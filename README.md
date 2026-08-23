@@ -86,6 +86,10 @@ existing project with its own CI, and the security model for pull requests from 
 framework: which tier code belongs to, and which of the three prompt layers a piece of prose belongs
 in.
 
+**[Sharing pipelines across an organization](docs/sharing.md)** is the design for one team owning the
+standards and many repositories inheriting them — pinned, reviewable, and impossible to quietly
+weaken. Proposed, not built.
+
 ## Commands
 
 ```bash

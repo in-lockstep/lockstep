@@ -292,6 +292,7 @@ leaving something believable in place.
 
 | Gap | Why it is not built |
 |---|---|
+| Sharing pipelines across repositories | Designed in `docs/sharing.md`, not built. `inherits:` at a pinned SHA, `sealed:` guardrails downstream cannot weaken, and bands on the fields a consumer may tune. Most of it rests on machinery that exists; the operational cost is private-repo fetch in a consumer's CI. |
 | Publishing `actions/` and the executor image | Needs an owner to publish under. Everything else is in place: `lockstep pin --sha/--exec-digest` records them, and the drift gate keeps the result honest. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |
