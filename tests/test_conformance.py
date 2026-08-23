@@ -192,3 +192,44 @@ def test_the_coverage_gate_still_runs_after_a_failed_leg(basic_spec_dir):
     generate = workflows(basic_spec_dir)["generate-tests.yml"]
     gate = generate["jobs"]["verify-extract-stories-from-each-issue"]
     assert evaluate(gate["if"], {}, {}) is True
+
+
+# --- the worked example ----------------------------------------------------
+
+EXAMPLE = None
+
+
+@pytest.fixture
+def httpbin_example():
+    from pathlib import Path
+
+    return Path(__file__).parent.parent / "examples" / "httpbin"
+
+
+def test_the_example_pipeline_compiles_and_is_reachable(httpbin_example):
+    workflow = workflows(httpbin_example)["validate-api.yml"]
+    assert simulate(workflow).order == [
+        "list-endpoints",
+        "write-a-contract-test-for-each-endpoint",
+        "verify-write-a-contract-test-for-each-endpoint",
+        "check-the-generated-tests-are-well-formed",
+        "render-and-publish-the-report",
+        "propose-generated-artifacts",
+    ]
+
+
+def test_skipping_generation_skips_its_coverage_gate_too(httpbin_example):
+    """With nothing generated there is nothing to judge; the gate would fail at 0% coverage."""
+    workflow = workflows(httpbin_example)["validate-api.yml"]
+    ran = simulate(workflow, {"skip_generation": True}).ran
+    assert "write-a-contract-test-for-each-endpoint" not in ran
+    assert "verify-write-a-contract-test-for-each-endpoint" not in ran
+    assert "check-the-generated-tests-are-well-formed" in ran
+
+
+def test_the_example_runs_the_committed_tests_without_any_agent(httpbin_example):
+    """Steady state: the expensive step is skipped and the run costs nothing."""
+    workflow = workflows(httpbin_example)["validate-api.yml"]
+    ran = simulate(workflow, {"skip_generation": True}).ran
+    agentic = {name for name, job in workflow["jobs"].items() if "aw-" in str(job.get("uses", ""))}
+    assert not (ran & agentic)

@@ -30,6 +30,8 @@ from .model import (
     Profile,
     ProfileDeploy,
     ProfileGithub,
+    ProfileReports,
+    Propose,
     SourceFile,
     Step,
     StepKind,
@@ -241,6 +243,16 @@ def parse_command(src: SourceFile) -> Command:
         converged_from=str(gh_raw.get("converged-from", "") or ""),
         raw=gh_raw.get("raw", {}) or {},
     )
+    propose_raw = gh_raw.get("propose") or {}
+    if propose_raw:
+        github.propose = Propose(
+            source=str(propose_raw.get("source", "") or ""),
+            destination=str(propose_raw.get("destination", "") or ""),
+            branch=str(propose_raw.get("branch", "pipeline/generated") or "pipeline/generated"),
+            title=str(propose_raw.get("title", "Generated pipeline artifacts") or ""),
+            labels=str(propose_raw.get("labels", "pipeline,generated") or ""),
+        )
+
     state = str(meta.get("state", "")).lower()
     return Command(
         name=str(meta.get("name") or Path(src.rel).stem),
@@ -304,6 +316,7 @@ def parse_profile(src: SourceFile) -> Profile:
 
     gh_raw = meta.get("github", {}) or {}
     deploy_raw = gh_raw.get("deploy", {}) or {}
+    reports_raw = gh_raw.get("reports", {}) or {}
     github = ProfileGithub(
         environment=str(gh_raw.get("environment", "") or ""),
         secrets=_as_list(gh_raw.get("secrets")),
@@ -313,6 +326,11 @@ def parse_profile(src: SourceFile) -> Profile:
             services=deploy_raw.get("services", {}) or {},
             cli=deploy_raw.get("cli", {}) or {},
             healthcheck=str(deploy_raw.get("healthcheck", "") or ""),
+        ),
+        reports=ProfileReports(
+            branch=str(reports_raw.get("branch", "") or ""),
+            path=str(reports_raw.get("path", "runs") or "runs"),
+            retain=int(reports_raw.get("retain", 90) or 90),
         ),
     )
     return Profile(

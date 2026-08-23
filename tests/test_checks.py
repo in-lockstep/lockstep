@@ -172,3 +172,15 @@ def test_findings_render_with_a_hint(basic_root, code):
     finding = next(f for f in report.findings if f.code == code)
     assert finding.hint
     assert code in finding.render()
+
+
+# --- the worked example ----------------------------------------------------
+
+
+def test_the_example_pipeline_lints_and_doctors_clean():
+    """The guide walks a reader through this; it has to hold up to the same checks as anything else."""
+    from pathlib import Path
+
+    example = Path(__file__).parent.parent / "examples" / "httpbin"
+    assert lint(load_spec(example)).findings == []
+    assert doctor(load_spec(example), example).ok

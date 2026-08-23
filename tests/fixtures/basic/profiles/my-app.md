@@ -8,6 +8,10 @@ github:
   vars: [APP_URL, API_URL, JIRA_BASE_URL]
   deploy:
     mode: external
+  reports:
+    branch: reports
+    path: runs
+    retain: 30
 ---
 
 url=${APP_URL}

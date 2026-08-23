@@ -1,0 +1,14 @@
+{
+  "input": {
+    "key": "uuid",
+    "method": "GET",
+    "path": "/uuid",
+    "expects": 200,
+    "describes": "Returns a JSON object with a `uuid` field. The value differs every call."
+  },
+  "expect": {
+    "storyId": "uuid",
+    "testType": "api",
+    "notes": "Must assert on the presence of the uuid field, never on its value."
+  }
+}

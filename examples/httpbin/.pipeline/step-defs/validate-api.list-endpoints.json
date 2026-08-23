@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--output={output_dir}/endpoints.json --only=\"{endpoints}\""
+  },
+  "command": "validate-api",
+  "context_files": [],
+  "fingerprint": "curl -sf {api_url}/spec.json | shasum -a 256 | cut -d' ' -f1",
+  "foreach": null,
+  "id": "list-endpoints",
+  "input": "",
+  "kind": "script",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "scripts/list-endpoints.py"
+}

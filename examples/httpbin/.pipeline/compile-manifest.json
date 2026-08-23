@@ -1,0 +1,55 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "9df09c50",
+      "sources": []
+    },
+    ".github/workflows/aw-test-writer.md": {
+      "sha": "67b97a16",
+      "sources": [
+        "agents/test-writer.md@c46314f0",
+        "guardrails/common.md@9e6e672a",
+        "guardrails/api-tests.md@64ec48a2",
+        "skills/api-testing.md@af842cdc",
+        "contexts/httpbin.md@bc2ca0cd"
+      ]
+    },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "bab97f6f",
+      "sources": []
+    },
+    ".github/workflows/shared/context-httpbin.md": {
+      "sha": "0e0d82f8",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-api-tests.md": {
+      "sha": "b0849657",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "551e3939",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-api-testing.md": {
+      "sha": "93700b38",
+      "sources": []
+    },
+    ".github/workflows/validate-api.yml": {
+      "sha": "3b0d863c",
+      "sources": [
+        "commands/validate-api.md@70999f26"
+      ]
+    },
+    ".pipeline/step-defs/validate-api.list-endpoints.json": {
+      "sha": "6cf43103",
+      "sources": []
+    },
+    "SECRETS.md": {
+      "sha": "7944c431",
+      "sources": []
+    }
+  },
+  "pipeline": "httpbin-contract",
+  "spec": 1
+}

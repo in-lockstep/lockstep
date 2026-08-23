@@ -113,6 +113,17 @@ class Parameter:
 
 
 @dataclass
+class Propose:
+    """Agent output that should reach the repository as a reviewed pull request."""
+
+    source: str = ""
+    destination: str = ""
+    branch: str = "pipeline/generated"
+    title: str = "Generated pipeline artifacts"
+    labels: str = "pipeline,generated"
+
+
+@dataclass
 class CommandGithub:
     triggers: dict[str, Any] = field(default_factory=dict)
     runs_on: str = ""
@@ -121,6 +132,7 @@ class CommandGithub:
     concurrency: dict[str, Any] | None = None
     # Step id whose `converged` output this command exposes to callers that unroll it.
     converged_from: str = ""
+    propose: Propose | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -191,11 +203,21 @@ class ProfileDeploy:
 
 
 @dataclass
+class ProfileReports:
+    """Where run reports are published so they outlive the artifacts they were built from."""
+
+    branch: str = ""
+    path: str = "runs"
+    retain: int = 90
+
+
+@dataclass
 class ProfileGithub:
     environment: str = ""
     secrets: list[str] = field(default_factory=list)
     vars: list[str] = field(default_factory=list)
     deploy: ProfileDeploy = field(default_factory=ProfileDeploy)
+    reports: ProfileReports = field(default_factory=ProfileReports)
 
 
 @dataclass

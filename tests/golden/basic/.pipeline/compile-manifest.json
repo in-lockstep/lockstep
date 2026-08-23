@@ -49,9 +49,9 @@
       "sources": []
     },
     ".github/workflows/validate.yml": {
-      "sha": "8a5b8678",
+      "sha": "4f9b6d53",
       "sources": [
-        "commands/validate.md@07878f25"
+        "commands/validate.md@dcc72949"
       ]
     },
     ".pipeline/step-defs/discover.discover-api-surface.json": {

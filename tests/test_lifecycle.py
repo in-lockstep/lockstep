@@ -163,3 +163,106 @@ def test_pins_are_recorded_as_json_for_review(basic_root):
     data, _, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
     path = write_pins(basic_root, data)
     assert json.loads(path.read_text())["capabilities"]["actions"]["sha"] == SHA
+
+
+# --- report publishing -----------------------------------------------------
+
+
+def report_job(root):
+    data = yaml.safe_load(compile_spec(root).files[".github/workflows/validate.yml"])
+    return data["jobs"]["render-and-publish-the-report"]
+
+
+def test_a_report_step_publishes_when_the_profile_says_where(basic_spec_dir):
+    """Artifacts expire; a dashboard nobody can open in three months cannot show a trend."""
+    publish = next(
+        step for step in report_job(basic_spec_dir)["steps"] if "publish-report" in str(step.get("uses"))
+    )
+    assert publish["with"]["branch"] == "reports"
+    assert publish["with"]["source"] == "outputs/runs/current"
+    assert publish["with"]["retain"] == "30"
+
+
+def test_the_report_is_published_even_when_the_run_failed(basic_spec_dir):
+    """A failing run is exactly the one whose report someone needs to read."""
+    publish = next(
+        step for step in report_job(basic_spec_dir)["steps"] if "publish-report" in str(step.get("uses"))
+    )
+    assert publish["if"] == "${{ always() }}"
+
+
+def test_publishing_is_the_only_write_the_pipeline_performs(basic_spec_dir):
+    data = yaml.safe_load(compile_spec(basic_spec_dir).files[".github/workflows/validate.yml"])
+    writers = [
+        name
+        for name, job in data["jobs"].items()
+        if (job.get("permissions") or {}).get("contents") == "write"
+    ]
+    assert writers == ["render-and-publish-the-report"]
+    assert data["permissions"] == {"contents": "read"}
+
+
+def test_no_publishing_without_a_declared_branch(basic_root):
+    profile = basic_root / "profiles" / "my-app.md"
+    profile.write_text(profile.read_text().replace("    branch: reports\n", "    branch: ''\n"))
+    text = compile_spec(basic_root).files[".github/workflows/validate.yml"]
+    assert "publish-report" not in text
+    assert "contents: write" not in text
+
+
+# --- proposing generated work ----------------------------------------------
+
+
+def example_workflow():
+    from pathlib import Path
+
+    example = Path(__file__).parent.parent / "examples" / "httpbin"
+    return yaml.safe_load(compile_spec(example).files[".github/workflows/validate-api.yml"])
+
+
+def test_generated_artifacts_are_proposed_rather_than_committed():
+    """The agent writes them once, a human reviews once, and every run after that costs nothing."""
+    job = example_workflow()["jobs"]["propose-generated-artifacts"]
+    propose = next(step for step in job["steps"] if step.get("id") == "propose")
+    assert propose["with"]["source"] == "outputs/test-scripts"
+    assert propose["with"]["destination"] == "test-scripts"
+    assert propose["with"]["branch"] == "pipeline/contract-tests"
+
+
+def test_only_publishing_jobs_may_write():
+    """Two jobs write: one publishes a report, one opens a pull request. Nothing else can."""
+    workflow = example_workflow()
+    writers = {
+        name: job["permissions"]
+        for name, job in workflow["jobs"].items()
+        if "write" in str(job.get("permissions", ""))
+    }
+    assert set(writers) == {"render-and-publish-the-report", "propose-generated-artifacts"}
+    assert writers["propose-generated-artifacts"] == {
+        "contents": "write",
+        "pull-requests": "write",
+    }
+
+
+def test_test_execution_never_shares_a_job_with_a_write_token():
+    """A write token in the job that runs test scripts would widen the blast radius for nothing."""
+    workflow = example_workflow()
+    for name, job in workflow["jobs"].items():
+        if "write" not in str(job.get("permissions", "")):
+            continue
+        runs = " ".join(step.get("run", "") for step in job.get("steps", []))
+        assert "test-runner" not in runs, f"{name} both executes tests and holds a write token"
+
+
+def test_the_agent_that_generates_them_can_write_nothing():
+    from pathlib import Path
+
+    example = Path(__file__).parent.parent / "examples" / "httpbin"
+    agent = compile_spec(example).files[".github/workflows/aw-test-writer.md"]
+    front = yaml.safe_load(agent.split("---")[1])
+    assert front["permissions"] == "read-all"
+
+
+def test_no_proposal_job_without_a_declared_destination(basic_spec_dir):
+    workflow = yaml.safe_load(compile_spec(basic_spec_dir).files[".github/workflows/validate.yml"])
+    assert "propose-generated-artifacts" not in workflow["jobs"]

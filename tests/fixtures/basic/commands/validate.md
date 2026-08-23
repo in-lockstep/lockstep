@@ -18,3 +18,6 @@ github:
 2. **Repair loop** → command: repair
    - max-iterations: 3
    (if not --skip-repair)
+
+3. **Render and publish the report** → builtin: report
+   - args: --run-dir={output_dir}/runs/current --output-dir={output_dir}

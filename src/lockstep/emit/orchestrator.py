@@ -157,6 +157,12 @@ def emit_command(
     _validate_conditions(command, steps)
     _validate_builtins(command, steps)
 
+    # A step that publishes a report needs a write token. Fusing it with test execution would hand
+    # that token to whatever the tests do, so it gets its own job.
+    for step in steps:
+        if _publishes_report(step, ctx):
+            step.job_boundary = True
+
     upstream = _upstream_outputs(steps, ctx, command)
     groups = group_steps(steps, fuse=spec.manifest.target.fuse_script_steps)
     state_group = _resolve_state_scope(command, groups, ctx, result)
@@ -226,6 +232,7 @@ def emit_command(
     result.job_count = len(jobs)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
     result.deterministic_steps = sum(1 for s in steps if s.kind in (StepKind.SCRIPT, StepKind.BUILTIN))
+    _emit_proposal(command, ctx, jobs, previous_id)
     _guard_against_skipped_dependencies(jobs)
     _expose_convergence(command, jobs, step_to_job, result)
 
@@ -441,6 +448,10 @@ def _steps_job(
             )
         if cache:
             body.append(emit_save(cache, ctx))
+        if _publishes_report(step, ctx):
+            body.append(_publish_report_step(step, ctx, command))
+            # The only write this pipeline performs, and it is confined to the reports branch.
+            job["permissions"] = {**job.get("permissions", {"contents": "read"}), "contents": "write"}
 
     steps: list[dict[str, Any]] = job["steps"]
     if stateful:
@@ -462,6 +473,44 @@ def _steps_job(
         )
     steps[2:2] = body
     return job
+
+
+def _publishes_report(step: Step, ctx: EmitContext) -> bool:
+    """A `report` builtin publishes when the profile says where to."""
+    return (
+        step.kind is StepKind.BUILTIN and step.target == "report" and bool(ctx.profile.github.reports.branch)
+    )
+
+
+def _publish_report_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
+    """Move the rendered report somewhere it will still exist in three months.
+
+    Artifacts expire, so a dashboard that only ever lived in one is useless for a trend. Publishing
+    to an orphan branch keeps the history without putting it in anyone's clone.
+    """
+    reports = ctx.profile.github.reports
+    source = _report_source(step, ctx, command)
+    return {
+        "name": "Publish the report",
+        "id": f"publish-{step.id}",
+        "if": "${{ always() }}",
+        "uses": ctx.pins.action("publish-report"),
+        "with": {
+            "branch": reports.branch,
+            "source": source,
+            "path": reports.path,
+            "retain": str(reports.retain),
+        },
+    }
+
+
+def _report_source(step: Step, ctx: EmitContext, command: Command) -> str:
+    """Where the report builtin wrote its output: its `--run-dir`, or the current run."""
+    args = ctx.expand(step.args.get("args", ""), command)
+    for token in args.split():
+        if token.startswith("--run-dir="):
+            return token.split("=", 1)[1]
+    return f"{ctx.output_dir_env}/runs/current"
 
 
 def _gated(step: dict[str, Any], condition: str | None) -> dict[str, Any]:
@@ -621,9 +670,12 @@ def _verify_job(
     verify = f"pipeline-exec fanout-verify --dir={output} --min-success-rate={step.min_success_rate}"
     if items_expr:
         verify += f" --expected='{items_expr}'"
+    # `!cancelled()` lets the gate judge a partially-failed matrix instead of being skipped by it —
+    # but if the fan-out itself was conditional and did not run, there is nothing to judge.
+    conditions = ([_bare_condition(step.condition)] if step.condition else []) + ["!cancelled()"]
     job: dict[str, Any] = {
         "needs": needs,
-        "if": "${{ !cancelled() }}",
+        "if": "${{ " + " && ".join(conditions) + " }}",
         "runs-on": ctx.runs_on,
         "container": ctx.pins.exec_container(),
         "steps": [
@@ -640,6 +692,47 @@ def _verify_job(
 # means in the spec — `(if not --skip-discovery)` skips discovery, not everything after it. This is
 # the documented idiom for "run if everything upstream succeeded or was skipped".
 SKIP_TOLERANT = "!failure() && !cancelled()"
+
+
+def _emit_proposal(
+    command: Command,
+    ctx: EmitContext,
+    jobs: dict[str, dict[str, Any]],
+    needs: str | None,
+) -> None:
+    """Route generated artifacts into the repository through review rather than straight in.
+
+    This is where a pipeline stops paying for what it already knows. The agent writes the artifacts
+    once, a human reviews them once, and every run afterwards executes committed files for nothing.
+    """
+    propose = command.github.propose
+    if not propose or not propose.source or not propose.destination:
+        return
+
+    jobs["propose-generated-artifacts"] = {
+        "needs": needs,
+        "if": "${{ !cancelled() }}",
+        "runs-on": ctx.runs_on,
+        "container": ctx.pins.exec_container(),
+        # The narrowest write a pipeline can need: a branch nobody merges without reading it.
+        "permissions": {"contents": "write", "pull-requests": "write"},
+        "steps": [
+            {"uses": ctx.pins.external_action("actions/checkout")},
+            {"uses": ctx.pins.action("restore")},
+            {
+                "name": "Propose the generated artifacts",
+                "id": "propose",
+                "uses": ctx.pins.action("propose-pr"),
+                "with": {
+                    "source": ctx.expand(propose.source, command),
+                    "destination": propose.destination,
+                    "branch": propose.branch,
+                    "title": propose.title,
+                    "labels": propose.labels,
+                },
+            },
+        ],
+    }
 
 
 def _guard_against_skipped_dependencies(jobs: dict[str, dict[str, Any]]) -> None:

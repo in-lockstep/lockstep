@@ -1,0 +1,14 @@
+{
+  "input": {
+    "key": "post-echo",
+    "method": "POST",
+    "path": "/post",
+    "expects": 200,
+    "describes": "Echoes the posted body back under a `json` field."
+  },
+  "expect": {
+    "storyId": "post-echo",
+    "testType": "api",
+    "notes": "Must send a body and assert the same body comes back; must not assert on origin or url."
+  }
+}
