@@ -190,9 +190,29 @@ gate against the base branch, lint, doctor, and the scripts' own tests. Every jo
 each installs the pinned compiler as a tool rather than syncing the repository's environment — a
 check must not execute project-defined build hooks in order to run.
 
+## Phase 6 — `lockstep init`
+
+The scaffold is a working pipeline, not a set of empty directories. It compiles, lints clean, and
+demonstrates the one shape that matters: a deterministic step producing work, an agent fanned out
+over it with a coverage policy, and a deterministic step consuming the results. Someone reading it
+can see where their own work goes.
+
+It ships with an eval case for its agent and a unit test for its script, so `lint` passes from the
+first commit rather than starting in the red — a linter that is red on day one is a linter people
+learn to ignore.
+
+Scaffolding surfaced two gaps: `lockstep pin` was not resolving the third-party actions the compiler
+emits, and `doctor` was not checking for them, so a freshly initialised pipeline would fail to
+compile with no check pointing at why. `pin` now resolves everything it can and reports what it
+cannot, rather than aborting on the first unreachable reference — a placeholder capability repository
+should not stop `actions/checkout` from being pinned.
+
+The whole day-one path is covered end to end: init, pin, compile, then a clean lint, doctor and drift
+gate.
+
 ## Testing
 
-361 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+377 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests

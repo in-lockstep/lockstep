@@ -21,7 +21,7 @@ DIGEST = "sha256:" + "b" * 64
 
 
 def test_pinning_records_the_supplied_commit_and_digest(basic_root):
-    data, notes = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
+    data, notes, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
     write_pins(basic_root, data)
 
     stored = load_pins(basic_root)["capabilities"]
@@ -34,7 +34,7 @@ def test_pinning_records_the_supplied_commit_and_digest(basic_root):
 def test_offline_pinning_contacts_nothing(basic_root):
     """`--offline` must not reach the network, so it can run in a sandbox or an air-gapped build."""
     before = load_pins(basic_root)["capabilities"]["actions"]["sha"]
-    data, _ = pin(load_spec(basic_root), basic_root, offline=True)
+    data, _, _ = pin(load_spec(basic_root), basic_root, offline=True)
     assert data["capabilities"]["actions"]["sha"] == before
 
 
@@ -42,12 +42,12 @@ def test_pinning_reports_an_unpinned_image(basic_root):
     pins = load_pins(basic_root)
     del pins["capabilities"]["exec"]["digest"]
     write_pins(basic_root, pins)
-    _, notes = pin(load_spec(basic_root), basic_root, offline=True)
-    assert any("not pinned" in note for note in notes)
+    _, notes, unresolved = pin(load_spec(basic_root), basic_root, offline=True)
+    assert any("--exec-digest" in problem for problem in unresolved)
 
 
 def test_pinned_output_makes_the_compiler_emit_that_commit(basic_root):
-    data, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
+    data, _, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
     write_pins(basic_root, data)
     text = compile_spec(basic_root).files[".github/workflows/discover.yml"]
     assert f"@{SHA}" in text
@@ -160,6 +160,6 @@ def test_ci_is_read_only(basic_spec_dir):
 
 
 def test_pins_are_recorded_as_json_for_review(basic_root):
-    data, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
+    data, _, _ = pin(load_spec(basic_root), basic_root, actions_sha=SHA, exec_digest=DIGEST)
     path = write_pins(basic_root, data)
     assert json.loads(path.read_text())["capabilities"]["actions"]["sha"] == SHA

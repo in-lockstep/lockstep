@@ -32,5 +32,8 @@ INTERNAL = frozenset(
     }
 )
 
+# Third-party actions the compiler emits directly, with the tag `lockstep pin` resolves.
+EXTERNAL_ACTIONS = {"actions/checkout": "v4"}
+
 # GitHub refuses a matrix larger than this; `pipeline-exec` enforces the same number at run time.
 MATRIX_CAP = 256

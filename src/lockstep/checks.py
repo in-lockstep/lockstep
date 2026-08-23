@@ -15,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
+from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import Pins
 from .emit.validate import MAX_JOB_MINUTES
 from .spec.model import Spec, StepKind
@@ -185,6 +186,15 @@ def _check_pins(pins: Pins, report: Report) -> None:
             "the executor image is not pinned by digest",
             hint="run `lockstep pin`, or record capabilities.exec.digest in .pipeline/pins.lock",
         )
+    for action in sorted(EXTERNAL_ACTIONS):
+        if not pins.external.get(action):
+            report.add(
+                Severity.ERROR,
+                "DOC012",
+                f"external action {action!r} is not pinned",
+                hint="run `lockstep pin` — a third-party action left on a tag can be replaced under "
+                "a pipeline that already passed review",
+            )
     if not pins.gh_aw_version:
         report.add(
             Severity.WARNING,

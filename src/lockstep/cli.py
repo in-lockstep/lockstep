@@ -208,7 +208,7 @@ def pin(root: Path, actions_sha: str, exec_digest: str, offline: bool) -> None:
     from .spec.load import load_spec
 
     try:
-        data, notes = resolve_pins(
+        data, notes, unresolved = resolve_pins(
             load_spec(root), root, actions_sha=actions_sha, exec_digest=exec_digest, offline=offline
         )
     except LockstepError as error:
@@ -219,6 +219,17 @@ def pin(root: Path, actions_sha: str, exec_digest: str, offline: bool) -> None:
     for note in notes:
         click.echo(f"  {note}")
     click.echo(f"wrote {path.relative_to(root)}")
+    for problem in unresolved:
+        click.echo(click.style(f"  unresolved: {problem}", fg="yellow"), err=True)
+    if unresolved:
+        click.echo(
+            click.style(
+                f"{len(unresolved)} reference(s) still unpinned; `lockstep compile` will refuse to emit them",
+                fg="yellow",
+            ),
+            err=True,
+        )
+        sys.exit(EXIT_DRIFT)
 
 
 @main.command()
@@ -258,6 +269,42 @@ def uneject(root: Path, target: str) -> None:
         click.echo(click.style(error.render(), fg="red"), err=True)
         sys.exit(EXIT_SPEC)
     click.echo(f"{target} is generated again; run `lockstep compile` to restore it")
+
+
+@main.command()
+@click.option(
+    "--dir",
+    "root",
+    default=".",
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Where to create the pipeline.",
+)
+@click.option("--name", required=True, help="Pipeline name; also the name of its first command.")
+@click.option("--profile", default="staging", show_default=True, help="Name of the first profile.")
+@click.option("--target", default="github-agentic", show_default=True)
+@click.option("--force", is_flag=True, help="Overwrite files that already exist.")
+def init(root: Path, name: str, profile: str, target: str, force: bool) -> None:
+    """Scaffold a new pipeline repository."""
+    from .scaffold import scaffold
+
+    if target != "github-agentic":
+        raise click.BadParameter(f"unknown target {target!r}", param_hint="--target")
+
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        written = scaffold(root, name, profile, force=force)
+    except LockstepError as error:
+        click.echo(click.style(error.render(), fg="red"), err=True)
+        sys.exit(EXIT_SPEC)
+
+    for relative in written:
+        click.echo(f"  + {relative}")
+    click.echo(f"\ncreated {len(written)} files in {root}")
+    click.echo("\nnext:")
+    click.echo(f"  cd {root}")
+    click.echo("  lockstep pin        # resolve capability tags to commits")
+    click.echo("  lockstep compile    # generate the workflows")
+    click.echo("  lockstep lint       # check the spec")
 
 
 @main.command(name="show-surface")

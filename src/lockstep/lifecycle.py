@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH
 from .errors import LockstepError
 from .spec.model import Spec
@@ -78,11 +79,17 @@ def pin(
     actions_sha: str = "",
     exec_digest: str = "",
     offline: bool = False,
-) -> tuple[dict[str, Any], list[str]]:
-    """Resolve the manifest's capability tags into the commits and digests that will actually run."""
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Resolve the manifest's capability tags into the commits and digests that will actually run.
+
+    Resolves everything it can and reports what it could not, rather than aborting on the first
+    failure: a placeholder capability repository should not stop the third-party actions from being
+    pinned. Returns (pins, notes, unresolved).
+    """
     data = load_pins(root)
     capabilities = data.setdefault("capabilities", {})
     notes: list[str] = []
+    unresolved: list[str] = []
 
     repo, _, tag = spec.manifest.capabilities.actions.partition("@")
     repo = repo.removeprefix("github.com/")
@@ -96,14 +103,35 @@ def pin(
         elif offline:
             notes.append("actions: left as-is (offline)")
         else:
-            resolved = resolve_tag(repo, tag)
-            if entry.get("sha") and entry["sha"] != resolved:
-                notes.append(
-                    f"actions: tag {tag} moved from {entry['sha'][:12]} to "
-                    f"{resolved[:12]} — review before committing"
-                )
-            entry["sha"] = resolved
-            notes.append(f"actions: {repo}@{tag} -> {resolved[:12]}")
+            try:
+                resolved = resolve_tag(repo, tag)
+            except PinError as error:
+                unresolved.append(f"actions: {error.message}")
+            else:
+                if entry.get("sha") and entry["sha"] != resolved:
+                    notes.append(
+                        f"actions: tag {tag} moved from {entry['sha'][:12]} to "
+                        f"{resolved[:12]} — review before committing"
+                    )
+                entry["sha"] = resolved
+                notes.append(f"actions: {repo}@{tag} -> {resolved[:12]}")
+
+    # The compiler also emits third-party actions; leaving those floating would defeat the point.
+    external = data.setdefault("external", {})
+    for action, tag in sorted(EXTERNAL_ACTIONS.items()):
+        entry = external.setdefault(action, {})
+        entry["tag"] = tag
+        if entry.get("sha"):
+            continue
+        if offline:
+            notes.append(f"{action}: left unpinned (offline)")
+            continue
+        try:
+            entry["sha"] = resolve_tag(action, tag)
+        except PinError as error:
+            unresolved.append(f"{action}: {error.message}")
+        else:
+            notes.append(f"{action}@{tag} -> {entry['sha'][:12]}")
 
     package, _, version = spec.manifest.capabilities.exec.partition("==")
     entry = capabilities.setdefault("exec", {})
@@ -115,12 +143,12 @@ def pin(
         entry["digest"] = exec_digest
         notes.append(f"exec image -> {exec_digest[:19]}")
     elif not entry.get("digest"):
-        notes.append(
-            "exec image is not pinned: pass --exec-digest with the digest from "
+        unresolved.append(
+            "exec image: pass --exec-digest with the digest from "
             "`docker buildx imagetools inspect <image>:<tag>`"
         )
 
-    return data, notes
+    return data, notes, unresolved
 
 
 def check_pins_current(spec: Spec, root: Path) -> list[str]:
