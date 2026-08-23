@@ -8,7 +8,7 @@ capabilities:
   gh-aw: v0.34.0
 
 extensions:
-  builtins: [issue-fetch, pr-feedback, await-checks]
+  builtins: [issue-fetch, await-checks]
   packages: ["issue-ext @ file://./extensions"]
 
 targets:

@@ -47,11 +47,14 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # A dispatch has no comment. Nothing to parse, and nothing to authorize beyond the fact that
-        # dispatching already required write access.
-        if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+        # Only a comment can carry an unauthorized request. Every other trigger — a dispatch, a
+        # schedule, a repository event — already required repository access to configure, so there is
+        # nothing here to parse and nothing to authorize. Keying on the payload rather than on a list
+        # of event names means adding a trigger cannot silently disable the pipeline.
+        if [ "$(jq -r 'has("comment")' "$GITHUB_EVENT_PATH")" != "true" ]; then
           echo "matched=true" >> "$GITHUB_OUTPUT"
           echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          echo "not a comment trigger (${GITHUB_EVENT_NAME}); nothing to authorize"
           exit 0
         fi
         echo "dispatch=false" >> "$GITHUB_OUTPUT"

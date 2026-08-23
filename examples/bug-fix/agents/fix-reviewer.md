@@ -4,7 +4,7 @@ description: Review the proposed fixes as an adversary, not an author
 model: claude-opus-4-6
 provider: vertex-claude
 max_tool_turns: 0
-guardrails: [common, minimal-change]
+guardrails: [common, minimal-change, review-response]
 github:
   max-ai-credits: 120
 ---

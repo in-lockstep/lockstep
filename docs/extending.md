@@ -22,11 +22,16 @@ below was run against it.
 ## The pipeline we're building
 
 ```
-fetch bugs ─▶ analyze ─▶ reproducer ─▶ prove it fails ─▶ write fix ─▶ apply ─▶ prove it passes ─▶ review ─▶ PR
- (builtin)    (agent)     (agent)        (builtin)        (agent)    (builtin)    (builtin)      (agent)  (action)
+   gate ─▶ fetch bugs ─▶ feedback ─▶ analyze ─▶ reproducer ─▶ prove it fails ─▶ write fix ─▶ …
+ (action)   (builtin)   (builtin)    (agent)     (agent)        (builtin)        (agent)
+                            ▲
+                            │  … ─▶ apply ─▶ prove it passes ─▶ review ─▶ PR
+                            │       (builtin)    (builtin)      (agent)  (action)
+                            │                                              │
+                            └────── reviewer comments + /fix ──────────────┘
 ```
 
-Eleven jobs. Four agents, **none of which can write anything**. One job at the end holds the only
+Twelve jobs. Four agents, **none of which can write anything**. One job at the end holds the only
 write permission in the pipeline. That shape isn't incidental — it's the reason a pipeline that
 writes code to your repository is a defensible idea rather than a reckless one.
 
@@ -35,6 +40,9 @@ Three of those steps need code the framework will never ship:
 - **`jira-fetch`** — talks to your issue tracker.
 - **`apply-patch`** — decides whether an agent's diff may land. This is a trust boundary.
 - **`run-suite`** — runs the target project's own tests and turns the result into a verdict.
+
+A fourth, `pr-feedback`, *used* to be an extension here and is now part of the framework. That move
+is itself worth understanding, and §6 covers it.
 
 And one step needs a composite action: checking out a *second* repository (the application being
 fixed) and installing its toolchain, which requires `actions/checkout` and `actions/setup-python` —
@@ -356,9 +364,13 @@ With both extensions in place, the spec reads as ordinary steps:
 ```markdown
 1. **Fetch triaged bugs** → builtin: jira-fetch
    - id: fetch-bugs
-   - args: --jql="{jql}" --limit={limit} --output={output_dir}/bugs.json
+   - args: --jql="{jql}" --limit={limit} --only="{only}" --output={output_dir}/bugs.json
 
-2. **Analyze each bug against the source** → agent: bug-analyst
+2. **Collect review feedback on the proposed fixes** → builtin: pr-feedback
+   - id: feedback
+   - args: --pr="{pull_request}" --by-path --output={output_dir}/feedback.json
+
+3. **Analyze each bug against the source** → agent: bug-analyst
    - foreach: bug in {output_dir}/bugs.json
    - output: {output_dir}/analyses
    - parallel: 3
@@ -475,7 +487,7 @@ doctor:
 0 error(s), 1 warning(s)
 
 $ lockstep compile --root examples/bug-fix
-fix-bugs: 9 steps -> 11 jobs · 4 agentic, 5 deterministic, 4 cacheable
+fix-bugs: 10 steps -> 12 jobs · 4 agentic, 6 deterministic, 5 cacheable
 wrote 19 files
 ```
 
@@ -483,7 +495,8 @@ The compiled graph, and where the trust sits:
 
 | Job | Kind | Permissions |
 |---|---|---|
-| `fetch-bugs` | steps | contents: read, actions: read |
+| `command-gate` | steps | contents: read |
+| `fetch-bugs` (with `pr-feedback`, fused) | steps | contents: read, actions: read |
 | `analyze-each-bug-against-the-source` | agent ×3 | *read-all* |
 | `verify-analyze-…` | steps | read |
 | `write-a-reproducer-for-each-analyzed-bug` | agent ×3 | *read-all* |
@@ -506,7 +519,166 @@ they mean the worst outcome of a bad run is a pull request somebody declines.
 
 ---
 
-## Part 6 — Checklist for your own extension
+## Part 6 — Adding the review loop
+
+The pipeline as described opens a pull request and stops. That is a fine first version and a poor
+second one: the most common outcome of proposing a fix is a reviewer who disagrees with part of it,
+and re-running the whole query from scratch to act on that is waste.
+
+So the command gains a chat-ops trigger:
+
+```yaml
+github:
+  triggers:
+    workflow_dispatch: true
+    schedule: '0 4 * * 1'
+  command:
+    name: "/fix"
+    events: [issue_comment, pull_request_review_comment]
+    roles: [admin, maintain, write]
+    arguments: [only]
+```
+
+A reviewer objects to a fix in review comments, types `/fix APP-412`, and the same pipeline runs
+again — narrowed to that bug, with their comments as input. [The chat-ops
+guide](implementing-issues.md) covers the gate itself in detail; two things are specific to
+extending a pipeline that already exists.
+
+### The gate must not break the schedule
+
+This pipeline runs weekly *and* answers comments. The gate's first question is therefore not "was
+this a dispatch" but "is there a comment at all":
+
+```bash
+# Only a comment can carry an unauthorized request. Every other trigger — a dispatch, a schedule, a
+# repository event — already required repository access to configure, so there is nothing here to
+# parse and nothing to authorize. Keying on the payload rather than on a list of event names means
+# adding a trigger cannot silently disable the pipeline.
+if [ "$(jq -r 'has("comment")' "$GITHUB_EVENT_PATH")" != "true" ]; then
+  echo "matched=true" >> "$GITHUB_OUTPUT"
+  echo "dispatch=true" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
+```
+
+The first version of that checked `GITHUB_EVENT_NAME = workflow_dispatch`, which meant a scheduled
+run found no comment, decided it was unauthorized, and did nothing at all — silently, every Monday.
+Keying on the payload makes the rule "comments are gated, everything else was already authorized by
+being configurable", which stays true when somebody adds a trigger.
+
+```python
+def test_the_gate_keys_on_the_payload_not_a_list_of_event_names():
+    """Adding a trigger must not be able to disable the pipeline by omission."""
+```
+
+### An extension gains a way to narrow
+
+A review re-run should not redo every bug in the query. `jira-fetch` grows one option:
+
+```python
+@click.option("--only", default="", help="Comma-separated keys to narrow to, for a targeted re-run.")
+def jira_fetch(jql, output, limit, only, base_url, token):
+    """…
+
+    `--only` narrows to specific keys, which is how a review re-run avoids re-doing every bug in the
+    query when a reviewer objected to one of them.
+    """
+```
+
+and the command threads the chat-ops argument straight through:
+
+```markdown
+1. **Fetch triaged bugs** → builtin: jira-fetch
+   - args: --jql="{jql}" --limit={limit} --only="{only}" --output={output_dir}/bugs.json
+```
+
+`{only}` compiles to `${{ inputs.only || needs.command-gate.outputs.only }}`, so `/fix APP-412`
+narrows the run and a scheduled invocation leaves it empty and fetches everything. One step, both
+paths.
+
+### Feedback reaches the agents that can act on it
+
+```markdown
+2. **Collect review feedback on the proposed fixes** → builtin: pr-feedback
+   - id: feedback
+   - args: --pr="{pull_request}" --by-path --output={output_dir}/feedback.json
+```
+
+That file then arrives as `context-files:` on the three agents whose work a reviewer can sensibly
+object to — the analyst, the fix writer, and the reviewer — and nowhere else. The reproducer writer
+does not get it: a reviewer's opinion about a patch is not evidence about whether a test reproduces a
+bug.
+
+`--by-path` is the part specific to a fan-out pipeline. Inline comments are grouped by the file they
+were left on, because with many bugs in flight the file is the only reliable signal of which leg a
+comment concerns:
+
+```python
+def group_by_path(feedback):
+    """Inline comments grouped by the file they were left on.
+
+    A pipeline that fans out over many items needs to route feedback to the leg it concerns, and the
+    file a comment sits on is the only reliable signal of which one that is.
+    """
+```
+
+### And a guardrail for answering a human
+
+Responding to review is a distinct behaviour with its own failure modes, so it gets its own
+guardrail rather than a paragraph bolted onto three agent bodies:
+
+```markdown
+When review feedback is present, it takes precedence over your own earlier reasoning. It came from
+someone who read the diff.
+
+You MUST address an inline comment where it was left. A reviewer who commented on line 42 and got a
+general improvement elsewhere will leave the same comment again.
+
+You MUST NOT argue with a reviewer by re-submitting the same change with a longer explanation. If you
+believe the feedback is mistaken, say so once, in your output, and implement what was asked — a human
+merges this, and they can overrule you far more cheaply than you can overrule them.
+
+You MUST NOT silently drop a fix a reviewer objected to. Either revise it or state plainly that it
+was withdrawn and why.
+```
+
+The last two are the ones that matter. An agent that quietly drops a contested fix looks like it
+complied; an agent that re-argues wastes a review cycle per round.
+
+---
+
+## Part 7 — When an extension stops being an extension
+
+`pr-feedback` was written as an extension for a different pipeline. When this one needed it too,
+duplicating it would have been the obvious move and the wrong one — so it moved into `pipeline-exec`
+instead, alongside `validate-schema` and `wait-for`.
+
+The test that says why:
+
+```python
+def test_pr_feedback_is_a_framework_builtin_now_not_an_extension():
+    """It began as an extension; a second pipeline needing it is what moved it into the framework."""
+    assert "pr-feedback" in AVAILABLE
+```
+
+Two things made that cheap, and both are properties of the extension mechanism rather than luck:
+
+**No spec changed.** A `builtin:` step names a command, never the package providing it. Removing
+`pr-feedback` from one extension's entry points and adding it to the framework's CLI left every
+`builtin: pr-feedback` step exactly as written.
+
+**The manifest declaration got shorter, and `doctor` noticed.** `extensions.builtins` lists what the
+compiler must take on trust; a promoted command drops off that list and becomes something the
+compiler can actually verify.
+
+**A reasonable rule for when to promote:** the second pipeline that needs it. One pipeline needing
+something is evidence it is specific to that pipeline. Two is evidence it is not — and the cost of
+being wrong in the other direction is two copies drifting apart, which is worse than a framework
+command nobody outside one repository uses.
+
+---
+
+## Part 8 — Checklist for your own extension
 
 **A builtin, when the work is code:**
 
@@ -529,6 +701,11 @@ they mean the worst outcome of a bad run is a pull request somebody declines.
 for the two cases above, and reaching for one when a script would do is how a pipeline accumulates
 machinery nobody wants to maintain.
 
+**Promote it when a second pipeline needs it.** One pipeline needing something is evidence it belongs
+to that pipeline. Two is evidence it does not, and two copies drifting apart is a worse outcome than a
+framework command with one user. Nothing in any spec changes when you move it — a `builtin:` step
+names a command, never the package providing it.
+
 ---
 
 ## Honest limits
@@ -538,6 +715,9 @@ machinery nobody wants to maintain.
   **none of it has run on a real GitHub runner**.
 - `jira-fetch` is written against Jira's v2 search API and paginates, but has only been tested
   against its own unit tests — not a live instance.
+- The review loop has never been exercised against a real pull request. The gate's authorization
+  path, the payload check that keeps the schedule working, and the narrowing argument are all
+  contract-tested and simulated, but not run.
 - The bug-fix pipeline is a worked example of the extension points, not a validated approach to
   automated code repair. The parts that make it defensible — read-only agents, a code-enforced patch
   boundary, fail-then-pass validation, adversarial review, human merge — are the parts worth copying

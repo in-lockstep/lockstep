@@ -41,15 +41,19 @@ def test_the_example_is_target_ready_apart_from_unverifiable_extensions():
     assert {finding.code for finding in report.findings} == {"DOC014"}
 
 
+AUTHORIZED = {"command-gate": {"authorized": "true"}}
+
+
 def test_the_whole_pipeline_is_reachable(workflow):
-    order = simulate(workflow).order
-    assert order[0] == "fetch-bugs"
+    order = simulate(workflow, {}, AUTHORIZED).order
+    assert order[0] == "command-gate"
+    assert order[1] == "fetch-bugs"
     assert order[-1] == "propose-generated-artifacts"
     assert "review-the-fixes" in order
 
 
 def test_a_dry_run_stops_before_proposing(workflow):
-    ran = simulate(workflow, {"dry_run": True}).ran
+    ran = simulate(workflow, {"dry_run": True}, AUTHORIZED).ran
     assert "review-the-fixes" in ran
     assert "assemble-what-passed-review" not in ran
 

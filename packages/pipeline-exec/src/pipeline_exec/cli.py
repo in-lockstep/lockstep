@@ -519,6 +519,57 @@ def check_convergence(run_dir: Path, name: str) -> None:
     )
 
 
+def _gh_json(*args: str) -> Any:
+    """Call `gh api` and parse JSON. Separated so tests can supply fixtures instead."""
+    result = subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        _fail(f"gh api {' '.join(args)} failed: {result.stderr.strip()[:200]}")
+    return json.loads(result.stdout or "[]")
+
+
+@main.command(name="pr-feedback")
+@click.option("--pr", default="", help="Pull request number. Empty before one exists.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
+@click.option("--by-path", is_flag=True, help="Also group inline comments by the file they concern.")
+def pr_feedback(pr: str, repo: str, output: Path, from_dir: Path | None, by_path: bool) -> None:
+    """Collect a pull request's review feedback as pipeline input.
+
+    A first run has no pull request and therefore no feedback. That is the normal case, not an
+    error: the same step runs on every invocation and simply has nothing to say the first time.
+    """
+    from .feedback import group_by_path, normalize
+
+    if from_dir:
+
+        def load(name: str) -> list[dict[str, Any]]:
+            path = from_dir / f"{name}.json"
+            return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
+
+        reviews, comments, discussion = load("reviews"), load("comments"), load("issue_comments")
+    elif not pr.strip():
+        reviews, comments, discussion = [], [], []
+        click.echo("no pull request yet; no feedback to collect")
+    else:
+        if not repo:
+            _fail("--repo is required (or set GITHUB_REPOSITORY)")
+        reviews = _gh_json(f"repos/{repo}/pulls/{pr}/reviews", "--paginate")
+        comments = _gh_json(f"repos/{repo}/pulls/{pr}/comments", "--paginate")
+        discussion = _gh_json(f"repos/{repo}/issues/{pr}/comments", "--paginate")
+
+    feedback = normalize(reviews, comments, discussion)
+    if by_path:
+        feedback["by_path"] = group_by_path(feedback)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(feedback, indent=2) + "\n", encoding="utf-8")
+
+    _emit_output("count", str(feedback["count"]))
+    _emit_output("requested_changes", "true" if feedback["requested_changes"] else "false")
+    click.echo(f"collected {feedback['count']} piece(s) of feedback -> {output}")
+
+
 @main.command(name="parse-command")
 @click.option("--command", required=True, help="The slash command to look for, e.g. /implement.")
 @click.option("--body", default="", help="The comment body.")

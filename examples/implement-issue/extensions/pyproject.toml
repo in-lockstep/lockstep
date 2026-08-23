@@ -7,7 +7,6 @@ dependencies = ["click>=8.1"]
 
 [project.entry-points."pipeline_exec.commands"]
 issue-fetch = "issue_ext.commands:issue_fetch"
-pr-feedback = "issue_ext.commands:pr_feedback"
 await-checks = "issue_ext.commands:await_checks"
 
 [build-system]

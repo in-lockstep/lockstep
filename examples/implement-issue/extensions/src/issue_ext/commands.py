@@ -1,9 +1,8 @@
 """Commands the implement-issue pipeline needs.
 
-The interesting one is `pr-feedback`. A reviewer's comments are the pipeline's most valuable input
-and its least trustworthy: they arrive from a text box, they are addressed to a human, and they get
-fed to a model that is about to write code. Collecting them is therefore a deliberate step with
-rules, not a `gh api` call inlined into a workflow.
+`pr-feedback` used to live here. A second pipeline needed it, so it moved into `pipeline-exec` —
+which is the normal lifecycle for an extension that turns out to be general. Nothing in this
+pipeline's spec changed: a `builtin:` step names a command, never the package providing it.
 """
 
 from __future__ import annotations
@@ -17,9 +16,6 @@ from pathlib import Path
 from typing import Any
 
 import click
-
-MAX_COMMENT = 4000
-MAX_COMMENTS = 60
 
 
 def _fail(message: str) -> None:
@@ -93,95 +89,6 @@ def _criteria(fields: dict[str, Any]) -> list[str]:
     return []
 
 
-# --- pr-feedback -----------------------------------------------------------
-
-
-def normalize(reviews: list[dict], comments: list[dict], issue_comments: list[dict]) -> dict[str, Any]:
-    """Reduce a pull request's review to what a code-writing agent can act on.
-
-    Inline comments keep their file and line, because "this is wrong" means nothing without them.
-    Everything is truncated and capped: a reviewer who pastes a log should not be able to push the
-    issue itself out of the model's context.
-    """
-    inline = [
-        {
-            "path": comment.get("path", ""),
-            "line": comment.get("line") or comment.get("original_line"),
-            "body": (comment.get("body") or "")[:MAX_COMMENT],
-            "author": (comment.get("user") or {}).get("login", ""),
-        }
-        for comment in comments
-        if (comment.get("body") or "").strip()
-    ][:MAX_COMMENTS]
-
-    general = [
-        {
-            "state": review.get("state", ""),
-            "body": (review.get("body") or "")[:MAX_COMMENT],
-            "author": (review.get("user") or {}).get("login", ""),
-        }
-        for review in reviews
-        if (review.get("body") or "").strip()
-    ][:MAX_COMMENTS]
-
-    discussion = [
-        {
-            "body": (comment.get("body") or "")[:MAX_COMMENT],
-            "author": (comment.get("user") or {}).get("login", ""),
-        }
-        for comment in issue_comments
-        # A comment that only invokes the pipeline is not feedback about the code.
-        if (comment.get("body") or "").strip() and not (comment.get("body") or "").lstrip().startswith("/")
-    ][:MAX_COMMENTS]
-
-    return {
-        "inline": inline,
-        "reviews": general,
-        "discussion": discussion,
-        "requested_changes": any(r.get("state") == "CHANGES_REQUESTED" for r in reviews),
-        "count": len(inline) + len(general) + len(discussion),
-    }
-
-
-@click.command(name="pr-feedback")
-@click.option("--pr", default="", help="Pull request number. Empty on a first run.")
-@click.option("--repo", envvar="GITHUB_REPOSITORY", required=True)
-@click.option("--output", required=True, type=click.Path(path_type=Path))
-@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
-def pr_feedback(pr: str, repo: str, output: Path, from_dir: Path | None) -> None:
-    """Collect a pull request's review feedback as pipeline input.
-
-    A first run has no pull request and therefore no feedback. That is the normal case, not an
-    error: the same step runs on every invocation and simply has nothing to say the first time.
-    """
-    if not pr.strip() and not from_dir:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(normalize([], [], []), indent=2) + "\n", encoding="utf-8")
-        _emit_output("count", "0")
-        _emit_output("requested_changes", "false")
-        click.echo("no pull request yet; no feedback to collect")
-        return
-
-    if from_dir:
-        def load(name: str) -> list[dict]:
-            path = from_dir / f"{name}.json"
-            return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
-
-        reviews, comments, issue_comments = load("reviews"), load("comments"), load("issue_comments")
-    else:
-        reviews = _gh(f"repos/{repo}/pulls/{pr}/reviews", "--paginate")
-        comments = _gh(f"repos/{repo}/pulls/{pr}/comments", "--paginate")
-        issue_comments = _gh(f"repos/{repo}/issues/{pr}/comments", "--paginate")
-
-    feedback = normalize(reviews, comments, issue_comments)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(feedback, indent=2) + "\n", encoding="utf-8")
-
-    _emit_output("count", str(feedback["count"]))
-    _emit_output("requested_changes", "true" if feedback["requested_changes"] else "false")
-    click.echo(f"collected {feedback['count']} piece(s) of feedback -> {output}")
-
-
 # --- await-checks ----------------------------------------------------------
 
 
@@ -192,9 +99,7 @@ def pr_feedback(pr: str, repo: str, output: Path, from_dir: Path | None) -> None
 @click.option("--interval", default=20, show_default=True, type=int)
 @click.option("--ignore", default="", help="Comma-separated check names to disregard.")
 @click.option("--output", type=click.Path(path_type=Path))
-def await_checks(
-    ref: str, repo: str, timeout: int, interval: int, ignore: str, output: Path | None
-) -> None:
+def await_checks(ref: str, repo: str, timeout: int, interval: int, ignore: str, output: Path | None) -> None:
     """Wait for the repository's own CI to finish, and report what it concluded.
 
     The pipeline writes a change and then asks the project's real CI whether it holds up — not a
@@ -209,7 +114,9 @@ def await_checks(
         runs = [r for r in payload.get("check_runs", []) if r.get("name") not in skip]
         if runs and all(run.get("status") == "completed" for run in runs):
             break
-        click.echo(f"waiting: {sum(1 for r in runs if r.get('status') != 'completed')} still running", err=True)
+        click.echo(
+            f"waiting: {sum(1 for r in runs if r.get('status') != 'completed')} still running", err=True
+        )
         time.sleep(interval)
     else:
         _fail(f"checks on {ref} did not finish within {timeout}s")

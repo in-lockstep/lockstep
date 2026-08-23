@@ -58,9 +58,7 @@ def reduce_issue(raw: dict[str, Any]) -> dict[str, Any]:
 @click.option("--base-url", envvar="JIRA_BASE_URL", default="")
 @click.option("--token", envvar="JIRA_API_TOKEN", default="")
 @click.option("--from-file", type=click.Path(path_type=Path), help="Read a fixture instead.")
-def jql_search(
-    jql: str, output: Path, limit: int, base_url: str, token: str, from_file: Path | None
-) -> None:
+def jql_search(jql: str, output: Path, limit: int, base_url: str, token: str, from_file: Path | None) -> None:
     """Run a query and reduce each result to what a triage decision turns on."""
     if from_file:
         payload = json.loads(from_file.read_text(encoding="utf-8"))

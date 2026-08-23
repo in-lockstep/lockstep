@@ -1,12 +1,12 @@
 {
   "args": {
-    "args": "--jql=\"{jql}\" --limit={limit} --only=\"{only}\" --output={output_dir}/bugs.json"
+    "args": "--pr=\"{pull_request}\" --by-path --output={output_dir}/feedback.json"
   },
   "command": "fix-bugs",
   "context_files": [],
   "fingerprint": "",
   "foreach": null,
-  "id": "fetch-bugs",
+  "id": "feedback",
   "input": "",
   "kind": "builtin",
   "on_failure": "",
@@ -14,5 +14,5 @@
   "parallel": 0,
   "post": "",
   "pre": "",
-  "target": "jira-fetch"
+  "target": "pr-feedback"
 }

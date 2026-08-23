@@ -120,9 +120,7 @@ def test_a_reproducer_is_only_meaningful_if_it_fails_first(tmp_path):
     (tmp_path / "test_x.py").write_text("def test_broken():\n    assert False\n", encoding="utf-8")
     verdict = tmp_path / "verdict.json"
 
-    result = CliRunner().invoke(
-        run_suite, [f"--repo={tmp_path}", "--expect=fail", f"--output={verdict}"]
-    )
+    result = CliRunner().invoke(run_suite, [f"--repo={tmp_path}", "--expect=fail", f"--output={verdict}"])
     assert result.exit_code == 0
     assert json.loads(verdict.read_text())["satisfied"] is True
 

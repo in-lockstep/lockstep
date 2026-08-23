@@ -46,9 +46,7 @@ def summarize(issues: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
         "by_priority": dict(Counter(issue.get("priority", "unset") for issue in issues).most_common()),
         "by_component": dict(
             Counter(
-                component
-                for issue in issues
-                for component in (issue.get("components") or ["unassigned"])
+                component for issue in issues for component in (issue.get("components") or ["unassigned"])
             ).most_common()
         ),
         "unlabelled": [issue["key"] for issue in issues if not issue.get("labels")],

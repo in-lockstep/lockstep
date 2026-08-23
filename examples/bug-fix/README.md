@@ -4,6 +4,9 @@ The worked example from [the extension guide](../../docs/extending.md). It fetch
 Jira, analyzes them against the application source, writes reproducers, writes fixes, validates them,
 reviews them adversarially, and opens a pull request.
 
+A reviewer who disagrees with a proposed fix says so in review comments and types `/fix APP-412`.
+The same pipeline runs again, narrowed to that bug, with their comments as input.
+
 It exists to demonstrate both extension points:
 
 - **`extensions/`** — a `pipeline-exec` extension contributing three builtins through entry points:

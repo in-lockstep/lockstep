@@ -69,9 +69,7 @@ def test_the_limit_is_honoured(tmp_path):
     source = tmp_path / "raw.json"
     source.write_text(json.dumps({"issues": [RAW] * 10}), encoding="utf-8")
     output = tmp_path / "issues.json"
-    CliRunner().invoke(
-        jql_search, ["--jql=x", f"--output={output}", f"--from-file={source}", "--limit=3"]
-    )
+    CliRunner().invoke(jql_search, ["--jql=x", f"--output={output}", f"--from-file={source}", "--limit=3"])
     assert len(json.loads(output.read_text())) == 3
 
 

@@ -56,10 +56,15 @@ def _emit_output(name: str, value: str) -> None:
 @click.option("--jql", required=True, help="Which issues to fetch.")
 @click.option("--output", required=True, type=click.Path(path_type=Path))
 @click.option("--limit", default=25, show_default=True, type=int)
+@click.option("--only", default="", help="Comma-separated keys to narrow to, for a targeted re-run.")
 @click.option("--base-url", envvar="JIRA_BASE_URL", required=True)
 @click.option("--token", envvar="JIRA_API_TOKEN", required=True)
-def jira_fetch(jql: str, output: Path, limit: int, base_url: str, token: str) -> None:
-    """Fetch bugs as a work list the pipeline can fan out over."""
+def jira_fetch(jql: str, output: Path, limit: int, only: str, base_url: str, token: str) -> None:
+    """Fetch bugs as a work list the pipeline can fan out over.
+
+    `--only` narrows to specific keys, which is how a review re-run avoids re-doing every bug in the
+    query when a reviewer objected to one of them.
+    """
     import httpx
 
     issues: list[dict[str, Any]] = []
@@ -83,6 +88,10 @@ def jira_fetch(jql: str, output: Path, limit: int, base_url: str, token: str) ->
 
     # `key` is the field `fanout` keys on, so it decides both the matrix legs and the output
     # filenames. Everything else here exists so the analysing agent needs no tools.
+    wanted = {key.strip() for key in only.split(",") if key.strip()}
+    if wanted:
+        issues = [issue for issue in issues if issue.get("key") in wanted]
+
     work = [
         {
             "key": issue["key"],

@@ -317,7 +317,8 @@ comments. Then:
 /implement
 ```
 
-The pipeline runs again. `pr-feedback` collects what you wrote and reduces it to what a code-writing
+The pipeline runs again. `pr-feedback` — a framework builtin; it began as an extension here and moved into `pipeline-exec`
+when a second pipeline needed it — collects what you wrote and reduces it to what a code-writing
 agent can act on:
 
 ```python
@@ -432,6 +433,8 @@ Start a change from the Actions tab, or from anywhere you can comment:
 - Nothing here has run on a real GitHub runner. The gate, the CI wait, and the comment update are
   contract-tested against exactly what the compiler emits, and the simulator proves the authorization
   graph — but a first live run will find things no local test can.
+- `pr-feedback` now ships with the framework rather than with this example's extension. Nothing in
+  the spec changed when it moved: a `builtin:` step names a command, never the package providing it.
 - `issue-fetch` is written against Jira's v2 API and has met only its own unit tests, not a live
   instance. Its acceptance-criteria lookup guesses at a custom field, which will need adjusting for
   your instance.
