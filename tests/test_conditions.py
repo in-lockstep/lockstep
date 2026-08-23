@@ -159,3 +159,53 @@ def test_a_step_whose_value_gates_others_is_never_cached(basic_root):
     workflow = yaml.safe_load(compile_spec(basic_root).files[".github/workflows/branching.yml"])
     steps = workflow["jobs"]["decide"]["steps"]
     assert not [step for step in steps if "step-cache" in str(step.get("uses", ""))]
+
+
+# --- running a step with the compiler ---------------------------------------
+
+
+COMPILER_STEPS = """
+1. **Re-pin** → script: scripts/fetch-issues.py
+   - id: repin
+   - uses-compiler: true
+   - args: --output={output_dir}/moved.json
+
+2. **Run in the executor** → builtin: report
+   - id: report
+   - args: --run-dir={output_dir}/runs
+"""
+
+
+@pytest.fixture
+def compiler_job(basic_root):
+    write_command(basic_root, COMPILER_STEPS)
+    return yaml.safe_load(compile_spec(basic_root).files[".github/workflows/branching.yml"])
+
+
+def test_a_compiler_step_runs_outside_the_executor_container(compiler_job):
+    """The image deliberately lacks the compiler: a runtime that could recompile could change what runs."""
+    assert "container" not in compiler_job["jobs"]["repin"]
+    assert "container" in compiler_job["jobs"]["report"]
+
+
+def test_a_compiler_step_installs_the_pinned_compiler(compiler_job):
+    steps = compiler_job["jobs"]["repin"]["steps"]
+    runs = [step.get("run", "") for step in steps]
+    assert any("uv tool install" in run for run in runs)
+
+
+def test_the_body_lands_after_the_preamble_not_inside_it(compiler_job):
+    """A longer preamble with a fixed insertion index would splice the body into the middle of it."""
+    steps = compiler_job["jobs"]["repin"]["steps"]
+    names = [step.get("name") or str(step.get("uses", "")) for step in steps]
+    assert names.index("Install the pinned compiler") < names.index("Re-pin")
+
+
+def test_a_compiler_step_never_shares_a_job_with_a_container_step(compiler_job):
+    assert "repin" in compiler_job["jobs"] and "report" in compiler_job["jobs"]
+
+
+def test_no_workflow_carries_the_compilers_scratch_key(basic_root):
+    write_command(basic_root, COMPILER_STEPS)
+    for text in compile_spec(basic_root).files.values():
+        assert "__body_at__" not in text

@@ -28,6 +28,11 @@ RUNNERS = {
 }
 
 
+# Scratch key on a job under construction, popped before it is emitted: the index its own steps go
+# at. A job that installs the compiler has a longer preamble than one that does not.
+BODY_AT = "__body_at__"
+
+
 @dataclass
 class JobGroup:
     """One emitted job: either a run of fused deterministic steps, or a single `uses:` call."""
@@ -91,6 +96,8 @@ def group_steps(steps: list[Step], *, fuse: bool) -> list[JobGroup]:
             or not current.steps[-1].fusible
             # a condition change would otherwise become per-step `if:` spaghetti
             or _condition_key(step.condition) != _condition_key(current.condition)
+            # One of these runs outside the executor container; they cannot share a job.
+            or step.uses_compiler != current.steps[-1].uses_compiler
         )
         if breaks:
             current = JobGroup(kind="steps", steps=[step])
@@ -373,6 +380,7 @@ def _ensure_producer(
         return previous_id, previous_job
     job_id = f"fanout-{group.id}"
     job = _base_steps_job(ctx, previous_id, condition=group.condition)
+    job.pop(BODY_AT, None)
     jobs[job_id] = job
     return job_id, job
 
@@ -418,6 +426,7 @@ def _base_steps_job(
     *,
     condition: Condition | None,
     step_to_job: dict[str, str] | None = None,
+    uses_compiler: bool = False,
 ) -> dict[str, Any]:
     job: dict[str, Any] = {}
     resolved = _needs_with(needs, condition, step_to_job or {})
@@ -426,9 +435,20 @@ def _base_steps_job(
     if condition:
         job["if"] = _if_expression(condition, step_to_job)
     job["runs-on"] = ctx.runs_on
-    job["container"] = ctx.pins.exec_container()
+    setup: list[dict[str, Any]] = [{"uses": ctx.pins.external_action("actions/checkout")}]
+    if uses_compiler:
+        # No executor container: this job needs the compiler, which the image deliberately lacks.
+        # Installed as a tool rather than by syncing the repository, so a check never executes
+        # project-defined build hooks to run.
+        compiler = ctx.spec.manifest.capabilities.compiler or "lockstep"
+        setup.append({"uses": "astral-sh/setup-uv@v6"})
+        setup.append({"name": "Install the pinned compiler", "run": f'uv tool install "{compiler}"'})
+        if ctx.spec.manifest.inherits:
+            setup.append({"name": "Fetch inherited pipelines", "run": "lockstep fetch"})
+    else:
+        job["container"] = ctx.pins.exec_container()
     job["steps"] = [
-        {"uses": ctx.pins.external_action("actions/checkout")},
+        *setup,
         {"uses": ctx.pins.action("restore")},
         {
             "id": "save-workspace",
@@ -436,6 +456,9 @@ def _base_steps_job(
             "if": "${{ always() }}",
         },
     ]
+    # Where a job's own steps go. Counted rather than assumed, because a job that installs the
+    # compiler has a longer preamble and a fixed index would splice the body into the middle of it.
+    job[BODY_AT] = len(setup) + 1
     return job
 
 
@@ -514,7 +537,13 @@ def _steps_job(
     step_to_job: dict[str, str],
     stateful: bool = False,
 ) -> dict[str, Any]:
-    job = _base_steps_job(ctx, needs, condition=group.condition, step_to_job=step_to_job)
+    job = _base_steps_job(
+        ctx,
+        needs,
+        condition=group.condition,
+        step_to_job=step_to_job,
+        uses_compiler=group.head.uses_compiler,
+    )
     env = env_block(ctx.profile)
     if any(value.startswith("${{ secrets.") for value in env.values()) and ctx.profile.github.environment:
         job["environment"] = ctx.profile.github.environment
@@ -572,7 +601,8 @@ def _steps_job(
                 "with": {"path": ctx.state_db_path, "retain": command.state == "keep"},
             }
         )
-    steps[2:2] = body
+    at = job.pop(BODY_AT, 2)
+    steps[at:at] = body
     return job
 
 
@@ -922,6 +952,7 @@ def _emit_proposal(
                     "title": ctx.expand(propose.title, command),
                     "labels": propose.labels,
                     **({"base": ctx.expand(propose.base, command)} if propose.base else {}),
+                    **({"reuse-branch": "true"} if propose.reuse_branch else {}),
                 },
             },
         ],

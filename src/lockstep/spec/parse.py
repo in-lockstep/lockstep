@@ -193,6 +193,8 @@ def _apply_subkeys(step: Step, pending: dict[str, str], location: str) -> None:
             step.context_files = [p.strip() for p in value.split(",") if p.strip()]
         elif key == "emits":
             step.emits = value.strip()
+        elif key == "uses-compiler":
+            step.uses_compiler = value.strip().lower() in ("true", "yes", "1")
         elif key == "id":
             step.id = slug(value)
             step.explicit_id = True
@@ -281,6 +283,7 @@ def parse_command(src: SourceFile) -> Command:
             title=str(propose_raw.get("title", "Generated pipeline artifacts") or ""),
             labels=str(propose_raw.get("labels", "pipeline,generated") or ""),
             base=str(propose_raw.get("base", "") or ""),
+            reuse_branch=bool(propose_raw.get("reuse-branch", False)),
         )
 
     state = str(meta.get("state", "")).lower()

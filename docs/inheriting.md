@@ -279,8 +279,88 @@ budgets.
 Nothing was designed for that. It falls out of committing generated output, which this framework
 already requires for an unrelated reason.
 
-Automating the bump — an inherited pipeline that opens that pull request itself when upstream moves —
-is designed in [sharing.md](sharing.md#part-7--keeping-consumers-current) and not built.
+### Or let the pipeline do it
+
+The standards repository publishes an `update` command, and a consumer inherits it like any other:
+
+```yaml
+commands:
+  update:
+    from: standards/update
+```
+
+```markdown
+<!-- upstream: commands/update.md -->
+---
+name: update
+github:
+  triggers:
+    schedule: "17 6 * * *"
+    repository_dispatch:
+      types: [upstream-moved]
+  propose:
+    source: "{output_dir}/recompiled"
+    destination: .
+    branch: pipeline/upstream-bump
+    title: "Update inherited pipelines"
+    reuse-branch: true
+---
+
+## Steps
+
+1. **Re-resolve every upstream** → script: scripts/repin.py
+   - id: repin
+   - emits: moved
+   - uses-compiler: true
+
+2. **Recompile at the new commits** → script: scripts/recompile.sh
+   - id: recompile
+   - uses-compiler: true
+   - args: --output={output_dir}/recompiled
+```
+
+Four things in that are load-bearing.
+
+**`uses-compiler: true`** drops the executor container and installs the pinned compiler. The image
+deliberately does not carry `lockstep` — a runtime that could recompile would be a runtime that could
+change what runs — and this is the one pipeline that legitimately needs it. `doctor` surfaces it as
+`DOC020` for a human, and refuses outright (`DOC021`) if such a command has no `propose:` block: a
+recompile that does not become a reviewable pull request either does nothing, or does something
+nobody reviewed.
+
+**`reuse-branch: true`** force-pushes one branch and edits the open pull request rather than opening
+another. Three upstream bumps in a week leave one pull request showing the current state — and a
+reviewer who already commented keeps their thread.
+
+**The payload is ignored entirely.** `repository_dispatch` is data somebody sent, and a payload that
+could name a ref would be a payload that could point a consumer at arbitrary code the moment a token
+leaked. Every commit comes from resolving this repository's own `inherits:` against repositories it
+already trusts. The design allows the payload to hint *which* alias moved as a scheduling
+optimization; the build does not read it at all, which is simpler to defend.
+
+**Polling is the baseline.** `schedule:` needs no privileged credential anywhere — this repository
+asks its upstreams whether they moved. The dispatch is the same work sooner, for organizations that
+need same-hour propagation, and it costs a GitHub App that can write to every consumer.
+
+### The upstream side
+
+```yaml
+# acme/pipeline-standards — .github/workflows/notify-consumers.yml
+on:
+  workflow_run:
+    workflows: [pipeline-ci]     # nothing fires until this repository's own checks pass
+    types: [completed]
+    branches: [main]
+```
+
+The App's installation list *is* the consumer list — `gh api /installation/repositories` — because a
+second list kept in a file would poke repositories that uninstalled and miss ones that just arrived.
+One unreachable consumer warns and the rest continue.
+
+There is deliberately **no builtin** for any of this. `lockstep pin` already resolves every ref and
+rewrites the lock; `repin.py` reads the lock, runs `pin`, and reads it again. A second implementation
+of resolution could disagree with the first, and the one that disagreed would be the one deciding
+whether to open a pull request.
 
 ---
 

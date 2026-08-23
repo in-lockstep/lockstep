@@ -6,6 +6,8 @@ inherits:
   review: ../upstream-review
 
 commands:
+  update:
+    from: standards/update
   review:
     from: review
     add-guardrails: [house-style]

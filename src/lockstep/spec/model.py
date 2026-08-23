@@ -100,6 +100,13 @@ class Step:
     max_iterations: int = 0
     # Shell command producing a hash of live target state, so a redeploy invalidates cached output.
     fingerprint: str = ""
+    # Run this step with the compiler installed, outside the executor container.
+    #
+    # The executor image deliberately does not contain `lockstep`: a runtime that could recompile
+    # would be a runtime that could change what runs. Exactly one kind of pipeline legitimately
+    # needs it — the one whose job is to re-pin an upstream and propose the recompile — and it must
+    # put the result through a pull request rather than committing it.
+    uses_compiler: bool = False
 
     def applies_to(self, backend: str) -> bool:
         """A step with no `targets:` applies everywhere; otherwise only where listed."""
@@ -142,6 +149,10 @@ class Propose:
     # Where the pull request lands. Defaults to the branch the run happened on; set it to publish
     # onto a branch whose contents are unrelated to the one that generated them.
     base: str = ""
+    # Push to one stable branch and update the open pull request rather than opening another. For
+    # work that supersedes itself: three upstream bumps in a week should leave one pull request
+    # showing the current state, and a reviewer who commented on it keeps their thread.
+    reuse_branch: bool = False
 
 
 @dataclass

@@ -241,6 +241,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     pins = Pins.load(spec)
     _check_pins(pins, report)
     _check_inherits(spec, root, report)
+    _check_runtime_compiler(spec, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)
     _check_secrets(spec, report)
@@ -299,6 +300,39 @@ def _check_pins(pins: Pins, report: Report) -> None:
             "gh-aw is not pinned",
             hint="set capabilities.gh-aw in pipeline.yaml so lock files stay reproducible",
         )
+
+
+def _check_runtime_compiler(spec: Spec, report: Report) -> None:
+    """A step that installs the compiler can regenerate this repository's own output.
+
+    There is one legitimate reason to want that — re-pinning an upstream and proposing the recompile
+    — and it is legitimate only because the result goes through a pull request. A pipeline that
+    committed its own recompile would be a pipeline whose reviewed output stopped being the artifact
+    that runs, so this is surfaced for a human rather than judged by the compiler.
+    """
+    for command in spec.commands.values():
+        steps = [step for step in command.steps if step.uses_compiler]
+        if not steps:
+            continue
+        location = command.src.rel if command.src else command.name
+        report.add(
+            Severity.WARNING,
+            "DOC020",
+            f"command {command.name!r} runs the compiler at runtime "
+            f"({', '.join(step.id or step.label for step in steps)})",
+            location=location,
+            hint="the only intended use is proposing a recompile after an upstream moved. Check "
+            "that its output reaches a pull request rather than a branch anybody merges from",
+        )
+        if command.github.propose is None:
+            report.add(
+                Severity.ERROR,
+                "DOC021",
+                f"command {command.name!r} recompiles but proposes nothing",
+                location=location,
+                hint="add a `propose:` block — a recompile that does not become a reviewable pull "
+                "request either does nothing or does something nobody reviewed",
+            )
 
 
 def _check_inherits(spec: Spec, root: Path, report: Report) -> None:

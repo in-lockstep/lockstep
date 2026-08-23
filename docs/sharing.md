@@ -9,7 +9,8 @@ for the walkthrough. `tests/fixtures/` holds the whole arrangement — an
 `upstream-review` repository that publishes a pipeline, and a `consumer` whose entire contents are a
 manifest, a profile, a context and one house rule. `tests/test_inherits.py` compiles it.
 
-Bands (Part 4) are built too. The updater (Part 7) is designed here and not built.
+Bands (Part 4) and the updater (Part 7) are built too. `tests/test_updater.py` compiles the
+updater in the consumer and checks the parts that fail quietly.
 
 ---
 
@@ -458,7 +459,8 @@ a payload that can point a consumer at arbitrary code the moment a token leaks.
 
 The pipeline resolves each SHA from the consumer's *own* `inherits:` entry, against the repository it
 already trusts. The payload may at most hint which alias moved, so a consumer can skip a run it has
-nothing to do in — a scheduling optimization, never an input to what gets fetched.
+nothing to do in — a scheduling optimization, never an input to what gets fetched. **The built
+version reads nothing from it at all**, which is simpler to defend and costs one cheap run.
 
 ### Push or poll
 
@@ -527,10 +529,10 @@ than no artifact.
 | `repository_dispatch` / `schedule` triggers | **exists** in the trigger block |
 | `inherits:`, `lockstep pin`, `lockstep fetch` | **exists** — Part 1 is built |
 | Resolving a branch ref, not only a tag | **exists** — `resolve_ref` handles both |
-| `uses-compiler:` on a step | new, small |
-| `reuse-branch:` on `propose-pr` | new, small |
-| `scripts/repin.sh` — pin, diff the lock, emit `moved` | new; `lockstep pin` already reports what moved, so this is `git diff --exit-code` and an output |
-| Fan-out job in upstream | new — iterate the App's installations and dispatch |
+| `uses-compiler:` on a step | **built** — plus `DOC020`/`DOC021` |
+| `reuse-branch:` on `propose-pr` | **built** |
+| `scripts/repin.py` — pin, compare the lock, emit `moved` | **built**; compares commits, so a retag is caught and an unresolvable upstream is not mistaken for a new version |
+| Fan-out job in upstream | **built** — `workflow_run` on a green `pipeline-ci`, the App's installations as the consumer list |
 
 Note what is *not* on that list: a builtin to check upstream versions. `lockstep pin` already resolves
 every ref and reports which ones moved, so the step is a `git diff` against the lock file it just

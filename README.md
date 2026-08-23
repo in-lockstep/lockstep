@@ -90,9 +90,9 @@ in.
 the standards and many repositories inheriting them: a consuming repository writes four files, gets
 guardrails it cannot weaken, and reviews an upstream change as a diff of the prompt text.
 
-**[Sharing pipelines across an organization](docs/sharing.md)** is the design behind that, and the
-one part not built yet: an inherited pipeline that opens its own bump pull request when upstream
-moves.
+**[Sharing pipelines across an organization](docs/sharing.md)** is the design behind that: which
+layers travel, what a consumer may tune, and how an inherited pipeline opens its own bump pull
+request when upstream moves.
 
 ## Commands
 
