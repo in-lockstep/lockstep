@@ -57,7 +57,7 @@ class CompilePlan:
 def compile_spec(root: Path) -> CompilePlan:
     spec = load_spec(root)
     pins = Pins.load(spec)
-    overlays = load_overlays(root)
+    overlays = load_overlays(spec)
     plan = CompilePlan(root=root)
 
     profiles = spec.compiled_profiles()
@@ -116,7 +116,7 @@ def compile_spec(root: Path) -> CompilePlan:
                 + f", {result.cached_steps} cacheable"
             )
 
-        applied = _apply_overlays(overlays, workflows, agent_files, root)
+        applied = _apply_overlays(overlays, workflows, agent_files, spec.home)
 
         out = spec.manifest.target.out
         for filename, result in workflows.items():
@@ -230,7 +230,7 @@ def _apply_overlays(
     overlays: list[Overlay],
     workflows: dict[str, WorkflowResult],
     agents: dict[str, AgentArtifact],
-    root: Path,
+    home: Path,
 ) -> dict[str, list[Overlay]]:
     applied: dict[str, list[Overlay]] = {}
     for overlay in overlays:
@@ -243,7 +243,7 @@ def _apply_overlays(
             artifact = agents[name]
             hits += apply_mapping_ops(artifact.frontmatter, overlay.frontmatter, location=overlay.rel)
             artifact.body, prompt_hits = apply_prompt_ops(
-                artifact.body, overlay.prompt, root, location=overlay.rel
+                artifact.body, overlay.prompt, home, location=overlay.rel
             )
             hits += prompt_hits
         else:

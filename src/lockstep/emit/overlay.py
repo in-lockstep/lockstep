@@ -16,6 +16,7 @@ from typing import Any
 import yaml
 
 from ..errors import OverlayAnchorNotFound, OverlayError
+from ..spec.model import Spec
 from ..util.hashing import sha_file, short
 
 OVERLAY_DIR = "overlays/github"
@@ -35,13 +36,15 @@ class Overlay:
         return f"{self.rel}@{self.sha}"
 
 
-def load_overlays(root: Path) -> list[Overlay]:
-    directory = root / OVERLAY_DIR
+def load_overlays(spec: Spec) -> list[Overlay]:
+    # Overlays are spec input, so they live wherever the rest of the definitions do. The stamp is
+    # written from the repository root, because that is the path a reviewer will go looking for.
+    directory = spec.home / OVERLAY_DIR
     if not directory.is_dir():
         return []
     overlays: list[Overlay] = []
     for path in sorted(directory.glob("*.yml")) + sorted(directory.glob("*.yaml")):
-        rel = str(path.relative_to(root))
+        rel = spec.repo_path(str(path.relative_to(spec.home)))
         sha = short(sha_file(path))
         for index, document in enumerate(yaml.safe_load_all(path.read_text(encoding="utf-8"))):
             if not document:
@@ -186,7 +189,7 @@ def _insert_index(items: list[Any], op: dict[str, Any], location: str) -> int:
     return index + 1 if after else index
 
 
-def apply_prompt_ops(body: str, ops: list[dict[str, Any]], root: Path, *, location: str) -> tuple[str, int]:
+def apply_prompt_ops(body: str, ops: list[dict[str, Any]], home: Path, *, location: str) -> tuple[str, int]:
     """Append or replace prose sections in a generated agent body."""
     applied = 0
     for index, op in enumerate(ops):
@@ -197,7 +200,7 @@ def apply_prompt_ops(body: str, ops: list[dict[str, Any]], root: Path, *, locati
         heading = str(op.get("heading", "")).strip()
         text = str(op.get("text", ""))
         if op.get("file"):
-            fragment = root / str(op["file"])
+            fragment = home / str(op["file"])
             if not fragment.is_file():
                 raise OverlayError(f"prompt fragment {op['file']!r} not found", location=where)
             text = fragment.read_text(encoding="utf-8")

@@ -32,11 +32,16 @@ class CheckReport:
         return not (self.missing or self.modified or self.orphaned)
 
 
-def _manifest_path(root: Path) -> Path:
-    """The compile manifest, wherever this repository keeps its pipeline."""
+def _home(root: Path) -> Path:
+    """Where this repository keeps its pipeline — `.lockstep/` when the definitions live there."""
     from ..spec.load import find_home
 
-    return find_home(root)[0] / MANIFEST_PATH
+    return find_home(root)[0]
+
+
+def _manifest_path(root: Path) -> Path:
+    """The compile manifest, wherever this repository keeps its pipeline."""
+    return _home(root) / MANIFEST_PATH
 
 
 def previously_generated(root: Path) -> set[str]:
@@ -55,7 +60,7 @@ def _ejected(root: Path) -> set[str]:
     """Files the user has taken ownership of; the compiler must not touch them."""
     import yaml
 
-    path = root / ".pipeline/ejected.yaml"
+    path = _home(root) / ".pipeline/ejected.yaml"
     if not path.is_file():
         return set()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

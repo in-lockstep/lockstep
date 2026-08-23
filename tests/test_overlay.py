@@ -8,6 +8,7 @@ import yaml
 from lockstep.emit import compile_spec
 from lockstep.emit.overlay import apply_mapping_ops, deep_merge, load_overlays, resolve
 from lockstep.errors import OverlayAnchorNotFound, OverlayError
+from lockstep.spec.load import load_spec
 
 OVERLAY_FILE = "overlays/github/generate-tests.yml"
 
@@ -95,7 +96,7 @@ def test_operation_without_an_anchor_is_rejected():
 
 
 def test_overlay_documents_load_with_provenance(basic_spec_dir):
-    overlays = load_overlays(basic_spec_dir)
+    overlays = load_overlays(load_spec(basic_spec_dir))
     assert [o.target for o in overlays] == [
         "workflows/generate-tests.yml",
         "workflows/aw-story-extractor.md",

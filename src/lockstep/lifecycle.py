@@ -18,10 +18,21 @@ import yaml
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH
 from .errors import LockstepError
+from .spec.load import find_home
 from .spec.model import Spec
 
 EJECTED_PATH = ".pipeline/ejected.yaml"
 EJECT_BASE = ".pipeline/eject-base"
+
+
+def _home(root: Path) -> Path:
+    """Where this repository keeps its pipeline.
+
+    Compiler state belongs with the definitions it describes: in a repository that adopted a
+    pipeline into `.lockstep/`, the ejection registry goes there too rather than leaving a second
+    `.pipeline/` directory at the root of somebody else's project.
+    """
+    return find_home(root)[0]
 
 
 class PinError(LockstepError):
@@ -58,9 +69,7 @@ def resolve_tag(repo: str, tag: str) -> str:
 
 
 def _pins_path(root: Path) -> Path:
-    from .spec.load import find_home
-
-    return find_home(root)[0] / PINS_PATH
+    return _home(root) / PINS_PATH
 
 
 def load_pins(root: Path) -> dict[str, Any]:
@@ -185,14 +194,14 @@ class Ejection:
 
     @classmethod
     def load(cls, root: Path) -> Ejection:
-        path = root / EJECTED_PATH
+        path = _home(root) / EJECTED_PATH
         if not path.is_file():
             return cls(files=[])
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         return cls(files=[str(entry) for entry in (data.get("files") or [])])
 
     def save(self, root: Path) -> Path:
-        path = root / EJECTED_PATH
+        path = _home(root) / EJECTED_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             "# Files this repository has taken ownership of. The compiler will not touch them, and\n"
@@ -213,7 +222,7 @@ def eject(root: Path, relative: str, generated: str) -> Path:
     if relative in registry.files:
         raise EjectError(f"{relative} is already ejected")
 
-    base = root / EJECT_BASE / relative
+    base = _home(root) / EJECT_BASE / relative
     base.parent.mkdir(parents=True, exist_ok=True)
     # The pristine generation is the merge base a later `uneject --merge` needs; without it the only
     # options would be keep-mine or take-theirs.
@@ -230,7 +239,7 @@ def uneject(root: Path, relative: str) -> None:
         raise EjectError(f"{relative} is not ejected")
     registry.files.remove(relative)
     registry.save(root)
-    base = root / EJECT_BASE / relative
+    base = _home(root) / EJECT_BASE / relative
     if base.is_file():
         base.unlink()
 
@@ -239,7 +248,7 @@ def stale_ejections(root: Path, generated: dict[str, str]) -> list[str]:
     """Ejected files whose generation has moved on since they were forked."""
     stale = []
     for relative in Ejection.load(root).files:
-        base = root / EJECT_BASE / relative
+        base = _home(root) / EJECT_BASE / relative
         fresh = generated.get(relative)
         if fresh is not None and base.is_file() and base.read_text(encoding="utf-8") != fresh:
             stale.append(relative)
