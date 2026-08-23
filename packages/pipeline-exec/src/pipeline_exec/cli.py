@@ -408,18 +408,46 @@ def test_runner(
 
 
 @main.command()
-@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option(
+    "--surface",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Declared API surface: `openapi:` and/or `paths:`. Lives with the pipeline's contexts.",
+)
+@click.option("--output", required=True, type=click.Path(path_type=Path), help="Where to write the JSON.")
+@click.option(
+    "--context",
+    type=click.Path(path_type=Path),
+    help="Also write what was found as a context fragment an agent can import.",
+)
+@click.option("--token", default="", help="Bearer token, when the target needs one.")
+@click.option("--insecure", is_flag=True, help="Skip TLS verification. For a self-signed test target only.")
 @click.option("--output-dir", default="", help="Pipeline output directory.")
-def discover(output: Path, output_dir: str) -> None:
-    """Discover the target application's API surface."""
+def discover(
+    surface: Path, output: Path, context: Path | None, token: str, insecure: bool, output_dir: str
+) -> None:
+    """Record the target's API surface, as declared by this pipeline.
+
+    The surface is declared rather than guessed: a framework that ships a list of endpoints ships one
+    application's endpoints. See docs/layers.md.
+    """
     import asyncio
 
-    from .builtins.discovery import discover_api
+    from .builtins.discovery import Surface, discover_api, write_context
 
-    schemas = asyncio.run(discover_api(_config(output_dir=output_dir)))
+    result = asyncio.run(
+        discover_api(
+            _config(output_dir=output_dir),
+            Surface.load(surface),
+            token=token,
+            verify_tls=not insecure,
+        )
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(schemas, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    click.echo(f"discovered {len(schemas)} schema group(s) -> {output}")
+    output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if context:
+        write_context(result, context)
+    click.echo(f"recorded the surface of {result['api_url']} -> {output}")
 
 
 @main.command()

@@ -67,6 +67,10 @@ intent` bot — one review per aspect, revised in place, and silent when nothing
 **[Adding a pipeline to a repository you already have](docs/adopting.md)** covers adoption into an
 existing project with its own CI, and the security model for pull requests from forks.
 
+**[What goes where](docs/layers.md)** is the rule that keeps application knowledge out of the
+framework: which tier code belongs to, and which of the three prompt layers a piece of prose belongs
+in.
+
 ## Commands
 
 ```bash

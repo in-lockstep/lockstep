@@ -43,8 +43,11 @@ class ExecConfig:
     profile_api_prefix: str = ""
     profile_username: str = ""
     profile_password: str = ""
-    profile_auth_method: str = "jwt"
-    profile_auth_login_path: str = "/api/v1/auth/login"
+    # No default scheme and no default login path. The runtime cannot know how your application
+    # authenticates, and a guess that happens to be one application's answer is worse than an error:
+    # it fails at the target, not here. The profile declares both. See docs/layers.md.
+    profile_auth_method: str = "none"
+    profile_auth_login_path: str = ""
 
     # Report templates ship inside this package rather than being located relative to a checkout.
     framework_dir: Path = field(default_factory=lambda: Path(__file__).parent)
