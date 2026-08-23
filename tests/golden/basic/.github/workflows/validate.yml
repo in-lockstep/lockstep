@@ -62,7 +62,7 @@ jobs:
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   repair-loop-2:
     needs: repair-loop-1
-    if: ${{ inputs.skip_repair != true && needs.repair-loop-1.outputs.converged != 'true' }}
+    if: ${{ !failure() && !cancelled() && inputs.skip_repair != true && needs.repair-loop-1.outputs.converged != 'true' }}
     uses: ./.github/workflows/repair.yml
     with:
       force: ${{ inputs.force }}
@@ -70,8 +70,10 @@ jobs:
       APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   repair-loop-3:
-    needs: repair-loop-2
-    if: ${{ inputs.skip_repair != true && needs.repair-loop-2.outputs.converged != 'true' }}
+    needs:
+    - repair-loop-1
+    - repair-loop-2
+    if: ${{ !failure() && !cancelled() && inputs.skip_repair != true && needs.repair-loop-1.outputs.converged != 'true' && needs.repair-loop-2.outputs.converged != 'true' }}
     uses: ./.github/workflows/repair.yml
     with:
       force: ${{ inputs.force }}

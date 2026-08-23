@@ -63,6 +63,7 @@ jobs:
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   fetch-issues:
     needs: discover-application-structure
+    if: ${{ !failure() && !cancelled() }}
     permissions:
       contents: read
       actions: read
@@ -119,6 +120,7 @@ jobs:
       uses: pipeline-fw/pipeline-actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2
   extract-stories-from-each-issue:
     needs: fetch-issues
+    if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -148,6 +150,7 @@ jobs:
       uses: pipeline-fw/pipeline-actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2
   build-test-manifest:
     needs: verify-extract-stories-from-each-issue
+    if: ${{ !failure() && !cancelled() }}
     permissions:
       contents: read
       actions: read

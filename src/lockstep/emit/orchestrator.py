@@ -226,6 +226,7 @@ def emit_command(
     result.job_count = len(jobs)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
     result.deterministic_steps = sum(1 for s in steps if s.kind in (StepKind.SCRIPT, StepKind.BUILTIN))
+    _guard_against_skipped_dependencies(jobs)
     _expose_convergence(command, jobs, step_to_job, result)
 
     result.data = {
@@ -574,17 +575,22 @@ def _command_jobs(
     secrets = {name: secret_ref(name) for name in ctx.profile.github.secrets}
 
     emitted: list[tuple[str, dict[str, Any]]] = []
-    previous = needs
     for index in range(1, iterations + 1):
         job_id = group.id if iterations == 1 else f"{group.id}-{index}"
         job: dict[str, Any] = {}
-        if previous:
-            job["needs"] = previous
+        previous_ids = [name for name, _ in emitted]
+        if previous_ids:
+            # Every prior iteration, not just the last: a skipped job's output is empty, and an
+            # empty output reads as "not converged", so checking only the predecessor would let a
+            # later iteration run after an earlier one had already converged.
+            job["needs"] = previous_ids if len(previous_ids) > 1 else previous_ids[0]
+        elif needs:
+            job["needs"] = needs
+
         conditions = []
         if step.condition:
             conditions.append(_bare_condition(step.condition))
-        if index > 1:
-            conditions.append(f"needs.{emitted[-1][0]}.outputs.converged != 'true'")
+        conditions.extend(f"needs.{name}.outputs.converged != 'true'" for name in previous_ids)
         if conditions:
             job["if"] = "${{ " + " && ".join(conditions) + " }}"
         job["uses"] = f"./.github/workflows/{target}"
@@ -592,7 +598,6 @@ def _command_jobs(
         if secrets:
             job["secrets"] = dict(secrets)
         emitted.append((job_id, job))
-        previous = job_id
     return emitted
 
 
@@ -629,6 +634,43 @@ def _verify_job(
         ],
     }
     return f"verify-{group.id}", job
+
+
+# Actions skips a job whose dependency was skipped. That is the opposite of what a conditional step
+# means in the spec — `(if not --skip-discovery)` skips discovery, not everything after it. This is
+# the documented idiom for "run if everything upstream succeeded or was skipped".
+SKIP_TOLERANT = "!failure() && !cancelled()"
+
+
+def _guard_against_skipped_dependencies(jobs: dict[str, dict[str, Any]]) -> None:
+    """Let work downstream of a skipped conditional step still run."""
+    skippable = {name for name, job in jobs.items() if job.get("if")}
+    changed = True
+    while changed:
+        changed = False
+        for name, job in jobs.items():
+            if name in skippable:
+                continue
+            if any(dep in skippable for dep in _needs_list(job)):
+                skippable.add(name)
+                changed = True
+
+    for job in jobs.values():
+        if not any(dep in skippable for dep in _needs_list(job)):
+            continue
+        condition = job.get("if")
+        if condition is None:
+            job["if"] = "${{ " + SKIP_TOLERANT + " }}"
+        elif "cancelled()" not in condition:
+            inner = condition.strip().removeprefix("${{").removesuffix("}}").strip()
+            job["if"] = "${{ " + f"{SKIP_TOLERANT} && {inner}" + " }}"
+
+
+def _needs_list(job: dict[str, Any]) -> list[str]:
+    needs = job.get("needs")
+    if needs is None:
+        return []
+    return [needs] if isinstance(needs, str) else list(needs)
 
 
 def _expose_convergence(

@@ -30,13 +30,22 @@ def test_a_convergence_loop_unrolls_to_a_bounded_chain(basic_spec_dir):
     ]
 
 
-def test_each_iteration_is_skipped_once_the_previous_one_converged(basic_spec_dir):
+def test_each_iteration_checks_every_prior_one(basic_spec_dir):
+    """A skipped job's output is empty, and empty reads as "not converged" — so checking only the
+    immediate predecessor would run iteration 3 after iteration 1 had already converged."""
     jobs = jobs_of(basic_spec_dir, "validate.yml")
     assert jobs["repair-loop-1"]["if"] == "${{ inputs.skip_repair != true }}"
-    assert jobs["repair-loop-2"]["if"] == (
-        "${{ inputs.skip_repair != true && needs.repair-loop-1.outputs.converged != 'true' }}"
-    )
-    assert jobs["repair-loop-3"]["needs"] == "repair-loop-2"
+
+    third = jobs["repair-loop-3"]
+    assert third["needs"] == ["repair-loop-1", "repair-loop-2"]
+    assert "needs.repair-loop-1.outputs.converged != 'true'" in third["if"]
+    assert "needs.repair-loop-2.outputs.converged != 'true'" in third["if"]
+
+
+def test_work_after_a_skipped_conditional_step_still_runs(basic_spec_dir):
+    """Actions skips a job whose dependency was skipped; the spec means only that step is skipped."""
+    jobs = jobs_of(basic_spec_dir, "generate-tests.yml")
+    assert "!failure() && !cancelled()" in jobs["fetch-issues"]["if"]
 
 
 def test_the_callee_publishes_a_converged_workflow_output(basic_spec_dir):

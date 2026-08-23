@@ -210,9 +210,45 @@ should not stop `actions/checkout` from being pinned.
 The whole day-one path is covered end to end: init, pin, compile, then a clean lint, doctor and drift
 gate.
 
+## Phase 7 — conformance
+
+Golden tests prove the compiler emits the same text twice. They say nothing about whether that text
+*behaves* like the spec it came from. `lockstep.conformance` walks the emitted graph instead:
+resolving `needs`, evaluating the `if:` expressions the compiler produces, and reporting which jobs
+would run in which order. It understands exactly the grammar the compiler emits and refuses anything
+else — an expression it cannot read is either a bug here or an emission nobody has reasoned about.
+
+That found two real bugs in a single afternoon, both invisible to every other test:
+
+1. **A conditional step skipped everything after it.** Actions skips a job whose dependency was
+   skipped, so `(if not --skip-discovery)` did not skip discovery — it skipped the entire pipeline.
+   Jobs downstream of a conditional one now carry `!failure() && !cancelled()`, the documented idiom
+   for "upstream succeeded or was skipped".
+2. **Convergence loops did not terminate correctly.** Each unrolled iteration checked only its
+   immediate predecessor, and a *skipped* job's output is empty — which reads as "not converged". So
+   converging at iteration 1 still ran iteration 3. Each iteration now checks every prior one.
+
+Neither is visible in a golden diff, and neither would have surfaced before a scheduled run behaved
+strangely in production.
+
+The suite also asserts the properties that make a compiled graph trustworthy: no dependency cycles,
+job order follows step order, every step that targets GitHub reaches a job, local-only steps reach
+none, and — by trying every combination of boolean inputs — no job is unreachable.
+
+### Not built
+
+**Round-trip evals across backends.** The design calls for running the same eval cases through the
+local runtime and the compiled output and diffing the scores. That needs `pipeline-framework`, which
+this repo deliberately does not depend on. It stays open, and it is the one remaining gap between
+"the compiled graph behaves as specified" and "both backends behave alike".
+
+**The fleet dashboard.** Reading many pipeline repositories' pins and manifests to report who is
+behind. It needs real consumer repositories to be worth anything; building it against none would be
+speculation.
+
 ## Testing
 
-377 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+400 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests

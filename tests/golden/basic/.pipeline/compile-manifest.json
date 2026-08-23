@@ -21,7 +21,7 @@
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "e1dab936",
+      "sha": "51103aff",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
@@ -49,7 +49,7 @@
       "sources": []
     },
     ".github/workflows/validate.yml": {
-      "sha": "b59680d1",
+      "sha": "8a5b8678",
       "sources": [
         "commands/validate.md@07878f25"
       ]
