@@ -1,6 +1,9 @@
 # Status
 
-## Phase 1 — the compiler skeleton (complete)
+All seven phases of the design are implemented. What remains open is listed under each phase and
+gathered at the end; nothing is silently missing.
+
+## Phase 1 — the compiler skeleton
 
 | Area | What works |
 |---|---|
@@ -15,7 +18,7 @@
 | **Semantic diff** | Permissions, triggers, egress, MCP allow-lists, safe-output caps, secrets, pins, budgets and turn caps; blocking vs informational. |
 | **Structural validation** | Reusable-workflow jobs with disallowed keys, dangling `needs:`, matrices reading undeclared outputs, over-limit timeouts, dispatch-input overflow. |
 
-## Phase 2 — step-type coverage (in progress)
+## Phase 2 — step-type coverage
 
 ### Done
 
@@ -62,7 +65,7 @@ convergence outputs and overlay `insert-step` anchors both have something stable
 - **`lockstep pin`, `eject`/`uneject`, `upgrade`** — Phase 5 lifecycle tooling. `pins.lock` is read but
   not resolved by the tool; ejection is honoured by the writer but has no command yet.
 
-## Phase 3 — the executor package (in progress)
+## Phase 3 — the executor package
 
 `pipeline-exec` is a second workspace package in this repo. One repository, two distributions: the
 compiler emits `pipeline-exec …` invocations as literal text, so the two are developed and tested
@@ -253,3 +256,16 @@ fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching 
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests
 covering a full fan-out cycle in both item and shard modes.
+
+## What remains open
+
+| Gap | Why it is not built |
+|---|---|
+| Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
+| Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |
+| The fleet dashboard | Needs real consumer repositories to report on. |
+| Per-command agent variants | An agent resolving to different prompt layers in different commands is refused rather than emitted as variants. |
+| Deploy modes | Profile `deploy.mode` (services / external / steps), readiness gates, CLI provisioning. `wait-for` exists; nothing emits it yet. |
+| `cost-rollup`, `collect-patterns` | Deferred until token accounting and the learning loop have a caller. |
+| Coverage of the session executors | They drive a real browser, API and shell against a running application. `make cov-all` reports the true figure; closing it needs a fixture application. |
+| `upgrade` with migration maps | Pinning, ejection and the drift gate are in place; automated overlay-anchor migration across capability majors is not. |

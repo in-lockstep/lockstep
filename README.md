@@ -42,9 +42,24 @@ They share a repository because the compiler emits `pipeline-exec` invocations a
 `tests/test_contract.py` parses every emitted invocation against the real CLI, so a renamed flag
 fails a build rather than a scheduled run.
 
+## Commands
+
+```bash
+lockstep init --name=my-pipeline    # scaffold a working pipeline
+lockstep pin                        # resolve capability tags to commits
+lockstep compile                    # generate the workflows
+lockstep compile --check            # drift gate: committed output must match the spec
+lockstep lint                       # is the spec well built?
+lockstep doctor                     # will GitHub accept it?
+lockstep show-surface               # every target decision in one document
+lockstep eject <file>               # take ownership of one generated file
+```
+
 ## Status
 
-Phase 3 — the executor package. See `docs/status.md` for what is implemented and what is deferred.
+All seven phases of the design are implemented. See [docs/status.md](docs/status.md) for what each
+covers and what remains open — chiefly round-trip evals across both backends, which need
+`pipeline-framework`.
 
 ## Development
 
