@@ -124,6 +124,25 @@ class Propose:
 
 
 @dataclass
+class ChatCommand:
+    """A slash command that lets a reviewer re-run a pipeline from a comment.
+
+    A comment trigger runs on behalf of the repository, not the commenter, so who may invoke it is
+    part of the declaration rather than an afterthought.
+    """
+
+    name: str = ""
+    events: list[str] = field(default_factory=lambda: ["issue_comment"])
+    roles: list[str] = field(default_factory=lambda: ["admin", "maintain", "write"])
+    arguments: list[str] = field(default_factory=list)
+    reaction: str = "eyes"
+
+    @property
+    def slug(self) -> str:
+        return self.name.lstrip("/")
+
+
+@dataclass
 class CommandGithub:
     triggers: dict[str, Any] = field(default_factory=dict)
     runs_on: str = ""
@@ -133,6 +152,7 @@ class CommandGithub:
     # Step id whose `converged` output this command exposes to callers that unroll it.
     converged_from: str = ""
     propose: Propose | None = None
+    command: ChatCommand | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 

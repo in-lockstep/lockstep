@@ -231,7 +231,10 @@ def emit_command(
     result.step_count = len(steps)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
     result.deterministic_steps = sum(1 for s in steps if s.kind in (StepKind.SCRIPT, StepKind.BUILTIN))
+    # Order matters: the proposal job must exist before the gate authorizes jobs, or the one job
+    # holding write permissions would be the only one left unauthorized.
     _emit_proposal(command, ctx, jobs, previous_id)
+    _emit_command_gate(command, ctx, jobs)
     # Counted here, not before: the proposal job is a job, and a summary that undercounts is a
     # summary nobody can check against the file.
     result.job_count = len(jobs)
@@ -702,6 +705,67 @@ def _verify_job(
 SKIP_TOLERANT = "!failure() && !cancelled()"
 
 
+COMMAND_GATE = "command-gate"
+
+
+def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[str, Any]]) -> None:
+    """Gate a comment-triggered pipeline on who asked for it.
+
+    A workflow triggered by a comment runs with the repository's token, and anyone who can comment
+    can trigger it. So every job is made to depend on an explicit authorization output rather than
+    on skip propagation — a job that is merely *downstream* of a skipped gate would still run under
+    the tolerant condition that lets conditional steps work.
+    """
+    chat = command.github.command
+    if not chat or not chat.name:
+        return
+
+    gate: dict[str, Any] = {
+        "name": f"Authorize {chat.name}",
+        "runs-on": ctx.runs_on,
+        # Reading collaborator permission and reacting to the comment; nothing else.
+        "permissions": {"contents": "read"},
+        "outputs": {
+            "authorized": "${{ steps.gate.outputs.authorized }}",
+            **{name: "${{ steps.gate.outputs." + name + " }}" for name in chat.arguments},
+            "instruction": "${{ steps.gate.outputs.instruction }}",
+            "pull_request": "${{ steps.gate.outputs.pull_request }}",
+        },
+        "steps": [
+            {"uses": ctx.pins.external_action("actions/checkout")},
+            {
+                "name": f"Authorize {chat.name}",
+                "id": "gate",
+                "uses": ctx.pins.action("command-gate"),
+                "with": {
+                    "command": chat.name,
+                    "roles": ",".join(chat.roles),
+                    "arguments": ",".join(chat.arguments),
+                    "reaction": chat.reaction,
+                },
+            },
+        ],
+    }
+    jobs[COMMAND_GATE] = gate
+
+    authorized = f"needs.{COMMAND_GATE}.outputs.authorized == 'true'"
+    for name, job in jobs.items():
+        if name == COMMAND_GATE:
+            continue
+        needs = _needs_list(job)
+        if COMMAND_GATE not in needs:
+            needs.insert(0, COMMAND_GATE)
+        job["needs"] = needs if len(needs) > 1 else needs[0]
+        existing = job.get("if")
+        inner = (existing or "").strip().removeprefix("${{").removesuffix("}}").strip()
+        job["if"] = "${{ " + (f"{authorized} && {inner}" if inner else authorized) + " }}"
+
+    # Move the gate to the front so the file reads in the order it runs.
+    ordered = {COMMAND_GATE: jobs.pop(COMMAND_GATE), **jobs}
+    jobs.clear()
+    jobs.update(ordered)
+
+
 def _emit_proposal(
     command: Command,
     ctx: EmitContext,
@@ -745,7 +809,9 @@ def _emit_proposal(
 
 def _guard_against_skipped_dependencies(jobs: dict[str, dict[str, Any]]) -> None:
     """Let work downstream of a skipped conditional step still run."""
-    skippable = {name for name, job in jobs.items() if job.get("if")}
+    # The command gate is excluded: every job checks its output directly, and treating it as merely
+    # skippable would let work proceed on an unauthorized comment.
+    skippable = {name for name, job in jobs.items() if job.get("if") and name != COMMAND_GATE}
     changed = True
     while changed:
         changed = False
@@ -831,6 +897,13 @@ def _on_block(command: Command, ctx: EmitContext, step_to_job: dict[str, str]) -
         if name in ("schedule", "workflow_dispatch"):
             continue
         on[name] = value
+
+    chat = command.github.command
+    if chat and chat.name:
+        for event in chat.events:
+            # `created` only: an edited comment re-firing a pipeline would let somebody rewrite what
+            # a run was asked to do after it was authorized.
+            on.setdefault(event, {"types": ["created"]})
 
     call_inputs = {
         name: {k: v for k, v in entry.items() if k != "description"} for name, entry in inputs.items()

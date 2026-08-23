@@ -1,0 +1,50 @@
+# Everything after the pull request exists.
+#
+# The proposal job is generated — it is what opens or updates the pull request — and these steps have
+# to follow it, so they arrive as an overlay rather than as spec steps. Waiting for the repository's
+# own CI and commenting the plan are both GitHub-specific, which is exactly the boundary overlays
+# are for.
+target: workflows/implement.yml
+patches:
+  - op: insert-step
+    at: jobs[id=propose-generated-artifacts].steps
+    after: propose
+    value:
+      name: Wait for the repository's own CI
+      id: ci
+      if: ${{ steps.propose.outputs.pull-request != '' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        url='${{ steps.propose.outputs.pull-request }}'
+        number="${url##*/}"
+        echo "number=$number" >> "$GITHUB_OUTPUT"
+        head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq '.head.sha')
+        # The project's own CI, not a test command this pipeline chose — otherwise the change is
+        # only proven to satisfy the pipeline.
+        pipeline-exec await-checks --ref="$head" --output=outputs/ci.json
+
+  - op: insert-step
+    at: jobs[id=propose-generated-artifacts].steps
+    after: ci
+    value:
+      name: Comment the plan on the pull request
+      id: plan-comment
+      if: ${{ always() && steps.ci.outputs.number != '' }}
+      uses: ./extensions/actions/comment-plan
+      with:
+        pull-request: ${{ steps.ci.outputs.number }}
+        plan: outputs/change/PLAN.md
+        command: "/implement"
+
+  - op: insert-step
+    at: jobs[id=fetch-issue].steps
+    before: fetch-issue
+    value:
+      name: Install the pipeline's extensions
+      id: install-extensions
+      run: |
+        set -euo pipefail
+        python -m pip install --quiet ./extensions
+        pipeline-exec list-commands --extensions-only

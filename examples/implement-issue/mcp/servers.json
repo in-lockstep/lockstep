@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${ALLOWED_PATHS}"],
+      "env": {},
+      "tools": ["read_file", "list_directory", "search_files", "get_file_info"]
+    },
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "${GIT_REPO_PATH}"],
+      "env": {},
+      "tools": ["git_log", "git_diff", "git_show", "git_status"]
+    }
+  }
+}

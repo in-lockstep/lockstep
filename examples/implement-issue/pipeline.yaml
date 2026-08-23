@@ -1,0 +1,22 @@
+spec: 1
+name: implement-issue
+
+capabilities:
+  actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
+  exec: pipeline-exec==0.1.0
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+extensions:
+  builtins: [issue-fetch, pr-feedback, await-checks]
+  packages: ["issue-ext @ file://./extensions"]
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    fuse-script-steps: true
+    default-runs-on: ubuntu-24.04
+    profiles: [main]
+
+budgets:
+  per_run_ai_credits: 700

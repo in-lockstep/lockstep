@@ -32,6 +32,7 @@ INTERNAL = frozenset(
         "fanout-verify",
         "shard-run",
         "cache-key",
+        "parse-command",
     }
 )
 

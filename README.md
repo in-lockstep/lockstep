@@ -53,6 +53,10 @@ fails a build rather than a scheduled run.
 builtins in `pipeline-exec`, and your own composite actions — worked through a pipeline that fixes
 bugs from an issue tracker and opens pull requests.
 
+**[Implementing an issue by review](docs/implementing-issues.md)** builds a pipeline that turns an
+issue into a pull request, and lets reviewers revise the plan or the code with ordinary PR comments
+plus a slash command.
+
 ## Commands
 
 ```bash

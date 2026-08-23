@@ -158,11 +158,25 @@ class EmitContext:
         parameter means the caller chooses it, and the compiled workflow must read its input.
         """
         if command:
+            chat = command.github.command
+            from_comment = set(chat.arguments) if chat else set()
             for parameter in command.parameters:
-                text = text.replace(
-                    "{" + parameter.name + "}",
-                    "${{ inputs." + parameter.input_name + " }}",
-                )
+                reference = "${{ inputs." + parameter.input_name + " }}"
+                if parameter.name in from_comment:
+                    # The same pipeline is reachable two ways. A dispatch supplies inputs; a comment
+                    # supplies the same values through the gate, and a step should not care which.
+                    reference = (
+                        "${{ inputs."
+                        + parameter.input_name
+                        + " || needs.command-gate.outputs."
+                        + parameter.input_name
+                        + " }}"
+                    )
+                text = text.replace("{" + parameter.name + "}", reference)
+            if chat:
+                # What the human actually wrote after the command — usually the point of the run.
+                text = text.replace("{instruction}", "${{ needs.command-gate.outputs.instruction }}")
+                text = text.replace("{pull_request}", "${{ needs.command-gate.outputs.pull_request }}")
         for key, value in self.resolved_values().items():
             text = text.replace("{" + key + "}", value)
         text = text.replace("{output_dir}", self.output_dir_env)

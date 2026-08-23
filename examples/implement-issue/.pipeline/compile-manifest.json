@@ -1,0 +1,98 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "9df09c50",
+      "sources": []
+    },
+    ".github/workflows/aw-change-writer.md": {
+      "sha": "71b8453e",
+      "sources": [
+        "agents/change-writer.md@34293872",
+        "guardrails/common.md@0adb4353",
+        "guardrails/source-analysis.md@6f80374a",
+        "guardrails/minimal-change.md@5e267c6d",
+        "skills/repo-conventions.md@db3c8530",
+        "contexts/repository.md@0c062bee"
+      ]
+    },
+    ".github/workflows/aw-planner.md": {
+      "sha": "556c5121",
+      "sources": [
+        "agents/planner.md@90765a5d",
+        "guardrails/common.md@0adb4353",
+        "guardrails/source-analysis.md@6f80374a",
+        "skills/repo-conventions.md@db3c8530",
+        "contexts/repository.md@0c062bee"
+      ]
+    },
+    ".github/workflows/aw-requirements-analyst.md": {
+      "sha": "f7dd648b",
+      "sources": [
+        "agents/requirements-analyst.md@b33ecd89",
+        "guardrails/common.md@0adb4353",
+        "guardrails/source-analysis.md@6f80374a",
+        "skills/repo-conventions.md@db3c8530",
+        "contexts/repository.md@0c062bee"
+      ]
+    },
+    ".github/workflows/aw-test-writer.md": {
+      "sha": "4b43a191",
+      "sources": [
+        "agents/test-writer.md@6af5ad4a",
+        "guardrails/common.md@0adb4353",
+        "guardrails/source-analysis.md@6f80374a",
+        "skills/repo-conventions.md@db3c8530",
+        "contexts/repository.md@0c062bee"
+      ]
+    },
+    ".github/workflows/implement.yml": {
+      "sha": "776bc0c5",
+      "sources": [
+        "commands/implement.md@aa792623"
+      ]
+    },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "c9908540",
+      "sources": []
+    },
+    ".github/workflows/shared/context-repository.md": {
+      "sha": "46fba8cd",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "dc6ae7a9",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-minimal-change.md": {
+      "sha": "8da2e3ce",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-source-analysis.md": {
+      "sha": "2a9e6ca0",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-repo-conventions.md": {
+      "sha": "92e0af3d",
+      "sources": []
+    },
+    ".pipeline/step-defs/implement.feedback.json": {
+      "sha": "8b265024",
+      "sources": []
+    },
+    ".pipeline/step-defs/implement.fetch-issue.json": {
+      "sha": "691477d9",
+      "sources": []
+    },
+    ".pipeline/step-defs/implement.render-the-plan-for-review.json": {
+      "sha": "f19e9685",
+      "sources": []
+    },
+    "SECRETS.md": {
+      "sha": "d6403028",
+      "sources": []
+    }
+  },
+  "pipeline": "implement-issue",
+  "spec": 1
+}

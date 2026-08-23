@@ -519,6 +519,35 @@ def check_convergence(run_dir: Path, name: str) -> None:
     )
 
 
+@main.command(name="parse-command")
+@click.option("--command", required=True, help="The slash command to look for, e.g. /implement.")
+@click.option("--body", default="", help="The comment body.")
+@click.option("--body-file", type=click.Path(path_type=Path), help="Read the body from a file.")
+@click.option("--names", default="", help="Comma-separated argument names for bare positionals.")
+def parse_command(command: str, body: str, body_file: Path | None, names: str) -> None:
+    """Read a chat-ops command out of a comment.
+
+    Publishes `matched`, every named argument, and `instruction` — the free text the human wrote
+    after the command, which is usually the most useful thing in the comment.
+    """
+    from .command import parse
+
+    text = body_file.read_text(encoding="utf-8") if body_file else body
+    declared = [name.strip() for name in names.split(",") if name.strip()]
+    invocation = parse(text, command, names=declared)
+
+    _emit_output("matched", "true" if invocation.matched else "false")
+    if not invocation.matched:
+        click.echo(f"no {command} in this comment", err=True)
+        return
+
+    for key, value in sorted(invocation.arguments.items()):
+        _emit_output(key, value)
+    _emit_output("instruction", invocation.instruction.replace("\n", " ")[:2000])
+    _emit_output("arguments", json.dumps(invocation.arguments, sort_keys=True))
+    click.echo(f"{invocation.command} {invocation.arguments}", err=True)
+
+
 @main.command(name="cache-key")
 @click.option("--prefix", required=True, help="Stable prefix identifying the pipeline and step.")
 @click.option("--inputs", "inputs_text", default="", help="Newline-separated files to hash.")

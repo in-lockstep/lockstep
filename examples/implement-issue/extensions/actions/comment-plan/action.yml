@@ -1,0 +1,74 @@
+name: Comment the plan on the pull request
+description: >-
+  Post the implementation plan as a pull request comment, replacing the pipeline's previous one.
+
+  The plan is what a reviewer argues with. Putting it in the pull request rather than an artifact is
+  what makes the review loop possible: a reviewer reads the plan, replies inline, and re-runs the
+  pipeline with that reply as input. Replacing rather than appending keeps the thread readable across
+  many iterations.
+
+inputs:
+  pull-request:
+    description: Pull request number.
+    required: true
+  plan:
+    description: File holding the plan, as markdown.
+    required: true
+  marker:
+    description: Hidden marker identifying this pipeline's comment, so it can be updated in place.
+    required: false
+    default: "<!-- lockstep:plan -->"
+  command:
+    description: The slash command to advertise in the comment footer.
+    required: false
+    default: "/implement"
+
+outputs:
+  comment:
+    description: URL of the posted comment.
+    value: ${{ steps.post.outputs.comment }}
+
+runs:
+  using: composite
+  steps:
+    - name: Post or update
+      id: post
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        plan='${{ inputs.plan }}'
+        marker='${{ inputs.marker }}'
+        pr='${{ inputs.pull-request }}'
+
+        if [ ! -f "$plan" ]; then
+          echo "no plan at $plan; nothing to comment"
+          exit 0
+        fi
+
+        {
+          echo "$marker"
+          echo "## Implementation plan"
+          echo
+          cat "$plan"
+          echo
+          echo "---"
+          echo
+          echo "Review this plan and the diff. To revise either, reply with review comments and then"
+          echo "comment \`${{ inputs.command }}\` — your comments become input to the next run."
+        } > /tmp/plan-comment.md
+
+        existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments" --paginate \
+                     --jq "[.[] | select(.body | startswith(\"${marker}\"))] | .[0].id // empty")
+
+        if [ -n "$existing" ]; then
+          url=$(gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+                  -F body=@/tmp/plan-comment.md --jq '.html_url')
+          echo "updated the existing plan comment"
+        else
+          url=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments" \
+                  -F body=@/tmp/plan-comment.md --jq '.html_url')
+          echo "posted the plan"
+        fi
+        echo "comment=$url" >> "$GITHUB_OUTPUT"

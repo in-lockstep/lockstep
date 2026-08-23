@@ -19,6 +19,7 @@ from ..util.text import slug, uniquify
 from .model import (
     Agent,
     AgentGithub,
+    ChatCommand,
     Command,
     CommandGithub,
     Condition,
@@ -243,6 +244,16 @@ def parse_command(src: SourceFile) -> Command:
         converged_from=str(gh_raw.get("converged-from", "") or ""),
         raw=gh_raw.get("raw", {}) or {},
     )
+    command_raw = gh_raw.get("command") or {}
+    if command_raw:
+        github.command = ChatCommand(
+            name=str(command_raw.get("name", "") or ""),
+            events=[str(e) for e in (command_raw.get("events") or ["issue_comment"])],
+            roles=[str(r) for r in (command_raw.get("roles") or ["admin", "maintain", "write"])],
+            arguments=[str(a) for a in (command_raw.get("arguments") or [])],
+            reaction=str(command_raw.get("reaction", "eyes") or "eyes"),
+        )
+
     propose_raw = gh_raw.get("propose") or {}
     if propose_raw:
         github.propose = Propose(

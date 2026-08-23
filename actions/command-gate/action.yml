@@ -1,0 +1,108 @@
+name: Authorize a chat-ops command
+description: >-
+  Decide whether a comment asked for this pipeline, and whether its author may ask.
+
+  A comment trigger runs with the repository's token while anyone who can comment can fire it. Those
+  two facts together are why this exists: reading the comment is parsing, but deciding who is allowed
+  is an authorization check against the API, and it must happen before anything else runs.
+
+inputs:
+  command:
+    description: The slash command to look for, e.g. /implement.
+    required: true
+  roles:
+    description: Comma-separated repository permissions allowed to invoke it.
+    required: false
+    default: "admin,maintain,write"
+  arguments:
+    description: Comma-separated argument names bare positionals map onto.
+    required: false
+    default: ""
+  reaction:
+    description: Reaction to leave on the comment so the author knows it was seen.
+    required: false
+    default: "eyes"
+
+outputs:
+  authorized:
+    description: "'true' only when the comment matched and its author was permitted."
+    value: ${{ steps.decide.outputs.authorized }}
+  instruction:
+    description: Free text the author wrote after the command.
+    value: ${{ steps.parse.outputs.instruction }}
+  pull_request:
+    description: The pull request the comment was on, empty when it was on an issue.
+    value: ${{ steps.decide.outputs.pull_request }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read the comment
+      id: parse
+      shell: bash
+      run: |
+        set -euo pipefail
+        # A dispatch has no comment. Nothing to parse, and nothing to authorize beyond the fact that
+        # dispatching already required write access.
+        if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+          echo "matched=true" >> "$GITHUB_OUTPUT"
+          echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "dispatch=false" >> "$GITHUB_OUTPUT"
+        jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH" > /tmp/comment-body.txt
+        pipeline-exec parse-command \
+          --command='${{ inputs.command }}' \
+          --body-file=/tmp/comment-body.txt \
+          --names='${{ inputs.arguments }}'
+
+    - name: Check the author may ask
+      id: role
+      if: steps.parse.outputs.matched == 'true' && steps.parse.outputs.dispatch != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        actor="${GITHUB_ACTOR}"
+        permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${actor}/permission" \
+                       --jq '.permission' 2>/dev/null || echo "none")
+        allowed=false
+        IFS=',' read -ra roles <<< "${{ inputs.roles }}"
+        for role in "${roles[@]}"; do
+          [ "$(echo "$role" | xargs)" = "$permission" ] && allowed=true
+        done
+        echo "permission=$permission" >> "$GITHUB_OUTPUT"
+        echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
+        if [ "$allowed" != "true" ]; then
+          echo "::warning::${actor} has '${permission}' permission and may not run ${{ inputs.command }}"
+        fi
+
+    - name: Decide
+      id: decide
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        authorized=false
+        if [ "${{ steps.parse.outputs.dispatch }}" = "true" ]; then
+          authorized=true
+        elif [ "${{ steps.parse.outputs.matched }}" = "true" ] && [ "${{ steps.role.outputs.allowed }}" = "true" ]; then
+          authorized=true
+        fi
+        echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+
+        pr=$(jq -r '.issue.pull_request.url // .pull_request.url // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
+        number=""
+        [ -n "$pr" ] && number=$(jq -r '.issue.number // .pull_request.number // ""' "$GITHUB_EVENT_PATH")
+        echo "pull_request=$number" >> "$GITHUB_OUTPUT"
+
+        if [ "$authorized" = "true" ] && [ "${{ steps.parse.outputs.dispatch }}" != "true" ]; then
+          # Acknowledge the comment so the author knows it was picked up rather than ignored.
+          comment=$(jq -r '.comment.id // ""' "$GITHUB_EVENT_PATH")
+          [ -n "$comment" ] && gh api -X POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${comment}/reactions" \
+            -f content='${{ inputs.reaction }}' >/dev/null 2>&1 || true
+        fi
+        echo "authorized: $authorized"
