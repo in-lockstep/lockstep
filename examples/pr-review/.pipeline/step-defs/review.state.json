@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--pr=\"{pull_request}\" --aspects={output_dir}/aspects.json --output={output_dir}/pending.json"
+  },
+  "command": "review",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "state",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "review-state"
+}

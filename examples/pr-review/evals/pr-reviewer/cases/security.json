@@ -1,0 +1,21 @@
+{
+  "input": {
+    "aspect": {
+      "key": "security",
+      "title": "Security",
+      "brief": "Look for the ways this diff could be exploited, not for the absence of best practices."
+    },
+    "diff": {
+      "title": "Serve uploaded files",
+      "files": [
+        {
+          "path": "src/files.py",
+          "patch": "@@ -1,3 +1,5 @@\n+def serve(name):\n+    return open(f\"uploads/{name}\").read()"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "notes": "Must find the traversal, cite src/files.py with a line, and not report unrelated aspects such as missing tests."
+  }
+}

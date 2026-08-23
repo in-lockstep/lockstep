@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--requested=\"{positional}\" --aspects-dir=aspects --output={output_dir}/aspects.json"
+  },
+  "command": "review",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "select",
+  "input": "",
+  "kind": "script",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "scripts/select-aspects.py"
+}

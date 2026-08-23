@@ -1,0 +1,63 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "9df09c50",
+      "sources": []
+    },
+    ".github/workflows/aw-pr-reviewer.md": {
+      "sha": "3f6b4bfe",
+      "sources": [
+        "agents/pr-reviewer.md@ddcdd7a5",
+        "guardrails/common.md@3d856e2e",
+        "guardrails/reviewing.md@a6010f09",
+        "skills/review-writing.md@ace5be4b",
+        "contexts/repo.md@8de30d0d"
+      ]
+    },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "60163440",
+      "sources": []
+    },
+    ".github/workflows/review.yml": {
+      "sha": "79393297",
+      "sources": [
+        "commands/review.md@fb9ab806"
+      ]
+    },
+    ".github/workflows/shared/context-repo.md": {
+      "sha": "cdfbfe57",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "8eb84af4",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-reviewing.md": {
+      "sha": "c1b03342",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-review-writing.md": {
+      "sha": "4c587cda",
+      "sources": []
+    },
+    ".pipeline/step-defs/review.diff.json": {
+      "sha": "17e3ea2b",
+      "sources": []
+    },
+    ".pipeline/step-defs/review.select.json": {
+      "sha": "9ef8eb04",
+      "sources": []
+    },
+    ".pipeline/step-defs/review.state.json": {
+      "sha": "3bad05d4",
+      "sources": []
+    },
+    "SECRETS.md": {
+      "sha": "05e6bd75",
+      "sources": []
+    }
+  },
+  "pipeline": "pr-review",
+  "spec": 1
+}

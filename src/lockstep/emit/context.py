@@ -177,6 +177,9 @@ class EmitContext:
                 # What the human actually wrote after the command — usually the point of the run.
                 text = text.replace("{instruction}", "${{ needs.command-gate.outputs.instruction }}")
                 text = text.replace("{pull_request}", "${{ needs.command-gate.outputs.pull_request }}")
+                # The bare words after the command, as a JSON array — what a pipeline fans out over
+                # when one invocation asks for several things at once.
+                text = text.replace("{positional}", "${{ needs.command-gate.outputs.positional }}")
         for key, value in self.resolved_values().items():
             text = text.replace("{" + key + "}", value)
         text = text.replace("{output_dir}", self.output_dir_env)

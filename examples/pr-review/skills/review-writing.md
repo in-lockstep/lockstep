@@ -1,0 +1,32 @@
+---
+name: review-writing
+description: The shape of a review somebody acts on
+---
+
+Return this structure:
+
+```json
+{
+  "title": "Security",
+  "summary": "One or two sentences: what you looked for, and what you concluded.",
+  "findings": [
+    {
+      "path": "src/orders.py",
+      "line": 84,
+      "comment": "A `name` of `../../etc/passwd` reaches `open()` here; nothing constrains it to the uploads directory."
+    }
+  ]
+}
+```
+
+- **`summary`** is what the reader sees first. Say what you concluded, not what you did.
+- **`findings`** are posted as inline comments on the diff, so `path` and `line` must come from the
+  diff you were given. A finding with no location goes in the summary instead.
+- **`comment`** states the problem, where it is, and what would go wrong. One paragraph. If a fix is
+  obvious, name it in a sentence; if it is not, do not guess.
+
+Order findings by how much they matter, not by where they appear in the file.
+
+Fewer, better findings. Three real ones are read; twelve mixed with noise are skimmed and dismissed.
+
+An empty `findings` list with an honest summary is a good review.

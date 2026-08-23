@@ -1,0 +1,17 @@
+[project]
+name = "review-ext"
+version = "0.1.0"
+description = "Pull request review commands for the pr-review pipeline"
+requires-python = ">=3.11"
+dependencies = ["click>=8.1"]
+
+[project.entry-points."pipeline_exec.commands"]
+pr-diff = "review_ext.commands:pr_diff"
+review-state = "review_ext.state:review_state"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/review_ext"]

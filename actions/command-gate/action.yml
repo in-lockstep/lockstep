@@ -38,6 +38,12 @@ outputs:
       The parsed arguments as JSON. They arrive as one value because their names are declared per
       pipeline, and a composite action can only expose outputs it names statically.
     value: ${{ steps.parse.outputs.arguments }}
+  positional:
+    description: >-
+      The bare words after the command, as a JSON array. `/review security intent` asks for two
+      things and the count is not known until somebody types it, so these are a list rather than
+      named arguments.
+    value: ${{ steps.parse.outputs.positional }}
 
 runs:
   using: composite

@@ -745,6 +745,7 @@ def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[
             **{name: "${{ steps.arguments.outputs." + name + " }}" for name in chat.arguments},
             "instruction": "${{ steps.gate.outputs.instruction }}",
             "pull_request": "${{ steps.gate.outputs.pull_request }}",
+            "positional": "${{ steps.gate.outputs.positional }}",
         },
         "steps": [
             {"uses": ctx.pins.external_action("actions/checkout")},

@@ -61,6 +61,9 @@ plus a slash command.
 pipeline, and uses it to look closely at how context, guardrails and skills shape what an agent
 produces.
 
+**[Reviewing pull requests on request](docs/reviewing-pull-requests.md)** builds a `/review security
+intent` bot — one review per aspect, revised in place, and silent when nothing has changed.
+
 ## Commands
 
 ```bash

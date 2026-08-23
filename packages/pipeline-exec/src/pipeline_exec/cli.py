@@ -596,6 +596,9 @@ def parse_command(command: str, body: str, body_file: Path | None, names: str) -
         _emit_output(key, value)
     _emit_output("instruction", invocation.instruction.replace("\n", " ")[:2000])
     _emit_output("arguments", json.dumps(invocation.arguments, sort_keys=True))
+    # Bare words, as a list. `/review security intent` asks for two things, and how many is not
+    # known until somebody types it — so they cannot be declared as named arguments.
+    _emit_output("positional", json.dumps(invocation.positional))
     click.echo(f"{invocation.command} {invocation.arguments}", err=True)
 
 

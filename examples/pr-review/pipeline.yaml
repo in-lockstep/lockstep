@@ -1,0 +1,22 @@
+spec: 1
+name: pr-review
+
+capabilities:
+  actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
+  exec: pipeline-exec==0.1.0
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+extensions:
+  builtins: [pr-diff, review-state]
+  packages: ["review-ext @ file://./extensions"]
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    fuse-script-steps: true
+    default-runs-on: ubuntu-24.04
+    profiles: [repo]
+
+budgets:
+  per_run_ai_credits: 400
