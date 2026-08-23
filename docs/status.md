@@ -142,9 +142,30 @@ runners the compiler dispatches on by extension. Workflows reference it by diges
   omits them and `make cov-all` reports the true figure (68%). Closing this needs a fixture
   application, which is Phase 4 territory.
 
+## Phase 4 — the capability actions
+
+Every compiled workflow references composite actions by SHA. Until now they were fictional, which
+made generated workflows un-runnable. They live in [`actions/`](../actions): `restore`, `save`,
+`state/load`, `state/save`, `step-cache` and `step-cache/save`.
+
+The interesting logic lives in `pipeline-exec` where it can be unit-tested — `cache-key` computes the
+content-addressed key, hashing file *contents* so a fresh checkout does not invalidate every step,
+and hashing a missing input distinctly from an empty one so an unproduced upstream output cannot
+share a key with a produced one. The YAML stays thin.
+
+`step-cache` consults two layers in order: a named artifact from an earlier run, which outlives the
+cache's eviction window, then `actions/cache`. It also verifies that a reported hit actually left the
+declared outputs on disk, because a partial restore must re-run rather than silently skip.
+
+**Building the actions surfaced a compiler bug:** the durable layer looks up artifacts from previous
+runs through the API, which needs `actions: read` — and the compiler was emitting `contents: read`
+only. Jobs that probe the cache now request it, and a contract test asserts they always will. Two
+further contract tests assert that every input the compiler passes is declared by the action, every
+output it reads exists, and every required input is supplied.
+
 ## Testing
 
-284 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+312 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests

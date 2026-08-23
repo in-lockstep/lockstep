@@ -43,6 +43,9 @@ env:
   OUTPUT_DIR: outputs
 jobs:
   discover-api-surface:
+    permissions:
+      contents: read
+      actions: read
     environment: my-app-staging
     runs-on: ubuntu-24.04
     container: ghcr.io/pipeline-fw/exec@sha256:71c2f5a9d3e84b6c0a1f7e2d5b8c9a4e3f6d0b1c2a5e8f7d4c3b6a9e0f1d2c3b
@@ -98,6 +101,7 @@ jobs:
         step: discover-api-surface
         outputs: |
           outputs/api-endpoints.json
+        key: ${{ steps.cache-discover-api-surface.outputs.key }}
     - id: cache-discover-ui-structure
       uses: pipeline-fw/pipeline-actions/step-cache@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2
       with:
@@ -124,6 +128,7 @@ jobs:
         step: discover-ui-structure
         outputs: |
           outputs/ui-structure.json
+        key: ${{ steps.cache-discover-ui-structure.outputs.key }}
     - name: Save state
       if: ${{ always() }}
       uses: pipeline-fw/pipeline-actions/state/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2

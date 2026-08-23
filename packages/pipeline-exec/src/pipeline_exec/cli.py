@@ -498,3 +498,35 @@ def check_convergence(run_dir: Path, name: str) -> None:
         ),
         err=True,
     )
+
+
+@main.command(name="cache-key")
+@click.option("--prefix", required=True, help="Stable prefix identifying the pipeline and step.")
+@click.option("--inputs", "inputs_text", default="", help="Newline-separated files to hash.")
+@click.option("--extra", default="", help="Runtime values that change behaviour without changing files.")
+@click.option("--name", default="key", show_default=True, help="Step output name to write.")
+def cache_key(prefix: str, inputs_text: str, extra: str, name: str) -> None:
+    """Compute a step's content-addressed cache key.
+
+    The key covers the declared inputs' contents, not their timestamps, so a step re-runs when its
+    script, its definition, or an upstream output it reads actually changes. A missing input is
+    hashed as missing rather than raising: an upstream output that was never produced must not
+    resolve to the same key as one that was.
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    for path_text in sorted({line.strip() for line in inputs_text.splitlines() if line.strip()}):
+        path = Path(path_text)
+        digest.update(path_text.encode("utf-8"))
+        if path.is_file():
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        elif path.is_dir():
+            for child in sorted(path.rglob("*")):
+                if child.is_file():
+                    digest.update(str(child).encode("utf-8"))
+                    digest.update(hashlib.sha256(child.read_bytes()).digest())
+        else:
+            digest.update(b"\x00missing")
+    digest.update(extra.encode("utf-8"))
+    _emit_output(name, f"{prefix}-{digest.hexdigest()[:16]}")

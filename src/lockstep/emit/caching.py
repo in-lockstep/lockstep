@@ -186,5 +186,10 @@ def emit_save(spec: CacheSpec, ctx: EmitContext) -> dict[str, Any]:
         "name": f"Publish {spec.step_id} outputs",
         "uses": ctx.pins.action("step-cache/save"),
         "if": spec.hit_condition,
-        "with": {"step": spec.step_id, "outputs": "\n".join(spec.outputs) + "\n"},
+        "with": {
+            "step": spec.step_id,
+            "outputs": "\n".join(spec.outputs) + "\n",
+            # Publish under the key the probe computed, so the two layers agree on identity.
+            "key": "${{ steps." + spec.probe_id + ".outputs.key }}",
+        },
     }

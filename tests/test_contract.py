@@ -18,7 +18,7 @@ from pipeline_exec import items as exec_items
 from pipeline_exec.cli import main as exec_cli
 
 from lockstep.emit import compile_spec
-from lockstep.emit.builtins import AVAILABLE, MATRIX_CAP
+from lockstep.emit.builtins import AVAILABLE, INTERNAL, MATRIX_CAP
 
 FIXTURE = Path(__file__).parent / "fixtures" / "basic"
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
@@ -105,7 +105,14 @@ def test_shard_run_receives_the_matrix_value_and_its_input():
 
 
 def test_the_compilers_builtin_list_matches_the_runtime():
-    assert AVAILABLE == set(exec_cli.commands)
+    """Every runtime command is either spec surface or declared plumbing — never unaccounted for."""
+    assert AVAILABLE | INTERNAL == set(exec_cli.commands)
+    assert not AVAILABLE & INTERNAL
+
+
+def test_every_command_the_compiler_emits_is_classified():
+    emitted = {invocation.split()[1] for _, invocation in emitted_invocations()}
+    assert emitted <= AVAILABLE | INTERNAL
 
 
 def test_the_matrix_cap_agrees_across_both_packages():
@@ -132,6 +139,99 @@ def test_no_generated_workflow_plumbs_step_outputs_by_hand():
     """`pipeline-exec` writes to $GITHUB_OUTPUT itself; a redirect would double-write."""
     for _, invocation in emitted_invocations():
         assert "$GITHUB_OUTPUT" not in invocation
+
+
+# --- the composite actions the compiler references -------------------------
+
+ACTIONS_ROOT = Path(__file__).parent.parent / "actions"
+
+
+def _walk_actions(node, used: dict, outputs_read: set) -> None:
+    if isinstance(node, dict):
+        ref = node.get("uses")
+        if isinstance(ref, str) and "pipeline-actions/" in ref:
+            name = ref.split("pipeline-actions/")[1].split("@")[0]
+            passed, read = used.setdefault(name, (set(), set()))
+            passed.update((node.get("with") or {}).keys())
+            step_id = node.get("id")
+            if step_id:
+                read.update(out for sid, out in outputs_read if sid == step_id)
+        for value in node.values():
+            _walk_actions(value, used, outputs_read)
+    elif isinstance(node, list):
+        for value in node:
+            _walk_actions(value, used, outputs_read)
+
+
+def referenced_actions() -> list[tuple[str, dict, list[str]]]:
+    """Every capability action the compiler emits, with the inputs and outputs it relies on."""
+    used: dict[str, tuple[set, set]] = {}
+    for path, text in compile_spec(FIXTURE).files.items():
+        if path.endswith(".yml"):
+            blob = text
+        elif "/aw-" in path:
+            match = re.match(r"\A---[ \t]*\n(.*?)\n---[ \t]*\n", text, re.DOTALL)
+            blob = match.group(1) if match else ""
+        else:
+            continue
+        outputs_read = set(re.findall(r"steps\.([\w-]+)\.outputs\.([\w-]+)", text))
+
+        _walk_actions(yaml.safe_load(blob) or {}, used, outputs_read)
+    return [(name, {"with": sorted(w)}, sorted(o)) for name, (w, o) in sorted(used.items())]
+
+
+def action_definition(name: str) -> dict:
+    path = ACTIONS_ROOT / name / "action.yml"
+    assert path.is_file(), f"the compiler references {name!r} but actions/{name}/action.yml is missing"
+    return yaml.safe_load(path.read_text()) or {}
+
+
+@pytest.mark.parametrize(
+    ("name", "used", "outputs"), referenced_actions(), ids=lambda v: v if isinstance(v, str) else None
+)
+def test_referenced_actions_declare_what_the_compiler_passes(name, used, outputs):
+    definition = action_definition(name)
+    declared = set((definition.get("inputs") or {}).keys())
+    undeclared = set(used["with"]) - declared
+    assert not undeclared, f"{name} is passed {sorted(undeclared)}, which it does not declare"
+
+
+@pytest.mark.parametrize(
+    ("name", "used", "outputs"), referenced_actions(), ids=lambda v: v if isinstance(v, str) else None
+)
+def test_referenced_actions_declare_the_outputs_the_compiler_reads(name, used, outputs):
+    definition = action_definition(name)
+    declared = set((definition.get("outputs") or {}).keys())
+    missing = set(outputs) - declared
+    assert not missing, f"the compiler reads {sorted(missing)} from {name}, which it does not declare"
+
+
+@pytest.mark.parametrize(
+    ("name", "used", "outputs"), referenced_actions(), ids=lambda v: v if isinstance(v, str) else None
+)
+def test_required_action_inputs_are_all_supplied(name, used, outputs):
+    definition = action_definition(name)
+    required = {
+        key
+        for key, spec in (definition.get("inputs") or {}).items()
+        if spec.get("required") and "default" not in spec
+    }
+    assert not required - set(used["with"]), (
+        f"{name} requires {sorted(required - set(used['with']))}, which the compiler does not pass"
+    )
+
+
+def test_jobs_that_probe_the_cache_can_read_artifacts():
+    """The durable cache layer looks up artifacts from earlier runs, which needs `actions: read`."""
+    for path, text in compile_spec(FIXTURE).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for job_id, job in (yaml.safe_load(text).get("jobs") or {}).items():
+            probes = any("step-cache@" in str(step.get("uses", "")) for step in job.get("steps") or [])
+            if probes:
+                assert (job.get("permissions") or {}).get("actions") == "read", (
+                    f"{path}:{job_id} probes the cache without permission to read artifacts"
+                )
 
 
 def test_an_unknown_builtin_is_a_compile_error(basic_root):

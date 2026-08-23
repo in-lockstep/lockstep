@@ -1,0 +1,45 @@
+name: Save workspace
+description: >-
+  Publish this job's output tree so later jobs can restore it. Matrix legs publish their own slice as
+  they finish, which is what lets an interrupted run resume instead of starting over.
+
+inputs:
+  paths:
+    description: Paths to publish. Defaults to $OUTPUT_DIR.
+    required: false
+    default: ""
+  retention-days:
+    description: How long the slice is kept.
+    required: false
+    default: "7"
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve slice
+      id: slice
+      shell: bash
+      run: |
+        set -euo pipefail
+        paths="${{ inputs.paths }}"
+        [ -n "$paths" ] || paths="${OUTPUT_DIR:-outputs}"
+        echo "paths<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$paths" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+        # Artifact names must be unique within a run: two matrix legs uploading the same name is an
+        # error, and the legs cannot know their own index portably.
+        echo "name=ws-${GITHUB_RUN_ID}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}-${RANDOM}${RANDOM}" >> "$GITHUB_OUTPUT"
+        if [ -z "$(find $paths -type f 2>/dev/null | head -1)" ]; then
+          echo "empty=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "empty=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Upload slice
+      if: steps.slice.outputs.empty != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.slice.outputs.name }}
+        path: ${{ steps.slice.outputs.paths }}
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: ignore

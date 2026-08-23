@@ -1,0 +1,38 @@
+name: Save state database
+description: Publish the state database for the next job in the chain.
+
+inputs:
+  path:
+    description: Where the database lives in the workspace.
+    required: true
+  retain:
+    description: "Keep the database after the run finishes (spec `state: keep`)."
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Check for a database
+      id: check
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f "${{ inputs.path }}" ]; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "no state database to save"
+        fi
+        # The name is fixed per run: the next job downloads it by name, and overwrite replaces the
+        # previous job's copy rather than accumulating one artifact per job.
+        echo "name=state-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload database
+      if: steps.check.outputs.exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.check.outputs.name }}
+        path: ${{ inputs.path }}
+        overwrite: true
+        retention-days: ${{ inputs.retain == 'true' && '90' || '1' }}

@@ -421,6 +421,8 @@ def _steps_job(
         gate = cache.hit_condition if cache else None
         if cache:
             result.cached_steps += 1
+            # The durable cache layer looks up artifacts from earlier runs via the API.
+            job["permissions"] = {"contents": "read", "actions": "read"}
             # The definition file exists to be hashed; only a cached step has anything to hash it.
             result.step_defs[step_def_path(command, step)] = render_step_def(step, command)
             if cache.fingerprint:

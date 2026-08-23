@@ -8,22 +8,27 @@ command that does not exist is then a compile error rather than a 2am `command n
 
 from __future__ import annotations
 
-# Commands a `builtin:` step may invoke.
+# Commands a `builtin:` step may name in the spec.
 AVAILABLE = frozenset(
     {
-        # fan-out mechanics
-        "fanout",
-        "fanout-verify",
-        "shard-run",
-        # trust boundaries and readiness
-        "validate-schema",
-        "wait-for",
-        # extracted from pipeline-framework
         "test-runner",
         "discover",
         "report",
         "collect-failures",
         "check-convergence",
+        "validate-schema",
+        "wait-for",
+    }
+)
+
+# Commands the compiler emits itself, as fan-out glue or from inside a composite action. They are
+# not spec surface: a `builtin:` step naming one of these would be describing plumbing, not work.
+INTERNAL = frozenset(
+    {
+        "fanout",
+        "fanout-verify",
+        "shard-run",
+        "cache-key",
     }
 )
 

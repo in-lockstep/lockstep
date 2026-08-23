@@ -15,19 +15,19 @@
       ]
     },
     ".github/workflows/discover.yml": {
-      "sha": "8506c637",
+      "sha": "1a88ab16",
       "sources": [
         "commands/discover.md@65153630"
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "a2e1a382",
+      "sha": "e1dab936",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
     },
     ".github/workflows/repair.yml": {
-      "sha": "03f6841c",
+      "sha": "343b4e37",
       "sources": [
         "commands/repair.md@d19a5139"
       ]

@@ -305,3 +305,70 @@ def test_wait_for_times_out_with_a_clear_message():
     result = run("wait-for", "--url=http://127.0.0.1:1/never", "--timeout=1", "--interval=1")
     assert result.exit_code == 1
     assert "timed out" in result.output
+
+
+# --- cache-key -------------------------------------------------------------
+
+
+def key_for(tmp_path, *args):
+    result = run("cache-key", "--prefix=p", *args)
+    assert result.exit_code == 0
+    return outputs(result)["key"]
+
+
+def test_a_key_is_stable_for_unchanged_inputs(tmp_path):
+    target = tmp_path / "a.py"
+    target.write_text("print(1)", encoding="utf-8")
+    assert key_for(tmp_path, f"--inputs={target}") == key_for(tmp_path, f"--inputs={target}")
+
+
+def test_changing_an_input_changes_the_key(tmp_path):
+    target = tmp_path / "a.py"
+    target.write_text("print(1)", encoding="utf-8")
+    before = key_for(tmp_path, f"--inputs={target}")
+    target.write_text("print(2)", encoding="utf-8")
+    assert key_for(tmp_path, f"--inputs={target}") != before
+
+
+def test_touching_a_file_without_changing_it_keeps_the_key(tmp_path):
+    """Content-addressed, not timestamp-addressed: a checkout must not invalidate every step."""
+    import os
+    import time
+
+    target = tmp_path / "a.py"
+    target.write_text("print(1)", encoding="utf-8")
+    before = key_for(tmp_path, f"--inputs={target}")
+    future = time.time() + 10_000
+    os.utime(target, (future, future))
+    assert key_for(tmp_path, f"--inputs={target}") == before
+
+
+def test_a_missing_input_differs_from_an_empty_one(tmp_path):
+    """An upstream output that was never produced must not share a key with one that was."""
+    missing = key_for(tmp_path, f"--inputs={tmp_path / 'gone.json'}")
+    (tmp_path / "gone.json").write_text("", encoding="utf-8")
+    assert key_for(tmp_path, f"--inputs={tmp_path / 'gone.json'}") != missing
+
+
+def test_runtime_extras_change_the_key(tmp_path):
+    assert key_for(tmp_path, "--extra=a") != key_for(tmp_path, "--extra=b")
+
+
+def test_input_order_does_not_change_the_key(tmp_path):
+    one, two = tmp_path / "a", tmp_path / "b"
+    one.write_text("1", encoding="utf-8")
+    two.write_text("2", encoding="utf-8")
+    assert key_for(tmp_path, f"--inputs={one}\n{two}") == key_for(tmp_path, f"--inputs={two}\n{one}")
+
+
+def test_a_directory_input_is_hashed_by_its_contents(tmp_path):
+    folder = tmp_path / "outdir"
+    folder.mkdir()
+    (folder / "one.json").write_text("a", encoding="utf-8")
+    before = key_for(tmp_path, f"--inputs={folder}")
+    (folder / "two.json").write_text("b", encoding="utf-8")
+    assert key_for(tmp_path, f"--inputs={folder}") != before
+
+
+def test_the_key_carries_its_prefix(tmp_path):
+    assert key_for(tmp_path, "--extra=x").startswith("p-")

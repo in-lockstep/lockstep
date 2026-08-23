@@ -11,8 +11,9 @@ ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy
 
 # Runners for the script extensions the compiler dispatches on: .py, .sh, .ts, .js, .rb, .go.
+# `gh` and `unzip` are used by the step-cache action to consult the durable artifact layer.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git jq ruby-full golang-go \
+        git jq unzip ruby-full golang-go gh \
     && rm -rf /var/lib/apt/lists/* \
     && curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/uv \

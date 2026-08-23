@@ -1,0 +1,38 @@
+name: Restore workspace
+description: >-
+  Rehydrate the pipeline output tree produced by earlier jobs in this run.
+  Jobs do not share a filesystem, so every step that reads a previous step's output starts here.
+
+inputs:
+  path:
+    description: Directory to restore into. Defaults to $OUTPUT_DIR.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve target
+      id: target
+      shell: bash
+      run: |
+        set -euo pipefail
+        target="${{ inputs.path }}"
+        [ -n "$target" ] || target="${OUTPUT_DIR:-outputs}"
+        mkdir -p "$target"
+        echo "path=$target" >> "$GITHUB_OUTPUT"
+
+    - name: Download this run's workspace slices
+      uses: actions/download-artifact@v4
+      continue-on-error: true          # the first job in a run has nothing to restore
+      with:
+        pattern: ws-${{ github.run_id }}-*
+        merge-multiple: true           # every job's slice lands in one tree
+        path: ${{ steps.target.outputs.path }}
+
+    - name: Report
+      shell: bash
+      run: |
+        set -euo pipefail
+        target="${{ steps.target.outputs.path }}"
+        echo "restored $(find "$target" -type f 2>/dev/null | wc -l | tr -d ' ') file(s) into $target"
