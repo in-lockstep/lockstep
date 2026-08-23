@@ -13,17 +13,15 @@ def init_sanitizer() -> None:
     global _PATTERNS
     _PATTERNS = []
 
+    # Suffixes, not names. The scan below matches any variable *ending* with one of these, so
+    # `AO_PASSWORD` and `JIRA_API_TOKEN` were already covered by `PASSWORD` and `TOKEN` — naming
+    # them bought nothing and read as a list of one organisation's systems.
     sensitive_keys = [
         "PASSWORD",
         "TOKEN",
         "SECRET",
         "API_KEY",
         "CREDENTIALS",
-        "AO_PASSWORD",
-        "AAP_PASSWORD",
-        "JIRA_API_TOKEN",
-        "ANTHROPIC_API_KEY",
-        "OPENAI_API_KEY",
     ]
 
     for key in sensitive_keys:

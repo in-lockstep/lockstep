@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 provider: vertex-claude
 max_tool_turns: 0
 guardrails: [common, api-tests]
-skills: [api-testing]
+skills: [test-script-format]
 github:
   max-ai-credits: 25
 ---

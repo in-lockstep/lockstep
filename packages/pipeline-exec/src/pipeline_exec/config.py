@@ -38,6 +38,12 @@ class ExecConfig:
     scripts_dir: str = "test-scripts"
     tags_file: str = ".env-tests"
 
+    # Two things the runtime cannot know about your application, declared rather than guessed: how
+    # its sign-in page works, and what to send when it rejects a field as required. Unset means the
+    # behaviour is off, which is the honest default. See docs/layers.md.
+    login_recipe: str = ""
+    recovery_rules: str = ""
+
     profile_url: str = ""
     profile_api_url: str = ""
     profile_api_prefix: str = ""
@@ -60,6 +66,8 @@ class ExecConfig:
             "ui_wait_timeout": int(os.environ.get("UI_WAIT_TIMEOUT", "30000")),
             "scripts_dir": os.environ.get("SCRIPTS_DIR", "test-scripts"),
             "tags_file": os.environ.get("TAGS_FILE", ".env-tests"),
+            "login_recipe": os.environ.get("LOGIN_RECIPE", ""),
+            "recovery_rules": os.environ.get("RECOVERY_RULES", ""),
         }
         for key in PROFILE_KEYS:
             raw = os.environ.get(f"PROFILE_{key.upper()}")

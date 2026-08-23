@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import subprocess
 
 from .types import ToolResult
@@ -19,11 +18,6 @@ class CliSession:
         command = str(params.get("command", ""))
         timeout = int(str(params.get("timeout", 30)))
         working_dir = str(params.get("working_dir", "")) or None
-
-        # Skip oc/kubectl commands when OCP is not configured
-        cmd_stripped = command.lstrip()
-        if cmd_stripped.startswith(("oc ", "oc\t", "kubectl ", "kubectl\t")) and not os.getenv("OCP_API_URL"):
-            return ToolResult(text="Skipped — OCP not configured (OCP_API_URL not set)")
 
         try:
             result = await asyncio.to_thread(

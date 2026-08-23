@@ -82,6 +82,7 @@ jobs:
       only: ${{ steps.arguments.outputs.only }}
       instruction: ${{ steps.gate.outputs.instruction }}
       pull_request: ${{ steps.gate.outputs.pull_request }}
+      positional: ${{ steps.gate.outputs.positional }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - name: Authorize /fix
@@ -90,6 +91,7 @@ jobs:
       with:
         command: /fix
         roles: admin,maintain,write
+        associations: OWNER,MEMBER,COLLABORATOR
         arguments: only
         reaction: eyes
     - name: Expand the parsed arguments

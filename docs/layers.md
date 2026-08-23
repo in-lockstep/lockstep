@@ -142,22 +142,41 @@ other produces either an agent told to do four contradictory jobs at once, or a 
 
 ---
 
-## Part 5 — Applying the rule to what exists
+## Part 5 — What the audit found, and where it went
 
-The audit that produced this document, with what each item violates:
+Every row below was found by asking the two questions of Part 1 and the one-question rule of Part 2.
+All of them are fixed; the table is kept because the *shape* of each mistake is the useful part.
 
-| Where | What | Rule |
-|---|---|---|
-| `builtins/discovery.py` | 13 hardcoded endpoints, probe defaults naming one domain model | Q1 — product in code |
-| `direct_executor._login_via_browser` | One application's login page, selector by selector | Q1 |
-| `direct_executor._try_422_recovery` | `schema_version`, `trigger_node_id`, `role_name: admin` | Q1 |
-| `direct_executor` / `cli_session` | `oc`/`kubectl` skipped when `OCP_API_URL` is unset | Q1 — the tag filter already shows the fix |
-| `config.py` | `auth_login_path` defaulting to `/api/v1/auth/login` | Q1 |
-| `bug-fix/skills/patch-format.md` | A prohibition list `minimal-change.md` also states | one-question rule → guardrail |
-| `bug-fix/contexts/target-app.md` | "never reproduce customer data" | one-question rule → guardrail |
-| five × `guardrails/common.md` | The same four rules, written five times | framework baseline |
-| `httpbin/skills/api-testing.md` | The test-script schema, restated by hand | ships with the builtin |
-| `codebase-navigation` / `repo-conventions` | A near-verbatim citation paragraph | one skill, or a shared one |
+| Where | What it was | Rule | Where it went |
+|---|---|---|---|
+| `builtins/discovery.py` | 13 hardcoded endpoints, probe defaults naming one domain model, POSTing invented payloads at the target | Q1 | Declared surface: an OpenAPI document or a path list. Reads only. Writes a **context**. |
+| `direct_executor._login_via_browser` | One application's sign-in page, selector by selector | Q1 | `executors/login.py` — same algorithm, recipe declared by the pipeline |
+| `direct_executor._try_422_recovery` | `schema_version`, `role_name: admin`, that app's workflow documents | Q1 | `executors/recovery.py` — declared defaults, or no retry |
+| `direct_executor` / `cli_session` | `oc`/`kubectl` skipped when `OCP_API_URL` is unset | Q1 | Deleted. The tag toggle already skips a script an environment cannot run, at the honest granularity. |
+| `direct_executor` | `AO_`/`AAP_`/`OCP_`/`GCP_` prefixes deciding which `{VAR}` was expected | Q1 | Ask the environment whether it has the variable |
+| `direct_executor` | `AO_API_URL`, `AO_URL` runtime variables | Q1 | `APP_API_URL` and `APP_URL`, which were already there |
+| `sanitize.py` | `AO_PASSWORD`, `JIRA_API_TOKEN` in the redaction list | Q1 | Deleted — the suffix scan above them already matched every one |
+| `config.py`, `api_session.py` | `auth_login_path` defaulting to `/api/v1/auth/login` | Q1 | No default. The profile declares it. |
+| `bug-fix/skills/patch-format.md` | A prohibition list `minimal-change.md` also stated | one-question | Merged into the guardrail that enforces it |
+| `bug-fix/contexts/target-app.md` | "never reproduce customer data" | one-question | The shipped baseline |
+| five × `guardrails/common.md` | The same four rules, written five times | framework gap | `library/guardrails/baseline.md` |
+| `httpbin/skills/api-testing.md` | The test-script schema, restated by hand | framework gap | `library/skills/test-script-format.md` |
+| `codebase-navigation` / `repo-conventions` | A near-verbatim citation paragraph | one-question | The `source-analysis` guardrail, which already required citations |
 
-None of these is subtle once the question is asked. That is the argument for writing the question
-down.
+`lockstep lint` now checks the one-question rule directly:
+
+- **LNT005** — a skill or a context containing MUST / MUST NOT / NEVER. Normative text belongs in a
+  guardrail, which is inlined ahead of the agent body and can carry an `enforce:` block. A rule in a
+  skill looks binding and binds nothing.
+- **LNT006** — a skill naming a path that only this pipeline's contexts mention. A skill should read
+  the same against a different application.
+
+Both are warnings, and all five examples are clean.
+
+### One thing left, deliberately
+
+`executors/api_session.py` disables TLS verification unconditionally — `check_hostname = False`,
+`verify_mode = CERT_NONE`. That is not application knowledge, so nothing above catches it, but it is
+the same category of mistake: a convenience for one test environment, made permanent for everybody.
+It is extracted code whose behaviour this repository preserves deliberately, so changing it is a
+decision to take on its own rather than fold into a cleanup.

@@ -96,7 +96,7 @@ def test_all_four_prompt_layers_reach_the_agent():
         "shared/skill-report-writing.md",
         "shared/context-tracker.md",
     ]
-    assert "You MUST return valid JSON" in body
+    assert "You MUST NOT invent an issue key" in body
     assert "This report is published to a public page" in body
     assert "You are given counts of a triage backlog" in body
 
@@ -104,7 +104,7 @@ def test_all_four_prompt_layers_reach_the_agent():
 def test_guardrails_precede_the_agents_own_instructions():
     """A constraint that might land after what it constrains is not a constraint."""
     body = compile_spec(EXAMPLE).files[".github/workflows/aw-triage-reporter.md"].split("---", 2)[2]
-    assert body.index("You MUST return valid JSON") < body.index("You are given counts")
+    assert body.index("You MUST NOT invent an issue key") < body.index("You are given counts")
 
 
 def test_every_layer_is_written_out_for_audit():

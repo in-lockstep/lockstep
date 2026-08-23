@@ -14,9 +14,7 @@ diff --git a/src/app/orders.py b/src/app/orders.py
 +    return sum(item.price for item in items if item.price is not None)
 ```
 
-Rules the applying step enforces, so a diff that breaks them is rejected rather than negotiated:
+Two properties of the format itself, which the applying step checks:
 
 - Paths are relative to the repository root.
 - Context lines must match the file as it currently is. Stale context does not apply.
-- Nothing under `.github/`, `.pipeline/`, `commands/`, `agents/`, `guardrails/`, or `pipeline.yaml`.
-  A fix that edits CI configuration is not a fix.

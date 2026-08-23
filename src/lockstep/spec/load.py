@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from .. import library
 from ..errors import MissingDefinition, SpecError
 from ..util.hashing import sha_file, short
 from .model import (
@@ -144,6 +145,18 @@ def load_spec(root: Path) -> Spec:
 
 def _validate(spec: Spec) -> None:
     """Cross-reference checks that must fail at compile time, not at 2am in a scheduled run."""
+    for name in sorted(spec.guardrails):
+        if name not in library.guardrails():
+            continue
+        # Silently dropping the file would be the worse outcome: an author would see their guardrail
+        # in the repository and not in the prompt.
+        fragment = spec.guardrails[name]
+        raise SpecError(
+            f"guardrail {name!r} has the same name as one the compiler ships",
+            location=fragment.src.rel if fragment.src else "",
+            hint="the shipped baseline is inlined into every agent already; rename yours",
+        )
+
     for command in spec.commands.values():
         for step in command.steps:
             loc = f"{command.src.rel if command.src else command.name} step {step.number}"
@@ -173,8 +186,12 @@ def _validate(spec: Spec) -> None:
             if name not in spec.guardrails:
                 raise MissingDefinition(f"unknown guardrail {name!r}", location=loc)
         for name in agent.skills:
-            if name not in spec.skills:
-                raise MissingDefinition(f"unknown skill {name!r}", location=loc)
+            if name not in spec.skills and name not in library.skills():
+                raise MissingDefinition(
+                    f"unknown skill {name!r}",
+                    location=loc,
+                    hint=f"shipped skills: {', '.join(sorted(library.skills()))}",
+                )
         for name in agent.mcp:
             if name not in spec.mcp_servers:
                 raise MissingDefinition(f"unknown MCP server {name!r}", location=loc)

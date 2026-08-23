@@ -1,11 +1,9 @@
 ---
 name: common
-description: Baseline constraints every agent inherits
+description: What this pipeline adds to the shipped baseline
 enforce:
   permissions: read-all
   deny-tools: [delete_*]
 ---
 
-You MUST return valid JSON and nothing else — no prose before or after it.
-You MUST NOT invent behaviour that is absent from the input you were given.
-NEVER include credentials, tokens, or personal data in your output.
+You MUST NOT assert anything about the target that you have not seen in a response it returned.

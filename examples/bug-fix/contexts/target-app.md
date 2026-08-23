@@ -12,5 +12,4 @@ Conventions worth respecting because reviewers will notice them:
 - Errors are raised, not returned as sentinels.
 - Public functions have docstrings; private helpers usually do not.
 
-The service handles customer orders, so bug reports frequently quote real order payloads. Treat
-anything that looks like customer data as data to reason about, never to reproduce in your output.
+The service handles customer orders, so bug reports frequently quote real order payloads.

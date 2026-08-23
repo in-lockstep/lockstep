@@ -14,6 +14,3 @@ the project does not use.
   change has to pass it.
 - **Structure**: put new code where similar code already lives. A correctly-placed change is easier
   to review than a well-organised one somewhere new.
-
-Cite what you rely on as `path/to/file.py:120-134`. Anyone reading you should reach the same lines
-without searching.

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import uuid
+from pathlib import Path
 from typing import Any
 
 from ..config import ExecConfig
@@ -14,6 +15,8 @@ from ..logging import log
 from .api_session import ApiSession
 from .browser_session import BrowserSession
 from .cli_session import CliSession
+from .login import LoginRecipe, looks_expired, sign_in
+from .recovery import Recovery
 from .types import ExecutedStep, ScriptStep, TestResult, TestScript
 
 LOGIN_STEP_PATTERNS = [
@@ -57,6 +60,11 @@ class DirectExecutor:
         self._run_dir = run_dir or config.output_dir
         self._runtime_vars: dict[str, str] = {}
         self._all_script_var_refs: set[str] = set()
+        # Read once per executor, and only when a script actually needs them.
+        self._recipe: LoginRecipe | None = None
+        self._recipe_read = False
+        self._recovery_rules: Recovery | None = None
+        self._recovery_read = False
 
     def _build_var_ref_index(self, script: TestScript) -> None:
         self._all_script_var_refs.clear()
@@ -216,100 +224,39 @@ class DirectExecutor:
             self._runtime_vars["LAST_ID"] = id_match.group(1)
 
     async def _login_via_browser(self, executor: BrowserSession) -> bool:
-        log.debug("    Performing automatic browser login...")
-        for attempt in range(2):
-            try:
-                if attempt > 0:
-                    await asyncio.sleep(2)
-                await executor.execute_tool("navigate", {"url": self._config.profile_url})
-                await executor.execute_tool(
-                    "wait_for",
-                    {"selector": "input, form, [class*=login], nav, [class*=page]", "timeout": 20000},
-                )
-                await asyncio.sleep(3)
+        """Sign in, if this pipeline declared how. See executors/login.py for why it is declared."""
+        recipe = self._login_recipe()
+        if recipe is None:
+            return False
+        return await sign_in(
+            executor,
+            recipe,
+            url=self._config.profile_url,
+            username=self._config.profile_username,
+            password=self._config.profile_password,
+        )
 
-                page_check = await executor.execute_tool("get_page_snapshot", {})
-                page_text = (page_check.text or "").strip()
-                if (
-                    len(page_text) > 50
-                    and "Log in" not in page_text
-                    and "Sign in" not in page_text
-                    and "Enter your" not in page_text
-                ):
-                    log.debug("    Already logged in")
-                    return True
-
-                # Check if login form is already visible (no SSO provider selector)
-                form_check = await executor.execute_tool(
-                    "wait_for",
-                    {
-                        "selector": 'input[type="text"], input[type="password"], input[name="username"]',
-                        "timeout": 3000,
-                    },
-                )
-                if form_check.text and "Timeout" in form_check.text:
-                    # Login form not visible — try clicking SSO provider link
-                    provider_texts = ["Sign in using local account", "local account", "Log in with password"]
-                    for text in provider_texts:
-                        result = await executor.execute_tool("click_text", {"text": text, "timeout": 3000})
-                        if result.text and "Failed" not in result.text and "no matching" not in result.text:
-                            log.debug("    Clicked login provider link")
-                            break
-
-                    await executor.execute_tool(
-                        "wait_for",
-                        {"selector": 'input[type="text"], input[type="password"]', "timeout": 10000},
-                    )
-
-                for sel in [
-                    'input[id*="login-username"]',
-                    'input[id*="username"]',
-                    'input[name="username"]',
-                    'input[type="text"]',
-                ]:
-                    result = await executor.execute_tool(
-                        "fill", {"selector": sel, "value": self._config.profile_username}
-                    )
-                    if result.text and "Failed" not in result.text:
-                        break
-
-                for sel in ['input[id*="login-password"]', 'input[id*="password"]', 'input[type="password"]']:
-                    result = await executor.execute_tool(
-                        "fill", {"selector": sel, "value": self._config.profile_password}
-                    )
-                    if result.text and "Failed" not in result.text:
-                        break
-
-                for sel in [
-                    'button[type="submit"]',
-                    'input[type="submit"]',
-                    'button:has-text("Log in")',
-                    'button:has-text("Sign in")',
-                ]:
-                    result = await executor.execute_tool("click", {"selector": sel})
-                    if result.text and "Failed" not in result.text:
-                        break
-
-                await executor.execute_tool("wait_for", {"selector": "body", "timeout": 5000})
-                verify = await executor.execute_tool("get_page_snapshot", {})
-                if verify.text and "Log in to" not in verify.text:
-                    log.debug("    Browser login successful")
-                    return True
-            except Exception:
-                continue
-        return False
+    def _login_recipe(self) -> LoginRecipe | None:
+        if not self._recipe_read:
+            self._recipe_read = True
+            path = self._config.login_recipe
+            self._recipe = LoginRecipe.load(Path(path)) if path else None
+            if self._recipe is None:
+                log.debug("    No login recipe declared — scripts sign in through their own steps")
+        return self._recipe
 
     async def _check_and_relogin(self, executor: BrowserSession, result_text: str = "") -> bool:
+        recipe = self._login_recipe()
+        if recipe is None:
+            return False
         if not result_text:
             snapshot = await executor.execute_tool("get_page_snapshot", {})
             result_text = snapshot.text or ""
             if not result_text:
                 return False
-        text = result_text.lower()
-        if any(kw in text for kw in ("log in to", "login-username", "login-password", "enter your")):
-            if "credentials" in text or "sign in" in text or "log in" in text:
-                log.debug("    Session expired — re-authenticating...")
-                return await self._login_via_browser(executor)
+        if looks_expired(recipe, result_text):
+            log.debug("    Session expired — re-authenticating...")
+            return await self._login_via_browser(executor)
         return False
 
     async def test_script(self, script: TestScript) -> TestResult:
@@ -324,10 +271,8 @@ class DirectExecutor:
             if self._config.profile_api_prefix:
                 api_base = f"{api_base}/{self._config.profile_api_prefix.strip('/')}"
             self._runtime_vars["APP_API_URL"] = api_base
-            self._runtime_vars["AO_API_URL"] = api_base
         if self._config.profile_url:
             self._runtime_vars["APP_URL"] = self._config.profile_url
-            self._runtime_vars["AO_URL"] = self._config.profile_url
 
         self._build_var_ref_index(script)
 
@@ -407,11 +352,12 @@ class DirectExecutor:
 
                 resolved_params = self._resolve_step_params(step.params)
 
-                # Check for unresolved variables
+                # Check for unresolved variables. A `{NAME}` the environment actually supplies is
+                # resolved later and is not a problem; this used to be decided by a list of one
+                # organisation's env prefixes, which said nothing about anyone else's.
                 params_str = json.dumps(resolved_params)
                 unresolved = re.findall(r"\{([A-Z][A-Z0-9_]*)\}", params_str)
-                env_prefixes = ("AO_", "AAP_", "APP_", "OCP_", "JIRA_", "GCP_")
-                unresolved = [v for v in unresolved if not any(v.startswith(p) for p in env_prefixes)]
+                unresolved = [v for v in unresolved if v not in os.environ]
                 if unresolved:
                     executed_steps.append(
                         ExecutedStep(
@@ -425,25 +371,6 @@ class DirectExecutor:
                         )
                     )
                     continue
-
-                # Skip oc/kubectl commands when OCP is not configured
-                if step.tool == "run_command":
-                    cmd = str(resolved_params.get("command", "")).lstrip()
-                    if cmd.startswith(("oc ", "oc\t", "kubectl ", "kubectl\t")) and not os.getenv(
-                        "OCP_API_URL"
-                    ):
-                        executed_steps.append(
-                            ExecutedStep(
-                                phase=phase,
-                                step_number=step.step,
-                                tool=step.tool,
-                                action=step.action,
-                                expected=step.expected,
-                                result="Skipped — OCP not configured (OCP_API_URL not set)",
-                                status="skipped",
-                            )
-                        )
-                        continue
 
                 # Route tool to correct executor
                 tool_executor = executor
@@ -680,77 +607,31 @@ class DirectExecutor:
     async def _try_422_recovery(
         self, result_text: str, step: ScriptStep, params: dict[str, Any], executor: Any
     ) -> str:
+        """Retry once with fields the pipeline declared. See executors/recovery.py for why."""
+        recovery = self._recovery()
+        if recovery is None:
+            return result_text
         method = str(params.get("method", ""))
         if method not in ("POST", "PUT") or not params.get("body"):
             return result_text
         try:
-            body_str = params["body"] if isinstance(params["body"], str) else json.dumps(params["body"])
-            body = json.loads(body_str)
-            patched = False
-
-            # Missing required fields
-            defaults: dict[str, Any] = {
-                "name": f"auto-{uuid.uuid4().hex[:8]}",
-                "trigger_node_id": "trigger",
-                "schema_version": "2.0.0",
-                "grant_type": "client_credentials",
-                "credential_type": "client_credentials",
-                "credential_type_id": "client_credentials",
-                "scope": "organization",
-                "effect": "allow",
-                "role_name": "admin",
-                "resource_type": "organization",
-                "redirect_uri": "https://mock-redirect.example.com/callback",
-                "file_ids": [],
-                "updates": {},
-            }
-            # Inject project_id from runtime vars if available
-            if "PROJECT_ID" in self._runtime_vars:
-                defaults["project_id"] = self._runtime_vars["PROJECT_ID"]
-
-            # Workflow definition fixes
-            if "workflow_definition" in body:
-                wf = body["workflow_definition"]
-                if "'parameters' is a required property" in result_text:
-                    for items_key in ("nodes", "triggers"):
-                        items = wf.get(items_key, [])
-                        for item in items:
-                            if isinstance(item, dict) and "parameters" not in item:
-                                item["parameters"] = {}
-                                patched = True
-                if "'name' is a required property" in result_text and "name" not in wf:
-                    wf["name"] = body.get("name", "auto-workflow")
-                    patched = True
-                if "'manual_trigger' was expected" in result_text:
-                    for trigger in wf.get("triggers", []):
-                        if isinstance(trigger, dict) and trigger.get("type") == "manual":
-                            trigger["type"] = "manual_trigger"
-                            patched = True
-
-            # Effect casing
-            if "effect" in body and "Invalid effect" in result_text:
-                current = str(body["effect"])
-                alt = {"allow": "Allow", "deny": "Deny"}.get(current, current.lower())
-                if alt != current:
-                    body["effect"] = alt
-                    patched = True
-
-            # Field required defaults
-            for m in re.finditer(r"(\w+): Field required", result_text):
-                field = m.group(1)
-                if field not in body and field in defaults:
-                    body[field] = defaults[field]
-                    patched = True
-                    log.debug(f"      422 recovery: added {field}={json.dumps(defaults[field])}")
-
-            if patched:
-                fixed_params = {**params, "body": json.dumps(body)}
-                retry = await executor.execute_tool("http_request", fixed_params)
-                if retry.text and "422" not in retry.text:
-                    return retry.text
+            raw = params["body"] if isinstance(params["body"], str) else json.dumps(params["body"])
+            body = json.loads(raw)
+            if not isinstance(body, dict) or not recovery.patch(body, result_text, self._runtime_vars):
+                return result_text
+            retry = await executor.execute_tool("http_request", {**params, "body": json.dumps(body)})
+            if retry.text and "422" not in retry.text:
+                return retry.text
         except (json.JSONDecodeError, KeyError):
             pass
         return result_text
+
+    def _recovery(self) -> Recovery | None:
+        if not self._recovery_read:
+            self._recovery_read = True
+            path = self._config.recovery_rules
+            self._recovery_rules = Recovery.load(Path(path)) if path else None
+        return self._recovery_rules
 
     async def _try_409_recovery(
         self, result_text: str, step: ScriptStep, params: dict[str, Any], api_session: ApiSession

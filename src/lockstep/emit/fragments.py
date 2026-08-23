@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .. import library
 from ..spec.model import Agent, Command, Enforce, Fragment, Profile, Spec
 from ..util.text import slug
 from .context import EmitContext
@@ -50,6 +51,13 @@ def resolve_layers(agent: Agent, command: Command | None, profile: Profile, spec
     layers = PromptLayers()
     seen: set[str] = set()
 
+    # The shipped baseline goes first and cannot be excluded. It holds the constraints that are true
+    # of every agent in every pipeline, and a profile that could switch them off would make the
+    # floor a suggestion. Everything a pipeline wants to add sits after it.
+    baseline = library.baseline()
+    layers.guardrails.append(baseline)
+    seen.add(baseline.name)
+
     names = list(agent.guardrails)
     if command:
         names.extend(command.guardrails)
@@ -61,8 +69,10 @@ def resolve_layers(agent: Agent, command: Command | None, profile: Profile, spec
             seen.add(name)
             layers.guardrails.append(fragment)
 
+    shipped = library.skills()
     for name in agent.skills:
-        fragment = spec.skills.get(name)
+        # A spec's own file wins, so a pipeline can override a shipped skill by writing one.
+        fragment = spec.skills.get(name) or shipped.get(name)
         if fragment:
             layers.skills.append(fragment)
 

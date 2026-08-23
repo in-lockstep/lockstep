@@ -3,8 +3,8 @@ name: source-analysis
 description: Constraints on reading and reasoning about source
 ---
 
-You MUST cite the file and line for every claim about the code. An uncited claim is a guess, and a
-guess here becomes a plan somebody approves.
+You MUST cite the file and line for every claim about the code, as `path/to/file.py:120-134`. An
+uncited claim is a guess, and a guess here becomes a plan somebody approves.
 
 You MUST NOT modify any file. You have read access; a separate step applies what you produce.
 

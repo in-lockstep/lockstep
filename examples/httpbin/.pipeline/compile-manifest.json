@@ -6,17 +6,18 @@
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "67b97a16",
+      "sha": "f8379bdc",
       "sources": [
-        "agents/test-writer.md@c46314f0",
-        "guardrails/common.md@9e6e672a",
+        "agents/test-writer.md@e0f43915",
+        "lockstep:guardrails/baseline.md@f12c42fc",
+        "guardrails/common.md@f64a42fc",
         "guardrails/api-tests.md@64ec48a2",
-        "skills/api-testing.md@af842cdc",
+        "lockstep:skills/test-script-format.md@b83cd2fa",
         "contexts/httpbin.md@bc2ca0cd"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "bab97f6f",
+      "sha": "2315bdc7",
       "sources": []
     },
     ".github/workflows/shared/context-httpbin.md": {
@@ -27,12 +28,16 @@
       "sha": "b0849657",
       "sources": []
     },
-    ".github/workflows/shared/guardrail-common.md": {
-      "sha": "551e3939",
+    ".github/workflows/shared/guardrail-baseline.md": {
+      "sha": "788c8c3a",
       "sources": []
     },
-    ".github/workflows/shared/skill-api-testing.md": {
-      "sha": "93700b38",
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "8f80209e",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-test-script-format.md": {
+      "sha": "b61e32d8",
       "sources": []
     },
     ".github/workflows/validate-api.yml": {

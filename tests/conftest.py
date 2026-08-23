@@ -21,3 +21,9 @@ def basic_root(tmp_path: Path) -> Path:
 def basic_spec_dir() -> Path:
     """The read-only fixture, for tests that only compile in memory."""
     return FIXTURES / "basic"
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    """The lockstep repository itself, for tests that compile the shipped examples."""
+    return Path(__file__).parent.parent

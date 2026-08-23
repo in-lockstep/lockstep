@@ -167,6 +167,6 @@ jobs:
         source: outputs/site
         destination: .
         branch: report/triage
-        title: '{title}'
+        title: ${{ inputs.title }}
         labels: report,triage,needs-review
         base: gh-pages

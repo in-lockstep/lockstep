@@ -10,6 +10,7 @@ to ignore.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -31,6 +32,10 @@ DETERMINISTIC_WORK = (
     "parse json",
     "validate schema",
 )
+
+
+# Words that make a sentence binding. Their presence is what separates a rule from a method.
+NORMATIVE = ("MUST", "MUST NOT", "NEVER", "SHALL", "REQUIRED:")
 
 
 class Severity(StrEnum):
@@ -88,6 +93,7 @@ def lint(spec: Spec) -> Report:
     _check_scripts_have_tests(spec, report)
     _check_deterministic_first(spec, report)
     _check_foreach_context(spec, report)
+    _check_layer_boundaries(spec, report)
     return report
 
 
@@ -153,6 +159,50 @@ def _check_foreach_context(spec: Spec, report: Report) -> None:
                     hint="set `parallel:` — matrix legs are independent, and serialising them costs "
                     "wall-clock for nothing",
                 )
+
+
+def _check_layer_boundaries(spec: Spec, report: Report) -> None:
+    """Each prompt layer answers one question. Text answering a different one belongs elsewhere.
+
+    A rule stated in a skill and again in a guardrail is one rule in two places, and the copy nobody
+    enforces wins by being the one somebody read. A rule stated *only* in a skill or a context is
+    worse: it looks binding and nothing inlines it first or compiles it to a permission.
+    """
+    for kind, fragments in (("skill", spec.skills), ("context", spec.contexts)):
+        for name, fragment in sorted(fragments.items()):
+            found = sorted({word for word in NORMATIVE if word in fragment.body})
+            if not found:
+                continue
+            report.add(
+                Severity.WARNING,
+                "LNT005",
+                f"{kind} {name!r} states a rule ({', '.join(found)})",
+                location=fragment.src.rel if fragment.src else name,
+                hint=f"a {kind} answers "
+                + ("how the job is done" if kind == "skill" else "what the subject is")
+                + "; move the constraint to a guardrail, where it is inlined ahead of the agent "
+                "body and can carry an `enforce:` block. See docs/layers.md",
+            )
+
+    for name, fragment in sorted(spec.skills.items()):
+        named = sorted({term for term in _product_terms(spec) if term in fragment.body})
+        if named:
+            report.add(
+                Severity.WARNING,
+                "LNT006",
+                f"skill {name!r} names something only the target has ({', '.join(named)})",
+                location=fragment.src.rel if fragment.src else name,
+                hint="a skill should read the same against a different application; anything true "
+                "of only this one belongs in a context, which the profile selects. See docs/layers.md",
+            )
+
+
+def _product_terms(spec: Spec) -> set[str]:
+    """Words the pipeline's own contexts use to name the target, which a skill should not repeat."""
+    terms: set[str] = set()
+    for fragment in spec.contexts.values():
+        terms.update(re.findall(r"`(/[a-z0-9][a-z0-9/_-]*)`", fragment.body))
+    return terms
 
 
 # --- doctor: will the target accept it? ------------------------------------

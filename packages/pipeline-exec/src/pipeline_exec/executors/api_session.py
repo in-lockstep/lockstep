@@ -22,7 +22,7 @@ class ApiSession:
         username: str,
         password: str,
         auth_method: str = "jwt",
-        login_path: str = "/api/v1/auth/login",
+        login_path: str = "",
         api_key_header: str = "",
     ) -> None:
         self._base_url = base_url.rstrip("/")

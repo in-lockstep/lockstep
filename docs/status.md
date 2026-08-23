@@ -130,6 +130,19 @@ Two deliberate adaptations:
   `TAG_<name>=skip-unless-env:VAR`, which expresses the same intent as a declaration. A pipeline
   relying on the old behaviour needs that one line.
 
+**The extracted tree no longer matches the origin, deliberately.** The tag-filter adaptation above
+turned out to be the first of a class rather than a one-off: an audit found 322 lines of one
+application's knowledge across the extracted modules — a sign-in page's selectors, a domain model's
+field defaults, that organisation's environment-variable prefixes, its endpoint map. `docs/layers.md`
+states the rule that identifies them and the tiers they belong to; the audit table there lists every
+one and where it went. The pattern is the same in each case: the algorithm was never the
+application-specific part, so the algorithm stayed and the strings moved out to something the
+pipeline declares. Behaviour that is now off by default when nothing is declared — automatic browser
+sign-in, 422 field recovery — is off because the alternative was a guess that failed at the target
+rather than at the compiler. `login.py` and `recovery.py` are new modules, written here and held to
+this repository's rules; the code they replaced could not be tested without that one application in
+front of it, which is how it survived.
+
 **The exec image** (`packages/pipeline-exec/docker/`) builds on the Playwright base and adds the
 runners the compiler dispatches on by extension. Workflows reference it by digest, never by tag.
 

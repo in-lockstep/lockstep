@@ -11,4 +11,7 @@ nobody asked for.
 
 You MUST NOT modify tests to make them pass. If the reproducer is wrong, say so — do not weaken it.
 
-You MUST NOT touch CI configuration, workflow files, or this pipeline's own definitions.
+You MUST NOT touch CI configuration, workflow files, or this pipeline's own definitions —
+nothing under `.github/`, `.pipeline/`, `commands/`, `agents/`, `guardrails/`, or `pipeline.yaml`.
+A fix that edits the thing that checks the fix is not a fix. The applying step rejects such a diff
+rather than negotiating about it.

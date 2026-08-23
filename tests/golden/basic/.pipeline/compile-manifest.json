@@ -6,9 +6,10 @@
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
-      "sha": "796d2872",
+      "sha": "c9c2935b",
       "sources": [
         "agents/story-extractor.md@9480178e",
+        "lockstep:guardrails/baseline.md@f12c42fc",
         "guardrails/common.md@e558a2d9",
         "skills/test/common.md@a4322449",
         "contexts/my-app-patterns.md@c781483a"
@@ -38,6 +39,10 @@
     },
     ".github/workflows/shared/context-my-app-patterns.md": {
       "sha": "0b2a249b",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-baseline.md": {
+      "sha": "3799e2d1",
       "sources": []
     },
     ".github/workflows/shared/guardrail-common.md": {

@@ -6,62 +6,70 @@
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
-      "sha": "71b8453e",
+      "sha": "2ff647d6",
       "sources": [
         "agents/change-writer.md@34293872",
-        "guardrails/common.md@0adb4353",
-        "guardrails/source-analysis.md@6f80374a",
+        "lockstep:guardrails/baseline.md@f12c42fc",
+        "guardrails/common.md@67509080",
+        "guardrails/source-analysis.md@9a31f04c",
         "guardrails/minimal-change.md@5e267c6d",
-        "skills/repo-conventions.md@db3c8530",
+        "skills/repo-conventions.md@5fe054f8",
         "contexts/repository.md@0c062bee"
       ]
     },
     ".github/workflows/aw-planner.md": {
-      "sha": "556c5121",
+      "sha": "9107e1f8",
       "sources": [
         "agents/planner.md@90765a5d",
-        "guardrails/common.md@0adb4353",
-        "guardrails/source-analysis.md@6f80374a",
-        "skills/repo-conventions.md@db3c8530",
+        "lockstep:guardrails/baseline.md@f12c42fc",
+        "guardrails/common.md@67509080",
+        "guardrails/source-analysis.md@9a31f04c",
+        "skills/repo-conventions.md@5fe054f8",
         "contexts/repository.md@0c062bee"
       ]
     },
     ".github/workflows/aw-requirements-analyst.md": {
-      "sha": "f7dd648b",
+      "sha": "13d18d04",
       "sources": [
         "agents/requirements-analyst.md@b33ecd89",
-        "guardrails/common.md@0adb4353",
-        "guardrails/source-analysis.md@6f80374a",
-        "skills/repo-conventions.md@db3c8530",
+        "lockstep:guardrails/baseline.md@f12c42fc",
+        "guardrails/common.md@67509080",
+        "guardrails/source-analysis.md@9a31f04c",
+        "skills/repo-conventions.md@5fe054f8",
         "contexts/repository.md@0c062bee"
       ]
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "4b43a191",
+      "sha": "4fc7ff2a",
       "sources": [
         "agents/test-writer.md@6af5ad4a",
-        "guardrails/common.md@0adb4353",
-        "guardrails/source-analysis.md@6f80374a",
-        "skills/repo-conventions.md@db3c8530",
+        "lockstep:guardrails/baseline.md@f12c42fc",
+        "guardrails/common.md@67509080",
+        "guardrails/source-analysis.md@9a31f04c",
+        "skills/repo-conventions.md@5fe054f8",
         "contexts/repository.md@0c062bee"
       ]
     },
     ".github/workflows/implement.yml": {
-      "sha": "a3e61561",
+      "sha": "78de9e3a",
       "sources": [
         "commands/implement.md@aa792623"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "9b1f5b9d",
+      "sha": "91f2dca9",
       "sources": []
     },
     ".github/workflows/shared/context-repository.md": {
       "sha": "46fba8cd",
       "sources": []
     },
+    ".github/workflows/shared/guardrail-baseline.md": {
+      "sha": "a953c77f",
+      "sources": []
+    },
     ".github/workflows/shared/guardrail-common.md": {
-      "sha": "dc6ae7a9",
+      "sha": "2017a7b9",
       "sources": []
     },
     ".github/workflows/shared/guardrail-minimal-change.md": {
@@ -69,11 +77,11 @@
       "sources": []
     },
     ".github/workflows/shared/guardrail-source-analysis.md": {
-      "sha": "2a9e6ca0",
+      "sha": "994c6edd",
       "sources": []
     },
     ".github/workflows/shared/skill-repo-conventions.md": {
-      "sha": "92e0af3d",
+      "sha": "bc058503",
       "sources": []
     },
     ".pipeline/step-defs/implement.feedback.json": {

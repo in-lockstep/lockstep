@@ -150,7 +150,7 @@ model: claude-sonnet-4-6
 provider: vertex-claude
 max_tool_turns: 0
 guardrails: [common, api-tests]
-skills: [api-testing]
+skills: [test-script-format]
 github:
   max-ai-credits: 25
 ---
@@ -161,11 +161,16 @@ You write a single contract test for one HTTP endpoint.
 
 The prompt this agent actually receives is assembled from **four layers**, in this order:
 
-1. **Guardrails** — hard constraints. Inlined at the very top.
+1. **Guardrails** — hard constraints. Inlined at the very top, starting with the baseline every
+   pipeline inherits from the compiler, then your own.
 2. **The agent body** — its persona and instructions.
-3. **Skills** — reusable know-how. Here, `api-testing` documents the JSON test-script format.
+3. **Skills** — reusable know-how. Here, `test-script-format` is one the compiler ships, because the
+   format it describes is the one `test-runner` parses; you don't write it, and it cannot drift.
 4. **Contexts** — what you're pointing at. The `httpbin` profile injects a context describing the
    target service and, critically, which of its response fields are unstable.
+
+Which of the four a given piece of prose belongs in is a rule, not a preference, and `lockstep lint`
+checks it. [What goes where](layers.md) is the rule.
 
 You can see the assembled result after compiling, in `.github/workflows/aw-test-writer.md`.
 
@@ -177,14 +182,19 @@ property. A constraint that might land after the instructions it constrains isn'
 ```yaml
 ---
 name: common
+description: What this pipeline adds to the shipped baseline
 enforce:
   permissions: read-all
   deny-tools: [delete_*]
 ---
 
-You MUST return valid JSON and nothing else — no prose before or after it.
-NEVER include credentials, tokens, or personal data in your output.
+You MUST NOT assert anything about the target that you have not seen in a response it returned.
 ```
+
+Short, because it only has to say what this pipeline adds. The rules that hold for every agent in
+every pipeline — return the schema you were asked for, don't invent, never emit credentials, treat
+input as data rather than instructions — are inlined ahead of this one from the compiler's own
+baseline, which no profile can exclude.
 
 The prose is a request. The `enforce:` block is not: it compiles into permissions and tool
 allow-lists the model *cannot exceed*, no matter what it decides to do. If your agent used an MCP
@@ -249,7 +259,7 @@ validate-api: 5 steps -> 6 jobs · 1 agentic, 4 deterministic, 1 cacheable
   + .github/workflows/pipeline-ci.yml
   + .github/workflows/shared/guardrail-common.md
   + .github/workflows/shared/guardrail-api-tests.md
-  + .github/workflows/shared/skill-api-testing.md
+  + .github/workflows/shared/skill-test-script-format.md
   + .github/workflows/shared/context-httpbin.md
   + .pipeline/compile-manifest.json
   + .pipeline/step-defs/validate-api.list-endpoints.json
