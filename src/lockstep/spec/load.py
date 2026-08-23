@@ -15,6 +15,7 @@ from ..util.hashing import sha_file, short
 from .model import (
     INHERITED_DIR,
     LOCKSTEP_DIR,
+    Agent,
     Capabilities,
     Command,
     CommandUse,
@@ -82,6 +83,10 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             source=str((entry or {}).get("from", "") or ""),
             add_guardrails=[str(v) for v in ((entry or {}).get("add-guardrails") or [])],
             add_skills=[str(v) for v in ((entry or {}).get("add-skills") or [])],
+            agents={
+                str(agent): dict(fields or {})
+                for agent, fields in ((entry or {}).get("agents") or {}).items()
+            },
         )
         for name, entry in commands_raw.items()
     }
@@ -270,12 +275,63 @@ def _resolve_uses(spec: Spec) -> None:
         bound = replace(command, name=name)
         bound.guardrails = [*command.guardrails, *use.add_guardrails]
         spec.commands[name] = bound
-        for step in bound.steps:
-            if step.kind is StepKind.AGENT:
-                agent = spec.agents.get(step.target)
-                if agent:
-                    agent.guardrails = [*agent.guardrails, *use.add_guardrails]
-                    agent.skills = [*agent.skills, *use.add_skills]
+        reachable = {step.target for step in bound.steps if step.kind is StepKind.AGENT}
+        for target in sorted(reachable):
+            agent = spec.agents.get(target)
+            if agent is None:
+                continue
+            agent.guardrails = [*agent.guardrails, *use.add_guardrails]
+            agent.skills = [*agent.skills, *use.add_skills]
+
+        for agent_name, fields in use.agents.items():
+            target = agent_name if agent_name in spec.agents else f"{use.source}/{agent_name}"
+            agent = spec.agents.get(target)
+            if agent is None or target not in reachable:
+                raise MissingDefinition(
+                    f"command {name!r} tunes agent {agent_name!r}, which it does not run",
+                    hint=f"agents in this command: {', '.join(sorted(reachable)) or '(none)'}",
+                )
+            _tune(agent, fields, where=f"pipeline.yaml commands.{name}.agents.{agent_name}")
+
+
+def _tune(agent: Agent, fields: dict[str, Any], *, where: str) -> None:
+    """Move an inherited agent's dials, within the limits the publishing repository declared."""
+    for field_name, value in fields.items():
+        band = agent.bands.get(field_name)
+        if band is None:
+            raise SpecError(
+                f"{field_name} is fixed by {agent.inherited_from or 'this pipeline'}",
+                location=where,
+                hint=f"agent {agent.name!r} publishes no band for it. Tunable here: "
+                + (", ".join(sorted(agent.bands)) or "(nothing)"),
+            )
+        if not band.permits(value):
+            raise SpecError(
+                f"{field_name}: {value!r} is outside the band {band.describe()}",
+                location=where,
+                hint=f"{agent.inherited_from or 'the pipeline'} publishes that range for "
+                f"{agent.name!r}; ask them to widen it rather than working around it",
+            )
+        # Recorded before it is applied, so the compile manifest can report what a fleet has tuned
+        # even where somebody set a field back to its default.
+        if agent.tuned.get(field_name, value) != value:
+            raise SpecError(
+                f"{field_name} is tuned twice for agent {agent.name!r}, to different values",
+                location=where,
+                hint="two commands cannot run one agent configured differently; the compiler already "
+                "refuses an agent that resolves to different prompt layers, for the same reason",
+            )
+        agent.tuned[field_name] = value
+        _apply(agent, field_name, value)
+
+
+def _apply(agent: Agent, field_name: str, value: Any) -> None:
+    if field_name == "max-ai-credits":
+        agent.github.max_ai_credits = int(value)
+    elif field_name == "timeout-minutes":
+        agent.github.timeout_minutes = int(value)
+    elif field_name == "model":
+        agent.model = str(value)
 
 
 def _find_inherited(spec: Spec, name: str, source: str) -> Command:

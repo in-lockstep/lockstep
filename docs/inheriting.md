@@ -289,6 +289,64 @@ is designed in [sharing.md](sharing.md#part-7--keeping-consumers-current) and no
 **Add.** `add-guardrails:` and `add-skills:` attach local definitions to an inherited command's agents
 without touching the inherited pipeline.
 
+**Tune, within a band the upstream published.** A band governs cost and latency; it never governs
+capability.
+
+```markdown
+<!-- upstream: agents/reviewer.md — a scalar is fixed, a mapping with `default:` opens a band -->
+---
+model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-4-1] }
+max_tool_turns: 4
+github:
+  max-ai-credits: { default: 60, min: 30, max: 200 }
+  timeout-minutes: { default: 20, max: 60 }
+---
+```
+
+```yaml
+# consumer: pipeline.yaml
+commands:
+  review:
+    from: review
+    agents:
+      reviewer:
+        max-ai-credits: 150
+        model: claude-opus-4-1
+```
+
+Everything that changes what an agent can *do* stays fixed, and trying to publish a band for one is
+refused at the upstream rather than at the consumer:
+
+```
+LS100: review:agents/reviewer.md — max_tool_turns cannot be banded
+      hint: a band governs cost and latency, never capability. Bandable: max-ai-credits,
+            timeout-minutes, model. max_tool_turns changes what this agent can do, so a consumer
+            who needs a different value needs a different agent
+```
+
+Overriding a field with no band is refused rather than ignored — the failure worth ruling out is a
+consumer who believes they raised a timeout and did not:
+
+```
+LS100: pipeline.yaml commands.review.agents.reviewer — max_tool_turns is fixed by review
+      hint: agent 'review/reviewer' publishes no band for it.
+            Tunable here: max-ai-credits, model, timeout-minutes
+```
+
+And a raised dial still has to fit the run budget:
+
+```
+DOC019: review:commands/review.md — command 'review' can spend 150 credits, over the run budget of 100
+      hint: tuned here: review/reviewer. Lower it, or raise budgets.per_run_ai_credits
+```
+
+What a consumer moved lands in `.pipeline/compile-manifest.json`, so reading that file across a fleet
+answers "who raised what, and against which band" without asking anyone:
+
+```json
+{ "tuned": { "review/reviewer": { "max-ai-credits": 150, "model": "claude-opus-4-1" } } }
+```
+
 **Exclude an ordinary inherited guardrail.** A profile's `exclude_guardrails` still works on anything
 not sealed.
 
@@ -314,9 +372,10 @@ change into a build failure rather than a customization that quietly stopped app
   not pinned is `DOC018`, an error.
 - **No transitive inheritance.** An inherited repository's own `inherits:` is not followed — that is a
   package manager, and this is not one. List both upstreams in the consumer.
-- **Bands are not built.** A consumer can add guardrails and skills, but cannot yet tune an inherited
-  agent's model or budget within a range the upstream declares. Designed in
-  [sharing.md](sharing.md#part-4--what-a-consumer-may-still-change).
+- **Three fields are bandable**, not because three is a principled number but because those three
+  demonstrably reach the emitted workflow. `runs-on` looked like an obvious fourth and is not: an
+  agentic workflow's runner does not come from the agent, so banding it would have published a dial
+  connected to nothing.
 - **Private repositories need a credential.** A consumer's `GITHUB_TOKEN` cannot read another private
   repository, so `lockstep fetch` in CI needs a GitHub App or a PAT. Nothing here solves that for you.
 - **Nothing has run on a real GitHub runner.** The capability actions and executor image these

@@ -17,8 +17,10 @@ from ..errors import BadStepSyntax, SpecError
 from ..util.hashing import sha_file, short
 from ..util.text import slug, uniquify
 from .model import (
+    BANDABLE,
     Agent,
     AgentGithub,
+    Band,
     ChatCommand,
     Command,
     CommandGithub,
@@ -294,22 +296,82 @@ def parse_command(src: SourceFile) -> Command:
     )
 
 
+def _band(value: Any, field_name: str, location: str) -> tuple[Any, Band | None]:
+    """A scalar is fixed. A mapping carrying `default:` publishes how far a consumer may move it."""
+    if not isinstance(value, dict):
+        return value, None
+    if "default" not in value:
+        raise SpecError(
+            f"{field_name} is a mapping with no `default:`",
+            location=location,
+            hint="write a scalar to fix the value, or `{ default: …, max: … }` to publish a band",
+        )
+    band = Band(
+        default=value["default"],
+        minimum=value.get("min"),
+        maximum=value.get("max"),
+        allow=[str(entry) for entry in (value.get("allow") or [])],
+    )
+    if band.allow and str(band.default) not in band.allow:
+        raise SpecError(
+            f"{field_name} has a default outside its own `allow:` list",
+            location=location,
+        )
+    if not band.allow and band.minimum is None and band.maximum is None:
+        raise SpecError(
+            f"{field_name} publishes a band with no limits",
+            location=location,
+            hint="add `min:`/`max:` for a number or `allow:` for a choice — an unlimited band is a "
+            "field a consumer may set to anything, which is not what publishing one means",
+        )
+    return band.default, band
+
+
+def _refuse_capability_bands(meta: dict[str, Any], gh_raw: dict[str, Any], where: str) -> None:
+    """A `default:` on a field no band may govern is somebody trying to publish one anyway.
+
+    Caught here rather than left to fail later as a type error, because the error is the whole point:
+    the answer to "can consumers raise max_tool_turns" is no, and it should say why.
+    """
+    for source in (meta, gh_raw):
+        for name, value in source.items():
+            if isinstance(value, dict) and "default" in value and name not in BANDABLE:
+                raise SpecError(
+                    f"{name} cannot be banded",
+                    location=where,
+                    hint="a band governs cost and latency, never capability. Bandable: "
+                    + ", ".join(BANDABLE)
+                    + f". {name} changes what this agent can do, so a consumer who needs a "
+                    "different value needs a different agent",
+                )
+
+
 def parse_agent(src: SourceFile) -> Agent:
     meta = src.metadata
     gh_raw = meta.get("github", {}) or {}
+    where = src.rel
+    _refuse_capability_bands(meta, gh_raw, where)
+    bands: dict[str, Band] = {}
+
+    def banded(raw: Any, name: str) -> Any:
+        value, band = _band(raw, name, where)
+        if band is not None:
+            bands[name] = band
+        return value
+
     github = AgentGithub(
         engine=str(gh_raw.get("engine", "") or ""),
         model=str(gh_raw.get("model", "") or ""),
-        max_ai_credits=gh_raw.get("max-ai-credits"),
+        max_ai_credits=banded(gh_raw.get("max-ai-credits"), "max-ai-credits"),
         network=_as_list(gh_raw.get("network")),
         safe_outputs=gh_raw.get("safe-outputs", {}) or {},
-        timeout_minutes=gh_raw.get("timeout-minutes"),
+        timeout_minutes=banded(gh_raw.get("timeout-minutes"), "timeout-minutes"),
         raw=gh_raw.get("raw", {}) or {},
     )
     return Agent(
         name=str(meta.get("name") or Path(src.rel).stem),
         description=str(meta.get("description", "")),
-        model=str(meta.get("model", "") or ""),
+        model=str(banded(meta.get("model", "") or "", "model")),
         provider=str(meta.get("provider", "") or ""),
         max_tool_turns=int(meta.get("max_tool_turns", 0) or 0),
         guardrails=_as_list(meta.get("guardrails")) or ["common"],
@@ -318,6 +380,7 @@ def parse_agent(src: SourceFile) -> Agent:
         body=src.body,
         github=github,
         src=src,
+        bands=bands,
     )
 
 

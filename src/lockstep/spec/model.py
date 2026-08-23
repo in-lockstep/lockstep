@@ -193,6 +193,53 @@ class Command:
     src: SourceFile | None = None
 
 
+# What a consumer of an inherited agent may move, and what it may never move.
+#
+# The rule is one sentence: a band governs cost and latency, it never governs capability. Credits,
+# how long a job may take, which model, which runner — all dials on the same machine. Permissions,
+# tools, network, turns, guardrails and the body are the surface upstream's evals were written
+# against and a security review signed off; a consumer who needs a different one needs a different
+# agent, and that conversation belongs upstream rather than in a config key.
+#
+# Three fields, not because three is a principled number but because these three demonstrably reach
+# the emitted workflow. `runs-on` looked like an obvious fourth and is not: an agentic workflow's
+# runner does not come from the agent, so banding it would have published a dial connected to
+# nothing. Add the fourth when somebody asks and it can be shown to move something.
+BANDABLE = ("max-ai-credits", "timeout-minutes", "model")
+
+
+@dataclass
+class Band:
+    """How far an inherited field may be moved, as the publishing repository declared it."""
+
+    default: Any
+    minimum: int | None = None
+    maximum: int | None = None
+    allow: list[str] = field(default_factory=list)
+
+    def describe(self) -> str:
+        if self.allow:
+            return " or ".join(repr(value) for value in self.allow)
+        if self.minimum is not None and self.maximum is not None:
+            return f"{self.minimum}\u2013{self.maximum}"
+        if self.maximum is not None:
+            return f"at most {self.maximum}"
+        if self.minimum is not None:
+            return f"at least {self.minimum}"
+        return "any value"
+
+    def permits(self, value: Any) -> bool:
+        if self.allow:
+            return str(value) in self.allow
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return False
+        if self.minimum is not None and number < self.minimum:
+            return False
+        return not (self.maximum is not None and number > self.maximum)
+
+
 @dataclass
 class AgentGithub:
     engine: str = ""
@@ -219,6 +266,10 @@ class Agent:
     body: str = ""
     github: AgentGithub = field(default_factory=AgentGithub)
     src: SourceFile | None = None
+    # Fields this agent publishes as movable, keyed by the name a consumer would write.
+    bands: dict[str, Band] = field(default_factory=dict)
+    # What a consumer actually moved, recorded so a fleet can be read from the compile manifest.
+    tuned: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -337,6 +388,8 @@ class CommandUse:
     source: str = ""
     add_guardrails: list[str] = field(default_factory=list)
     add_skills: list[str] = field(default_factory=list)
+    # agent name -> {field: value}, checked against the bands that agent publishes.
+    agents: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass

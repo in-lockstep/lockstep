@@ -9,6 +9,10 @@ commands:
   review:
     from: review
     add-guardrails: [house-style]
+    agents:
+      reviewer:
+        max-ai-credits: 150
+        model: claude-opus-4-1
 
 capabilities:
   actions: github.com/acme/pipeline-actions@v1.4.0

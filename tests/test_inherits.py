@@ -242,3 +242,95 @@ def test_the_generated_ci_fetches_before_it_compiles(consumer):
 def test_the_compiled_pipeline_is_reachable_end_to_end(consumer):
     workflow = yaml.safe_load(compile_spec(consumer).files[".github/workflows/review.yml"])
     assert simulate(workflow, {}, {}).order == ["diff", "review-it"]
+
+
+# --- bands: what an upstream lets a consumer move ---------------------------
+
+
+def credits(root):
+    front = yaml.safe_load(compile_spec(root).files[AGENT].split("---")[1])
+    return front["max-ai-credits"], front["engine"]["model"], front["timeout-minutes"]
+
+
+def test_a_consumer_moves_a_dial_within_the_band(consumer):
+    assert credits(consumer) == (150, "claude-opus-4-1", 20)
+
+
+def test_an_untouched_band_keeps_the_upstream_default(consumer):
+    """`timeout-minutes` is banded and not tuned, so the publishing repository's value stands."""
+    assert credits(consumer)[2] == 20
+
+
+def test_going_outside_the_band_is_refused_and_names_it(consumer):
+    edit(consumer, "pipeline.yaml", {"max-ai-credits: 150": "max-ai-credits: 400"})
+    with pytest.raises(SpecError) as excinfo:
+        load_spec(consumer)
+    rendered = excinfo.value.render()
+    assert "outside the band 30–200" in rendered
+    assert "ask them to widen it" in rendered
+
+
+def test_a_choice_outside_the_allow_list_is_refused(consumer):
+    edit(consumer, "pipeline.yaml", {"model: claude-opus-4-1": "model: gpt-9"})
+    with pytest.raises(SpecError) as excinfo:
+        load_spec(consumer)
+    assert "claude-sonnet-4-6" in excinfo.value.render()
+
+
+def test_a_field_with_no_band_is_fixed(consumer):
+    """Refused rather than ignored: the failure to rule out is believing you raised something."""
+    edit(consumer, "pipeline.yaml", {"max-ai-credits: 150": "max_tool_turns: 20"})
+    with pytest.raises(SpecError) as excinfo:
+        load_spec(consumer)
+    rendered = excinfo.value.render()
+    assert "is fixed by review" in rendered
+    assert "Tunable here: max-ai-credits, model, timeout-minutes" in rendered
+
+
+def test_capability_cannot_be_banded_at_all(consumer):
+    """The answer to "can consumers raise max_tool_turns" is no, and it says why."""
+    edit(
+        consumer,
+        ".pipeline/inherited/review/agents/reviewer.md",
+        {"max_tool_turns: 4": "max_tool_turns: { default: 4, max: 30 }"},
+    )
+    with pytest.raises(SpecError) as excinfo:
+        load_spec(consumer)
+    rendered = excinfo.value.render()
+    assert "cannot be banded" in rendered
+    assert "never capability" in rendered
+
+
+def test_tuning_an_agent_the_command_does_not_run_is_refused(consumer):
+    edit(consumer, "pipeline.yaml", {"      reviewer:": "      ghost:"})
+    with pytest.raises(MissingDefinition) as excinfo:
+        load_spec(consumer)
+    assert "which it does not run" in excinfo.value.render()
+
+
+def test_a_band_with_no_limits_is_refused(consumer):
+    """Publishing an unlimited band means a consumer may set anything, which is not publishing one."""
+    edit(
+        consumer,
+        ".pipeline/inherited/review/agents/reviewer.md",
+        {"timeout-minutes: { default: 20, max: 60 }": "timeout-minutes: { default: 20 }"},
+    )
+    with pytest.raises(SpecError) as excinfo:
+        load_spec(consumer)
+    assert "band with no limits" in excinfo.value.render()
+
+
+def test_a_raised_band_still_has_to_fit_the_run_budget(consumer):
+    edit(consumer, "pipeline.yaml", {"per_run_ai_credits: 200": "per_run_ai_credits: 100"})
+    report = doctor(load_spec(consumer), consumer)
+    finding = next(f for f in report.findings if f.code == "DOC019")
+    assert "can spend 150 credits" in finding.message
+    assert "review/reviewer" in finding.hint
+
+
+def test_what_a_consumer_tuned_is_recorded_for_the_fleet(consumer):
+    import json
+
+    manifest = json.loads(compile_spec(consumer).files[".pipeline/compile-manifest.json"])
+    assert manifest["tuned"] == {"review/reviewer": {"max-ai-credits": 150, "model": "claude-opus-4-1"}}
+    assert manifest["inherits"]["standards"].endswith("upstream-standards")

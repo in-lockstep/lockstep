@@ -375,6 +375,27 @@ def _check_budgets(spec: Spec, report: Report) -> None:
             "no per-run credit budget",
             hint="set budgets.per_run_ai_credits in pipeline.yaml so a runaway run fails loudly",
         )
+        return
+
+    # A band lets a consumer raise one agent; the run budget is the ceiling over all of them. Raising
+    # past it is a run that fails partway through, which is the most expensive way to find out.
+    for command in spec.commands.values():
+        agents = {step.target for step in command.steps if step.kind is StepKind.AGENT}
+        worst = sum(spec.agents[name].github.max_ai_credits or 0 for name in agents if name in spec.agents)
+        if worst > spec.manifest.per_run_ai_credits:
+            tuned = sorted(name for name in agents if name in spec.agents and spec.agents[name].tuned)
+            report.add(
+                Severity.ERROR,
+                "DOC019",
+                f"command {command.name!r} can spend {worst} credits, over the run budget of "
+                f"{spec.manifest.per_run_ai_credits}",
+                location=command.src.rel if command.src else command.name,
+                hint=(
+                    f"tuned here: {', '.join(tuned)}. Lower it, or raise budgets.per_run_ai_credits"
+                    if tuned
+                    else "lower an agent's max-ai-credits, or raise budgets.per_run_ai_credits"
+                ),
+            )
 
 
 def _check_secrets(spec: Spec, report: Report) -> None:

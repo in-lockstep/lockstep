@@ -9,7 +9,7 @@ for the walkthrough. `tests/fixtures/` holds the whole arrangement — an
 `upstream-review` repository that publishes a pipeline, and a `consumer` whose entire contents are a
 manifest, a profile, a context and one house rule. `tests/test_inherits.py` compiles it.
 
-Bands (Part 4) and the updater (Part 7) are designed here and not built.
+Bands (Part 4) are built too. The updater (Part 7) is designed here and not built.
 
 ---
 
@@ -281,8 +281,8 @@ belongs upstream. Everything a band can move is a dial on the same machine.
 | `max-ai-credits` | yes | how much a run may spend |
 | `timeout-minutes` | yes | how long it may take |
 | `model` | yes, from a list | a cost/quality trade at the same capability surface |
-| `runs-on` | yes, from a list | where it executes; a larger runner is not a wider agent |
 | `max_tool_turns` | **no** | turns are reach. More turns is a different agent. |
+| `runs-on` | not yet | an agentic workflow's runner does not come from the agent, so banding it would publish a dial connected to nothing |
 | `permissions`, `deny-tools`, `network`, `mcp` | **no** | the enforced floor |
 | guardrails, skills, the body | **no** | add to them; you cannot replace them |
 
@@ -375,7 +375,7 @@ was waiting for.
 | `from:` / `add-guardrails:` / `add-skills:` in `commands:` | **built** | the manifest already carried a per-command map |
 | Evals and script tests resolved upstream | **built** | `LNT001`, `LNT002` follow the definition |
 | `DOC017` / `DOC018` — unpinned and unpinnable upstreams | **built** | |
-| Bands on tunable fields | design | start with three fields |
+| Bands on tunable fields | **built** | three fields, each of which reaches the emitted workflow |
 | Transitive imports | — | **not in v1.** An import that imports is a package manager; require the consumer to list both, and say so |
 | Private-repo fetch in CI | medium | **the real operational cost.** A consumer's `GITHUB_TOKEN` cannot read another private repository; this needs a GitHub App or a PAT, per consumer. Worth knowing before starting rather than after |
 

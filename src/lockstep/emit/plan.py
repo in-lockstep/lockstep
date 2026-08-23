@@ -340,4 +340,11 @@ def _compile_manifest(plan: CompilePlan, spec: Spec) -> str:
         "spec": spec.manifest.spec_version,
         "files": entries,
     }
+    # What this repository inherits, and what it moved within the bands it was given. Reading this
+    # file across a fleet answers "who is on what version, and who tuned what" without asking anyone.
+    if spec.manifest.inherits:
+        payload["inherits"] = dict(sorted(spec.manifest.inherits.items()))
+    tuned = {name: dict(sorted(agent.tuned.items())) for name, agent in spec.agents.items() if agent.tuned}
+    if tuned:
+        payload["tuned"] = dict(sorted(tuned.items()))
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
