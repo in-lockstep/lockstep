@@ -264,7 +264,8 @@ should never have to think about it.
 
 ## Part 5 — Rollout, and knowing where you stand
 
-**Changing a standard.** Tag `pipeline-standards@v4`. A bot opens a pull request in each consumer
+**Changing a standard.** Merge upstream, and let the consumers notice — Part 7 is how, and why the
+recompile has to happen in each consumer rather than centrally. A pull request lands in each one,
 bumping the pin and committing the recompile. The diff shows the guardrail text. CI runs the drift
 gate, the policy gate, and each repo's own evals. Merge is per-repo and reviewed.
 
@@ -301,6 +302,129 @@ was waiting for.
 The `.lockstep/` convention already means a consuming repository pays one directory. Combined with
 inheritance, adopting a corporate pipeline becomes: create `.lockstep/`, write a manifest, a profile
 and a context, run `lockstep pin && lockstep compile`, and commit.
+
+---
+
+## Part 7 — Keeping consumers current
+
+Pinning is what makes inheritance safe and what makes it go stale. The updater is itself an inherited
+pipeline: upstream writes it once, every consumer compiles it, and nobody downstream authors anything.
+
+```markdown
+<!-- acme/pipeline-standards — commands/update.md, inherited by every consumer -->
+---
+name: update
+description: Open a pull request when an upstream this repository inherits has moved
+github:
+  triggers:
+    repository_dispatch: [upstream-moved]
+    schedule: "17 6 * * *"
+    workflow_dispatch: true
+---
+
+## Steps
+
+1. **Resolve every tracked ref to a commit** → builtin: check-upstreams
+   - id: upstreams
+   - emits: moved
+   - args: --output={output_dir}/moved.json
+
+2. **Recompile at the new pins** → script: scripts/repin.sh
+   (if standards in {upstreams.moved})
+   - args: --alias=standards
+
+3. **Open or update one pull request** → builtin: propose-upstream-bump
+   - args: --moved={output_dir}/moved.json
+```
+
+### The work has to happen downstream
+
+Upstream needs an App with write access to dispatch at all — so why not have upstream open the pull
+request itself, and skip the inherited pipeline?
+
+Because **recompiling requires the consumer's environment**. That repository has its own capability
+pins, its own `exec-image`, its own extensions, its own overlays and profiles. Upstream opening the
+pull request would mean faithfully reproducing every consumer's toolchain, and getting it subtly
+wrong in the ones that differ — which are exactly the ones where being wrong matters.
+
+Running in the consumer's own CI makes it correct by construction. So the dispatch carries **a signal,
+not content**: "something you inherit has moved." Everything else is resolved locally.
+
+### Trigger and tracking ref are different questions
+
+Merging to main upstream is a *trigger*. What each consumer *follows* is its own choice, declared in
+its own manifest:
+
+| Consumer declares | Picks up | Suits |
+|---|---|---|
+| `standards: …@main` | every merge upstream | one or two canary repositories |
+| `standards: …@v3` | only when the tag moves | everyone else |
+| `standards: …@v3.2.1` | never, until edited by hand | a repository that has opted out, visibly |
+
+One dispatch serves all three. A consumer tracking `@v3` receives the signal, resolves `v3` to the
+same commit it already has, finds nothing to do, and exits — so upstream does not need a consumer
+list segmented by policy.
+
+**Keep one or two canaries on `@main`.** An upstream merge that breaks a consumer's overlay surfaces
+as `OVL404` in the canary's pull request, before the tag is cut, in the only place that can detect it:
+a repository with real overlays. Upstream should not dispatch until its own drift gate and evals pass
+on main, and the canary is the second gate after that.
+
+### The payload is untrusted input
+
+The dispatch payload is data somebody sent, and the framework's rule about issue text applies to it
+unchanged: **never resolve a ref from the payload.** A payload naming a branch or a commit to fetch is
+a payload that can point a consumer at arbitrary code the moment a token leaks.
+
+The pipeline resolves each SHA from the consumer's *own* `inherits:` entry, against the repository it
+already trusts. The payload may at most hint which alias moved, so a consumer can skip a run it has
+nothing to do in — a scheduling optimization, never an input to what gets fetched.
+
+### Push or poll
+
+| | Poll — `schedule:` | Push — `repository_dispatch` |
+|---|---|---|
+| Upstream credentials | **none** | a GitHub App with `contents: write` on every consumer |
+| Latency | the cron interval | seconds |
+| Cost | one cheap run per repo per day | one run per repo per upstream merge |
+| Setup | zero | an App, installed org-wide |
+
+Poll is the baseline because it works with no privileged credential anywhere, and a day is a
+reasonable latency for a standards change that is going to be reviewed by a human anyway. Push is the
+opt-in for organizations that need same-hour propagation, and its cost is honest: an App that can
+write to every repository is a serious credential, and it exists solely to say "go look."
+
+### One pull request, not a stack
+
+Three upstream merges in a week must not leave three open bump pull requests. This is the problem the
+review pipeline already solved: a marker in the body, found and updated in place.
+
+```
+<!-- lockstep:upstream-bump aliases=standards,review -->
+```
+
+### When the recompile fails
+
+An upstream change that breaks a consumer's overlay produces no output to commit. Do not swallow it
+and do not open an issue somewhere else: open the pull request with the pin bump anyway and let CI
+fail on it. The breakage then lives in the same review surface as the change that caused it, with the
+`OVL404` message naming the anchor that no longer exists.
+
+### What this would take
+
+| Piece | Status |
+|---|---|
+| `propose-pr` composite action | **exists** — branch-scoped token, opens the pull request |
+| `--semantic-diff` for the pull request body | **exists** — reports widened permissions and budgets |
+| Drift gate proving the recompile | **exists** |
+| `repository_dispatch` / `schedule` triggers | **exists** in the trigger block |
+| Resolving a *branch* ref, not only a tag | small — `resolve_tag` uses `git ls-remote --tags`; branches need `--heads` |
+| `check-upstreams`, `propose-upstream-bump` | new builtins, both thin |
+| Fan-out from upstream to N consumers | new — a release job iterating the App's installations |
+
+**One caveat with no clean answer:** the updater is inherited and pinned like everything else, so a
+consumer whose updater is broken cannot receive the fix that repairs it. Keep this command small,
+keep it boring, and expect that repairing it across a fleet is a manual morning.
 
 ---
 
