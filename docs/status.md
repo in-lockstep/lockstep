@@ -270,6 +270,18 @@ fingerprint, a state database, nested commands, and a three-iteration convergenc
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests
 covering a full fan-out cycle in both item and shard modes.
 
+## Ceilings on agents an upstream never wrote
+
+`enforce:` on a guardrail now carries `max-turns`, `max-ai-credits` and `per-run-ai-credits`. A band
+bounds a dial on an agent upstream published; a ceiling bounds every agent in a consuming repository,
+including ones it wrote itself — the gap bands left open. Sealed guardrails already reach every agent
+unnamed, so the mechanism is the one that was there. Lowest ceiling wins; zero and non-numbers are
+refused at parse time; the run cap is checked against the consumer's own `budgets.per_run_ai_credits`
+and an absent budget is refused rather than passed. Enforced in `verify_enforcement`, after overlays.
+
+It stops drift, not a determined fork: a consumer can delete `inherits:`. What it guarantees is that
+removing a ceiling is a diff on a pull request, gated by `compile --check`. `docs/sharing.md` Part 4.
+
 ## Self-hosting
 
 This repository compiles its own drift gate. `.lockstep/` holds a manifest and a profile; they

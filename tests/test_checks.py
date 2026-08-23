@@ -8,6 +8,7 @@ import pytest
 from conftest import ready_but_unpublished
 
 from lockstep.checks import Severity, doctor, lint
+from lockstep.errors import SpecError
 from lockstep.spec.load import load_spec
 
 
@@ -231,3 +232,38 @@ def test_a_declared_extension_is_flagged_as_unverifiable(basic_root):
     finding = next(f for f in report.findings if f.code == "DOC014")
     assert finding.severity is Severity.WARNING
     assert "list-commands" in finding.hint
+
+
+# --- ceilings on `enforce:` -------------------------------------------------
+
+
+def test_a_ceiling_that_is_not_a_number_is_refused(basic_root):
+    """Silently coercing it would produce a limit nobody can predict from the file."""
+    guardrail = basic_root / "guardrails" / "common.md"
+    guardrail.write_text(
+        guardrail.read_text().replace("---\n\n", "enforce:\n  max-turns: lots\n---\n\n", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(SpecError) as error:
+        load_spec(basic_root)
+    assert "not a number" in error.value.message
+
+
+def test_a_ceiling_of_zero_is_refused(basic_root):
+    """Zero forbids rather than limits, and reads like an omission."""
+    guardrail = basic_root / "guardrails" / "common.md"
+    guardrail.write_text(
+        guardrail.read_text().replace("---\n\n", "enforce:\n  max-ai-credits: 0\n---\n\n", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(SpecError) as error:
+        load_spec(basic_root)
+    assert "forbids rather than limits" in error.value.message
+
+
+def test_no_ceiling_anywhere_constrains_nothing(basic_spec_dir):
+    """The fixture sets none, so every agent compiles on its own declared numbers."""
+    spec = load_spec(basic_spec_dir)
+    assert all(fragment.enforce.max_turns is None for fragment in spec.guardrails.values())
+    assert all(fragment.enforce.max_ai_credits is None for fragment in spec.guardrails.values())
+

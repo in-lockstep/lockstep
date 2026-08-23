@@ -51,7 +51,9 @@ def repin():
 def test_the_updater_is_inherited_like_any_other_pipeline(consumer):
     """Upstream writes it once; nobody downstream authors a self-updating pipeline."""
     assert "update" in load_spec(consumer).commands
-    assert not (consumer / "commands").exists()
+    # The repository has commands of its own; none of them is this one.
+    assert not (consumer / "commands" / "update.md").exists()
+    assert not any("upstream" in path.read_text() for path in (consumer / "commands").glob("*.md"))
 
 
 def test_it_polls_and_accepts_a_dispatch(workflow):

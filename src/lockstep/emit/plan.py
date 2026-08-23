@@ -65,6 +65,8 @@ def compile_spec(root: Path) -> CompilePlan:
         # looks exactly like output that runs, right up until a runner tries to fetch it.
         plan.notes.append(f"{placeholder} is a placeholder pin — this output cannot run as emitted")
 
+    _check_run_budget(spec)
+
     profiles = spec.compiled_profiles()
     if not profiles:
         raise EmitError(
@@ -274,6 +276,39 @@ def _check_unapplied(overlays: list[Overlay], plan: CompilePlan, out: str) -> No
                 location=overlay.rel,
                 hint=f"nearest: workflows/{close[0]}" if close else None,
             )
+
+
+def _check_run_budget(spec: Spec) -> None:
+    """A cap on the whole run, from whichever guardrail sets the lowest one.
+
+    Per-agent ceilings do not bound a bill — a repository under one can add a second agent. This is
+    the ceiling that does, and unlike the per-agent ones it is not scoped to an agent's layer set,
+    so every guardrail in the spec is asked rather than only the ones some agent imports.
+    """
+    caps = [
+        (fragment, fragment.enforce.per_run_ai_credits)
+        for fragment in spec.guardrails.values()
+        if fragment.enforce.per_run_ai_credits is not None
+    ]
+    if not caps:
+        return
+    fragment, cap = min(caps, key=lambda entry: entry[1] or 0)
+    where = fragment.src.rel if fragment.src else fragment.name
+    budget = spec.manifest.per_run_ai_credits
+    if budget is None:
+        raise EmitError(
+            f"no per-run credit budget, but {where} caps one at {cap}",
+            location=spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml",
+            hint=f"set budgets.per_run_ai_credits to {cap} or less — a run with no budget is not "
+            "under the cap, it is outside it",
+        )
+    if budget > cap:
+        raise EmitError(
+            f"budgets.per_run_ai_credits is {budget}, over the cap of {cap} set by {where}",
+            location=spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml",
+            hint=f"lower it to {cap} or less, or relax `enforce.per-run-ai-credits` in that "
+            "guardrail — a sealed guardrail's cap is not the consuming repository's to move",
+        )
 
 
 def _overlay_header(overlays: list[Overlay]) -> list[str]:

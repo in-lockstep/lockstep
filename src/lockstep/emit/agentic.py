@@ -192,6 +192,21 @@ def verify_enforcement(artifact: AgentArtifact) -> None:
                 hint="remove the overlay hunk, or relax `enforce.network` in the guardrail that sets it",
             )
 
+    for key, ceiling, what in (
+        ("max-turns", artifact.enforced.max_turns, "tool turns"),
+        ("max-ai-credits", artifact.enforced.max_ai_credits, "credits"),
+    ):
+        if ceiling is None:
+            continue
+        requested = front.get(key)
+        if requested is None or int(requested) > ceiling:
+            raise EmitError(
+                f"compiled agent asks for {requested} {what}, over the ceiling of {ceiling}",
+                location=location,
+                hint=f"lower `{key}` on the agent, or relax `enforce.{key}` in the guardrail that "
+                "sets it — a sealed guardrail's ceiling is not the consuming repository's to move",
+            )
+
     if front.get("permissions") != "read-all":
         raise EmitError(
             f"compiled agent requests permissions {front.get('permissions')!r}",

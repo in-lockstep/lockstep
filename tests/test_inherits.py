@@ -20,7 +20,7 @@ import yaml
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
-from lockstep.errors import MissingDefinition, SpecError
+from lockstep.errors import EmitError, MissingDefinition, SpecError
 from lockstep.lifecycle import fetch
 from lockstep.spec.load import load_manifest_only, load_spec
 
@@ -61,7 +61,11 @@ def guardrail_order(root):
 
 
 def test_a_consumer_writes_a_profile_a_context_and_its_own_rules(consumer):
-    """Everything else arrives. These are the layers an upstream cannot know."""
+    """Everything inherited arrives. The rest is what an upstream cannot know, plus what it owns.
+
+    The `changelog` pipeline is the repository's own — no upstream describes it, and nothing about
+    it was inherited. It is here because that is the case the organization's ceilings are for.
+    """
     written = {
         str(path.relative_to(consumer))
         for path in consumer.rglob("*")
@@ -72,6 +76,9 @@ def test_a_consumer_writes_a_profile_a_context_and_its_own_rules(consumer):
         "profiles/repo.md",
         "contexts/repo.md",
         "guardrails/house-style.md",
+        "agents/changelog-writer.md",
+        "commands/changelog.md",
+        "evals/changelog-writer/cases/one.json",
     }
 
 
@@ -334,3 +341,94 @@ def test_what_a_consumer_tuned_is_recorded_for_the_fleet(consumer):
     manifest = json.loads(compile_spec(consumer).files[".pipeline/compile-manifest.json"])
     assert manifest["tuned"] == {"review/reviewer": {"max-ai-credits": 150, "model": "claude-opus-4-1"}}
     assert manifest["inherits"]["standards"].endswith("upstream-standards")
+
+
+# --- ceilings: what an upstream sets on agents it will never see -------------
+#
+# A band bounds a dial on an agent the organization published. A ceiling bounds every agent in a
+# consuming repository, including ones it wrote itself — which, before this, were the agents an
+# organization had no say over at all.
+
+
+def test_a_ceiling_reaches_an_agent_the_organization_never_wrote(consumer):
+    """The `changelog-writer` is the consumer's own. It still compiles under the standards."""
+    agent = yaml.safe_load(
+        compile_spec(consumer).files[".github/workflows/aw-changelog-writer.md"].split("---")[1]
+    )
+    assert agent["max-turns"] == 3
+    assert agent["max-ai-credits"] == 40
+
+
+def test_a_local_agent_over_the_credit_ceiling_is_refused(consumer):
+    edit(consumer, "agents/changelog-writer.md", {"max-ai-credits: 40": "max-ai-credits: 400"})
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the ceiling of 200" in error.value.message
+
+
+def test_a_local_agent_over_the_turn_ceiling_is_refused(consumer):
+    edit(consumer, "agents/changelog-writer.md", {"max_tool_turns: 3": "max_tool_turns: 30"})
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the ceiling of 8" in error.value.message
+
+
+def test_the_refusal_says_the_ceiling_is_not_the_consumers_to_move(consumer):
+    """The useful half of the message: where the limit came from, and that editing it is upstream's."""
+    edit(consumer, "agents/changelog-writer.md", {"max-ai-credits: 40": "max-ai-credits: 400"})
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "sealed guardrail" in error.value.hint
+
+
+def test_an_overlay_cannot_raise_an_agent_past_the_ceiling(consumer):
+    """Overlays are a customization tier, not an override of the enforceable half of a guardrail."""
+    overlay = consumer / "overlays" / "github" / "raise-it.yml"
+    overlay.parent.mkdir(parents=True, exist_ok=True)
+    overlay.write_text(
+        "target: workflows/aw-changelog-writer.md\n"
+        "frontmatter:\n"
+        "  - op: merge\n"
+        "    at: max-ai-credits\n"
+        "    value: 900\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the ceiling of 200" in error.value.message
+
+
+# --- the ceiling that actually bounds a bill --------------------------------
+
+
+def test_a_run_budget_over_the_cap_is_refused(consumer):
+    """Per-agent ceilings do not bound a bill: a repository under them can add another agent."""
+    edit(consumer, "pipeline.yaml", {"per_run_ai_credits: 200": "per_run_ai_credits: 2000"})
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the cap of 200" in error.value.message
+
+
+def test_no_run_budget_at_all_is_refused_when_a_cap_exists(consumer):
+    """Unbounded is not under the cap; it is outside it."""
+    edit(consumer, "pipeline.yaml", {"budgets:\n  per_run_ai_credits: 200": "budgets: {}"})
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "caps one at 200" in error.value.message
+
+
+def test_the_lowest_ceiling_wins_not_the_last_one_read(consumer):
+    """Two guardrails each setting one are two constraints; honouring only the last honours neither."""
+    house = consumer / ".pipeline/inherited/review/guardrails/house.md"
+    house.write_text(
+        house.read_text().replace(
+            "---\n\n",
+            "enforce:\n  max-ai-credits: 25\n---\n\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the ceiling of 25" in error.value.message
+

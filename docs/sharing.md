@@ -282,7 +282,7 @@ belongs upstream. Everything a band can move is a dial on the same machine.
 | `max-ai-credits` | yes | how much a run may spend |
 | `timeout-minutes` | yes | how long it may take |
 | `model` | yes, from a list | a cost/quality trade at the same capability surface |
-| `max_tool_turns` | **no** | turns are reach. More turns is a different agent. |
+| `max_tool_turns` | **no** | turns are reach. More turns is a different agent — but see ceilings below, which *cap* turns on agents a consumer wrote |
 | `runs-on` | not yet | an agentic workflow's runner does not come from the agent, so banding it would publish a dial connected to nothing |
 | `permissions`, `deny-tools`, `network`, `mcp` | **no** | the enforced floor |
 | guardrails, skills, the body | **no** | add to them; you cannot replace them |
@@ -327,6 +327,67 @@ Four rules, each with an error that names the thing rather than the rule:
 
 Every override lands in `.pipeline/compile-manifest.json` beside the sources, so reading that file
 across a fleet answers "who raised what, and against which band" without asking anyone.
+
+---
+
+### The gap bands leave: agents the organization never wrote
+
+A band bounds a dial on an agent **upstream published**. It says nothing about an agent the consuming
+repository wrote itself — and those were, until now, entirely outside the organization's reach. A
+repository could inherit every standard, pass every check, and run a local agent with fifty turns and
+an unbounded credit budget beside them.
+
+Ceilings close that. They are not bands and should not be confused with them:
+
+| | Band | Ceiling |
+|---|---|---|
+| Asks | how far may a consumer move *this* dial on *our* agent | how high may a consumer's dial go on an agent we have never seen |
+| Declared on | the upstream agent | a guardrail's `enforce:` block |
+| Reaches | that one agent, in a consumer that inherits it | **every agent in the repository**, inherited or local |
+| Governs | cost and latency only | cost *and* reach — turns are capability, and a ceiling is where capability is bounded |
+
+They live on `enforce:` because that is already the half of a guardrail the substrate enforces rather
+than requests, and because a **sealed** guardrail already reaches every agent without being named:
+
+```markdown
+<!-- acme/pipeline-standards — guardrails/data-handling.md -->
+---
+name: data-handling
+sealed: true
+enforce:
+  permissions: read-all
+  deny-tools: [write_file, create_*, update_*, delete_*]
+  max-turns: 8
+  max-ai-credits: 200
+  per-run-ai-credits: 200
+---
+```
+
+Three rules, and the reasoning behind each:
+
+1. **The lowest ceiling wins, not the last one read.** Two guardrails each setting one are two
+   constraints; honouring only whichever was parsed last honours neither.
+2. **A ceiling of zero, or a value that is not a number, is refused at parse time.** Zero would
+   forbid rather than limit while reading like an omission, and a coerced value is a limit nobody
+   can predict from the file.
+3. **The run cap is the one that bounds a bill.** Per-agent ceilings do not: a repository under them
+   can add a second agent. `enforce.per-run-ai-credits` is checked against the consumer's own
+   `budgets.per_run_ai_credits`, and a repository with no budget at all is refused rather than
+   passed — unbounded is not under the cap, it is outside it.
+
+Enforcement is the same point as the rest of the floor: `verify_enforcement`, **after** overlays run.
+An overlay that raises `max-ai-credits` in the emitted agent is refused exactly like one that widens
+egress, because otherwise `enforce:` would be advice.
+
+**What this is and is not.** A consumer who wants more can delete the `inherits:` line — sealing is
+not an access control against the repository's own owners, and presenting it as one would be a lie.
+What it is: the committed output contains the flattened prompt layers and the compiled frontmatter,
+so removing a ceiling is a **diff on a pull request**, gated by `compile --check`. It stops drift and
+forgetting, which is what actually happens, rather than defending against a determined fork, which
+mostly does not. Actual spend per repository per month is a GitHub billing control and is not
+something a compiler can reach.
+
+---
 
 **Overlay.** The existing strategic-merge patches work unchanged on inherited definitions, with
 `OVL404` still failing loudly on an anchor that matches nothing — which is what turns an upstream

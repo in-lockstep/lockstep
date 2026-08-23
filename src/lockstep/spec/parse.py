@@ -387,12 +387,40 @@ def parse_agent(src: SourceFile) -> Agent:
     )
 
 
+def _ceiling(raw: dict[str, Any], key: str, src: SourceFile) -> int | None:
+    """One ceiling from an `enforce:` block, refusing anything that is not a positive whole number.
+
+    A ceiling of zero would forbid the thing outright while reading like an omission, and a value
+    the parser silently coerced is a limit nobody can predict from the file.
+    """
+    if key not in raw or raw[key] is None:
+        return None
+    try:
+        value = int(raw[key])
+    except (TypeError, ValueError):
+        raise SpecError(
+            f"enforce.{key} is {raw[key]!r}, which is not a number",
+            location=src.rel,
+            hint="a ceiling is a positive whole number; remove the key to set no ceiling",
+        ) from None
+    if value < 1:
+        raise SpecError(
+            f"enforce.{key} is {value}, which forbids rather than limits",
+            location=src.rel,
+            hint="remove the key to set no ceiling; a ceiling of zero would read like an omission",
+        )
+    return value
+
+
 def parse_fragment(src: SourceFile, kind: str) -> Fragment:
     enforce_raw = src.metadata.get("enforce", {}) or {}
     enforce = Enforce(
         permissions=str(enforce_raw.get("permissions", "") or ""),
         network=str(enforce_raw.get("network", "") or ""),
         deny_tools=_as_list(enforce_raw.get("deny-tools")),
+        max_turns=_ceiling(enforce_raw, "max-turns", src),
+        max_ai_credits=_ceiling(enforce_raw, "max-ai-credits", src),
+        per_run_ai_credits=_ceiling(enforce_raw, "per-run-ai-credits", src),
     )
     name = str(src.metadata.get("name") or Path(src.rel).stem)
     return Fragment(

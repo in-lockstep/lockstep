@@ -8,6 +8,9 @@ inherits:
 commands:
   update:
     from: standards/update
+  # This repository's own: nothing about it is inherited, and it still compiles under the
+  # organization's sealed ceilings.
+  changelog: {}
   review:
     from: review
     add-guardrails: [house-style]

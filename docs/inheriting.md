@@ -33,6 +33,9 @@ sealed: true
 enforce:
   permissions: read-all
   deny-tools: [write_file, create_*, update_*, delete_*]
+  max-turns: 8
+  max-ai-credits: 200
+  per-run-ai-credits: 200
 ---
 
 NEVER reproduce customer records, credentials, or internal hostnames in output that leaves this
@@ -55,6 +58,18 @@ looking at.
 
 > Sealing a guardrail in your *own* repository seals it against yourself, which means nothing. The
 > loader ignores `sealed:` on a local definition rather than pretending it did something.
+
+**The three numbers are ceilings, and they are the reason "every agent" is worth saying twice.** A
+band bounds a dial on an agent this organization published; a ceiling bounds every agent in a
+consuming repository — including the ones it wrote itself, which no upstream will ever see. A
+repository under these can write whatever agents it likes, and none of them gets more than eight
+turns or 200 credits, and no single run gets more than 200 in total.
+
+`per-run-ai-credits` is the one that bounds a bill: the per-agent ceilings do not, because a
+repository under them can add a second agent. It is checked against the consumer's own
+`budgets.per_run_ai_credits`, and a consumer with no budget declared is refused rather than passed —
+unbounded is not under the cap. `docs/sharing.md` has the full contrast with bands, including what
+sealing does and does not defend against.
 
 ---
 

@@ -290,6 +290,18 @@ class Enforce:
     permissions: str = ""
     network: str = ""
     deny_tools: list[str] = field(default_factory=list)
+    # Ceilings. A band asks how far a consumer may move a dial on an agent this organization wrote;
+    # a ceiling asks how high a consumer's dial may go on an agent it has never seen. Different
+    # question, so deliberately not a band — and the reason it lives here is that a sealed guardrail
+    # reaches every agent in the repository, including the ones the consumer authored.
+    #
+    # `None` means unset, which is what lets the merge take the lowest of several guardrails rather
+    # than the last one read.
+    max_turns: int | None = None
+    max_ai_credits: int | None = None
+    # The one that actually bounds a bill: per-agent ceilings do not, because a consumer can add
+    # more agents. Checked against `budgets.per_run_ai_credits`, which is the consumer's own number.
+    per_run_ai_credits: int | None = None
 
 
 @dataclass

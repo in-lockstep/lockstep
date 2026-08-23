@@ -39,6 +39,15 @@ class PromptLayers:
             for tool in fragment.enforce.deny_tools:
                 if tool not in merged.deny_tools:
                     merged.deny_tools.append(tool)
+            # Ceilings take the lowest, not the last: two guardrails each setting one are two
+            # constraints, and satisfying only whichever was read last is satisfying neither.
+            for name in ("max_turns", "max_ai_credits", "per_run_ai_credits"):
+                limit = getattr(fragment.enforce, name)
+                if limit is None:
+                    continue
+                current = getattr(merged, name)
+                if current is None or limit < current:
+                    setattr(merged, name, limit)
         return merged
 
     def signature(self) -> str:
