@@ -16,23 +16,23 @@
       ]
     },
     ".github/workflows/discover.yml": {
-      "sha": "1a88ab16",
+      "sha": "1366f9a9",
       "sources": [
         "commands/discover.md@65153630"
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "51103aff",
+      "sha": "0c638679",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "f13d6222",
+      "sha": "b9039692",
       "sources": []
     },
     ".github/workflows/repair.yml": {
-      "sha": "343b4e37",
+      "sha": "824b6d3a",
       "sources": [
         "commands/repair.md@d19a5139"
       ]
@@ -54,7 +54,7 @@
       "sources": []
     },
     ".github/workflows/validate.yml": {
-      "sha": "4f9b6d53",
+      "sha": "608551bc",
       "sources": [
         "commands/validate.md@dcc72949"
       ]

@@ -60,6 +60,11 @@ def compile_spec(root: Path) -> CompilePlan:
     overlays = load_overlays(spec)
     plan = CompilePlan(root=root)
 
+    for placeholder in pins.placeholders():
+        # Said on every compile rather than left to be noticed: output that references a placeholder
+        # looks exactly like output that runs, right up until a runner tries to fetch it.
+        plan.notes.append(f"{placeholder} is a placeholder pin — this output cannot run as emitted")
+
     profiles = spec.compiled_profiles()
     if not profiles:
         raise EmitError(

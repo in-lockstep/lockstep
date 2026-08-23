@@ -106,10 +106,12 @@ def test_lint_strict_promotes_warnings(basic_root):
     assert run("lint", "--root", str(basic_root), "--strict").exit_code == EXIT_DRIFT
 
 
-def test_doctor_passes_on_the_fixture(basic_root):
+def test_doctor_reports_a_pipeline_whose_capabilities_were_never_published(basic_root):
+    """A zero pin has the shape of a pin and none of the value; doctor is where that surfaces."""
     result = run("doctor", "--root", str(basic_root))
-    assert result.exit_code == EXIT_OK
-    assert "0 error(s)" in result.output
+    assert result.exit_code == EXIT_DRIFT
+    assert "DOC015" in result.output
+    assert "placeholder" in result.output
 
 
 def test_doctor_rejects_an_unknown_target(basic_root):

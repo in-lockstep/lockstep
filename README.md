@@ -38,16 +38,31 @@ lockstep show-surface               # every GitHub-target decision in one docume
 
 ## Packages
 
-This is a uv workspace holding two distributions:
+A compiled pipeline references three things, and only the first is a dev dependency:
 
-| Package | Role | Who installs it |
+| Unit | Role | Where it runs |
 |---|---|---|
-| `lockstep` | the compiler, lint, drift gate | developers, as a dev dependency |
-| [`pipeline-exec`](packages/pipeline-exec) | fan-out, sharding, coverage gates, validation | the generated pipeline repo, and nothing else |
+| `lockstep` | the compiler, lint, drift gate | your machine, and the drift gate |
+| [`actions/`](actions) | the composite actions every workflow calls | the runner, as `uses:` pinned to a commit |
+| [`packages/pipeline-exec`](packages/pipeline-exec) | fan-out, sharding, coverage gates, executors | the runner, as the job `container:` |
 
-They share a repository because the compiler emits `pipeline-exec` invocations as literal text:
-`tests/test_contract.py` parses every emitted invocation against the real CLI, so a renamed flag
-fails a build rather than a scheduled run.
+`actions/` and `pipeline-exec` share this repository with the compiler because the compiler emits
+references to both as literal text: `tests/test_contract.py` parses every emitted invocation against
+the real CLI and every input against the real action, so a renamed flag fails a build rather than a
+scheduled run. A pipeline points at wherever you published them:
+
+```yaml
+capabilities:
+  actions: github.com/<owner>/<repo>@v1.0.0    # resolved to a commit by `lockstep pin`
+  exec-image: quay.io/<owner>/pipeline-exec    # any registry; resolved to a digest
+```
+
+> [!IMPORTANT]
+> **Neither has been published anywhere.** `pipeline-fw/pipeline-actions` and its executor image do
+> not exist — the examples in this repository pin both to forty zeros, so they compile, lint and
+> simulate, and **cannot run on a real runner**. `lockstep doctor` reports it as `DOC015` and
+> `lockstep compile` says so on every run. Publishing them, then `lockstep pin`, is what makes a
+> pipeline here deployable.
 
 **[Extending the framework](docs/extending.md)** covers the two extension points — third-party
 builtins in `pipeline-exec`, and your own composite actions — worked through a pipeline that fixes

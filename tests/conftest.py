@@ -27,3 +27,18 @@ def basic_spec_dir() -> Path:
 def repo_root() -> Path:
     """The lockstep repository itself, for tests that compile the shipped examples."""
     return Path(__file__).parent.parent
+
+
+# Every example and fixture here pins its capabilities to placeholders, because
+# `pipeline-fw/pipeline-actions` and its executor image have never been published anywhere. That is
+# a real reason not to be target-ready, and doctor says so — DOC015. These helpers assert that
+# everything *else* holds, so the day the capabilities are published the assertions get stronger
+# rather than needing rewriting.
+UNPUBLISHED = "DOC015"
+
+
+def ready_but_unpublished(report, *also_expected: str) -> None:
+    codes = {finding.code for finding in report.findings}
+    assert UNPUBLISHED in codes, "placeholder pins should be reported, not passed over"
+    assert codes == {UNPUBLISHED, *also_expected}
+    assert all(finding.code == UNPUBLISHED for finding in report.errors)

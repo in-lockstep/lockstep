@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from conftest import ready_but_unpublished
 
 from lockstep.checks import Severity, doctor, lint
 from lockstep.spec.load import load_spec
@@ -97,8 +98,8 @@ def test_a_clean_spec_lints_clean(basic_root):
 # --- doctor ----------------------------------------------------------------
 
 
-def test_the_fixture_is_target_ready(basic_spec_dir):
-    assert doctor(load_spec(basic_spec_dir), basic_spec_dir).ok
+def test_the_fixture_is_target_ready_apart_from_being_unpublished(basic_spec_dir):
+    ready_but_unpublished(doctor(load_spec(basic_spec_dir), basic_spec_dir))
 
 
 def test_unpinned_capabilities_are_errors(basic_root):
@@ -183,7 +184,7 @@ def test_the_example_pipeline_lints_and_doctors_clean():
 
     example = Path(__file__).parent.parent / "examples" / "httpbin"
     assert lint(load_spec(example)).findings == []
-    assert doctor(load_spec(example), example).ok
+    ready_but_unpublished(doctor(load_spec(example), example))
 
 
 # --- extensions ------------------------------------------------------------

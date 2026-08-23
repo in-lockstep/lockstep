@@ -272,8 +272,27 @@ covering a full fan-out cycle in both item and shard modes.
 
 ## What remains open
 
+**The capabilities have never been published.** `capabilities.actions` points at
+`github.com/pipeline-fw/pipeline-actions` and `capabilities.exec-image` at an executor image, and
+neither exists: the name was chosen during the design and nothing was ever pushed to it. Every
+example and fixture here pins both to forty zeros.
+
+That was invisible for longer than it should have been — a zero has the shape of a pin, so the
+examples compiled, linted and simulated exactly like ones that would run. It is now stated in three
+places rather than left to be noticed: `lockstep doctor` reports `DOC015` as an error and treats a
+placeholder as unpinned, `lockstep compile` prints "this output cannot run as emitted" on every run,
+and the readiness tests assert the disclosure is present rather than asserting a clean bill of
+health. `tests/test_pinning.py::test_every_example_is_honest_about_being_unpublished` fails if an
+example ever stops saying so.
+
+The check catches zeros, not invention. Nothing offline can tell a fabricated commit from a real one
+— the `basic` fixture's actions SHA is made up and looks entirely plausible. Only `lockstep pin`
+contacting the remote can settle that, which is why it reports what it could not resolve instead of
+leaving something believable in place.
+
 | Gap | Why it is not built |
 |---|---|
+| Publishing `actions/` and the executor image | Needs an owner to publish under. Everything else is in place: `lockstep pin --sha/--exec-digest` records them, and the drift gate keeps the result honest. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |
 | The fleet dashboard | Needs real consumer repositories to report on. |

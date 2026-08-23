@@ -153,7 +153,23 @@ def pin(
     entry["package"] = package or "pipeline-exec"
     if version:
         entry["version"] = version
-    entry.setdefault("image", "ghcr.io/pipeline-fw/exec")
+
+    # The manifest says where; the lock records what was found there. Writing the manifest's value
+    # in rather than keeping whatever was here is what makes a registry change take effect — and
+    # what makes a stale digest a hard error at the next compile rather than a silent pull from
+    # wherever the image used to live.
+    image = spec.manifest.capabilities.exec_image
+    if not image:
+        unresolved.append(
+            "exec image: set capabilities.exec-image in pipeline.yaml to where it is published, "
+            "e.g. `quay.io/<owner>/pipeline-exec`"
+        )
+    else:
+        if entry.get("image") and entry["image"] != image:
+            entry.pop("digest", None)
+            notes.append(f"exec image moved to {image}; its digest was dropped and must be resolved")
+        entry["image"] = image
+
     if exec_digest:
         entry["digest"] = exec_digest
         notes.append(f"exec image -> {exec_digest[:19]}")

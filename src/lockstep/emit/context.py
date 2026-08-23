@@ -11,20 +11,34 @@ from ..errors import EmitError
 from ..spec.model import Command, Profile, SourceFile, Spec
 
 PINS_PATH = ".pipeline/pins.lock"
-DEFAULT_ACTIONS_REPO = "pipeline-fw/pipeline-actions"
-DEFAULT_EXEC_IMAGE = "ghcr.io/pipeline-fw/exec"
+
+# A pin of the right shape and no value. `lockstep pin` writes these when it has nothing to resolve
+# against — an unpublished capability repository, an image that has never been built — so that the
+# lock file records the intent. They compile, and they cannot run: a workflow referencing one is
+# pointing at a commit and a digest that do not exist. Doctor treats them as unpinned, because that
+# is what they are, and the compiler says so on every run rather than leaving it to be noticed.
+PLACEHOLDER_SHA = "0" * 40
+PLACEHOLDER_DIGEST = "sha256:" + "0" * 64
+
+
+def _agree(key: str, field: str, locked: object, declared: str) -> None:
+    if locked and declared and str(locked) != declared:
+        raise EmitError(
+            f"{PINS_PATH} pins {field} {str(locked)!r}, but {key} now says {declared!r}",
+            hint="run `lockstep pin` — the digest on record was resolved against the old value",
+        )
 
 
 @dataclass
 class Pins:
     """Resolved capability pins: tags/versions from the manifest, SHAs/digests from pins.lock."""
 
-    actions_repo: str = DEFAULT_ACTIONS_REPO
+    actions_repo: str = ""
     actions_tag: str = ""
     actions_sha: str = ""
     exec_package: str = "pipeline-exec"
     exec_version: str = ""
-    exec_image: str = DEFAULT_EXEC_IMAGE
+    exec_image: str = ""
     exec_digest: str = ""
     gh_aw_version: str = ""
     external: dict[str, str] = field(default_factory=dict)
@@ -35,14 +49,18 @@ class Pins:
     def load(cls, spec: Spec) -> Pins:
         caps = spec.manifest.capabilities
         actions_repo, _, actions_tag = caps.actions.partition("@")
-        actions_repo = actions_repo.removeprefix("github.com/") or DEFAULT_ACTIONS_REPO
+        actions_repo = actions_repo.removeprefix("github.com/")
         exec_package, _, exec_version = caps.exec.partition("==")
 
+        # Where things live is the manifest's answer. There is no built-in default: a compiler that
+        # silently points at a repository it happens to know the name of produces a workflow that
+        # references somebody else's code, which is a worse outcome than refusing to compile.
         pins = cls(
             actions_repo=actions_repo,
             actions_tag=actions_tag,
             exec_package=exec_package or "pipeline-exec",
             exec_version=exec_version,
+            exec_image=caps.exec_image,
             gh_aw_version=caps.gh_aw,
         )
 
@@ -54,11 +72,14 @@ class Pins:
         cap_pins = data.get("capabilities", {}) or {}
         actions = cap_pins.get("actions", {}) or {}
         exec_pin = cap_pins.get("exec", {}) or {}
-        pins.actions_repo = str(actions.get("repo") or pins.actions_repo)
-        pins.actions_tag = str(actions.get("tag") or pins.actions_tag)
+        # The lock supplies what was *resolved*. Where the manifest says something different from
+        # what the lock was resolved against, the pin describes a different artifact than the one
+        # this pipeline now asks for — so it is refused rather than quietly preferred either way.
         pins.actions_sha = str(actions.get("sha") or "")
-        pins.exec_image = str(exec_pin.get("image") or DEFAULT_EXEC_IMAGE)
         pins.exec_digest = str(exec_pin.get("digest") or "")
+        _agree("capabilities.actions", "repo", actions.get("repo"), pins.actions_repo)
+        _agree("capabilities.actions", "tag", actions.get("tag"), pins.actions_tag)
+        _agree("capabilities.exec-image", "image", exec_pin.get("image"), pins.exec_image)
         pins.exec_version = str(exec_pin.get("version") or pins.exec_version)
         pins.external = {str(k): str(v.get("sha", "")) for k, v in (data.get("external") or {}).items()}
         pins.external_tags = {
@@ -67,8 +88,23 @@ class Pins:
         pins.resolved = bool(pins.actions_sha)
         return pins
 
+    def placeholders(self) -> list[str]:
+        """Pins that record an intention rather than an artifact that exists."""
+        found = []
+        if self.actions_sha == PLACEHOLDER_SHA:
+            found.append(f"capability actions ({self.actions_repo or 'unset'}@{self.actions_tag})")
+        if self.exec_digest == PLACEHOLDER_DIGEST:
+            found.append(f"executor image ({self.exec_image or 'unset'})")
+        return found
+
     def action(self, name: str) -> str:
         """A pinned reference to one of the capability repo's composite actions."""
+        if not self.actions_repo:
+            raise EmitError(
+                "no capability actions repository",
+                hint="set capabilities.actions in pipeline.yaml to where the composite actions are "
+                "published, e.g. `github.com/<owner>/<repo>@v1.0.0`",
+            )
         if not self.actions_sha:
             raise EmitError(
                 f"capability action {name!r} is not pinned",
@@ -86,6 +122,12 @@ class Pins:
         return f"{name}@{sha}"
 
     def exec_container(self) -> str:
+        if not self.exec_image:
+            raise EmitError(
+                "no executor image",
+                hint="set capabilities.exec-image in pipeline.yaml to where the image is published, "
+                "e.g. `quay.io/<owner>/pipeline-exec` or `ghcr.io/<owner>/pipeline-exec`",
+            )
         if not self.exec_digest:
             raise EmitError(
                 "executor image is not pinned by digest",

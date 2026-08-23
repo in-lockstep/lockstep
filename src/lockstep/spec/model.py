@@ -291,6 +291,10 @@ class McpServer:
 class Capabilities:
     actions: str = ""
     exec: str = ""
+    # Where the executor image is published. A registry choice, so it belongs here rather than in
+    # the lock file, which records only what was resolved. Any registry works: ghcr.io, quay.io, a
+    # private one — the compiler writes it verbatim into `container:`.
+    exec_image: str = ""
     compiler: str = ""
     gh_aw: str = ""
 

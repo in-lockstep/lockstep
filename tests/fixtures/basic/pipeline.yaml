@@ -4,6 +4,7 @@ name: user-story-validation
 capabilities:
   actions: github.com/pipeline-fw/pipeline-actions@v1.6.2
   exec: pipeline-exec==1.4.2
+  exec-image: ghcr.io/pipeline-fw/pipeline-exec
   compiler: lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 

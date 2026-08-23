@@ -77,6 +77,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
         capabilities=Capabilities(
             actions=str(caps_raw.get("actions", "") or ""),
             exec=str(caps_raw.get("exec", "") or ""),
+            exec_image=str(caps_raw.get("exec-image", "") or ""),
             compiler=str(caps_raw.get("compiler", "") or ""),
             gh_aw=str(caps_raw.get("gh-aw", "") or ""),
         ),

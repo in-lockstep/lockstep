@@ -246,6 +246,23 @@ def _check_pins(pins: Pins, report: Report) -> None:
                 hint="run `lockstep pin` — a third-party action left on a tag can be replaced under "
                 "a pipeline that already passed review",
             )
+    for placeholder in pins.placeholders():
+        report.add(
+            Severity.ERROR,
+            "DOC015",
+            f"{placeholder} is pinned to a placeholder, not to anything that exists",
+            hint="a zero pin has the shape of a pin and none of the value: the workflow it compiles "
+            "into references a commit or digest that was never published. Publish the capability, "
+            "then `lockstep pin` — or `lockstep pin --sha/--exec-digest` if you resolved it yourself",
+        )
+    if not pins.exec_image:
+        report.add(
+            Severity.ERROR,
+            "DOC016",
+            "no executor image",
+            hint="set capabilities.exec-image in pipeline.yaml — any registry works, e.g. "
+            "`quay.io/<owner>/pipeline-exec` or `ghcr.io/<owner>/pipeline-exec`",
+        )
     if not pins.gh_aw_version:
         report.add(
             Severity.WARNING,

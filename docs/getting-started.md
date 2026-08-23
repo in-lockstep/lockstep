@@ -48,6 +48,7 @@ name: httpbin-contract
 capabilities:
   actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
   exec: pipeline-exec==0.1.0
+  exec-image: ghcr.io/pipeline-fw/pipeline-exec
   compiler: lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 
@@ -62,10 +63,19 @@ budgets:
 
 Three things worth noticing.
 
-**Capabilities are versions, not code.** A compiled pipeline references composite actions, an
-executor package and a container image. It never vendors them. `lockstep pin` turns each of these
-tags into an exact commit or digest, recorded in `.pipeline/pins.lock` — so a tag someone moves later
-cannot change what your reviewed pipeline runs.
+**Capabilities are addresses, not code.** A compiled pipeline references composite actions and a
+container image; it never vendors them. `actions` and `exec-image` say *where* they are published —
+any registry works for the image, `quay.io` as readily as `ghcr.io` — and `lockstep pin` resolves
+each into an exact commit or digest recorded in `.pipeline/pins.lock`. A tag someone moves later
+cannot change what your reviewed pipeline runs, and changing an address without re-pinning is a hard
+error rather than a silent pull from where the image used to live.
+
+There is no default for either. A compiler that quietly points at a repository you did not choose
+would produce a workflow that runs somebody else's code.
+
+> The two addresses above are the ones in this repository's examples, and **they have never been
+> published** — their pins are forty zeros. `lockstep compile` says so on every run and `doctor`
+> reports it as an error. Change them to your own before expecting anything to run.
 
 **The target block is where GitHub-specific decisions live**, so the rest of the spec stays about
 your pipeline rather than about GitHub.
