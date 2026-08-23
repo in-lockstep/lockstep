@@ -24,6 +24,7 @@ SPEC_PATHS = [
     "mcp/**",
     "overlays/**",
     "scripts/**",
+    "tests/**",
     "pipeline.yaml",
     ".pipeline/**",
 ]
@@ -117,7 +118,12 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
     return {
         "name": "pipeline-ci",
         "on": {
-            "pull_request": {"paths": [spec.repo_path(path) for path in SPEC_PATHS] + [f"{ctx.out_dir}/**"]},
+            "pull_request": {
+                "paths": [spec.repo_path(path) for path in SPEC_PATHS]
+                + [f"{ctx.out_dir}/**"]
+                # Already repository-relative: `watch` names things outside the pipeline's home.
+                + list(spec.manifest.target.watch)
+            },
             "push": {"branches": ["main"]},
             "workflow_dispatch": {},
         },

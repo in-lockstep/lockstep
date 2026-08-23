@@ -94,6 +94,10 @@ guardrails it cannot weaken, and reviews an upstream change as a diff of the pro
 layers travel, what a consumer may tune, and how an inherited pipeline opens its own bump pull
 request when upstream moves.
 
+**[This repository compiles its own drift gate](docs/self-hosting.md)** covers self-hosting: why the
+gate installs the checkout rather than a release, why the hand-written CI workflow stays
+hand-written, and the defects dogfooding surfaced.
+
 ## Commands
 
 ```bash

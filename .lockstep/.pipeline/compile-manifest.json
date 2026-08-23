@@ -1,0 +1,19 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "8dd12516",
+      "sources": []
+    },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "0b0c8631",
+      "sources": []
+    },
+    ".lockstep/SECRETS.md": {
+      "sha": "3864c66c",
+      "sources": []
+    }
+  },
+  "pipeline": "lockstep",
+  "spec": 1
+}

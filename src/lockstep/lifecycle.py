@@ -169,6 +169,9 @@ def pin(
     capabilities = data.setdefault("capabilities", {})
     notes: list[str] = []
     unresolved: list[str] = []
+    # Nothing to resolve for a capability the output never names, and reporting one as unresolved
+    # reads as a pipeline that is not ready when it is.
+    used = spec.capabilities_used()
 
     repo, _, tag = spec.manifest.capabilities.actions.partition("@")
     repo = repo.removeprefix("github.com/")
@@ -255,7 +258,7 @@ def pin(
     # what makes a stale digest a hard error at the next compile rather than a silent pull from
     # wherever the image used to live.
     image = spec.manifest.capabilities.exec_image
-    if not image:
+    if not image and used.executor:
         unresolved.append(
             "exec image: set capabilities.exec-image in pipeline.yaml to where it is published, "
             "e.g. `quay.io/<owner>/pipeline-exec`"
@@ -269,7 +272,7 @@ def pin(
     if exec_digest:
         entry["digest"] = exec_digest
         notes.append(f"exec image -> {exec_digest[:19]}")
-    elif not entry.get("digest"):
+    elif not entry.get("digest") and used.executor:
         unresolved.append(
             "exec image: pass --exec-digest with the digest from "
             "`docker buildx imagetools inspect <image>:<tag>`"

@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "fb6c7ea0",
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "18e079cb",
+      "sha": "7b003b01",
       "sources": []
     },
     ".github/workflows/shared/context-httpbin.md": {

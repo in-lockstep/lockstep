@@ -107,6 +107,26 @@ def test_unpinned_capabilities_are_errors(basic_root):
     assert {"DOC001", "DOC002"} <= codes(doctor_of(basic_root))
 
 
+def test_a_capability_the_output_never_names_is_not_demanded(basic_root):
+    """A pin is a promise about an artifact a workflow references.
+
+    Asked for one the output does not name, doctor is a red gate with nothing behind it — which is
+    the state a pipeline is in when its work is all compiler steps, or when it has no steps at all.
+    """
+    for command in (basic_root / "commands").glob("*.md"):
+        command.unlink()
+    for agent in (basic_root / "agents").glob("*.md"):
+        agent.unlink()
+    (basic_root / ".pipeline" / "pins.lock").unlink()
+    assert not {"DOC001", "DOC002", "DOC003", "DOC016"} & codes(doctor_of(basic_root))
+
+
+def test_a_capability_the_output_does_name_still_is(basic_root):
+    """The same fixture with its commands intact: the demand is about use, not about being lenient."""
+    (basic_root / ".pipeline" / "pins.lock").unlink()
+    assert {"DOC001", "DOC002"} <= codes(doctor_of(basic_root))
+
+
 def test_a_moved_tag_would_not_be_caught_by_pins_alone(basic_root):
     """Pinning only helps if the pin is a commit; a tag is a mutable pointer."""
     pins = json.loads((basic_root / ".pipeline" / "pins.lock").read_text())

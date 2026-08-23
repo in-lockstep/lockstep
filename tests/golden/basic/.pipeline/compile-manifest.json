@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "e40d1485",
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
@@ -28,7 +28,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "b9039692",
+      "sha": "85317f17",
       "sources": []
     },
     ".github/workflows/repair.yml": {

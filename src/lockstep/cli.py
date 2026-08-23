@@ -122,7 +122,8 @@ def compile_cmd(
         f"wrote {len(written.created) + len(written.updated)} files "
         f"({len(written.unchanged)} unchanged, {len(written.removed)} pruned)"
     )
-    click.echo("next: run `gh aw compile` to produce the .lock.yml files the orchestrators call")
+    if plan.stats.get("agentic"):
+        click.echo("next: run `gh aw compile` to produce the .lock.yml files the orchestrators call")
     _emit_diff(diff)
 
 

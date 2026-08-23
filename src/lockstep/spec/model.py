@@ -6,7 +6,7 @@ disk: no environment lookups, no runtime state. That is what makes `compile --ch
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -376,6 +376,13 @@ class TargetConfig:
     default_runs_on: str = "ubuntu-24.04"
     shard_threshold: int = 20
     profiles: list[str] = field(default_factory=list)
+    # Repository paths, outside the pipeline's own directories, that can change the compiled output.
+    # The drift gate triggers on the spec because normally the spec is the only input — the compiler
+    # is a pinned release and cannot move under a pull request. A repository that builds its own
+    # compiler, or keeps an extension elsewhere in the tree, has a second input, and a gate that
+    # cannot see it passes on the change most worth checking. Written repository-relative, because
+    # what they name is outside the pipeline.
+    watch: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -432,6 +439,15 @@ INHERITED_DIR = ".pipeline/inherited"
 LOCKSTEP_DIR = ".lockstep"
 
 
+@dataclass(frozen=True)
+class CapabilityUse:
+    """What a pipeline's output references, so readiness is asked about that and nothing else."""
+
+    actions: bool
+    executor: bool
+    gh_aw: bool
+
+
 @dataclass
 class Spec:
     """Everything the compiler reads, resolved and validated."""
@@ -466,6 +482,32 @@ class Spec:
         if not self.in_lockstep_dir or not relative:
             return relative
         return f"{LOCKSTEP_DIR}/{relative}"
+
+    def capabilities_used(self) -> CapabilityUse:
+        """Which capabilities this pipeline's compiled output will actually name.
+
+        A pin is a promise about an artifact a workflow references. Requiring one for a capability
+        no job mentions is a red gate with nothing behind it — and a pipeline is legitimately in
+        that state when its work is all compiler steps: a repository whose only pipeline is its own
+        drift gate pulls no container and calls no composite action.
+        """
+        use = CapabilityUse(actions=False, executor=False, gh_aw=False)
+        for command in self.commands.values():
+            if command.github.propose or command.github.command:
+                # propose-pr and command-gate are composite actions.
+                use = replace(use, actions=True)
+            for step in command.steps:
+                if step.kind is StepKind.AGENT:
+                    use = replace(use, gh_aw=True)
+                    if step.foreach:
+                        # `fanout` is injected into the job that produces the items.
+                        use = replace(use, actions=True)
+                    continue
+                # Every job built from steps restores and saves the workspace around them.
+                use = replace(use, actions=True)
+                if not step.uses_compiler:
+                    use = replace(use, executor=True)
+        return use
 
     def compiled_profiles(self) -> list[Profile]:
         """Profiles to compile a workflow set for, in declared order."""

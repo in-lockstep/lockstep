@@ -15,6 +15,7 @@ on:
     - mcp/**
     - overlays/**
     - scripts/**
+    - tests/**
     - pipeline.yaml
     - .pipeline/**
     - .github/workflows/**

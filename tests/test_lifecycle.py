@@ -151,6 +151,27 @@ def test_ci_runs_on_spec_changes(basic_spec_dir):
     assert "overlays/**" in paths
 
 
+def test_ci_runs_on_the_tests_it_runs(basic_spec_dir):
+    """The scripts job runs `pytest tests/`; a change to those tests has to reach it."""
+    ci = yaml.safe_load(compile_spec(basic_spec_dir).files[".github/workflows/pipeline-ci.yml"])
+    assert "tests/**" in (ci.get("on") or ci.get(True))["pull_request"]["paths"]
+
+
+def test_watched_paths_join_the_trigger(basic_root):
+    """Normally the spec is the only input. A repository that builds its own compiler has two."""
+    manifest = basic_root / "pipeline.yaml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            "    profiles: [my-app]",
+            "    profiles: [my-app]\n    watch: [src/**, pyproject.toml]",
+        ),
+        encoding="utf-8",
+    )
+    ci = yaml.safe_load(compile_spec(basic_root).files[".github/workflows/pipeline-ci.yml"])
+    paths = (ci.get("on") or ci.get(True))["pull_request"]["paths"]
+    assert {"src/**", "pyproject.toml"} <= set(paths)
+
+
 def test_ci_is_read_only(basic_spec_dir):
     ci = yaml.safe_load(compile_spec(basic_spec_dir).files[".github/workflows/pipeline-ci.yml"])
     assert ci["permissions"] == {"contents": "read"}

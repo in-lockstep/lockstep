@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "4a4533a8",
       "sources": []
     },
     ".github/workflows/aw-triage-reporter.md": {
@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "800de092",
+      "sha": "df7f6404",
       "sources": []
     },
     ".github/workflows/shared/context-tracker.md": {

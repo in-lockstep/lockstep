@@ -264,11 +264,25 @@ speculation.
 
 ## Testing
 
-400 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+724 tests; 94% line coverage of the compiler, 91% counting the runtime. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests
 covering a full fan-out cycle in both item and shard modes.
+
+## Self-hosting
+
+This repository compiles its own drift gate. `.lockstep/` holds a manifest and a profile; they
+compile to `.github/workflows/pipeline-ci.yml`, which recompiles and byte-compares on every pull
+request that touches the spec **or** `src/`. `docs/self-hosting.md` covers the two things that are
+different when the compiler is the repository — the gate installs the checkout rather than a
+release, and the hand-written `ci.yml` stays hand-written — and the defects it surfaced: `doctor`,
+`pin` and `show-surface` all treating a capability the output never names as unpinned rather than
+unused, `DOC007` on a pipeline with no agents, `.gitattributes` marking workflows the compiler did
+not write, and the `scripts` job not triggering on the tests it runs.
+
+It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
+`container:`, and that image is one of the unpublished capabilities below.
 
 ## What remains open
 
@@ -294,6 +308,7 @@ leaving something believable in place.
 |---|---|
 | Transitive inheritance | An import that imports is a package manager. A consumer lists both upstreams; `docs/sharing.md` says why. |
 | Private-repo fetch in a consumer's CI | A consumer's `GITHUB_TOKEN` cannot read another private repository, so `lockstep fetch` there needs a GitHub App or a PAT. Nothing in the framework can solve that for an organization. |
+| A `/review` on this repository's own pull requests | Agent workflows and the chat-ops gate need `pipeline-actions` published. The lenses are designed — `docs/self-hosting.md` names them. |
 | Publishing `actions/` and the executor image | Needs an owner to publish under. Everything else is in place: `lockstep pin --sha/--exec-digest` records them, and the drift gate keeps the result honest. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |

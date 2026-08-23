@@ -20,7 +20,7 @@ from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH, Pins
 from .emit.validate import MAX_JOB_MINUTES
-from .spec.model import Spec, StepKind
+from .spec.model import CapabilityUse, Spec, StepKind
 
 # Work an agent should never be doing: deterministic transformations cost tokens, vary run to run,
 # and are the exact thing a script does better.
@@ -239,7 +239,7 @@ def _product_terms(spec: Spec) -> set[str]:
 def doctor(spec: Spec, root: Path) -> Report:
     report = Report()
     pins = Pins.load(spec)
-    _check_pins(pins, report)
+    _check_pins(pins, spec.capabilities_used(), report)
     _check_inherits(spec, root, report)
     _check_runtime_compiler(spec, report)
     _check_engines(spec, report)
@@ -251,8 +251,8 @@ def doctor(spec: Spec, root: Path) -> Report:
     return report
 
 
-def _check_pins(pins: Pins, report: Report) -> None:
-    if not pins.actions_sha:
+def _check_pins(pins: Pins, used: CapabilityUse, report: Report) -> None:
+    if used.actions and not pins.actions_sha:
         report.add(
             Severity.ERROR,
             "DOC001",
@@ -260,7 +260,7 @@ def _check_pins(pins: Pins, report: Report) -> None:
             hint="run `lockstep pin` — a floating tag can be moved under a pipeline that already "
             "passed review",
         )
-    if not pins.exec_digest:
+    if used.executor and not pins.exec_digest:
         report.add(
             Severity.ERROR,
             "DOC002",
@@ -285,7 +285,7 @@ def _check_pins(pins: Pins, report: Report) -> None:
             "into references a commit or digest that was never published. Publish the capability, "
             "then `lockstep pin` — or `lockstep pin --sha/--exec-digest` if you resolved it yourself",
         )
-    if not pins.exec_image:
+    if used.executor and not pins.exec_image:
         report.add(
             Severity.ERROR,
             "DOC016",
@@ -293,7 +293,7 @@ def _check_pins(pins: Pins, report: Report) -> None:
             hint="set capabilities.exec-image in pipeline.yaml — any registry works, e.g. "
             "`quay.io/<owner>/pipeline-exec` or `ghcr.io/<owner>/pipeline-exec`",
         )
-    if not pins.gh_aw_version:
+    if used.gh_aw and not pins.gh_aw_version:
         report.add(
             Severity.WARNING,
             "DOC003",
@@ -346,7 +346,7 @@ def _check_inherits(spec: Spec, root: Path, report: Report) -> None:
     locked: dict[str, Any] = {}
     if path.is_file():
         try:
-            locked = (json.loads(path.read_text(encoding="utf-8")).get("inherits") or {})
+            locked = json.loads(path.read_text(encoding="utf-8")).get("inherits") or {}
         except json.JSONDecodeError:
             locked = {}
 
@@ -403,6 +403,10 @@ def _check_budgets(spec: Spec, report: Report) -> None:
                 hint="set github.max-ai-credits — an unbounded agent on a schedule is an unbounded bill",
             )
     if spec.manifest.per_run_ai_credits is None:
+        if not spec.agents:
+            # A run budget bounds what the models may spend. With no agent to spend it, asking for
+            # one is a number nothing reads.
+            return
         report.add(
             Severity.WARNING,
             "DOC007",

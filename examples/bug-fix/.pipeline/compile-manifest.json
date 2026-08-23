@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "4425b8f2",
       "sources": []
     },
     ".github/workflows/aw-bug-analyst.md": {
@@ -60,7 +60,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "c3a95154",
+      "sha": "651f8587",
       "sources": []
     },
     ".github/workflows/shared/context-target-app.md": {

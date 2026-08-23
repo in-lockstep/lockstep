@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "344210a6",
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
@@ -57,7 +57,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "e4b817c0",
+      "sha": "e7a9d4ef",
       "sources": []
     },
     ".github/workflows/shared/context-repository.md": {

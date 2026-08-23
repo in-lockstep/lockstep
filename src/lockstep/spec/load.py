@@ -109,6 +109,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             default_runs_on=str(target_raw.get("default-runs-on", "ubuntu-24.04")),
             shard_threshold=int(target_raw.get("shard-threshold", 20)),
             profiles=[str(p) for p in (target_raw.get("profiles", []) or [])],
+            watch=[str(p) for p in (target_raw.get("watch", []) or [])],
         ),
         per_run_ai_credits=budgets.get("per_run_ai_credits"),
         commands=data.get("commands", {}) or {},

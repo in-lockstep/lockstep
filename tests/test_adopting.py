@@ -126,3 +126,37 @@ def test_a_repository_that_is_the_pipeline_is_unaffected(basic_root):
     spec = load_spec(basic_root)
     assert not spec.in_lockstep_dir
     assert spec.repo_path("scripts/fetch-issues.py") == "scripts/fetch-issues.py"
+
+
+def test_watched_paths_are_written_from_the_repository_root(adopted_root):
+    """They name things outside the pipeline, so the `.lockstep/` prefix would be wrong."""
+    manifest = adopted_root / ".lockstep" / "pipeline.yaml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            "    out: .github/workflows", "    out: .github/workflows\n    watch: [src/**]"
+        ),
+        encoding="utf-8",
+    )
+    ci = yaml.safe_load(compile_spec(adopted_root).files[".github/workflows/pipeline-ci.yml"])
+    paths = (ci.get("on") or ci.get(True))["pull_request"]["paths"]
+    assert "src/**" in paths
+    assert ".lockstep/src/**" not in paths
+
+
+def test_only_generated_files_are_marked_generated(adopted_root):
+    """The output directory is shared with workflows the repository already had.
+
+    `*.yml linguist-generated` collapsed those in every pull request diff — including the CI that
+    is the one gate a compiler change cannot rewrite.
+    """
+    (adopted_root / ".github/workflows").mkdir(parents=True, exist_ok=True)
+    (adopted_root / ".github/workflows/ci.yml").write_text("name: CI\n", encoding="utf-8")
+    files = compile_spec(adopted_root).files
+    attributes = files[".github/workflows/.gitattributes"]
+
+    assert "*.yml linguist-generated" not in attributes
+    marked = {line.split(" ", 1)[0] for line in attributes.splitlines() if "linguist-generated" in line}
+    generated = {p.removeprefix(".github/workflows/") for p in files if p.startswith(".github/workflows/")}
+    # gh-aw writes the lock files after this compile, so they stay a pattern.
+    assert marked - {"*.lock.yml"} == generated - {".gitattributes"}
+    assert "ci.yml" not in marked

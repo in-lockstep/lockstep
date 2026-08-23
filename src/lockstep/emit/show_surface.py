@@ -19,16 +19,30 @@ def render(root: Path) -> str:
     pins = Pins.load(spec)
     overlays = load_overlays(spec)
     manifest = spec.manifest
+    # A capability the output never names is not unpinned; it is unused. Saying UNPINNED reads as a
+    # pipeline that is not ready when it is.
+    used = spec.capabilities_used()
+
+    if used.actions:
+        actions_line = f"- capability actions: `{pins.actions_repo}@{pins.actions_tag}`" + (
+            f" -> `{pins.actions_sha}`" if pins.actions_sha else "  **UNPINNED**"
+        )
+    else:
+        actions_line = "- capability actions: `(unused)`"
+    if used.executor:
+        executor_line = f"- executor: `{pins.exec_package}=={pins.exec_version}`" + (
+            f", image `{pins.exec_image}@{pins.exec_digest}`" if pins.exec_digest else "  **UNPINNED**"
+        )
+    else:
+        executor_line = "- executor: `(unused)`"
 
     lines = [
         f"# GitHub target surface — {manifest.name}",
         "",
         "## Pins",
         "",
-        f"- capability actions: `{pins.actions_repo}@{pins.actions_tag}`"
-        + (f" -> `{pins.actions_sha}`" if pins.actions_sha else "  **UNPINNED**"),
-        f"- executor: `{pins.exec_package}=={pins.exec_version}`"
-        + (f", image `{pins.exec_image}@{pins.exec_digest}`" if pins.exec_digest else "  **UNPINNED**"),
+        actions_line,
+        executor_line,
         f"- gh-aw: `{pins.gh_aw_version or '(unset)'}`",
         f"- budget: {manifest.per_run_ai_credits or '(none)'} credits per run",
         "",

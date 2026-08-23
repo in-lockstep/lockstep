@@ -1,0 +1,27 @@
+spec: 1
+name: lockstep
+
+# This repository compiles its own drift gate.
+#
+# Everything else here is a pipeline repository that installs a released compiler. This one *is* the
+# compiler, which changes exactly one thing and it is the thing that matters: the output is a
+# function of the spec **and** of `src/`. So `compiler` points at the checkout rather than at a
+# release — a gate that installed the published `lockstep` would recompile a pull request's spec
+# with the previous pull request's compiler and pass — and `watch` puts the compiler's own source on
+# the trigger, because a change to the emitter is the change most worth recompiling.
+#
+# No `actions`, `exec` or `exec-image`: this pipeline has no steps, so its output names no composite
+# action and pulls no container. When it grows one, those get declared and pinned like anywhere else.
+
+capabilities:
+  compiler: "."
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    default-runs-on: ubuntu-24.04
+    profiles: [repo]
+    watch:
+      - src/**
+      - pyproject.toml
+      - uv.lock

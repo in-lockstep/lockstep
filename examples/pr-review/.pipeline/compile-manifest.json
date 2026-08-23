@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "9df09c50",
+      "sha": "3d4f0e4f",
       "sources": []
     },
     ".github/workflows/aw-intent-reviewer.md": {
@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "6773e921",
+      "sha": "91eae6fd",
       "sources": []
     },
     ".github/workflows/review.yml": {
