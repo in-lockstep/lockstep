@@ -86,9 +86,13 @@ existing project with its own CI, and the security model for pull requests from 
 framework: which tier code belongs to, and which of the three prompt layers a piece of prose belongs
 in.
 
-**[Sharing pipelines across an organization](docs/sharing.md)** is the design for one team owning the
-standards and many repositories inheriting them — pinned, reviewable, and impossible to quietly
-weaken. Proposed, not built.
+**[Inheriting a pipeline from another repository](docs/inheriting.md)** walks through one team owning
+the standards and many repositories inheriting them: a consuming repository writes four files, gets
+guardrails it cannot weaken, and reviews an upstream change as a diff of the prompt text.
+
+**[Sharing pipelines across an organization](docs/sharing.md)** is the design behind that — including
+the parts not built yet: bands on what a consumer may tune, and an inherited pipeline that opens its
+own bump pull request when upstream moves.
 
 ## Commands
 

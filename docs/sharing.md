@@ -3,12 +3,13 @@
 One security team owns the review standards. Two hundred repositories should follow them, pick up
 changes without anybody copying a file, and still be able to say what *their* codebase is.
 
-**Tier 1 and sealing are built.** `tests/fixtures/` holds the whole arrangement — an
+**Tier 1 and sealing are built** — see [Inheriting a pipeline from another repository](inheriting.md)
+for the walkthrough. `tests/fixtures/` holds the whole arrangement — an
 `upstream-standards` repository that publishes sealed guardrails and nothing else, an
 `upstream-review` repository that publishes a pipeline, and a `consumer` whose entire contents are a
 manifest, a profile, a context and one house rule. `tests/test_inherits.py` compiles it.
 
-Bands (Part 4) and the updater (Part 7) are still design.
+Bands (Part 4) and the updater (Part 7) are designed here and not built.
 
 ---
 
@@ -264,15 +265,42 @@ commands:
     add-guardrails: [house-style]     # appended after the inherited ones
 ```
 
-**Tune, within a band.** Upstream declares what may move:
+**Tune, within a band.** This is the piece with no precedent in the codebase and the one most likely
+to sprawl, so it needs a rule before it needs a syntax:
+
+> **A band governs cost and latency. It never governs capability.**
+
+Anything that changes what an agent *can do* — its permissions, its tools, its network, how many
+turns it gets, which MCP servers it can reach, its guardrails, its body — is not tunable at any
+band. Those are the surface upstream's evals were written against and the surface a security review
+signed off. A consumer that needs a different one needs a different agent, and that conversation
+belongs upstream. Everything a band can move is a dial on the same machine.
+
+| Field | Bandable | Why |
+|---|---|---|
+| `max-ai-credits` | yes | how much a run may spend |
+| `timeout-minutes` | yes | how long it may take |
+| `model` | yes, from a list | a cost/quality trade at the same capability surface |
+| `runs-on` | yes, from a list | where it executes; a larger runner is not a wider agent |
+| `max_tool_turns` | **no** | turns are reach. More turns is a different agent. |
+| `permissions`, `deny-tools`, `network`, `mcp` | **no** | the enforced floor |
+| guardrails, skills, the body | **no** | add to them; you cannot replace them |
+
+Upstream declares the band. A scalar stays fixed; a mapping with `default:` opens it:
 
 ```markdown
+<!-- acme/pipeline-pr-review — agents/security-reviewer.md -->
 ---
 name: security-reviewer
+model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-4-1] }
+max_tool_turns: 6
 github:
-  max-ai-credits: { default: 90, max: 200 }
+  max-ai-credits: { default: 90, min: 40, max: 200 }
+  timeout-minutes: { default: 20, max: 60 }
 ---
 ```
+
+The consumer moves it, or does not:
 
 ```yaml
 commands:
@@ -281,11 +309,23 @@ commands:
     agents:
       security-reviewer:
         max-ai-credits: 150
+        model: claude-opus-4-1
 ```
 
-Outside the band is an error naming the band. This is the piece with no precedent in the codebase and
-the piece most likely to sprawl, so it should start with `max-ai-credits`, `model` and `runs-on` and
-grow only against real requests.
+Four rules, each with an error that names the thing rather than the rule:
+
+1. **Outside the band is refused**, naming the band: *`max-ai-credits: 400` is outside the band
+   `40–200` that `review` publishes for `security-reviewer`.*
+2. **A field with no band is fixed.** Overriding it is refused rather than ignored — the failure mode
+   worth ruling out is a consumer who believes they raised a timeout and did not.
+3. **Two command-uses may not tune one agent differently.** The compiler already refuses an agent
+   that resolves to different prompt layers in different commands; this is the same rule about the
+   same thing, and the same error shape.
+4. **A raised band still meets the run budget.** `budgets.per_run_ai_credits` is a ceiling over the
+   whole run, and a band that lets one agent exceed it should fail at compile rather than at 3am.
+
+Every override lands in `.pipeline/compile-manifest.json` beside the sources, so reading that file
+across a fleet answers "who raised what, and against which band" without asking anyone.
 
 **Overlay.** The existing strategic-merge patches work unchanged on inherited definitions, with
 `OVL404` still failing loudly on an anchor that matches nothing — which is what turns an upstream
@@ -450,6 +490,33 @@ and do not open an issue somewhere else: open the pull request with the pin bump
 fail on it. The breakage then lives in the same review surface as the change that caused it, with the
 `OVL404` message naming the anchor that no longer exists.
 
+### Two things it needs that do not exist yet
+
+Writing the command out made both of them obvious, and neither is visible from the design sketch.
+
+**The updater is the one pipeline that needs the compiler at runtime.** Every other job runs in the
+`pipeline-exec` container, which deliberately does not contain `lockstep` — the compiler is a
+development dependency, and a runtime that could recompile would be a runtime that could change what
+runs. But re-pinning and recompiling is exactly this pipeline's job.
+
+The answer is a step-level flag rather than putting the compiler in the image:
+
+```markdown
+2. **Re-pin and recompile** → script: scripts/repin.sh
+   - uses-compiler: true
+```
+
+which emits a job that installs the pinned compiler with `uv tool install` and drops the exec
+container — precisely what the generated `pipeline-ci.yml` jobs already do. Nothing else in the
+framework may set it, and `doctor` should say so if anything else does: a pipeline that can recompile
+itself is a pipeline whose committed output stopped being the reviewed artifact.
+
+**`propose-pr` opens a new pull request every time.** Three upstream merges in a week would leave
+three open bumps. It needs a `reuse-branch: true` input: a stable branch name, force-pushed, with
+`gh pr edit` when one is already open. This is the same shape the review pipeline uses for revising
+a review in place, and the same reason — a second artifact saying what the first one said is worse
+than no artifact.
+
 ### What this would take
 
 | Piece | Status |
@@ -458,9 +525,17 @@ fail on it. The breakage then lives in the same review surface as the change tha
 | `--semantic-diff` for the pull request body | **exists** — reports widened permissions and budgets |
 | Drift gate proving the recompile | **exists** |
 | `repository_dispatch` / `schedule` triggers | **exists** in the trigger block |
-| Resolving a *branch* ref, not only a tag | small — `resolve_tag` uses `git ls-remote --tags`; branches need `--heads` |
-| `check-upstreams`, `propose-upstream-bump` | new builtins, both thin |
-| Fan-out from upstream to N consumers | new — a release job iterating the App's installations |
+| `inherits:`, `lockstep pin`, `lockstep fetch` | **exists** — Part 1 is built |
+| Resolving a branch ref, not only a tag | **exists** — `resolve_ref` handles both |
+| `uses-compiler:` on a step | new, small |
+| `reuse-branch:` on `propose-pr` | new, small |
+| `scripts/repin.sh` — pin, diff the lock, emit `moved` | new; `lockstep pin` already reports what moved, so this is `git diff --exit-code` and an output |
+| Fan-out job in upstream | new — iterate the App's installations and dispatch |
+
+Note what is *not* on that list: a builtin to check upstream versions. `lockstep pin` already resolves
+every ref and reports which ones moved, so the step is a `git diff` against the lock file it just
+rewrote. A new builtin would have been a second implementation of resolution logic that could
+disagree with the first.
 
 **One caveat with no clean answer:** the updater is inherited and pinned like everything else, so a
 consumer whose updater is broken cannot receive the fix that repairs it. Keep this command small,
@@ -477,8 +552,10 @@ unrelated reason and happens to be exactly right: the diff a reviewer sees is th
 version bump.
 
 **What is uncomfortable.** Bands invite a configuration language. Every field somebody asks to tune
-is a small, reasonable request, and the sum is a second spec format layered over the first. The
-discipline has to be that bands are added against a real conflict, never in anticipation of one.
+is a small, reasonable request, and the sum is a second spec format layered over the first. The rule
+that a band governs cost and latency but never capability is what holds the line, and it will be
+argued with — the first request will be for `max_tool_turns`, it will be reasonable, and granting it
+would mean a consumer can widen an agent past the surface its evals cover.
 
 **What could go wrong.** Two hundred repositories pinned to two hundred different standard versions,
 with nobody merging the bump PRs, is worse than copy-paste — because copy-paste is at least visibly

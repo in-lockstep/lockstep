@@ -1,0 +1,323 @@
+# Inheriting a pipeline from another repository
+
+Every other guide here builds a pipeline inside the repository that runs it. This one builds three
+repositories: a **standards** repository owned by whoever is accountable for the rules, a **pipeline**
+repository owned by whoever built the review bot, and a **consumer** that gets both and writes four
+files.
+
+The working copy is in this repository, under `tests/fixtures/` — `upstream-standards`,
+`upstream-review` and `consumer`. Every command and every error message below is output from
+compiling it. `tests/test_inherits.py` runs it on every build, so if this guide goes stale, CI says so.
+
+---
+
+## Part 1 — The standards repository
+
+Nothing here is a pipeline. It is the floor every pipeline stands on.
+
+```
+upstream-standards/
+├── pipeline.yaml            spec: 1 · name: acme-standards
+├── guardrails/
+│   └── data-handling.md     sealed
+└── skills/
+    └── citation-style.md
+```
+
+```markdown
+<!-- guardrails/data-handling.md -->
+---
+name: data-handling
+description: What may leave this organization
+sealed: true
+enforce:
+  permissions: read-all
+  deny-tools: [write_file, create_*, update_*, delete_*]
+---
+
+NEVER reproduce customer records, credentials, or internal hostnames in output that leaves this
+organization's infrastructure.
+
+You MUST NOT quote a value you cannot tell is synthetic. Test fixtures in this organization are
+seeded from production, so a plausible-looking order id usually belongs to somebody.
+```
+
+**`sealed: true` is the whole difference between a standard and a default.** A sealed guardrail:
+
+- reaches **every agent in every consuming pipeline** without being named by any of them;
+- **cannot be excluded** by a consumer's profile;
+- **cannot be shadowed** by a local file of the same name;
+- has its `enforce:` block re-asserted after overlays, so no downstream customization widens it.
+
+The first of those is the one that matters most in practice. A guardrail each pipeline has to
+remember to list is a guardrail one pipeline will forget, and it will be the pipeline nobody is
+looking at.
+
+> Sealing a guardrail in your *own* repository seals it against yourself, which means nothing. The
+> loader ignores `sealed:` on a local definition rather than pretending it did something.
+
+---
+
+## Part 2 — The pipeline repository
+
+An ordinary pipeline. It does not know it is going to be inherited, and it names nothing outside
+itself.
+
+```
+upstream-review/
+├── pipeline.yaml
+├── commands/review.md          → agent: reviewer
+├── agents/reviewer.md          guardrails: [house] · skills: [verdict]
+├── guardrails/house.md
+├── skills/verdict.md
+├── scripts/collect-diff.py
+├── tests/test_collect_diff.py  ← ships with the script it tests
+└── evals/reviewer/cases/       ← ships with the agent it tests
+```
+
+Two of those directories are the point of the arrangement. **Evals and unit tests travel with what
+they test.** `lockstep lint` looks for an inherited agent's eval cases under
+`.pipeline/inherited/<alias>/evals/<agent>/cases/`, and for an inherited script's tests in that
+repository's own `tests/` — never in the consumer.
+
+A consumer forced to write those would be testing somebody else's prompt from the outside, against
+its own copy of it, which is exactly the drift this framework keeps refusing to build in.
+
+Notice what the pipeline does **not** contain: any reference to `data-handling`. It is not required
+to know the standards exist. They arrive by being sealed.
+
+---
+
+## Part 3 — The consumer
+
+```
+consumer/
+├── pipeline.yaml
+├── profiles/repo.md
+├── contexts/repo.md
+└── guardrails/house-style.md
+```
+
+That is the entire repository. There is a test asserting it stays that way.
+
+```yaml
+# pipeline.yaml
+spec: 1
+name: acme-web
+
+inherits:
+  standards: ../upstream-standards        # a path while developing
+  review: ../upstream-review              # in production: github.com/acme/pipeline-pr-review@v2
+
+commands:
+  review:
+    from: review                          # instantiate the inherited command
+    add-guardrails: [house-style]         # appended after the inherited ones
+
+capabilities:
+  actions: github.com/acme/pipeline-actions@v1.4.0
+  exec: pipeline-exec==0.1.0
+  exec-image: quay.io/acme/pipeline-exec
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    profiles: [repo]
+```
+
+`from: review` names the alias. If that upstream defines more than one command, the compiler says so
+and lists them; name one with `from: review/some-command`.
+
+### The two files only this repository can write
+
+```markdown
+<!-- contexts/repo.md -->
+---
+name: repo
+description: What this codebase is
+---
+
+A Python service. `ruff`, `mypy --strict` and `pytest` run on every pull request, so anything those
+tools would catch is already caught.
+
+All database access goes through `src/repo.py`.
+```
+
+The profile selects it — and that is what makes one file enough. **A context is bound to the profile,
+not to an agent**, so it reaches every agent of every inherited pipeline without either upstream
+naming it. Inherit three pipelines and they all learn what this codebase is from the same file.
+
+Profiles are the one thing never inherited. They hold one deployment's secrets and choose its
+contexts, and neither is knowable upstream.
+
+---
+
+## Part 4 — Running it
+
+```bash
+lockstep pin        # resolve each `inherits:` ref to a commit, into .pipeline/pins.lock
+lockstep fetch      # materialize them at exactly those commits
+lockstep compile
+```
+
+```
+$ lockstep fetch
+  review: copied from ../upstream-review (local, not pinned)
+  standards: copied from ../upstream-standards (local, not pinned)
+fetched 2 upstream(s)
+
+$ lockstep compile
+review: 2 steps -> 2 jobs · 1 agentic, 1 deterministic, 1 cacheable
+  + .github/workflows/aw-review-reviewer.md
+  + .github/workflows/review.yml
+  + .github/workflows/shared/guardrail-baseline.md
+  + .github/workflows/shared/guardrail-standards-data-handling.md
+  + .github/workflows/shared/guardrail-review-house.md
+  + .github/workflows/shared/guardrail-house-style.md
+  + .github/workflows/shared/skill-review-verdict.md
+  + .github/workflows/shared/context-repo.md
+  + .github/workflows/pipeline-ci.yml
+wrote 13 files (0 unchanged, 0 pruned)
+```
+
+### What is committed, and what is not
+
+**Fetched definitions are not committed.** They land in `.pipeline/inherited/<alias>/`, which the
+scaffolded `.gitignore` excludes. They are resolved state, like a virtualenv: the lock file records
+which commit, and `lockstep fetch` puts it back. Committing them would make every upstream bump a
+diff of somebody else's repository.
+
+**Generated output is committed**, as always — and that is what makes an upstream change reviewable.
+More on that in Part 6.
+
+Compiling without fetching is an error that names the fix:
+
+```
+LS101: .pipeline/inherited/standards — 'standards' is inherited from ../upstream-standards
+       but has not been fetched
+      hint: run `lockstep fetch` — inherited definitions are resolved state, like a virtualenv,
+            so they are not committed
+```
+
+The generated `pipeline-ci.yml` runs `lockstep fetch` before every check that compiles, so the drift
+gate compares against the same commits your laptop did.
+
+---
+
+## Part 5 — What actually reached the agent
+
+Compile and read the generated agent. Two lines carry the whole story:
+
+```
+# sources: review:agents/reviewer.md@efd67e10 lockstep:guardrails/baseline.md@f12c42fc
+#          standards:guardrails/data-handling.md@addbefa2 review:guardrails/house.md@3723d767
+#          guardrails/house-style.md@dde11b53 review:skills/verdict.md@0ead478c
+#          contexts/repo.md@6eb5ea05
+# prompt layers: guardrail:baseline | guardrail:standards/data-handling | guardrail:review/house
+#                | guardrail:house-style | skill:review/verdict | context:repo
+```
+
+Four tiers of ownership, distinguishable at a glance:
+
+| Prefix | Means | Example |
+|---|---|---|
+| `lockstep:` | ships inside the compiler | `guardrails/baseline.md` |
+| `standards:` | inherited from that alias | `guardrails/data-handling.md` |
+| `review:` | inherited from that alias | `agents/reviewer.md` |
+| *(none)* | this repository wrote it | `contexts/repo.md` |
+
+And the guardrail order in the compiled prompt is the order of authority:
+
+```
+baseline  →  standards/data-handling  →  review/house  →  house-style
+(framework)      (sealed, organization)     (upstream)     (this repo)
+```
+
+Each may add to the one before it. None may weaken it.
+
+### Namespacing
+
+Everything inherited is namespaced by its alias, and **a definition resolves its references inside
+its own tree**. An inherited command's `agent: reviewer` step resolves to `review/reviewer`, not to
+whatever the consumer happens to have called `reviewer`. Scripts reroot into the fetched tree:
+
+```
+uv run python3 .pipeline/inherited/review/scripts/collect-diff.py --output=outputs/diff.json
+```
+
+A local file that takes an inherited name is refused rather than resolved in some direction:
+
+```
+LS200: guardrails/standards/data-handling.md — guardrail 'standards/data-handling' is defined twice
+      hint: a local definition cannot take the name of an inherited one; rename yours
+```
+
+**Cross-alias references are deliberately not possible.** An inherited pipeline is self-contained;
+anything organization-wide reaches it by being sealed. That rules out the whole class of "which
+version of the shared thing does this pipeline want" without a resolver.
+
+---
+
+## Part 6 — Changing a standard
+
+The security team edits `data-handling.md` and tags `v4`. In each consumer:
+
+```bash
+lockstep pin        # v4 → a new commit
+lockstep fetch
+lockstep compile
+```
+
+The pull request that carries this contains `shared/guardrail-standards-data-handling.md`, because
+flattened prompt layers are committed output. **The diff is the guardrail text** — the words the
+model will now be told, not a version number. `compile --check` proves the output matches the spec at
+that pin, and `--semantic-diff --fail-on-blocking` reports if the change widened permissions or
+budgets.
+
+Nothing was designed for that. It falls out of committing generated output, which this framework
+already requires for an unrelated reason.
+
+Automating the bump — an inherited pipeline that opens that pull request itself when upstream moves —
+is designed in [sharing.md](sharing.md#part-7--keeping-consumers-current) and not built.
+
+---
+
+## Part 7 — What a consumer may and may not do
+
+**Add.** `add-guardrails:` and `add-skills:` attach local definitions to an inherited command's agents
+without touching the inherited pipeline.
+
+**Exclude an ordinary inherited guardrail.** A profile's `exclude_guardrails` still works on anything
+not sealed.
+
+**Not exclude a standard:**
+
+```
+LS100: profiles/repo.md — guardrail 'standards/data-handling' is sealed and cannot be excluded
+      hint: it is a standard 'standards' publishes, not a default; take it up with whoever owns
+            that repository
+```
+
+**Overlay or eject.** Both work unchanged on inherited definitions. An overlay whose anchor an
+upstream rename removed fails with `OVL404` naming the anchor — which is what turns an upstream
+change into a build failure rather than a customization that quietly stopped applying.
+
+---
+
+## Honest limits
+
+- **Local paths are not reproducible.** `inherits: standards: ../upstream-standards` is copied rather
+  than cloned, which is what makes developing an upstream and a consumer side by side bearable.
+  `doctor` reports it as `DOC017`, and it should never reach a default branch. A remote source that is
+  not pinned is `DOC018`, an error.
+- **No transitive inheritance.** An inherited repository's own `inherits:` is not followed — that is a
+  package manager, and this is not one. List both upstreams in the consumer.
+- **Bands are not built.** A consumer can add guardrails and skills, but cannot yet tune an inherited
+  agent's model or budget within a range the upstream declares. Designed in
+  [sharing.md](sharing.md#part-4--what-a-consumer-may-still-change).
+- **Private repositories need a credential.** A consumer's `GITHUB_TOKEN` cannot read another private
+  repository, so `lockstep fetch` in CI needs a GitHub App or a PAT. Nothing here solves that for you.
+- **Nothing has run on a real GitHub runner.** The capability actions and executor image these
+  pipelines reference have never been published; see the note in the README.
