@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 from click.testing import CliRunner
-
 from review_ext.commands import MAX_PATCH, assemble, is_generated, pr_diff
 
 PULL = {

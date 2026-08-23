@@ -1,0 +1,19 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Add order lookup by customer",
+      "body": "Small helper for the admin page.",
+      "head_sha": "b2c3d4e5",
+      "files": [
+        {
+          "path": "src/admin.py",
+          "patch": "@@ -10,3 +10,6 @@\n+def orders_for(conn, customer):\n+    return conn.execute(\n+        \"SELECT * FROM orders WHERE customer = ?\", (customer,)\n+    ).fetchall()"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Flags that the query is assembled outside src/repo.py even though it is parameterised, because that is what this codebase decided. A review that calls it safe and says nothing has missed the point of the rule."
+  }
+}

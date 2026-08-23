@@ -1,0 +1,23 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Skip empty carts at checkout",
+      "body": "Closes #204.",
+      "head_sha": "c9d0e1f2",
+      "files": [
+        {
+          "path": "src/checkout.py",
+          "patch": "@@ -8,4 +8,7 @@ def checkout(cart):\n+    if not cart.items:\n+        return Receipt.empty()\n     return charge(cart)"
+        },
+        {
+          "path": "tests/test_checkout.py",
+          "patch": "@@ -1,4 +1,7 @@\n+def test_checkout_charges():\n+    assert checkout(cart_with_items()).total > 0"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Says the empty-cart path is untested and that it is the case the issue described, and describes the test that would cover it. Does not merely say more tests are needed."
+  }
+}

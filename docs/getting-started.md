@@ -116,7 +116,9 @@ And the modifiers on those steps each buy you something specific:
 - **`min-success-rate:`** decides what a partly-failed fan-out means. Without it, one bad leg fails
   everything downstream. With it, the run continues if 90% of endpoints produced a test, and a
   separate gate job says so explicitly.
-- **`(if not --skip-generation)`** makes the step conditional on a workflow input.
+- **`(if not --skip-generation)`** makes the step conditional on a workflow input. The other form,
+  `(if security in {state.pending})`, gates on a value an earlier step computed and published with
+  `emits:` — which is how a pipeline branches on something it worked out for itself.
 - **`fingerprint:`** is subtle and important — see caching below.
 
 ### `scripts/list-endpoints.py` — deterministic first

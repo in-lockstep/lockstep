@@ -1,0 +1,21 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Serve uploaded files",
+      "head_sha": "d4e5f6a7",
+      "files": [
+        {
+          "path": "src/files.py",
+          "patch": "@@ -1,5 +1,8 @@\n+def serve(name):\n+    if \"/\" in name or \"..\" in name:\n+        raise ValueError(name)\n+    return open(f\"uploads/{name}\").read()"
+        }
+      ]
+    },
+    "revision": true,
+    "previously_reviewed_sha": "a1b2c3d4",
+    "previous_review": "## Security review\n\nOne finding.\n\n- **src/files.py:2** — a `name` of `../../etc/passwd` reaches `open()`; nothing constrains it to the uploads directory.",
+    "new_commits": [{"sha": "d4e5f6a7", "message": "Reject names containing separators"}]
+  },
+  "expect": {
+    "notes": "Says the earlier finding is fixed and names it. Does not repeat it as though still open, and does not drop it silently. If it raises nothing new, it says that."
+  }
+}

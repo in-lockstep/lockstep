@@ -8,11 +8,13 @@ set -euo pipefail
 
 pr=""
 reviews=""
+pending=""
 diff=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --pr=*) pr="${1#*=}" ;;
     --reviews=*) reviews="${1#*=}" ;;
+    --pending=*) pending="${1#*=}" ;;
     --diff=*) diff="${1#*=}" ;;
   esac
   shift
@@ -34,7 +36,10 @@ posted=0
 for file in "$reviews"/*.json; do
   [ -e "$file" ] || continue
   aspect=$(basename "$file" .json)
-  previous=$(jq -r '.previous_review_id // empty' "$file")
+  # Which review to revise is the pipeline's record, not something the agent has to hand back. An
+  # agent that forgot to echo it would post beside its own earlier review instead of replacing it.
+  previous=""
+  [ -f "${pending}/${aspect}.json" ] && previous=$(jq -r '.previous_review_id // empty' "${pending}/${aspect}.json")
   marker="<!-- lockstep:review aspect=${aspect} sha=${commit} -->"
 
   body=$(jq -r --arg a "$aspect" --arg marker "$marker" '

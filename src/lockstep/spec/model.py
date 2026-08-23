@@ -35,16 +35,31 @@ class StepKind(StrEnum):
 
 @dataclass(frozen=True)
 class Condition:
-    """`(if --flag)` / `(if not --flag)` on a step."""
+    """When a step runs.
 
-    flag: str
-    negated: bool
+    Two forms. `(if --flag)` / `(if not --flag)` asks about a workflow input, which is known before
+    anything runs. `(if security in {state.pending})` asks about a value an earlier step computed,
+    which is the only way to gate on work the pipeline decided for itself.
+    """
+
+    flag: str = ""
+    negated: bool = False
+    # Membership form: is `value` among the items of `step_id`'s `output`?
+    value: str = ""
+    step_id: str = ""
+    output: str = ""
+
+    @property
+    def is_membership(self) -> bool:
+        return bool(self.step_id)
 
     @property
     def input_name(self) -> str:
         return self.flag.lstrip("-").replace("-", "_")
 
     def key(self) -> str:
+        if self.is_membership:
+            return f"{self.step_id}.{self.output}:{self.value}"
         return f"{'!' if self.negated else ''}{self.input_name}"
 
 
@@ -69,6 +84,9 @@ class Step:
     input: str = ""
     output: str = ""
     context_files: list[str] = field(default_factory=list)
+    # A named value this step publishes for later steps to condition on. The step writes it to
+    # `$GITHUB_OUTPUT`; the compiler lifts it to a job output.
+    emits: str = ""
     foreach: Foreach | None = None
     parallel: int = 0
     condition: Condition | None = None

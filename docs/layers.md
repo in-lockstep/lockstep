@@ -5,8 +5,9 @@ which of the four files it belongs in.
 
 It exists because the rule was never written down, and things drifted in exactly the way an unwritten
 rule allows: one application's login page ended up compiled into the runtime, five pipelines
-independently wrote the same four safety rules, and a constraint that a step actually enforces was
-filed under `skills/` where nothing enforces anything.
+independently wrote the same four safety rules, a constraint that a step actually enforces was filed
+under `skills/` where nothing enforces anything, and one pipeline grew a fifth directory for prose
+that had a perfectly good home.
 
 ---
 
@@ -128,19 +129,45 @@ something that pretends to, it has made the mistake this document exists to name
 
 ---
 
-## Part 4 — Item sets are not a layer
+## Part 4 — Agents may be specific; shared layers may not
 
-`examples/pr-review/aspects/` holds four markdown files. They look like prompt layers and they are
-not one: they are *items*, fanned out one job apiece by `foreach`, each becoming one prompt rather
-than composing into a shared one. They are selected by a runtime argument — `/review security intent`
-— not by an agent or a profile.
+The rules above govern the three *shared* layers, because sharing is what makes specificity a
+liability: a skill imported by four agents that names one application's endpoints is wrong three
+times. An agent is not shared. It is one job, and it is allowed — expected — to know exactly what
+that job needs.
 
-Give them their own directory, named for what they are to the pipeline (`aspects/`, `checks/`,
-`environments/`), and keep them out of `skills/`. A file under `skills/` is composed into every
-prompt of every agent that names it; a file under `aspects/` is chosen per run. Filing one as the
-other produces either an agent told to do four contradictory jobs at once, or a fan-out of one.
+So this belongs in an agent body, not a context:
 
----
+> All database access goes through `src/repo.py`. A query assembled anywhere else is worth flagging
+> even when it looks parameterised, because it is outside the layer that was audited.
+
+It names a product. It would be wrong against a different codebase. And it is still not a context,
+because only the security reviewer needs it — a context is injected by the profile into every agent,
+so putting it there would make the test-coverage reviewer read the threat model.
+
+The question to ask is not "is this specific" but **"how many prompts does this reach?"**
+
+| Reaches | Home | May name a product |
+|---|---|---|
+| every agent in every pipeline | shipped baseline guardrail | no |
+| several agents in this pipeline | guardrail / skill | no |
+| every agent under one profile | context | yes |
+| exactly one agent | that agent's body | yes |
+
+That last row is the one that was missing, and its absence is what pushed `examples/pr-review` into
+inventing a fifth directory.
+
+### What that directory was
+
+`aspects/` held four markdown files — one per review lens — which
+`scripts/select-aspects.py` parsed with a hand-rolled frontmatter reader and embedded as a `brief`
+field in a JSON item. The prose reached the model as *data*, so it got no `shared/` file, no
+provenance stamp, no place in any prompt-layer signature, and neither lint rule could see it. The
+eval case had a hand-copied one-sentence excerpt of the real lens and had already drifted from it.
+
+Each lens is now an agent. Nothing about the taxonomy changed; a row was written down that had
+always been true. What the pipeline gained is in `docs/reviewing-pull-requests.md`: eval cases per
+lens, a budget per lens, and a lens that can say what this codebase has already decided.
 
 ## Part 5 — What the audit found, and where it went
 
@@ -162,6 +189,8 @@ All of them are fixed; the table is kept because the *shape* of each mistake is 
 | five × `guardrails/common.md` | The same four rules, written five times | framework gap | `library/guardrails/baseline.md` |
 | `httpbin/skills/api-testing.md` | The test-script schema, restated by hand | framework gap | `library/skills/test-script-format.md` |
 | `codebase-navigation` / `repo-conventions` | A near-verbatim citation paragraph | one-question | The `source-analysis` guardrail, which already required citations |
+| `pr-review/aspects/` | Prose reaching the model as JSON data, outside every layer | Part 4 | One agent per lens |
+| `evals/pr-reviewer/cases/security.json` | A hand-copied excerpt of the lens it was testing | drift | The eval supplies the diff; the lens comes from the agent under test |
 
 `lockstep lint` now checks the one-question rule directly:
 

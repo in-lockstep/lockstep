@@ -116,6 +116,12 @@ def cache_spec_for(
         # exists and so never starts a runner for them.
         return None
 
+    if step.emits:
+        # A step whose value decides whether later steps run must run. Skipped, it publishes an
+        # empty output, every dependent condition reads false, and the pipeline quietly does
+        # nothing — which looks exactly like having decided there was nothing to do.
+        return None
+
     outputs = declared_outputs(step, ctx, command)
     if not outputs:
         return None

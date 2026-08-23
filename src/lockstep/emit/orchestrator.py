@@ -116,14 +116,32 @@ def _condition_key(condition: Condition | None) -> str:
     return condition.key() if condition else ""
 
 
-def _bare_condition(condition: Condition) -> str:
+def _bare_condition(condition: Condition, step_to_job: dict[str, str] | None = None) -> str:
+    if condition.is_membership:
+        job = (step_to_job or {}).get(condition.step_id, condition.step_id)
+        ref = f"needs.{job}.outputs.{condition.output}"
+        # The emptiness test is not defensive noise: `fromJSON('')` is an error, not false, and an
+        # upstream job that was itself skipped publishes exactly that.
+        return f"{ref} != '' && contains(fromJSON({ref}), '{condition.value}')"
     operator = "!=" if condition.negated else "=="
     return f"inputs.{condition.input_name} {operator} true"
 
 
-def _if_expression(condition: Condition) -> str:
+def _if_expression(condition: Condition, step_to_job: dict[str, str] | None = None) -> str:
     """`(if not --skip-repair)` -> an expression that also reads correctly on schedule triggers."""
-    return "${{ " + _bare_condition(condition) + " }}"
+    return "${{ " + _bare_condition(condition, step_to_job) + " }}"
+
+
+def _needs_with(needs: str | None, condition: Condition | None, step_to_job: dict[str, str]) -> Any:
+    """A membership condition reads a job output, and Actions only exposes those of direct needs."""
+    chain = [needs] if needs else []
+    if condition and condition.is_membership:
+        producer = step_to_job.get(condition.step_id)
+        if producer and producer not in chain:
+            chain.append(producer)
+    if not chain:
+        return None
+    return chain[0] if len(chain) == 1 else chain
 
 
 def emit_command(
@@ -171,8 +189,28 @@ def emit_command(
     previous_job: dict[str, Any] | None = None
 
     step_to_job: dict[str, str] = {}
+    # Steps gated on the same earlier value are siblings, not a queue: `/review security intent`
+    # asks for two reviews, and running the second only after the first finishes would double the
+    # wall clock for no ordering anybody asked for.
+    branch_producer: str | None = None
+    branch_base: str | None = None
+    branch_members: list[str] = []
+    pending_needs: list[str] | None = None
 
     for group in groups:
+        condition = group.head.condition
+        producer = condition.step_id if condition and condition.is_membership else None
+        pending_needs = None
+        if producer:
+            if producer != branch_producer:
+                branch_producer, branch_base, branch_members = producer, previous_id, []
+            previous_id = branch_base
+        elif branch_members:
+            # Whatever follows a branch waits for all of it.
+            pending_needs = branch_members
+            branch_producer, branch_base, branch_members = None, None, []
+            previous_id = None
+
         fanout_ref: str | None = None
         items_expr: str | None = None
         producer_id: str | None = None
@@ -200,6 +238,7 @@ def emit_command(
                         command,
                         upstream,
                         result,
+                        step_to_job,
                         stateful=group is state_group,
                     ),
                 )
@@ -208,25 +247,44 @@ def emit_command(
             emitted = [
                 (
                     group.id,
-                    _agent_job(group, ctx, previous_id, fanout_ref, agent_lock, agent_secrets, command),
+                    _agent_job(
+                        group, ctx, previous_id, fanout_ref, agent_lock, agent_secrets, command, step_to_job
+                    ),
                 )
             ]
             result.agents_used.append(group.head.target)
         else:
             emitted = _command_jobs(group, ctx, previous_id, sub_workflow, command)
 
+        if pending_needs is not None:
+            emitted[0][1]["needs"] = pending_needs if len(pending_needs) > 1 else pending_needs[0]
         for job_id, job in emitted:
             jobs[job_id] = job
         for step in group.steps:
             step_to_job[step.id] = emitted[0][0]
+            if step.emits:
+                emitted[0][1].setdefault("outputs", {})[step.emits] = (
+                    "${{ steps." + step.id + ".outputs." + step.emits + " }}"
+                )
 
-        previous_id = emitted[-1][0]
-        previous_job = emitted[-1][1] if group.kind == "steps" else None
+        if producer:
+            branch_members.append(emitted[-1][0])
+            previous_id = branch_base
+            previous_job = None
+        else:
+            previous_id = emitted[-1][0]
+            previous_job = emitted[-1][1] if group.kind == "steps" else None
 
         if group.head.foreach and group.head.min_success_rate is not None:
-            verify_id, verify_job = _verify_job(group, ctx, previous_id, producer_id, items_expr, command)
+            # A fan-out step is never a branch member, so the job it just emitted is its dependency.
+            verify_id, verify_job = _verify_job(
+                group, ctx, emitted[-1][0], producer_id, items_expr, command
+            )
             jobs[verify_id] = verify_job
             previous_id, previous_job = verify_id, verify_job
+
+    if branch_members:
+        previous_id = branch_members[-1]
 
     result.step_count = len(steps)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
@@ -270,13 +328,37 @@ def _validate_builtins(command: Command, steps: list[Step], spec: Spec) -> None:
 
 def _validate_conditions(command: Command, steps: list[Step]) -> None:
     declared = {p.input_name for p in command.parameters} | {"force"}
+    emitted: dict[str, str] = {}
     for step in steps:
-        if step.condition and step.condition.input_name not in declared:
+        loc = f"{command.src.rel if command.src else command.name} step {step.number}"
+        condition = step.condition
+        if condition and condition.is_membership:
+            # Earlier, not merely elsewhere: a job cannot read the outputs of one that runs after it.
+            if condition.step_id not in emitted:
+                raise SpecError(
+                    f"step condition reads {condition.output!r} from step {condition.step_id!r}, "
+                    "which does not emit it before this point",
+                    location=loc,
+                    hint=(
+                        f"available: {', '.join(f'{k}.{v}' for k, v in emitted.items()) or '(none)'}"
+                        " — add `emits: <name>` to the earlier step and have it write that name to "
+                        "$GITHUB_OUTPUT"
+                    ),
+                )
+            if emitted[condition.step_id] != condition.output:
+                raise SpecError(
+                    f"step {condition.step_id!r} emits {emitted[condition.step_id]!r}, "
+                    f"not {condition.output!r}",
+                    location=loc,
+                )
+        elif condition and condition.input_name not in declared:
             raise SpecError(
-                f"step condition references undeclared parameter {step.condition.flag!r}",
-                location=f"{command.src.rel if command.src else command.name} step {step.number}",
+                f"step condition references undeclared parameter {condition.flag!r}",
+                location=loc,
                 hint=f"declared parameters: {', '.join(sorted(declared))}",
             )
+        if step.emits:
+            emitted[step.id] = step.emits
 
 
 def _ensure_producer(
@@ -330,12 +412,19 @@ def _inject_fanout(job: dict[str, Any], group: JobGroup, ctx: EmitContext, comma
     steps.insert(insert_at, step)
 
 
-def _base_steps_job(ctx: EmitContext, needs: str | None, *, condition: Condition | None) -> dict[str, Any]:
+def _base_steps_job(
+    ctx: EmitContext,
+    needs: str | None,
+    *,
+    condition: Condition | None,
+    step_to_job: dict[str, str] | None = None,
+) -> dict[str, Any]:
     job: dict[str, Any] = {}
-    if needs:
-        job["needs"] = needs
+    resolved = _needs_with(needs, condition, step_to_job or {})
+    if resolved:
+        job["needs"] = resolved
     if condition:
-        job["if"] = _if_expression(condition)
+        job["if"] = _if_expression(condition, step_to_job)
     job["runs-on"] = ctx.runs_on
     job["container"] = ctx.pins.exec_container()
     job["steps"] = [
@@ -422,9 +511,10 @@ def _steps_job(
     command: Command,
     upstream: dict[str, dict[str, str]],
     result: WorkflowResult,
+    step_to_job: dict[str, str],
     stateful: bool = False,
 ) -> dict[str, Any]:
-    job = _base_steps_job(ctx, needs, condition=group.condition)
+    job = _base_steps_job(ctx, needs, condition=group.condition, step_to_job=step_to_job)
     env = env_block(ctx.profile)
     if any(value.startswith("${{ secrets.") for value in env.values()) and ctx.profile.github.environment:
         job["environment"] = ctx.profile.github.environment
@@ -574,13 +664,15 @@ def _agent_job(
     agent_lock: dict[str, str],
     agent_secrets: dict[str, list[str]],
     command: Command,
+    step_to_job: dict[str, str],
 ) -> dict[str, Any]:
     step = group.head
     job: dict[str, Any] = {}
-    if needs:
-        job["needs"] = needs
+    resolved = _needs_with(needs, step.condition, step_to_job)
+    if resolved:
+        job["needs"] = resolved
     if step.condition:
-        job["if"] = _if_expression(step.condition)
+        job["if"] = _if_expression(step.condition, step_to_job)
     if fanout_ref:
         job["strategy"] = _strategy(group, fanout_ref)
 

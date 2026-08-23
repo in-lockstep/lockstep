@@ -39,11 +39,11 @@ So: **if `.lockstep/` exists, that is where the pipeline lives.**
 │   ├── ci.yml                   yours, untouched
 │   ├── review.yml               generated
 │   ├── pipeline-ci.yml          generated
-│   └── aw-pr-reviewer.md        generated
+│   └── aw-security-reviewer.md  generated, one per reviewing agent
 ├── .lockstep/                   the entire pipeline, in one directory
 │   ├── pipeline.yaml
 │   ├── commands/  agents/  guardrails/  skills/  contexts/  profiles/
-│   ├── aspects/  scripts/  tests/  evals/  extensions/  overlays/
+│   ├── scripts/  tests/  evals/  extensions/  overlays/
 │   └── .pipeline/               pins and provenance
 ├── Makefile                     yours
 ├── src/                         yours
@@ -66,38 +66,38 @@ def find_home(root: Path) -> tuple[Path, bool]:
 changes is what the compiler *emits*, because a generated workflow runs at the repository root and
 has to name things from there:
 
-```yaml
-# in .lockstep/commands/review.md
-- args: --requested="{positional}" --aspects-dir={lockstep}/aspects --output={output_dir}/aspects.json
+```markdown
+7. **Post one review per aspect** → script: scripts/post-reviews.sh
 ```
 
 compiles to
 
 ```
-uv run python3 .lockstep/scripts/select-aspects.py --requested="…" --aspects-dir=.lockstep/aspects …
+bash .lockstep/scripts/post-reviews.sh --pr="…" --reviews=outputs/reviews …
 ```
 
-Script paths are prefixed automatically. `{lockstep}` is there for the paths the compiler cannot
-recognise as paths — a data directory, a template — and expands to `.lockstep` or to `.` depending on
-the layout, so one spec serves both.
+Script paths are prefixed automatically, and so are the step definitions the cache hashes. For paths
+the compiler cannot recognise as paths — a data directory, a template you pass to a script — write
+`{lockstep}`, which expands to `.lockstep` or to `.` depending on the layout, so one spec serves
+both.
 
 ### Adopting the example
 
 ```bash
 mkdir .lockstep
-cp -R path/to/examples/pr-review/* .lockstep/
-cp path/to/examples/pr-review/.pipeline .lockstep/ -R
-
-# The one edit adoption needs: point the aspects directory at where it now lives
-sed -i 's|--aspects-dir=aspects|--aspects-dir={lockstep}/aspects|' .lockstep/commands/review.md
+cp -R path/to/examples/pr-review/. .lockstep/
+rm -rf .lockstep/.github          # the example's own compiled output, not yours
 
 lockstep lint      # no findings
 lockstep compile
 ```
 
+No edits. The pipeline reads no directories of its own at runtime, so nothing in the spec has to be
+told where it now lives.
+
 ```
-review: 5 steps -> 5 jobs · 1 agentic, 4 deterministic, 3 cacheable
-wrote 13 files
+review: 7 steps -> 7 jobs · 4 agentic, 3 deterministic, 1 cacheable
+wrote 14 files
 ```
 
 Your repository root gained exactly one directory.

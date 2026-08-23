@@ -1,0 +1,23 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Retry the payment gateway once",
+      "body": "Transient failures were surfacing to users.",
+      "head_sha": "d0e1f2a3",
+      "files": [
+        {
+          "path": "src/pay.py",
+          "patch": "@@ -14,3 +14,7 @@ def pay(order):\n-    return gateway.charge(order)\n+    try:\n+        return gateway.charge(order)\n+    except Transient:\n+        return gateway.charge(order)"
+        },
+        {
+          "path": "tests/test_pay.py",
+          "patch": "@@ -5,3 +5,5 @@\n+def test_pay_calls_gateway(mock_gateway):\n+    pay(an_order())\n+    assert mock_gateway.charge.called"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Says the test asserts the gateway was called rather than what happened, so it would pass against the old code too — the retry itself is untested. Names the case: a first call raising Transient and a second succeeding."
+  }
+}

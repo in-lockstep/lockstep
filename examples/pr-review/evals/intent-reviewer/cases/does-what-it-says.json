@@ -1,0 +1,19 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Return 404 for unknown orders",
+      "body": "Closes #182. Unknown ids raised a 500; they should be a 404.",
+      "head_sha": "f6a7b8c9",
+      "files": [
+        {
+          "path": "src/api.py",
+          "patch": "@@ -30,4 +30,6 @@ def get_order(oid):\n-    return repo.load(oid)\n+    order = repo.load(oid)\n+    if order is None:\n+        raise NotFound(oid)\n+    return order"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Says in one sentence that the diff does what it says. May note the implication that callers previously handling a 500 will now see a 404. Does not manufacture a concern."
+  }
+}

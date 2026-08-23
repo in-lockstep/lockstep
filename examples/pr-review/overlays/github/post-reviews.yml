@@ -6,8 +6,8 @@
 target: workflows/review.yml
 patches:
   - op: insert-step
-    at: jobs[id=select].steps
-    before: select
+    at: jobs[id=diff].steps
+    before: diff
     value:
       name: Install the pipeline's extensions
       id: install-extensions

@@ -98,8 +98,18 @@ def _as_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+MEMBERSHIP = re.compile(r"\A(?P<value>[\w.-]+)\s+in\s+\{(?P<step>[\w-]+)\.(?P<output>[\w-]+)\}\Z")
+
+
 def _parse_condition(raw: str) -> Condition:
     text = raw.strip()
+    membership = MEMBERSHIP.match(text)
+    if membership:
+        return Condition(
+            value=membership.group("value"),
+            step_id=membership.group("step"),
+            output=membership.group("output"),
+        )
     negated = False
     if text.lower().startswith("not "):
         negated = True
@@ -179,6 +189,8 @@ def _apply_subkeys(step: Step, pending: dict[str, str], location: str) -> None:
             step.output = value
         elif key == "context-files":
             step.context_files = [p.strip() for p in value.split(",") if p.strip()]
+        elif key == "emits":
+            step.emits = value.strip()
         elif key == "id":
             step.id = slug(value)
             step.explicit_id = True

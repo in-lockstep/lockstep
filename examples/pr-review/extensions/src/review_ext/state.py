@@ -10,6 +10,9 @@ beside it. A reviewer who addressed a finding wants to see it resolved, not repe
 
 Both need the same fact — which commit each aspect was last reviewed against — and the only durable
 place to keep it is the review itself. So the bot's reviews carry a marker, and this reads it back.
+
+It also resolves what the comment asked for. `/review banana` fails here rather than in a prompt: a
+model asked to perform a banana review will produce one, and it will look plausible.
 """
 
 from __future__ import annotations
@@ -66,6 +69,34 @@ def previous_reviews(reviews: list[dict[str, Any]]) -> dict[str, dict[str, Any]]
             "submitted_at": review.get("submitted_at", ""),
         }
     return found
+
+
+def requested_aspects(raw: str, available: list[str]) -> list[str]:
+    """Resolve what the comment asked for against what this pipeline can actually review.
+
+    An empty request reviews everything: `/review` with no arguments is a reasonable thing to type,
+    and refusing it would be pedantry.
+    """
+    text = (raw or "").strip()
+    words: list[str] = []
+    if text.startswith("["):
+        try:
+            words = [str(item).strip().lower() for item in json.loads(text) if str(item).strip()]
+        except json.JSONDecodeError:
+            words = []
+    if not words and text:
+        words = [word.strip().lower() for word in re.split(r"[,\s]+", text) if word.strip()]
+    if not words:
+        return sorted(available)
+
+    unknown = [word for word in words if word not in available]
+    if unknown:
+        _fail(
+            f"unknown review aspect(s): {', '.join(unknown)}. available: {', '.join(sorted(available))}"
+        )
+    # Deduplicated, because `/review security security` asks for one review, not two.
+    seen: set[str] = set()
+    return [word for word in words if not (word in seen or seen.add(word))]
 
 
 def plan(
@@ -139,24 +170,34 @@ def _gh(path: str, paginate: bool = False) -> Any:
 @click.command(name="review-state")
 @click.option("--pr", required=True, help="Pull request number.")
 @click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
-@click.option("--aspects", "aspects_file", required=True, type=click.Path(path_type=Path))
+@click.option("--requested", default="", help="What the comment asked for. Empty reviews everything.")
+@click.option(
+    "--available",
+    required=True,
+    help="The aspects this pipeline has a reviewer for, comma separated.",
+)
 @click.option("--head", default="", help="The commit being reviewed. Read from the API if omitted.")
-@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--output-dir", required=True, type=click.Path(path_type=Path))
 @click.option("--force", is_flag=True, help="Review again even if nothing has changed.")
 @click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
 def review_state(
     pr: str,
     repo: str,
-    aspects_file: Path,
+    requested: str,
+    available: str,
     head: str,
-    output: Path,
+    output_dir: Path,
     force: bool,
     from_dir: Path | None,
 ) -> None:
-    """Narrow the requested aspects to those the pull request has actually moved past."""
-    aspects = json.loads(aspects_file.read_text(encoding="utf-8"))
+    """Work out which reviews are still due, and what each one is revising."""
+    known = [name.strip() for name in available.split(",") if name.strip()]
+    if not known:
+        _fail("--available lists no aspects; nothing could ever be reviewed")
+    aspects = [{"key": key} for key in requested_aspects(requested, known)]
 
     if from_dir:
+
         def load(name: str) -> Any:
             path = from_dir / f"{name}.json"
             return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
@@ -171,14 +212,19 @@ def review_state(
         head = head or (commits[-1]["sha"] if commits else "")
 
     pending, skipped = plan(aspects, reviews, head, commits, force=force)
+
+    # One file per aspect, because one job per aspect reads them. The reviewing job for an aspect
+    # that is not pending never starts, so it never looks for a file that is not there.
+    output_dir.mkdir(parents=True, exist_ok=True)
     for item in pending:
         item["head_sha"] = head
+        (output_dir / f"{item['key']}.json").write_text(
+            json.dumps(item, indent=2) + "\n", encoding="utf-8"
+        )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(pending, indent=2) + "\n", encoding="utf-8")
-
-    _emit_output("pending", str(len(pending)))
-    _emit_output("skipped", str(len(skipped)))
+    # A JSON array, because the conditions gating each reviewing job test membership in it. A count
+    # would not tell them which reviews to run.
+    _emit_output("pending", json.dumps([item["key"] for item in pending]))
     click.echo(f"{len(pending)} aspect(s) to review, {len(skipped)} unchanged")
     for entry in skipped:
         click.echo(f"  skipping {entry['key']}: {entry['reason']}", err=True)

@@ -1,0 +1,19 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Serve uploaded files",
+      "body": "Adds an endpoint that returns a previously uploaded file by name.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "src/files.py",
+          "patch": "@@ -1,3 +1,5 @@\n+def serve(name):\n+    return open(f\"uploads/{name}\").read()"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Finds the traversal: a `name` of `../../etc/passwd` reaches open(). Cites src/files.py with a line. Says what an attacker does. Reports nothing about the missing test — that is another review's job."
+  }
+}

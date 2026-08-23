@@ -1,0 +1,19 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Show the shipping status on the orders page",
+      "body": "Adds a column.",
+      "head_sha": "a7b8c9d0",
+      "files": [
+        {
+          "path": "src/views.py",
+          "patch": "@@ -12,6 +12,9 @@ def orders_page(user):\n     orders = repo.orders_for(user)\n+    for order in orders:\n+        order.shipping = repo.shipping_for(order.id)\n     return render(orders)"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "notes": "Names the cost as a function of order count — one query per order, so a 500-order account issues 500 round trips. Orders are the unbounded collection here, which is why this is the finding this lens exists for."
+  }
+}

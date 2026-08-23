@@ -12,6 +12,7 @@ expression it cannot read is a bug in this module or a new emission it has not b
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -22,6 +23,10 @@ EXPRESSION = re.compile(r"^\$\{\{\s*(?P<body>.+?)\s*\}\}$", re.DOTALL)
 INPUT_TEST = re.compile(r"^inputs\.(?P<name>[A-Za-z0-9_]+)\s*(?P<op>==|!=)\s*true$")
 OUTPUT_TEST = re.compile(
     r"^needs\.(?P<job>[A-Za-z0-9_-]+)\.outputs\.(?P<output>[A-Za-z0-9_-]+)\s*(?P<op>==|!=)\s*'(?P<value>[^']*)'$"
+)
+MEMBERSHIP_TEST = re.compile(
+    r"^contains\(fromJSON\(needs\.(?P<job>[A-Za-z0-9_-]+)\.outputs\.(?P<output>[A-Za-z0-9_-]+)\)"
+    r",\s*'(?P<value>[^']*)'\)$"
 )
 NON_EMPTY_TEST = re.compile(
     r"^needs\.(?P<job>[A-Za-z0-9_-]+)\.outputs\.(?P<output>[A-Za-z0-9_-]+)\s*!=\s*'\[\]'$"
@@ -68,6 +73,15 @@ def evaluate(expression: str, inputs: dict[str, Any], outputs: dict[str, dict[st
     if empty_match:
         produced = outputs.get(empty_match.group("job"), {}).get(empty_match.group("output"), "")
         return produced != "[]"
+
+    member_match = MEMBERSHIP_TEST.match(body)
+    if member_match:
+        produced = outputs.get(member_match.group("job"), {}).get(member_match.group("output"), "")
+        try:
+            items = json.loads(produced or "[]")
+        except json.JSONDecodeError:
+            return False
+        return member_match.group("value") in items
 
     output_match = OUTPUT_TEST.match(body)
     if output_match:
