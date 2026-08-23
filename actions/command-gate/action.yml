@@ -33,6 +33,11 @@ outputs:
   pull_request:
     description: The pull request the comment was on, empty when it was on an issue.
     value: ${{ steps.decide.outputs.pull_request }}
+  arguments:
+    description: >-
+      The parsed arguments as JSON. They arrive as one value because their names are declared per
+      pipeline, and a composite action can only expose outputs it names statically.
+    value: ${{ steps.parse.outputs.arguments }}
 
 runs:
   using: composite

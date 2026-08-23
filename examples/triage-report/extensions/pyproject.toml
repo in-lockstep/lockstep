@@ -1,0 +1,16 @@
+[project]
+name = "triage-ext"
+version = "0.1.0"
+description = "Tracker search for the triage-report pipeline"
+requires-python = ">=3.11"
+dependencies = ["click>=8.1", "httpx>=0.27"]
+
+[project.entry-points."pipeline_exec.commands"]
+jql-search = "triage_ext.commands:jql_search"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/triage_ext"]

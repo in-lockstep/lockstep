@@ -68,8 +68,8 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       authorized: ${{ steps.gate.outputs.authorized }}
-      issue: ${{ steps.gate.outputs.issue }}
-      branch: ${{ steps.gate.outputs.branch }}
+      issue: ${{ steps.arguments.outputs.issue }}
+      branch: ${{ steps.arguments.outputs.branch }}
       instruction: ${{ steps.gate.outputs.instruction }}
       pull_request: ${{ steps.gate.outputs.pull_request }}
     steps:
@@ -82,6 +82,15 @@ jobs:
         roles: admin,maintain,write
         arguments: issue,branch
         reaction: eyes
+    - name: Expand the parsed arguments
+      id: arguments
+      run: |
+        set -euo pipefail
+        payload='${{ steps.gate.outputs.arguments }}'
+        [ -n "$payload" ] || payload="{}"
+        echo "issue=$(echo "$payload" | jq -r '.issue // empty')" >> "$GITHUB_OUTPUT"
+        echo "branch=$(echo "$payload" | jq -r '.branch // empty')" >> "$GITHUB_OUTPUT"
+      shell: bash
   fetch-issue:
     needs: command-gate
     if: ${{ needs.command-gate.outputs.authorized == 'true' }}

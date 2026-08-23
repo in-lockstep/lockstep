@@ -708,6 +708,19 @@ SKIP_TOLERANT = "!failure() && !cancelled()"
 COMMAND_GATE = "command-gate"
 
 
+def _expand_arguments(names: list[str]) -> str:
+    """Turn the gate's JSON argument blob into one step output per declared argument."""
+    lines = [
+        "set -euo pipefail",
+        "payload='${{ steps.gate.outputs.arguments }}'",
+        '[ -n "$payload" ] || payload="{}"',
+    ]
+    lines += [
+        f'echo "{name}=$(echo "$payload" | jq -r \'.{name} // empty\')" >> "$GITHUB_OUTPUT"' for name in names
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[str, Any]]) -> None:
     """Gate a comment-triggered pipeline on who asked for it.
 
@@ -727,7 +740,9 @@ def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[
         "permissions": {"contents": "read"},
         "outputs": {
             "authorized": "${{ steps.gate.outputs.authorized }}",
-            **{name: "${{ steps.gate.outputs." + name + " }}" for name in chat.arguments},
+            # Read from the expansion step, not from the action: a composite action exposes only the
+            # outputs it declares, and these names are chosen per pipeline.
+            **{name: "${{ steps.arguments.outputs." + name + " }}" for name in chat.arguments},
             "instruction": "${{ steps.gate.outputs.instruction }}",
             "pull_request": "${{ steps.gate.outputs.pull_request }}",
         },
@@ -743,6 +758,12 @@ def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[
                     "arguments": ",".join(chat.arguments),
                     "reaction": chat.reaction,
                 },
+            },
+            {
+                "name": "Expand the parsed arguments",
+                "id": "arguments",
+                "shell": "bash",
+                "run": _expand_arguments(chat.arguments),
             },
         ],
     }
@@ -795,12 +816,16 @@ def _emit_proposal(
                 "name": "Propose the generated artifacts",
                 "id": "propose",
                 "uses": ctx.pins.action("propose-pr"),
+                # Every field is expanded: a title or branch naming a parameter is the normal case,
+                # and a literal `{issue}` reaching GitHub is the kind of thing nobody notices until
+                # they are looking at a branch called `{branch}`.
                 "with": {
                     "source": ctx.expand(propose.source, command),
                     "destination": propose.destination,
-                    "branch": propose.branch,
-                    "title": propose.title,
+                    "branch": ctx.expand(propose.branch, command),
+                    "title": ctx.expand(propose.title, command),
                     "labels": propose.labels,
+                    **({"base": ctx.expand(propose.base, command)} if propose.base else {}),
                 },
             },
         ],

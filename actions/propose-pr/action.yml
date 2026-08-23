@@ -28,6 +28,13 @@ inputs:
     description: Comma-separated labels.
     required: false
     default: "pipeline,generated"
+  base:
+    description: >-
+      Branch the pull request targets. Defaults to the branch the workflow ran on. Set it to publish
+      somewhere else — a documentation or GitHub Pages branch, for instance, whose contents have
+      nothing to do with the branch that generated them.
+    required: false
+    default: ""
 
 outputs:
   pull-request:
@@ -66,8 +73,26 @@ runs:
           exit 0
         fi
 
+        base='${{ inputs.base }}'
+        [ -n "$base" ] || base="${GITHUB_REF_NAME}"
         branch="${{ inputs.branch }}-${GITHUB_RUN_ID}"
-        git checkout -q -b "$branch"
+
+        if [ "$base" != "${GITHUB_REF_NAME}" ]; then
+          # Publishing onto a different branch: the work must sit on top of *that* branch, or the
+          # pull request would carry every difference between the two.
+          git stash push -q -- "$destination" 2>/dev/null || true
+          git fetch -q origin "$base" 2>/dev/null || true
+          if git rev-parse --verify -q "origin/$base" >/dev/null; then
+            git checkout -q -B "$branch" "origin/$base"
+          else
+            git checkout -q --orphan "$branch"
+            git rm -rq --cached . 2>/dev/null || true
+          fi
+          git stash pop -q 2>/dev/null || true
+          git add -A "$destination"
+        else
+          git checkout -q -b "$branch"
+        fi
         git commit -q -m "${{ inputs.title }}"
         git push -q origin "$branch"
 
@@ -77,7 +102,7 @@ runs:
 
         Review these before merging. Once merged they run deterministically and cost nothing." \
           --label "${{ inputs.labels }}" \
-          --base "${GITHUB_REF_NAME}" \
+          --base "$base" \
           --head "$branch")
 
         echo "pull-request=$url" >> "$GITHUB_OUTPUT"

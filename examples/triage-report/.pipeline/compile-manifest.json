@@ -1,0 +1,59 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "9df09c50",
+      "sources": []
+    },
+    ".github/workflows/aw-triage-reporter.md": {
+      "sha": "7446dbde",
+      "sources": [
+        "agents/triage-reporter.md@de2d471d",
+        "guardrails/common.md@59113d34",
+        "guardrails/reporting.md@c040446b",
+        "skills/report-writing.md@eb4376ff",
+        "contexts/tracker.md@7230670f"
+      ]
+    },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "3457dc29",
+      "sources": []
+    },
+    ".github/workflows/shared/context-tracker.md": {
+      "sha": "135abd49",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "a4bc5808",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-reporting.md": {
+      "sha": "10b642fd",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-report-writing.md": {
+      "sha": "3dbb92ae",
+      "sources": []
+    },
+    ".github/workflows/triage.yml": {
+      "sha": "00381454",
+      "sources": [
+        "commands/triage.md@7ed89d33"
+      ]
+    },
+    ".pipeline/step-defs/triage.search.json": {
+      "sha": "41dea2eb",
+      "sources": []
+    },
+    ".pipeline/step-defs/triage.summarize.json": {
+      "sha": "9d998563",
+      "sources": []
+    },
+    "SECRETS.md": {
+      "sha": "b1fc6326",
+      "sources": []
+    }
+  },
+  "pipeline": "triage-report",
+  "spec": 1
+}

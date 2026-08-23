@@ -121,6 +121,9 @@ class Propose:
     branch: str = "pipeline/generated"
     title: str = "Generated pipeline artifacts"
     labels: str = "pipeline,generated"
+    # Where the pull request lands. Defaults to the branch the run happened on; set it to publish
+    # onto a branch whose contents are unrelated to the one that generated them.
+    base: str = ""
 
 
 @dataclass

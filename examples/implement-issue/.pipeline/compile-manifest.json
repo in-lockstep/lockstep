@@ -47,7 +47,7 @@
       ]
     },
     ".github/workflows/implement.yml": {
-      "sha": "776bc0c5",
+      "sha": "e0e05c78",
       "sources": [
         "commands/implement.md@aa792623"
       ]

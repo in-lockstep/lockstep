@@ -262,6 +262,7 @@ def parse_command(src: SourceFile) -> Command:
             branch=str(propose_raw.get("branch", "pipeline/generated") or "pipeline/generated"),
             title=str(propose_raw.get("title", "Generated pipeline artifacts") or ""),
             labels=str(propose_raw.get("labels", "pipeline,generated") or ""),
+            base=str(propose_raw.get("base", "") or ""),
         )
 
     state = str(meta.get("state", "")).lower()

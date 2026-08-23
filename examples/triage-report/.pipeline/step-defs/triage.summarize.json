@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--input={output_dir}/issues.json --output={output_dir}/summary.json"
+  },
+  "command": "triage",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "summarize",
+  "input": "",
+  "kind": "script",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "scripts/summarize.py"
+}

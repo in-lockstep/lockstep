@@ -21,6 +21,14 @@ from lockstep.emit import compile_spec
 from lockstep.emit.builtins import AVAILABLE, INTERNAL, MATRIX_CAP
 
 FIXTURE = Path(__file__).parent / "fixtures" / "basic"
+# Every pipeline in the repository, not just the fixture. A referenced action that does not exist is
+# invisible if only one pipeline is checked and that pipeline happens not to reference it.
+EXAMPLES = sorted(
+    path
+    for path in (Path(__file__).parent.parent / "examples").iterdir()
+    if (path / "pipeline.yaml").is_file()
+)
+ALL_PIPELINES = [FIXTURE, *EXAMPLES]
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
 REDIRECTION = re.compile(r"\s*>>?\s*\"?\$GITHUB_OUTPUT\"?\s*$")
 
@@ -166,7 +174,8 @@ def _walk_actions(node, used: dict, outputs_read: set) -> None:
 def referenced_actions() -> list[tuple[str, dict, list[str]]]:
     """Every capability action the compiler emits, with the inputs and outputs it relies on."""
     used: dict[str, tuple[set, set]] = {}
-    for path, text in compile_spec(FIXTURE).files.items():
+    files = {path: text for root in ALL_PIPELINES for path, text in compile_spec(root).files.items()}
+    for path, text in files.items():
         if path.endswith(".yml"):
             blob = text
         elif "/aw-" in path:
@@ -178,6 +187,11 @@ def referenced_actions() -> list[tuple[str, dict, list[str]]]:
 
         _walk_actions(yaml.safe_load(blob) or {}, used, outputs_read)
     return [(name, {"with": sorted(w)}, sorted(o)) for name, (w, o) in sorted(used.items())]
+
+
+def test_every_pipeline_in_the_repository_is_checked():
+    """The guard against this file quietly checking one pipeline while others drift."""
+    assert len(ALL_PIPELINES) >= 4
 
 
 def action_definition(name: str) -> dict:

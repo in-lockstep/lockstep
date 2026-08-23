@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--jql=\"{jql}\" --limit={limit} --output={output_dir}/issues.json"
+  },
+  "command": "triage",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "search",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "jql-search"
+}

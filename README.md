@@ -57,6 +57,10 @@ bugs from an issue tracker and opens pull requests.
 issue into a pull request, and lets reviewers revise the plan or the code with ordinary PR comments
 plus a slash command.
 
+**[Publishing a report to GitHub Pages](docs/publishing-reports.md)** builds a triage-report
+pipeline, and uses it to look closely at how context, guardrails and skills shape what an agent
+produces.
+
 ## Commands
 
 ```bash
