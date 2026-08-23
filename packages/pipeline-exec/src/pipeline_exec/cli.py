@@ -19,6 +19,7 @@ from . import __version__
 from .errors import CoverageShortfall, ExecError
 from .hygiene import DEFAULT_MAX_FIELD, sanitize
 from .items import MATRIX_CAP, Item, as_matrix, as_shards, covered, enforce_cap, load_items, shard_of
+from .plugins import register
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -54,6 +55,24 @@ def _summary(text: str) -> None:
 @click.version_option(__version__, prog_name="pipeline-exec")
 def main() -> None:
     """Deterministic executors for compiled pipeline workflows."""
+
+
+@main.command(name="list-commands")
+@click.option("--extensions-only", is_flag=True, help="List only commands contributed by extensions.")
+def list_commands(extensions_only: bool) -> None:
+    """List the commands available here, including any an extension contributes.
+
+    `lockstep doctor` cannot verify an extension it does not have installed, so this is how a
+    pipeline repository proves in CI that the builtins its spec names actually exist.
+    """
+    from .plugins import discover
+
+    extensions = set(discover())
+    for name in sorted(main.commands):
+        if extensions_only and name not in extensions:
+            continue
+        origin = "extension" if name in extensions else "built-in"
+        click.echo(f"{name}\t{origin}")
 
 
 @main.command()
@@ -530,3 +549,7 @@ def cache_key(prefix: str, inputs_text: str, extra: str, name: str) -> None:
             digest.update(b"\x00missing")
     digest.update(extra.encode("utf-8"))
     _emit_output(name, f"{prefix}-{digest.hexdigest()[:16]}")
+
+
+# Extensions load last, so a built-in command can never be shadowed by one.
+_registered = register(main)

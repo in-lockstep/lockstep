@@ -184,3 +184,29 @@ def test_the_example_pipeline_lints_and_doctors_clean():
     example = Path(__file__).parent.parent / "examples" / "httpbin"
     assert lint(load_spec(example)).findings == []
     assert doctor(load_spec(example), example).ok
+
+
+# --- extensions ------------------------------------------------------------
+
+
+def declare_extension(root, *, package=True):
+    manifest = root / "pipeline.yaml"
+    block = "\nextensions:\n  builtins: [jira-fetch]\n"
+    if package:
+        block += "  packages: [my-pipeline-extensions==1.0.0]\n"
+    manifest.write_text(manifest.read_text() + block)
+
+
+def test_an_extension_builtin_without_a_package_is_an_error(basic_root):
+    """Nothing would install it, and the workflow would fail with `No such command`."""
+    declare_extension(basic_root, package=False)
+    assert "DOC013" in codes(doctor_of(basic_root))
+
+
+def test_a_declared_extension_is_flagged_as_unverifiable(basic_root):
+    declare_extension(basic_root)
+    report = doctor_of(basic_root)
+    assert "DOC013" not in codes(report)
+    finding = next(f for f in report.findings if f.code == "DOC014")
+    assert finding.severity is Severity.WARNING
+    assert "list-commands" in finding.hint

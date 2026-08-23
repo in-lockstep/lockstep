@@ -1,0 +1,21 @@
+{
+  "capabilities": {
+    "actions": {
+      "repo": "pipeline-fw/pipeline-actions",
+      "tag": "v1.0.0",
+      "sha": "0000000000000000000000000000000000000000"
+    },
+    "exec": {
+      "package": "pipeline-exec",
+      "version": "0.1.0",
+      "image": "ghcr.io/pipeline-fw/exec",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "external": {
+    "actions/checkout": {
+      "tag": "v4",
+      "sha": "11d5960a326750d5838078e36cf38b85af677262"
+    }
+  }
+}

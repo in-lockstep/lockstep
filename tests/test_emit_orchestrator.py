@@ -183,3 +183,28 @@ def test_load_spec_is_pure_of_environment(basic_spec_dir, monkeypatch):
     monkeypatch.setenv("APP_URL", "http://should-not-be-read")
     spec = load_spec(basic_spec_dir)
     assert spec.profiles["my-app"].values["url"] == "${APP_URL}"
+
+
+# --- extension builtins ----------------------------------------------------
+
+
+def test_an_undeclared_extension_builtin_is_refused(basic_root):
+    command = basic_root / "commands" / "repair.md"
+    command.write_text(command.read_text().replace("builtin: collect-failures", "builtin: jira-fetch"))
+    with pytest.raises(EmitError) as excinfo:
+        compile_spec(basic_root)
+    assert "extensions.builtins" in excinfo.value.render()
+
+
+def test_a_declared_extension_builtin_compiles(basic_root):
+    """The compiler cannot install an extension, so declaring it is how the spec vouches for it."""
+    manifest = basic_root / "pipeline.yaml"
+    manifest.write_text(
+        manifest.read_text() + "\nextensions:\n  builtins: [jira-fetch]\n  packages: [ext==1.0]\n"
+    )
+    command = basic_root / "commands" / "repair.md"
+    command.write_text(command.read_text().replace("builtin: collect-failures", "builtin: jira-fetch"))
+
+    jobs = jobs_of(basic_root, "repair.yml")
+    runs = " ".join(step.get("run", "") for job in jobs.values() for step in job.get("steps", []) or [])
+    assert "pipeline-exec jira-fetch" in runs

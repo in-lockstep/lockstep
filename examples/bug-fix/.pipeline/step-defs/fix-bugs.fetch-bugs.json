@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--jql=\"{jql}\" --limit={limit} --output={output_dir}/bugs.json"
+  },
+  "command": "fix-bugs",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "fetch-bugs",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "jira-fetch"
+}

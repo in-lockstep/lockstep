@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--repo={output_dir}/target --suite=pytest --expect=fail --output={output_dir}/reproduced.json"
+  },
+  "command": "fix-bugs",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "prove-reproducers",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "run-suite"
+}

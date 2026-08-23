@@ -243,7 +243,7 @@ Then:
 
 ```bash
 $ uv run lockstep compile --root examples/httpbin
-validate-api: 5 steps -> 5 jobs · 1 agentic, 4 deterministic, 1 cacheable
+validate-api: 5 steps -> 6 jobs · 1 agentic, 4 deterministic, 1 cacheable
   + .github/workflows/validate-api.yml
   + .github/workflows/aw-test-writer.md
   + .github/workflows/pipeline-ci.yml

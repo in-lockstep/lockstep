@@ -49,6 +49,10 @@ They share a repository because the compiler emits `pipeline-exec` invocations a
 `tests/test_contract.py` parses every emitted invocation against the real CLI, so a renamed flag
 fails a build rather than a scheduled run.
 
+**[Extending the framework](docs/extending.md)** covers the two extension points — third-party
+builtins in `pipeline-exec`, and your own composite actions — worked through a pipeline that fixes
+bugs from an issue tracker and opens pull requests.
+
 ## Commands
 
 ```bash

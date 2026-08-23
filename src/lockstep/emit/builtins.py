@@ -18,6 +18,9 @@ AVAILABLE = frozenset(
         "check-convergence",
         "validate-schema",
         "wait-for",
+        # Introspection: how a pipeline repository proves in CI that the builtins its spec names
+        # actually exist, extensions included.
+        "list-commands",
     }
 )
 

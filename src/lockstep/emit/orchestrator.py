@@ -155,7 +155,7 @@ def emit_command(
         )
 
     _validate_conditions(command, steps)
-    _validate_builtins(command, steps)
+    _validate_builtins(command, steps, spec)
 
     # A step that publishes a report needs a write token. Fusing it with test execution would hand
     # that token to whatever the tests do, so it gets its own job.
@@ -229,10 +229,12 @@ def emit_command(
             previous_id, previous_job = verify_id, verify_job
 
     result.step_count = len(steps)
-    result.job_count = len(jobs)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
     result.deterministic_steps = sum(1 for s in steps if s.kind in (StepKind.SCRIPT, StepKind.BUILTIN))
     _emit_proposal(command, ctx, jobs, previous_id)
+    # Counted here, not before: the proposal job is a job, and a summary that undercounts is a
+    # summary nobody can check against the file.
+    result.job_count = len(jobs)
     _guard_against_skipped_dependencies(jobs)
     _expose_convergence(command, jobs, step_to_job, result)
 
@@ -247,13 +249,19 @@ def emit_command(
     return result
 
 
-def _validate_builtins(command: Command, steps: list[Step]) -> None:
+def _validate_builtins(command: Command, steps: list[Step], spec: Spec) -> None:
+    declared = spec.manifest.extensions.builtins
+    known = AVAILABLE | set(declared)
     for step in steps:
-        if step.kind is StepKind.BUILTIN and step.target not in AVAILABLE:
+        if step.kind is StepKind.BUILTIN and step.target not in known:
             raise EmitError(
                 f"builtin {step.target!r} is not provided by pipeline-exec",
                 location=f"{command.src.rel if command.src else command.name} step {step.number}",
-                hint=f"available: {', '.join(sorted(AVAILABLE))}",
+                hint=(
+                    f"available: {', '.join(sorted(AVAILABLE))}. "
+                    "If an extension provides it, list it under `extensions.builtins` in "
+                    "pipeline.yaml — the compiler cannot discover a command it does not install"
+                ),
             )
 
 

@@ -12,6 +12,7 @@ from ..errors import MissingDefinition, SpecError
 from ..util.hashing import sha_file, short
 from .model import (
     Capabilities,
+    Extensions,
     Manifest,
     SourceFile,
     Spec,
@@ -53,6 +54,7 @@ def load_manifest(root: Path) -> Manifest:
     caps_raw = data.get("capabilities", {}) or {}
     target_raw = (data.get("targets", {}) or {}).get("github-agentic", {}) or {}
     budgets = data.get("budgets", {}) or {}
+    extensions_raw = data.get("extensions", {}) or {}
 
     manifest = Manifest(
         spec_version=int(data.get("spec", 1) or 1),
@@ -72,6 +74,10 @@ def load_manifest(root: Path) -> Manifest:
         ),
         per_run_ai_credits=budgets.get("per_run_ai_credits"),
         commands=data.get("commands", {}) or {},
+        extensions=Extensions(
+            builtins=[str(name) for name in (extensions_raw.get("builtins") or [])],
+            packages=[str(name) for name in (extensions_raw.get("packages") or [])],
+        ),
         src=SourceFile(
             path=path,
             rel=MANIFEST_NAME,

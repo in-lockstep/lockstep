@@ -1,0 +1,10 @@
+{
+  "input": {
+    "key": "APP-412",
+    "summary": "Order total is wrong when an item has no price",
+    "description": "Totalling an order that contains an item with a null price raises a TypeError instead of skipping it."
+  },
+  "expect": {
+    "notes": "Must cite a file and line; must not propose a change to tests or CI configuration."
+  }
+}

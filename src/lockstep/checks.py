@@ -167,6 +167,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     _check_secrets(spec, report)
     _check_mcp_allowlists(spec, report)
     _check_timeouts(spec, report)
+    _check_extensions(spec, report)
     return report
 
 
@@ -284,6 +285,27 @@ def _check_mcp_allowlists(spec: Spec, report: Report) -> None:
                 hint="list its tools; the compiler turns that list into the gateway allow-list, and "
                 "an empty list means the agent gets whatever the server offers",
             )
+
+
+def _check_extensions(spec: Spec, report: Report) -> None:
+    """An extension builtin is taken on trust; say so, and say how to verify it."""
+    extensions = spec.manifest.extensions
+    if extensions.builtins and not extensions.packages:
+        report.add(
+            Severity.ERROR,
+            "DOC013",
+            f"{len(extensions.builtins)} extension builtin(s) declared but no package provides them",
+            hint="list the distributions under `extensions.packages` so a generated repository "
+            "installs them; otherwise the workflow will fail with `No such command`",
+        )
+    if extensions.builtins:
+        report.add(
+            Severity.WARNING,
+            "DOC014",
+            f"extension builtins are not verifiable here: {', '.join(sorted(extensions.builtins))}",
+            hint="run `pipeline-exec list-commands` in CI with the extension installed to prove "
+            "they exist before a scheduled run finds out they do not",
+        )
 
 
 def _check_timeouts(spec: Spec, report: Report) -> None:

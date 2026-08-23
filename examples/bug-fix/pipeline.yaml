@@ -1,0 +1,25 @@
+spec: 1
+name: bug-fix
+
+capabilities:
+  actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
+  exec: pipeline-exec==0.1.0
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+# What this pipeline adds to the framework. The compiler cannot import pipeline-exec, so it cannot
+# discover a third-party command by itself — declaring the names here is what lets a `builtin:` step
+# reference one. `packages` is what a generated repository installs to get them.
+extensions:
+  builtins: [jira-fetch, apply-patch, run-suite]
+  packages: ["bugfix-ext @ file://./extensions"]
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    fuse-script-steps: true
+    default-runs-on: ubuntu-24.04
+    profiles: [production]
+
+budgets:
+  per_run_ai_credits: 900

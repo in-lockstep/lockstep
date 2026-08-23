@@ -260,6 +260,19 @@ class TargetConfig:
 
 
 @dataclass
+class Extensions:
+    """What this pipeline adds to the framework.
+
+    The compiler cannot import `pipeline-exec` — a generated repo installs the runtime, never the
+    compiler — so it cannot discover a third-party command by itself. Declaring the names here is
+    what lets a `builtin:` step reference one without the compiler having to guess.
+    """
+
+    builtins: list[str] = field(default_factory=list)
+    packages: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Manifest:
     """pipeline.yaml — capability pins and target config."""
 
@@ -269,6 +282,7 @@ class Manifest:
     target: TargetConfig = field(default_factory=TargetConfig)
     per_run_ai_credits: int | None = None
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
+    extensions: Extensions = field(default_factory=Extensions)
     src: SourceFile | None = None
 
 
