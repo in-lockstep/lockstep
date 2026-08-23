@@ -31,7 +31,7 @@ def by_name(steps, name):
 
 def context_for(root) -> EmitContext:
     spec = load_spec(root)
-    return EmitContext(spec=spec, pins=Pins.load(root, spec), profile=spec.profiles["my-app"])
+    return EmitContext(spec=spec, pins=Pins.load(spec), profile=spec.profiles["my-app"])
 
 
 def test_a_step_declaring_an_output_is_wrapped_in_a_cache_probe(basic_spec_dir):

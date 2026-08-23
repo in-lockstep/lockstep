@@ -16,7 +16,7 @@ from .overlay import load_overlays
 
 def render(root: Path) -> str:
     spec: Spec = load_spec(root)
-    pins = Pins.load(root, spec)
+    pins = Pins.load(spec)
     overlays = load_overlays(root)
     manifest = spec.manifest
 

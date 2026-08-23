@@ -137,6 +137,10 @@ class ChatCommand:
     name: str = ""
     events: list[str] = field(default_factory=lambda: ["issue_comment"])
     roles: list[str] = field(default_factory=lambda: ["admin", "maintain", "write"])
+    # The commenter's relationship to the repository, checked alongside their permission. On a
+    # public repository the permission API is not a reliable trust signal — everybody can read a
+    # public repository — whereas the association distinguishes a maintainer from a passer-by.
+    associations: list[str] = field(default_factory=lambda: ["OWNER", "MEMBER", "COLLABORATOR"])
     arguments: list[str] = field(default_factory=list)
     reaction: str = "eyes"
 
@@ -309,12 +313,20 @@ class Manifest:
     src: SourceFile | None = None
 
 
+# A pipeline added to an existing repository keeps its definitions here rather than adding eight
+# top-level directories beside somebody's source. Discovered, not configured: the directory either
+# exists or it does not.
+LOCKSTEP_DIR = ".lockstep"
+
+
 @dataclass
 class Spec:
     """Everything the compiler reads, resolved and validated."""
 
     root: Path
     manifest: Manifest
+    # True when the definitions live in `.lockstep/` rather than at the repository root.
+    in_lockstep_dir: bool = False
     commands: dict[str, Command] = field(default_factory=dict)
     agents: dict[str, Agent] = field(default_factory=dict)
     guardrails: dict[str, Fragment] = field(default_factory=dict)
@@ -322,6 +334,21 @@ class Spec:
     contexts: dict[str, Fragment] = field(default_factory=dict)
     profiles: dict[str, Profile] = field(default_factory=dict)
     mcp_servers: dict[str, McpServer] = field(default_factory=dict)
+
+    @property
+    def home(self) -> Path:
+        """Where the definitions live: `.lockstep/` when it exists, the repository root otherwise."""
+        return self.root / LOCKSTEP_DIR if self.in_lockstep_dir else self.root
+
+    def repo_path(self, relative: str) -> str:
+        """A definition-relative path, expressed from the repository root.
+
+        Generated workflows run at the repository root, so every path they carry — a script to run, a
+        file to hash for a cache key — has to be written from there rather than from `.lockstep/`.
+        """
+        if not self.in_lockstep_dir or not relative:
+            return relative
+        return f"{LOCKSTEP_DIR}/{relative}"
 
     def compiled_profiles(self) -> list[Profile]:
         """Profiles to compile a workflow set for, in declared order."""

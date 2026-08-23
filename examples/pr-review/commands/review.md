@@ -20,7 +20,10 @@ github:
   command:
     name: "/review"
     events: [issue_comment, pull_request_review_comment]
-    roles: [admin, maintain, write, read]
+    roles: [admin, maintain, write]
+    # Who counts as part of this project. On a public repository the permission check alone is not
+    # enough — add CONTRIBUTOR here to let outside contributors review their own pull requests.
+    associations: [OWNER, MEMBER, COLLABORATOR]
 ---
 
 ## Steps

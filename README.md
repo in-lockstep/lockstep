@@ -64,6 +64,9 @@ produces.
 **[Reviewing pull requests on request](docs/reviewing-pull-requests.md)** builds a `/review security
 intent` bot — one review per aspect, revised in place, and silent when nothing has changed.
 
+**[Adding a pipeline to a repository you already have](docs/adopting.md)** covers adoption into an
+existing project with its own CI, and the security model for pull requests from forks.
+
 ## Commands
 
 ```bash

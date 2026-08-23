@@ -137,8 +137,9 @@ def test_only_the_posting_job_may_write(workflow):
     assert writers["post"] == {"contents": "read", "pull-requests": "write"}
 
 
-def test_readers_may_ask_for_a_review():
-    """Asking a bot to look at a pull request is not a privileged action."""
+def test_an_outside_contributor_cannot_spend_the_projects_budget_by_default():
+    """`read` permission on a public repository means "anyone", so it is not the trust signal."""
     command = load_spec(EXAMPLE).commands["review"].github.command
-    assert "read" in command.roles
     assert command.name == "/review"
+    assert "read" not in command.roles
+    assert command.associations == ["OWNER", "MEMBER", "COLLABORATOR"]

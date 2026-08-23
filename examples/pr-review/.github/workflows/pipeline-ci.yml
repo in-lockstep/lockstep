@@ -79,4 +79,4 @@ jobs:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: astral-sh/setup-uv@v6
     - name: Run the scripts' own tests
-      run: if [ -d tests ]; then uv run pytest tests -q; else echo "no tests/ directory"; fi
+      run: if [ -d tests ]; then uv run pytest tests -q; else echo "no tests directory"; fi

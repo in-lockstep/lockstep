@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from .. import __version__
@@ -33,7 +32,7 @@ class Pins:
     resolved: bool = False
 
     @classmethod
-    def load(cls, root: Path, spec: Spec) -> Pins:
+    def load(cls, spec: Spec) -> Pins:
         caps = spec.manifest.capabilities
         actions_repo, _, actions_tag = caps.actions.partition("@")
         actions_repo = actions_repo.removeprefix("github.com/") or DEFAULT_ACTIONS_REPO
@@ -47,7 +46,7 @@ class Pins:
             gh_aw_version=caps.gh_aw,
         )
 
-        path = root / PINS_PATH
+        path = spec.home / PINS_PATH
         if not path.is_file():
             return pins
 
@@ -182,6 +181,9 @@ class EmitContext:
                 text = text.replace("{positional}", "${{ needs.command-gate.outputs.positional }}")
         for key, value in self.resolved_values().items():
             text = text.replace("{" + key + "}", value)
+        # Where this pipeline's own files live, from the repository root. A step reading one of
+        # them — an aspects directory, a template — needs the path the workflow will actually use.
+        text = text.replace("{lockstep}", self.spec.repo_path(".").rstrip("/.") or ".")
         text = text.replace("{output_dir}", self.output_dir_env)
         text = text.replace("{state_db}", self.state_db_path)
         return text.replace("{pipeline_name}", self.spec.manifest.name)

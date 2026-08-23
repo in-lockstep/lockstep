@@ -542,7 +542,9 @@ def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
     """
     args = ctx.expand(step.args.get("args", ""), command)
     invocation = (
-        f"{runner_for(step.target)} {step.target}"
+        # The workflow runs at the repository root, so a script is named from there even though the
+        # spec names it relative to itself.
+        f"{runner_for(step.target)} {ctx.spec.repo_path(step.target)}"
         if step.kind is StepKind.SCRIPT
         else f"pipeline-exec {step.target}"
     )
@@ -756,6 +758,7 @@ def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[
                 "with": {
                     "command": chat.name,
                     "roles": ",".join(chat.roles),
+                    "associations": ",".join(chat.associations),
                     "arguments": ",".join(chat.arguments),
                     "reaction": chat.reaction,
                 },

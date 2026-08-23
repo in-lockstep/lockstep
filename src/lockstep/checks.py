@@ -93,7 +93,7 @@ def lint(spec: Spec) -> Report:
 
 def _check_agents_have_evals(spec: Spec, report: Report) -> None:
     for name, agent in sorted(spec.agents.items()):
-        cases = spec.root / "evals" / name / "cases"
+        cases = spec.home / "evals" / name / "cases"
         if not cases.is_dir() or not any(cases.glob("*.json")):
             report.add(
                 Severity.ERROR,
@@ -106,7 +106,7 @@ def _check_agents_have_evals(spec: Spec, report: Report) -> None:
 
 
 def _check_scripts_have_tests(spec: Spec, report: Report) -> None:
-    tests_dir = spec.root / "tests"
+    tests_dir = spec.home / "tests"
     tested = {p.name for p in tests_dir.rglob("test_*.py")} if tests_dir.is_dir() else set()
     seen: set[str] = set()
     for command in spec.commands.values():
@@ -160,7 +160,7 @@ def _check_foreach_context(spec: Spec, report: Report) -> None:
 
 def doctor(spec: Spec, root: Path) -> Report:
     report = Report()
-    pins = Pins.load(root, spec)
+    pins = Pins.load(spec)
     _check_pins(pins, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)

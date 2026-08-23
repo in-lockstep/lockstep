@@ -16,13 +16,13 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "60163440",
+      "sha": "37b2b3a4",
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "79393297",
+      "sha": "71591b91",
       "sources": [
-        "commands/review.md@fb9ab806"
+        "commands/review.md@6b89ba7e"
       ]
     },
     ".github/workflows/shared/context-repo.md": {

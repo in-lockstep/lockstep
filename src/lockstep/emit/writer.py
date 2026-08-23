@@ -32,9 +32,16 @@ class CheckReport:
         return not (self.missing or self.modified or self.orphaned)
 
 
+def _manifest_path(root: Path) -> Path:
+    """The compile manifest, wherever this repository keeps its pipeline."""
+    from ..spec.load import find_home
+
+    return find_home(root)[0] / MANIFEST_PATH
+
+
 def previously_generated(root: Path) -> set[str]:
     """Files the last compile owned — the compiler prunes what it no longer generates."""
-    path = root / MANIFEST_PATH
+    path = _manifest_path(root)
     if not path.is_file():
         return set()
     try:

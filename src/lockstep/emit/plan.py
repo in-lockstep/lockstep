@@ -56,7 +56,7 @@ class CompilePlan:
 
 def compile_spec(root: Path) -> CompilePlan:
     spec = load_spec(root)
-    pins = Pins.load(root, spec)
+    pins = Pins.load(spec)
     overlays = load_overlays(root)
     plan = CompilePlan(root=root)
 
@@ -107,7 +107,7 @@ def compile_spec(root: Path) -> CompilePlan:
             workflows[filename] = result
             plan.notes.extend(result.notes)
             for path, content in result.step_defs.items():
-                plan.add(path, content)
+                plan.add(spec.repo_path(path), content)
             fused = result.step_count - result.job_count
             plan.summaries.append(
                 f"{name}: {_plural(result.step_count, 'step')} -> {_plural(result.job_count, 'job')}"
@@ -161,8 +161,8 @@ def compile_spec(root: Path) -> CompilePlan:
         ),
     )
     plan.add(f"{spec.manifest.target.out}/.gitattributes", _gitattributes())
-    plan.add(SECRETS_DOC, _secrets_doc(spec, profiles))
-    plan.add(MANIFEST_PATH, _compile_manifest(plan, spec))
+    plan.add(spec.repo_path(SECRETS_DOC), _secrets_doc(spec, profiles))
+    plan.add(spec.repo_path(MANIFEST_PATH), _compile_manifest(plan, spec))
 
     plan.stats = {
         "workflows": sum(1 for p in plan.files if p.endswith(".yml")),

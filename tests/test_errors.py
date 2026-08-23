@@ -9,14 +9,16 @@ from lockstep.emit.context import Pins
 from lockstep.emit.mcp import emit_server
 from lockstep.emit.profiles import env_block, named_secrets, prefix_for
 from lockstep.errors import EmitError, MissingDefinition, SpecError
-from lockstep.spec.load import load_manifest, load_spec
+from lockstep.spec.load import load_spec
 from lockstep.spec.model import Enforce, McpServer, Profile, ProfileGithub
 
 
-def test_missing_manifest_names_the_fix(tmp_path):
+def test_missing_manifest_names_both_places_it_looked(tmp_path):
     with pytest.raises(MissingDefinition) as excinfo:
-        load_manifest(tmp_path)
-    assert "pipeline.yaml" in excinfo.value.render()
+        load_spec(tmp_path)
+    rendered = excinfo.value.render()
+    assert "pipeline.yaml" in rendered
+    assert ".lockstep" in rendered
 
 
 def test_unsupported_spec_version_is_refused(basic_root):
@@ -159,8 +161,8 @@ def test_named_secrets_reports_only_what_is_consumed():
     assert named_secrets(profile, env_block(profile)) == ["USED"]
 
 
-def test_pins_without_a_lockfile_carry_manifest_tags(basic_spec_dir):
-    spec = load_spec(basic_spec_dir)
-    pins = Pins.load(basic_spec_dir.parent / "does-not-exist", spec)
+def test_pins_without_a_lockfile_carry_manifest_tags(basic_root):
+    (basic_root / ".pipeline" / "pins.lock").unlink()
+    pins = Pins.load(load_spec(basic_root))
     assert pins.actions_tag == "v1.6.2"
     assert pins.resolved is False

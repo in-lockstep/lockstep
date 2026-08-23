@@ -120,9 +120,9 @@ def cache_spec_for(
     if not outputs:
         return None
 
-    key_inputs = [step_def_path(command, step)]
+    key_inputs = [ctx.spec.repo_path(step_def_path(command, step))]
     if step.kind is StepKind.SCRIPT:
-        key_inputs.append(step.target)
+        key_inputs.append(ctx.spec.repo_path(step.target))
 
     # Invalidation cascades: if this step reads an earlier step's output, that output joins the key.
     expanded_args = ctx.expand(step.args.get("args", ""), command)

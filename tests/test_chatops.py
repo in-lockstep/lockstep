@@ -80,6 +80,28 @@ def test_the_gate_is_told_which_roles_may_invoke(workflow):
     assert step["with"]["roles"] == "admin,maintain,write"
 
 
+def test_the_gate_checks_relationship_as_well_as_permission(workflow):
+    """On a public repository the permission API is not a trust signal: everyone can read one."""
+    step = next(s for s in workflow["jobs"][GATE]["steps"] if s.get("id") == "gate")
+    assert step["with"]["associations"] == "OWNER,MEMBER,COLLABORATOR"
+
+
+def test_both_signals_must_pass():
+    action = (Path(__file__).parent.parent / "actions" / "command-gate" / "action.yml").read_text()
+    assert "author_association" in action
+    assert '[ "$by_permission" = "true" ] && [ "$by_association" = "true" ] && allowed=true' in action
+
+
+def test_an_outside_contributor_is_denied_by_default():
+    """A passer-by on a public repository must not be able to spend the project's AI budget."""
+    from lockstep.spec.model import ChatCommand
+
+    default = ChatCommand(name="/x")
+    assert "CONTRIBUTOR" not in default.associations
+    assert "NONE" not in default.associations
+    assert default.roles == ["admin", "maintain", "write"]
+
+
 def test_every_job_checks_authorization_explicitly(workflow):
     """Skip propagation is not enough: the tolerant condition that lets conditional steps work would
     otherwise let an unauthorized comment run everything downstream of a skipped gate."""

@@ -57,8 +57,14 @@ def resolve_tag(repo: str, tag: str) -> str:
     return result.stdout.split()[0]
 
 
+def _pins_path(root: Path) -> Path:
+    from .spec.load import find_home
+
+    return find_home(root)[0] / PINS_PATH
+
+
 def load_pins(root: Path) -> dict[str, Any]:
-    path = root / PINS_PATH
+    path = _pins_path(root)
     if path.is_file():
         loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
         return loaded
@@ -66,7 +72,7 @@ def load_pins(root: Path) -> dict[str, Any]:
 
 
 def write_pins(root: Path, data: dict[str, Any]) -> Path:
-    path = root / PINS_PATH
+    path = _pins_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path

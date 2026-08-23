@@ -32,6 +32,7 @@ SPEC_PATHS = [
 def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
     compiler = spec.manifest.capabilities.compiler or "lockstep"
     checkout = ctx.pins.external_action("actions/checkout")
+    tests = spec.repo_path("tests")
 
     def setup(extra: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         return [
@@ -88,9 +89,12 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
                 {"uses": "astral-sh/setup-uv@v6"},
                 {
                     "name": "Run the scripts' own tests",
-                    # Script steps run on every execution, so a regression here is silent.
+                    # Script steps run on every execution, so a regression here is silent. These are
+                    # the *pipeline's* tests: in a repository that already had its own, they live
+                    # beside the pipeline and are run separately from whatever CI it already had.
                     "run": (
-                        'if [ -d tests ]; then uv run pytest tests -q; else echo "no tests/ directory"; fi'
+                        f"if [ -d {tests} ]; then uv run pytest {tests} -q; "
+                        f'else echo "no {tests} directory"; fi'
                     ),
                 },
             ],
@@ -100,7 +104,7 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
     return {
         "name": "pipeline-ci",
         "on": {
-            "pull_request": {"paths": SPEC_PATHS + [f"{ctx.out_dir}/**"]},
+            "pull_request": {"paths": [spec.repo_path(path) for path in SPEC_PATHS] + [f"{ctx.out_dir}/**"]},
             "push": {"branches": ["main"]},
             "workflow_dispatch": {},
         },

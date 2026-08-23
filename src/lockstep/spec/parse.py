@@ -250,6 +250,10 @@ def parse_command(src: SourceFile) -> Command:
             name=str(command_raw.get("name", "") or ""),
             events=[str(e) for e in (command_raw.get("events") or ["issue_comment"])],
             roles=[str(r) for r in (command_raw.get("roles") or ["admin", "maintain", "write"])],
+            associations=[
+                str(a).upper()
+                for a in (command_raw.get("associations") or ["OWNER", "MEMBER", "COLLABORATOR"])
+            ],
             arguments=[str(a) for a in (command_raw.get("arguments") or [])],
             reaction=str(command_raw.get("reaction", "eyes") or "eyes"),
         )

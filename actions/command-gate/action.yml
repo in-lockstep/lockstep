@@ -14,6 +14,14 @@ inputs:
     description: Comma-separated repository permissions allowed to invoke it.
     required: false
     default: "admin,maintain,write"
+  associations:
+    description: >-
+      Comma-separated author associations allowed to invoke it. Checked alongside the permission
+      because on a public repository the permission API is not a trust signal — everybody can read a
+      public repository — while the association distinguishes a maintainer from a passer-by. Add
+      CONTRIBUTOR or NONE deliberately to open the command to outside contributors.
+    required: false
+    default: "OWNER,MEMBER,COLLABORATOR"
   arguments:
     description: Comma-separated argument names bare positionals map onto.
     required: false
@@ -30,6 +38,9 @@ outputs:
   instruction:
     description: Free text the author wrote after the command.
     value: ${{ steps.parse.outputs.instruction }}
+  association:
+    description: The commenter's relationship to the repository, as GitHub reported it.
+    value: ${{ steps.role.outputs.association }}
   pull_request:
     description: The pull request the comment was on, empty when it was on an issue.
     value: ${{ steps.decide.outputs.pull_request }}
@@ -79,17 +90,37 @@ runs:
       run: |
         set -euo pipefail
         actor="${GITHUB_ACTOR}"
+
+        # Two independent signals, both of which must pass.
+        #
+        # The permission API answers "what can this account do here". On a public repository it is a
+        # weak signal: a passer-by can read it, so a `read` permission says nothing about trust.
+        # The author association, which GitHub puts in the event payload, answers the question that
+        # actually matters — is this person part of this project.
         permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${actor}/permission" \
                        --jq '.permission' 2>/dev/null || echo "none")
-        allowed=false
+        association=$(jq -r '.comment.author_association // "NONE"' "$GITHUB_EVENT_PATH")
+
+        by_permission=false
         IFS=',' read -ra roles <<< "${{ inputs.roles }}"
         for role in "${roles[@]}"; do
-          [ "$(echo "$role" | xargs)" = "$permission" ] && allowed=true
+          [ "$(echo "$role" | xargs)" = "$permission" ] && by_permission=true
         done
+
+        by_association=false
+        IFS=',' read -ra associations <<< "${{ inputs.associations }}"
+        for entry in "${associations[@]}"; do
+          [ "$(echo "$entry" | xargs | tr '[:lower:]' '[:upper:]')" = "$association" ] && by_association=true
+        done
+
+        allowed=false
+        [ "$by_permission" = "true" ] && [ "$by_association" = "true" ] && allowed=true
+
         echo "permission=$permission" >> "$GITHUB_OUTPUT"
+        echo "association=$association" >> "$GITHUB_OUTPUT"
         echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
         if [ "$allowed" != "true" ]; then
-          echo "::warning::${actor} has '${permission}' permission and may not run ${{ inputs.command }}"
+          echo "::warning::${actor} (permission '${permission}', association '${association}') may not run ${{ inputs.command }}"
         fi
 
     - name: Decide

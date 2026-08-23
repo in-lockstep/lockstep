@@ -11,6 +11,7 @@ import yaml
 from ..errors import MissingDefinition, SpecError
 from ..util.hashing import sha_file, short
 from .model import (
+    LOCKSTEP_DIR,
     Capabilities,
     Extensions,
     Manifest,
@@ -30,11 +31,11 @@ from .parse import (
 MANIFEST_NAME = "pipeline.yaml"
 
 
-def _load_dir(root: Path, subdir: str) -> list[SourceFile]:
-    directory = root / subdir
+def _load_dir(home: Path, subdir: str) -> list[SourceFile]:
+    directory = home / subdir
     if not directory.is_dir():
         return []
-    return [read_source(p, root) for p in sorted(directory.rglob("*.md"))]
+    return [read_source(p, home) for p in sorted(directory.rglob("*.md"))]
 
 
 def _fragment_name(src: SourceFile, subdir: str) -> str:
@@ -43,12 +44,25 @@ def _fragment_name(src: SourceFile, subdir: str) -> str:
     return str(rel.with_suffix("")).replace("\\", "/")
 
 
-def load_manifest(root: Path) -> Manifest:
-    path = root / MANIFEST_NAME
+def find_home(root: Path) -> tuple[Path, bool]:
+    """Where this repository keeps its pipeline.
+
+    `.lockstep/` when it is there, the repository root otherwise. A repository that exists for the
+    pipeline can keep everything at the root; one that already has source of its own puts the whole
+    pipeline in one directory, and nothing about the spec changes either way.
+    """
+    if (root / LOCKSTEP_DIR / MANIFEST_NAME).is_file():
+        return root / LOCKSTEP_DIR, True
+    return root, False
+
+
+def load_manifest(home: Path, root: Path) -> Manifest:
+    path = home / MANIFEST_NAME
     if not path.is_file():
         raise MissingDefinition(
-            f"no {MANIFEST_NAME} found in {root}",
-            hint="run `lockstep init` or add a pipeline.yaml manifest",
+            f"no {MANIFEST_NAME} in {root} or {root / LOCKSTEP_DIR}",
+            hint="run `lockstep init`, or add a pipeline.yaml — at the repository root for a "
+            "dedicated pipeline repository, or in .lockstep/ to add one to an existing project",
         )
     data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     caps_raw = data.get("capabilities", {}) or {}
@@ -80,7 +94,7 @@ def load_manifest(root: Path) -> Manifest:
         ),
         src=SourceFile(
             path=path,
-            rel=MANIFEST_NAME,
+            rel=str(path.relative_to(root)),
             sha=short(sha_file(path)),
             metadata=data,
             body="",
@@ -97,16 +111,17 @@ def load_manifest(root: Path) -> Manifest:
 def load_spec(root: Path) -> Spec:
     """Read every definition under `root` into a validated Spec."""
     root = root.resolve()
-    manifest = load_manifest(root)
-    spec = Spec(root=root, manifest=manifest)
+    home, nested = find_home(root)
+    manifest = load_manifest(home, root)
+    spec = Spec(root=root, manifest=manifest, in_lockstep_dir=nested)
 
-    for src in _load_dir(root, "commands"):
+    for src in _load_dir(home, "commands"):
         command = parse_command(src)
         spec.commands[command.name] = command
-    for src in _load_dir(root, "agents"):
+    for src in _load_dir(home, "agents"):
         agent = parse_agent(src)
         spec.agents[agent.name] = agent
-    for src in _load_dir(root, "profiles"):
+    for src in _load_dir(home, "profiles"):
         profile = parse_profile(src)
         spec.profiles[profile.name] = profile
     for subdir, bucket in (
@@ -114,12 +129,12 @@ def load_spec(root: Path) -> Spec:
         ("skills", spec.skills),
         ("contexts", spec.contexts),
     ):
-        for src in _load_dir(root, subdir):
+        for src in _load_dir(home, subdir):
             fragment = parse_fragment(src, subdir.rstrip("s"))
             fragment.name = _fragment_name(src, subdir)
             bucket[fragment.name] = fragment
 
-    mcp_path = root / "mcp" / "servers.json"
+    mcp_path = home / "mcp" / "servers.json"
     if mcp_path.is_file():
         spec.mcp_servers = parse_mcp_servers(json.loads(mcp_path.read_text(encoding="utf-8")))
 
@@ -145,7 +160,7 @@ def _validate(spec: Spec) -> None:
                     hint=f"known commands: {', '.join(sorted(spec.commands)) or '(none)'}",
                 )
             if step.kind.value == "script":
-                script = spec.root / step.target
+                script = spec.home / step.target
                 if not script.exists():
                     raise MissingDefinition(
                         f"script {step.target!r} does not exist",
