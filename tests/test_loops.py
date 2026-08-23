@@ -42,16 +42,16 @@ def test_each_iteration_is_skipped_once_the_previous_one_converged(basic_spec_di
 def test_the_callee_publishes_a_converged_workflow_output(basic_spec_dir):
     data = workflow(basic_spec_dir, "repair.yml")
     call = (data.get("on") or data.get(True))["workflow_call"]
-    assert call["outputs"]["converged"]["value"] == "${{ jobs.collect-failures.outputs.converged }}"
+    assert call["outputs"]["converged"]["value"] == "${{ jobs.check-convergence.outputs.converged }}"
 
 
 def test_the_producing_job_exposes_the_step_output(basic_spec_dir):
-    job = jobs_of(basic_spec_dir, "repair.yml")["collect-failures"]
+    job = jobs_of(basic_spec_dir, "repair.yml")["check-convergence"]
     assert job["outputs"]["converged"] == "${{ steps.check-convergence.outputs.converged }}"
 
 
 def test_run_steps_carry_ids_so_outputs_and_overlays_can_address_them(basic_spec_dir):
-    steps = jobs_of(basic_spec_dir, "repair.yml")["collect-failures"]["steps"]
+    steps = jobs_of(basic_spec_dir, "repair.yml")["check-convergence"]["steps"]
     assert "check-convergence" in [step.get("id") for step in steps]
 
 

@@ -19,7 +19,17 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0",
     "pytest-cov>=7.1.0",
+    "pipeline-exec",
 ]
+
+# One repo, two distributions. The compiler emits `pipeline-exec` invocations as literal text, so the
+# two are developed and tested together — see tests/test_contract.py. A generated pipeline repo
+# installs only pipeline-exec, never the compiler.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+pipeline-exec = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -46,5 +56,5 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+testpaths = ["tests", "packages/pipeline-exec/tests"]
+pythonpath = ["src", "packages/pipeline-exec/src"]

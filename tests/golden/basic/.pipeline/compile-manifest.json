@@ -21,15 +21,15 @@
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "5f3ea93b",
+      "sha": "5a024630",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
     },
     ".github/workflows/repair.yml": {
-      "sha": "614a795d",
+      "sha": "1e6abf19",
       "sources": [
-        "commands/repair.md@e265d2b3"
+        "commands/repair.md@daa544cc"
       ]
     },
     ".github/workflows/shared/context-my-app-patterns.md": {

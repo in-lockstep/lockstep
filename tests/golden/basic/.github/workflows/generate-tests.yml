@@ -109,7 +109,7 @@ jobs:
           outputs/jira-issues.json
     - name: Fan out issues
       id: fanout-extract-stories-from-each-issue
-      run: pipeline-exec fanout --input=outputs/jira-issues.json --key=key --only-missing --max=256 >> "$GITHUB_OUTPUT"
+      run: pipeline-exec fanout --input=outputs/jira-issues.json --key=key --max=256 --only-missing --output-dir=outputs/extracted-stories --no-shard >> "$GITHUB_OUTPUT"
     - id: save-workspace
       if: ${{ always() }}
       uses: pipeline-fw/pipeline-actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2

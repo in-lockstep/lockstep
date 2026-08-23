@@ -6,6 +6,12 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 
+[manifest]
+members = [
+    "lockstep",
+    "pipeline-exec",
+]
+
 [[package]]
 name = "ast-serialize"
 version = "0.8.0"
@@ -347,6 +353,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "pipeline-exec" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -362,6 +369,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.11" },
+    { name = "pipeline-exec", editable = "packages/pipeline-exec" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.6" },
@@ -454,6 +462,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
 ]
+
+[[package]]
+name = "pipeline-exec"
+version = "0.1.0"
+source = { editable = "packages/pipeline-exec" }
+dependencies = [
+    { name = "click" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "click", specifier = ">=8.1" }]
 
 [[package]]
 name = "pluggy"

@@ -109,6 +109,13 @@ def cache_spec_for(
     upstream: dict[str, str],
 ) -> CacheSpec | None:
     """Build a cache spec, or None when the step declares nothing cacheable."""
+    if step.foreach:
+        # A foreach step must not be step-cached: every matrix leg would compute the same key, so
+        # one leg publishing would make all legs skip on the next run. Per-item skipping is already
+        # handled — better — by `fanout --only-missing`, which drops covered items before the matrix
+        # exists and so never starts a runner for them.
+        return None
+
     outputs = declared_outputs(step, ctx, command)
     if not outputs:
         return None

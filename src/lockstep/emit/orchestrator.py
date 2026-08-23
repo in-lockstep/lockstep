@@ -13,6 +13,7 @@ from typing import Any
 from ..errors import EmitError, SpecError
 from ..spec.model import Command, Condition, Spec, Step, StepKind
 from ..util.text import slug
+from .builtins import AVAILABLE, MATRIX_CAP
 from .caching import cache_spec_for, emit_fingerprint, emit_probe, emit_save, render_step_def, step_def_path
 from .context import EmitContext
 from .profiles import env_block, secret_ref
@@ -154,6 +155,7 @@ def emit_command(
         )
 
     _validate_conditions(command, steps)
+    _validate_builtins(command, steps)
 
     upstream = _upstream_outputs(steps, ctx, command)
     groups = group_steps(steps, fuse=spec.manifest.target.fuse_script_steps)
@@ -237,6 +239,16 @@ def emit_command(
     return result
 
 
+def _validate_builtins(command: Command, steps: list[Step]) -> None:
+    for step in steps:
+        if step.kind is StepKind.BUILTIN and step.target not in AVAILABLE:
+            raise EmitError(
+                f"builtin {step.target!r} is not provided by pipeline-exec",
+                location=f"{command.src.rel if command.src else command.name} step {step.number}",
+                hint=f"available: {', '.join(sorted(AVAILABLE))}",
+            )
+
+
 def _validate_conditions(command: Command, steps: list[Step]) -> None:
     declared = {p.input_name for p in command.parameters} | {"force"}
     for step in steps:
@@ -268,13 +280,26 @@ def _inject_fanout(job: dict[str, Any], group: JobGroup, ctx: EmitContext, comma
     foreach = group.head.foreach
     assert foreach is not None
     source = ctx.expand(foreach.source, command)
+    parts = [
+        "pipeline-exec fanout",
+        f"--input={source}",
+        f"--key={foreach.key_field}",
+        f"--max={MATRIX_CAP}",
+    ]
+    output = ctx.expand(group.head.output, command)
+    if output:
+        # Git and the restored workspace are both caches: an item whose output already exists is
+        # dropped here, so a resumed run fans out only what is still missing.
+        parts.extend(["--only-missing", f"--output-dir={output}"])
+    if group.kind == "agent":
+        # An agent leg is a whole gh-aw run and cannot host more than one item.
+        parts.append("--no-shard")
+    else:
+        parts.append(f"--shard-threshold={ctx.spec.manifest.target.shard_threshold}")
     step = {
         "id": f"fanout-{group.id}",
         "name": f"Fan out {foreach.var}s",
-        "run": (
-            f"pipeline-exec fanout --input={source} --key={foreach.key_field} "
-            '--only-missing --max=256 >> "$GITHUB_OUTPUT"'
-        ),
+        "run": " ".join(parts) + ' >> "$GITHUB_OUTPUT"',
     }
     # Insert before the trailing save step so the item list reflects this job's own output.
     steps: list[dict[str, Any]] = job["steps"]
@@ -444,14 +469,28 @@ def _gated(step: dict[str, Any], condition: str | None) -> dict[str, Any]:
 
 
 def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
-    """One spec step becomes one `run:` step; the runner is chosen by file extension."""
+    """One spec step becomes one `run:` step; the runner is chosen by file extension.
+
+    A deterministic `foreach` step is wrapped in `shard-run`, which accepts either shape the matrix
+    can carry — one item, or a shard covering many. That keeps the emitted workflow identical
+    whether or not the item count crosses the sharding threshold, because the count is a runtime
+    fact the compiler cannot see. `{item}` and `{item.field}` survive expansion untouched and are
+    substituted per item at run time.
+    """
     args = ctx.expand(step.args.get("args", ""), command)
     invocation = (
         f"{runner_for(step.target)} {step.target}"
         if step.kind is StepKind.SCRIPT
         else f"pipeline-exec {step.target}"
     )
-    return {"name": step.label, "id": step.id, "run": f"{invocation} {args}".strip()}
+    run = f"{invocation} {args}".strip()
+    if step.foreach:
+        source = ctx.expand(step.foreach.source, command)
+        run = (
+            "pipeline-exec shard-run --slice='${{ toJSON(matrix.item) }}' "
+            f"--input={source} --key={step.foreach.key_field} -- {run}"
+        )
+    return {"name": step.label, "id": step.id, "run": run}
 
 
 def _strategy(group: JobGroup, fanout_ref: str) -> dict[str, Any]:

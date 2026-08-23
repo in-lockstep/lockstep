@@ -54,11 +54,6 @@ convergence outputs and overlay `insert-step` anchors both have something stable
 
 ### Still open
 
-- **Shard mode.** Deferred deliberately, and not merely unfinished: the threshold is a decision about
-  *how many items there are*, which is a runtime fact. The compiler cannot know it, so the branch
-  belongs inside `pipeline-exec fanout` — emit item legs below the threshold and shard descriptors
-  above it — with the compiler emitting the same matrix either way. That makes it Phase 3 work, not
-  Phase 2. Agent `foreach` stays one leg per item regardless, since each item needs its own gh-aw run.
 - **Deploy modes** — profile `deploy.mode` (services / external / steps), readiness gates, CLI
   provisioning for CLI-session tests.
 - **Per-command agent variants** — an agent resolving to different prompt layers in different commands
@@ -67,9 +62,60 @@ convergence outputs and overlay `insert-step` anchors both have something stable
 - **`lockstep pin`, `eject`/`uneject`, `upgrade`** — Phase 5 lifecycle tooling. `pins.lock` is read but
   not resolved by the tool; ejection is honoured by the writer but has no command yet.
 
+## Phase 3 — the executor package (in progress)
+
+`pipeline-exec` is a second workspace package in this repo. One repository, two distributions: the
+compiler emits `pipeline-exec …` invocations as literal text, so the two are developed and tested
+together — but a generated pipeline repo installs only the runtime, never the compiler.
+
+### Done
+
+**Fan-out, including the sharding decision.** `fanout` turns a JSON array into a matrix, dropping
+items whose output already exists (`--only-missing`), refusing counts above the matrix cap, and —
+above a threshold — emitting shard descriptors instead of items. This is where Phase 2's deferred
+shard mode landed, and the reason it belongs here rather than in the compiler: the threshold is a
+question about *how many items there are*, which is a runtime fact. The compiler emits the same
+matrix expression either way. Agent fan-out passes `--no-shard`, because an agent leg is a whole
+gh-aw run and cannot host more than one item.
+
+**`shard-run`** accepts either shape the matrix can carry — one item, or a shard covering many — and
+substitutes `{item}` / `{item.field}` per item. Every item runs even after one fails, so a bad item
+costs its own output rather than the rest of the slice; the leg still exits non-zero.
+
+**`fanout-verify`** enforces the `min-success-rate` policy Phase 2 emits, writes coverage to the step
+summary, and names what is missing.
+
+**`validate-schema`** validates and sanitizes agent output at the trust boundary: JSON well-formedness,
+required keys, control-character and markup stripping, and field-length caps. An absent output
+directory is reported, not failed — the producing step may have been skipped, and failing here would
+mask the real cause.
+
+**`wait-for`** blocks until an application answers, so tests do not race a still-booting target and
+send the repair loop chasing a startup race.
+
+**Contract tests.** `tests/test_contract.py` extracts every `pipeline-exec` invocation the compiler
+emits and parses it against the real CLI, and asserts that the compiler's declared builtin list and
+matrix cap match the runtime's. A `builtin:` step naming a command `pipeline-exec` does not provide
+is now a compile error rather than a `command not found` at 2am.
+
+**Fixed while wiring this up:** a `foreach` step that declared an output was being step-cached, and
+every matrix leg computed the *same* key — so one leg publishing would have made all legs skip on the
+next run. Per-item skipping belongs to `fanout --only-missing`, which drops covered items before the
+matrix exists and never starts a runner for them; `foreach` steps are no longer step-cached.
+
+### Still open
+
+- **Extraction from pipeline-framework** — `test-runner`, `discovery`, `report`, `collect-failures`,
+  `check-convergence` and the API/browser/CLI session executors with their resilience features still
+  live in the framework repo. Moving them is the other half of Phase 3 and touches a second repo.
+- **`cost-rollup` and `collect-patterns`** — deferred until the phases that emit them (token
+  accounting and the learning loop), rather than built speculatively against no caller.
+- **The exec container image** — `ghcr.io/pipeline-fw/exec`, with Playwright browsers baked in.
+
 ## Testing
 
-179 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+237 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
-`make golden` rewrites it after an intentional change.
+`make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests
+covering a full fan-out cycle in both item and shard modes.

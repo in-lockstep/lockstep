@@ -5,19 +5,19 @@ check: fmt lint typecheck test
 ci: lint typecheck cov
 
 fmt:
-	uv run ruff format src tests
+	uv run ruff format src tests packages
 
 lint:
-	uv run ruff check src tests
+	uv run ruff check src tests packages
 
 typecheck:
-	uv run mypy src
+	uv run mypy src packages/pipeline-exec/src
 
 test:
-	uv run pytest tests -q
+	uv run pytest -q
 
 cov:
-	uv run pytest tests -q --cov=lockstep --cov-report=term-missing --cov-fail-under=90
+	uv run pytest -q --cov=lockstep --cov=pipeline_exec --cov-report=term-missing --cov-fail-under=90
 
 # Rewrite the golden output tree after an intentional change. Read the diff before committing.
 golden:

@@ -29,9 +29,22 @@ lockstep compile --semantic-diff    # report security and cost surface deltas
 lockstep show-surface               # every GitHub-target decision in one document
 ```
 
+## Packages
+
+This is a uv workspace holding two distributions:
+
+| Package | Role | Who installs it |
+|---|---|---|
+| `lockstep` | the compiler, lint, drift gate | developers, as a dev dependency |
+| [`pipeline-exec`](packages/pipeline-exec) | fan-out, sharding, coverage gates, validation | the generated pipeline repo, and nothing else |
+
+They share a repository because the compiler emits `pipeline-exec` invocations as literal text:
+`tests/test_contract.py` parses every emitted invocation against the real CLI, so a renamed flag
+fails a build rather than a scheduled run.
+
 ## Status
 
-Phase 2 — step-type coverage. See `docs/status.md` for what is implemented and what is deferred.
+Phase 3 — the executor package. See `docs/status.md` for what is implemented and what is deferred.
 
 ## Development
 
