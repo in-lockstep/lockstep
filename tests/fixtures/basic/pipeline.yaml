@@ -1,0 +1,18 @@
+spec: 1
+name: user-story-validation
+
+capabilities:
+  actions: github.com/pipeline-fw/pipeline-actions@v1.6.2
+  exec: pipeline-exec==1.4.2
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    fuse-script-steps: true
+    default-runs-on: ubuntu-24.04
+    profiles: [my-app]
+
+budgets:
+  per_run_ai_credits: 400

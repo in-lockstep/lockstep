@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "jira": {
+      "container": "ghcr.io/sooperset/mcp-atlassian:latest",
+      "env": {
+        "JIRA_URL": "${JIRA_BASE_URL}",
+        "JIRA_PERSONAL_TOKEN": "${JIRA_API_TOKEN}"
+      },
+      "tools": ["search_issues", "get_issue", "create_issue", "update_issue", "transition_issue"]
+    }
+  }
+}

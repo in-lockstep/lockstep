@@ -1,0 +1,48 @@
+{
+  "compiler": "0.1.0",
+  "files": {
+    ".github/workflows/.gitattributes": {
+      "sha": "9df09c50",
+      "sources": []
+    },
+    ".github/workflows/aw-story-extractor.md": {
+      "sha": "796d2872",
+      "sources": [
+        "agents/story-extractor.md@9480178e",
+        "guardrails/common.md@e558a2d9",
+        "skills/test/common.md@a4322449",
+        "contexts/my-app-patterns.md@c781483a"
+      ]
+    },
+    ".github/workflows/discover.yml": {
+      "sha": "fde8d19d",
+      "sources": [
+        "commands/discover.md@3f9c382f"
+      ]
+    },
+    ".github/workflows/generate-tests.yml": {
+      "sha": "cfb77cd1",
+      "sources": [
+        "commands/generate-tests.md@85309eb6"
+      ]
+    },
+    ".github/workflows/shared/context-my-app-patterns.md": {
+      "sha": "0b2a249b",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-common.md": {
+      "sha": "caffd81f",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-test-common.md": {
+      "sha": "3d9cfeb1",
+      "sources": []
+    },
+    "SECRETS.md": {
+      "sha": "0be77f7b",
+      "sources": []
+    }
+  },
+  "pipeline": "user-story-validation",
+  "spec": 1
+}

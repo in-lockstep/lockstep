@@ -1,0 +1,17 @@
+target: workflows/generate-tests.yml
+patches:
+  - op: merge
+    at: jobs[id=fetch-issues]
+    value:
+      timeout-minutes: 30
+---
+target: workflows/aw-story-extractor.md
+frontmatter:
+  - op: merge
+    at: network
+    value:
+      allowed: ['jira-mirror.acme.internal']
+prompt:
+  - op: append-section
+    heading: Acme conventions
+    file: overlays/github/fragments/acme.md
