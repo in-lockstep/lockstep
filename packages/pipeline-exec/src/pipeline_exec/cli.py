@@ -30,8 +30,17 @@ def _fail(message: str) -> None:
 
 
 def _emit_output(name: str, value: str) -> None:
-    """Write a step output. Redirected to $GITHUB_OUTPUT by the caller, printed when run by hand."""
-    click.echo(f"{name}={value}")
+    """Publish a step output.
+
+    Appends to $GITHUB_OUTPUT when running under Actions and echoes to stdout otherwise, so the
+    generated workflow carries no shell redirection and the same command is usable by hand.
+    """
+    destination = os.environ.get("GITHUB_OUTPUT")
+    if destination:
+        with open(destination, "a", encoding="utf-8") as handle:
+            handle.write(f"{name}={value}\n")
+    else:
+        click.echo(f"{name}={value}")
 
 
 def _summary(text: str) -> None:
@@ -322,3 +331,170 @@ def wait_for(urls: tuple[str, ...], timeout: int, interval: int) -> None:
             time.sleep(interval)
     if pending:
         _fail(f"timed out after {timeout}s waiting for: {', '.join(pending)}")
+
+
+# --- extracted executors ---------------------------------------------------
+#
+# These wrap the code moved over from pipeline-framework. The executors carry resilience behaviour
+# that was earned against a real application — 409/422 recovery, PATCH/PUT fallback, retry ladders,
+# browser auto-login and crash recovery, runtime variable tracking — so the modules were copied
+# verbatim and only their imports and configuration plumbing were adapted.
+
+
+def _config(**overrides: object) -> Any:
+    from .config import ExecConfig
+
+    return ExecConfig.from_env(**overrides)
+
+
+@main.command(name="test-runner")
+@click.option("--scripts-dir", default="", help="Where the committed test scripts live.")
+@click.option("--tags-file", default="", help="Tag toggles (.env-tests).")
+@click.option("--run-dir", default="outputs/runs/current", show_default=True)
+@click.option("--output-dir", default="", help="Pipeline output directory.")
+@click.option("--parallel", default=0, type=int, help="Concurrent scripts; 0 uses the default.")
+@click.option("--changed", is_flag=True, help="Only scripts modified since their last execution.")
+@click.option("--story", default="", help="Comma-separated story ids to run.")
+def test_runner(
+    scripts_dir: str,
+    tags_file: str,
+    run_dir: str,
+    output_dir: str,
+    parallel: int,
+    changed: bool,
+    story: str,
+) -> None:
+    """Execute committed JSON test scripts against the target application."""
+    import asyncio
+
+    from .builtins.test_runner import run_test_pipeline
+
+    config = _config(scripts_dir=scripts_dir, tags_file=tags_file, output_dir=output_dir)
+    summary = asyncio.run(
+        run_test_pipeline(
+            config,
+            run_dir=run_dir,
+            changed_only=changed,
+            story_filter=story,
+            concurrency=parallel,
+        )
+    )
+    click.echo(json.dumps(summary))
+    _summary(
+        f"### Tests\n\n{summary['passed']} passed, {summary['failed']} failed, "
+        f"{summary['skipped']} skipped of {summary['total']}\n"
+    )
+    if summary.get("failed"):
+        sys.exit(EXIT_FAILED)
+
+
+@main.command()
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--output-dir", default="", help="Pipeline output directory.")
+def discover(output: Path, output_dir: str) -> None:
+    """Discover the target application's API surface."""
+    import asyncio
+
+    from .builtins.discovery import discover_api
+
+    schemas = asyncio.run(discover_api(_config(output_dir=output_dir)))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(schemas, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    click.echo(f"discovered {len(schemas)} schema group(s) -> {output}")
+
+
+@main.command()
+@click.option("--run-dir", default="outputs/runs/current", show_default=True, type=click.Path(path_type=Path))
+@click.option("--output-dir", default="outputs", show_default=True)
+@click.option("--index/--no-index", default=True, help="Also refresh the run index page.")
+def report(run_dir: Path, output_dir: str, index: bool) -> None:
+    """Render the HTML dashboard for a run."""
+    from .reports.collect import build_dashboard_data
+    from .reports.dashboard import generate_dashboard, generate_index_page
+
+    if not run_dir.is_dir():
+        click.echo(f"{run_dir} does not exist; nothing to report")
+        return
+    config = _config(output_dir=output_dir)
+    data = build_dashboard_data(run_dir, output_dir)
+    path = generate_dashboard(str(run_dir), data, config)
+    click.echo(f"dashboard -> {path}")
+    if index:
+        click.echo(f"index -> {generate_index_page(output_dir, config)}")
+
+
+@main.command(name="collect-failures")
+@click.option("--run-dir", default="outputs/runs/current", show_default=True, type=click.Path(path_type=Path))
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--scripts-dir", default="test-scripts", show_default=True, type=click.Path(path_type=Path))
+@click.option("--report-chars", default=4000, show_default=True, type=int)
+@click.option("--script-chars", default=3000, show_default=True, type=int)
+def collect_failures(
+    run_dir: Path, output: Path, scripts_dir: Path, report_chars: int, script_chars: int
+) -> None:
+    """Gather failed execution reports into one file for an agent to analyze."""
+    import re
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    exec_dir = run_dir / "executions"
+    if not exec_dir.is_dir():
+        output.write_text("[]\n", encoding="utf-8")
+        click.echo("no executions found; nothing to collect")
+        return
+
+    failures = []
+    examined = 0
+    for report_file in sorted(exec_dir.glob("*.md")):
+        content = report_file.read_text(encoding="utf-8")
+        examined += 1
+        if not re.search(r"\*\*FAILED\*\*", content, re.IGNORECASE):
+            continue
+        script_path = scripts_dir / f"{report_file.stem}.json"
+        failures.append(
+            {
+                "key": report_file.stem,
+                "story_id": report_file.stem,
+                "report": content[:report_chars],
+                "test_script": script_path.read_text(encoding="utf-8")[:script_chars]
+                if script_path.is_file()
+                else "",
+            }
+        )
+
+    output.write_text(json.dumps(failures, indent=2) + "\n", encoding="utf-8")
+    click.echo(f"collected {len(failures)} failure(s) from {examined} report(s) -> {output}")
+
+
+@main.command(name="check-convergence")
+@click.option("--run-dir", default="outputs/runs/current", show_default=True, type=click.Path(path_type=Path))
+@click.option("--name", default="converged", show_default=True, help="Step output name to write.")
+def check_convergence(run_dir: Path, name: str) -> None:
+    """Report whether the repair loop has converged.
+
+    Always exits 0: convergence is a result, not a failure, and a non-zero exit would fail the job
+    that is meant to read the answer. The verdict goes to the step output; the detail goes to stderr.
+    """
+    from collections import Counter
+
+    classifications_path = run_dir / "heal-classifications.json"
+    counts: Counter[str] = Counter()
+    if classifications_path.is_file():
+        loaded = json.loads(classifications_path.read_text(encoding="utf-8"))
+        counts = Counter(
+            entry.get("category", "unknown") for entry in loaded.values() if isinstance(entry, dict)
+        )
+
+    script_bugs = counts.get("script_bug", 0)
+    converged = script_bugs == 0
+    _emit_output(name, "true" if converged else "false")
+    click.echo(
+        json.dumps(
+            {
+                "converged": converged,
+                "script_bugs": script_bugs,
+                "app_bugs": counts.get("app_bug", 0),
+                "infra": counts.get("infra_issue", 0),
+            }
+        ),
+        err=True,
+    )

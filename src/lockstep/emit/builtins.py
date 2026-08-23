@@ -11,11 +11,19 @@ from __future__ import annotations
 # Commands a `builtin:` step may invoke.
 AVAILABLE = frozenset(
     {
+        # fan-out mechanics
         "fanout",
         "fanout-verify",
         "shard-run",
+        # trust boundaries and readiness
         "validate-schema",
         "wait-for",
+        # extracted from pipeline-framework
+        "test-runner",
+        "discover",
+        "report",
+        "collect-failures",
+        "check-convergence",
     }
 )
 

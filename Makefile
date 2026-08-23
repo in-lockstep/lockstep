@@ -1,4 +1,4 @@
-.PHONY: check ci fmt lint typecheck test cov golden
+.PHONY: check ci fmt lint typecheck test cov cov-all golden
 
 check: fmt lint typecheck test
 
@@ -18,6 +18,11 @@ test:
 
 cov:
 	uv run pytest -q --cov=lockstep --cov=pipeline_exec --cov-report=term-missing --cov-fail-under=90
+
+# The true figure, including the extracted executors that need a running application to cover.
+cov-all:
+	uv run pytest -q --cov=lockstep --cov=pipeline_exec --cov-report=term-missing \
+	  --cov-config=/dev/null --cov-fail-under=0
 
 # Rewrite the golden output tree after an intentional change. Read the diff before committing.
 golden:

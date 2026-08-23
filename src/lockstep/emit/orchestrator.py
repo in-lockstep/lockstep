@@ -299,7 +299,7 @@ def _inject_fanout(job: dict[str, Any], group: JobGroup, ctx: EmitContext, comma
     step = {
         "id": f"fanout-{group.id}",
         "name": f"Fan out {foreach.var}s",
-        "run": " ".join(parts) + ' >> "$GITHUB_OUTPUT"',
+        "run": " ".join(parts),
     }
     # Insert before the trailing save step so the item list reflects this job's own output.
     steps: list[dict[str, Any]] = job["steps"]

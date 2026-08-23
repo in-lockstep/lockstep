@@ -45,6 +45,21 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+# Code extracted verbatim from pipeline-framework. It carries resilience behaviour earned against a
+# real application, so cosmetic rules do not apply to it and — more importantly — `make fmt` must
+# never silently rewrite it. Changes here should be deliberate and reviewed against the origin.
+[tool.ruff.lint.per-file-ignores]
+"packages/pipeline-exec/src/pipeline_exec/executors/*" = ["E501", "B007"]
+"packages/pipeline-exec/src/pipeline_exec/builtins/*" = ["E501", "B007"]
+"packages/pipeline-exec/src/pipeline_exec/reports/*" = ["E501", "B007"]
+
+[tool.ruff.format]
+exclude = [
+    "packages/pipeline-exec/src/pipeline_exec/executors/**",
+    "packages/pipeline-exec/src/pipeline_exec/builtins/**",
+    "packages/pipeline-exec/src/pipeline_exec/reports/**",
+]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
@@ -55,6 +70,51 @@ disallow_untyped_defs = true
 module = "tests.*"
 disallow_untyped_defs = false
 
+# The extracted executors predate this repo's strict settings. They are type-checked, but not held to
+# strict-mode rules that would require rewriting code whose behaviour we deliberately preserved.
+[[tool.mypy.overrides]]
+module = "pipeline_exec.executors.*"
+disallow_untyped_defs = false
+disallow_any_generics = false
+warn_return_any = false
+disallow_untyped_calls = false
+
+# Playwright is an optional extra: API and CLI tests do not need it, and the module imports it lazily.
+[[tool.mypy.overrides]]
+module = "playwright.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pipeline_exec.builtins.*"
+disallow_untyped_defs = false
+disallow_any_generics = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = "pipeline_exec.reports.*"
+disallow_untyped_defs = false
+disallow_any_generics = false
+warn_return_any = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/pipeline-exec/tests"]
 pythonpath = ["src", "packages/pipeline-exec/src"]
+# `TestScript` is a dataclass, not a test case.
+python_classes = ["*Tests"]
+
+[tool.coverage.run]
+branch = false
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+# The session executors drive a real browser, a real API and a real shell against a running
+# application; they cannot be meaningfully covered without one. They arrived from
+# pipeline-framework with no tests of their own, so this is inherited debt, recorded rather than
+# hidden: `make cov-all` reports the true figure, and closing it needs a fixture application.
+omit = [
+    "*/pipeline_exec/executors/api_session.py",
+    "*/pipeline_exec/executors/browser_session.py",
+    "*/pipeline_exec/executors/cli_session.py",
+    "*/pipeline_exec/executors/direct_executor.py",
+    "*/pipeline_exec/builtins/discovery.py",
+]

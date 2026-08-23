@@ -1,6 +1,6 @@
 {
   "args": {
-    "args": "--output={output_dir}/failures.json"
+    "args": "--run-dir={output_dir}/runs/current --output={output_dir}/failures.json"
   },
   "command": "repair",
   "context_files": [],
@@ -8,11 +8,11 @@
   "foreach": null,
   "id": "collect-failures",
   "input": "",
-  "kind": "script",
+  "kind": "builtin",
   "on_failure": "",
   "output": "",
   "parallel": 0,
   "post": "",
   "pre": "",
-  "target": "scripts/collect-failures.py"
+  "target": "collect-failures"
 }

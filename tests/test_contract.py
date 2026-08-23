@@ -112,12 +112,34 @@ def test_the_matrix_cap_agrees_across_both_packages():
     assert MATRIX_CAP == exec_items.MATRIX_CAP
 
 
+def test_the_profile_environment_the_compiler_exports_is_the_one_the_executors_read():
+    """The executors' only configuration channel is the `PROFILE_*` block every job carries."""
+    from pipeline_exec.config import PROFILE_KEYS
+
+    from lockstep.emit.profiles import env_block
+    from lockstep.spec.load import load_spec
+
+    profile = load_spec(FIXTURE).profiles["my-app"]
+    exported = set(env_block(profile))
+
+    declared = {key for key in PROFILE_KEYS if key in profile.values}
+    assert declared, "the fixture profile should declare keys the executors consume"
+    for key in declared:
+        assert f"PROFILE_{key.upper()}" in exported
+
+
+def test_no_generated_workflow_plumbs_step_outputs_by_hand():
+    """`pipeline-exec` writes to $GITHUB_OUTPUT itself; a redirect would double-write."""
+    for _, invocation in emitted_invocations():
+        assert "$GITHUB_OUTPUT" not in invocation
+
+
 def test_an_unknown_builtin_is_a_compile_error(basic_root):
     command = basic_root / "commands" / "discover.md"
     command.write_text(
         command.read_text().replace(
             "1. **Discover API surface** → script: scripts/discover-api.py",
-            "1. **Discover API surface** → builtin: test-runner",
+            "1. **Discover API surface** → builtin: teleport",
         )
     )
     from lockstep.errors import EmitError

@@ -14,8 +14,8 @@ github:
 
 ## Steps
 
-1. **Collect failures** → script: scripts/collect-failures.py
-   - args: --output={output_dir}/failures.json
+1. **Collect failures** → builtin: collect-failures
+   - args: --run-dir={output_dir}/runs/current --output={output_dir}/failures.json
 
 2. **Repair each failing script** → script: scripts/repair-script.py
    - foreach: failure in {output_dir}/failures.json
@@ -23,6 +23,6 @@ github:
    - args: --failure={item.key} --output={output_dir}/repairs/{item.key}.json
    - parallel: 2
 
-3. **Check convergence** → script: scripts/check-convergence.py
+3. **Check convergence** → builtin: check-convergence
    - id: check-convergence
-   - args: --input={output_dir}/failures.json
+   - args: --run-dir={output_dir}/runs/current

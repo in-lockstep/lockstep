@@ -21,15 +21,15 @@
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "5a024630",
+      "sha": "a2e1a382",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
     },
     ".github/workflows/repair.yml": {
-      "sha": "1e6abf19",
+      "sha": "03f6841c",
       "sources": [
-        "commands/repair.md@daa544cc"
+        "commands/repair.md@d19a5139"
       ]
     },
     ".github/workflows/shared/context-my-app-patterns.md": {
@@ -67,7 +67,7 @@
       "sources": []
     },
     ".pipeline/step-defs/repair.collect-failures.json": {
-      "sha": "5aff6d9b",
+      "sha": "7329817d",
       "sources": []
     },
     "SECRETS.md": {
