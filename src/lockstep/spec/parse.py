@@ -329,7 +329,14 @@ def parse_fragment(src: SourceFile, kind: str) -> Fragment:
         deny_tools=_as_list(enforce_raw.get("deny-tools")),
     )
     name = str(src.metadata.get("name") or Path(src.rel).stem)
-    return Fragment(name=name, kind=kind, body=src.body, enforce=enforce, src=src)
+    return Fragment(
+        name=name,
+        kind=kind,
+        body=src.body,
+        enforce=enforce,
+        src=src,
+        sealed=bool(src.metadata.get("sealed", False)),
+    )
 
 
 def parse_profile(src: SourceFile) -> Profile:

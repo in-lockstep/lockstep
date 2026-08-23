@@ -44,6 +44,19 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
                 "name": "Install the pinned compiler",
                 "run": f'uv tool install "{compiler}"',
             },
+            *(
+                [
+                    {
+                        # Inherited definitions are resolved state, not committed source, so every
+                        # check that compiles has to materialize them first — at the commits the
+                        # lock file records, which is what keeps `--check` byte-for-byte honest.
+                        "name": "Fetch inherited pipelines",
+                        "run": "lockstep fetch",
+                    }
+                ]
+                if spec.manifest.inherits
+                else []
+            ),
             *(extra or []),
         ]
 

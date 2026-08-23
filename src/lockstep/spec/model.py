@@ -214,6 +214,8 @@ class Agent:
     guardrails: list[str] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
     mcp: list[str] = field(default_factory=list)
+    # The alias this arrived under, empty for an agent the repository wrote itself.
+    inherited_from: str = ""
     body: str = ""
     github: AgentGithub = field(default_factory=AgentGithub)
     src: SourceFile | None = None
@@ -237,6 +239,12 @@ class Fragment:
     body: str
     enforce: Enforce = field(default_factory=Enforce)
     src: SourceFile | None = None
+    # A sealed guardrail is a standard rather than a default: it reaches every agent without being
+    # named, no profile may exclude it, and no local file may take its name. Only meaningful on an
+    # inherited guardrail — a pipeline sealing its own is sealing it against itself.
+    sealed: bool = False
+    # The alias this arrived under, empty for definitions the repository wrote itself.
+    inherited_from: str = ""
 
 
 @dataclass
@@ -322,17 +330,36 @@ class Extensions:
 
 
 @dataclass
+class CommandUse:
+    """How this repository instantiates one command: its own, or one it inherits."""
+
+    # `<alias>` or `<alias>/<command>`. Empty for a command this repository defines itself.
+    source: str = ""
+    add_guardrails: list[str] = field(default_factory=list)
+    add_skills: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Manifest:
     """pipeline.yaml — capability pins and target config."""
 
     spec_version: int = 1
     name: str = ""
+    # alias -> `github.com/<owner>/<repo>@<ref>`, or a path for local development.
+    inherits: dict[str, str] = field(default_factory=dict)
     capabilities: Capabilities = field(default_factory=Capabilities)
     target: TargetConfig = field(default_factory=TargetConfig)
     per_run_ai_credits: int | None = None
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
+    uses: dict[str, CommandUse] = field(default_factory=dict)
     extensions: Extensions = field(default_factory=Extensions)
     src: SourceFile | None = None
+
+
+# Where `lockstep fetch` materializes what this repository inherits. Under `.pipeline/` because it
+# is resolved state rather than authored definition, and gitignored for the same reason a virtualenv
+# is: the lock file is the thing worth committing.
+INHERITED_DIR = ".pipeline/inherited"
 
 
 # A pipeline added to an existing repository keeps its definitions here rather than adding eight
@@ -361,6 +388,10 @@ class Spec:
     def home(self) -> Path:
         """Where the definitions live: `.lockstep/` when it exists, the repository root otherwise."""
         return self.root / LOCKSTEP_DIR if self.in_lockstep_dir else self.root
+
+    def sealed_guardrails(self) -> list[Fragment]:
+        """Inherited standards, in alias order. Every agent gets these whether it asks or not."""
+        return [f for _, f in sorted(self.guardrails.items()) if f.sealed]
 
     def repo_path(self, relative: str) -> str:
         """A definition-relative path, expressed from the repository root.

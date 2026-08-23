@@ -14,10 +14,11 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
 from .emit.builtins import EXTERNAL_ACTIONS
-from .emit.context import Pins
+from .emit.context import PINS_PATH, Pins
 from .emit.validate import MAX_JOB_MINUTES
 from .spec.model import Spec, StepKind
 
@@ -98,22 +99,49 @@ def lint(spec: Spec) -> Report:
 
 
 def _check_agents_have_evals(spec: Spec, report: Report) -> None:
+    from .spec.model import INHERITED_DIR
+
     for name, agent in sorted(spec.agents.items()):
-        cases = spec.home / "evals" / name / "cases"
+        # An inherited agent is evalled by whoever published it — the cases travel with the agent,
+        # which is the only place they can be written against the prompt they are testing. A
+        # consumer that had to write them would be testing somebody else's lens from the outside.
+        if agent.inherited_from:
+            alias = agent.inherited_from
+            local = name.removeprefix(f"{alias}/")
+            cases = spec.home / INHERITED_DIR / alias / "evals" / local / "cases"
+            where = f"{alias}: evals/{local}/cases/"
+        else:
+            cases = spec.home / "evals" / name / "cases"
+            where = f"evals/{name}/cases/"
+
         if not cases.is_dir() or not any(cases.glob("*.json")):
             report.add(
                 Severity.ERROR,
                 "LNT001",
                 f"agent {name!r} has no eval cases",
                 location=agent.src.rel if agent.src else name,
-                hint=f"add cases under evals/{name}/cases/ — an agent without evals cannot be "
+                hint=f"add cases under {where} — an agent without evals cannot be "
                 "changed safely, and the eval gate has nothing to gate on",
             )
 
 
 def _check_scripts_have_tests(spec: Spec, report: Report) -> None:
-    tests_dir = spec.home / "tests"
-    tested = {p.name for p in tests_dir.rglob("test_*.py")} if tests_dir.is_dir() else set()
+    from .spec.model import INHERITED_DIR
+
+    def _suite_path(target: str) -> str:
+        if target.startswith(f"{INHERITED_DIR}/"):
+            alias = Path(target).relative_to(INHERITED_DIR).parts[0]
+            return f"{alias}: tests"
+        return "tests"
+
+    def suite_for(target: str) -> set[str]:
+        """Where a script's tests live: beside it, wherever it was published."""
+        directory = spec.home / "tests"
+        if target.startswith(f"{INHERITED_DIR}/"):
+            alias = Path(target).relative_to(INHERITED_DIR).parts[0]
+            directory = spec.home / INHERITED_DIR / alias / "tests"
+        return {p.name for p in directory.rglob("test_*.py")} if directory.is_dir() else set()
+
     seen: set[str] = set()
     for command in spec.commands.values():
         for step in command.steps:
@@ -121,14 +149,14 @@ def _check_scripts_have_tests(spec: Spec, report: Report) -> None:
                 continue
             seen.add(step.target)
             stem = Path(step.target).stem.replace("-", "_")
-            if f"test_{stem}.py" not in tested:
+            if f"test_{stem}.py" not in suite_for(step.target):
                 report.add(
                     Severity.WARNING,
                     "LNT002",
                     f"script {step.target!r} has no unit test",
                     location=command.src.rel if command.src else command.name,
-                    hint=f"add tests/test_{stem}.py — script steps run on every execution, so a "
-                    "regression here is silent and permanent",
+                    hint=f"add {_suite_path(step.target)}/test_{stem}.py — script steps run on "
+                    "every execution, so a regression here is silent and permanent",
                 )
 
 
@@ -212,6 +240,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     report = Report()
     pins = Pins.load(spec)
     _check_pins(pins, report)
+    _check_inherits(spec, root, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)
     _check_secrets(spec, report)
@@ -270,6 +299,40 @@ def _check_pins(pins: Pins, report: Report) -> None:
             "gh-aw is not pinned",
             hint="set capabilities.gh-aw in pipeline.yaml so lock files stay reproducible",
         )
+
+
+def _check_inherits(spec: Spec, root: Path, report: Report) -> None:
+    """An inherited pipeline has to be pinned, or the drift gate is comparing against a moving target."""
+    import json
+
+    from .spec.model import LOCKSTEP_DIR
+
+    home = root / LOCKSTEP_DIR if spec.in_lockstep_dir else root
+    path = home / PINS_PATH
+    locked: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            locked = (json.loads(path.read_text(encoding="utf-8")).get("inherits") or {})
+        except json.JSONDecodeError:
+            locked = {}
+
+    for alias, source in sorted(spec.manifest.inherits.items()):
+        if not source.startswith("github.com/"):
+            report.add(
+                Severity.WARNING,
+                "DOC017",
+                f"{alias!r} is inherited from a local path ({source})",
+                hint="a path cannot be pinned, so nobody else can reproduce this build. Fine while "
+                "developing an upstream and a consumer side by side; not fine on a default branch",
+            )
+        elif not (locked.get(alias) or {}).get("sha"):
+            report.add(
+                Severity.ERROR,
+                "DOC018",
+                f"{alias!r} is inherited from {source} but is not pinned to a commit",
+                hint="run `lockstep pin` — an unpinned upstream can change what this pipeline runs "
+                "without anything in this repository changing",
+            )
 
 
 def _check_engines(spec: Spec, report: Report) -> None:

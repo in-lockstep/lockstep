@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,12 +13,16 @@ from .. import library
 from ..errors import MissingDefinition, SpecError
 from ..util.hashing import sha_file, short
 from .model import (
+    INHERITED_DIR,
     LOCKSTEP_DIR,
     Capabilities,
+    Command,
+    CommandUse,
     Extensions,
     Manifest,
     SourceFile,
     Spec,
+    StepKind,
     TargetConfig,
 )
 from .parse import (
@@ -71,9 +76,21 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     budgets = data.get("budgets", {}) or {}
     extensions_raw = data.get("extensions", {}) or {}
 
+    commands_raw = data.get("commands", {}) or {}
+    uses = {
+        str(name): CommandUse(
+            source=str((entry or {}).get("from", "") or ""),
+            add_guardrails=[str(v) for v in ((entry or {}).get("add-guardrails") or [])],
+            add_skills=[str(v) for v in ((entry or {}).get("add-skills") or [])],
+        )
+        for name, entry in commands_raw.items()
+    }
+
     manifest = Manifest(
         spec_version=int(data.get("spec", 1) or 1),
         name=str(data.get("name", "") or root.name),
+        inherits={str(k): str(v) for k, v in (data.get("inherits", {}) or {}).items()},
+        uses=uses,
         capabilities=Capabilities(
             actions=str(caps_raw.get("actions", "") or ""),
             exec=str(caps_raw.get("exec", "") or ""),
@@ -110,38 +127,179 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     return manifest
 
 
+def load_manifest_only(root: Path) -> Spec:
+    """The manifest, with no definitions loaded.
+
+    `lockstep pin` needs this: it resolves the refs that `lockstep fetch` then uses, so it cannot
+    require the fetched trees to already be there.
+    """
+    root = root.resolve()
+    home, nested = find_home(root)
+    return Spec(root=root, manifest=load_manifest(home, root), in_lockstep_dir=nested)
+
+
 def load_spec(root: Path) -> Spec:
-    """Read every definition under `root` into a validated Spec."""
+    """Read every definition under `root`, plus everything it inherits, into a validated Spec."""
     root = root.resolve()
     home, nested = find_home(root)
     manifest = load_manifest(home, root)
     spec = Spec(root=root, manifest=manifest, in_lockstep_dir=nested)
 
-    for src in _load_dir(home, "commands"):
-        command = parse_command(src)
+    # Inherited definitions load first so a local file of the same name is a collision the loader can
+    # see and refuse, rather than an overwrite whose direction depends on dictionary order.
+    for alias in sorted(manifest.inherits):
+        _load_definitions(spec, home / INHERITED_DIR / alias, alias=alias, home=home)
+    _load_definitions(spec, home, alias="", home=home)
+
+    _resolve_uses(spec)
+    _validate(spec)
+    return spec
+
+
+def _load_definitions(spec: Spec, directory: Path, *, alias: str, home: Path) -> None:
+    """Load one definition tree into the spec, namespaced by `alias` when it is an inherited one."""
+    if alias and not directory.is_dir():
+        source = spec.manifest.inherits[alias]
+        raise MissingDefinition(
+            f"{alias!r} is inherited from {source} but has not been fetched",
+            location=str(directory.relative_to(home)),
+            hint="run `lockstep fetch` — inherited definitions are resolved state, like a virtualenv, "
+            "so they are not committed",
+        )
+
+    def scoped(name: str) -> str:
+        return f"{alias}/{name}" if alias else name
+
+    def stamped(src: SourceFile) -> SourceFile:
+        """Provenance says which upstream a definition arrived from, and at what content.
+
+        Without the alias, a generated file's `sources:` line claims the consumer wrote a guardrail
+        it only inherited — and the diff that matters when a standard changes is unattributable.
+        """
+        return replace(src, rel=f"{alias}:{src.rel}") if alias else src
+
+    for src in _load_dir(directory, "commands"):
+        command = parse_command(stamped(src))
+        command.name = scoped(command.name)
+        if alias:
+            _scope_command(command, alias)
         spec.commands[command.name] = command
-    for src in _load_dir(home, "agents"):
-        agent = parse_agent(src)
+
+    for src in _load_dir(directory, "agents"):
+        agent = parse_agent(stamped(src))
+        agent.name = scoped(agent.name)
+        agent.inherited_from = alias
+        # A definition resolves its references inside its own tree. Cross-alias references are not a
+        # thing in this version: an inherited pipeline is self-contained, and anything organization-
+        # wide reaches it by being sealed rather than by being named.
+        agent.guardrails = [scoped(name) for name in agent.guardrails]
+        agent.skills = [scoped(name) for name in agent.skills]
         spec.agents[agent.name] = agent
-    for src in _load_dir(home, "profiles"):
+
+    for src in _load_dir(directory, "profiles"):
+        # Profiles are the one thing never inherited: they hold one deployment's secrets and choose
+        # its contexts, and neither is knowable upstream.
+        if alias:
+            continue
         profile = parse_profile(src)
         spec.profiles[profile.name] = profile
+
     for subdir, bucket in (
         ("guardrails", spec.guardrails),
         ("skills", spec.skills),
         ("contexts", spec.contexts),
     ):
-        for src in _load_dir(home, subdir):
-            fragment = parse_fragment(src, subdir.rstrip("s"))
-            fragment.name = _fragment_name(src, subdir)
+        for src in _load_dir(directory, subdir):
+            fragment = parse_fragment(stamped(src), subdir.rstrip("s"))
+            fragment.name = scoped(_fragment_name(src, subdir))
+            fragment.inherited_from = alias
+            if not alias:
+                # Sealing your own guardrail seals it against yourself, which means nothing.
+                fragment.sealed = False
+            if fragment.name in bucket:
+                raise SpecError(
+                    f"{fragment.kind} {fragment.name!r} is defined twice",
+                    location=src.rel,
+                    hint="a local definition cannot take the name of an inherited one; rename yours",
+                )
             bucket[fragment.name] = fragment
 
-    mcp_path = home / "mcp" / "servers.json"
+    if alias:
+        _merge_extensions(spec, directory, alias, home)
+        return
+
+    mcp_path = directory / "mcp" / "servers.json"
     if mcp_path.is_file():
         spec.mcp_servers = parse_mcp_servers(json.loads(mcp_path.read_text(encoding="utf-8")))
 
-    _validate(spec)
-    return spec
+
+def _scope_command(command: Command, alias: str) -> None:
+    """Rewrite an inherited command's references into its own namespace.
+
+    Its scripts live in the fetched tree rather than beside the consumer's own, and the agents and
+    sub-commands it names are the ones its own repository defined — not whatever a consumer happens
+    to have called the same thing.
+    """
+    command.guardrails = [f"{alias}/{name}" for name in command.guardrails]
+    for step in command.steps:
+        if step.kind is StepKind.SCRIPT:
+            step.target = f"{INHERITED_DIR}/{alias}/{step.target}"
+        elif step.kind in (StepKind.AGENT, StepKind.COMMAND):
+            step.target = f"{alias}/{step.target}"
+
+
+def _merge_extensions(spec: Spec, directory: Path, alias: str, home: Path) -> None:
+    """An inherited pipeline brings the builtins it needs, and the package that provides them."""
+    inherited = load_manifest(directory, directory).extensions
+    for name in inherited.builtins:
+        if name not in spec.manifest.extensions.builtins:
+            spec.manifest.extensions.builtins.append(name)
+    for package in inherited.packages:
+        # `name @ file://./extensions` is relative to the tree that declared it.
+        rerooted = package.replace("file://./", f"file://./{INHERITED_DIR}/{alias}/")
+        if rerooted not in spec.manifest.extensions.packages:
+            spec.manifest.extensions.packages.append(rerooted)
+
+
+def _resolve_uses(spec: Spec) -> None:
+    """Bind each `commands:` entry that names an inherited command to the definition it wants."""
+    for name, use in spec.manifest.uses.items():
+        if not use.source:
+            continue
+        command = _find_inherited(spec, name, use.source)
+        bound = replace(command, name=name)
+        bound.guardrails = [*command.guardrails, *use.add_guardrails]
+        spec.commands[name] = bound
+        for step in bound.steps:
+            if step.kind is StepKind.AGENT:
+                agent = spec.agents.get(step.target)
+                if agent:
+                    agent.guardrails = [*agent.guardrails, *use.add_guardrails]
+                    agent.skills = [*agent.skills, *use.add_skills]
+
+
+def _find_inherited(spec: Spec, name: str, source: str) -> Command:
+    if "/" in source:
+        found = spec.commands.get(source)
+        if found is None:
+            raise MissingDefinition(
+                f"command {name!r} is `from: {source}`, which no inherited pipeline defines",
+                hint=f"known: {', '.join(sorted(n for n in spec.commands if '/' in n)) or '(none)'}",
+            )
+        return found
+
+    candidates = sorted(n for n in spec.commands if n.startswith(f"{source}/"))
+    if not candidates:
+        raise MissingDefinition(
+            f"command {name!r} is `from: {source}`, which is not an alias in `inherits:`",
+            hint=f"declared aliases: {', '.join(sorted(spec.manifest.inherits)) or '(none)'}",
+        )
+    if len(candidates) > 1:
+        raise SpecError(
+            f"`from: {source}` is ambiguous — that pipeline defines {len(candidates)} commands",
+            hint=f"name one: {', '.join(candidates)}",
+        )
+    return spec.commands[candidates[0]]
 
 
 def _validate(spec: Spec) -> None:
@@ -199,6 +357,15 @@ def _validate(spec: Spec) -> None:
 
     for profile in spec.profiles.values():
         loc = profile.src.rel if profile.src else profile.name
+        for name in profile.exclude_guardrails:
+            excluded = spec.guardrails.get(name)
+            if excluded is not None and excluded.sealed:
+                raise SpecError(
+                    f"guardrail {name!r} is sealed and cannot be excluded",
+                    location=loc,
+                    hint=f"it is a standard {excluded.inherited_from!r} publishes, not a default; "
+                    "take it up with whoever owns that repository",
+                )
         for name in profile.contexts:
             if name not in spec.contexts:
                 raise MissingDefinition(f"unknown context {name!r}", location=loc)

@@ -3,8 +3,12 @@
 One security team owns the review standards. Two hundred repositories should follow them, pick up
 changes without anybody copying a file, and still be able to say what *their* codebase is.
 
-This is the design for that. It adds one manifest key and one frontmatter flag; everything else is
-machinery this framework already has and already tests.
+**Tier 1 and sealing are built.** `tests/fixtures/` holds the whole arrangement — an
+`upstream-standards` repository that publishes sealed guardrails and nothing else, an
+`upstream-review` repository that publishes a pipeline, and a `consumer` whose entire contents are a
+manifest, a profile, a context and one house rule. `tests/test_inherits.py` compiles it.
+
+Bands (Part 4) and the updater (Part 7) are still design.
 
 ---
 
@@ -106,24 +110,32 @@ That is the whole consuming repository. Nine other directories stay empty.
 
 ### Where imports come from, and how they are pinned
 
-A git ref, resolved to a commit, recorded beside the capability pins:
+A git ref — a tag *or a branch* — resolved to a commit and recorded beside the capability pins:
 
 ```json
 // .lockstep/.pipeline/pins.lock
 {
   "inherits": {
-    "standards": { "repo": "acme/pipeline-standards", "tag": "v3", "sha": "9c1f…" },
-    "review":    { "repo": "acme/pipeline-pr-review", "tag": "v2", "sha": "4ab7…" }
+    "standards": { "repo": "acme/pipeline-standards", "ref": "v3",   "sha": "9c1f…" },
+    "review":    { "repo": "acme/pipeline-pr-review", "ref": "main", "sha": "4ab7…" }
   }
 }
 ```
 
-This reuses `resolve_tag`, `check_pins_current` and the moved-tag warning verbatim — the same
-supply-chain property the capability actions already get. A tag someone retags is caught on the next
-build rather than silently changing what a reviewed pipeline runs.
+This reuses `resolve_ref`, `check_pins_current` and the moved-ref warning — the same supply-chain
+property the capability actions already get. A tag someone retags is caught on the next build rather
+than silently changing what a reviewed pipeline runs. Changing the ref in the manifest drops the
+recorded commit, so a stale pin cannot survive a redirection.
 
-The fetched spec is **not committed**. `lockstep compile` materializes each import at its pinned SHA
-into `.lockstep/.pipeline/inherited/<alias>/`, gitignored, exactly like any other dependency.
+The fetched spec is **not committed**. `lockstep fetch` materializes each import at its pinned commit
+into `.pipeline/inherited/<alias>/` — one commit, fetched by SHA, not a branch that happens to point
+at it today — and the scaffolded `.gitignore` excludes it. `lockstep compile` refuses to run without
+it, naming the command, and the generated `pipeline-ci.yml` runs `lockstep fetch` before every check
+that compiles.
+
+A path instead of a `github.com/` source is copied rather than cloned, which is what makes developing
+an upstream and a consumer side by side bearable. `doctor` reports it as `DOC017`: unpinnable, so
+nobody else can reproduce the build.
 
 ### The part that makes this work: the drift gate is the review mechanism
 
@@ -158,10 +170,35 @@ Three tiers of ownership, visible in one line of a generated file.
 
 ### Names
 
-An import's definitions are namespaced by its alias: `standards/data-handling`, `review/security-reviewer`.
-The framework already supports paths in fragment names (`skills/test/common.md` is `test/common`), so
-this needs no new resolution rule — only that a local file cannot take an inherited name silently,
-which is the check `library` shadowing already performs.
+An import's definitions are namespaced by its alias: `standards/data-handling`,
+`review/security-reviewer`. The framework already supports paths in fragment names
+(`skills/test/common.md` is `test/common`), so this needs no new resolution rule — only that a local
+file cannot take an inherited name, which is refused rather than silently resolved either way.
+
+**A definition resolves its references inside its own tree.** An inherited command's `agent:` step,
+its guardrails and its scripts all scope to the alias it arrived under, so a consumer that happens to
+have an agent by the same name does not capture it. Scripts reroot into the fetched tree, which is
+what makes `bash .lockstep/.pipeline/inherited/review/scripts/post-reviews.sh` the emitted path.
+
+Cross-alias references are deliberately not a thing: an inherited pipeline is self-contained, and
+anything organization-wide reaches it by being **sealed** rather than by being named.
+
+Provenance carries the alias, so a generated file says which upstream each layer came from:
+
+```
+# sources: review:agents/reviewer.md@efd67e10 lockstep:guardrails/baseline.md@f12c42fc
+#          standards:guardrails/data-handling.md@addbefa2 guardrails/house-style.md@dde11b53
+```
+
+Framework, upstream pipeline, upstream standard, local — four tiers of ownership in one line.
+
+### Evals and tests travel with what they test
+
+An inherited agent is evalled by whoever published it: `LNT001` looks for its cases under
+`.pipeline/inherited/<alias>/evals/<agent>/cases/`, not in the consumer. Same for `LNT002` and an
+inherited script's unit tests. A consumer forced to write those would be testing somebody else's
+prompt from the outside, against a copy of it — which is the drift this framework keeps refusing to
+build in.
 
 ---
 
@@ -189,14 +226,15 @@ NEVER include customer records, credentials, or internal hostnames in output tha
 organization's infrastructure.
 ```
 
-Four compiler rules, all of which mirror something that already exists:
+Four compiler rules, all implemented, each mirroring something that already existed:
 
 1. A sealed guardrail **cannot be excluded**. `exclude_guardrails` naming one is an error, not a
    silent drop — the same reasoning that made a spec guardrail named `baseline` an error rather than
    a file the author sees in the repository and never in the prompt.
 2. A local file **cannot shadow** a sealed name. Already implemented for shipped guardrails.
-3. Sealed guardrails are **inlined ahead of local ones**. Position is a security property; this
-   extends the existing ordering rather than inventing one.
+3. Sealed guardrails are **inlined ahead of local ones**, and reach every agent without being named
+   — a guardrail each pipeline has to remember to list is one that a pipeline will forget. Position
+   is a security property; this extends the existing ordering rather than inventing one.
 4. Their `enforce:` block is **re-asserted after overlays**, which the compiler already does for the
    floor it computes today.
 
@@ -289,13 +327,15 @@ was waiting for.
 
 ## Part 6 — What it would take
 
-| Piece | Size | Rests on |
+| Piece | Status | Notes |
 |---|---|---|
-| `inherits:` in the manifest; fetch at a pinned SHA | small | `resolve_tag`, `pins.lock`, `check_pins_current` — all present |
-| Namespaced merge into the spec | small | fragment names already carry paths |
-| `sealed:` and its four rules | small | shadowing check and enforce-floor re-assertion both present |
-| `from:` / `add-guardrails:` in `commands:` | small | the manifest already carries a per-command map |
-| Bands on tunable fields | medium | new; start with three fields |
+| `inherits:` in the manifest; `lockstep fetch` at a pinned commit | **built** | reuses `resolve_ref`, `pins.lock`, `check_pins_current` |
+| Namespaced merge, script rerooting, aliased provenance | **built** | fragment names already carried paths |
+| `sealed:` and its four rules | **built** | shadowing check and enforce-floor re-assertion already existed |
+| `from:` / `add-guardrails:` / `add-skills:` in `commands:` | **built** | the manifest already carried a per-command map |
+| Evals and script tests resolved upstream | **built** | `LNT001`, `LNT002` follow the definition |
+| `DOC017` / `DOC018` — unpinned and unpinnable upstreams | **built** | |
+| Bands on tunable fields | design | start with three fields |
 | Transitive imports | — | **not in v1.** An import that imports is a package manager; require the consumer to list both, and say so |
 | Private-repo fetch in CI | medium | **the real operational cost.** A consumer's `GITHUB_TOKEN` cannot read another private repository; this needs a GitHub App or a PAT, per consumer. Worth knowing before starting rather than after |
 

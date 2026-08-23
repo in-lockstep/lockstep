@@ -58,6 +58,13 @@ def resolve_layers(agent: Agent, command: Command | None, profile: Profile, spec
     layers.guardrails.append(baseline)
     seen.add(baseline.name)
 
+    # Organization standards sit directly under the framework's floor and above everything local.
+    # They arrive without being named: a guardrail every pipeline has to remember to list is a
+    # guardrail one pipeline will forget, which is the whole reason `sealed:` exists.
+    for standard in spec.sealed_guardrails():
+        layers.guardrails.append(standard)
+        seen.add(standard.name)
+
     names = list(agent.guardrails)
     if command:
         names.extend(command.guardrails)

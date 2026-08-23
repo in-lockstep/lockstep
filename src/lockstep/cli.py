@@ -196,6 +196,27 @@ def doctor(root: Path, target: str, strict: bool) -> None:
     _run_checks(root, lambda spec: run_doctor(spec, root), "doctor", strict)
 
 
+@main.command(name="fetch")
+@root_option
+def fetch_command(root: Path) -> None:
+    """Materialize everything this pipeline inherits, at the commits its lock file records."""
+    from .lifecycle import fetch as do_fetch
+    from .spec.load import load_manifest_only
+
+    try:
+        notes = do_fetch(load_manifest_only(root), root)
+    except LockstepError as error:
+        click.echo(click.style(error.render(), fg="red"), err=True)
+        sys.exit(EXIT_SPEC)
+
+    if not notes:
+        click.echo("nothing inherited")
+        return
+    for note in notes:
+        click.echo(f"  {note}")
+    click.echo(f"fetched {len(notes)} upstream(s)")
+
+
 @main.command()
 @root_option
 @click.option("--sha", "actions_sha", default="", help="Pin the capability actions to this commit.")
@@ -205,11 +226,15 @@ def pin(root: Path, actions_sha: str, exec_digest: str, offline: bool) -> None:
     """Resolve capability tags into the commits and digests that will actually run."""
     from .lifecycle import pin as resolve_pins
     from .lifecycle import write_pins
-    from .spec.load import load_spec
+    from .spec.load import load_manifest_only
 
     try:
         data, notes, unresolved = resolve_pins(
-            load_spec(root), root, actions_sha=actions_sha, exec_digest=exec_digest, offline=offline
+            load_manifest_only(root),
+            root,
+            actions_sha=actions_sha,
+            exec_digest=exec_digest,
+            offline=offline,
         )
     except LockstepError as error:
         click.echo(click.style(error.render(), fg="red"), err=True)

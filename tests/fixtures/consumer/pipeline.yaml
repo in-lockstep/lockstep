@@ -1,0 +1,26 @@
+spec: 1
+name: acme-web
+
+inherits:
+  standards: ../upstream-standards
+  review: ../upstream-review
+
+commands:
+  review:
+    from: review
+    add-guardrails: [house-style]
+
+capabilities:
+  actions: github.com/acme/pipeline-actions@v1.4.0
+  exec: pipeline-exec==0.1.0
+  exec-image: quay.io/acme/pipeline-exec
+  compiler: lockstep>=0.1,<1.0
+  gh-aw: v0.34.0
+
+targets:
+  github-agentic:
+    out: .github/workflows
+    profiles: [repo]
+
+budgets:
+  per_run_ai_credits: 200

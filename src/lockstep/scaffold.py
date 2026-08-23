@@ -231,7 +231,10 @@ def test_the_limit_is_honoured():
     # --- repo furniture ---
 
     def _gitignore(self) -> str:
-        return "outputs/\n__pycache__/\n.venv/\n*.pyc\n"
+        # Inherited definitions are resolved state, like a virtualenv: the lock file records which
+        # commit, and `lockstep fetch` puts it back. Committing them would make every upstream bump
+        # a diff of somebody else's repository.
+        return "outputs/\n.pipeline/inherited/\n__pycache__/\n.venv/\n*.pyc\n"
 
     def _readme(self) -> str:
         return f"""# {self.name}

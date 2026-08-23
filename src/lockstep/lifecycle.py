@@ -8,6 +8,7 @@ cannot express — recorded, snapshotted, and tracked, so a fork is a decision r
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +19,67 @@ import yaml
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH
 from .errors import LockstepError
-from .spec.load import find_home
-from .spec.model import Spec
+from .spec.load import MANIFEST_NAME, find_home
+from .spec.model import INHERITED_DIR, LOCKSTEP_DIR, Spec
+
+
+def fetch(spec: Spec, root: Path) -> list[str]:
+    """Materialize everything this repository inherits, at the commit its lock file records.
+
+    A local path is copied rather than cloned, which is what makes developing an upstream and a
+    consumer side by side bearable. It is also unpinnable, so `doctor` says so.
+    """
+    home = _home(root)
+    pins = load_pins(root).get("inherits", {}) or {}
+    notes: list[str] = []
+
+    for alias, source in sorted(spec.manifest.inherits.items()):
+        destination = home / INHERITED_DIR / alias
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        if not source.startswith("github.com/"):
+            local = (root / source).resolve()
+            if not (local / MANIFEST_NAME).is_file() and not (local / LOCKSTEP_DIR).is_dir():
+                raise PinError(f"{alias}: {local} is not a pipeline")
+            origin, _ = find_home(local)
+            shutil.copytree(origin, destination, ignore=shutil.ignore_patterns(".git", ".github"))
+            notes.append(f"{alias}: copied from {source} (local, not pinned)")
+            continue
+
+        entry = pins.get(alias) or {}
+        sha = str(entry.get("sha") or "")
+        if not sha:
+            raise PinError(
+                f"{alias}: no commit recorded for {source}",
+                hint="run `lockstep pin` first — fetching a moving ref would defeat the lock file",
+            )
+        _clone_at(entry.get("repo", ""), sha, destination)
+        notes.append(f"{alias}: {entry.get('repo')}@{sha[:12]}")
+
+    return notes
+
+
+def _clone_at(repo: str, sha: str, destination: Path) -> None:
+    """Fetch exactly one commit. Not a branch that happens to point at it today."""
+    url = f"https://github.com/{repo}.git"
+    destination.mkdir(parents=True, exist_ok=True)
+    steps = (
+        ["git", "init", "--quiet"],
+        ["git", "remote", "add", "origin", url],
+        ["git", "fetch", "--quiet", "--depth", "1", "origin", sha],
+        ["git", "checkout", "--quiet", "FETCH_HEAD"],
+    )
+    for args in steps:
+        result = subprocess.run(args, cwd=destination, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise PinError(
+                f"could not fetch {repo}@{sha[:12]}: {result.stderr.strip()[:200]}",
+                hint="the commit must exist and be reachable with the token this job holds",
+            )
+    shutil.rmtree(destination / ".git", ignore_errors=True)
+
 
 EJECTED_PATH = ".pipeline/ejected.yaml"
 EJECT_BASE = ".pipeline/eject-base"
@@ -46,13 +106,17 @@ class EjectError(LockstepError):
 # --- pinning ---------------------------------------------------------------
 
 
-def resolve_tag(repo: str, tag: str) -> str:
-    """Resolve a tag to the commit it currently points at."""
+def resolve_ref(repo: str, ref: str) -> str:
+    """Resolve a tag *or a branch* to the commit it currently points at.
+
+    Branches matter for inheritance in a way they do not for capabilities: a canary consumer tracks
+    `@main` so an upstream change that breaks a real overlay surfaces before the tag is cut.
+    """
     owner_repo = "/".join(repo.split("/")[:2])
     url = f"https://github.com/{owner_repo}.git"
     try:
         result = subprocess.run(
-            ["git", "ls-remote", "--tags", "--refs", url, tag],
+            ["git", "ls-remote", "--tags", "--heads", "--refs", url, ref],
             capture_output=True,
             text=True,
             timeout=30,
@@ -62,8 +126,8 @@ def resolve_tag(repo: str, tag: str) -> str:
         raise PinError(f"could not reach {url}: {exc}") from exc
     if result.returncode != 0 or not result.stdout.strip():
         raise PinError(
-            f"no tag {tag!r} in {owner_repo}",
-            hint="check capabilities.actions in pipeline.yaml, or pass --sha to pin by hand",
+            f"no tag or branch {ref!r} in {owner_repo}",
+            hint="check the ref in pipeline.yaml, or pass --sha to pin by hand",
         )
     return result.stdout.split()[0]
 
@@ -119,7 +183,7 @@ def pin(
             notes.append("actions: left as-is (offline)")
         else:
             try:
-                resolved = resolve_tag(repo, tag)
+                resolved = resolve_ref(repo, tag)
             except PinError as error:
                 unresolved.append(f"actions: {error.message}")
             else:
@@ -142,11 +206,43 @@ def pin(
             notes.append(f"{action}: left unpinned (offline)")
             continue
         try:
-            entry["sha"] = resolve_tag(action, tag)
+            entry["sha"] = resolve_ref(action, tag)
         except PinError as error:
             unresolved.append(f"{action}: {error.message}")
         else:
             notes.append(f"{action}@{tag} -> {entry['sha'][:12]}")
+
+    # Inherited pipelines pin exactly like capabilities do, and for the same reason: a tag someone
+    # retags is the supply-chain event this whole mechanism exists to catch.
+    inherits = data.setdefault("inherits", {})
+    for alias, source in sorted(spec.manifest.inherits.items()):
+        if not source.startswith("github.com/"):
+            notes.append(f"{alias}: local path, not pinned")
+            inherits.pop(alias, None)
+            continue
+        repo, _, ref = source.removeprefix("github.com/").partition("@")
+        if not ref:
+            unresolved.append(f"{alias}: {source} names no ref; add `@<tag-or-branch>`")
+            continue
+        entry = inherits.setdefault(alias, {})
+        if entry.get("repo") not in (None, repo) or entry.get("ref") not in (None, ref):
+            entry.pop("sha", None)
+        entry["repo"], entry["ref"] = repo, ref
+        if offline:
+            notes.append(f"{alias}: left as-is (offline)")
+            continue
+        try:
+            resolved = resolve_ref(repo, ref)
+        except PinError as error:
+            unresolved.append(f"{alias}: {error.message}")
+        else:
+            if entry.get("sha") and entry["sha"] != resolved:
+                notes.append(f"{alias}: {ref} moved {entry['sha'][:12]} -> {resolved[:12]}")
+            entry["sha"] = resolved
+            notes.append(f"{alias}: {repo}@{ref} -> {resolved[:12]}")
+    for alias in [a for a in inherits if a not in spec.manifest.inherits]:
+        inherits.pop(alias)
+        notes.append(f"{alias}: no longer inherited; dropped from the lock")
 
     package, _, version = spec.manifest.capabilities.exec.partition("==")
     entry = capabilities.setdefault("exec", {})
@@ -192,7 +288,7 @@ def check_pins_current(spec: Spec, root: Path) -> list[str]:
     entry = (data.get("capabilities") or {}).get("actions") or {}
     if not (entry.get("repo") and entry.get("tag") and entry.get("sha")):
         return []
-    current = resolve_tag(entry["repo"], entry["tag"])
+    current = resolve_ref(entry["repo"], entry["tag"])
     if current != entry["sha"]:
         return [
             f"{entry['repo']}@{entry['tag']} now resolves to {current[:12]}, "
