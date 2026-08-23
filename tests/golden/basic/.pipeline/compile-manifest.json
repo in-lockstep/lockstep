@@ -26,6 +26,10 @@
         "commands/generate-tests.md@440e3547"
       ]
     },
+    ".github/workflows/pipeline-ci.yml": {
+      "sha": "3f862c6a",
+      "sources": []
+    },
     ".github/workflows/repair.yml": {
       "sha": "343b4e37",
       "sources": [

@@ -26,6 +26,8 @@ from .agentic import (
     verify_enforcement,
     workflow_filename,
 )
+from .ci import WORKFLOW_NAME as CI_WORKFLOW
+from .ci import emit_ci
 from .context import EmitContext, Pins
 from .fragments import emit_fragments, resolve_layers
 from .orchestrator import WorkflowResult, emit_command, normalize
@@ -150,6 +152,14 @@ def compile_spec(root: Path) -> CompilePlan:
 
     _check_unapplied(overlays, plan, spec.manifest.target.out)
 
+    ci_ctx = EmitContext(spec=spec, pins=pins, profile=profiles[0], multi_profile=multi)
+    plan.add(
+        f"{spec.manifest.target.out}/{CI_WORKFLOW}",
+        yamlio.with_header(
+            yamlio.annotate_pins(yamlio.dump(emit_ci(spec, ci_ctx)), pins.sha_tags()),
+            ci_ctx.header([spec.manifest.src]),
+        ),
+    )
     plan.add(f"{spec.manifest.target.out}/.gitattributes", _gitattributes())
     plan.add(SECRETS_DOC, _secrets_doc(spec, profiles))
     plan.add(MANIFEST_PATH, _compile_manifest(plan, spec))

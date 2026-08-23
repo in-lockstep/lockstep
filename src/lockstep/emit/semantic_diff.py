@@ -132,10 +132,33 @@ def diff_surfaces(old: dict[str, dict[str, Any]], new: dict[str, dict[str, Any]]
 
 
 def against_disk(root: Path, plan: CompilePlan) -> SemanticDiff:
-    """Compare a fresh compile against what is currently committed."""
+    """Compare a fresh compile against what is currently in the working tree."""
     on_disk: dict[str, str] = {}
     for relative in plan.files:
         target = root / relative
         if target.is_file():
             on_disk[relative] = target.read_text(encoding="utf-8")
     return diff_surfaces(surfaces(on_disk), surfaces(plan.files))
+
+
+def against_ref(root: Path, plan: CompilePlan, ref: str) -> SemanticDiff:
+    """Compare a fresh compile against a git ref — normally the branch being merged into.
+
+    Comparing against the working tree answers "did you forget to recompile", which the drift gate
+    already covers. The question a reviewer needs answered is different: what does merging this
+    change about the security and cost surface? That is only visible against the base.
+    """
+    import subprocess
+
+    baseline: dict[str, str] = {}
+    for relative in plan.files:
+        result = subprocess.run(
+            ["git", "show", f"{ref}:{relative}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            baseline[relative] = result.stdout
+    return diff_surfaces(surfaces(baseline), surfaces(plan.files))

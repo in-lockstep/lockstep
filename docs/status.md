@@ -163,9 +163,36 @@ only. Jobs that probe the cache now request it, and a contract test asserts they
 further contract tests assert that every input the compiler passes is declared by the action, every
 output it reads exists, and every required input is supplied.
 
+## Phase 5 — lifecycle tooling
+
+**`lockstep lint`** asks whether the spec is well built: every agent evaluated, every script tested,
+no agent spending tokens on sorting and deduplication, no fan-out left serial. **`lockstep doctor`**
+asks a different question — whether the target will accept it: pins resolved, engines mapped, budgets
+set, credentials declared, MCP servers carrying tool lists, timeouts within the platform limit. A
+spec can be excellent and un-deployable, so conflating the two would make both easier to ignore.
+
+**`lockstep pin`** resolves capability tags to the commits that will actually run, and reports when a
+tag has been moved since it was pinned — the supply-chain event pinning exists to catch.
+
+**`lockstep eject` / `uneject`** are the escape hatch for the file the spec cannot express. Ejecting
+snapshots the generation it forked from, so a later merge has a real base; `compile --check` then
+reports when that source moves on, keeping fork debt visible instead of silent.
+
+**The policy gate.** `--fail-on-blocking` fails a build when the security surface changes — a new
+write permission, a new trigger, a new egress host, a widened MCP allow-list. Building it exposed a
+gap in the design: comparing against the working tree answers "did you forget to recompile", which
+the drift gate already covers, so an author who recompiled correctly would sail through. The question
+a reviewer needs answered is what *merging* would change, which is only visible against the base
+branch. Hence `--base`, which the generated gate passes automatically.
+
+**Generated `pipeline-ci.yml`** wires all of it into the compiled repo: drift gate with the policy
+gate against the base branch, lint, doctor, and the scripts' own tests. Every job is read-only, and
+each installs the pinned compiler as a tool rather than syncing the repository's environment — a
+check must not execute project-defined build hooks in order to run.
+
 ## Testing
 
-312 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
+361 tests, 96% line coverage. The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests

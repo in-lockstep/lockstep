@@ -86,3 +86,90 @@ def test_notes_surface_deferred_capabilities(basic_root):
     result = run("compile", "--root", str(basic_root))
     assert "note:" in result.output
     assert "Deploy the app locally" in result.output
+
+
+# --- Phase 5 lifecycle commands --------------------------------------------
+
+
+def test_lint_fails_on_an_error(basic_root):
+    result = run("lint", "--root", str(basic_root))
+    assert result.exit_code == EXIT_DRIFT
+    assert "LNT001" in result.output
+
+
+def test_lint_strict_promotes_warnings(basic_root):
+    cases = basic_root / "evals" / "story-extractor" / "cases"
+    cases.mkdir(parents=True)
+    (cases / "one.json").write_text("{}", encoding="utf-8")
+
+    assert run("lint", "--root", str(basic_root)).exit_code == EXIT_OK
+    assert run("lint", "--root", str(basic_root), "--strict").exit_code == EXIT_DRIFT
+
+
+def test_doctor_passes_on_the_fixture(basic_root):
+    result = run("doctor", "--root", str(basic_root))
+    assert result.exit_code == EXIT_OK
+    assert "0 error(s)" in result.output
+
+
+def test_doctor_rejects_an_unknown_target(basic_root):
+    assert run("doctor", "--root", str(basic_root), "--target=jenkins").exit_code != EXIT_OK
+
+
+def test_pin_writes_the_lockfile(basic_root):
+    result = run("pin", "--root", str(basic_root), "--sha", "c" * 40, "--exec-digest", "sha256:" + "d" * 64)
+    assert result.exit_code == EXIT_OK
+    assert "pins.lock" in result.output
+    assert "c" * 40 in (basic_root / ".pipeline" / "pins.lock").read_text()
+
+
+def test_eject_then_compile_leaves_the_file_alone(basic_root):
+    run("compile", "--root", str(basic_root))
+    target = ".github/workflows/discover.yml"
+    assert run("eject", "--root", str(basic_root), target).exit_code == EXIT_OK
+
+    (basic_root / target).write_text("# mine now\n", encoding="utf-8")
+    run("compile", "--root", str(basic_root))
+    assert (basic_root / target).read_text() == "# mine now\n"
+
+
+def test_ejecting_an_ungenerated_file_is_refused(basic_root):
+    result = run("eject", "--root", str(basic_root), "README.md")
+    assert result.exit_code == EXIT_SPEC
+    assert "not generated" in result.output
+
+
+def test_uneject_restores_compiler_ownership(basic_root):
+    run("compile", "--root", str(basic_root))
+    target = ".github/workflows/discover.yml"
+    run("eject", "--root", str(basic_root), target)
+    assert run("uneject", "--root", str(basic_root), target).exit_code == EXIT_OK
+
+    (basic_root / target).write_text("# no longer mine\n", encoding="utf-8")
+    assert run("compile", "--root", str(basic_root), "--check").exit_code == EXIT_DRIFT
+
+
+def test_the_policy_gate_fails_an_unacknowledged_surface_change(basic_root):
+    """A widened tool allow-list must stop a merge, not merely appear in a check summary."""
+    run("compile", "--root", str(basic_root))
+    guardrail = basic_root / "guardrails" / "common.md"
+    guardrail.write_text(guardrail.read_text().replace("  permissions: read-all\n", ""))
+
+    result = run("compile", "--root", str(basic_root), "--check", "--fail-on-blocking")
+    assert result.exit_code == EXIT_DRIFT
+    assert "[BLOCK]" in result.output
+
+
+def test_a_clean_recompile_passes_the_policy_gate(basic_root):
+    run("compile", "--root", str(basic_root))
+    assert run("compile", "--root", str(basic_root), "--check", "--fail-on-blocking").exit_code == EXIT_OK
+
+
+def test_check_reports_a_stale_ejection(basic_root):
+    run("compile", "--root", str(basic_root))
+    run("eject", "--root", str(basic_root), ".github/workflows/discover.yml")
+    command = basic_root / "commands" / "discover.md"
+    command.write_text(command.read_text().replace("**Discover UI structure**", "**Map the UI**"))
+
+    result = run("compile", "--root", str(basic_root), "--check")
+    assert "stale eject" in result.output
