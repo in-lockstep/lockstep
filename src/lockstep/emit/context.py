@@ -117,6 +117,10 @@ class EmitContext:
         return self.runs_on_override or self.spec.manifest.target.default_runs_on
 
     @property
+    def state_db_path(self) -> str:
+        return f"{self.output_dir_env}/.state/{self.spec.manifest.name}.db"
+
+    @property
     def out_dir(self) -> str:
         return self.spec.manifest.target.out
 
@@ -162,4 +166,5 @@ class EmitContext:
         for key, value in self.resolved_values().items():
             text = text.replace("{" + key + "}", value)
         text = text.replace("{output_dir}", self.output_dir_env)
+        text = text.replace("{state_db}", self.state_db_path)
         return text.replace("{pipeline_name}", self.spec.manifest.name)

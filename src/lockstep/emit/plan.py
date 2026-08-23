@@ -104,11 +104,14 @@ def compile_spec(root: Path) -> CompilePlan:
             )
             workflows[filename] = result
             plan.notes.extend(result.notes)
+            for path, content in result.step_defs.items():
+                plan.add(path, content)
             fused = result.step_count - result.job_count
             plan.summaries.append(
                 f"{name}: {_plural(result.step_count, 'step')} -> {_plural(result.job_count, 'job')}"
                 + (f" (fusion saved {fused})" if fused > 0 else "")
                 + f" · {result.agentic_steps} agentic, {result.deterministic_steps} deterministic"
+                + f", {result.cached_steps} cacheable"
             )
 
         applied = _apply_overlays(overlays, workflows, agent_files, root)

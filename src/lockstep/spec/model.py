@@ -79,6 +79,9 @@ class Step:
     targets: list[str] = field(default_factory=list)
     job_boundary: bool = False
     min_success_rate: float | None = None
+    max_iterations: int = 0
+    # Shell command producing a hash of live target state, so a redeploy invalidates cached output.
+    fingerprint: str = ""
 
     def applies_to(self, backend: str) -> bool:
         """A step with no `targets:` applies everywhere; otherwise only where listed."""
@@ -116,6 +119,8 @@ class CommandGithub:
     timeout_minutes: int | None = None
     max_iterations: int = 1
     concurrency: dict[str, Any] | None = None
+    # Step id whose `converged` output this command exposes to callers that unroll it.
+    converged_from: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
 

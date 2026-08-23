@@ -113,7 +113,7 @@ def test_targets_gate_steps_per_backend():
 
 def test_loads_the_fixture_spec(basic_spec_dir):
     spec = load_spec(basic_spec_dir)
-    assert set(spec.commands) == {"discover", "generate-tests"}
+    assert set(spec.commands) == {"discover", "generate-tests", "repair", "validate"}
     assert spec.agents["story-extractor"].max_tool_turns == 8
     assert spec.guardrails["common"].enforce.permissions == "read-all"
     assert spec.skills["test/common"].name == "test/common"

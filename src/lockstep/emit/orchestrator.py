@@ -13,6 +13,7 @@ from typing import Any
 from ..errors import EmitError, SpecError
 from ..spec.model import Command, Condition, Spec, Step, StepKind
 from ..util.text import slug
+from .caching import cache_spec_for, emit_fingerprint, emit_probe, emit_save, render_step_def, step_def_path
 from .context import EmitContext
 from .profiles import env_block, secret_ref
 
@@ -53,6 +54,8 @@ class WorkflowResult:
     job_count: int = 0
     agentic_steps: int = 0
     deterministic_steps: int = 0
+    step_defs: dict[str, str] = field(default_factory=dict)
+    cached_steps: int = 0
 
 
 def runner_for(script: str) -> str:
@@ -112,10 +115,14 @@ def _condition_key(condition: Condition | None) -> str:
     return condition.key() if condition else ""
 
 
+def _bare_condition(condition: Condition) -> str:
+    operator = "!=" if condition.negated else "=="
+    return f"inputs.{condition.input_name} {operator} true"
+
+
 def _if_expression(condition: Condition) -> str:
     """`(if not --skip-repair)` -> an expression that also reads correctly on schedule triggers."""
-    operator = "!=" if condition.negated else "=="
-    return "${{ inputs." + condition.input_name + " " + operator + " true }}"
+    return "${{ " + _bare_condition(condition) + " }}"
 
 
 def emit_command(
@@ -135,11 +142,6 @@ def emit_command(
         result.notes.append(
             f"{command.name}: step {skipped.number} ({skipped.label!r}) skipped — targets={skipped.targets}"
         )
-    if command.state:
-        result.notes.append(
-            f"{command.name}: `state: {command.state}` is not lowered yet (Phase 2); "
-            "steps needing shared state should be fused into one job"
-        )
     if command.github.max_iterations > 1:
         result.notes.append(
             f"{command.name}: `max-iterations` convergence unrolling is not implemented yet (Phase 2)"
@@ -153,13 +155,19 @@ def emit_command(
 
     _validate_conditions(command, steps)
 
+    upstream = _upstream_outputs(steps, ctx, command)
     groups = group_steps(steps, fuse=spec.manifest.target.fuse_script_steps)
+    state_group = _resolve_state_scope(command, groups, ctx, result)
     jobs: dict[str, dict[str, Any]] = {}
     previous_id: str | None = None
     previous_job: dict[str, Any] | None = None
 
+    step_to_job: dict[str, str] = {}
+
     for group in groups:
         fanout_ref: str | None = None
+        items_expr: str | None = None
+        producer_id: str | None = None
         if group.head.foreach:
             producer_id, producer_job = _ensure_producer(jobs, previous_id, previous_job, group, ctx)
             output_name = f"items_{group.id.replace('-', '_')}"
@@ -167,28 +175,60 @@ def emit_command(
             producer_job.setdefault("outputs", {})[output_name] = (
                 "${{ steps." + f"fanout-{group.id}" + ".outputs.items }}"
             )
+            items_expr = "${{ needs." + producer_id + ".outputs." + output_name + " }}"
             fanout_ref = "${{ fromJSON(needs." + producer_id + ".outputs." + output_name + ") }}"
             previous_id = producer_id
 
+        emitted: list[tuple[str, dict[str, Any]]]
         if group.kind == "steps":
-            job = _steps_job(group, ctx, previous_id, fanout_ref, command)
+            emitted = [
+                (
+                    group.id,
+                    _steps_job(
+                        group,
+                        ctx,
+                        previous_id,
+                        fanout_ref,
+                        command,
+                        upstream,
+                        result,
+                        stateful=group is state_group,
+                    ),
+                )
+            ]
         elif group.kind == "agent":
-            job = _agent_job(group, ctx, previous_id, fanout_ref, agent_lock, agent_secrets, command)
+            emitted = [
+                (
+                    group.id,
+                    _agent_job(group, ctx, previous_id, fanout_ref, agent_lock, agent_secrets, command),
+                )
+            ]
             result.agents_used.append(group.head.target)
         else:
-            job = _command_job(group, ctx, previous_id, sub_workflow, command)
+            emitted = _command_jobs(group, ctx, previous_id, sub_workflow, command)
 
-        jobs[group.id] = job
-        previous_id = group.id
-        previous_job = job if group.kind == "steps" else None
+        for job_id, job in emitted:
+            jobs[job_id] = job
+        for step in group.steps:
+            step_to_job[step.id] = emitted[0][0]
+
+        previous_id = emitted[-1][0]
+        previous_job = emitted[-1][1] if group.kind == "steps" else None
+
+        if group.head.foreach and group.head.min_success_rate is not None:
+            verify_id, verify_job = _verify_job(group, ctx, previous_id, producer_id, items_expr, command)
+            jobs[verify_id] = verify_job
+            previous_id, previous_job = verify_id, verify_job
 
     result.step_count = len(steps)
     result.job_count = len(jobs)
     result.agentic_steps = sum(1 for s in steps if s.kind is StepKind.AGENT)
     result.deterministic_steps = sum(1 for s in steps if s.kind in (StepKind.SCRIPT, StepKind.BUILTIN))
+    _expose_convergence(command, jobs, step_to_job, result)
+
     result.data = {
         "name": command.name if not ctx.multi_profile else f"{command.name} ({ctx.profile.name})",
-        "on": _on_block(command, ctx),
+        "on": _on_block(command, ctx, step_to_job),
         "permissions": {"contents": "read"},
         "concurrency": _concurrency(command, ctx),
         "env": {"OUTPUT_DIR": ctx.output_dir_env},
@@ -266,12 +306,79 @@ def _base_steps_job(ctx: EmitContext, needs: str | None, *, condition: Condition
     return job
 
 
+STATE_TOKEN = "{state_db}"
+
+
+def _uses_state(step: Step) -> bool:
+    haystack = " ".join([*step.args.values(), step.input, step.output, step.pre, step.post])
+    return STATE_TOKEN in haystack
+
+
+def _resolve_state_scope(
+    command: Command, groups: list[JobGroup], ctx: EmitContext, result: WorkflowResult
+) -> JobGroup | None:
+    """Find the single job that may carry the state database.
+
+    The state file travels between jobs as an artifact, which is last-writer-wins. That is fine
+    within one job and wrong across parallel ones, so the compiler is total about it: state must
+    live in exactly one job group, and never inside a matrix.
+    """
+    if not command.state:
+        return None
+
+    holders = [(group, step) for group in groups for step in group.steps if _uses_state(step)]
+    if not holders:
+        result.notes.append(
+            f"{command.name}: `state: {command.state}` is declared but no step references "
+            f"`{STATE_TOKEN}`; no state database is emitted"
+        )
+        return None
+
+    distinct = {id(group): group for group, _ in holders}
+    if len(distinct) > 1:
+        steps = ", ".join(f"{step.number} ({step.label!r})" for _, step in holders)
+        raise EmitError(
+            f"`{STATE_TOKEN}` is used by steps in {len(distinct)} different jobs: {steps}",
+            location=command.src.rel if command.src else command.name,
+            hint=(
+                "state travels between jobs as a last-writer-wins artifact; merge these steps into "
+                "one job (remove the boundary between them) or pass values through step outputs"
+            ),
+        )
+
+    group = next(iter(distinct.values()))
+    if group.head.foreach:
+        raise EmitError(
+            f"`{STATE_TOKEN}` is used inside a foreach step ({group.head.label!r})",
+            location=command.src.rel if command.src else command.name,
+            hint="matrix legs run in parallel; concurrent writes to one state artifact would be lost",
+        )
+    _ = ctx
+    return group
+
+
+def _upstream_outputs(steps: list[Step], ctx: EmitContext, command: Command) -> dict[str, dict[str, str]]:
+    """For each step, the output paths earlier steps declared — the cache-invalidation cascade."""
+    from .caching import declared_outputs
+
+    seen: dict[str, str] = {}
+    per_step: dict[str, dict[str, str]] = {}
+    for step in steps:
+        per_step[step.id] = dict(seen)
+        for path in declared_outputs(step, ctx, command):
+            seen[path] = step.id
+    return per_step
+
+
 def _steps_job(
     group: JobGroup,
     ctx: EmitContext,
     needs: str | None,
     fanout_ref: str | None,
     command: Command,
+    upstream: dict[str, dict[str, str]],
+    result: WorkflowResult,
+    stateful: bool = False,
 ) -> dict[str, Any]:
     job = _base_steps_job(ctx, needs, condition=group.condition)
     env = env_block(ctx.profile)
@@ -285,19 +392,55 @@ def _steps_job(
 
     body: list[dict[str, Any]] = []
     for step in group.steps:
+        cache = cache_spec_for(step, command, ctx, upstream.get(step.id, {}))
+        gate = cache.hit_condition if cache else None
+        if cache:
+            result.cached_steps += 1
+            # The definition file exists to be hashed; only a cached step has anything to hash it.
+            result.step_defs[step_def_path(command, step)] = render_step_def(step, command)
+            if cache.fingerprint:
+                body.append(emit_fingerprint(cache, step))
+            body.append(emit_probe(cache, ctx))
+
         if step.pre:
-            body.append({"name": f"pre: {step.label}", "run": step.pre})
-        body.append(_run_step(step, ctx, command))
+            body.append(_gated({"name": f"pre: {step.label}", "run": step.pre}, gate))
+        body.append(_gated(_run_step(step, ctx, command), gate))
         if step.post:
-            body.append({"name": f"post: {step.label}", "run": step.post})
+            body.append(_gated({"name": f"post: {step.label}", "run": step.post}, gate))
         if step.on_failure:
             body.append(
                 {"name": f"on-failure: {step.label}", "if": "${{ failure() }}", "run": step.on_failure}
             )
+        if cache:
+            body.append(emit_save(cache, ctx))
 
     steps: list[dict[str, Any]] = job["steps"]
+    if stateful:
+        body.insert(
+            0,
+            {
+                "name": "Load state",
+                "uses": ctx.pins.action("state/load"),
+                "with": {"path": ctx.state_db_path},
+            },
+        )
+        body.append(
+            {
+                "name": "Save state",
+                "if": "${{ always() }}",
+                "uses": ctx.pins.action("state/save"),
+                "with": {"path": ctx.state_db_path, "retain": command.state == "keep"},
+            }
+        )
     steps[2:2] = body
     return job
+
+
+def _gated(step: dict[str, Any], condition: str | None) -> dict[str, Any]:
+    """A cache hit skips the work and its hooks alike — the hooks are part of the step."""
+    if condition:
+        step["if"] = condition
+    return step
 
 
 def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
@@ -308,7 +451,7 @@ def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
         if step.kind is StepKind.SCRIPT
         else f"pipeline-exec {step.target}"
     )
-    return {"name": step.label, "run": f"{invocation} {args}".strip()}
+    return {"name": step.label, "id": step.id, "run": f"{invocation} {args}".strip()}
 
 
 def _strategy(group: JobGroup, fanout_ref: str) -> dict[str, Any]:
@@ -364,34 +507,107 @@ def _agent_job(
     return job
 
 
-def _command_job(
+def _command_jobs(
     group: JobGroup,
     ctx: EmitContext,
     needs: str | None,
     sub_workflow: dict[str, str],
     command: Command,
-) -> dict[str, Any]:
+) -> list[tuple[str, dict[str, Any]]]:
+    """Emit a nested command call, unrolled when it is a convergence loop.
+
+    Actions has no `while`, so a loop that runs "until converged" becomes a fixed chain of jobs, each
+    skipped once the previous one reported convergence. The bound is a compile-time decision, which
+    is a better habit than an unbounded local loop anyway.
+    """
     step = group.head
-    job: dict[str, Any] = {}
-    if needs:
-        job["needs"] = needs
-    if step.condition:
-        job["if"] = _if_expression(step.condition)
     target = sub_workflow.get(step.target)
     if not target:
         raise EmitError(f"no compiled workflow for command {step.target!r}")
-    job["uses"] = f"./.github/workflows/{target}"
 
+    iterations = step.max_iterations or command.github.max_iterations or 1
     with_block = {
         slug(k).replace("-", "_"): ctx.expand(v, command) for k, v in step.args.items() if k != "args"
     }
     with_block.setdefault("force", "${{ inputs.force }}")
-    job["with"] = with_block
-
     secrets = {name: secret_ref(name) for name in ctx.profile.github.secrets}
-    if secrets:
-        job["secrets"] = secrets
-    return job
+
+    emitted: list[tuple[str, dict[str, Any]]] = []
+    previous = needs
+    for index in range(1, iterations + 1):
+        job_id = group.id if iterations == 1 else f"{group.id}-{index}"
+        job: dict[str, Any] = {}
+        if previous:
+            job["needs"] = previous
+        conditions = []
+        if step.condition:
+            conditions.append(_bare_condition(step.condition))
+        if index > 1:
+            conditions.append(f"needs.{emitted[-1][0]}.outputs.converged != 'true'")
+        if conditions:
+            job["if"] = "${{ " + " && ".join(conditions) + " }}"
+        job["uses"] = f"./.github/workflows/{target}"
+        job["with"] = dict(with_block)
+        if secrets:
+            job["secrets"] = dict(secrets)
+        emitted.append((job_id, job))
+        previous = job_id
+    return emitted
+
+
+def _verify_job(
+    group: JobGroup,
+    ctx: EmitContext,
+    matrix_job: str,
+    producer_id: str | None,
+    items_expr: str | None,
+    command: Command,
+) -> tuple[str, dict[str, Any]]:
+    """Decide explicitly what a partially-failed fan-out means.
+
+    The local runtime saves each item as it completes and keeps going; plain `needs:` would instead
+    fail the whole pipeline on one bad leg. This restores the local semantics as an inspectable
+    policy rather than an accident of how Actions treats dependencies.
+    """
+    step = group.head
+    output = ctx.expand(step.output, command) or f"{ctx.output_dir_env}/{step.id}"
+    needs = [matrix_job] + ([producer_id] if producer_id and producer_id != matrix_job else [])
+    verify = f"pipeline-exec fanout-verify --dir={output} --min-success-rate={step.min_success_rate}"
+    if items_expr:
+        verify += f" --expected='{items_expr}'"
+    job: dict[str, Any] = {
+        "needs": needs,
+        "if": "${{ !cancelled() }}",
+        "runs-on": ctx.runs_on,
+        "container": ctx.pins.exec_container(),
+        "steps": [
+            {"uses": ctx.pins.external_action("actions/checkout")},
+            {"uses": ctx.pins.action("restore")},
+            {"name": f"Verify {step.label} coverage", "id": f"verify-{step.id}", "run": verify},
+            {"id": "save-workspace", "if": "${{ always() }}", "uses": ctx.pins.action("save")},
+        ],
+    }
+    return f"verify-{group.id}", job
+
+
+def _expose_convergence(
+    command: Command,
+    jobs: dict[str, dict[str, Any]],
+    step_to_job: dict[str, str],
+    result: WorkflowResult,
+) -> None:
+    """Publish a `converged` job output so a caller can unroll this command as a loop."""
+    source = command.github.converged_from
+    if not source:
+        return
+    job_id = step_to_job.get(source)
+    if job_id is None:
+        raise EmitError(
+            f"`converged-from: {source}` names a step this command does not compile",
+            location=command.src.rel if command.src else command.name,
+            hint=f"known step ids: {', '.join(sorted(step_to_job)) or '(none)'}",
+        )
+    jobs[job_id].setdefault("outputs", {})["converged"] = "${{ steps." + source + ".outputs.converged }}"
 
 
 def _inputs_for(command: Command) -> dict[str, Any]:
@@ -418,7 +634,7 @@ def _inputs_for(command: Command) -> dict[str, Any]:
     return inputs
 
 
-def _on_block(command: Command, ctx: EmitContext) -> dict[str, Any]:
+def _on_block(command: Command, ctx: EmitContext, step_to_job: dict[str, str]) -> dict[str, Any]:
     inputs = _inputs_for(command)
     on: dict[str, Any] = {"workflow_dispatch": {"inputs": inputs}}
 
@@ -438,6 +654,14 @@ def _on_block(command: Command, ctx: EmitContext) -> dict[str, Any]:
     call: dict[str, Any] = {"inputs": call_inputs}
     if ctx.profile.github.secrets:
         call["secrets"] = {name: {"required": False} for name in ctx.profile.github.secrets}
+    if command.github.converged_from:
+        job_id = step_to_job[command.github.converged_from]
+        call["outputs"] = {
+            "converged": {
+                "description": "Whether this run reached convergence",
+                "value": "${{ jobs." + job_id + ".outputs.converged }}",
+            }
+        }
     on["workflow_call"] = call
     return on
 
@@ -473,6 +697,9 @@ JOB_ORDER = (
 )
 
 
+STEP_ORDER = ("name", "id", "if", "uses", "run", "with", "env", "working-directory", "continue-on-error")
+
+
 def _reorder(data: dict[str, Any], order: tuple[str, ...]) -> dict[str, Any]:
     known = [key for key in order if key in data]
     rest = [key for key in data if key not in order]
@@ -481,6 +708,11 @@ def _reorder(data: dict[str, Any], order: tuple[str, ...]) -> dict[str, Any]:
 
 def normalize(workflow: dict[str, Any]) -> dict[str, Any]:
     """Put a compiled workflow into canonical key order."""
-    jobs = workflow.get("jobs", {})
-    workflow["jobs"] = {name: _reorder(job, JOB_ORDER) for name, job in jobs.items()}
+    jobs: dict[str, Any] = workflow.get("jobs", {})
+    normalized: dict[str, Any] = {}
+    for name, job in jobs.items():
+        if isinstance(job.get("steps"), list):
+            job["steps"] = [_reorder(step, STEP_ORDER) for step in job["steps"]]
+        normalized[name] = _reorder(job, JOB_ORDER)
+    workflow["jobs"] = normalized
     return _reorder(workflow, TOP_LEVEL_ORDER)

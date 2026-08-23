@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--output={output_dir}/ui-structure.json --state={state_db}"
+  },
+  "command": "discover",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "discover-ui-structure",
+  "input": "",
+  "kind": "script",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "echo \"discovery complete\"",
+  "pre": "",
+  "target": "scripts/discover-ui.py"
+}

@@ -15,15 +15,21 @@
       ]
     },
     ".github/workflows/discover.yml": {
-      "sha": "fde8d19d",
+      "sha": "8506c637",
       "sources": [
-        "commands/discover.md@3f9c382f"
+        "commands/discover.md@65153630"
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "cfb77cd1",
+      "sha": "5f3ea93b",
       "sources": [
-        "commands/generate-tests.md@85309eb6"
+        "commands/generate-tests.md@440e3547"
+      ]
+    },
+    ".github/workflows/repair.yml": {
+      "sha": "614a795d",
+      "sources": [
+        "commands/repair.md@e265d2b3"
       ]
     },
     ".github/workflows/shared/context-my-app-patterns.md": {
@@ -36,6 +42,32 @@
     },
     ".github/workflows/shared/skill-test-common.md": {
       "sha": "3d9cfeb1",
+      "sources": []
+    },
+    ".github/workflows/validate.yml": {
+      "sha": "b59680d1",
+      "sources": [
+        "commands/validate.md@07878f25"
+      ]
+    },
+    ".pipeline/step-defs/discover.discover-api-surface.json": {
+      "sha": "76ade08b",
+      "sources": []
+    },
+    ".pipeline/step-defs/discover.discover-ui-structure.json": {
+      "sha": "f38311fe",
+      "sources": []
+    },
+    ".pipeline/step-defs/generate-tests.build-test-manifest.json": {
+      "sha": "256a0aef",
+      "sources": []
+    },
+    ".pipeline/step-defs/generate-tests.fetch-issues.json": {
+      "sha": "09e735fb",
+      "sources": []
+    },
+    ".pipeline/step-defs/repair.collect-failures.json": {
+      "sha": "5aff6d9b",
       "sources": []
     },
     "SECRETS.md": {

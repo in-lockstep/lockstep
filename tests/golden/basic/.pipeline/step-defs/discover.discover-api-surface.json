@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--output={output_dir}/api-endpoints.json --api-url={api_url}"
+  },
+  "command": "discover",
+  "context_files": [],
+  "fingerprint": "curl -sf {api_url}/openapi.json | sha256sum | cut -d' ' -f1",
+  "foreach": null,
+  "id": "discover-api-surface",
+  "input": "",
+  "kind": "script",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "scripts/discover-api.py"
+}

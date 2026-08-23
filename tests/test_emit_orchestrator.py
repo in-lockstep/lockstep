@@ -35,6 +35,7 @@ def test_agent_step_breaks_fusion(basic_spec_dir):
         "discover-application-structure",
         "fetch-issues",
         "extract-stories-from-each-issue",
+        "verify-extract-stories-from-each-issue",
         "build-test-manifest",
     ]
 
@@ -44,7 +45,7 @@ def test_jobs_chain_in_step_order(basic_spec_dir):
     assert "needs" not in jobs["discover-application-structure"]
     assert jobs["fetch-issues"]["needs"] == "discover-application-structure"
     assert jobs["extract-stories-from-each-issue"]["needs"] == "fetch-issues"
-    assert jobs["build-test-manifest"]["needs"] == "extract-stories-from-each-issue"
+    assert jobs["build-test-manifest"]["needs"] == "verify-extract-stories-from-each-issue"
 
 
 def test_foreach_becomes_a_matrix_fed_by_the_producing_job(basic_spec_dir):
@@ -89,14 +90,18 @@ def test_local_only_steps_are_skipped_with_a_note(basic_spec_dir):
     assert "deploy-local.sh" not in text
 
 
+def step_named(job, name):
+    return next(step for step in job["steps"] if step.get("name") == name)
+
+
 def test_parameters_and_profile_values_are_substituted(basic_spec_dir):
     jobs = jobs_of(basic_spec_dir, "generate-tests.yml")
-    run = jobs["fetch-issues"]["steps"][2]["run"]
+    run = step_named(jobs["fetch-issues"], "Fetch issues from Jira")["run"]
     assert '--jql="${{ inputs.jql }}"' in run
     assert "{jql}" not in run
 
     discover = jobs_of(basic_spec_dir, "discover.yml")["discover-api-surface"]
-    assert "--api-url=${{ vars.API_URL }}" in discover["steps"][2]["run"]
+    assert "--api-url=${{ vars.API_URL }}" in step_named(discover, "Discover API surface")["run"]
 
 
 def test_profile_env_is_exported_under_both_prefixes(basic_spec_dir):
@@ -172,15 +177,6 @@ def test_fusion_can_be_disabled(basic_root):
     manifest = basic_root / "pipeline.yaml"
     manifest.write_text(manifest.read_text().replace("fuse-script-steps: true", "fuse-script-steps: false"))
     assert len(jobs_of(basic_root, "discover.yml")) == 2
-
-
-def test_state_declaration_is_reported_as_not_yet_lowered(basic_root):
-    command = basic_root / "commands" / "discover.md"
-    command.write_text(
-        command.read_text().replace("guardrails: [common]", "state: true\nguardrails: [common]")
-    )
-    plan = compile_spec(basic_root)
-    assert any("state" in note for note in plan.notes)
 
 
 def test_load_spec_is_pure_of_environment(basic_spec_dir, monkeypatch):

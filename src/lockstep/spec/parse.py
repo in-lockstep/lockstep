@@ -58,6 +58,8 @@ STRUCTURAL_KEYS = {
     "targets",
     "min-success-rate",
     "job-boundary",
+    "max-iterations",
+    "fingerprint",
 } | HOOK_KEYS
 
 
@@ -187,6 +189,10 @@ def _apply_subkeys(step: Step, pending: dict[str, str], location: str) -> None:
                     f"min-success-rate must be a number, got {value!r}",
                     location=f"{location} step {step.number}",
                 ) from exc
+        elif key == "fingerprint":
+            step.fingerprint = value
+        elif key == "max-iterations":
+            step.max_iterations = int(value) if value.isdigit() else 0
         elif key == "job-boundary":
             step.job_boundary = value.strip().lower() in ("true", "yes", "1")
         elif key == "pre":
@@ -232,6 +238,7 @@ def parse_command(src: SourceFile) -> Command:
         timeout_minutes=gh_raw.get("timeout-minutes"),
         max_iterations=int(gh_raw.get("max-iterations", 1) or 1),
         concurrency=gh_raw.get("concurrency"),
+        converged_from=str(gh_raw.get("converged-from", "") or ""),
         raw=gh_raw.get("raw", {}) or {},
     )
     state = str(meta.get("state", "")).lower()

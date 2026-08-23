@@ -21,7 +21,7 @@ def test_compile_writes_the_workflow_tree(basic_root):
 
 def test_compile_reports_the_deterministic_ratio(basic_root):
     result = run("compile", "--root", str(basic_root))
-    assert "4 steps -> 4 jobs · 1 agentic, 2 deterministic" in result.output
+    assert "generate-tests: 4 steps -> 5 jobs · 1 agentic, 2 deterministic" in result.output
     assert "2 steps -> 1 job (fusion saved 1)" in result.output
 
 

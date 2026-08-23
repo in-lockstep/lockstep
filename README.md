@@ -31,7 +31,7 @@ lockstep show-surface               # every GitHub-target decision in one docume
 
 ## Status
 
-Phase 1 — the compiler skeleton. See `docs/status.md` for what is implemented and what is deferred.
+Phase 2 — step-type coverage. See `docs/status.md` for what is implemented and what is deferred.
 
 ## Development
 

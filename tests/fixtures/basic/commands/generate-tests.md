@@ -28,6 +28,7 @@ github:
    - foreach: issue in {output_dir}/jira-issues.json
    - output: {output_dir}/extracted-stories
    - parallel: 3
+   - min-success-rate: 0.8
 
 4. **Build test manifest** → script: scripts/save-manifest.py
    - args: --input={output_dir}/extracted-stories --output={output_dir}/test-manifest.json
