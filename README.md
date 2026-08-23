@@ -20,6 +20,13 @@ spec (commands/ agents/ guardrails/ skills/ contexts/ profiles/ mcp/ + pipeline.
 .github/workflows/aw-<agent>.lock.yml   what actually runs
 ```
 
+## Start here
+
+**[Getting started](docs/getting-started.md)** walks through building a real pipeline against a live
+public API, and explains each part of the framework as you meet it — including what happens once the
+output is hosted on GitHub: how changes get reviewed, where output is stored, and how reports survive
+long enough to show a trend.
+
 ## Usage
 
 ```bash
