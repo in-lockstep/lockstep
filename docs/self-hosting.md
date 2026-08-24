@@ -66,24 +66,49 @@ pipeline is an addition to your CI, never a replacement for it.**
 
 ---
 
-## Why this pipeline has no steps
+## The pipeline that reviews this repository
 
-`pipeline-ci.yml` is the only thing `.lockstep/` compiles to, and that is deliberate. Two of the
-three packaging units are unpublished: `in-lockstep/lockstep/actions` and the `pipeline-exec`
-container image are both pinned to placeholders across the examples, which
-`lockstep compile` says out loud on every run. A step compiles to a job with
+`pipeline-ci.yml` used to be the only thing `.lockstep/` compiled to, because a step compiles to a
+job with `container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000…` and the placeholders made any
+pipeline with a step in it one that could not run. That is no longer true: `actions-v0.1.0` and
+`exec-v0.1.0` are published, so this repository now inherits `/review` and is reviewed by the
+pipeline it ships.
 
 ```yaml
-container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000…
+inherits:
+  review: lockstep:review
 ```
 
-so any pipeline with a script or builtin step in it is a pipeline that cannot run yet. `pipeline-ci`
-touches none of that — `actions/checkout`, `astral-sh/setup-uv`, `uv tool install`, `lockstep` — so
-it is the one generated workflow that runs today, and it is what this repository compiles.
+**Inherited rather than written.** A bespoke review pipeline here would be the one consumers cannot
+have, and its lenses would stop being the ones under eval — the framework would be dogfooding
+something other than its product. What this repository adds is the half a shipped pipeline is
+[forbidden to carry](adopting-shipped-pipelines.md): `contexts/codebase.md`, knowledge of a codebase
+the framework has never seen.
 
-The useful pipeline — a `/review` whose lenses know [what goes where](layers.md) and can say when
-`src/lockstep/emit/` changed and `tests/golden/` did not — is the next step, and it needs the
-composite actions published first.
+That context is the whole point of the exercise. It tells the four lenses that `ruff`, `mypy
+--strict` and a 90% coverage floor already ran, so repeating them costs the review its credibility;
+that a change under `src/lockstep/emit/` leaving `tests/golden/` untouched is either provably
+output-neutral or output nobody looked at; that `src/lockstep/library/` is shipped source held to
+rules the rest is not; and that widening the enforcement floor is the most consequential change this
+repository accepts. None of that could live in the shipped pipeline, and without it the lenses would
+review a generic Python project.
+
+### What it cost to turn on
+
+Two warnings, both of which the framework raises for adopters and neither of which it was willing to
+let this repository skip.
+
+`DOC007` wanted a per-run credit budget. A full review is four lenses at their published defaults —
+90 + 50 + 50 + 40 — so `per_run_ai_credits: 300` is every lens plus room for one tuned up, and
+`per_agent_daily_ai_credits: 500` bounds the failure a per-run cap cannot survive: a lens in a retry
+loop, or a comment trigger firing on its own output.
+
+`DOC025` is still open, deliberately. Adding one profile context changed the compiled prompt of all
+four inherited lenses, so they are agents their upstreams never evaluated — and nothing here checks
+that teaching them this codebase left them able to find what their own cases plant. Closing it means
+`evals.inherited` and a judge, which costs credits on every pull request. `tests/test_selfhost.py`
+names the code rather than tolerating findings generally, so any *other* finding still fails the
+build.
 
 ---
 
@@ -122,5 +147,5 @@ lockstep lint
 lockstep doctor
 ```
 
-All three are clean, and `.lockstep/` is four files: a manifest, a profile, the lock, and the compile
-manifest.
+`lint` is clean and `doctor` reports only `DOC025`, for the reason above. `.lockstep/` is a manifest,
+a profile, a context, the lock and the compile manifest.

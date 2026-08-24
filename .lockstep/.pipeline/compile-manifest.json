@@ -2,17 +2,94 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "8dd12516",
+      "sha": "f9553a59",
       "sources": []
     },
+    ".github/workflows/aw-review-intent-reviewer.md": {
+      "sha": "d8289aaf",
+      "sources": [
+        "review:agents/intent-reviewer.md@4b04de94",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "review:guardrails/reviewing.md@dd106a9d",
+        "review:skills/review-format.md@4dd44c89",
+        "review:skills/review-revision.md@4049cfd2",
+        "contexts/codebase.md@8d9f276c"
+      ]
+    },
+    ".github/workflows/aw-review-performance-reviewer.md": {
+      "sha": "fe7a1615",
+      "sources": [
+        "review:agents/performance-reviewer.md@077c07d5",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "review:guardrails/reviewing.md@dd106a9d",
+        "review:skills/review-format.md@4dd44c89",
+        "review:skills/review-revision.md@4049cfd2",
+        "contexts/codebase.md@8d9f276c"
+      ]
+    },
+    ".github/workflows/aw-review-security-reviewer.md": {
+      "sha": "84d2ef25",
+      "sources": [
+        "review:agents/security-reviewer.md@9091ec35",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "review:guardrails/reviewing.md@dd106a9d",
+        "review:skills/review-format.md@4dd44c89",
+        "review:skills/review-revision.md@4049cfd2",
+        "contexts/codebase.md@8d9f276c"
+      ]
+    },
+    ".github/workflows/aw-review-tests-reviewer.md": {
+      "sha": "31d39fef",
+      "sources": [
+        "review:agents/tests-reviewer.md@df9f4591",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "review:guardrails/reviewing.md@dd106a9d",
+        "review:skills/review-format.md@4dd44c89",
+        "review:skills/review-revision.md@4049cfd2",
+        "contexts/codebase.md@8d9f276c"
+      ]
+    },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "0b0c8631",
+      "sha": "c9005390",
+      "sources": []
+    },
+    ".github/workflows/review-review.yml": {
+      "sha": "b0ee0425",
+      "sources": [
+        "review:commands/review.md@76ce9d76"
+      ]
+    },
+    ".github/workflows/shared/context-codebase.md": {
+      "sha": "adbf9554",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-baseline.md": {
+      "sha": "c208a351",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-review-reviewing.md": {
+      "sha": "5ce9291f",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-review-review-format.md": {
+      "sha": "666126b9",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-review-review-revision.md": {
+      "sha": "80fb9be6",
+      "sources": []
+    },
+    ".lockstep/.pipeline/step-defs/review/review.diff.json": {
+      "sha": "57b738b9",
       "sources": []
     },
     ".lockstep/SECRETS.md": {
-      "sha": "3864c66c",
+      "sha": "b9728e19",
       "sources": []
     }
+  },
+  "inherits": {
+    "review": "lockstep:review"
   },
   "pipeline": "lockstep",
   "spec": 1
