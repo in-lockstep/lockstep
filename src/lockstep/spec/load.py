@@ -23,6 +23,7 @@ from .model import (
     Extensions,
     InheritsAuth,
     Manifest,
+    OtelConfig,
     Sandbox,
     SourceFile,
     Spec,
@@ -80,6 +81,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     sandbox_raw = target_raw.get("sandbox", {}) or {}
     budgets = data.get("budgets", {}) or {}
     evals_raw = data.get("evals", {}) or {}
+    otel_raw = data.get("otel", {}) or {}
     auth_raw = data.get("inherits-auth", {}) or {}
     extensions_raw = data.get("extensions", {}) or {}
 
@@ -133,6 +135,12 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             ),
             min_score=(float(evals_raw["min-score"]) if evals_raw.get("min-score") is not None else None),
             on_prompt_change=bool(evals_raw.get("on-prompt-change", True)),
+        ),
+        otel=OtelConfig(
+            export=str(otel_raw.get("export", "") or ""),
+            endpoint=str(otel_raw.get("endpoint", "") or ""),
+            service_name=str(otel_raw.get("service-name", "") or ""),
+            pricing={str(k): float(v) for k, v in (otel_raw.get("pricing") or {}).items()},
         ),
         inherits_auth=InheritsAuth(
             token=str(auth_raw.get("token", "") or ""),

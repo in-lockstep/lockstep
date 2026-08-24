@@ -951,3 +951,141 @@ def cache_key(prefix: str, inputs_text: str, extra: str, name: str) -> None:
 
 # Extensions load last, so a built-in command can never be shadowed by one.
 _registered = register(main)
+
+
+@main.command(name="meter")
+@click.option(
+    "--usage",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory of gh-aw usage artifacts downloaded for this run.",
+)
+@click.option("--output", required=True, type=click.Path(path_type=Path), help="Where to write OTLP.")
+@click.option("--pricing", type=click.Path(path_type=Path), help="JSON map of model to dollars per credit.")
+@click.option("--endpoint", default="", help="OTLP/HTTP collector base URL. Metrics POST to /v1/metrics.")
+@click.option("--service-name", default="lockstep", help="service.name on the exported resource.")
+@click.option("--title", default="Run cost", help="Heading for the job summary table.")
+@click.option(
+    "--jobs",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="A saved /actions/runs/{id}/jobs response: outcomes, durations and queue times.",
+)
+@click.option("--explain", is_flag=True, help="Print every file read and every number matched.")
+@click.option(
+    "--require-usage",
+    is_flag=True,
+    help="Fail when no usage record was found, rather than reporting that none was.",
+)
+def meter(
+    usage: Path,
+    output: Path,
+    pricing: Path | None,
+    endpoint: str,
+    service_name: str,
+    title: str,
+    jobs: Path | None,
+    explain: bool,
+    require_usage: bool,
+) -> None:
+    """Turn a run's measured credits into dollars, OTLP metrics, and a line in the log.
+
+    Credits come from gh-aw, which measured them. Dollars come from a rate table somebody wrote, so
+    they are derived rather than observed, and a model the table does not name is reported as
+    unpriced rather than as free. A cost report that says $0.00 because it did not recognise a model
+    is the one number worse than no report at all.
+    """
+    import time
+
+    from .otel import metrics_document, price, read_jobs, read_usage, render_summary, run_shape
+
+    rates: dict[str, float] = {}
+    if pricing and pricing.is_file():
+        try:
+            raw = json.loads(pricing.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            _fail(f"pricing table is not valid JSON ({error.msg})")
+        rates = {str(k): float(v) for k, v in (raw or {}).items()}
+
+    records, rollups = read_usage(usage) if usage.is_dir() else ([], [])
+    priced = price(records, rates, rollups)
+    summary = priced.summary()
+    run_jobs = read_jobs(jobs) if jobs else []
+    attempt = int(os.environ.get("GITHUB_RUN_ATTEMPT", "1") or 1)
+
+    if explain:
+        click.echo(f"read {usage}")
+        for record in records:
+            click.echo(f"  measurement {record.source}: {record.credits:g} credits, model={record.model!r}")
+        for record in rollups:
+            click.echo(f"  roll-up (not summed) {record.source}: {record.credits:g} credits")
+
+    resource = {
+        "service.name": service_name,
+        "vcs.repository.name": os.environ.get("GITHUB_REPOSITORY", ""),
+        "cicd.pipeline.name": os.environ.get("GITHUB_WORKFLOW", ""),
+        "cicd.pipeline.run.id": os.environ.get("GITHUB_RUN_ID", ""),
+        "vcs.ref.head.name": os.environ.get("GITHUB_REF_NAME", ""),
+        "vcs.ref.head.revision": os.environ.get("GITHUB_SHA", ""),
+    }
+    document = metrics_document(
+        priced, resource=resource, nanos=time.time_ns(), jobs=run_jobs, attempt=attempt
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+    _summary(render_summary(priced, title=title, jobs=run_jobs))
+    _emit_output("credits", str(summary["credits"]))
+    _emit_output("dollars", str(summary["dollars"]))
+    _emit_output("priced_fraction", str(summary["priced_fraction"]))
+    _emit_output("records", str(summary["records"]))
+    if run_jobs:
+        shape = run_shape(run_jobs)
+        _emit_output("wall_seconds", str(shape["wall_seconds"]))
+        _emit_output("busy_seconds", str(shape["busy_seconds"]))
+        _emit_output("failed_jobs", str(len(shape["failed"])))
+
+    if endpoint:
+        _post_metrics(endpoint, document)
+
+    click.echo(
+        f"{summary['credits']:g} credits, ${summary['dollars']:,.4f}"
+        + (f" ({summary['priced_fraction']:.0%} priced)" if summary["unpriced_models"] else "")
+        + f" -> {output}"
+    )
+    if summary["unpriced_models"]:
+        click.echo("unpriced: " + ", ".join(summary["unpriced_models"]))
+    if not records:
+        message = (
+            f"no usage records under {usage} — reporting nothing found rather than a cost of zero. "
+            "Run with --explain to see what was read"
+        )
+        if require_usage:
+            _fail(message)
+        click.echo(message)
+
+
+def _post_metrics(endpoint: str, document: dict[str, Any]) -> None:
+    """Send one OTLP/HTTP metrics document to a collector.
+
+    A failed export does not fail the pipeline. The run's work is already done and its cost is
+    already written to the artifact and the log; losing a metric is worth a loud line, not a red
+    build somebody has to re-run.
+    """
+    import urllib.error
+    import urllib.request
+
+    url = endpoint.rstrip("/")
+    if not url.endswith("/v1/metrics"):
+        url = f"{url}/v1/metrics"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(document).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            click.echo(f"exported to {url} ({response.status})")
+    except (urllib.error.URLError, OSError) as error:
+        click.echo(click.style(f"OTLP export to {url} failed: {error}", fg="yellow"), err=True)

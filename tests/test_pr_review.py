@@ -65,6 +65,9 @@ def test_the_pipeline_is_reachable_end_to_end(workflow):
         *(f"scan-{job}" for job in REVIEW_JOBS.values()),
         *REVIEW_JOBS.values(),
         "post",
+        # Last, and only ever last: it reads what the reviewers reported spending. It waits on the
+        # agents rather than on `post`, so a failed posting step does not cost us the accounting.
+        "meter",
     ]
 
 

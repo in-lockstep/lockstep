@@ -312,6 +312,7 @@ def emit_command(
     # Order matters: the proposal job must exist before the gate authorizes jobs, or the one job
     # holding write permissions would be the only one left unauthorized.
     _emit_proposal(command, ctx, jobs, previous_id)
+    _emit_meter(command, ctx, jobs, steps, step_to_job)
     _emit_command_gate(command, ctx, jobs)
     # Counted here, not before: the proposal job is a job, and a summary that undercounts is a
     # summary nobody can check against the file.
@@ -912,6 +913,7 @@ SKIP_TOLERANT = "!failure() && !cancelled()"
 
 
 COMMAND_GATE = "command-gate"
+METER_JOB = "meter"
 
 
 def _expand_arguments(names: list[str]) -> str:
@@ -925,6 +927,22 @@ def _expand_arguments(names: list[str]) -> str:
         f'echo "{name}=$(echo "$payload" | jq -r \'.{name} // empty\')" >> "$GITHUB_OUTPUT"' for name in names
     ]
     return "\n".join(lines) + "\n"
+
+
+def _emit_meter(
+    command: Command, ctx: EmitContext, jobs: dict[str, Any], steps: Any, step_to_job: dict[str, str]
+) -> None:
+    """Append the job that says what this command cost, when the pipeline asked to be metered.
+
+    It waits on the agent jobs specifically rather than on everything: what it collects is what
+    those jobs produced, and a deterministic step at the end of a pipeline has nothing to report.
+    """
+    from .meter import meter_job
+
+    agent_jobs = sorted({step_to_job[step.id] for step in steps if step.kind is StepKind.AGENT})
+    job = meter_job(ctx.spec, ctx, needs=agent_jobs, title=f"Cost of `{command.name}`")
+    if job:
+        jobs[METER_JOB] = job
 
 
 def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[str, Any]]) -> None:

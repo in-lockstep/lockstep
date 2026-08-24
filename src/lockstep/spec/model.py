@@ -478,6 +478,36 @@ class EvalConfig:
 
 
 @dataclass
+class OtelConfig:
+    """Where a run's consumption goes, and what a credit costs.
+
+    Off unless declared. A pipeline that has not been told a rate cannot report a cost, and one
+    that reported $0.00 because nobody set a table would be worse than one that reported nothing.
+
+    `pricing` maps a model to dollars per credit. Longest-prefix matched, so `claude-sonnet-4-6`
+    prices `claude-sonnet-4-6-20260101` too — a table that had to name every dated snapshot would
+    silently stop pricing things the day a provider published one.
+    """
+
+    export: str = ""  # "" (off) | "artifact" | "endpoint" | "both"
+    endpoint: str = ""
+    service_name: str = ""
+    pricing: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def enabled(self) -> bool:
+        return self.export in ("artifact", "endpoint", "both")
+
+    @property
+    def to_artifact(self) -> bool:
+        return self.export in ("artifact", "both")
+
+    @property
+    def to_endpoint(self) -> bool:
+        return self.export in ("endpoint", "both")
+
+
+@dataclass
 class TargetConfig:
     out: str = ".github/workflows"
     fuse_script_steps: bool = True
@@ -535,6 +565,7 @@ class Manifest:
     # `daily_ai_credits` would have quietly said otherwise. `show-surface` prints that product.
     per_agent_daily_ai_credits: int | None = None
     evals: EvalConfig = field(default_factory=EvalConfig)
+    otel: OtelConfig = field(default_factory=OtelConfig)
     inherits_auth: InheritsAuth = field(default_factory=InheritsAuth)
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
     uses: dict[str, CommandUse] = field(default_factory=dict)
@@ -649,6 +680,14 @@ class Spec:
         used = {"actions/checkout"}
         if self.manifest.inherits_auth.uses_app:
             used.add("actions/create-github-app-token")
+        if self.manifest.otel.enabled:
+            # Read off the manifest alone, like the App-token line above. `lockstep pin` runs before
+            # `fetch` and therefore sees a manifest without its agents loaded; a condition that also
+            # asked about agents would answer differently in `pin` and in `doctor`, and the pin
+            # would be missing exactly where it is needed.
+            used.add("actions/download-artifact")
+            if self.manifest.otel.to_artifact:
+                used.add("actions/upload-artifact")
         return used
 
     def compiled_profiles(self) -> list[Profile]:

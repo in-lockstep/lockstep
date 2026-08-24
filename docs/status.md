@@ -498,7 +498,7 @@ pipeline built here *can express*, and every one of them is something they demon
 Listed separately from the table below because the provenance matters: these were not derived from
 this design, and the fact that somebody needed them in production is the argument for each.
 
-Two are now closed — `docs/evals.md` describes both:
+Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
 
 - **Eval cases with a fixture repository.** A case names a `fixture`, and the tree is laid down in
   its own directory before the agent runs, with the path written into the input as `repo`. The
@@ -512,10 +512,21 @@ Two are now closed — `docs/evals.md` describes both:
   the suite on the *mean*, which is the regression a pass rate cannot see: every case clearing its
   own floor while the suite slides from 4.8 to 4.1. Comparing this run to last month's is the part
   still missing, and it is the run-history row below.
+- **Budgets in money.** `otel:` adds a metering job that reads what gh-aw measured, prices it
+  against a rate table in the manifest, and publishes OTLP metrics plus a cost line in the run
+  summary. Credits are measured and dollars are derived, so a model with no rate is reported as
+  unpriced rather than as free, and the total says what fraction of itself it could price. The
+  enforced budgets stay in credits, where the substrate can refuse a run before it starts —
+  `budgets.per_agent_daily_ai_credits` is new and does exactly that.
+
+  The metrics deliberately cover more than cost. Four of the five questions an operator asks — is
+  it working, what just happened, is it getting better, where should effort go — are about
+  outcomes, timings and rates, and all of them were observable from the Actions jobs API without
+  new instrumentation. Per-model and per-agent points carry the OTEL GenAI semantic conventions so
+  an agent-aware backend needs no teaching.
 
 | Gap | What is missing here | Why it matters |
 |---|---|---|
-| **Budgets in money** | `per_run_ai_credits` and `max-ai-credits` are gh-aw credits. | Their eval cases cap `max_cost_usd: 2.00`. Credits are the substrate's unit; dollars are the unit the person approving the budget uses, and the translation is not something a compiler should leave to the reader. |
 | **Run history, transcripts, replay** | Nothing is retained. A run's reasoning is gone when the job log rotates. | They ship `analyze-transcript` and `replay-session` skills, a metrics repository, and an independent audit layer over their own review agent's performance. This is the operational half of the 2am story, and it is also the only way to tell whether a prompt change helped. |
 | **A retro loop** | Nothing carries a run's outcome back to the spec. `collect-patterns` is deferred below with no caller. | Their sixth agent analyses a completed workflow — timings, iterations, patterns — and files improvement proposals. A framework whose thesis is that prompts are reviewable artifacts should be able to say which of them are working. |
 | **A zero-authoring path** | `lockstep init` scaffolds one pipeline that an author then finishes. | They install a GitHub App, enroll a repository, and six agents start working. That is the difference between a framework and a product, and it is the decisive gap for the smallest adopters — the ones with no platform team, who are also the ones most likely to try it. |

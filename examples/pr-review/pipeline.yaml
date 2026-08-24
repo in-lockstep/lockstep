@@ -19,6 +19,15 @@ targets:
     default-runs-on: ubuntu-24.04
     profiles: [repo]
 
+# What a run costs, in the currency the person approving the budget uses. Credits are measured by
+# gh-aw; dollars are these rates applied to that measurement, so they are only as current as the
+# table. A model with no rate here is reported as unpriced rather than as free.
+otel:
+  export: artifact
+  pricing:
+    claude-sonnet-4-6: 0.0021
+    claude-haiku-4-5: 0.0004
+
 budgets:
   per_run_ai_credits: 400
   # Per agent workflow, per day, enforced by gh-aw before the agent starts. `/review` is one comment

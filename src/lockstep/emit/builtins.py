@@ -41,6 +41,9 @@ INTERNAL = frozenset(
         "eval-cases",
         "eval-judge-prep",
         "eval-grade",
+        # Accounting. Emitted at the end of a run, over artifacts the run produced; a `builtin:`
+        # step naming it would be asking a pipeline to bill itself mid-flight.
+        "meter",
     }
 )
 
@@ -50,6 +53,10 @@ EXTERNAL_ACTIONS = {
     # Mints a short-lived installation token for reading a private upstream. Emitted only when a
     # pipeline declares `inherits-auth.app-id`, and pinned by `lockstep pin` like anything else.
     "actions/create-github-app-token": "v2",
+    # Metering. Emitted only when a pipeline declares `otel.export`, so a pipeline that does not
+    # meter carries no pin for either of these.
+    "actions/download-artifact": "v5",
+    "actions/upload-artifact": "v5",
 }
 
 # GitHub refuses a matrix larger than this; `pipeline-exec` enforces the same number at run time.
