@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     outputs:
       items_extract_stories_from_each_issue: ${{ steps.fanout-extract-stories-from-each-issue.outputs.items }}
     timeout-minutes: 30
@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
@@ -167,7 +167,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     env:
       MY_URL: ${{ vars.APP_URL }}
       PROFILE_URL: ${{ vars.APP_URL }}

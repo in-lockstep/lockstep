@@ -435,9 +435,13 @@ class Sandbox:
     wrong way round.
 
     The floor is applied to every job that runs in the executor container and is not declared:
-    capabilities dropped, no privilege escalation. Both are kernel-enforced and neither is something
-    a correct script needs. What a pipeline declares here only ever *widens* that, which is why the
-    semantic diff treats a change to it as a security-surface change.
+    capabilities dropped except the one the runner protocol requires, and no privilege escalation.
+    All of it is kernel-enforced, and what a pipeline declares here only ever *widens* it — which is
+    why the semantic diff treats a change to it as a security-surface change.
+
+    The floor used to drop capabilities without exception, on the reasoning that a correct script
+    needs none of them. That was true of the script and false of the machinery it runs inside; see
+    `options()`.
     """
 
     # Linux capabilities to add back after dropping all of them. Named individually, because
@@ -452,7 +456,27 @@ class Sandbox:
 
     def options(self) -> str:
         """The `container.options` string. The floor first, then whatever was declared."""
-        parts = ["--cap-drop=ALL", "--security-opt=no-new-privileges"]
+        parts = [
+            "--cap-drop=ALL",
+            # Put back exactly one, because Actions itself needs it.
+            #
+            # The runner creates `$GITHUB_OUTPUT`, `$GITHUB_STATE` and the rest of
+            # `_runner_file_commands` owned by the *host* user with mode 0644, and every step that
+            # publishes an output writes to them. The executor image runs as root, and root writes
+            # a file it does not own by holding CAP_DAC_OVERRIDE — so dropping all capabilities
+            # made every such write fail with EACCES.
+            #
+            # That took down more than it looks like: step outputs are how jobs talk to each other,
+            # so `steps.state.outputs.pending` (which decides *which* review lenses run), the
+            # checkout post-step, and the metering job that writes the run ledger all failed. No
+            # deterministic step in a container had ever published an output.
+            #
+            # DAC_OVERRIDE restores the permission bypass root would ordinarily have and nothing
+            # else. Every other capability stays dropped and `no-new-privileges` is untouched, so
+            # this is the narrowest thing that lets the runner protocol work.
+            "--cap-add=DAC_OVERRIDE",
+            "--security-opt=no-new-privileges",
+        ]
         parts += [f"--cap-add={name}" for name in self.capabilities]
         if self.memory:
             parts.append(f"--memory={self.memory}")

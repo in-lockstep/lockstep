@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     outputs:
       cases: ${{ steps.cases.outputs.cases }}
     steps:
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
