@@ -97,6 +97,10 @@ request when upstream moves.
 **[What an eval case promises](docs/evals.md)** is the grading contract: which expectations a
 machine settles, which need a model, and why a case carrying a rubric is never reported as passed.
 
+**[What the people who would adopt this need next](docs/needs.md)** is the backlog derived from five
+adopter personas rather than from the design: what gates a public launch, what a security lead has to
+write themselves today, and what the run ledger measures that a director is not asking about.
+
 **[This repository compiles its own drift gate](docs/self-hosting.md)** covers self-hosting: why the
 gate installs the checkout rather than a release, why the hand-written CI workflow stays
 hand-written, and the defects dogfooding surfaced.

@@ -583,7 +583,9 @@ Five are now closed — `docs/evals.md`, `docs/metering.md`, `docs/adopting-ship
 **The list is closed.** Every gap this comparison found has been built, which is worth stating
 plainly and also worth not over-reading: these were the gaps *visible from reading another project*.
 They were real and they were worth closing, and closing them does not mean nothing is missing —
-`what remains open` above is the list derived from this design rather than from somebody else's.
+`what remains open` above is the list derived from this design rather than from somebody else's, and
+[`needs.md`](needs.md) is a third, derived from neither: from the five people who would have to adopt
+this, and what would make each of them put it down.
 
 Three things they have that are deliberately **not** on this list. Work prioritization by RICE scoring
 is a pipeline somebody could build with this framework, not a capability the framework lacks. A fixed
