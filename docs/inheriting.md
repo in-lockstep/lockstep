@@ -466,7 +466,10 @@ change into a build failure rather than a customization that quietly stopped app
   `doctor` reports it as `DOC017`, and it should never reach a default branch. A remote source that is
   not pinned is `DOC018`, an error.
 - **No transitive inheritance.** An inherited repository's own `inherits:` is not followed — that is a
-  package manager, and this is not one. List both upstreams in the consumer.
+  package manager, and this is not one. List both upstreams in the consumer, which is supported and
+  is the normal shape for an organization with team-level standards: see *Many upstreams, one
+  consumer* in [sharing.md](sharing.md). The cost of refusing transitivity is that a consumer can
+  forget one, and nothing yet warns about it.
 - **Three fields are bandable**, not because three is a principled number but because those three
   demonstrably reach the emitted workflow. `runs-on` looked like an obvious fourth and is not: an
   agentic workflow's runner does not come from the agent, so banding it would have published a dial

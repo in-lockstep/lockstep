@@ -432,3 +432,23 @@ def test_the_lowest_ceiling_wins_not_the_last_one_read(consumer):
         compile_spec(consumer)
     assert "over the ceiling of 25" in error.value.message
 
+
+def test_a_second_upstream_cannot_reopen_egress_the_first_closed(consumer):
+    """Two upstreams compose as constraints, not as a last-writer-wins settings merge.
+
+    Only `deny-all` is enforced, so any other value clears it — which made this decidable by alias
+    order alone: rename the alias, get a different security surface.
+    """
+    edit(
+        consumer,
+        ".pipeline/inherited/standards/guardrails/data-handling.md",
+        {"  permissions: read-all": "  permissions: read-all\n  network: deny-all"},
+    )
+    house = consumer / ".pipeline/inherited/review/guardrails/house.md"
+    house.write_text(
+        house.read_text().replace("---\n\n", "enforce:\n  network: defaults\n---\n\n", 1),
+        encoding="utf-8",
+    )
+    agent = yaml.safe_load(compile_spec(consumer).files[AGENT].split("---")[1])
+    assert agent["network"] == {"allowed": []}
+

@@ -110,6 +110,101 @@ Plus two files the repository actually has to write:
 
 That is the whole consuming repository. Nine other directories stay empty.
 
+### Many upstreams, one consumer
+
+The manifest above names two, and nothing about the mechanism stops at two. This is the shape most
+organizations of any size actually need, and it is worth spelling out because it is easy to mistake
+for the thing that *is* refused.
+
+An organization publishes what every repository must follow. A team publishes what its own
+repositories do differently — not a fork of the organization's standards, and not a superset of them:
+its own pipelines, for work only that team does.
+
+```
+acme/org-standards                billing-team/standards
+  guardrails/data-handling.md       commands/ledger-check.md
+  guardrails/dependency-policy.md   agents/ledger-reviewer.md
+  commands/security-scan.md         guardrails/double-entry.md
+      │                                   │
+      │  sealed, every repository         │  this team's own pipelines
+      │                                   │
+      └───────────────┬───────────────────┘
+                      ▼
+      billing-team/ledger-service        billing-team/invoicing
+      billing-team/payments-api          (each names both, directly)
+```
+
+```yaml
+# billing-team/ledger-service/.lockstep/pipeline.yaml
+inherits:
+  org:  github.com/acme/org-standards@v3.2.0
+  team: github.com/billing-team/standards@v1.4.0
+
+commands:
+  security-scan:
+    from: org/security-scan
+  ledger-check:
+    from: team/ledger-check
+    add-guardrails: [house-style]
+```
+
+**This is fan-in, and fan-in is not transitivity.** What the loader refuses is following an inherited
+repository's *own* `inherits:`. What it does happily is load several upstream trees side by side for
+one consumer: `load_spec` walks `manifest.inherits` for the root spec, and each tree is namespaced by
+its alias.
+
+### What the team repository does with the organization's standards
+
+It inherits them too — for its own development:
+
+```yaml
+# billing-team/standards/.lockstep/pipeline.yaml
+inherits:
+  org: github.com/acme/org-standards@v3.2.0
+```
+
+That is not how they reach the component repositories. It is how the team's own agents get authored
+under them: `ledger-reviewer` compiles with the organization's sealed guardrails inlined, its evals
+run against the prompt those guardrails actually produce, and its credit budget is checked against
+the organization's ceiling. A team pipeline that would violate a standard fails in the team's
+repository, on the pull request that wrote it — not in three component repositories a month later.
+
+The inheritance stops there. Every component repository names `org` itself. That is the design
+intent rather than a limitation to work around: a repository's `inherits:` block is the complete,
+explicit list of everything it takes, and reading one file tells you what a repository is standing
+on. An import that imports would make that answer a graph traversal.
+
+### How two upstreams compose
+
+Nothing needs to coordinate between them, because the pieces that could collide are the pieces
+built to merge:
+
+| | Behaviour with two upstreams |
+|---|---|
+| **Names** | Namespaced by alias. `org/data-handling` and `team/data-handling` are different guardrails, and neither can shadow the other or a local file. |
+| **Sealed guardrails** | Both arrive, unnamed, in every agent — the consumer's own agents included. |
+| **Ceilings** | Lowest wins. Organization caps credits at 200, team at 60: every agent gets 60. Neither upstream has to know the other set one. |
+| **Denied tools** | Unioned. A tool either upstream denies is denied. |
+| **Egress** | `deny-all` is sticky. Once either upstream closes egress, the other cannot reopen it. |
+| **Bands** | Belong to the agent that publishes them, so they never interact. |
+
+The one thing that *is* decided by alias order is the order sealed guardrails are inlined in, which
+sorts alphabetically. That matters for prose precedence — a later instruction reads as a refinement
+of an earlier one — and not for anything enforced. Name the broader standard's alias so it sorts
+first if you care; `org` before `team` happens to.
+
+### The failure mode to know about
+
+A component repository that names `team` and forgets `org` compiles clean, lints clean, and doctors
+clean — while silently standing on none of the organization's standards. It is the quiet direction to
+fail in, and it is the one real cost of refusing transitivity.
+
+Nothing detects it today. The information is available — `.pipeline/inherited/team/pipeline.yaml`
+carries the team repository's own `inherits:` — so a check that says *"`team` inherits `org`, which
+you do not"* is the obvious guard, and it should be a warning rather than an error, because the
+framework cannot know whether an omission is deliberate. Until it exists, the thing that catches it
+is a review of the `inherits:` block, which is at least one short list in one file.
+
 ### Where imports come from, and how they are pinned
 
 A git ref — a tag *or a branch* — resolved to a commit and recorded beside the capability pins:

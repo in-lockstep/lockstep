@@ -34,7 +34,11 @@ class PromptLayers:
         for fragment in self.guardrails:
             if fragment.enforce.permissions:
                 merged.permissions = fragment.enforce.permissions
-            if fragment.enforce.network:
+            if fragment.enforce.network and merged.network != "deny-all":
+                # `deny-all` is a floor, not a setting: once a guardrail has closed egress, a later
+                # one cannot reopen it. Only `deny-all` is enforced, so any other value here clears
+                # it — which meant a repository inheriting two upstreams could have the second one
+                # silently undo the first's egress rule, decided by nothing but alias order.
                 merged.network = fragment.enforce.network
             for tool in fragment.enforce.deny_tools:
                 if tool not in merged.deny_tools:
