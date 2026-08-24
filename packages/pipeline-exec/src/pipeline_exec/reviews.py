@@ -126,14 +126,26 @@ def requested_aspects(raw: str, available: list[str]) -> list[str]:
     and refusing it would be pedantry.
     """
     text = (raw or "").strip()
-    words: list[str] = []
+    parsed: list[str] | None = None
     if text.startswith("["):
         try:
-            words = [str(item).strip().lower() for item in json.loads(text) if str(item).strip()]
+            parsed = [str(item).strip().lower() for item in json.loads(text) if str(item).strip()]
         except json.JSONDecodeError:
-            words = []
-    if not words and text:
+            # Not JSON after all — fall through to the word split below, which is what a human
+            # typing `/review security intent` produces.
+            parsed = None
+
+    # `parsed is None` and `parsed == []` are different answers, and conflating them is what broke
+    # `/review` with no arguments. The gate hands over `[]` for "nothing was requested", which
+    # parses successfully to an empty list — and the old code, seeing no words and a non-empty
+    # string, re-split the literal `[]` into a request for an aspect called "[]".
+    if parsed is not None:
+        words = parsed
+    elif text:
         words = [word.strip().lower() for word in re.split(r"[,\s]+", text) if word.strip()]
+    else:
+        words = []
+
     if not words:
         return sorted(available)
 
