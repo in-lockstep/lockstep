@@ -75,6 +75,9 @@ jobs:
       positional: ${{ steps.gate.outputs.positional }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: astral-sh/setup-uv@v6
+    - name: Install the pinned executor
+      run: uv tool install "in-lockstep-exec==0.1.0"
     - name: Authorize /implement
       id: gate
       uses: in-lockstep/lockstep/actions/command-gate@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1

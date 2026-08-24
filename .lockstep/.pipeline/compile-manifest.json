@@ -88,7 +88,7 @@
       ]
     },
     ".github/workflows/implement-implement.yml": {
-      "sha": "7e8fcbc7",
+      "sha": "e981261c",
       "sources": [
         "implement:commands/implement.md@2ba58b8d"
       ]
@@ -98,7 +98,7 @@
       "sources": []
     },
     ".github/workflows/review-review.yml": {
-      "sha": "eb758fa9",
+      "sha": "37054710",
       "sources": [
         "review:commands/review.md@76ce9d76"
       ]

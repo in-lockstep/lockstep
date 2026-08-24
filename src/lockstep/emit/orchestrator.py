@@ -978,6 +978,21 @@ def _emit_command_gate(command: Command, ctx: EmitContext, jobs: dict[str, dict[
         },
         "steps": [
             {"uses": ctx.pins.external_action("actions/checkout")},
+            # The gate parses the comment with `pipeline-exec parse-command`, and this job has no
+            # executor container: it is the cheap authorization step that decides whether anything
+            # expensive runs, so putting it inside the image it is gating would be the wrong way
+            # round. It therefore installs the executor as a tool, the same way the eval job that
+            # needs the compiler does.
+            #
+            # Without this the comment path failed with `pipeline-exec: command not found` — and it
+            # failed *only* on the comment path, because every other trigger short-circuits before
+            # the parse. So `/review` by dispatch worked and `/review` by comment, which is the
+            # entire point of a chat-ops command, never had.
+            {"uses": "astral-sh/setup-uv@v6"},
+            {
+                "name": "Install the pinned executor",
+                "run": f'uv tool install "{ctx.pins.exec_requirement()}"',
+            },
             {
                 "name": f"Authorize {chat.name}",
                 "id": "gate",
