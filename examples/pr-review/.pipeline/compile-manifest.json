@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "cf6e9607",
+      "sha": "f2e63e37",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
@@ -62,7 +62,7 @@
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "ce024024",
+      "sha": "81db2704",
       "sources": [
         "commands/review.md@97ef9fce"
       ]

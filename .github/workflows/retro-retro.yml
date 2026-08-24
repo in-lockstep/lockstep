@@ -113,6 +113,8 @@ jobs:
     with:
       input_path: outputs/history.json
       output_path: outputs/retro.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   meter:
     name: Meter the run
     needs:

@@ -54,11 +54,11 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "f75c6a2e",
+      "sha": "cd961578",
       "sources": []
     },
     ".github/workflows/fix-bugs.yml": {
-      "sha": "8f1e4ce9",
+      "sha": "da91dfef",
       "sources": [
         "commands/fix-bugs.md@e099e18d"
       ]

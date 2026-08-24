@@ -22,11 +22,11 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "9071dfed",
+      "sha": "e3b84ba3",
       "sources": []
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "632abd98",
+      "sha": "98b8f796",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]

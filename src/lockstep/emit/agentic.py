@@ -212,6 +212,20 @@ def build_agent(
         # Never `secrets: inherit` — an undeclared secret must be a build-time error.
         call["secrets"] = {name: {"required": True} for name in secrets}
 
+    # The engine credential is passed by the caller but not declared here.
+    #
+    # A called workflow does not inherit repository secrets — that is the part this got wrong. The
+    # lock file `gh aw compile` produces already declares `ANTHROPIC_API_KEY` as an optional
+    # `workflow_call` secret, so the callee side is handled; what was missing is anybody handing it
+    # over. The agent job authorized, activated, and died with "None of the following secrets are
+    # set: ANTHROPIC_API_KEY" while the secret sat in the repository the whole time.
+    #
+    # Not added to `call["secrets"]` above, because that is this compiler's declaration and gh-aw
+    # writes its own. Declaring it `required: true` here would also break every repository that has
+    # not set one yet, at compile time, for a workflow they may never run.
+    engine_secret = ENGINE_SECRET.get(resolve_engine(agent), "")
+    caller_secrets = [*secrets, engine_secret] if engine_secret else list(secrets)
+
     network = [] if enforce.network == "deny-all" else ["defaults", *agent.github.network]
     # The collector, if this pipeline exports to one. gh-aw allow-lists the host itself when the URL
     # is a literal it can read at compile time — it cannot when the URL is a runtime expression, and
@@ -279,7 +293,7 @@ def build_agent(
         body="\n\n".join(part for part in body_parts if part).strip() + "\n",
         sources=sources,
         layer_signature=layers.signature(),
-        required_secrets=secrets,
+        required_secrets=caller_secrets,
         enforced=enforce,
         tool_floor={name: list(entry.get("allowed", [])) for name, entry in servers.items()},
     )

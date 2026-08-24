@@ -54,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/test-writer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/test-writer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-test-writer:
     name: Grade test-writer
     needs:

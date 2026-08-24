@@ -54,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/intent-reviewer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/intent-reviewer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-intent-reviewer:
     name: Grade intent-reviewer
     needs:
@@ -109,6 +111,8 @@ jobs:
     with:
       input_path: outputs/evals/performance-reviewer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/performance-reviewer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-performance-reviewer:
     name: Grade performance-reviewer
     needs:
@@ -164,6 +168,8 @@ jobs:
     with:
       input_path: outputs/evals/security-reviewer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/security-reviewer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-security-reviewer:
     name: Grade security-reviewer
     needs:
@@ -219,6 +225,8 @@ jobs:
     with:
       input_path: outputs/evals/tests-reviewer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/tests-reviewer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-tests-reviewer:
     name: Grade tests-reviewer
     needs:

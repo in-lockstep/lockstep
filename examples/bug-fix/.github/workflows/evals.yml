@@ -54,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/bug-analyst/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/bug-analyst/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-bug-analyst:
     name: Grade bug-analyst
     needs:
@@ -109,6 +111,8 @@ jobs:
     with:
       input_path: outputs/evals/fix-reviewer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/fix-reviewer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-fix-reviewer:
     name: Grade fix-reviewer
     needs:
@@ -164,6 +168,8 @@ jobs:
     with:
       input_path: outputs/evals/fix-writer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/fix-writer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-fix-writer:
     name: Grade fix-writer
     needs:
@@ -219,6 +225,8 @@ jobs:
     with:
       input_path: outputs/evals/reproducer-writer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/reproducer-writer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-reproducer-writer:
     name: Grade reproducer-writer
     needs:

@@ -239,6 +239,8 @@ jobs:
       item: ${{ toJSON(matrix.item) }}
       output_path: outputs/analyses/${{ matrix.item.key }}.json
       context_files: outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   verify-analyze-each-bug-against-the-source:
     needs:
     - command-gate
@@ -303,6 +305,8 @@ jobs:
     with:
       item: ${{ toJSON(matrix.item) }}
       output_path: outputs/reproducers/${{ matrix.item.key }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   prove-reproducers:
     needs:
     - command-gate
@@ -400,6 +404,8 @@ jobs:
       item: ${{ toJSON(matrix.item) }}
       output_path: outputs/patches/${{ matrix.item.key }}.json
       context_files: outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   verify-write-a-fix-for-each-reproduced-bug:
     needs:
     - command-gate
@@ -509,6 +515,8 @@ jobs:
       input_path: outputs/validated.json
       output_path: outputs/review.json
       context_files: outputs/patches/combined.patch,outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   assemble-what-passed-review:
     needs:
     - command-gate

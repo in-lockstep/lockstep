@@ -194,6 +194,8 @@ jobs:
       input_path: outputs/issue.json
       output_path: outputs/requirements.json
       context_files: outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-plan-the-change:
     name: Scan input for implement/planner
     needs:
@@ -230,6 +232,8 @@ jobs:
       input_path: outputs/requirements.json
       output_path: outputs/plan.json
       context_files: outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-write-tests-the-repository-s-ci-will-run:
     name: Scan input for implement/test-writer
     needs:
@@ -266,6 +270,8 @@ jobs:
       input_path: outputs/plan.json
       output_path: outputs/change/tests
       context_files: outputs/requirements.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-write-the-change:
     name: Scan input for implement/change-writer
     needs:
@@ -302,6 +308,8 @@ jobs:
       input_path: outputs/plan.json
       output_path: outputs/change/src
       context_files: outputs/requirements.json,outputs/feedback.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   render-the-plan-for-review:
     needs:
     - command-gate

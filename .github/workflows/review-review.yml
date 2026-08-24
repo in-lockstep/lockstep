@@ -158,6 +158,8 @@ jobs:
       input_path: outputs/pending/security.json
       output_path: outputs/reviews/security.json
       context_files: outputs/diff.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-review-for-intent:
     name: Scan input for review/intent-reviewer
     needs:
@@ -194,6 +196,8 @@ jobs:
       input_path: outputs/pending/intent.json
       output_path: outputs/reviews/intent.json
       context_files: outputs/diff.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-review-for-performance:
     name: Scan input for review/performance-reviewer
     needs:
@@ -230,6 +234,8 @@ jobs:
       input_path: outputs/pending/performance.json
       output_path: outputs/reviews/performance.json
       context_files: outputs/diff.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   scan-review-for-test-coverage:
     name: Scan input for review/tests-reviewer
     needs:
@@ -266,6 +272,8 @@ jobs:
       input_path: outputs/pending/tests.json
       output_path: outputs/reviews/tests.json
       context_files: outputs/diff.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   post:
     needs:
     - command-gate

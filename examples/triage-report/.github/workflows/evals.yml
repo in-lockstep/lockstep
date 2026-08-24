@@ -54,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/triage-reporter/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/triage-reporter/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-triage-reporter:
     name: Grade triage-reporter
     needs:

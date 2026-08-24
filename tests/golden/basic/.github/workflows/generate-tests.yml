@@ -159,6 +159,7 @@ jobs:
       output_path: outputs/extracted-stories/${{ matrix.item.key }}.json
     secrets:
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   verify-extract-stories-from-each-issue:
     needs:
     - extract-stories-from-each-issue

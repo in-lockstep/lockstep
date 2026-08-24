@@ -23,6 +23,7 @@ from pathlib import Path
 
 import yaml
 
+from lockstep.emit import compile_spec
 from lockstep.emit.agentic import AGENT_CALLER_PERMISSIONS
 
 # Rank within one scope. A caller granting `write` satisfies a callee asking for `read`.
@@ -106,3 +107,50 @@ def test_the_agent_never_asks_for_read_all(repo_root):
         data = yaml.safe_load(lock.read_text(encoding="utf-8")) or {}
         for job, body in (data.get("jobs") or {}).items():
             assert body.get("permissions") != "read-all", f"{lock.name}:{job} asks for read-all"
+
+
+# --- the engine credential has to be handed over ---------------------------------------------------
+#
+# A called workflow does not inherit repository secrets. The lock file gh-aw produces declares
+# `ANTHROPIC_API_KEY` as an optional `workflow_call` secret, so the callee side was always handled —
+# what was missing was anybody passing it. `/implement` authorized, fetched its issue, scanned, and
+# died in gh-aw's activation job with "None of the following secrets are set: ANTHROPIC_API_KEY",
+# while the secret sat in the repository the whole time.
+
+
+def _agent_calls(root: Path) -> list[tuple[str, str, dict]]:
+    """Every job that calls a compiled agent workflow, with its `secrets:` block."""
+    import yaml
+
+    found: list[tuple[str, str, dict]] = []
+    for path, text in compile_spec(root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for name, job in (yaml.safe_load(text) or {}).get("jobs", {}).items():
+            if isinstance(job, dict) and "aw-" in str(job.get("uses", "")):
+                found.append((path, name, job.get("secrets") or {}))
+    return found
+
+
+def test_every_agent_call_hands_over_the_engine_credential(repo_root):
+    from lockstep.emit.agentic import ENGINE_SECRET
+
+    calls = _agent_calls(repo_root)
+    assert calls, "no agent calls found, so this would prove nothing"
+
+    known = set(ENGINE_SECRET.values())
+    missing = [
+        f"{path}:{job}" for path, job, secrets in calls if not (known & set(secrets))
+    ]
+    assert not missing, (
+        "these call an agent workflow without passing an engine credential, so the run authorizes "
+        "and then dies in activation:\n  " + "\n  ".join(missing)
+    )
+
+
+def test_the_credential_is_passed_by_reference_not_inherited(repo_root):
+    """`secrets: inherit` would hand every agent the whole repository."""
+    for path, job, secrets in _agent_calls(repo_root):
+        assert secrets != "inherit", f"{path}:{job}"
+        for name, value in secrets.items():
+            assert value == "${{ secrets." + name + " }}", f"{path}:{job}:{name}"
