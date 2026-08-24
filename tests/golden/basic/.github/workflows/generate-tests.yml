@@ -69,7 +69,9 @@ jobs:
       actions: read
     environment: my-app-staging
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       items_extract_stories_from_each_issue: ${{ steps.fanout-extract-stories-from-each-issue.outputs.items }}
     timeout-minutes: 30
@@ -118,8 +120,29 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
-  extract-stories-from-each-issue:
+  scan-extract-stories-from-each-issue:
+    name: Scan input for story-extractor
     needs: fetch-issues
+    if: ${{ !failure() && !cancelled() }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+    - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/jira-issues.json --mode=warn --report=outputs/scan/extract-stories-from-each-issue.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
+  extract-stories-from-each-issue:
+    needs:
+    - fetch-issues
+    - scan-extract-stories-from-each-issue
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
@@ -138,7 +161,9 @@ jobs:
     - fetch-issues
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
@@ -156,7 +181,9 @@ jobs:
       actions: read
     environment: my-app-staging
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       MY_URL: ${{ vars.APP_URL }}
       PROFILE_URL: ${{ vars.APP_URL }}

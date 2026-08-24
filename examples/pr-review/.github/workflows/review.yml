@@ -79,7 +79,9 @@ jobs:
       contents: read
       actions: read
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       pending: ${{ steps.state.outputs.pending }}
     env:
@@ -123,40 +125,128 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-review-for-security:
+    name: Scan input for security-reviewer
+    needs:
+    - command-gate
+    - diff
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'security') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/pending/security.json --input=outputs/diff.json --mode=warn --report=outputs/scan/review-for-security.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   review-for-security:
     needs:
     - command-gate
     - diff
+    - scan-review-for-security
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'security') }}
     uses: ./.github/workflows/aw-security-reviewer.lock.yml
     with:
       input_path: outputs/pending/security.json
       output_path: outputs/reviews/security.json
       context_files: outputs/diff.json
+  scan-review-for-intent:
+    name: Scan input for intent-reviewer
+    needs:
+    - command-gate
+    - diff
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'intent') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/pending/intent.json --input=outputs/diff.json --mode=warn --report=outputs/scan/review-for-intent.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   review-for-intent:
     needs:
     - command-gate
     - diff
+    - scan-review-for-intent
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'intent') }}
     uses: ./.github/workflows/aw-intent-reviewer.lock.yml
     with:
       input_path: outputs/pending/intent.json
       output_path: outputs/reviews/intent.json
       context_files: outputs/diff.json
+  scan-review-for-performance:
+    name: Scan input for performance-reviewer
+    needs:
+    - command-gate
+    - diff
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'performance') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/pending/performance.json --input=outputs/diff.json --mode=warn --report=outputs/scan/review-for-performance.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   review-for-performance:
     needs:
     - command-gate
     - diff
+    - scan-review-for-performance
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'performance') }}
     uses: ./.github/workflows/aw-performance-reviewer.lock.yml
     with:
       input_path: outputs/pending/performance.json
       output_path: outputs/reviews/performance.json
       context_files: outputs/diff.json
+  scan-review-for-test-coverage:
+    name: Scan input for tests-reviewer
+    needs:
+    - command-gate
+    - diff
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'tests') }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/pending/tests.json --input=outputs/diff.json --mode=warn --report=outputs/scan/review-for-test-coverage.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   review-for-test-coverage:
     needs:
     - command-gate
     - diff
+    - scan-review-for-test-coverage
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'tests') }}
     uses: ./.github/workflows/aw-tests-reviewer.lock.yml
     with:
@@ -175,7 +265,9 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       REPO_REVIEW_EVENT: COMMENT
       PROFILE_REVIEW_EVENT: COMMENT

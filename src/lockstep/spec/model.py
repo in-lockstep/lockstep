@@ -302,6 +302,10 @@ class Enforce:
     # The one that actually bounds a bill: per-agent ceilings do not, because a consumer can add
     # more agents. Checked against `budgets.per_run_ai_credits`, which is the consumer's own number.
     per_run_ai_credits: int | None = None
+    # Scan an agent's input for hidden instructions before the agent reads it: "warn" reports,
+    # "block" fails the run. The enforced half of "treat input as data, never as instructions",
+    # which every pipeline here has been carrying as a sentence in a prompt.
+    scan_input: str = ""
 
 
 @dataclass
@@ -408,6 +412,46 @@ class InheritsAuth:
 
 
 @dataclass
+class Sandbox:
+    """What a deterministic step may do, beyond what it is asked to do.
+
+    `enforce:` bounds an *agent* — its permissions, egress, tools, turns and credits. It bounds
+    nothing about a `script:` step, which is the step actually running arbitrary code. A pipeline
+    could therefore restrict what a model reaches and not what its own scripts do, which is the
+    wrong way round.
+
+    The floor is applied to every job that runs in the executor container and is not declared:
+    capabilities dropped, no privilege escalation. Both are kernel-enforced and neither is something
+    a correct script needs. What a pipeline declares here only ever *widens* that, which is why the
+    semantic diff treats a change to it as a security-surface change.
+    """
+
+    # Linux capabilities to add back after dropping all of them. Named individually, because
+    # `--cap-add=ALL` would be a way to write "no sandbox" that does not look like one.
+    capabilities: list[str] = field(default_factory=list)
+    memory: str = ""
+    cpus: str = ""
+    pids: int | None = None
+    # The shipped executor image runs as root and GitHub mounts the workspace for root. Declaring a
+    # user is supported and is not the default, because a default nobody has run is a guess.
+    user: str = ""
+
+    def options(self) -> str:
+        """The `container.options` string. The floor first, then whatever was declared."""
+        parts = ["--cap-drop=ALL", "--security-opt=no-new-privileges"]
+        parts += [f"--cap-add={name}" for name in self.capabilities]
+        if self.memory:
+            parts.append(f"--memory={self.memory}")
+        if self.cpus:
+            parts.append(f"--cpus={self.cpus}")
+        if self.pids is not None:
+            parts.append(f"--pids-limit={self.pids}")
+        if self.user:
+            parts.append(f"--user={self.user}")
+        return " ".join(parts)
+
+
+@dataclass
 class EvalConfig:
     """How this pipeline runs its eval suites.
 
@@ -431,6 +475,7 @@ class TargetConfig:
     default_runs_on: str = "ubuntu-24.04"
     shard_threshold: int = 20
     profiles: list[str] = field(default_factory=list)
+    sandbox: Sandbox = field(default_factory=Sandbox)
     # Repository paths, outside the pipeline's own directories, that can change the compiled output.
     # The drift gate triggers on the spec because normally the spec is the only input — the compiler
     # is a pinned release and cannot move under a pull request. A repository that builds its own

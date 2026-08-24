@@ -6,10 +6,10 @@
       "sources": []
     },
     ".github/workflows/aw-intent-reviewer.md": {
-      "sha": "6153f52a",
+      "sha": "b044f065",
       "sources": [
         "agents/intent-reviewer.md@b1b64121",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@ebc5073f",
         "guardrails/reviewing.md@a6010f09",
         "skills/review-writing.md@ace5be4b",
@@ -18,10 +18,10 @@
       ]
     },
     ".github/workflows/aw-performance-reviewer.md": {
-      "sha": "0e253d9f",
+      "sha": "e805063f",
       "sources": [
         "agents/performance-reviewer.md@35c73aad",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@ebc5073f",
         "guardrails/reviewing.md@a6010f09",
         "skills/review-writing.md@ace5be4b",
@@ -30,10 +30,10 @@
       ]
     },
     ".github/workflows/aw-security-reviewer.md": {
-      "sha": "84650415",
+      "sha": "cc705392",
       "sources": [
         "agents/security-reviewer.md@5710c8ce",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@ebc5073f",
         "guardrails/reviewing.md@a6010f09",
         "skills/review-writing.md@ace5be4b",
@@ -42,10 +42,10 @@
       ]
     },
     ".github/workflows/aw-tests-reviewer.md": {
-      "sha": "9b08f5c8",
+      "sha": "230da293",
       "sources": [
         "agents/tests-reviewer.md@636955b5",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@ebc5073f",
         "guardrails/reviewing.md@a6010f09",
         "skills/review-writing.md@ace5be4b",
@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "e9c44b45",
+      "sha": "6f3be3ca",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
@@ -62,7 +62,7 @@
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "d30eb271",
+      "sha": "308fd72d",
       "sources": [
         "commands/review.md@97ef9fce"
       ]
@@ -72,7 +72,7 @@
       "sources": []
     },
     ".github/workflows/shared/guardrail-baseline.md": {
-      "sha": "4cf288d3",
+      "sha": "c208a351",
       "sources": []
     },
     ".github/workflows/shared/guardrail-common.md": {

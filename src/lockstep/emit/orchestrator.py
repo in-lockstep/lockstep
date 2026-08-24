@@ -265,6 +265,21 @@ def emit_command(
 
         if pending_needs is not None:
             emitted[0][1]["needs"] = pending_needs if len(pending_needs) > 1 else pending_needs[0]
+
+        # Inserted after `needs` is settled and never into `emitted`, so the step-to-job map and the
+        # chaining below still point at the agent job rather than at its escort.
+        if group.kind == "agent":
+            scanned = _scan_job(group, ctx, command, emitted[0][1].get("needs"), step_to_job)
+            if scanned:
+                scan_id, scan_job = scanned
+                jobs[scan_id] = scan_job
+                # Added to the agent's dependencies, never substituted for them. Its `if:` reads
+                # `needs.<job>.outputs`, and a job dropped from `needs` makes that expression empty
+                # rather than an error — the condition would silently stop matching.
+                existing = emitted[0][1].get("needs")
+                current = [existing] if isinstance(existing, str) else list(existing or [])
+                emitted[0][1]["needs"] = [*current, scan_id] if current else scan_id
+
         for job_id, job in emitted:
             jobs[job_id] = job
         for step in group.steps:
@@ -444,7 +459,7 @@ def _base_steps_job(
         if ctx.spec.manifest.inherits:
             setup.append({"name": "Fetch inherited pipelines", "run": "lockstep fetch"})
     else:
-        job["container"] = ctx.pins.exec_container()
+        job["container"] = ctx.container()
     job["steps"] = [
         *setup,
         {"uses": ctx.pins.action("restore")},
@@ -783,6 +798,75 @@ def _command_jobs(
     return emitted
 
 
+def _scan_job(
+    group: JobGroup,
+    ctx: EmitContext,
+    command: Command,
+    needs: Any,
+    step_to_job: dict[str, str],
+) -> tuple[str, dict[str, Any]] | None:
+    """Scan what an agent is about to read, when a guardrail reaching it asks for that.
+
+    The guardrail that carries the request is the one whose prose asks the model to treat its input
+    as data — so the enforced half and the advisory half arrive together, on the same agent, from
+    the same file. A pipeline with no such guardrail emits no job.
+
+    It runs in the executor container rather than inside the agent workflow, because that is where
+    `pipeline-exec` lives and because a failure here should stop the agent from starting rather than
+    be something the agent is told about after reading the input.
+    """
+    from .fragments import resolve_layers
+
+    step = group.head
+    agent = ctx.spec.agents.get(step.target)
+    if agent is None:
+        return None
+    mode = resolve_layers(agent, command, ctx.profile, ctx.spec).enforce().scan_input
+    if not mode:
+        return None
+
+    targets: list[str] = []
+    if step.input:
+        targets.append(ctx.expand(step.input, command))
+    if step.foreach:
+        # The whole directory: the fan-out reads one file per item, and which item carries the
+        # payload is the question, not something the compiler can name in advance.
+        targets.append(ctx.expand(step.foreach.source, command))
+    targets.extend(ctx.expand(path, command) for path in step.context_files)
+    if not targets:
+        return None
+
+    job_id = f"scan-{group.id}"
+    report = f"{ctx.output_dir_env}/scan/{group.id}.json"
+    run = " ".join(
+        [
+            "pipeline-exec scan-input",
+            *(f"--input={path}" for path in targets),
+            f"--mode={mode}",
+            f"--report={report}",
+        ]
+    )
+    job: dict[str, Any] = {
+        "name": f"Scan input for {step.target}",
+        "runs-on": ctx.runs_on,
+        "permissions": {"contents": "read"},
+        "container": ctx.container(),
+    }
+    if needs:
+        job["needs"] = needs
+    if step.condition:
+        # The same condition the agent carries, resolved against the same map: a scan that ran when
+        # the agent did not would fail a pipeline over input nobody was going to read.
+        job["if"] = _if_expression(step.condition, step_to_job)
+    job["steps"] = [
+        {"uses": ctx.pins.external_action("actions/checkout")},
+        {"uses": ctx.pins.action("restore")},
+        {"name": "Scan for hidden instructions", "id": "scan", "run": run},
+        {"id": "save-workspace", "uses": ctx.pins.action("save"), "if": "${{ always() }}"},
+    ]
+    return job_id, job
+
+
 def _verify_job(
     group: JobGroup,
     ctx: EmitContext,
@@ -810,7 +894,7 @@ def _verify_job(
         "needs": needs,
         "if": "${{ " + " && ".join(conditions) + " }}",
         "runs-on": ctx.runs_on,
-        "container": ctx.pins.exec_container(),
+        "container": ctx.container(),
         "steps": [
             {"uses": ctx.pins.external_action("actions/checkout")},
             {"uses": ctx.pins.action("restore")},
@@ -930,7 +1014,7 @@ def _emit_proposal(
         "needs": needs,
         "if": "${{ !cancelled() }}",
         "runs-on": ctx.runs_on,
-        "container": ctx.pins.exec_container(),
+        "container": ctx.container(),
         # The narrowest write a pipeline can need: a branch nobody merges without reading it.
         "permissions": {"contents": "write", "pull-requests": "write"},
         "steps": [

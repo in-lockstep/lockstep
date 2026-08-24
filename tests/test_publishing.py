@@ -43,6 +43,8 @@ def test_the_example_is_target_ready_apart_from_being_unpublished():
 def test_the_pipeline_is_reachable_end_to_end(workflow):
     assert simulate(workflow).order == [
         "search",
+        # Every agent is preceded by a scan of what it is about to read.
+        "scan-write-the-triage-report",
         "write-the-triage-report",
         "render",
         "propose-generated-artifacts",

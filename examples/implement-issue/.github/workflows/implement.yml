@@ -101,7 +101,9 @@ jobs:
       actions: read
     environment: main
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       MAIN_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -165,40 +167,128 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-interpret-the-requirements:
+    name: Scan input for requirements-analyst
+    needs:
+    - command-gate
+    - fetch-issue
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/issue.json --input=outputs/feedback.json --mode=warn --report=outputs/scan/interpret-the-requirements.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   interpret-the-requirements:
     needs:
     - command-gate
     - fetch-issue
+    - scan-interpret-the-requirements
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     uses: ./.github/workflows/aw-requirements-analyst.lock.yml
     with:
       input_path: outputs/issue.json
       output_path: outputs/requirements.json
       context_files: outputs/feedback.json
+  scan-plan-the-change:
+    name: Scan input for planner
+    needs:
+    - command-gate
+    - interpret-the-requirements
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/requirements.json --input=outputs/feedback.json --mode=warn --report=outputs/scan/plan-the-change.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   plan-the-change:
     needs:
     - command-gate
     - interpret-the-requirements
+    - scan-plan-the-change
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     uses: ./.github/workflows/aw-planner.lock.yml
     with:
       input_path: outputs/requirements.json
       output_path: outputs/plan.json
       context_files: outputs/feedback.json
+  scan-write-tests-the-repository-s-ci-will-run:
+    name: Scan input for test-writer
+    needs:
+    - command-gate
+    - plan-the-change
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/plan.json --input=outputs/requirements.json --mode=warn --report=outputs/scan/write-tests-the-repository-s-ci-will-run.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   write-tests-the-repository-s-ci-will-run:
     needs:
     - command-gate
     - plan-the-change
+    - scan-write-tests-the-repository-s-ci-will-run
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     uses: ./.github/workflows/aw-test-writer.lock.yml
     with:
       input_path: outputs/plan.json
       output_path: outputs/change/tests
       context_files: outputs/requirements.json
+  scan-write-the-change:
+    name: Scan input for change-writer
+    needs:
+    - command-gate
+    - write-tests-the-repository-s-ci-will-run
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/plan.json --input=outputs/requirements.json --input=outputs/feedback.json --mode=warn --report=outputs/scan/write-the-change.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   write-the-change:
     needs:
     - command-gate
     - write-tests-the-repository-s-ci-will-run
+    - scan-write-the-change
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     uses: ./.github/workflows/aw-change-writer.lock.yml
     with:
@@ -215,7 +305,9 @@ jobs:
       actions: read
     environment: main
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       MAIN_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -261,7 +353,9 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0

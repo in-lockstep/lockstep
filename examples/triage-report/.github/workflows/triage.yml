@@ -62,7 +62,9 @@ jobs:
       actions: read
     environment: tracker
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       TRACKER_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -123,8 +125,28 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
-  write-the-triage-report:
+  scan-write-the-triage-report:
+    name: Scan input for triage-reporter
     needs: search
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/summary.json --input=outputs/issues.json --mode=warn --report=outputs/scan/write-the-triage-report.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  write-the-triage-report:
+    needs:
+    - search
+    - scan-write-the-triage-report
     uses: ./.github/workflows/aw-triage-reporter.lock.yml
     with:
       input_path: outputs/summary.json
@@ -134,7 +156,9 @@ jobs:
     needs: write-the-triage-report
     environment: tracker
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       TRACKER_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -156,7 +180,9 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0

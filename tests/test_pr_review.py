@@ -58,9 +58,11 @@ REVIEW_JOBS = {
 
 def test_the_pipeline_is_reachable_end_to_end(workflow):
     everything = {"diff": {"pending": '["security","intent","performance","tests"]'}}
-    assert simulate(workflow, {}, {**AUTHORIZED, **everything}).order == [
+    order = simulate(workflow, {}, {**AUTHORIZED, **everything}).order
+    assert order == [
         GATE,
         "diff",
+        *(f"scan-{job}" for job in REVIEW_JOBS.values()),
         *REVIEW_JOBS.values(),
         "post",
     ]
@@ -86,7 +88,10 @@ def test_an_aspect_that_was_not_asked_for_does_not_run(workflow, aspect):
 def test_the_reviews_run_beside_each_other_not_in_a_queue(workflow):
     """Two aspects asked for is two reviews at once; queueing them doubles the wait for nothing."""
     for job in REVIEW_JOBS.values():
-        assert workflow["jobs"][job]["needs"] == [GATE, "diff"]
+        # Each review is preceded by its own scan of its own input, so they still fan out from the
+        # diff rather than queueing behind one another.
+        assert workflow["jobs"][job]["needs"] == [GATE, "diff", f"scan-{job}"]
+        assert workflow["jobs"][f"scan-{job}"]["needs"] == [GATE, "diff"]
     assert workflow["jobs"]["post"]["needs"] == [GATE, *REVIEW_JOBS.values()]
 
 

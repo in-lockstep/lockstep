@@ -6,27 +6,27 @@
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
-      "sha": "6c41bbe8",
+      "sha": "caad7463",
       "sources": [
         "agents/story-extractor.md@9480178e",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@e558a2d9",
         "skills/test/common.md@a4322449",
         "contexts/my-app-patterns.md@c781483a"
       ]
     },
     ".github/workflows/discover.yml": {
-      "sha": "f75ba3aa",
+      "sha": "8391b33b",
       "sources": [
         "commands/discover.md@65153630"
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "bfeba711",
+      "sha": "98f37084",
       "sources": []
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "b0ecf883",
+      "sha": "0a426391",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
@@ -36,7 +36,7 @@
       "sources": []
     },
     ".github/workflows/repair.yml": {
-      "sha": "04b42975",
+      "sha": "499e2078",
       "sources": [
         "commands/repair.md@d19a5139"
       ]
@@ -46,7 +46,7 @@
       "sources": []
     },
     ".github/workflows/shared/guardrail-baseline.md": {
-      "sha": "3799e2d1",
+      "sha": "9fdb6661",
       "sources": []
     },
     ".github/workflows/shared/guardrail-common.md": {
@@ -58,7 +58,7 @@
       "sources": []
     },
     ".github/workflows/validate.yml": {
-      "sha": "48c201c9",
+      "sha": "b656ebd0",
       "sources": [
         "commands/validate.md@dcc72949"
       ]

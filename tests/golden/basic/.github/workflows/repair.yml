@@ -52,7 +52,9 @@ jobs:
       actions: read
     environment: my-app-staging
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       items_repair_each_failing_script: ${{ steps.fanout-repair-each-failing-script.outputs.items }}
     env:
@@ -107,7 +109,9 @@ jobs:
       matrix:
         item: ${{ fromJSON(needs.collect-failures.outputs.items_repair_each_failing_script) }}
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       MY_URL: ${{ vars.APP_URL }}
       PROFILE_URL: ${{ vars.APP_URL }}
@@ -132,7 +136,9 @@ jobs:
     needs: repair-each-failing-script
     environment: my-app-staging
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       converged: ${{ steps.check-convergence.outputs.converged }}
     env:

@@ -211,6 +211,17 @@ class EmitContext:
     def out_dir(self) -> str:
         return self.spec.manifest.target.out
 
+    def container(self) -> dict[str, Any]:
+        """The `container:` block for a job running a deterministic step.
+
+        The image is pinned by digest; the options carry the sandbox floor. Both are produced here
+        so no emitter can build an exec job that quietly skips either — and there are four of them.
+        """
+        return {
+            "image": self.pins.exec_container(),
+            "options": self.spec.manifest.target.sandbox.options(),
+        }
+
     @property
     def output_dir_env(self) -> str:
         return "outputs"

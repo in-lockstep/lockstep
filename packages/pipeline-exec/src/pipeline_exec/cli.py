@@ -659,6 +659,78 @@ def _issue_number(issue: str) -> str:
     return tail
 
 
+@main.command(name="scan-input")
+@click.option("--input", "inputs", multiple=True, required=True, type=click.Path(path_type=Path))
+@click.option("--mode", type=click.Choice(["warn", "block"]), default="warn", show_default=True)
+@click.option(
+    "--fail-on",
+    type=click.Choice(["critical", "high", "medium"]),
+    default="critical",
+    show_default=True,
+    help="Lowest severity that fails the step in block mode.",
+)
+@click.option("--report", type=click.Path(path_type=Path), help="Where to write the findings.")
+def scan_input(inputs: tuple[Path, ...], mode: str, fail_on: str, report: Path | None) -> None:
+    """Look for instructions hidden in the data an agent is about to read.
+
+    The shipped baseline guardrail asks a model to treat its input as data. This is the half that
+    does not depend on the model agreeing: it runs first, on the files the agent will be handed.
+
+    It is not a filter that makes untrusted input safe — pattern matching cannot decide what a
+    sentence means. What bounds a successful injection is the read-only permissions, the tool
+    deny-list and the egress rules the same guardrail compiles into the workflow. This narrows the
+    gap between telling the model and checking, and says what it found.
+    """
+    from .injection import scan
+
+    ranks = {"medium": 0, "high": 1, "critical": 2}
+    scanned: list[str] = []
+    findings: list[dict[str, Any]] = []
+    for path in inputs:
+        files = sorted(path.rglob("*")) if path.is_dir() else [path]
+        for target in files:
+            if not target.is_file():
+                continue
+            scanned.append(str(target))
+            for finding in scan(target.read_text(encoding="utf-8", errors="replace")):
+                findings.append({**finding.as_dict(), "file": str(target)})
+
+    if not scanned:
+        # An agent about to read nothing is a pipeline bug, and reporting a clean scan of no files
+        # is the kind of green that hides one.
+        _fail(f"nothing to scan at {', '.join(str(p) for p in inputs)}")
+
+    summary: dict[str, Any] = {
+        "total": len(findings),
+        "files_scanned": len(scanned),
+        "by_severity": {level: sum(1 for f in findings if f["severity"] == level) for level in ranks},
+        "categories": sorted({str(f["category"]) for f in findings}),
+        "findings": findings,
+    }
+
+    if report:
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+    for hit in findings:
+        click.echo(
+            f"  {hit['severity']:8} {hit['category']:22} "
+            f"{hit['file']}:{hit['line']}  {hit['excerpt']}"
+        )
+
+    blocking = [hit for hit in findings if ranks[str(hit["severity"])] >= ranks[fail_on]]
+    _emit_output("findings", str(len(findings)))
+    _emit_output("blocking", str(len(blocking)))
+    click.echo(
+        f"scanned {len(scanned)} file(s): {len(findings)} finding(s), {len(blocking)} at or above {fail_on}"
+    )
+    if blocking and mode == "block":
+        _fail(
+            f"{len(blocking)} finding(s) at or above {fail_on} in input an agent was about to read. "
+            "Relax `enforce.scan-input` in the guardrail that sets it, or look at what was found"
+        )
+
+
 @main.command(name="eval-cases")
 @click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
 @click.option("--output-dir", required=True, type=click.Path(path_type=Path))

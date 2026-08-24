@@ -387,6 +387,19 @@ def parse_agent(src: SourceFile) -> Agent:
     )
 
 
+def _scan_mode(raw: dict[str, Any], src: SourceFile) -> str:
+    value = str(raw.get("scan-input", "") or "").strip().lower()
+    if value and value not in ("warn", "block"):
+        raise SpecError(
+            f"enforce.scan-input is {value!r}",
+            location=src.rel,
+            hint="`warn` reports what it found; `block` fails the run. There is deliberately no "
+            "third setting — a scanner that silently rewrote its input would be changing what a "
+            "reviewer approved",
+        )
+    return value
+
+
 def _ceiling(raw: dict[str, Any], key: str, src: SourceFile) -> int | None:
     """One ceiling from an `enforce:` block, refusing anything that is not a positive whole number.
 
@@ -418,6 +431,7 @@ def parse_fragment(src: SourceFile, kind: str) -> Fragment:
         permissions=str(enforce_raw.get("permissions", "") or ""),
         network=str(enforce_raw.get("network", "") or ""),
         deny_tools=_as_list(enforce_raw.get("deny-tools")),
+        scan_input=_scan_mode(enforce_raw, src),
         max_turns=_ceiling(enforce_raw, "max-turns", src),
         max_ai_credits=_ceiling(enforce_raw, "max-ai-credits", src),
         per_run_ai_credits=_ceiling(enforce_raw, "per-run-ai-credits", src),

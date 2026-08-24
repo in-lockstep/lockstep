@@ -43,6 +43,12 @@ class PromptLayers:
             for tool in fragment.enforce.deny_tools:
                 if tool not in merged.deny_tools:
                     merged.deny_tools.append(tool)
+            # The strictest scan wins, for the same reason ceilings take the lowest: two guardrails
+            # asking for different strengths are two constraints, and the weaker satisfies neither.
+            if fragment.enforce.scan_input == "block" or (
+                fragment.enforce.scan_input and not merged.scan_input
+            ):
+                merged.scan_input = fragment.enforce.scan_input
             # Ceilings take the lowest, not the last: two guardrails each setting one are two
             # constraints, and satisfying only whichever was read last is satisfying neither.
             for name in ("max_turns", "max_ai_credits", "per_run_ai_credits"):

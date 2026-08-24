@@ -23,6 +23,7 @@ from .model import (
     Extensions,
     InheritsAuth,
     Manifest,
+    Sandbox,
     SourceFile,
     Spec,
     StepKind,
@@ -76,6 +77,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     caps_raw = data.get("capabilities", {}) or {}
     target_raw = (data.get("targets", {}) or {}).get("github-agentic", {}) or {}
+    sandbox_raw = target_raw.get("sandbox", {}) or {}
     budgets = data.get("budgets", {}) or {}
     evals_raw = data.get("evals", {}) or {}
     auth_raw = data.get("inherits-auth", {}) or {}
@@ -114,6 +116,13 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             shard_threshold=int(target_raw.get("shard-threshold", 20)),
             profiles=[str(p) for p in (target_raw.get("profiles", []) or [])],
             watch=[str(p) for p in (target_raw.get("watch", []) or [])],
+            sandbox=Sandbox(
+                capabilities=[str(c) for c in (sandbox_raw.get("capabilities") or [])],
+                memory=str(sandbox_raw.get("memory", "") or ""),
+                cpus=str(sandbox_raw.get("cpus", "") or ""),
+                pids=int(sandbox_raw["pids"]) if sandbox_raw.get("pids") is not None else None,
+                user=str(sandbox_raw.get("user", "") or ""),
+            ),
         ),
         per_run_ai_credits=budgets.get("per_run_ai_credits"),
         evals=EvalConfig(

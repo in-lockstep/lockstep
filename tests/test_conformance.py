@@ -210,6 +210,7 @@ def test_the_example_pipeline_compiles_and_is_reachable(httpbin_example):
     workflow = workflows(httpbin_example)["validate-api.yml"]
     assert simulate(workflow).order == [
         "list-endpoints",
+        "scan-write-a-contract-test-for-each-endpoint",
         "write-a-contract-test-for-each-endpoint",
         "verify-write-a-contract-test-for-each-endpoint",
         "check-the-generated-tests-are-well-formed",

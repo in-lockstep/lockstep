@@ -6,10 +6,10 @@
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
-      "sha": "6ba21818",
+      "sha": "f5daa025",
       "sources": [
         "agents/change-writer.md@34293872",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@67509080",
         "guardrails/source-analysis.md@9a31f04c",
         "guardrails/minimal-change.md@5e267c6d",
@@ -18,10 +18,10 @@
       ]
     },
     ".github/workflows/aw-planner.md": {
-      "sha": "efc34094",
+      "sha": "a8ec3104",
       "sources": [
         "agents/planner.md@90765a5d",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@67509080",
         "guardrails/source-analysis.md@9a31f04c",
         "skills/repo-conventions.md@5fe054f8",
@@ -29,10 +29,10 @@
       ]
     },
     ".github/workflows/aw-requirements-analyst.md": {
-      "sha": "98dd4388",
+      "sha": "0390ecdd",
       "sources": [
         "agents/requirements-analyst.md@b33ecd89",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@67509080",
         "guardrails/source-analysis.md@9a31f04c",
         "skills/repo-conventions.md@5fe054f8",
@@ -40,10 +40,10 @@
       ]
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "d986cf18",
+      "sha": "3629c556",
       "sources": [
         "agents/test-writer.md@6af5ad4a",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@67509080",
         "guardrails/source-analysis.md@9a31f04c",
         "skills/repo-conventions.md@5fe054f8",
@@ -51,11 +51,11 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "d2ba5b25",
+      "sha": "b35fb25d",
       "sources": []
     },
     ".github/workflows/implement.yml": {
-      "sha": "eb520ef2",
+      "sha": "85bdaf43",
       "sources": [
         "commands/implement.md@aa792623"
       ]
@@ -69,7 +69,7 @@
       "sources": []
     },
     ".github/workflows/shared/guardrail-baseline.md": {
-      "sha": "a953c77f",
+      "sha": "3624a34e",
       "sources": []
     },
     ".github/workflows/shared/guardrail-common.md": {

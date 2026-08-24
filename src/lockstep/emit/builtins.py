@@ -37,6 +37,7 @@ INTERNAL = frozenset(
         "parse-command",
         # Eval plumbing. The compiler writes these into the eval workflow itself; a `builtin:` step
         # naming one would be describing the harness rather than the work.
+        "scan-input",
         "eval-cases",
         "eval-judge-prep",
         "eval-grade",

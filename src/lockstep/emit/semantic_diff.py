@@ -31,6 +31,9 @@ BLOCKING = {
     "mcp-tools",
     "secrets",
     "safe-output-caps",
+    # What a deterministic step may do. Adding a capability back, or raising a limit, widens what
+    # arbitrary code in a `script:` step can reach — the same class of change as widening egress.
+    "sandbox",
 }
 
 
@@ -82,6 +85,11 @@ def surface_of(path: str, text: str) -> dict[str, Any]:
         if isinstance(data, dict):
             surface["permissions"] = data.get("permissions")
             surface["triggers"] = sorted((data.get(True) or data.get("on") or {}).keys())
+            surface["sandbox"] = {
+                name: (job.get("container") or {}).get("options")
+                for name, job in (data.get("jobs") or {}).items()
+                if isinstance(job, dict) and isinstance(job.get("container"), dict)
+            }
     elif path.endswith(".md"):
         front = _load_frontmatter(text)
         surface["permissions"] = front.get("permissions")

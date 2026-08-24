@@ -6,10 +6,10 @@
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "12065db4",
+      "sha": "1376db2e",
       "sources": [
         "agents/test-writer.md@e0f43915",
-        "lockstep:guardrails/baseline.md@f12c42fc",
+        "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@f64a42fc",
         "guardrails/api-tests.md@64ec48a2",
         "lockstep:skills/test-script-format.md@b83cd2fa",
@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "bec3bd02",
+      "sha": "abf84b9b",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
@@ -33,7 +33,7 @@
       "sources": []
     },
     ".github/workflows/shared/guardrail-baseline.md": {
-      "sha": "788c8c3a",
+      "sha": "95dd6502",
       "sources": []
     },
     ".github/workflows/shared/guardrail-common.md": {
@@ -45,7 +45,7 @@
       "sources": []
     },
     ".github/workflows/validate-api.yml": {
-      "sha": "f147a747",
+      "sha": "65fca1e4",
       "sources": [
         "commands/validate-api.md@70999f26"
       ]

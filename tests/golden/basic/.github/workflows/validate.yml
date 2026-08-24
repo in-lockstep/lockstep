@@ -87,7 +87,9 @@ jobs:
       contents: write
     environment: my-app-staging
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       MY_URL: ${{ vars.APP_URL }}
       PROFILE_URL: ${{ vars.APP_URL }}

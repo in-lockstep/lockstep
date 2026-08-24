@@ -34,6 +34,10 @@ def test_agent_step_breaks_fusion(basic_spec_dir):
     assert list(jobs) == [
         "discover-application-structure",
         "fetch-issues",
+        # Every agent is preceded by a scan of what it is about to read, because the shipped
+        # baseline guardrail enforces one. It is a job rather than a step so that a finding stops
+        # the agent from starting.
+        "scan-extract-stories-from-each-issue",
         "extract-stories-from-each-issue",
         "verify-extract-stories-from-each-issue",
         "build-test-manifest",
@@ -44,7 +48,11 @@ def test_jobs_chain_in_step_order(basic_spec_dir):
     jobs = jobs_of(basic_spec_dir, "generate-tests.yml")
     assert "needs" not in jobs["discover-application-structure"]
     assert jobs["fetch-issues"]["needs"] == "discover-application-structure"
-    assert jobs["extract-stories-from-each-issue"]["needs"] == "fetch-issues"
+    assert jobs["scan-extract-stories-from-each-issue"]["needs"] == "fetch-issues"
+    assert jobs["extract-stories-from-each-issue"]["needs"] == [
+        "fetch-issues",
+        "scan-extract-stories-from-each-issue",
+    ]
     assert jobs["build-test-manifest"]["needs"] == "verify-extract-stories-from-each-issue"
 
 

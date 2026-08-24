@@ -185,7 +185,7 @@ def _exec_job(
         job["if"] = condition
     if outputs:
         job["outputs"] = outputs
-    job["container"] = ctx.pins.exec_container()
+    job["container"] = ctx.container()
     job["steps"] = [
         {"uses": ctx.pins.external_action("actions/checkout")},
         {"uses": ctx.pins.action("restore")},

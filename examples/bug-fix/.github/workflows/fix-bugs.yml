@@ -110,7 +110,9 @@ jobs:
       actions: read
     environment: production
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       items_analyze_each_bug_against_the_source: ${{ steps.fanout-analyze-each-bug-against-the-source.outputs.items }}
     env:
@@ -192,10 +194,32 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-analyze-each-bug-against-the-source:
+    name: Scan input for bug-analyst
+    needs:
+    - command-gate
+    - fetch-bugs
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/bugs.json --input=outputs/feedback.json --mode=warn --report=outputs/scan/analyze-each-bug-against-the-source.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   analyze-each-bug-against-the-source:
     needs:
     - command-gate
     - fetch-bugs
+    - scan-analyze-each-bug-against-the-source
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     strategy:
       fail-fast: false
@@ -214,7 +238,9 @@ jobs:
     - fetch-bugs
     if: ${{ needs.command-gate.outputs.authorized == 'true' && !cancelled() }}
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       items_write_a_reproducer_for_each_analyzed_bug: ${{ steps.fanout-write-a-reproducer-for-each-analyzed-bug.outputs.items }}
     steps:
@@ -229,10 +255,32 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-write-a-reproducer-for-each-analyzed-bug:
+    name: Scan input for reproducer-writer
+    needs:
+    - command-gate
+    - verify-analyze-each-bug-against-the-source
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/analyses.json --mode=warn --report=outputs/scan/write-a-reproducer-for-each-analyzed-bug.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   write-a-reproducer-for-each-analyzed-bug:
     needs:
     - command-gate
     - verify-analyze-each-bug-against-the-source
+    - scan-write-a-reproducer-for-each-analyzed-bug
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     strategy:
       fail-fast: false
@@ -253,7 +301,9 @@ jobs:
       actions: read
     environment: production
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     outputs:
       items_write_a_fix_for_each_reproduced_bug: ${{ steps.fanout-write-a-fix-for-each-reproduced-bug.outputs.items }}
     env:
@@ -297,10 +347,32 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-write-a-fix-for-each-reproduced-bug:
+    name: Scan input for fix-writer
+    needs:
+    - command-gate
+    - prove-reproducers
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/reproduced.json --input=outputs/feedback.json --mode=warn --report=outputs/scan/write-a-fix-for-each-reproduced-bug.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   write-a-fix-for-each-reproduced-bug:
     needs:
     - command-gate
     - prove-reproducers
+    - scan-write-a-fix-for-each-reproduced-bug
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     strategy:
       fail-fast: false
@@ -319,7 +391,9 @@ jobs:
     - prove-reproducers
     if: ${{ needs.command-gate.outputs.authorized == 'true' && !cancelled() }}
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -339,7 +413,9 @@ jobs:
       actions: read
     environment: production
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       PRODUCTION_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -381,10 +457,32 @@ jobs:
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+  scan-review-the-fixes:
+    name: Scan input for fix-reviewer
+    needs:
+    - command-gate
+    - apply
+    if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+    - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Scan for hidden instructions
+      id: scan
+      run: pipeline-exec scan-input --input=outputs/validated.json --input=outputs/patches/combined.patch --input=outputs/feedback.json --mode=warn --report=outputs/scan/review-the-fixes.json
+    - id: save-workspace
+      if: ${{ always() }}
+      uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   review-the-fixes:
     needs:
     - command-gate
     - apply
+    - scan-review-the-fixes
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
     uses: ./.github/workflows/aw-fix-reviewer.lock.yml
     with:
@@ -401,7 +499,9 @@ jobs:
       actions: read
     environment: production
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       PRODUCTION_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROFILE_JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
@@ -452,7 +552,9 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-24.04
-    container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    container:
+      image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0

@@ -292,7 +292,7 @@ def test_the_generated_ci_fetches_before_it_compiles(consumer):
 
 def test_the_compiled_pipeline_is_reachable_end_to_end(consumer):
     workflow = yaml.safe_load(compile_spec(consumer).files[".github/workflows/review.yml"])
-    assert simulate(workflow, {}, {}).order == ["diff", "review-it"]
+    assert simulate(workflow, {}, {}).order == ["diff", "scan-review-it", "review-it"]
 
 
 # --- bands: what an upstream lets a consumer move ---------------------------
