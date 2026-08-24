@@ -325,3 +325,15 @@ def test_no_shipped_spec_names_a_distribution_somebody_else_owns():
                 checked += 1
     assert checked >= 12, f"only {checked} capability lines checked; the scan is not finding them"
 
+
+def test_the_expectations_lint_knows_are_the_ones_the_grader_applies():
+    """Two copies of one contract: the compiler must not import the runtime, so a test holds them.
+
+    A key lint accepts and the grader ignores is an expectation that passes review and never runs.
+    """
+    from pipeline_exec.evals import EXPECT_KEYS as runtime_keys
+
+    from lockstep.checks import EXPECT_KEYS as compiler_keys
+
+    assert set(compiler_keys) == set(runtime_keys)
+

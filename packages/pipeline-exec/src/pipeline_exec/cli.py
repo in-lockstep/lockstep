@@ -659,6 +659,82 @@ def _issue_number(issue: str) -> str:
     return tail
 
 
+@main.command(name="eval-grade")
+@click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
+@click.option("--outputs", required=True, type=click.Path(path_type=Path), help="Directory of agent outputs.")
+@click.option("--output", required=True, type=click.Path(path_type=Path), help="Where to write the report.")
+@click.option("--agent", default="", help="Name recorded in the report.")
+@click.option("--min-pass-rate", type=float, default=None, help="Fail below this rate of decided cases.")
+def eval_grade(
+    cases: Path, outputs: Path, output: Path, agent: str, min_pass_rate: float | None
+) -> None:
+    """Grade an agent's answers against its eval cases.
+
+    Applies the deterministic half of each case — required fields, text that must and must not
+    appear, counts. A case carrying a rubric is reported as awaiting judgement rather than scored
+    here: this command has no model, and grading prose without one would invent the number.
+
+    An output file missing for a case is a failure, not a skip. The agent was asked and did not
+    answer, which is exactly the regression an eval suite is for.
+    """
+    from .evals import Case, CaseError, grade, summarize
+
+    files = sorted(cases.glob("*.json"))
+    if not files:
+        _fail(f"no cases in {cases}")
+
+    results: list[dict[str, Any]] = []
+    for path in files:
+        try:
+            case = Case.load(path)
+        except CaseError as error:
+            _fail(str(error))
+        answer_path = outputs / f"{case.name}.json"
+        if not answer_path.is_file():
+            results.append(
+                {
+                    "case": case.name,
+                    "checks": [
+                        {"check": "answered", "target": case.name, "passed": False, "detail": "no output"}
+                    ],
+                    "deterministic_passed": False,
+                    "rubric": case.rubric,
+                    "rubric_pending": False,
+                    "passed": False,
+                }
+            )
+            continue
+        try:
+            answer = json.loads(answer_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            _fail(f"{case.name}: the agent's output is not valid JSON ({error.msg})")
+        results.append(grade(case, answer))
+
+    summary = summarize(results, min_pass_rate=min_pass_rate)
+    report = {"agent": agent, "summary": summary, "cases": results}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    for result in results:
+        if not result["deterministic_passed"]:
+            for check in result["checks"]:
+                if not check["passed"]:
+                    click.echo(
+                        f"  {result['case']}: {check['check']} {check['target']!r} — {check['detail']}"
+                    )
+
+    _emit_output("passed", "true" if summary["ok"] else "false")
+    _emit_output("pass_rate", str(summary["pass_rate"]))
+    _emit_output("pending_rubric", str(len(summary["pending_rubric"])))
+    click.echo(
+        f"{summary['passed']}/{summary['total'] - len(summary['pending_rubric'])} decided case(s) passed"
+        + (f", {len(summary['pending_rubric'])} awaiting judgement" if summary["pending_rubric"] else "")
+        + f" -> {output}"
+    )
+    if not summary["ok"]:
+        sys.exit(1)
+
+
 @main.command(name="parse-command")
 @click.option("--command", required=True, help="The slash command to look for, e.g. /implement.")
 @click.option("--body", default="", help="The comment body.")

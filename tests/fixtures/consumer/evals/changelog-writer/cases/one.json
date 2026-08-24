@@ -1,1 +1,12 @@
-{"input": {}, "expect": {}}
+{
+  "input": {
+    "number": 412,
+    "title": "Skip items with no price when totalling an order",
+    "labels": ["bug", "area/billing"]
+  },
+  "expect": {
+    "schema": ["note"],
+    "absent": ["TODO"],
+    "rubric": "One paragraph: what changed and who it affects. Names no file paths."
+  }
+}

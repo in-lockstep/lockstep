@@ -7,8 +7,10 @@
     "describes": "Returns a JSON object with a `uuid` field. The value differs every call."
   },
   "expect": {
-    "storyId": "uuid",
-    "testType": "api",
-    "notes": "Must assert on the presence of the uuid field, never on its value."
+    "equals": {
+      "storyId": "uuid",
+      "testType": "api"
+    },
+    "rubric": "Must assert on the presence of the uuid field, never on its value."
   }
 }

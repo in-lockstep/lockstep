@@ -20,6 +20,7 @@ AVAILABLE = frozenset(
         "wait-for",
         "pr-feedback",
         "gh-issue-fetch",
+        "eval-grade",
         # Introspection: how a pipeline repository proves in CI that the builtins its spec names
         # actually exist, extensions included.
         "list-commands",

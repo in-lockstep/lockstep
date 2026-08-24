@@ -7,8 +7,10 @@
     "describes": "Echoes the posted body back under a `json` field."
   },
   "expect": {
-    "storyId": "post-echo",
-    "testType": "api",
-    "notes": "Must send a body and assert the same body comes back; must not assert on origin or url."
+    "equals": {
+      "storyId": "post-echo",
+      "testType": "api"
+    },
+    "rubric": "Must send a body and assert the same body comes back; must not assert on origin or url."
   }
 }

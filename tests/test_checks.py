@@ -28,7 +28,9 @@ def give_evals(root, *agents):
     for name in agents:
         cases = root / "evals" / name / "cases"
         cases.mkdir(parents=True, exist_ok=True)
-        (cases / "one.json").write_text("{}", encoding="utf-8")
+        (cases / "one.json").write_text(
+            '{"input": {"key": "one"}, "expect": {"schema": ["summary"]}}', encoding="utf-8"
+        )
 
 
 # --- lint ------------------------------------------------------------------
@@ -266,4 +268,3 @@ def test_no_ceiling_anywhere_constrains_nothing(basic_spec_dir):
     spec = load_spec(basic_spec_dir)
     assert all(fragment.enforce.max_turns is None for fragment in spec.guardrails.values())
     assert all(fragment.enforce.max_ai_credits is None for fragment in spec.guardrails.values())
-

@@ -18,6 +18,6 @@
     "revision": false
   },
   "expect": {
-    "notes": "Says the test asserts the gateway was called rather than what happened, so it would pass against the old code too — the retry itself is untested. Names the case: a first call raising Transient and a second succeeding."
+    "rubric": "Says the test asserts the gateway was called rather than what happened, so it would pass against the old code too \u2014 the retry itself is untested. Names the case: a first call raising Transient and a second succeeding."
   }
 }

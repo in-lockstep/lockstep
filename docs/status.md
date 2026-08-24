@@ -300,6 +300,30 @@ not write, and the `scripts` job not triggering on the tests it runs.
 It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
 `container:`, and that image is one of the unpublished capabilities below.
 
+## Eval cases assert something now
+
+`lockstep lint` refused an agent with no eval cases and checked that a `.json` file existed. Every
+case in the repository carried an `expect.notes` string — prose addressed to a human, in a file no
+program opened. An agent could be rewritten from scratch without a case noticing.
+
+`docs/evals.md` is the contract. Two halves, the same split `enforce:` draws: `schema`, `equals`,
+`contains`, `absent` and `count` are applied by `pipeline-exec eval-grade` and mean the same thing
+every run; `rubric` is prose for the part no substring match settles. A case must assert at least
+one — LNT008 refuses one that asserts nothing, because it passed before it was written. LNT007
+refuses one that will not parse or says nothing about its input.
+
+The grader never reports a rubric case as passed. It reports the deterministic half as decided and
+the rubric as outstanding, and the roll-up counts those separately: a suite claiming 4/4 while half
+of it was never judged is the reassuring number the contract exists to remove. A case with no output
+file fails rather than being skipped — the agent was asked and did not answer.
+
+What is not built is the half that needs a model: invoking an agent once per case requires a running
+gh-aw and the credits, so nothing produces the outputs `eval-grade` reads yet. The contract, the
+grader and the rules do not wait on that; they are what will make the run mean something.
+
+Migrating the 22 existing cases found two in `examples/httpbin` asserting exact field values through
+keys nothing read, which is where the `equals` expectation came from.
+
 ## The gh-aw seam
 
 `lockstep compile` emits an agent as markdown; `gh aw compile` turns that markdown into the

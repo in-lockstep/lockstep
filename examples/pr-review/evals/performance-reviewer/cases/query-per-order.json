@@ -14,6 +14,14 @@
     "revision": false
   },
   "expect": {
-    "notes": "Names the cost as a function of order count — one query per order, so a 500-order account issues 500 round trips. Orders are the unbounded collection here, which is why this is the finding this lens exists for."
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": {
+        "min": 1
+      }
+    },
+    "rubric": "Names the cost as a function of order count \u2014 one query per order, so a 500-order account issues 500 round trips. Orders are the unbounded collection here, which is why this is the finding this lens exists for."
   }
 }

@@ -14,6 +14,6 @@
     "revision": false
   },
   "expect": {
-    "notes": "Flags that the query is assembled outside src/repo.py even though it is parameterised, because that is what this codebase decided. A review that calls it safe and says nothing has missed the point of the rule."
+    "rubric": "Flags that the query is assembled outside src/repo.py even though it is parameterised, because that is what this codebase decided. A review that calls it safe and says nothing has missed the point of the rule."
   }
 }

@@ -14,6 +14,6 @@
     "revision": false
   },
   "expect": {
-    "notes": "Says in one sentence that the diff does what it says. May note the implication that callers previously handling a 500 will now see a 404. Does not manufacture a concern."
+    "rubric": "Says in one sentence that the diff does what it says. May note the implication that callers previously handling a 500 will now see a 404. Does not manufacture a concern."
   }
 }

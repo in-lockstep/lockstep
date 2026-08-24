@@ -116,6 +116,9 @@ def _check_agents_have_evals(spec: Spec, report: Report) -> None:
             cases = spec.home / "evals" / name / "cases"
             where = f"evals/{name}/cases/"
 
+        if cases.is_dir():
+            _check_case_shape(cases, where, report)
+
         if not cases.is_dir() or not any(cases.glob("*.json")):
             report.add(
                 Severity.ERROR,
@@ -124,6 +127,64 @@ def _check_agents_have_evals(spec: Spec, report: Report) -> None:
                 location=agent.src.rel if agent.src else name,
                 hint=f"add cases under {where} — an agent without evals cannot be "
                 "changed safely, and the eval gate has nothing to gate on",
+            )
+
+
+# What an eval case may assert. Declared here rather than imported: the compiler must not depend on
+# the runtime, so `tests/test_contract.py` holds the two copies to each other instead.
+EXPECT_KEYS = ("schema", "equals", "contains", "absent", "count", "rubric")
+
+
+def _check_case_shape(cases: Path, where: str, report: Report) -> None:
+    """A case that asserts nothing passed before anybody wrote it.
+
+    `lockstep lint` used to check that a file existed. A file existing is not an eval, and the shape
+    of the thing inside it is the difference between a suite that can fail and a directory listing.
+    """
+    import json
+
+    for path in sorted(cases.glob("*.json")):
+        location = f"{where}{path.name}"
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            report.add(
+                Severity.ERROR,
+                "LNT007",
+                f"eval case is not valid JSON ({error.msg} at line {error.lineno})",
+                location=location,
+            )
+            continue
+        if not isinstance(raw, dict) or "input" not in raw:
+            report.add(
+                Severity.ERROR,
+                "LNT007",
+                "eval case has no `input` — a case has to say what the agent was given",
+                location=location,
+            )
+            continue
+
+        expect = raw.get("expect")
+        expect = expect if isinstance(expect, dict) else {}
+        unknown = sorted(set(expect) - set(EXPECT_KEYS))
+        if unknown:
+            report.add(
+                Severity.ERROR,
+                "LNT008",
+                f"eval case declares unknown expectation(s): {', '.join(unknown)}",
+                location=location,
+                hint=f"known expectations: {', '.join(EXPECT_KEYS)}. An unrecognised key is not a "
+                "stricter case, it is one that never runs",
+            )
+        if not set(expect) & set(EXPECT_KEYS):
+            report.add(
+                Severity.ERROR,
+                "LNT008",
+                "eval case asserts nothing, so it passes for any output",
+                location=location,
+                hint=f"add at least one of: {', '.join(EXPECT_KEYS)}. `rubric` is prose judged by a "
+                "model; the rest are checked by `pipeline-exec eval-grade` and mean the same thing "
+                "on every run",
             )
 
 

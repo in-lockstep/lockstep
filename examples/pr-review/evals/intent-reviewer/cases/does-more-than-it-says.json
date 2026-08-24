@@ -14,6 +14,6 @@
     "revision": false
   },
   "expect": {
-    "notes": "Reports the bcc as behaviour nobody asked for: the description promises a rounding fix and the diff also changes who receives every invoice. Does not comment on rounding correctness, which is not this lens."
+    "rubric": "Reports the bcc as behaviour nobody asked for: the description promises a rounding fix and the diff also changes who receives every invoice. Does not comment on rounding correctness, which is not this lens."
   }
 }

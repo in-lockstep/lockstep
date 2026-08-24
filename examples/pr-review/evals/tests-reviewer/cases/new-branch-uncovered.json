@@ -18,6 +18,6 @@
     "revision": false
   },
   "expect": {
-    "notes": "Says the empty-cart path is untested and that it is the case the issue described, and describes the test that would cover it. Does not merely say more tests are needed."
+    "rubric": "Says the empty-cart path is untested and that it is the case the issue described, and describes the test that would cover it. Does not merely say more tests are needed."
   }
 }

@@ -14,6 +14,17 @@
     "revision": false
   },
   "expect": {
-    "notes": "Finds the traversal: a `name` of `../../etc/passwd` reaches open(). Cites src/files.py with a line. Says what an attacker does. Reports nothing about the missing test — that is another review's job."
+    "schema": [
+      "findings"
+    ],
+    "contains": [
+      "src/files.py"
+    ],
+    "count": {
+      "findings": {
+        "min": 1
+      }
+    },
+    "rubric": "Finds the traversal: a `name` of `../../etc/passwd` reaches open(). Cites src/files.py with a line. Says what an attacker does. Reports nothing about the missing test \u2014 that is another review's job."
   }
 }

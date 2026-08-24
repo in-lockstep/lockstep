@@ -5,12 +5,21 @@
       "body": "No behaviour change.",
       "head_sha": "c3d4e5f6",
       "files": [
-        {"path": "CHANGELOG.md", "patch": "@@ -1,1 +1,1 @@\n-Relase 1.4\n+Release 1.4"}
+        {
+          "path": "CHANGELOG.md",
+          "patch": "@@ -1,1 +1,1 @@\n-Relase 1.4\n+Release 1.4"
+        }
       ]
     },
     "revision": false
   },
   "expect": {
-    "notes": "Reports no findings and says so in a sentence. A review that manufactures a concern here teaches people to mute the bot."
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": "Reports no findings and says so in a sentence. A review that manufactures a concern here teaches people to mute the bot."
   }
 }

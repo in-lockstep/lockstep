@@ -103,7 +103,9 @@ def test_lint_fails_on_an_error(basic_root):
 def test_lint_strict_promotes_warnings(basic_root):
     cases = basic_root / "evals" / "story-extractor" / "cases"
     cases.mkdir(parents=True)
-    (cases / "one.json").write_text("{}", encoding="utf-8")
+    (cases / "one.json").write_text(
+        '{"input": {"key": "one"}, "expect": {"schema": ["summary"]}}', encoding="utf-8"
+    )
 
     assert run("lint", "--root", str(basic_root)).exit_code == EXIT_OK
     assert run("lint", "--root", str(basic_root), "--strict").exit_code == EXIT_DRIFT

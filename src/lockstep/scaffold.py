@@ -217,13 +217,17 @@ def test_the_limit_is_honoured():
 '''
 
     def _eval_case(self) -> str:
+        # The first eval anybody reads, so it shows both halves of the contract: checks that mean
+        # the same thing on every run, and a rubric for the part no substring match can settle.
         return """{
   "input": {
     "key": "item-1",
     "title": "Example item 1"
   },
   "expect": {
-    "summary": "a two-sentence summary of the item"
+    "schema": ["summary"],
+    "absent": ["TODO"],
+    "rubric": "Two sentences: what the item is, and why it matters. Says nothing the item does not."
   }
 }
 """
