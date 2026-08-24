@@ -495,3 +495,42 @@ def test_emitted_github_builtins_carry_a_token(root):
                     if f"pipeline-exec {builtin} " in run and "GH_TOKEN" not in str(step.get("env", "")):
                         missing.append(f"{path}:{job_name}:{builtin}")
     assert not missing, "emitted without GH_TOKEN:\n  " + "\n  ".join(sorted(set(missing)))
+
+
+# --- a cache key becomes an artifact name ---------------------------------------------------------
+#
+# GitHub refuses several characters in an artifact name, `/` among them, and the step cache uploads
+# under `step-<key-prefix>`. An inherited command is namespaced by its alias, so `review/review`
+# produced `step-ls-v1-lockstep-review/review-diff-…` and the upload failed with "The artifact name
+# is not valid".
+#
+# Only an *inherited* pipeline can produce it, which is why every example passed: the consumer
+# fixture is the one that inherits, and it is the shape `--adopt` gives everybody who writes least.
+
+# Characters GitHub rejects in an artifact name.
+ARTIFACT_FORBIDDEN = set('":<>|*?\r\n\\/')
+
+
+def _key_prefixes(root: Path) -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    for path, text in compile_spec(root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for job in (yaml.safe_load(text) or {}).get("jobs", {}).values():
+            if not isinstance(job, dict):
+                continue
+            for step in job.get("steps") or []:
+                prefix = (step.get("with") or {}).get("key-prefix")
+                if prefix:
+                    found.append((path, str(prefix)))
+    return found
+
+
+@pytest.mark.parametrize("root", ALL_PIPELINES, ids=lambda p: p.name)
+def test_every_cache_key_is_a_legal_artifact_name(root):
+    bad = [
+        f"{path}: {prefix}"
+        for path, prefix in _key_prefixes(root)
+        if ARTIFACT_FORBIDDEN & set(prefix)
+    ]
+    assert not bad, "these become artifact names GitHub refuses:\n  " + "\n  ".join(bad)

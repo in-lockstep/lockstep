@@ -109,7 +109,7 @@ jobs:
       uses: in-lockstep/lockstep/actions/step-cache@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
       with:
         step: fetch-issue
-        key-prefix: ls-v1-lockstep-implement/implement-fetch-issue-4f53cda1
+        key-prefix: ls-v1-lockstep-implement-implement-fetch-issue-4f53cda1
         key-inputs: |
           .lockstep/.pipeline/step-defs/implement/implement.fetch-issue.json
         outputs: |
@@ -135,7 +135,7 @@ jobs:
       uses: in-lockstep/lockstep/actions/step-cache@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
       with:
         step: feedback
-        key-prefix: ls-v1-lockstep-implement/implement-feedback-4f53cda1
+        key-prefix: ls-v1-lockstep-implement-implement-feedback-4f53cda1
         key-inputs: |
           .lockstep/.pipeline/step-defs/implement/implement.feedback.json
         outputs: |
@@ -322,7 +322,7 @@ jobs:
       uses: in-lockstep/lockstep/actions/step-cache@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
       with:
         step: render-the-plan-for-review
-        key-prefix: ls-v1-lockstep-implement/implement-render-the-plan-for-review-4f53cda1
+        key-prefix: ls-v1-lockstep-implement-implement-render-the-plan-for-review-4f53cda1
         key-inputs: |
           .lockstep/.pipeline/step-defs/implement/implement.render-the-plan-for-review.json
           outputs/plan.json

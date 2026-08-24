@@ -20,6 +20,7 @@ from typing import Any
 
 from ..spec.model import Command, Step, StepKind
 from ..util.hashing import sha_obj, short
+from ..util.text import slug
 from .context import EmitContext
 
 KEY_SCHEMA = "ls-v1"
@@ -146,7 +147,14 @@ def cache_spec_for(
         outputs=outputs,
         key_inputs=sorted(set(key_inputs)),
         key_extra=key_extra,
-        key_prefix=f"{KEY_SCHEMA}-{ctx.spec.manifest.name}-{command.name}-{step.id}-{profile_fingerprint}",
+        # Slugged, because this prefix becomes an artifact name and GitHub refuses several
+        # characters in one — `/` among them. An inherited command is namespaced by its alias, so
+        # `review/review` produced `step-ls-v1-lockstep-review/review-diff-…` and the upload failed
+        # with "The artifact name is not valid". That is every pipeline taken by `--adopt`, which is
+        # the whole zero-authoring path, so it broke for exactly the consumers who wrote least.
+        key_prefix=slug(
+            f"{KEY_SCHEMA}-{ctx.spec.manifest.name}-{command.name}-{step.id}-{profile_fingerprint}"
+        ),
         fingerprint=ctx.expand(step.fingerprint, command),
     )
 

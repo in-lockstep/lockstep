@@ -176,3 +176,39 @@ def test_the_surface_states_what_a_daily_ceiling_actually_permits(tmp_path):
         "- daily ceiling: 5000 credits per agent per day — up to 35000 across 7 agent(s)"
     )
     assert "bounds one execution, not a day of them" in _daily_budget_line(None, 7)
+
+
+# --- a cache key becomes an artifact name ---------------------------------------------------------
+
+
+def test_no_cache_key_contains_a_character_github_refuses_in_an_artifact_name(repo_root):
+    """`/review` died publishing its diff: "The artifact name is not valid".
+
+    The step cache uploads under `step-<key-prefix>`, and the prefix carries the command name. An
+    inherited command is namespaced by its alias, so this repository's `review/review` put a `/`
+    into it — and GitHub refuses several characters in an artifact name, that one included.
+
+    It belongs here rather than with the examples because no example inherits, so none of them can
+    produce a namespaced command. This repository is the only pipeline in the tree that does, which
+    makes it the only one that could ever have caught this.
+    """
+    import yaml
+
+    forbidden = set('":<>|*?\r\n\\/')
+    bad: list[str] = []
+    for path, text in compile_spec(repo_root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for job in (yaml.safe_load(text) or {}).get("jobs", {}).values():
+            if not isinstance(job, dict):
+                continue
+            for step in job.get("steps") or []:
+                prefix = str((step.get("with") or {}).get("key-prefix") or "")
+                if prefix and forbidden & set(prefix):
+                    bad.append(f"{path}: {prefix}")
+    assert not bad, "these become artifact names GitHub refuses:\n  " + "\n  ".join(bad)
+
+
+def test_this_repository_really_does_compile_a_namespaced_command(repo_root):
+    """Otherwise the test above passes by never seeing the shape that broke."""
+    assert any("/" in name for name in load_spec(repo_root).commands)
