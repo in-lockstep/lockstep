@@ -6,8 +6,11 @@ comparison** was derived from reading another project, and is closed.
 
 This is a third, and its provenance is the reason it is separate. It comes from asking who would
 put this in front of their organization, what they arrive wanting, and what would make them put it
-down. Nothing here was found by reading the code. Several of these are not features: two are a tag
-push, three are documents, and one is the site itself.
+down. Nothing here was found by reading the code. Several are not features at all: three are a
+release, three are documents, and one is the site itself.
+
+Two are already closed — N1 and N14, both publishing — and one of those did not exist when the list
+was written. It was found by doing the other.
 
 The five are the platform engineer who owns the paved road, the security lead who signs off before
 agents touch anything real, the engineering leader who funds it, the staff engineer who builds the
@@ -17,7 +20,7 @@ pipelines, and the five-person team who will author nothing and wants the loop b
 |---|---|---|---|---|
 | **N1** | Publish the capabilities | everyone | tag push | **done** — `actions-v0.1.0`, `exec-v0.1.0` |
 | **N2** | Run the loop on this repository | everyone | self-hosting | now unblocked, and gating |
-| **N14** | Publish the Python distributions | everyone | release | new — found by doing N1 |
+| **N14** | Publish the Python distributions | everyone | release | **done** — `in-lockstep`, `in-lockstep-exec` 0.1.0 |
 | **N3** | A measured time to first value | leader, small team | measurement | new |
 | **N4** | A shorter first day | small team | code | new |
 | **N5** | A way to tell a working judge from a broken one | small team | code | new |
@@ -61,26 +64,32 @@ costs no case study, no consenting customer, and no new code. It is also the onl
 exist for some time — there are no adopters yet, and the fleet dashboard (N6) is waiting on the same
 absence.
 
-N1 removed the blocker and left one behind: the agent jobs install the compiler and the executor
-from a Python index, and N14 has not happened. Nothing has *executed* yet — the actions resolve and
-the image pulls, but no agent has run.
+N1 and N14 removed every blocker. The actions resolve, the image pulls anonymously, and both
+distributions install from PyPI — a machine holding none of this source can `pip install` its way to
+a compiled pipeline. **Nothing has executed yet**, and that is now the only thing between this
+project and its first piece of evidence.
 
 ---
 
 ## Adoption
 
-### N14 — Publish the Python distributions
+### N14 — Publish the Python distributions — **done**
 
-Found by doing N1, which is the only reason it is on the list: compiled pipelines run
-`uv tool install "in-lockstep=="` in the drift-gate job and `uv tool install "in-lockstep-exec=="`
-in the eval job that materializes inherited definitions. Neither distribution is on any index.
+`in-lockstep` 0.1.0 and `in-lockstep-exec` 0.1.0 are on PyPI, by Trusted Publishing with no API
+token anywhere and a per-project environment so each credential is scoped to the one project it may
+upload. Verified the only way that counts: `pip install` from the index into a clean virtualenv on a
+machine holding none of this source, then `init --adopt all` → `pin` → `fetch` → `compile` →
+`doctor`, 0 errors.
 
-So "publish the capabilities" turned out to name two of four things. The actions and the image were
-the two this repository had written release workflows for, and the two `status.md` listed — which is
-how a gap list derived from a design misses what the design merely assumes.
+**This need did not exist when the list was written**, and that is the part worth keeping. It was
+found by doing N1: "publish the capabilities" turned out to name two of four things, because the
+actions and the image were the two with release workflows and the two `status.md` named, while the
+compiler and the executor are installed *by the compiled output* rather than referenced by the
+manifest. A gap list derived from a design misses what the design merely assumes.
 
-Both names are free on PyPI. Until they are taken, a consumer repository can resolve every action
-and pull the image, and still cannot install the tools its own workflows invoke.
+It cost one more defect of the same family as N1's six — both distributions are core metadata 2.5,
+and the Twine inside the publish action's container rejected it while the twine on this machine
+accepted it all day. Nothing local could see the version that mattered.
 
 ---
 

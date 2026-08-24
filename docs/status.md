@@ -440,10 +440,19 @@ other scans every shipped spec for a capability naming a distribution this repos
 
 ## What remains open
 
-**The capabilities are published.** `actions-v0.1.0` resolves to commit `aad2f112`, and
-`exec-v0.1.0` published `ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f80…`. Every example pins
-both for real, and `lockstep doctor` reports no findings where it used to report `DOC015` on all of
-them.
+**Everything is published.** Four artifacts, on three tag lines:
+
+| Artifact | Reference |
+|---|---|
+| Composite actions | `actions-v0.1.0` → commit `aad2f112` |
+| Executor image | `ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f80…`, public |
+| Compiler | `in-lockstep` 0.1.0 on PyPI |
+| Executor package | `in-lockstep-exec` 0.1.0 on PyPI |
+
+Every example pins the first two for real, and `lockstep doctor` reports no findings where it used
+to report `DOC015` on all of them. `pip install in-lockstep in-lockstep-exec` into an empty
+virtualenv, on a machine holding none of this source, runs `init --adopt all` → `pin` → `fetch` (5
+pipelines) → `compile` (15 gh-aw lock files) → `doctor`, 0 errors.
 
 The composite actions needed no separate repository: `uses: in-lockstep/lockstep/actions/restore@<sha>`
 resolves against a subdirectory of this one, and `resolve_ref` already sliced `repo.split("/")[:2]`
@@ -472,18 +481,43 @@ rather than planning it:
 | The image workflow's dry run could never pass | It chose its smoke-test reference by asking whether a digest existed, and `load:` emits one too — but that digest names a registry manifest, so `docker run` always pulls, and the dry run never logged in. |
 | **`lockstep pin` recorded the annotated tag object, not the commit** | The worst of them. Actions resolves `uses: …@<sha>` against commits only, so every pipeline pinned to an annotated tag emitted forty plausible characters naming something no runner can check out — the exact failure pinning exists to prevent. `--refs` suppresses peeled lines and a pattern matching `<ref>` does not match `<ref>^{}`, so the commit was never in the output to be chosen. `resolve_ref` had no tests; it has four now. |
 
-The last one is the general case worth keeping: **nothing offline can tell a tag object from a
-commit**, just as nothing offline can tell a fabricated SHA from a real one. Only `lockstep pin`
-contacting the remote settles either, which is why it reports what it could not resolve instead of
-leaving something believable in place.
+A seventh arrived with the Python distributions, and it is the same shape one layer out. Both are
+core metadata **2.5** — hatchling emits PEP 639 `License-Expression` for the `license = "Apache-2.0"`
+these manifests declare — and the Twine bundled inside `gh-action-pypi-publish` v1.13.0 rejects it
+outright. `twine check` passed locally throughout, because the twine that mattered was the one in
+the action's container, which nothing local can see. The distributions were never wrong. v1.14.2 is
+the first release carrying Twine 7 and the pin now names it, with the reason, because a floor that
+looks like hygiene is load-bearing here.
 
-### Still unpublished: the Python distributions
+The general case worth keeping: **nothing offline can tell a tag object from a commit**, just as
+nothing offline can tell a fabricated SHA from a real one, or a local toolchain from the one that
+will actually run. Only contacting the remote settles any of them, which is why `lockstep pin`
+reports what it could not resolve instead of leaving something believable in place.
 
-`in-lockstep` and `in-lockstep-exec` are not on any index. Compiled pipelines run
+### The distributions, and what listing them late says
+
+`in-lockstep` and `in-lockstep-exec` are on PyPI. Compiled pipelines run
 `uv tool install "in-lockstep=="` in the drift-gate job and `uv tool install "in-lockstep-exec=="`
-in an eval job that materializes inherited definitions, so a consumer repository cannot yet run
-either. Both names are free. This was never on this list, which is its own small lesson about what
-"published" was taken to mean.
+in an eval job that materializes inherited definitions, so without them a consumer could resolve
+every action and pull the image and still not run.
+
+**Neither was ever on this list.** "The capabilities have not been published" named the two things
+this repository had written release workflows for, and the two a reader would think of as artifacts
+— and quietly omitted the two the compiled output installs by name. A gap list derived from a design
+misses what the design merely assumes.
+
+They publish by Trusted Publishing: PyPI verifies a short-lived OIDC credential minted for this
+repository, this workflow and this environment, and no API token exists anywhere. The environment is
+per distribution, because PyPI identifies a publisher by owner, repository, workflow and environment
+together and refuses two projects behind an identical configuration. That refusal is right — one
+configuration would mean one credential speaking for both, so a workflow permitted to publish the
+runtime would be permitted to publish the compiler.
+
+Three gates run before an upload. The tag has to name the version in both manifests, because PyPI
+never lets a version be reused. The suite has to pass. And a clean install has to carry what is not
+Python: the compiler ships five pipelines as markdown and the executor ships Jinja templates, none
+of them `.py`, all of them read from the source tree here and from site-packages everywhere else —
+so a packaging change can drop them with every test in this repository still green.
 
 ## Two of those gaps are closed
 

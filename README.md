@@ -27,6 +27,15 @@ public API, and explains each part of the framework as you meet it — including
 output is hosted on GitHub: how changes get reviewed, where output is stored, and how reports survive
 long enough to show a trend.
 
+## Install
+
+```bash
+uv tool install in-lockstep         # the compiler
+```
+
+The runtime, `in-lockstep-exec`, is installed by compiled pipelines rather than by you — jobs run it
+as the container image, and only a job that materializes inherited definitions installs the package.
+
 ## Usage
 
 ```bash
