@@ -67,6 +67,22 @@ ENGINE_SECRET = {
 # instead.
 AGENT_CALLER_PERMISSIONS = {"actions": "read", "contents": "read", "issues": "write"}
 
+# What the agent job itself gets, and it is deliberately not `read-all`.
+#
+# `read-all` was the old floor and it could not work as one. A called workflow may not exceed its
+# caller, and GitHub expands `read-all` to *every* scope — it named artifact-metadata, attestations,
+# checks, code-quality, deployments, discussions, drives, models, packages, pages, pull-requests,
+# repository-projects, statuses and vulnerability-alerts when it refused the run. Matching that from
+# a caller means enumerating a list GitHub keeps adding to, and every new scope would break startup
+# again the day it shipped.
+#
+# So the agent asks for what it uses instead: the two scopes `gh aw compile`'s own jobs read. This
+# is strictly narrower than before — read on two scopes rather than on twenty — which makes the
+# workable answer also the safer one. Agents here reach nothing else through the workflow token;
+# the MCP servers in this repository and its examples are local `filesystem` and `git` processes,
+# and anything talking to an API carries its own credential.
+AGENT_PERMISSIONS = {"actions": "read", "contents": "read"}
+
 # The fixed input contract every compiled agent workflow accepts.
 WORKFLOW_INPUTS = {
     "item": {"type": "string", "required": False, "default": ""},
@@ -217,7 +233,7 @@ def build_agent(
         "max-ai-credits": agent.github.max_ai_credits,
         "timeout-minutes": agent.github.timeout_minutes or 20,
         # The agent job never writes. Every side effect goes through a safe output.
-        "permissions": "read-all",
+        "permissions": dict(AGENT_PERMISSIONS),
         "network": {"allowed": network},
         "steps": [{"uses": ctx.pins.action("restore")}],
         "post-steps": [
@@ -303,11 +319,17 @@ def verify_enforcement(artifact: AgentArtifact) -> None:
                 "sets it — a sealed guardrail's ceiling is not the consuming repository's to move",
             )
 
-    if front.get("permissions") != "read-all":
+    # The floor is "no scope is writable", not "the permissions equal one particular literal".
+    # `read-all` used to be that literal and is now refused with everything else that is not an
+    # explicit read-only map: it cannot be granted by a calling job without enumerating every scope
+    # GitHub has, so an agent asking for it is an agent that cannot start.
+    granted = front.get("permissions")
+    if not isinstance(granted, dict) or any(level != "read" for level in granted.values()):
         raise EmitError(
-            f"compiled agent requests permissions {front.get('permissions')!r}",
+            f"compiled agent requests permissions {granted!r}",
             location=location,
-            hint="agent jobs are read-only on this target; route writes through safe-outputs",
+            hint="agent jobs are read-only on this target: give an explicit map of read scopes and "
+            "route writes through safe-outputs",
         )
 
     for name, floor in artifact.tool_floor.items():

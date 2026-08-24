@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "110f097e",
+      "sha": "2e65c759",
       "sources": [
         "agents/test-writer.md@e0f43915",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -45,7 +45,7 @@
       "sources": []
     },
     ".github/workflows/validate-api.yml": {
-      "sha": "e1b6d660",
+      "sha": "ec8269cf",
       "sources": [
         "commands/validate-api.md@70999f26"
       ]

@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-intent-reviewer.md": {
-      "sha": "686acd1d",
+      "sha": "2e216cac",
       "sources": [
         "agents/intent-reviewer.md@b1b64121",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-performance-reviewer.md": {
-      "sha": "1b6fe017",
+      "sha": "8d281b33",
       "sources": [
         "agents/performance-reviewer.md@35c73aad",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -30,7 +30,7 @@
       ]
     },
     ".github/workflows/aw-security-reviewer.md": {
-      "sha": "0e640f11",
+      "sha": "7ff9e05b",
       "sources": [
         "agents/security-reviewer.md@92f96a8a",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -42,7 +42,7 @@
       ]
     },
     ".github/workflows/aw-tests-reviewer.md": {
-      "sha": "9c9e6410",
+      "sha": "2cb9d35d",
       "sources": [
         "agents/tests-reviewer.md@636955b5",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -62,7 +62,7 @@
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "639122f0",
+      "sha": "38ad3b3f",
       "sources": [
         "commands/review.md@97ef9fce"
       ]

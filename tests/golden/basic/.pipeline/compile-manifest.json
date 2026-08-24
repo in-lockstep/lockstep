@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
-      "sha": "caad7463",
+      "sha": "50bfeb5c",
       "sources": [
         "agents/story-extractor.md@9480178e",
         "lockstep:guardrails/baseline.md@7875122b",

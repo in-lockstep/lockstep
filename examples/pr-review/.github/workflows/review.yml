@@ -155,6 +155,10 @@ jobs:
     - diff
     - scan-review-for-security
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'security') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-security-reviewer.lock.yml
     with:
       input_path: outputs/pending/security.json
@@ -187,6 +191,10 @@ jobs:
     - diff
     - scan-review-for-intent
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'intent') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-intent-reviewer.lock.yml
     with:
       input_path: outputs/pending/intent.json
@@ -219,6 +227,10 @@ jobs:
     - diff
     - scan-review-for-performance
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'performance') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-performance-reviewer.lock.yml
     with:
       input_path: outputs/pending/performance.json
@@ -251,6 +263,10 @@ jobs:
     - diff
     - scan-review-for-test-coverage
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' && needs.diff.outputs.pending != '' && contains(fromJSON(needs.diff.outputs.pending), 'tests') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-tests-reviewer.lock.yml
     with:
       input_path: outputs/pending/tests.json

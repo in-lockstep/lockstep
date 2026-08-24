@@ -180,7 +180,7 @@ def test_no_reviewer_can_write(aspect):
     front = yaml.safe_load(
         compile_spec(EXAMPLE).files[f".github/workflows/aw-{aspect}-reviewer.md"].split("---")[1]
     )
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
 def test_only_the_posting_job_runs_code_with_a_write_token(workflow):

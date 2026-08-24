@@ -143,4 +143,4 @@ def test_the_reporting_agent_needs_no_tools():
     )
     assert front["max-turns"] == 0
     assert "mcp-servers" not in front
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"

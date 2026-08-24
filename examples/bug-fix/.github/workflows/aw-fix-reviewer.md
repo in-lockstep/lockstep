@@ -33,7 +33,9 @@ model: claude-opus-4-6
 max-turns: 0
 max-ai-credits: 120
 timeout-minutes: 20
-permissions: read-all
+permissions:
+  actions: read
+  contents: read
 network:
   allowed:
   - defaults

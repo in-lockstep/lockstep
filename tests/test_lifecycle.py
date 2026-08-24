@@ -295,7 +295,7 @@ def test_the_agent_that_generates_them_can_write_nothing():
     example = Path(__file__).parent.parent / "examples" / "httpbin"
     agent = compile_spec(example).files[".github/workflows/aw-test-writer.md"]
     front = yaml.safe_load(agent.split("---")[1])
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
 def test_no_proposal_job_without_a_declared_destination(basic_spec_dir):

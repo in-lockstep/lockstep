@@ -122,7 +122,7 @@ def test_no_agent_in_this_pipeline_can_write_anything():
     assert len(agents) == 4
     for path in agents:
         front = yaml.safe_load(files[path].split("---")[1])
-        assert front["permissions"] == "read-all"
+        assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
 def test_only_the_proposal_job_runs_code_with_a_write_token(workflow):

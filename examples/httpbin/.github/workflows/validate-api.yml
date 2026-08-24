@@ -129,6 +129,10 @@ jobs:
     - list-endpoints
     - scan-write-a-contract-test-for-each-endpoint
     if: ${{ !failure() && !cancelled() && inputs.skip_generation != true }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       max-parallel: 4

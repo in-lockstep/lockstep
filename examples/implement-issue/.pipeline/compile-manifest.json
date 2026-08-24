@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
-      "sha": "9c0e0fda",
+      "sha": "51e0649c",
       "sources": [
         "agents/change-writer.md@34293872",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-planner.md": {
-      "sha": "7390f471",
+      "sha": "55e134e6",
       "sources": [
         "agents/planner.md@90765a5d",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -29,7 +29,7 @@
       ]
     },
     ".github/workflows/aw-requirements-analyst.md": {
-      "sha": "8af372ec",
+      "sha": "7c212d9b",
       "sources": [
         "agents/requirements-analyst.md@b33ecd89",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -40,7 +40,7 @@
       ]
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "849aa469",
+      "sha": "af377beb",
       "sources": [
         "agents/test-writer.md@6af5ad4a",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -55,7 +55,7 @@
       "sources": []
     },
     ".github/workflows/implement.yml": {
-      "sha": "c10646eb",
+      "sha": "5986d712",
       "sources": [
         "commands/implement.md@aa792623"
       ]

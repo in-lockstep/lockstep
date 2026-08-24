@@ -221,6 +221,10 @@ jobs:
     - fetch-bugs
     - scan-analyze-each-bug-against-the-source
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -282,6 +286,10 @@ jobs:
     - verify-analyze-each-bug-against-the-source
     - scan-write-a-reproducer-for-each-analyzed-bug
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -374,6 +382,10 @@ jobs:
     - prove-reproducers
     - scan-write-a-fix-for-each-reproduced-bug
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -484,6 +496,10 @@ jobs:
     - apply
     - scan-review-the-fixes
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-fix-reviewer.lock.yml
     with:
       input_path: outputs/validated.json

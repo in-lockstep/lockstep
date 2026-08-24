@@ -147,6 +147,10 @@ jobs:
     needs:
     - search
     - scan-write-the-triage-report
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-triage-reporter.lock.yml
     with:
       input_path: outputs/summary.json

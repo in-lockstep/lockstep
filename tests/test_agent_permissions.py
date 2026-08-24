@@ -90,4 +90,19 @@ def test_the_agent_job_itself_still_never_writes(repo_root):
         agent = (data.get("jobs") or {}).get("agent")
         if agent is None:
             continue
-        assert agent.get("permissions") == "read-all", f"{lock.name}: agent job is not read-only"
+        granted = agent.get("permissions")
+        assert isinstance(granted, dict), f"{lock.name}: agent permissions are not an explicit map"
+        assert all(level == "read" for level in granted.values()), f"{lock.name}: agent job can write"
+
+
+def test_the_agent_never_asks_for_read_all(repo_root):
+    """`read-all` is refused now, and the reason is worth keeping written down.
+
+    A called workflow may not exceed its caller, and GitHub expands `read-all` to every scope it
+    has — including ones added after this was written. Matching that from a caller means chasing a
+    list nobody controls, so an agent asking for it is an agent that cannot start.
+    """
+    for lock in _lock_files(repo_root):
+        data = yaml.safe_load(lock.read_text(encoding="utf-8")) or {}
+        for job, body in (data.get("jobs") or {}).items():
+            assert body.get("permissions") != "read-all", f"{lock.name}:{job} asks for read-all"
