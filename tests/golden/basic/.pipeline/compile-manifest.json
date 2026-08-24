@@ -26,7 +26,7 @@
       "sources": []
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "0a426391",
+      "sha": "fd3451ff",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]

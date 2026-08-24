@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from lockstep.emit import compile_spec
+from lockstep.emit.agentic import AGENT_CALLER_PERMISSIONS
 from lockstep.emit.writer import check_plan, write_plan
 from lockstep.errors import LockstepError
 from lockstep.lifecycle import Ejection, eject, load_pins, pin, stale_ejections, uneject, write_pins
@@ -250,19 +251,32 @@ def test_generated_artifacts_are_proposed_rather_than_committed():
     assert propose["with"]["branch"] == "pipeline/contract-tests"
 
 
-def test_only_publishing_jobs_may_write():
-    """Two jobs write: one publishes a report, one opens a pull request. Nothing else can."""
+def test_only_publishing_jobs_run_code_with_a_write_token():
+    """Two jobs write: one publishes a report, one opens a pull request. Nothing else executes
+    anything while holding one.
+
+    Agent-calling jobs hold `issues: write` as well, and they are a different thing. A job with
+    `uses:` and no `steps:` runs no code, so it cannot spend a permission — it can only hand it to
+    the workflow it calls, whose own agent job is `read-all` and is asserted separately. gh-aw's
+    generated `conclusion` and `safe_outputs` jobs require it, and without it GitHub refuses the
+    whole workflow at startup.
+    """
     workflow = example_workflow()
-    writers = {
+    executing = {
         name: job["permissions"]
         for name, job in workflow["jobs"].items()
-        if "write" in str(job.get("permissions", ""))
+        if "write" in str(job.get("permissions", "")) and "steps" in job
     }
-    assert set(writers) == {"render-and-publish-the-report", "propose-generated-artifacts"}
-    assert writers["propose-generated-artifacts"] == {
+    assert set(executing) == {"render-and-publish-the-report", "propose-generated-artifacts"}
+    assert executing["propose-generated-artifacts"] == {
         "contents": "write",
         "pull-requests": "write",
     }
+
+    # And the pass-through grant is exactly the contract, never wider.
+    for name, job in workflow["jobs"].items():
+        if "uses" in job and "write" in str(job.get("permissions", "")):
+            assert job["permissions"] == AGENT_CALLER_PERMISSIONS, name
 
 
 def test_test_execution_never_shares_a_job_with_a_write_token():

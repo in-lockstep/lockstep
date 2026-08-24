@@ -44,6 +44,29 @@ ENGINE_SECRET = {
     "gemini": "GEMINI_API_KEY",
 }
 
+# What a job calling a compiled agent workflow has to grant it.
+#
+# A reusable workflow can never hold more permission than its caller, and this was emitted with
+# none — so every scope but `contents` was `none` and GitHub refused the workflow before running
+# anything: "The nested job 'activation' is requesting 'actions: read', but is only allowed
+# 'actions: none'." No pipeline with an agent in it could ever have started.
+#
+# The three scopes are what `gh aw compile` produces jobs for. `activation` and `conclusion` read
+# the Actions API to find the run they belong to; everything reads contents; and `conclusion` and
+# `safe_outputs` write issues to report what the run produced and what it could not do. The set does
+# not vary with declared safe outputs — those two jobs exist regardless.
+#
+# **This is not a hole in the floor.** The `agent` job is `read-all`, which `assert_floor` still
+# checks after overlays, and the writes belong to gh-aw's own deterministic jobs. That is the
+# safe-output model — an agent produces a request, machinery it does not control performs it — and
+# the caller has to pass through enough permission for that machinery to exist at all.
+#
+# Pinned in spirit to `capabilities.gh-aw`, like ENGINE_SECRET above. A version needing a fourth
+# scope would reintroduce exactly this failure, in production, so
+# `test_agent_permissions.py` compares this against every committed `.lock.yml` and fails the build
+# instead.
+AGENT_CALLER_PERMISSIONS = {"actions": "read", "contents": "read", "issues": "write"}
+
 # The fixed input contract every compiled agent workflow accepts.
 WORKFLOW_INPUTS = {
     "item": {"type": "string", "required": False, "default": ""},
