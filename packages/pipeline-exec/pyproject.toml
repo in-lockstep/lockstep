@@ -20,6 +20,12 @@ browser = ["playwright>=1.44"]
 [project.scripts]
 pipeline-exec = "pipeline_exec.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/in-lockstep/lockstep"
+Repository = "https://github.com/in-lockstep/lockstep"
+Documentation = "https://github.com/in-lockstep/lockstep#readme"
+Issues = "https://github.com/in-lockstep/lockstep/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
