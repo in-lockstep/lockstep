@@ -138,6 +138,14 @@ class Parameter:
     name: str
     description: str = ""
     default: str | None = None
+    # Where to look when nothing explicit supplied a value: a fact carried by the event that fired
+    # the run. `/implement 18` on issue #18 should not need the number repeated, because the comment
+    # is on the issue and the payload already says which.
+    #
+    # Declared rather than inferred from the parameter's name. A pipeline whose parameter happens to
+    # be called `issue` should not silently acquire a meaning it did not ask for, and somebody
+    # reading the spec should be able to see where a value came from without knowing the compiler.
+    from_event: str = ""
 
     @property
     def input_name(self) -> str:

@@ -240,17 +240,33 @@ def _assign_ids(steps: list[Step]) -> None:
             step.id = uniquify(slug(step.label), taken)
 
 
+# Facts a parameter may take from the event that fired the run, and the expression each becomes.
+#
+# One entry, deliberately. `{pull_request}` and `{instruction}` already cover what the other obvious
+# candidates would, so a second source should wait for a second real case rather than being guessed
+# at now — and an unknown name is refused rather than silently emitting an empty expression.
+EVENT_SOURCES = {"issue-number": "github.event.issue.number"}
+
+
 def parse_command(src: SourceFile) -> Command:
     meta = src.metadata
     params: list[Parameter] = []
     for entry in meta.get("parameters", []) or []:
         if isinstance(entry, dict):
             default = entry.get("default")
+            from_event = str(entry.get("from-event", "") or "")
+            if from_event and from_event not in EVENT_SOURCES:
+                raise SpecError(
+                    f"unknown from-event {from_event!r}",
+                    location=src.rel,
+                    hint=f"available: {', '.join(sorted(EVENT_SOURCES))}",
+                )
             params.append(
                 Parameter(
                     name=str(entry.get("name", "")),
                     description=str(entry.get("description", "")),
                     default=None if default is None else str(default),
+                    from_event=from_event,
                 )
             )
     gh_raw = meta.get("github", {}) or {}

@@ -10,6 +10,7 @@ from typing import Any
 from .. import __version__
 from ..errors import EmitError
 from ..spec.model import Command, Profile, SourceFile, Spec
+from ..spec.parse import EVENT_SOURCES
 
 PINS_PATH = ".pipeline/pins.lock"
 
@@ -280,6 +281,11 @@ class EmitContext:
                 if parameter.name in from_comment:
                     # A comment supplies the same values through the gate.
                     sources.append("needs.command-gate.outputs." + parameter.input_name)
+                if parameter.from_event:
+                    # A fact the event already carries. `/implement 18` on issue #18 should not need
+                    # the number repeated — behind anything explicit, ahead of the literal default,
+                    # because what the payload knows beats what the spec guessed.
+                    sources.append(EVENT_SOURCES[parameter.from_event])
                 if parameter.default:
                     # Last, so an explicit value always wins over it. Single quotes doubled, which
                     # is how a GitHub expression escapes one.

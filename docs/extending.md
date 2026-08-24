@@ -19,6 +19,31 @@ below was run against it.
 
 ---
 
+## Taking a value from the event that fired the run
+
+`/implement 18` commented on issue #18 should not need the number repeated — the comment is on the
+issue, and the payload already says which.
+
+```
+parameters:
+  - name: issue
+    default: ""
+    from-event: issue-number
+```
+
+The parameter resolves through a chain, first non-empty winning: a dispatch input, then whatever the
+comment supplied after the command, then the event, then the declared default. So `/implement 42`
+still means 42 anywhere, a dispatch with `issue=7` beats both, and bare `/implement` on an issue
+means that issue.
+
+**Declared rather than inferred from the name.** A pipeline whose parameter happens to be called
+`issue` should not silently acquire a meaning it never asked for, and somebody reading the spec
+should be able to see where a value came from without knowing how the compiler works.
+
+One source exists today, `issue-number`. `{pull_request}` and `{instruction}` already cover the
+other obvious candidates, so the next one waits for a second real case rather than being guessed at
+— and a name the compiler does not recognise is refused at compile time, naming the ones it does.
+
 ## Reaching the GitHub API from a step you wrote
 
 `gh` reads `GH_TOKEN` and nothing else, and refuses to run inside Actions without it. The framework's

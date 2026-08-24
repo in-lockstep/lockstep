@@ -97,9 +97,9 @@
       ]
     },
     ".github/workflows/implement-implement.yml": {
-      "sha": "96e503f5",
+      "sha": "26c0173c",
       "sources": [
-        "implement:commands/implement.md@2ba58b8d"
+        "implement:commands/implement.md@59fbee68"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
