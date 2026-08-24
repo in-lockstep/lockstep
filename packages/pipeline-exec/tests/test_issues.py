@@ -211,3 +211,139 @@ def test_an_empty_fixture_directory_fails_rather_than_writing_an_empty_issue(tmp
     result = run("--issue=1", "--repo=acme/web", f"--output={tmp_path / 'i.json'}", f"--from-dir={empty}")
     assert result.exit_code == 1
     assert "no issue found" in result.output
+
+
+# --- Jira, reduced to the same shape ---------------------------------------
+#
+# A pipeline reading `summary`, `description` and `acceptance_criteria` should not have to know which
+# tracker delivered them. What differs genuinely — an issue type, a component — stays alongside
+# rather than being flattened onto something GitHub-shaped.
+
+
+def jira(**fields):
+    base = {"summary": "s", "description": "", "status": {"name": "Open"}}
+    base.update(fields)
+    return {"key": "PLAT-1", "self": "https://jira.example/rest/api/2/issue/1", "fields": base}
+
+
+def test_a_jira_issue_reduces_to_the_github_shape():
+    from pipeline_exec.issues import reduce_issue, reduce_jira_issue
+
+    shared = {"key", "summary", "description", "acceptance_criteria", "labels", "assignees", "state"}
+    github = set(reduce_issue({"number": 1, "title": "t", "body": ""}, []))
+    assert shared <= set(reduce_jira_issue(jira())) & github
+
+
+def test_a_configured_criteria_field_wins():
+    from pipeline_exec.issues import jira_criteria
+
+    fields = {
+        "customfield_500": "Given a user\nWhen they log in",
+        "description": "## Acceptance criteria\n- other",
+    }
+    criteria, source = jira_criteria(fields, field_id="customfield_500")
+    assert criteria == ["Given a user", "When they log in"]
+    assert source == "field customfield_500"
+
+
+def test_a_configured_field_that_is_empty_does_not_send_it_guessing():
+    """Somebody said where these live. The answer is that this issue has none."""
+    from pipeline_exec.issues import jira_criteria
+
+    criteria, source = jira_criteria(
+        {"customfield_500": "", "description": "## Acceptance criteria\n- something"},
+        field_id="customfield_500",
+    )
+    assert criteria == []
+    assert "empty" in source
+
+
+def test_an_unconfigured_instance_guesses_and_says_that_it_guessed():
+    from pipeline_exec.issues import jira_criteria
+
+    criteria, source = jira_criteria({"customfield_733": "Given a cart\nWhen it is empty"})
+    assert criteria == ["Given a cart", "When it is empty"]
+    assert source == "guessed from customfield_733"
+
+
+def test_falling_back_to_the_description_uses_the_same_parser_as_github():
+    from pipeline_exec.issues import jira_criteria
+
+    criteria, source = jira_criteria({"description": "## Acceptance criteria\n- Returns 400\n- Logs it"})
+    assert criteria == ["Returns 400", "Logs it"]
+    assert source == "description"
+
+
+def test_no_criteria_anywhere_says_none_rather_than_guessing():
+    from pipeline_exec.issues import jira_criteria
+
+    assert jira_criteria({"description": "It is broken."}) == ([], "none")
+
+
+def test_tracker_native_fields_are_kept_rather_than_mapped():
+    """A Jira issue type is a real thing and is not a GitHub label."""
+    from pipeline_exec.issues import reduce_jira_issue
+
+    document = reduce_jira_issue(
+        jira(
+            issuetype={"name": "Bug"},
+            components=[{"name": "reports"}],
+            priority={"name": "High"},
+            labels=["billing"],
+            assignee={"displayName": "Dana Ruiz"},
+        )
+    )
+    assert document["type"] == "Bug"
+    assert document["components"] == ["reports"]
+    assert document["priority"] == "High"
+    assert document["labels"] == ["billing"]
+    assert document["assignees"] == ["Dana Ruiz"]
+
+
+def test_the_command_reads_either_tracker_through_one_flag(tmp_path):
+    import json as _json
+
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    fixtures = tmp_path / "fx"
+    fixtures.mkdir()
+    (fixtures / "issue.json").write_text(_json.dumps(jira(description="## Acceptance criteria\n- Works")))
+    out = tmp_path / "issue.json"
+    result = CliRunner().invoke(
+        main, ["issue-fetch", "--source=jira", "--issue=PLAT-1", f"--from-dir={fixtures}", f"--output={out}"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "criteria_source=description" in result.output
+    assert _json.loads(out.read_text())["acceptance_criteria"] == ["Works"]
+
+
+def test_an_issue_that_is_not_there_is_an_error_not_an_empty_document(tmp_path):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    empty = tmp_path / "fx"
+    empty.mkdir()
+    result = CliRunner().invoke(
+        main,
+        [
+            "issue-fetch",
+            "--source=jira",
+            "--issue=NOPE-1",
+            f"--from-dir={empty}",
+            f"--output={tmp_path / 'o.json'}",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "no issue found" in result.output
+
+
+def test_jira_without_credentials_says_which_ones(tmp_path):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    result = CliRunner().invoke(
+        main, ["issue-fetch", "--source=jira", "--issue=P-1", f"--output={tmp_path / 'o.json'}"], env={}
+    )
+    assert result.exit_code != 0
+    assert "JIRA_BASE_URL" in result.output

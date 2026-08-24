@@ -112,3 +112,72 @@ def reduce_issue(
 def _name(label: Any) -> str:
     """Labels arrive as objects from the API and as strings from a webhook payload."""
     return label.get("name", "") if isinstance(label, dict) else str(label)
+
+
+# --- Jira -----------------------------------------------------------------------------------------
+#
+# The same four keys, from a tracker that stores them differently. What GitHub renders as a heading
+# or a task list, Jira puts in a custom field whose id differs per instance — so this reads, in
+# order: the field somebody configured, then a field that looks like acceptance criteria, then the
+# description itself. Each fallback is weaker than the one before it, and `criteria_source` in the
+# output says which one answered, because "no criteria" and "we guessed" are different situations
+# and an agent handed them silently would treat them the same.
+
+CRITERIA_HINTS = ("acceptance", "given", "criteria")
+
+
+def jira_criteria(fields: dict[str, Any], *, field_id: str = "") -> tuple[list[str], str]:
+    """Acceptance criteria, and how they were found."""
+    if field_id:
+        value = fields.get(field_id)
+        if isinstance(value, str) and value.strip():
+            return _lines(value), f"field {field_id}"
+        # Configured and empty is a fact worth reporting, not a reason to go guessing: somebody
+        # said where these live, and the answer is that this issue has none.
+        return [], f"field {field_id} (empty)"
+
+    for key, value in sorted(fields.items()):
+        if not key.startswith("customfield_") or not isinstance(value, str) or not value.strip():
+            continue
+        if any(hint in value.lower() for hint in CRITERIA_HINTS):
+            return _lines(value), f"guessed from {key}"
+
+    described = criteria_from(str(fields.get("description") or ""))
+    return described, "description" if described else "none"
+
+
+def _lines(value: str) -> list[str]:
+    return [line.strip("-*• ").strip() for line in value.splitlines() if line.strip()]
+
+
+def reduce_jira_issue(
+    raw: dict[str, Any], *, criteria_field: str = "", max_body: int = MAX_BODY
+) -> dict[str, Any]:
+    """One Jira issue, reduced to the shape `reduce_issue` produces for GitHub.
+
+    One shape, so a pipeline reads `summary`, `description` and `acceptance_criteria` without
+    knowing which tracker it is pointed at — and so an agent's eval cases are about the work rather
+    than about the API that delivered it. What differs between trackers stays alongside rather than
+    being flattened away: an issue type is a real thing in Jira and is not a GitHub label.
+    """
+    fields = raw.get("fields") or {}
+    criteria, source = jira_criteria(fields, field_id=criteria_field)
+    status = (fields.get("status") or {}).get("name", "")
+    return {
+        "key": raw.get("key", ""),
+        "number": None,
+        "repo": "",
+        "url": raw.get("self", ""),
+        "state": status,
+        "summary": fields.get("summary", ""),
+        "description": str(fields.get("description") or "")[:max_body],
+        "acceptance_criteria": criteria,
+        "criteria_source": source,
+        "labels": list(fields.get("labels") or []),
+        "assignees": [name for name in [(fields.get("assignee") or {}).get("displayName", "")] if name],
+        "discussion": [],
+        # Tracker-native, kept rather than mapped onto something GitHub-shaped.
+        "type": (fields.get("issuetype") or {}).get("name", ""),
+        "components": [c.get("name", "") for c in fields.get("components") or []],
+        "priority": (fields.get("priority") or {}).get("name", ""),
+    }

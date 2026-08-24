@@ -18,7 +18,7 @@ from typing import Any
 
 import yaml
 
-from . import __version__
+from . import __version__, library
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH, is_local_requirement, requirement_name
 from .errors import LockstepError
@@ -41,6 +41,20 @@ def fetch(spec: Spec, root: Path) -> list[str]:
         if destination.exists():
             shutil.rmtree(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
+
+        if library.is_shipped(source):
+            origin = library.shipped_pipeline(source)
+            if origin is None:
+                raise PinError(
+                    f"{alias}: no pipeline named {library.shipped_name(source)!r} ships with this compiler",
+                    hint="available: " + (", ".join(sorted(library.pipelines())) or "(none)"),
+                )
+            shutil.copytree(origin, destination)
+            # Pinned by `capabilities.compiler`, not by a commit. The pipelines ship inside the
+            # compiler, so the version range that decides which compiler runs is the same one that
+            # decides which pipelines a repository gets — there is no second thing to pin.
+            notes.append(f"{alias}: shipped with lockstep {__version__}")
+            continue
 
         if not source.startswith("github.com/"):
             local = (root / source).resolve()
@@ -255,6 +269,13 @@ def pin(
     # retags is the supply-chain event this whole mechanism exists to catch.
     inherits = data.setdefault("inherits", {})
     for alias, source in sorted(spec.manifest.inherits.items()):
+        if library.is_shipped(source):
+            # Nothing to resolve. These travel inside the compiler, so `capabilities.compiler` is
+            # already the pin — recording a second one would be a number that could disagree with
+            # the artifact it claims to describe.
+            notes.append(f"{alias}: shipped with the compiler ({__version__})")
+            inherits.pop(alias, None)
+            continue
         if not source.startswith("github.com/"):
             notes.append(f"{alias}: local path, not pinned")
             inherits.pop(alias, None)

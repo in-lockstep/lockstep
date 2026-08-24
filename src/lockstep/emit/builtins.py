@@ -23,6 +23,9 @@ AVAILABLE = frozenset(
         # Introspection: how a pipeline repository proves in CI that the builtins its spec names
         # actually exist, extensions included.
         "list-commands",
+        # One shape from either tracker, so a pipeline reading `acceptance_criteria` does not have
+        # to know which one delivered it.
+        "issue-fetch",
     }
 )
 

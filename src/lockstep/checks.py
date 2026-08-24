@@ -16,7 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from . import __version__
+from . import __version__, library
 from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
 from .emit.context import PINS_PATH, Pins
 from .emit.validate import MAX_JOB_MINUTES
@@ -586,6 +586,21 @@ def _check_inherits(spec: Spec, root: Path, report: Report) -> None:
             locked = {}
 
     for alias, source in sorted(spec.manifest.inherits.items()):
+        if library.is_shipped(source):
+            if library.shipped_pipeline(source) is None:
+                report.add(
+                    Severity.ERROR,
+                    "DOC023",
+                    f"{alias!r} inherits {source}, which this compiler does not ship",
+                    hint="shipped pipelines: "
+                    + (", ".join(sorted(library.pipelines())) or "(none)")
+                    + ". A newer or older compiler may ship a different set — the version range in "
+                    "`capabilities.compiler` is what decides",
+                )
+            # Nothing else to say. A shipped pipeline is pinned by `capabilities.compiler`, which
+            # `_check_pins` already holds to an exact version — so unlike a local path it *is*
+            # reproducible, and unlike a git upstream there is no second commit to record.
+            continue
         if not source.startswith("github.com/"):
             report.add(
                 Severity.WARNING,

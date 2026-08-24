@@ -19,6 +19,107 @@ class ScaffoldError(LockstepError):
 
 
 @dataclass(frozen=True)
+class Adopt:
+    """A repository that runs the pipelines this compiler ships, and authors none of them.
+
+    The whole file set is a manifest and a profile. That is the point: adopting should not begin
+    with writing a pipeline, and everything here stays true as the repository grows — the shipped
+    pipelines are inherited, so they are overlayable step by step, and a pipeline written later
+    sits beside them rather than replacing them.
+    """
+
+    name: str
+    profile: str
+    pipelines: tuple[str, ...]
+
+    def files(self) -> dict[str, str]:
+        return {
+            "pipeline.yaml": self._manifest(),
+            f"profiles/{self.profile}.md": self._profile(),
+            ".gitignore": ".pipeline/inherited/\noutputs/\n",
+            "README.md": self._readme(),
+        }
+
+    def _manifest(self) -> str:
+        inherits = "\n".join(f"  {name}: lockstep:{name}" for name in self.pipelines)
+        first = self.pipelines[0]
+        return f"""spec: 1
+name: {self.name}
+
+# The pipelines this repository runs, and where they come from. `lockstep:` means they ship inside
+# the compiler, so the version range below is what decides which ones you get — there is no second
+# thing to pin. Inheriting them compiles them; nothing further is required to run one.
+inherits:
+{inherits}
+
+# Nothing needs to go here to get started. This is where an inherited command is *tuned* — within
+# the bands its author published, without forking it:
+#
+# commands:
+#   {first}:
+#     from: {first}
+#     add-guardrails: [house-style]     # a guardrail of yours, on their agents
+#     agents:
+#       triage-analyst:
+#         max-ai-credits: 40            # inside the band the pipeline published
+#
+# `overlays/` changes their steps. A command in `commands/` runs beside them.
+
+capabilities:
+  actions: github.com/in-lockstep/lockstep/actions@actions-v1.0.0
+  exec: in-lockstep-exec==0.1.0
+  exec-image: ghcr.io/in-lockstep/pipeline-exec
+  compiler: in-lockstep>=0.1,<1.0
+  gh-aw: v0.86.2
+
+targets:
+  github-agentic:
+    profiles: [{self.profile}]
+
+budgets:
+  per_run_ai_credits: 200
+  # Per agent workflow, per day, refused by gh-aw before the agent starts. Unset does not mean
+  # unlimited — it means gh-aw's own default of 5000.
+  per_agent_daily_ai_credits: 2000
+"""
+
+    def _profile(self) -> str:
+        return f"""---
+name: {self.profile}
+github:
+  secrets: [ANTHROPIC_API_KEY]
+---
+
+Where these pipelines run. Add the tracker credentials here if you read issues from Jira:
+`JIRA_BASE_URL` and `JIRA_API_TOKEN` as secrets, and `issue_source: jira` as a value.
+"""
+
+    def _readme(self) -> str:
+        listed = "\n".join(f"- `{name}`" for name in self.pipelines)
+        return f"""# {self.name}
+
+Runs the pipelines that ship with lockstep:
+
+{listed}
+
+```bash
+lockstep pin        # resolve capability tags to commits
+lockstep compile    # generate the workflows
+lockstep lint       # check the spec
+```
+
+## Growing out of this
+
+1. **Tune one.** A `commands:` entry in `pipeline.yaml` moves a model or a budget within the band
+   the pipeline published, or adds a guardrail of yours to its agents. No fork, no copy.
+2. **Change its steps.** An overlay in `overlays/` inserts, replaces or deletes a step by id.
+   `lockstep compile --check` still holds the result to the spec.
+3. **Write your own.** A command in `commands/` runs beside the inherited ones and can reuse their
+   agents. Nothing has to be given up to add one.
+"""
+
+
+@dataclass(frozen=True)
 class Scaffold:
     name: str
     profile: str
@@ -277,12 +378,29 @@ Three tiers, in order of preference:
 """
 
 
-def scaffold(root: Path, name: str, profile: str, *, force: bool = False) -> list[str]:
-    """Write a new pipeline into `root`, refusing to overwrite anything already there."""
+def scaffold(
+    root: Path, name: str, profile: str, *, force: bool = False, adopt: tuple[str, ...] = ()
+) -> list[str]:
+    """Write a new pipeline into `root`, refusing to overwrite anything already there.
+
+    With `adopt`, writes a repository that inherits the shipped pipelines instead of authoring one.
+    """
     if not name.replace("-", "").replace("_", "").isalnum():
         raise ScaffoldError(f"{name!r} is not a usable pipeline name", hint="use letters, digits and dashes")
 
-    files = Scaffold(name=name, profile=profile).files()
+    if adopt:
+        from . import library
+
+        available = library.pipelines()
+        unknown = [pipeline for pipeline in adopt if pipeline not in available]
+        if unknown:
+            raise ScaffoldError(
+                f"no shipped pipeline named {', '.join(unknown)}",
+                hint="available: " + (", ".join(sorted(available)) or "(none)"),
+            )
+        files = Adopt(name=name, profile=profile, pipelines=tuple(adopt)).files()
+    else:
+        files = Scaffold(name=name, profile=profile).files()
     existing = [relative for relative in files if (root / relative).exists()]
     if existing and not force:
         raise ScaffoldError(

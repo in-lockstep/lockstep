@@ -1089,3 +1089,87 @@ def _post_metrics(endpoint: str, document: dict[str, Any]) -> None:
             click.echo(f"exported to {url} ({response.status})")
     except (urllib.error.URLError, OSError) as error:
         click.echo(click.style(f"OTLP export to {url} failed: {error}", fg="yellow"), err=True)
+
+
+@main.command(name="issue-fetch")
+@click.option("--source", default="github", type=click.Choice(["github", "jira"]), show_default=True)
+@click.option("--issue", required=True, help="Issue number or `#123` for GitHub; the key for Jira.")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="", help="GitHub only.")
+@click.option("--base-url", envvar="JIRA_BASE_URL", default="", help="Jira only.")
+@click.option("--criteria-field", envvar="JIRA_CRITERIA_FIELD", default="", help="Jira only.")
+@click.option("--no-discussion", is_flag=True, help="Skip the comment thread.")
+@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of an API.")
+def issue_fetch(
+    source: str,
+    issue: str,
+    output: Path,
+    repo: str,
+    base_url: str,
+    criteria_field: str,
+    no_discussion: bool,
+    from_dir: Path | None,
+) -> None:
+    """Fetch one issue from whichever tracker this repository uses, in one shape.
+
+    A pipeline that reads `summary`, `description` and `acceptance_criteria` should not have to know
+    which tracker delivered them, and an agent's eval cases should be about the work rather than
+    about an API. What genuinely differs stays alongside rather than being flattened: a Jira issue
+    type is a real thing and is not a GitHub label.
+    """
+    if source == "github":
+        ctx = click.get_current_context()
+        ctx.invoke(
+            gh_issue_fetch,
+            issue=issue,
+            repo=repo,
+            output=output,
+            no_discussion=no_discussion,
+            from_dir=from_dir,
+        )
+        return
+
+    from .issues import reduce_jira_issue
+
+    if from_dir:
+        path = from_dir / "issue.json"
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    else:
+        token = os.environ.get("JIRA_API_TOKEN", "")
+        if not base_url or not token:
+            _fail("JIRA_BASE_URL and JIRA_API_TOKEN are required unless --from-dir is given")
+        raw = _jira_json(base_url, token, issue)
+
+    document = reduce_jira_issue(raw, criteria_field=criteria_field)
+    if not document["key"]:
+        _fail(f"no issue found for {issue!r}")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    _emit_output("key", document["key"])
+    _emit_output("state", document["state"])
+    _emit_output("criteria", str(len(document["acceptance_criteria"])))
+    # Published because "none found" and "guessed from a field nobody configured" are different
+    # situations, and a step that reported only a count would make them look identical.
+    _emit_output("criteria_source", document["criteria_source"])
+    click.echo(
+        f"fetched {document['key']} — {len(document['acceptance_criteria'])} criteria "
+        f"({document['criteria_source']}) -> {output}"
+    )
+
+
+def _jira_json(base_url: str, token: str, key: str) -> dict[str, Any]:
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/issue/{urllib.parse.quote(key)}"
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return dict(json.loads(response.read().decode("utf-8")))
+    except urllib.error.HTTPError as error:
+        _fail(f"issue tracker returned {error.code} for {key}")
+    except (urllib.error.URLError, OSError) as error:
+        _fail(f"could not reach {base_url}: {error}")
+    return {}

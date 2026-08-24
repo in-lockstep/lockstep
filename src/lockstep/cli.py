@@ -405,16 +405,38 @@ def uneject(root: Path, target: str) -> None:
 @click.option("--profile", default="staging", show_default=True, help="Name of the first profile.")
 @click.option("--target", default="github-agentic", show_default=True)
 @click.option("--force", is_flag=True, help="Overwrite files that already exist.")
-def init(root: Path, name: str, profile: str, target: str, force: bool) -> None:
-    """Scaffold a new pipeline repository."""
+@click.option(
+    "--adopt",
+    default="",
+    help="Comma-separated shipped pipelines to inherit instead of authoring one. `all` takes every one.",
+)
+def init(root: Path, name: str, profile: str, target: str, force: bool, adopt: str) -> None:
+    """Scaffold a new pipeline repository.
+
+    With `--adopt`, scaffolds a repository that *runs* the pipelines this compiler ships rather than
+    one that defines its own — a manifest and a profile, and nothing else to write. They are
+    inherited rather than copied, so tuning one, overlaying its steps, or adding a pipeline of your
+    own beside them are all things that come later without giving anything up.
+    """
+    from . import library
     from .scaffold import scaffold
 
     if target != "github-agentic":
         raise click.BadParameter(f"unknown target {target!r}", param_hint="--target")
 
+    chosen: tuple[str, ...] = ()
+    if adopt:
+        chosen = (
+            tuple(sorted(library.pipelines()))
+            if adopt.strip() == "all"
+            else tuple(part.strip() for part in adopt.split(",") if part.strip())
+        )
+        if not chosen:
+            raise click.BadParameter("no pipelines ship with this compiler", param_hint="--adopt")
+
     root.mkdir(parents=True, exist_ok=True)
     try:
-        written = scaffold(root, name, profile, force=force)
+        written = scaffold(root, name, profile, force=force, adopt=chosen)
     except LockstepError as error:
         click.echo(click.style(error.render(), fg="red"), err=True)
         sys.exit(EXIT_SPEC)
@@ -425,6 +447,8 @@ def init(root: Path, name: str, profile: str, target: str, force: bool) -> None:
     click.echo("\nnext:")
     click.echo(f"  cd {root}")
     click.echo("  lockstep pin        # resolve capability tags to commits")
+    if chosen:
+        click.echo("  lockstep fetch      # materialize the pipelines you inherited")
     click.echo("  lockstep compile    # generate the workflows")
     click.echo("  lockstep lint       # check the spec")
 
