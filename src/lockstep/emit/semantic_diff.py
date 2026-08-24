@@ -103,6 +103,7 @@ def surface_of(path: str, text: str) -> dict[str, Any]:
             if isinstance(entry, dict)
         }
         surface["credits"] = front.get("max-ai-credits")
+        surface["daily-credits"] = front.get("max-daily-ai-credits")
         surface["turns"] = front.get("max-turns")
         surface["engine"] = front.get("engine")
     return surface

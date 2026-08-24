@@ -21,3 +21,6 @@ targets:
 
 budgets:
   per_run_ai_credits: 400
+  # Per agent workflow, per day, enforced by gh-aw before the agent starts. `/review` is one comment
+  # away from being run all afternoon, and every one of those runs is inside its per-run budget.
+  per_agent_daily_ai_credits: 2000

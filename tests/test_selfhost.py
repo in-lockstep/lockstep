@@ -115,3 +115,16 @@ def test_the_surface_calls_an_unused_capability_unused(repo_root):
     assert "- capability actions: `(unused)`" in surface
     assert "UNPINNED" not in surface
 
+
+def test_the_surface_states_what_a_daily_ceiling_actually_permits(tmp_path):
+    """Per agent, per day — so a repository's real daily exposure is that times its agent count.
+
+    Printing only the configured number would let a repository read "5000 credits a day" off its own
+    surface document and be wrong by however many agents it has.
+    """
+    from lockstep.emit.show_surface import _daily_budget_line
+
+    assert _daily_budget_line(5000, 7) == (
+        "- daily ceiling: 5000 credits per agent per day — up to 35000 across 7 agent(s)"
+    )
+    assert "bounds one execution, not a day of them" in _daily_budget_line(None, 7)

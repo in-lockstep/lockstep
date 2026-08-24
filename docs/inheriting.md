@@ -59,7 +59,7 @@ looking at.
 > Sealing a guardrail in your *own* repository seals it against yourself, which means nothing. The
 > loader ignores `sealed:` on a local definition rather than pretending it did something.
 
-**The three numbers are ceilings, and they are the reason "every agent" is worth saying twice.** A
+**The four numbers are ceilings, and they are the reason "every agent" is worth saying twice.** A
 band bounds a dial on an agent this organization published; a ceiling bounds every agent in a
 consuming repository — including the ones it wrote itself, which no upstream will ever see. A
 repository under these can write whatever agents it likes, and none of them gets more than eight
@@ -70,6 +70,24 @@ repository under them can add a second agent. It is checked against the consumer
 `budgets.per_run_ai_credits`, and a consumer with no budget declared is refused rather than passed —
 unbounded is not under the cap. `docs/sharing.md` has the full contrast with bands, including what
 sealing does and does not defend against.
+
+`daily-ai-credits` bounds a different axis, and it is the one people are usually surprised by. A run
+budget bounds *one execution* and says nothing whatever about how many executions there are — a
+chat-ops command is one comment away from running four hundred times in an afternoon, every one of
+them comfortably inside its budget. This ceiling is checked against `budgets.per_agent_daily_ai_credits`
+the same way, and unlike the others it does not stop at compile time: it lands in every agent as
+gh-aw's `max-daily-ai-credits`, which refuses the run **before the agent starts**, backed by a usage
+cache. That makes it the only budget here that a runaway loop cannot outrun.
+
+Two things to be clear about, because both are easy to get wrong:
+
+- **It is per agent workflow, per day** — not per repository. Seven agents under a ceiling of 5000
+  can spend 35,000 credits in a day. The manifest key is named `per_agent_daily_ai_credits` for that
+  reason, and `lockstep show-surface` prints the product rather than the configured number.
+- **You already have one.** With nothing declared, gh-aw applies `vars.GH_AW_DEFAULT_MAX_DAILY_AI_CREDITS`
+  or 5000 per agent per day. Declaring the budget replaces that default with a number your
+  organization chose and can cap from an upstream; leaving it unset does not mean unlimited, it
+  means somebody else's default.
 
 ---
 

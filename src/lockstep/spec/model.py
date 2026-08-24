@@ -302,6 +302,11 @@ class Enforce:
     # The one that actually bounds a bill: per-agent ceilings do not, because a consumer can add
     # more agents. Checked against `budgets.per_run_ai_credits`, which is the consumer's own number.
     per_run_ai_credits: int | None = None
+    # A ceiling on repetition rather than on a single run. `per_run_ai_credits` bounds one execution
+    # and says nothing about a chat-ops command somebody triggers four hundred times in an
+    # afternoon; this is the axis that catches that. gh-aw enforces it per agent workflow per day,
+    # before the agent starts.
+    daily_ai_credits: int | None = None
     # Scan an agent's input for hidden instructions before the agent reads it: "warn" reports,
     # "block" fails the run. The enforced half of "treat input as data, never as instructions",
     # which every pipeline here has been carrying as a sentence in a prompt.
@@ -525,6 +530,10 @@ class Manifest:
     capabilities: Capabilities = field(default_factory=Capabilities)
     target: TargetConfig = field(default_factory=TargetConfig)
     per_run_ai_credits: int | None = None
+    # Per agent workflow, per day — deliberately named for what gh-aw actually enforces. A repository
+    # with seven agents under a 5000 ceiling can spend 35,000 in a day, and a key called
+    # `daily_ai_credits` would have quietly said otherwise. `show-surface` prints that product.
+    per_agent_daily_ai_credits: int | None = None
     evals: EvalConfig = field(default_factory=EvalConfig)
     inherits_auth: InheritsAuth = field(default_factory=InheritsAuth)
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)

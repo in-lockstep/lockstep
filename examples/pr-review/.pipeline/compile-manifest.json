@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-intent-reviewer.md": {
-      "sha": "b044f065",
+      "sha": "16ec638a",
       "sources": [
         "agents/intent-reviewer.md@b1b64121",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-performance-reviewer.md": {
-      "sha": "e805063f",
+      "sha": "bdae6c4c",
       "sources": [
         "agents/performance-reviewer.md@35c73aad",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -30,7 +30,7 @@
       ]
     },
     ".github/workflows/aw-security-reviewer.md": {
-      "sha": "e89e2ebf",
+      "sha": "db767581",
       "sources": [
         "agents/security-reviewer.md@92f96a8a",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -42,7 +42,7 @@
       ]
     },
     ".github/workflows/aw-tests-reviewer.md": {
-      "sha": "230da293",
+      "sha": "5802f1cd",
       "sources": [
         "agents/tests-reviewer.md@636955b5",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -54,15 +54,15 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "666e10c7",
+      "sha": "e84f6599",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "8c4ca091",
+      "sha": "d07b4cb7",
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "308fd72d",
+      "sha": "ab876ffe",
       "sources": [
         "commands/review.md@97ef9fce"
       ]

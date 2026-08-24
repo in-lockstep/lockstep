@@ -435,6 +435,7 @@ def parse_fragment(src: SourceFile, kind: str) -> Fragment:
         max_turns=_ceiling(enforce_raw, "max-turns", src),
         max_ai_credits=_ceiling(enforce_raw, "max-ai-credits", src),
         per_run_ai_credits=_ceiling(enforce_raw, "per-run-ai-credits", src),
+        daily_ai_credits=_ceiling(enforce_raw, "daily-ai-credits", src),
     )
     name = str(src.metadata.get("name") or Path(src.rel).stem)
     return Fragment(

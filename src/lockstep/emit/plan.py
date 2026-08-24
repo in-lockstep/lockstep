@@ -69,6 +69,7 @@ def compile_spec(root: Path) -> CompilePlan:
         plan.notes.append(f"{placeholder} is a placeholder pin — this output cannot run as emitted")
 
     _check_run_budget(spec)
+    _check_daily_budget(spec)
 
     profiles = spec.compiled_profiles()
     if not profiles:
@@ -322,6 +323,44 @@ def _check_run_budget(spec: Spec) -> None:
             f"budgets.per_run_ai_credits is {budget}, over the cap of {cap} set by {where}",
             location=spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml",
             hint=f"lower it to {cap} or less, or relax `enforce.per-run-ai-credits` in that "
+            "guardrail — a sealed guardrail's cap is not the consuming repository's to move",
+        )
+
+
+def _check_daily_budget(spec: Spec) -> None:
+    """A cap on a day of runs, from whichever guardrail sets the lowest one.
+
+    Separate from the per-run cap because it bounds a different thing. `per_run_ai_credits` says
+    what one execution may spend and says nothing at all about how many executions there are — a
+    chat-ops command is one comment away from running four hundred times in an afternoon, every one
+    of them inside its budget.
+
+    Unlike the per-run ceiling this one is not merely checked here: it compiles into every agent,
+    and gh-aw refuses the run before the agent starts.
+    """
+    caps = [
+        (fragment, fragment.enforce.daily_ai_credits)
+        for fragment in spec.guardrails.values()
+        if fragment.enforce.daily_ai_credits is not None
+    ]
+    if not caps:
+        return
+    fragment, cap = min(caps, key=lambda entry: entry[1] or 0)
+    where = fragment.src.rel if fragment.src else fragment.name
+    budget = spec.manifest.per_agent_daily_ai_credits
+    location = spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml"
+    if budget is None:
+        raise EmitError(
+            f"no daily credit budget, but {where} caps one at {cap} per agent",
+            location=location,
+            hint=f"set budgets.per_agent_daily_ai_credits to {cap} or less — a repository with no "
+            "daily ceiling is not under the cap, it is outside it",
+        )
+    if budget > cap:
+        raise EmitError(
+            f"budgets.per_agent_daily_ai_credits is {budget}, over the cap of {cap} set by {where}",
+            location=location,
+            hint=f"lower it to {cap} or less, or relax `enforce.daily-ai-credits` in that "
             "guardrail — a sealed guardrail's cap is not the consuming repository's to move",
         )
 

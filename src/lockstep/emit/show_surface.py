@@ -14,6 +14,21 @@ from .context import Pins
 from .overlay import load_overlays
 
 
+def _daily_budget_line(per_agent: int | None, agents: int) -> str:
+    """The daily ceiling, and what it actually permits.
+
+    gh-aw enforces this per agent workflow per day. Printing only the configured number would let a
+    repository with seven agents read "5000 credits a day" off its own surface document and be
+    wrong by a factor of seven — which is the precise failure this document exists to prevent.
+    """
+    if per_agent is None:
+        return "- daily ceiling: (none) — a run budget bounds one execution, not a day of them"
+    return (
+        f"- daily ceiling: {per_agent} credits per agent per day"
+        f" — up to {per_agent * agents} across {agents} agent(s)"
+    )
+
+
 def render(root: Path) -> str:
     spec: Spec = load_spec(root)
     pins = Pins.load(spec)
@@ -50,6 +65,7 @@ def render(root: Path) -> str:
         f"- gh-aw: `{pins.gh_aw_version or '(unset)'}`",
         *(f"- engine credential: `{secret}` (engine `{engine}`)" for engine, secret, _ in credentials),
         f"- budget: {manifest.per_run_ai_credits or '(none)'} credits per run",
+        _daily_budget_line(manifest.per_agent_daily_ai_credits, len(spec.agents)),
         "",
         "## Commands",
         "",

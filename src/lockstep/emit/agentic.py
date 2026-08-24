@@ -156,6 +156,12 @@ def build_agent(
             {"uses": ctx.pins.action("save"), "with": {"paths": "${{ inputs.output_path }}"}},
         ],
     }
+    # A ceiling on repetition, enforced by gh-aw before the agent starts rather than by anything
+    # here. `max-ai-credits` bounds one run; this bounds a day of them, which is the axis a chat-ops
+    # command triggered four hundred times in an afternoon actually moves.
+    if spec.manifest.per_agent_daily_ai_credits is not None:
+        frontmatter["max-daily-ai-credits"] = spec.manifest.per_agent_daily_ai_credits
+
     if servers:
         frontmatter["mcp-servers"] = servers
 

@@ -125,6 +125,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             ),
         ),
         per_run_ai_credits=budgets.get("per_run_ai_credits"),
+        per_agent_daily_ai_credits=budgets.get("per_agent_daily_ai_credits"),
         evals=EvalConfig(
             judge=str(evals_raw.get("judge", "") or ""),
             min_pass_rate=(

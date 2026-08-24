@@ -102,9 +102,13 @@ def test_an_unfetched_upstream_is_an_error_that_says_what_to_run(consumer):
 
 def test_a_sealed_standard_reaches_an_agent_that_never_named_it(consumer):
     """A guardrail every pipeline must remember to list is one that a pipeline will forget."""
-    assert "guardrails" not in (FIXTURES / "upstream-review" / "agents" / "reviewer.md").read_text().split(
-        "data-handling"
-    )[0].split("---")[-1]
+    assert (
+        "guardrails"
+        not in (FIXTURES / "upstream-review" / "agents" / "reviewer.md")
+        .read_text()
+        .split("data-handling")[0]
+        .split("---")[-1]
+    )
     assert "internal hostnames" in body(consumer)
 
 
@@ -204,9 +208,7 @@ def test_the_enforce_floor_merges_across_tiers(consumer):
 def test_an_inherited_script_resolves_into_the_fetched_tree(consumer):
     workflow = yaml.safe_load(compile_spec(consumer).files[".github/workflows/review.yml"])
     run = " ".join(
-        step.get("run", "")
-        for job in workflow["jobs"].values()
-        for step in job.get("steps", []) or []
+        step.get("run", "") for job in workflow["jobs"].values() for step in job.get("steps", []) or []
     )
     assert ".pipeline/inherited/review/scripts/collect-diff.py" in run
 
@@ -462,6 +464,77 @@ def test_no_run_budget_at_all_is_refused_when_a_cap_exists(consumer):
     assert "caps one at 200" in error.value.message
 
 
+# --- the ceiling that bounds repetition -------------------------------------
+
+
+def add_daily_cap(root, credits):
+    """An upstream guardrail capping what any one agent may spend in a day."""
+    guardrail = root.parent / "upstream-standards" / "guardrails" / "data-handling.md"
+    guardrail.write_text(
+        guardrail.read_text().replace(
+            "  per-run-ai-credits: 200", f"  per-run-ai-credits: 200\n  daily-ai-credits: {credits}"
+        ),
+        encoding="utf-8",
+    )
+    from lockstep.lifecycle import fetch
+    from lockstep.spec.load import load_manifest_only
+
+    fetch(load_manifest_only(root), root)
+
+
+def set_daily_budget(root, credits):
+    edit(
+        root,
+        "pipeline.yaml",
+        {"  per_run_ai_credits: 200": f"  per_run_ai_credits: 200\n  per_agent_daily_ai_credits: {credits}"},
+    )
+
+
+def test_a_daily_budget_reaches_every_agent(consumer):
+    """gh-aw enforces it before the agent starts, so it has to be in the frontmatter of each one."""
+    set_daily_budget(consumer, 1000)
+    front = yaml.safe_load(compile_spec(consumer).files[AGENT].split("---")[1])
+    assert front["max-daily-ai-credits"] == 1000
+
+
+def test_no_daily_budget_emits_no_ceiling(consumer):
+    front = yaml.safe_load(compile_spec(consumer).files[AGENT].split("---")[1])
+    assert "max-daily-ai-credits" not in front
+
+
+def test_a_daily_budget_over_the_cap_is_refused(consumer):
+    """A run budget bounds one execution and says nothing about four hundred of them."""
+    add_daily_cap(consumer, 500)
+    set_daily_budget(consumer, 5000)
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the cap of 500" in error.value.message
+
+
+def test_no_daily_budget_at_all_is_refused_when_a_cap_exists(consumer):
+    add_daily_cap(consumer, 500)
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "caps one at 500 per agent" in error.value.message
+
+
+def test_the_lowest_daily_ceiling_wins(consumer):
+    add_daily_cap(consumer, 500)
+    house = consumer / "guardrails" / "house-style.md"
+    house.write_text(
+        house.read_text().replace(
+            "description: What this repo adds",
+            "description: What this repo adds\nenforce:\n  daily-ai-credits: 300",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    set_daily_budget(consumer, 400)
+    with pytest.raises(EmitError) as error:
+        compile_spec(consumer)
+    assert "over the cap of 300" in error.value.message
+
+
 def test_the_lowest_ceiling_wins_not_the_last_one_read(consumer):
     """Two guardrails each setting one are two constraints; honouring only the last honours neither."""
     house = consumer / ".pipeline/inherited/review/guardrails/house.md"
@@ -550,4 +623,3 @@ def test_an_unfetched_upstream_is_not_also_a_transitivity_warning(consumer):
     except MissingDefinition:
         pass
     assert "DOC022" not in codes
-
