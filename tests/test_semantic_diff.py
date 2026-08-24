@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lockstep.emit import compile_spec
-from lockstep.emit.semantic_diff import against_disk, diff_surfaces, surfaces
+from lockstep.emit.semantic_diff import (
+    AcknowledgementError,
+    Delta,
+    SemanticDiff,
+    against_disk,
+    diff_surfaces,
+    parse_acknowledgements,
+    surfaces,
+)
 from lockstep.emit.writer import write_plan
 
 
@@ -66,3 +76,75 @@ def test_surface_covers_workflows_only(basic_spec_dir):
 def test_added_workflow_is_reported():
     diff = diff_surfaces({}, {"a.yml": {"permissions": None}})
     assert diff.deltas[0].category == "new-file"
+
+
+# --- acknowledging a security-surface change ------------------------------------------------------
+#
+# The module promised deltas would block "until explicitly acknowledged" and nothing implemented
+# acknowledging, so every legitimate widening was permanently red and clearable only by an admin
+# bypass. A security gate nobody can clear is one people learn to bypass, which is worse than not
+# having it — the same argument `publish-history` makes for not failing a run over bookkeeping.
+
+
+def _diff(*categories: str, acknowledged: set[str] | None = None) -> SemanticDiff:
+    return SemanticDiff(
+        deltas=[Delta(category, "w.yml", "was -> now") for category in categories],
+        acknowledged=acknowledged or set(),
+    )
+
+
+def test_a_blocking_delta_nobody_named_still_fails():
+    assert [d.category for d in _diff("sandbox").unacknowledged] == ["sandbox"]
+
+
+def test_naming_the_category_clears_it():
+    assert _diff("sandbox", acknowledged={"sandbox"}).unacknowledged == []
+
+
+def test_acknowledging_one_category_does_not_clear_another():
+    """The failure this exists to prevent: one trailer waving through a second, unrelated widening."""
+    diff = _diff("sandbox", "permissions", acknowledged={"sandbox"})
+    assert [d.category for d in diff.unacknowledged] == ["permissions"]
+
+
+def test_an_informational_delta_never_needed_acknowledging():
+    assert _diff("uses").unacknowledged == []
+    assert _diff("uses").blocking == []
+
+
+def test_the_trailer_is_read_from_a_commit_message():
+    message = "Add the meter job\n\nSome prose.\n\nSecurity-Surface: sandbox, permissions\n"
+    assert parse_acknowledgements(message) == {"sandbox", "permissions"}
+
+
+def test_the_trailer_key_is_case_insensitive():
+    """Git trailers conventionally are, and a gate refused over capitalization is infuriating."""
+    assert parse_acknowledgements("security-surface: sandbox") == {"sandbox"}
+
+
+def test_categories_with_hyphens_survive_the_split():
+    """`mcp-tools` and `safe-output-caps` contain the character a naive parser would split on."""
+    assert parse_acknowledgements("Security-Surface: mcp-tools, safe-output-caps") == {
+        "mcp-tools",
+        "safe-output-caps",
+    }
+
+
+@pytest.mark.parametrize("blanket", ["all", "*", "any", "everything"])
+def test_a_blanket_acknowledgement_is_refused(blanket):
+    """A gate that can be cleared without reading it is one people clear without reading it."""
+    with pytest.raises(AcknowledgementError):
+        parse_acknowledgements(f"Security-Surface: {blanket}")
+
+
+def test_no_trailer_acknowledges_nothing():
+    assert parse_acknowledgements("Add the meter job\n\nNo trailer here.\n") == set()
+    assert parse_acknowledgements("") == set()
+
+
+def test_an_acknowledgement_for_a_category_that_did_not_move_is_reported():
+    """An acknowledgment copied forward from an earlier change is how the trailer stops meaning
+    anything, and this is the only moment anybody would notice."""
+    diff = _diff("sandbox", acknowledged={"sandbox", "network"})
+    assert diff.unacknowledged == []
+    assert diff.stale_acknowledgements == ["network"]

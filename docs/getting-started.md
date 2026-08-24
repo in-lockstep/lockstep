@@ -491,8 +491,31 @@ to recompile — which the drift gate already covers. What a reviewer actually n
 ```
 semantic diff (security and cost surface):
   [BLOCK] mcp-tools: aw-test-writer.md — {'jira': ['get_issue']} -> {'jira': ['get_issue', 'create_issue']}
-1 blocking delta(s) — these require explicit acknowledgment
+1 unacknowledged security-surface delta(s).
+Acknowledge them in a commit message on this branch, naming what moved:
+
+    Security-Surface: mcp-tools
 ```
+
+That trailer is the whole acknowledgment mechanism. Put it in a commit message on the branch and the
+delta is reported as `[ack'd]` and stops failing the check.
+
+It is a **trailer rather than a file** because the delta only exists between a base and a head. Once
+the change merges there is nothing left to compare, so an in-tree acknowledgment would go stale the
+moment it landed and the file would fill up with entries describing changes nobody can still see. A
+trailer belongs to the commit that moved the surface, survives a squash, and stays as the permanent
+answer to *why does this pipeline have that permission* — which is the question somebody actually
+asks, months later, when the reason is gone.
+
+Two things it refuses. `Security-Surface: all` is not accepted — a gate that can be cleared without
+reading it is a gate people clear without reading it, and naming everything is not a statement about
+this change. And acknowledging one category never clears another: a branch that widens egress and
+*also* adds an MCP tool has to say both, or the second one still fails. That is the failure this is
+guarding against — one trailer waving through a widening nobody looked at.
+
+Acknowledging a category the diff did not report is allowed but reported back, because an
+acknowledgment copied forward from a previous change is how the trailer quietly stops meaning
+anything.
 
 ### When the spec can't say it
 
