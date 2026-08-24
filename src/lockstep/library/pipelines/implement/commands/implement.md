@@ -4,6 +4,9 @@ description: Implement one issue on a branch and open a pull request carrying th
 parameters:
   - name: issue
     default: ""
+    # The comment is on the issue, so the payload already says which. `/implement` on issue #18
+    # means #18; `/implement 42` anywhere still means 42, because anything explicit wins.
+    from-event: issue-number
     description: The issue to implement — a number on GitHub, a key on Jira
   - name: source
     default: github

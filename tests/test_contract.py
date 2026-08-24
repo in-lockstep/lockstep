@@ -22,6 +22,8 @@ from lockstep.emit.builtins import AVAILABLE, INTERNAL, MATRIX_CAP
 from lockstep.spec.load import load_spec
 
 FIXTURE = Path(__file__).parent / "fixtures" / "basic"
+# This repository, which inherits the shipped commands that opt into an event source.
+FIXTURE_LIBRARY = Path(__file__).parent.parent
 # Every pipeline in the repository, not just the fixture. A referenced action that does not exist is
 # invisible if only one pipeline is checked and that pipeline happens not to reference it.
 EXAMPLES = sorted(
@@ -665,3 +667,54 @@ def test_an_explicit_value_still_wins_over_the_default():
         assert not literals or literals[0] == len(parts) - 1, (
             f"a literal default must come last so an explicit value wins: {expression}"
         )
+
+
+# --- a parameter can take a fact from the event ---------------------------------------------------
+#
+# `/implement 18` commented **on issue #18** should not need the number repeated. The comment is on
+# the issue and `github.event.issue.number` is in the payload — the gate already derives the sibling
+# value, `pull_request`, the same way.
+#
+# Declared rather than inferred from the parameter's name: a pipeline whose parameter happens to be
+# called `issue` should not silently acquire a meaning it did not ask for.
+
+
+def test_the_event_source_lands_between_the_explicit_values_and_the_default():
+    """Order is the whole behaviour. Explicit beats the payload; the payload beats a guess."""
+    text = compile_spec(FIXTURE_LIBRARY).files[".github/workflows/implement-implement.yml"]
+    match = re.search(r"issue-fetch --source=\"[^\"]*\" --issue=\"\$\{\{ ([^}]+) \}\}\"", text)
+    assert match, "the issue-fetch invocation changed shape"
+    parts = [part.strip() for part in match.group(1).split("||")]
+    assert parts[0] == "inputs.issue"
+    assert parts[1] == "needs.command-gate.outputs.issue"
+    assert parts[2] == "github.event.issue.number"
+
+
+def test_an_unknown_event_source_is_refused(tmp_path):
+    """An unrecognised name would otherwise emit an empty expression and fail at run time."""
+    import shutil
+
+    from lockstep.errors import SpecError
+
+    root = tmp_path / "spec"
+    shutil.copytree(FIXTURE, root)
+    command = root / "commands" / "generate-tests.md"
+    text = command.read_text(encoding="utf-8")
+    marker = "  - name: skip-discovery\n"
+    assert marker in text
+    command.write_text(
+        text.replace(marker, marker + "    from-event: whatever-i-felt-like\n", 1), encoding="utf-8"
+    )
+    with pytest.raises(SpecError) as caught:
+        compile_spec(root)
+    # `render()` is what a user sees; the available list lives in the hint rather than the message,
+    # and an error that refuses a name without saying which names exist is half an error.
+    rendered = caught.value.render()
+    assert "whatever-i-felt-like" in rendered
+    assert "issue-number" in rendered, "the error should name what is available"
+
+
+def test_a_parameter_without_the_field_is_unchanged(tmp_path):
+    """Opt-in: nothing acquires a payload fallback by having a suggestive name."""
+    text = compile_spec(FIXTURE).files[".github/workflows/generate-tests.yml"]
+    assert "github.event.issue.number" not in text
