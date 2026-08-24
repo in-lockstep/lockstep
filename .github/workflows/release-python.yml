@@ -12,6 +12,12 @@
 # environment. There is no secret to leak, rotate, or scope wrongly — which is the same argument
 # the rest of the framework makes about agents never holding credentials.
 #
+# The environment is **per distribution**, which is not decoration. PyPI identifies a publisher by
+# owner, repository, workflow and environment together, and refuses to register two projects behind
+# an identical configuration — otherwise one credential would speak for both, and a workflow allowed
+# to publish the runtime could publish the compiler. Naming the environment after the project is
+# what keeps each credential scoped to the one thing it may upload.
+#
 # Tagged `v*`, the compiler's own line. `actions-v*` and `exec-v*` stay separate so a pin moves when
 # the thing behind it moved.
 name: release-python
@@ -99,7 +105,9 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
     runs-on: ubuntu-24.04
-    environment: pypi
+    # pypi-in-lockstep and pypi-in-lockstep-exec. Each must match the environment recorded in that
+    # project's publisher on PyPI, or the exchange is refused.
+    environment: pypi-${{ matrix.project }}
     permissions:
       id-token: write     # mint the OIDC credential PyPI verifies; nothing else is needed
     strategy:
