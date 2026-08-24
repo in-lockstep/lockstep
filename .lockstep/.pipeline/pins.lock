@@ -16,6 +16,10 @@
     "actions/checkout": {
       "sha": "11d5960a326750d5838078e36cf38b85af677262",
       "tag": "v4"
+    },
+    "actions/download-artifact": {
+      "sha": "634f93cb2916e3fdff6788551b99b062d0335ce0",
+      "tag": "v5"
     }
   },
   "inherits": {}

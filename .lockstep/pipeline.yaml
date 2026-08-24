@@ -42,6 +42,18 @@ budgets:
   per_run_ai_credits: 300
   per_agent_daily_ai_credits: 500
 
+# One line per run, on a branch, because artifacts expire and job logs rotate. Turned on the day
+# `/review` went live rather than the day something wanted to read it: a run that finishes before
+# this exists leaves no record, and the comparison it would have joined is simply unavailable
+# afterwards. The eval noise floor is measured across repeated runs of one prompt, so the ledger has
+# to predate the first prompt change worth judging.
+#
+# No `otel:` yet. Credits are read from what gh-aw already measured; dollars need a rate table, and
+# a run with none is reported as unpriced rather than as free — `priced_fraction` travels with the
+# cost so a reader can tell those apart.
+history:
+  branch: pipeline-history
+
 targets:
   github-agentic:
     out: .github/workflows
