@@ -372,3 +372,51 @@ def test_the_key_a_fixture_path_is_written_into_is_the_one_lint_reserves(tmp_pat
     report = Report()
     _check_fixture("tree", {REPO_KEY: "/elsewhere"}, tmp_path / "cases", "one.json", report)
     assert [f.code for f in report.findings] == ["LNT009"]
+
+
+# --- the executor has to exist where it is invoked ------------------------------------------------
+#
+# `/review` by comment failed with `pipeline-exec: command not found`. The command-gate job runs on
+# a bare runner rather than in the executor container, and the composite action it calls parses the
+# comment with `pipeline-exec parse-command`.
+#
+# It failed on the comment path alone, because every other trigger short-circuits before the parse —
+# so `/review` by dispatch worked, and `/review` by comment, which is the entire point of a chat-ops
+# command, had never run. Nothing offline noticed, because the invocation is inside a composite
+# action rather than in the emitted workflow, and the emitted workflow is all any check reads.
+
+
+def _installs_executor(job: dict) -> bool:
+    for step in job.get("steps") or []:
+        if "uv tool install" in step.get("run", "") and "exec" in step.get("run", ""):
+            return True
+    return False
+
+
+def _uses_executor(job: dict) -> bool:
+    """Directly, or through a composite action known to need it."""
+    for step in job.get("steps") or []:
+        if "pipeline-exec " in step.get("run", ""):
+            return True
+        # The gate is the case that bit: the invocation lives inside the action, not here.
+        if "/actions/command-gate@" in str(step.get("uses", "")):
+            return True
+    return False
+
+
+@pytest.mark.parametrize("root", ALL_PIPELINES, ids=lambda p: p.name)
+def test_every_job_that_runs_the_executor_can_reach_it(root):
+    missing: list[str] = []
+    for path, text in compile_spec(root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for name, job in (yaml.safe_load(text) or {}).get("jobs", {}).items():
+            if not isinstance(job, dict) or not _uses_executor(job):
+                continue
+            if job.get("container") or _installs_executor(job):
+                continue
+            missing.append(f"{path}:{name}")
+    assert not missing, (
+        "these jobs invoke `pipeline-exec` with neither the executor container nor an install, "
+        "so they fail at run time with `command not found`:\n  " + "\n  ".join(missing)
+    )

@@ -2,73 +2,125 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "f9553a59",
+      "sha": "30dba929",
       "sources": []
     },
+    ".github/workflows/aw-implement-change-writer.md": {
+      "sha": "8bd07941",
+      "sources": [
+        "implement:agents/change-writer.md@39c33239",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "implement:guardrails/implementing.md@7740e516",
+        "implement:skills/change-format.md@babdb34a",
+        "contexts/codebase.md@923544b2"
+      ]
+    },
+    ".github/workflows/aw-implement-planner.md": {
+      "sha": "39392a4e",
+      "sources": [
+        "implement:agents/planner.md@c0f3e827",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "implement:guardrails/implementing.md@7740e516",
+        "contexts/codebase.md@923544b2"
+      ]
+    },
+    ".github/workflows/aw-implement-requirements-analyst.md": {
+      "sha": "1c9b816c",
+      "sources": [
+        "implement:agents/requirements-analyst.md@1e3431e4",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "implement:guardrails/implementing.md@7740e516",
+        "contexts/codebase.md@923544b2"
+      ]
+    },
+    ".github/workflows/aw-implement-test-writer.md": {
+      "sha": "b825a125",
+      "sources": [
+        "implement:agents/test-writer.md@a09e7b5f",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "implement:guardrails/implementing.md@7740e516",
+        "implement:skills/change-format.md@babdb34a",
+        "contexts/codebase.md@923544b2"
+      ]
+    },
     ".github/workflows/aw-review-intent-reviewer.md": {
-      "sha": "311996b1",
+      "sha": "9d3b92fb",
       "sources": [
         "review:agents/intent-reviewer.md@4b04de94",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
         "review:skills/review-revision.md@4049cfd2",
-        "contexts/codebase.md@8d9f276c"
+        "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-review-performance-reviewer.md": {
-      "sha": "dc734294",
+      "sha": "3c8aca9d",
       "sources": [
         "review:agents/performance-reviewer.md@077c07d5",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
         "review:skills/review-revision.md@4049cfd2",
-        "contexts/codebase.md@8d9f276c"
+        "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-review-security-reviewer.md": {
-      "sha": "7cde546e",
+      "sha": "13ed5bb8",
       "sources": [
         "review:agents/security-reviewer.md@9091ec35",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
         "review:skills/review-revision.md@4049cfd2",
-        "contexts/codebase.md@8d9f276c"
+        "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-review-tests-reviewer.md": {
-      "sha": "7ac88644",
+      "sha": "ca348c33",
       "sources": [
         "review:agents/tests-reviewer.md@df9f4591",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
         "review:skills/review-revision.md@4049cfd2",
-        "contexts/codebase.md@8d9f276c"
+        "contexts/codebase.md@923544b2"
+      ]
+    },
+    ".github/workflows/implement-implement.yml": {
+      "sha": "e981261c",
+      "sources": [
+        "implement:commands/implement.md@2ba58b8d"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "b7a91767",
+      "sha": "fc8e76f2",
       "sources": []
     },
     ".github/workflows/review-review.yml": {
-      "sha": "8a41737c",
+      "sha": "37054710",
       "sources": [
         "review:commands/review.md@76ce9d76"
       ]
     },
     ".github/workflows/shared/context-codebase.md": {
-      "sha": "adbf9554",
+      "sha": "abd44bc0",
       "sources": []
     },
     ".github/workflows/shared/guardrail-baseline.md": {
       "sha": "c208a351",
       "sources": []
     },
+    ".github/workflows/shared/guardrail-implement-implementing.md": {
+      "sha": "281b25ad",
+      "sources": []
+    },
     ".github/workflows/shared/guardrail-review-reviewing.md": {
       "sha": "5ce9291f",
+      "sources": []
+    },
+    ".github/workflows/shared/skill-implement-change-format.md": {
+      "sha": "1df0b270",
       "sources": []
     },
     ".github/workflows/shared/skill-review-review-format.md": {
@@ -79,16 +131,29 @@
       "sha": "80fb9be6",
       "sources": []
     },
+    ".lockstep/.pipeline/step-defs/implement/implement.feedback.json": {
+      "sha": "042fd899",
+      "sources": []
+    },
+    ".lockstep/.pipeline/step-defs/implement/implement.fetch-issue.json": {
+      "sha": "ac26cdae",
+      "sources": []
+    },
+    ".lockstep/.pipeline/step-defs/implement/implement.render-the-plan-for-review.json": {
+      "sha": "96adc22d",
+      "sources": []
+    },
     ".lockstep/.pipeline/step-defs/review/review.diff.json": {
       "sha": "57b738b9",
       "sources": []
     },
     ".lockstep/SECRETS.md": {
-      "sha": "b9728e19",
+      "sha": "9dc46937",
       "sources": []
     }
   },
   "inherits": {
+    "implement": "lockstep:implement",
     "review": "lockstep:review"
   },
   "pipeline": "lockstep",
