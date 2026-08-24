@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "21515421",
+      "sha": "fb76a607",
       "sources": []
     },
     ".github/workflows/review.yml": {
@@ -92,7 +92,7 @@
       "sources": []
     },
     "SECRETS.md": {
-      "sha": "05e6bd75",
+      "sha": "d9fecdf9",
       "sources": []
     }
   },

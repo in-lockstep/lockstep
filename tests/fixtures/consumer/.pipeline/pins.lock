@@ -1,9 +1,26 @@
 {
   "capabilities": {
-    "actions": { "repo": "acme/pipeline-actions", "tag": "v1.4.0", "sha": "1111111111111111111111111111111111111111" },
-    "exec": { "image": "quay.io/acme/pipeline-exec", "package": "in-lockstep-exec", "version": "0.1.0", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
+    "actions": {
+      "repo": "acme/pipeline-actions",
+      "sha": "1111111111111111111111111111111111111111",
+      "tag": "v1.4.0"
+    },
+    "compiler": {
+      "requirement": "in-lockstep>=0.1,<1.0",
+      "version": "0.1.0"
+    },
+    "exec": {
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "image": "quay.io/acme/pipeline-exec",
+      "package": "in-lockstep-exec",
+      "version": "0.1.0"
+    }
   },
   "external": {
-    "actions/checkout": { "tag": "v4", "sha": "11d5960a326750d5838078e36cf38b85af677262" }
-  }
+    "actions/checkout": {
+      "sha": "11d5960a326750d5838078e36cf38b85af677262",
+      "tag": "v4"
+    }
+  },
+  "inherits": {}
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,6 +18,21 @@ PINS_PATH = ".pipeline/pins.lock"
 # lock file records the intent. They compile, and they cannot run: a workflow referencing one is
 # pointing at a commit and a digest that do not exist. Doctor treats them as unpinned, because that
 # is what they are, and the compiler says so on every run rather than leaving it to be noticed.
+# Where a PEP 508 requirement stops being a name: `in-lockstep>=0.1,<1.0` -> `in-lockstep`.
+REQUIREMENT_NAME = re.compile(r"^[A-Za-z0-9._-]+")
+
+
+def requirement_name(requirement: str) -> str:
+    match = REQUIREMENT_NAME.match(requirement.strip())
+    return match.group(0) if match else requirement.strip()
+
+
+def is_local_requirement(requirement: str) -> bool:
+    """A path rather than a distribution — this repository compiling itself from the checkout."""
+    text = requirement.strip().strip("\"'")
+    return text in (".", "..") or text.startswith(("./", "../", "/", "file://"))
+
+
 PLACEHOLDER_SHA = "0" * 40
 PLACEHOLDER_DIGEST = "sha256:" + "0" * 64
 
@@ -41,6 +57,10 @@ class Pins:
     exec_image: str = ""
     exec_digest: str = ""
     gh_aw_version: str = ""
+    # The compiler requirement from the manifest, and the exact version `lockstep pin` resolved it
+    # to. A range is not a pin: the gate would install whatever the index offers that day.
+    compiler_requirement: str = ""
+    compiler_version: str = ""
     external: dict[str, str] = field(default_factory=dict)
     external_tags: dict[str, str] = field(default_factory=dict)
     resolved: bool = False
@@ -62,6 +82,7 @@ class Pins:
             exec_version=exec_version,
             exec_image=caps.exec_image,
             gh_aw_version=caps.gh_aw,
+            compiler_requirement=caps.compiler,
         )
 
         path = spec.home / PINS_PATH
@@ -81,6 +102,14 @@ class Pins:
         _agree("capabilities.actions", "tag", actions.get("tag"), pins.actions_tag)
         _agree("capabilities.exec-image", "image", exec_pin.get("image"), pins.exec_image)
         pins.exec_version = str(exec_pin.get("version") or pins.exec_version)
+        compiler = cap_pins.get("compiler", {}) or {}
+        _agree(
+            "capabilities.compiler",
+            "requirement",
+            compiler.get("requirement"),
+            pins.compiler_requirement,
+        )
+        pins.compiler_version = str(compiler.get("version") or "")
         pins.external = {str(k): str(v.get("sha", "")) for k, v in (data.get("external") or {}).items()}
         pins.external_tags = {
             str(v.get("sha", "")): str(v.get("tag", "")) for v in (data.get("external") or {}).values()
@@ -120,6 +149,23 @@ class Pins:
                 hint=f"add it to the `external` block of {PINS_PATH}",
             )
         return f"{name}@{sha}"
+
+    def compiler_install(self) -> str:
+        """What a generated check installs, exact when it can be.
+
+        Everything else in a compiled pipeline is pinned to something immutable, and then the gate
+        that enforces that installed its own compiler from a version range. A newer release could
+        therefore change what a consumer's security check ran without a line changing in their
+        repository — the exact event pinning exists to catch, in the one place nobody was looking.
+
+        `lockstep pin` records the compiler that produced the committed output, which is the only
+        version known to reproduce it. A local path (this repository compiling itself) is passed
+        through: there is nothing to pin, the checkout *is* the version.
+        """
+        requirement = self.compiler_requirement or "in-lockstep"
+        if self.compiler_version and not is_local_requirement(requirement):
+            return f"{requirement_name(requirement)}=={self.compiler_version}"
+        return requirement
 
     def exec_container(self) -> str:
         if not self.exec_image:

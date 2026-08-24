@@ -57,7 +57,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "78afd5de",
+      "sha": "2feb055a",
       "sources": []
     },
     ".github/workflows/shared/context-repository.md": {
@@ -97,7 +97,7 @@
       "sources": []
     },
     "SECRETS.md": {
-      "sha": "d6403028",
+      "sha": "eb474f91",
       "sources": []
     }
   },

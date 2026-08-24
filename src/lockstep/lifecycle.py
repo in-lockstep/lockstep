@@ -16,8 +16,9 @@ from typing import Any
 
 import yaml
 
+from . import __version__
 from .emit.builtins import EXTERNAL_ACTIONS
-from .emit.context import PINS_PATH
+from .emit.context import PINS_PATH, is_local_requirement, requirement_name
 from .errors import LockstepError
 from .spec.load import MANIFEST_NAME, find_home
 from .spec.model import INHERITED_DIR, LOCKSTEP_DIR, Spec
@@ -277,6 +278,24 @@ def pin(
             "exec image: pass --exec-digest with the digest from "
             "`docker buildx imagetools inspect <image>:<tag>`"
         )
+
+    # The compiler that produced the committed output is the only version known to reproduce it,
+    # which is what the drift gate asks a consumer's CI to do. Recording the running version is
+    # therefore not an approximation of a resolve — it is the correct answer, and it makes a compiler
+    # upgrade an explicit act that shows up as a one-line diff in the generated workflows.
+    requirement = spec.manifest.capabilities.compiler
+    if requirement and not is_local_requirement(requirement):
+        entry = capabilities.setdefault("compiler", {})
+        previous = str(entry.get("version") or "")
+        entry["requirement"] = requirement
+        entry["version"] = __version__
+        if previous and previous != __version__:
+            notes.append(f"compiler: {previous} -> {__version__} — review before committing")
+        else:
+            notes.append(f"compiler: {requirement_name(requirement)}=={__version__}")
+    elif requirement:
+        notes.append("compiler: local path, not pinned")
+        capabilities.pop("compiler", None)
 
     return data, notes, unresolved
 

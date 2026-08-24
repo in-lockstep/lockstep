@@ -28,6 +28,21 @@ ENGINE_BY_PROVIDER = {
 }
 UNMAPPED_PROVIDERS = {"ollama"}
 
+# The credential each engine reads to call its model.
+#
+# This is gh-aw's contract, not this compiler's: the secret is consumed by the workflows
+# `gh aw compile` produces, and nothing lockstep emits ever references it. It is recorded here
+# anyway, because a document titled "every secret this pipeline needs" that omits the most sensitive
+# one is worse than no document. `capabilities.gh-aw` pins the version this was written against.
+#
+# `copilot` is absent deliberately: it authenticates with the workflow's GitHub token, so there is
+# no separate secret to set.
+ENGINE_SECRET = {
+    "claude": "ANTHROPIC_API_KEY",
+    "codex": "OPENAI_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
 # The fixed input contract every compiled agent workflow accepts.
 WORKFLOW_INPUTS = {
     "item": {"type": "string", "required": False, "default": ""},

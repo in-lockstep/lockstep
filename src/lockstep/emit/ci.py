@@ -31,7 +31,7 @@ SPEC_PATHS = [
 
 
 def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
-    compiler = spec.manifest.capabilities.compiler or "lockstep"
+    compiler = ctx.pins.compiler_install()
     checkout = ctx.pins.external_action("actions/checkout")
     tests = spec.repo_path("tests")
 

@@ -67,7 +67,8 @@ def test_the_scaffold_lints_clean(pipeline):
 
 def test_the_scaffold_only_needs_pinning_to_be_target_ready(pipeline):
     codes = {finding.code for finding in doctor(load_spec(pipeline), pipeline).findings}
-    assert codes <= {"DOC001", "DOC002", "DOC012"}
+    # DOC023 is the compiler pin — also a thing `lockstep pin` resolves, not a defect in the spec.
+    assert codes <= {"DOC001", "DOC002", "DOC012", "DOC023"}
 
 
 def test_a_pinned_scaffold_is_target_ready(pinned):

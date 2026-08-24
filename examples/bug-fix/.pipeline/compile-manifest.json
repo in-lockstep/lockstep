@@ -60,7 +60,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "7cb157aa",
+      "sha": "f42bae4f",
       "sources": []
     },
     ".github/workflows/shared/context-target-app.md": {
@@ -116,7 +116,7 @@
       "sources": []
     },
     "SECRETS.md": {
-      "sha": "874ebb72",
+      "sha": "9d4161e9",
       "sources": []
     }
   },

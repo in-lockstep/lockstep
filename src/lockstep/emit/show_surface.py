@@ -36,6 +36,10 @@ def render(root: Path) -> str:
     else:
         executor_line = "- executor: `(unused)`"
 
+    from .plan import engine_credentials
+
+    credentials = engine_credentials(spec)
+
     lines = [
         f"# GitHub target surface — {manifest.name}",
         "",
@@ -44,6 +48,7 @@ def render(root: Path) -> str:
         actions_line,
         executor_line,
         f"- gh-aw: `{pins.gh_aw_version or '(unset)'}`",
+        *(f"- engine credential: `{secret}` (engine `{engine}`)" for engine, secret, _ in credentials),
         f"- budget: {manifest.per_run_ai_credits or '(none)'} credits per run",
         "",
         "## Commands",

@@ -284,9 +284,7 @@ def emit_command(
 
         if group.head.foreach and group.head.min_success_rate is not None:
             # A fan-out step is never a branch member, so the job it just emitted is its dependency.
-            verify_id, verify_job = _verify_job(
-                group, ctx, emitted[-1][0], producer_id, items_expr, command
-            )
+            verify_id, verify_job = _verify_job(group, ctx, emitted[-1][0], producer_id, items_expr, command)
             jobs[verify_id] = verify_job
             previous_id, previous_job = verify_id, verify_job
 
@@ -440,7 +438,7 @@ def _base_steps_job(
         # No executor container: this job needs the compiler, which the image deliberately lacks.
         # Installed as a tool rather than by syncing the repository, so a check never executes
         # project-defined build hooks to run.
-        compiler = ctx.spec.manifest.capabilities.compiler or "lockstep"
+        compiler = ctx.pins.compiler_install()
         setup.append({"uses": "astral-sh/setup-uv@v6"})
         setup.append({"name": "Install the pinned compiler", "run": f'uv tool install "{compiler}"'})
         if ctx.spec.manifest.inherits:

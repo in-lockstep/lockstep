@@ -16,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH, Pins
@@ -295,6 +296,28 @@ def _check_pins(pins: Pins, used: CapabilityUse, report: Report) -> None:
             hint="set capabilities.exec-image in pipeline.yaml — any registry works, e.g. "
             "`quay.io/<owner>/pipeline-exec` or `ghcr.io/<owner>/pipeline-exec`",
         )
+    from .emit.context import is_local_requirement
+
+    if pins.compiler_requirement and not is_local_requirement(pins.compiler_requirement):
+        if not pins.compiler_version:
+            report.add(
+                Severity.WARNING,
+                "DOC023",
+                f"the compiler is a range ({pins.compiler_requirement}), not a pinned version",
+                hint="run `lockstep pin` — everything else this pipeline runs is pinned to something "
+                "immutable, and then the check that enforces that installs its own compiler from "
+                "whatever the index offers that day",
+            )
+        elif pins.compiler_version != __version__:
+            report.add(
+                Severity.WARNING,
+                "DOC024",
+                f"pinned to compiler {pins.compiler_version}, but {__version__} is compiling",
+                hint="the committed output was produced by one and is about to be checked by the "
+                "other. Run `lockstep pin` to adopt this version deliberately, or install "
+                f"{pins.compiler_version} to match what is committed",
+            )
+
     if used.gh_aw and not pins.gh_aw_version:
         report.add(
             Severity.WARNING,

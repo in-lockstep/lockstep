@@ -5,11 +5,15 @@
       "sha": "0000000000000000000000000000000000000000",
       "tag": "actions-v1.0.0"
     },
+    "compiler": {
+      "requirement": "in-lockstep>=0.1,<1.0",
+      "version": "0.1.0"
+    },
     "exec": {
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "image": "ghcr.io/in-lockstep/pipeline-exec",
       "package": "in-lockstep-exec",
-      "version": "0.1.0",
-      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      "version": "0.1.0"
     }
   },
   "external": {
@@ -17,5 +21,6 @@
       "sha": "11d5960a326750d5838078e36cf38b85af677262",
       "tag": "v4"
     }
-  }
+  },
+  "inherits": {}
 }

@@ -300,6 +300,27 @@ not write, and the `scripts` job not triggering on the tests it runs.
 It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
 `container:`, and that image is one of the unpublished capabilities below.
 
+## Pinning the compiler, and naming the engine credential
+
+Two things a pre-launch review found missing from a system whose premise is that nothing floats.
+
+**The compiler was the one floating dependency.** Actions pin to a commit, the executor image to a
+digest, inherited pipelines to a commit — and then the check enforcing all of that installed its own
+compiler from a version range. A release could change what a consumer's security gate ran without a
+line changing in their repository. `lockstep pin` now records the compiler that produced the
+committed output, which is the only version known to reproduce it, and the gate installs
+`in-lockstep==<version>`. A local-path compiler — this repository compiling itself — is passed
+through, because the checkout is the version. `DOC023` reports an unpinned compiler; `DOC024` reports
+compiling with a version other than the pinned one, which means the committed output came from one
+compiler and is about to be checked by another.
+
+**`SECRETS.md` omitted the engine credential.** A document titled "every secret this pipeline needs"
+listed the profile's secrets and not the key the model authenticates with — the most sensitive one in
+the system. It went unlisted precisely because nothing this compiler emits references it: it is read
+by the workflows `gh aw compile` produces. It is now derived from the engines in use, named with the
+agents that need it, and shown in `lockstep show-surface`. `ENGINE_SECRET` is gh-aw's contract, not
+this compiler's, and `capabilities.gh-aw` pins the version it was written against.
+
 ## TLS verification
 
 `executors/api_session.py` verified no certificates: `check_hostname = False`,
