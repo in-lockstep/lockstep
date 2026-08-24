@@ -522,8 +522,16 @@ so a packaging change can drop them with every test in this repository still gre
 ## Two of those gaps are closed
 
 **A sandbox for deterministic steps.** Every job running a `script:` or `builtin:` step now carries
-`--cap-drop=ALL --security-opt=no-new-privileges`, produced in one place so no emitter can build an
-exec job that skips it. `targets.github-agentic.sandbox` adds capabilities back by name, sets memory,
+`--cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges`, produced in one place so
+no emitter can build an exec job that skips it.
+
+The one capability added back is not hardening relaxed — it is what Actions itself requires. The
+runner owns `$GITHUB_OUTPUT` and `$GITHUB_STATE`, the container runs as root, and root writes a file
+it does not own by holding `CAP_DAC_OVERRIDE`. Dropping it made every step-output write fail with
+`EACCES`, which is job-to-job communication gone: the output deciding which review lenses run, the
+checkout post-step, and the metering job that writes the run ledger. The floor was written on the
+reasoning that a correct script needs no capabilities, which was true of the script and false of the
+protocol it runs inside — and only a real run could say so. `targets.github-agentic.sandbox` adds capabilities back by name, sets memory,
 CPU and PID limits, or a non-root user — and only ever widens the floor, which is why the semantic
 diff treats a change to it as a security-surface change alongside permissions and egress. No default
 user, because the shipped image runs as root and a default nobody has executed is a guess.

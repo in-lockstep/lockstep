@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     outputs:
       pending: ${{ steps.state.outputs.pending }}
     steps:
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
@@ -162,7 +162,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
@@ -270,7 +270,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
@@ -295,7 +295,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f808f16cf308864107c0659c08245dee1910aab50c38c20cdb684fc7253
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - name: Collect what each agent reported spending

@@ -58,7 +58,9 @@ def test_a_capability_can_be_added_back_by_name(basic_root):
     """`--cap-add=ALL` would be a way to write "no sandbox" that does not look like one."""
     add_sandbox(basic_root, "    sandbox:\n      capabilities: [NET_ADMIN]")
     options = next(iter(exec_jobs(basic_root).values()))["container"]["options"]
-    assert "--cap-drop=ALL --security-opt=no-new-privileges --cap-add=NET_ADMIN" == options
+    assert options == (
+        "--cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges --cap-add=NET_ADMIN"
+    )
 
 
 def test_resource_limits_are_declarable(basic_root):
@@ -70,7 +72,7 @@ def test_resource_limits_are_declarable(basic_root):
 def test_the_floor_survives_whatever_is_declared(basic_root):
     add_sandbox(basic_root, "    sandbox:\n      user: '1001'")
     options = next(iter(exec_jobs(basic_root).values()))["container"]["options"]
-    assert options.startswith("--cap-drop=ALL --security-opt=no-new-privileges")
+    assert options.startswith("--cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges")
     assert "--user=1001" in options
 
 
@@ -87,7 +89,27 @@ def test_widening_the_sandbox_is_a_blocking_change():
 
 
 def test_the_options_are_built_in_one_place():
-    assert Sandbox().options() == "--cap-drop=ALL --security-opt=no-new-privileges"
+    assert Sandbox().options() == "--cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges"
+
+
+def test_the_floor_keeps_the_capability_the_runner_protocol_needs():
+    """DAC_OVERRIDE is not hardening relaxed, it is the one thing Actions itself requires.
+
+    The runner owns `$GITHUB_OUTPUT` and `$GITHUB_STATE`; the container runs as root; root writes a
+    file it does not own by holding this capability. Dropping it made every step-output write fail
+    with EACCES, which took out job-to-job communication entirely — including the output deciding
+    which review lenses run, and the metering job that writes the run ledger.
+    """
+    options = Sandbox().options()
+    assert "--cap-drop=ALL" in options
+    assert "--cap-add=DAC_OVERRIDE" in options
+    assert "--security-opt=no-new-privileges" in options
+
+
+def test_nothing_else_is_added_back_by_default():
+    """One exception, not a habit of them."""
+    added = [part for part in Sandbox().options().split() if part.startswith("--cap-add=")]
+    assert added == ["--cap-add=DAC_OVERRIDE"]
 
 
 # --- the input scan ----------------------------------------------------------

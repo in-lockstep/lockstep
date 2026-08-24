@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "cf3dfc44",
+      "sha": "6d9c20bf",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
@@ -45,7 +45,7 @@
       "sources": []
     },
     ".github/workflows/validate-api.yml": {
-      "sha": "ec8269cf",
+      "sha": "7bf0833a",
       "sources": [
         "commands/validate-api.md@70999f26"
       ]

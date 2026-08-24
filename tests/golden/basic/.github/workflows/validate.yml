@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/in-lockstep/pipeline-exec@sha256:0000000000000000000000000000000000000000000000000000000000000000
-      options: --cap-drop=ALL --security-opt=no-new-privileges
+      options: --cap-drop=ALL --cap-add=DAC_OVERRIDE --security-opt=no-new-privileges
     env:
       MY_URL: ${{ vars.APP_URL }}
       PROFILE_URL: ${{ vars.APP_URL }}

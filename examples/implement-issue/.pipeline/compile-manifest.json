@@ -51,11 +51,11 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "2bf4a26f",
+      "sha": "88b4123f",
       "sources": []
     },
     ".github/workflows/implement.yml": {
-      "sha": "5986d712",
+      "sha": "12dc6e7c",
       "sources": [
         "commands/implement.md@aa792623"
       ]
