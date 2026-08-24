@@ -26,6 +26,17 @@ AVAILABLE = frozenset(
         # One shape from either tracker, so a pipeline reading `acceptance_criteria` does not have
         # to know which one delivered it.
         "issue-fetch",
+        # Reviewing a pull request. Promoted out of `examples/pr-review` so a shipped pipeline can
+        # depend on them: an extension package in an example is not something the library can name.
+        "pr-diff",
+        "review-state",
+        "post-reviews",
+        # Implementing a change and finding out whether it holds up. Promoted out of
+        # `examples/implement-issue` and `examples/bug-fix` for the same reason.
+        "apply-patch",
+        "run-suite",
+        "await-checks",
+        "render-plan",
     }
 )
 

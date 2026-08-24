@@ -1,0 +1,28 @@
+{
+  "input": {
+    "analysis": {
+      "cause": "export() reads the template name from a module constant, so the request parameter is never used.",
+      "evidence": [
+        "src/reports/export.py builds the path from TEMPLATE_DEFAULT"
+      ],
+      "location": {
+        "path": "src/reports/export.py",
+        "line": 12
+      },
+      "reproduction": "GET /reports/1?format=csv returns a PDF; expected CSV.",
+      "confidence": "high",
+      "ruled_out": []
+    }
+  },
+  "expect": {
+    "rubric": {
+      "criteria": "Writes one test that fails today because it asserts what should happen.",
+      "levels": {
+        "5": "One test asserting a CSV comes back for ?format=csv \u2014 which fails now \u2014 in the repository's idiom, named for the behaviour rather than the issue.",
+        "3": "A relevant test, but several variations or a name tied to the issue number.",
+        "1": "Asserts the current buggy output, which would pass now and fail after the fix."
+      },
+      "min": 4
+    }
+  }
+}

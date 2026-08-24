@@ -59,6 +59,9 @@ different compiler version may ship a different set.
 
 ## What ships
 
+Four pipelines, which between them are a whole loop: an issue arrives, gets placed, gets
+implemented, gets reviewed, and what broke gets fixed.
+
 ### `triage`
 
 Reads one issue and places it: what kind of work it is, how urgent, what it is missing, and what to
@@ -79,6 +82,44 @@ Its guardrail names the two failures that matter, because they pull in opposite 
 Four eval cases hold it to that, including a feature request whose reporter wrote "this is really
 urgent" and an issue whose acceptance criteria a parser inferred from prose rather than read from a
 field somebody filled in.
+
+### `implement`
+
+`/implement 412` reads the issue, interprets the requirements, plans the change, writes the tests,
+writes the code, and opens a pull request with the plan rendered on it.
+
+Nothing in it writes to the repository. The agents produce files under an output directory and the
+command's `propose:` block turns those into a branch — which is what lets every agent be
+`read-all` and why a prompt is never the thing standing between a model and `main`.
+
+The two prompts worth reading are the ones that refuse to guess. `requirements-analyst` puts what the
+issue does not decide into `unanswerable` rather than resolving it, because the next agent will
+implement a guess with exactly the confidence it implements a requirement and nobody downstream can
+tell which was which. `planner` carries those into `open_questions` on the pull request, where a
+human sees them.
+
+### `review`
+
+`/review`, or `/review security intent`, posts one review per aspect: security, intent, performance,
+test coverage.
+
+Each aspect is an agent rather than a data file. That is what makes a lens testable — its eval cases
+hold diffs with planted problems — and what lets a lens carry its own model and budget. It also
+means the bot revises rather than repeats: each review carries a marker naming the commit it was
+made against, so a second run on an unchanged branch posts nothing, and a run after new commits
+edits the review already there.
+
+### `fix`
+
+`/fix 88` reproduces a bug, fixes it, and proves the fix.
+
+**The shape is the argument.** The reproducer is written first and the pipeline *requires it to
+fail*; only then is the fix written, and only a passing suite reaches the proposal. A pipeline that
+wrote the test and the fix together would produce a test that passes either way and a change nobody
+can tell worked.
+
+`bug-analyst` is allowed to fail. Reporting `confidence: low` with a list of what it ruled out is a
+real answer that saves the next person hours; a confident wrong cause costs them hours instead.
 
 ---
 
@@ -135,5 +176,11 @@ from an issue to a merge, and they are opinions the framework can only hold in g
 that make them good in *your* repository are the ones only you can write, which is what the growth
 path above exists for.
 
-Nor is `triage` alone an AI-SDLC. Implement, review and fix are the rest of it, and today those
-exist as `examples/` you copy rather than as pipelines you inherit. `docs/status.md` tracks that.
+What they are is a starting point that is *runnable* on day one and does not have to be abandoned on
+day ninety. The parts that make a pipeline good in your repository — which layer was audited, which
+handler has produced findings before, how your tests are laid out — are the parts only you can write.
+Every shipped agent says so where it would otherwise be guessing, and `docs/layers.md` says where
+those facts belong.
+
+The `examples/` directory still exists, and is now the other thing: pipelines to *read* when you are
+writing your own, rather than the only way to get one.

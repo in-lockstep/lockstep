@@ -1173,3 +1173,340 @@ def _jira_json(base_url: str, token: str, key: str) -> dict[str, Any]:
     except (urllib.error.URLError, OSError) as error:
         _fail(f"could not reach {base_url}: {error}")
     return {}
+
+
+@main.command(name="pr-diff")
+@click.option("--pr", required=True, help="Pull request number.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
+def pr_diff(pr: str, repo: str, output: Path, from_dir: Path | None) -> None:
+    """Fetch a pull request's diff and metadata, reduced to what a review can act on.
+
+    Most of the work is deciding what *not* to send. A reviewer handed 40,000 lines produces a review
+    of the first 2,000 and a confident silence about the rest, so this truncates deliberately and
+    names what it dropped.
+    """
+    from .reviews import assemble
+
+    if from_dir:
+        files = json.loads((from_dir / "files.json").read_text(encoding="utf-8"))
+        pull = json.loads((from_dir / "pull.json").read_text(encoding="utf-8"))
+    else:
+        if not repo:
+            _fail("--repo is required (or set GITHUB_REPOSITORY)")
+        pull = _gh_json(f"repos/{repo}/pulls/{pr}")
+        files = _gh_json(f"repos/{repo}/pulls/{pr}/files", "--paginate")
+
+    diff = assemble(files, pull)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(diff, indent=2) + "\n", encoding="utf-8")
+
+    _emit_output("files", str(len(diff["files"])))
+    _emit_output("head_sha", diff["head_sha"])
+    _emit_output("truncated", "true" if diff["truncated"] else "false")
+    click.echo(f"{len(diff['files'])} file(s) for review -> {output}")
+    if diff["not_reviewed"]:
+        click.echo(f"not reviewed: {', '.join(diff['not_reviewed'][:5])}", err=True)
+
+
+@main.command(name="review-state")
+@click.option("--pr", required=True, help="Pull request number.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
+@click.option("--requested", default="", help="What the comment asked for. Empty reviews everything.")
+@click.option("--available", required=True, help="The aspects this pipeline has a reviewer for.")
+@click.option("--head", default="", help="The commit being reviewed. Read from the API if omitted.")
+@click.option("--output-dir", required=True, type=click.Path(path_type=Path))
+@click.option("--force", is_flag=True, help="Review again even if nothing has changed.")
+@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
+def review_state(
+    pr: str,
+    repo: str,
+    requested: str,
+    available: str,
+    head: str,
+    output_dir: Path,
+    force: bool,
+    from_dir: Path | None,
+) -> None:
+    """Work out which reviews are still due, and what each one is revising.
+
+    A second review saying the same thing about the same commit is worse than no review: it buries
+    the human conversation and teaches people to mute the bot.
+    """
+    from .reviews import ReviewError, plan, requested_aspects
+
+    known = [name.strip() for name in available.split(",") if name.strip()]
+    if not known:
+        _fail("--available lists no aspects; nothing could ever be reviewed")
+    try:
+        aspects = [{"key": key} for key in requested_aspects(requested, known)]
+    except ReviewError as error:
+        _fail(str(error))
+
+    if from_dir:
+
+        def load(name: str) -> Any:
+            path = from_dir / f"{name}.json"
+            return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
+
+        reviews, commits = load("reviews"), load("commits")
+        head = head or "head000"
+    else:
+        if not repo:
+            _fail("--repo is required (or set GITHUB_REPOSITORY)")
+        reviews = _gh_json(f"repos/{repo}/pulls/{pr}/reviews", "--paginate")
+        commits = _gh_json(f"repos/{repo}/pulls/{pr}/commits", "--paginate")
+        head = head or (commits[-1]["sha"] if commits else "")
+
+    pending, skipped = plan(aspects, reviews, head, commits, force=force)
+
+    # One file per aspect, because one job per aspect reads them. The reviewing job for an aspect
+    # that is not pending never starts, so it never looks for a file that is not there.
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for item in pending:
+        item["head_sha"] = head
+        (output_dir / f"{item['key']}.json").write_text(json.dumps(item, indent=2) + "\n", encoding="utf-8")
+
+    # A JSON array, because the conditions gating each reviewing job test membership in it.
+    _emit_output("pending", json.dumps([item["key"] for item in pending]))
+    click.echo(f"{len(pending)} aspect(s) to review, {len(skipped)} unchanged")
+    for entry in skipped:
+        click.echo(f"  skipping {entry['key']}: {entry['reason']}", err=True)
+
+
+@main.command(name="post-reviews")
+@click.option("--pr", default="", help="Pull request number. Empty posts nothing.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
+@click.option("--reviews", required=True, type=click.Path(path_type=Path), help="One JSON per aspect.")
+@click.option("--pending", type=click.Path(path_type=Path), help="What review-state wrote, for revisions.")
+@click.option("--diff", type=click.Path(path_type=Path), help="The diff, for the commit reviewed.")
+@click.option("--dry-run", is_flag=True, help="Render the bodies and post nothing.")
+def post_reviews(
+    pr: str, repo: str, reviews: Path, pending: Path | None, diff: Path | None, dry_run: bool
+) -> None:
+    """Publish each aspect's findings as its own pull request review, revising rather than repeating.
+
+    Which review to revise is the pipeline's record rather than something the agent hands back. An
+    agent that forgot to echo it would post beside its own earlier review instead of replacing it.
+    """
+    from .reviews import review_payload
+
+    if not pr:
+        click.echo("no pull request to post to")
+        return
+    files = sorted(reviews.glob("*.json")) if reviews.is_dir() else []
+    if not files:
+        click.echo("nothing to post: no aspect needed reviewing")
+        return
+
+    sha = ""
+    if diff and diff.is_file():
+        sha = str(json.loads(diff.read_text(encoding="utf-8")).get("head_sha") or "")
+
+    posted = 0
+    for path in files:
+        aspect = path.stem
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            click.echo(f"::warning::{aspect}: the reviewer's output is not valid JSON", err=True)
+            continue
+
+        previous = ""
+        record = (pending / f"{aspect}.json") if pending else None
+        if record and record.is_file():
+            previous = str(json.loads(record.read_text(encoding="utf-8")).get("previous_review_id") or "")
+
+        action, payload = review_payload(aspect, result, sha=sha, previous_id=previous)
+        if dry_run:
+            click.echo(f"--- {aspect} ({action})\n{payload['body']}")
+            posted += 1
+            continue
+        target = (
+            f"repos/{repo}/pulls/{pr}/reviews/{previous}"
+            if action == "revise"
+            else f"repos/{repo}/pulls/{pr}/reviews"
+        )
+        method = "PUT" if action == "revise" else "POST"
+        # A failure to post one aspect is not a reason to lose the others.
+        if _gh_send(method, target, payload):
+            posted += 1
+            click.echo(f"{'revised' if action == 'revise' else 'posted'} the {aspect} review")
+        else:
+            click.echo(f"::warning::could not {action} the {aspect} review", err=True)
+
+    click.echo(f"posted or revised {posted} review(s)")
+    _summary(f"posted or revised {posted} review(s)")
+    _emit_output("posted", str(posted))
+
+
+def _gh_send(method: str, path: str, payload: dict[str, Any]) -> bool:
+    result = subprocess.run(
+        ["gh", "api", "-X", method, path, "--input", "-"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        click.echo(result.stderr.strip()[:300], err=True)
+    return result.returncode == 0
+
+
+@main.command(name="apply-patch")
+@click.option("--patch", required=True, type=click.Path(path_type=Path))
+@click.option("--repo", default=".", type=click.Path(path_type=Path), help="Where to apply it.")
+@click.option("--check", is_flag=True, help="Report whether it would apply, without applying it.")
+def apply_patch(patch: Path, repo: Path, check: bool) -> None:
+    """Apply an agent-proposed diff, refusing anything that reaches outside the source tree.
+
+    The agent that wrote this diff has no write permission and never touches the repository. This is
+    the only thing that does, which is why the rules are here in code rather than in a prompt.
+    """
+    from .changes import protected_paths
+
+    if not patch.is_file():
+        _fail(f"{patch} does not exist")
+    diff = patch.read_text(encoding="utf-8")
+    if not diff.strip():
+        click.echo("empty patch; nothing to apply")
+        _emit_output("applied", "false")
+        return
+
+    breaches = protected_paths(diff)
+    if breaches:
+        _emit_output("applied", "false")
+        _fail(f"patch touches protected paths and was rejected: {', '.join(breaches)}")
+
+    command = ["git", "apply", "--check"] if check else ["git", "apply", "--3way", "--whitespace=nowarn"]
+    result = subprocess.run(
+        [*command, str(patch.resolve())], cwd=repo, capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        click.echo(result.stderr.strip(), err=True)
+        _emit_output("applied", "false")
+        _fail("patch did not apply cleanly")
+
+    click.echo("patch would apply" if check else "patch applied")
+    _emit_output("applied", "false" if check else "true")
+
+
+@main.command(name="run-suite")
+@click.option("--repo", default=".", type=click.Path(path_type=Path))
+@click.option(
+    "--overlay",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="A directory of proposed files to lay over the repository before running.",
+)
+@click.option("--suite", default="pytest", show_default=True, help="pytest, jest, go or cargo.")
+@click.option("--select", default="", help="Narrow the run, e.g. one reproducer test.")
+@click.option("--output", type=click.Path(path_type=Path), help="Write the verdict as JSON.")
+@click.option(
+    "--expect",
+    type=click.Choice(["pass", "fail"]),
+    default="pass",
+    show_default=True,
+    help="What this step needs the suite to do.",
+)
+def run_suite(
+    repo: Path, overlay: Path | None, suite: str, select: str, output: Path | None, expect: str
+) -> None:
+    """Run the target project's own tests and turn the result into a verdict.
+
+    `--expect fail` is what makes a reproducer meaningful: a test that does not fail before the fix
+    proves nothing about the bug, so a pipeline asserts the failure first and the pass afterwards.
+    """
+    import shutil
+
+    from .changes import SUITES, suite_verdict
+
+    if overlay and overlay.is_dir():
+        # The same copy `propose-pr` will make later, made now so the suite runs against what the
+        # pull request would contain. Without it, "prove the reproducer fails" would run the
+        # repository as it already is and pass for the wrong reason.
+        shutil.copytree(overlay, repo, dirs_exist_ok=True)
+        click.echo(f"laid {overlay} over {repo}")
+
+    if suite not in SUITES:
+        _fail(f"unknown suite {suite!r} — known: {', '.join(sorted(SUITES))}")
+    command = [*SUITES[suite], *(select.split() if select else [])]
+    result = subprocess.run(command, cwd=repo, capture_output=True, text=True, check=False)
+    verdict = suite_verdict(result, suite=suite, select=select, expect=expect)
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
+    _emit_output("passed", "true" if verdict["passed"] else "false")
+    _emit_output("satisfied", "true" if verdict["satisfied"] else "false")
+    click.echo(f"{suite}: {'passed' if verdict['passed'] else 'failed'} (expected to {expect})")
+
+    if not verdict["satisfied"]:
+        _fail(f"suite was expected to {expect} and did not")
+
+
+@main.command(name="await-checks")
+@click.option("--ref", required=True, help="Commit SHA or branch whose checks to wait for.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", required=True)
+@click.option("--timeout", default=1800, show_default=True, type=int, help="Seconds.")
+@click.option("--interval", default=20, show_default=True, type=int)
+@click.option("--ignore", default="", help="Comma-separated check names to disregard.")
+@click.option("--output", type=click.Path(path_type=Path))
+def await_checks(ref: str, repo: str, timeout: int, interval: int, ignore: str, output: Path | None) -> None:
+    """Wait for the repository's own CI to finish, and report what it concluded.
+
+    A pipeline writes a change and then asks the project's real CI whether it holds up — not a test
+    command this pipeline chose, which would only prove the change satisfies this pipeline.
+    """
+    import time
+
+    from .changes import check_verdict
+
+    skip = {name.strip() for name in ignore.split(",") if name.strip()}
+    deadline = time.monotonic() + timeout
+    runs: list[dict[str, Any]] = []
+
+    while time.monotonic() < deadline:
+        payload = _gh_json(f"repos/{repo}/commits/{ref}/check-runs")
+        runs = [r for r in payload.get("check_runs", []) if r.get("name") not in skip]
+        if runs and all(run.get("status") == "completed" for run in runs):
+            break
+        waiting = sum(1 for r in runs if r.get("status") != "completed")
+        click.echo(f"waiting: {waiting} still running", err=True)
+        time.sleep(interval)
+    else:
+        _fail(f"checks on {ref} did not finish within {timeout}s")
+
+    verdict = check_verdict(runs, ref=ref)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
+
+    _emit_output("passed", "true" if verdict["passed"] else "false")
+    _emit_output("failed", ",".join(verdict["failed"]))
+    click.echo(
+        f"{len(runs)} check(s): "
+        + ("all passed" if verdict["passed"] else "failed: " + ", ".join(verdict["failed"]))
+    )
+    if not verdict["passed"]:
+        _fail("the repository's own CI rejected this change")
+
+
+@main.command(name="render-plan")
+@click.option("--plan", required=True, type=click.Path(path_type=Path))
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+def render_plan_command(plan: Path, output: Path) -> None:
+    """Render a plan as the markdown a reviewer reads on the pull request.
+
+    Deterministic on purpose: the agent decided what the plan says, and layout that varied between
+    runs would make a comment updated in place churn for no reason.
+    """
+    from .changes import load_plan, render_plan
+
+    if not plan.is_file():
+        click.echo("no plan to render")
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(render_plan(load_plan(plan)), encoding="utf-8")
+    click.echo(f"rendered the plan -> {output}")

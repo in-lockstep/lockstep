@@ -1,0 +1,26 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Tidy the report builder",
+      "body": "Readability only.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "src/reports.py",
+          "status": "modified",
+          "patch": "@@ -12,3 +12,1 @@\n-    out = []\n-    for row in rows:\n-        out.append(row.name)\n+    out = [row.name for row in rows]"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": "Reports nothing. A comprehension instead of a loop is not worth a human reading a comment about it, and reporting it is how this lens gets muted."
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "input": {
+    "analysis": {
+      "cause": "export() reads the template name from a module constant, so the request parameter is never used.",
+      "evidence": [
+        "src/reports/export.py builds the path from TEMPLATE_DEFAULT"
+      ],
+      "location": {
+        "path": "src/reports/export.py",
+        "line": 12
+      },
+      "reproduction": "GET /reports/1?format=csv returns a PDF; expected CSV.",
+      "confidence": "high",
+      "ruled_out": []
+    },
+    "reproduced": {
+      "passed": false,
+      "satisfied": true
+    }
+  },
+  "expect": {
+    "rubric": {
+      "criteria": "Fixes the named cause, minimally, without touching the test.",
+      "levels": {
+        "5": "Only the export path changes so the parameter selects the template; the test is untouched and nothing is reorganised.",
+        "3": "Correct fix carrying an unrelated tidy-up.",
+        "1": "Edits the test, or fixes a symptom by catching the wrong output."
+      },
+      "min": 4
+    }
+  }
+}

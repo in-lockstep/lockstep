@@ -188,3 +188,66 @@ def test_a_pipeline_of_your_own_runs_beside_the_shipped_ones(adopter):
     files = compile_spec(adopter).files
     assert any(path.endswith("ours.yml") for path in files)
     assert any(path.endswith("triage-triage.yml") for path in files)
+
+
+# --- what the shipped set covers --------------------------------------------
+
+
+def test_the_shipped_set_is_a_whole_sdlc():
+    """Triage an issue, implement it, review the result, fix what it broke."""
+    assert set(SHIPPED) >= {"triage", "implement", "review", "fix"}
+
+
+def test_every_shipped_agent_publishes_bands_rather_than_fixed_values(adopter):
+    """So the first change anybody wants to make is a line in `commands:`, not a fork."""
+    spec = load_spec(adopter)
+    shipped = [a for name, a in spec.agents.items() if a.inherited_from]
+    assert shipped
+    for agent in shipped:
+        # The band is recorded beside the resolved default, keyed by the field it governs.
+        assert "max-ai-credits" in agent.bands, agent.name
+        assert "model" in agent.bands, agent.name
+
+
+def test_every_shipped_agent_has_eval_cases(adopter):
+    """LNT001 refuses an agent nobody evaluates. A shipped agent is not exempt from that."""
+    for name, path in library.pipelines().items():
+        for agent in sorted((path / "agents").glob("*.md")):
+            cases = path / "evals" / agent.stem / "cases"
+            assert cases.is_dir() and any(cases.glob("*.json")), f"{name}/{agent.stem}"
+
+
+def test_a_fix_is_proven_by_a_test_that_failed_first(adopter):
+    """The shape of the fix pipeline is its argument.
+
+    A pipeline that wrote the reproducer and the fix together would produce a test that passes
+    either way and a change nobody can tell worked. So the failing run gates the fix, and the
+    passing run gates the proposal.
+    """
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/fix-fix.yml"])
+    jobs = workflow["jobs"]
+
+    def runs(job):
+        return " ".join(step.get("run", "") for step in jobs[job].get("steps", []))
+
+    def needs(job):
+        value = jobs[job].get("needs")
+        return [value] if isinstance(value, str) else list(value or [])
+
+    assert "--expect=fail" in runs("reproduce")
+    assert "--expect=pass" in runs("validate")
+    # The fix cannot be written until the reproducer has failed.
+    assert "reproduce" in needs("write-the-fix")
+    # Nothing is proposed until the suite passes.
+    assert "validate" in needs("review-the-fix")
+
+
+def test_nothing_shipped_writes_to_the_repository_itself(adopter):
+    """Agents produce files; `propose:` turns them into a pull request.
+
+    That is what lets every shipped agent be read-only, and why a prompt is never the thing standing
+    between a model and the default branch.
+    """
+    for path, text in compile_spec(adopter).files.items():
+        if "/aw-" in path and path.endswith(".md"):
+            assert yaml.safe_load(text.split("---")[1])["permissions"] == "read-all", path

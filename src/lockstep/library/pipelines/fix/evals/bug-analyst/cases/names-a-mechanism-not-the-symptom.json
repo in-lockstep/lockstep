@@ -1,0 +1,36 @@
+{
+  "input": {
+    "bug": {
+      "key": "#88",
+      "number": 88,
+      "repo": "acme/app",
+      "state": "open",
+      "summary": "Export endpoint ignores the format parameter",
+      "description": "Passing ?format=csv still returns a PDF. Expected a CSV.",
+      "acceptance_criteria": [],
+      "criteria_source": "none",
+      "labels": [
+        "bug"
+      ],
+      "assignees": [],
+      "discussion": []
+    }
+  },
+  "expect": {
+    "schema": [
+      "cause",
+      "evidence",
+      "reproduction",
+      "confidence"
+    ],
+    "rubric": {
+      "criteria": "Reports a mechanism, with a reproduction the next agent can write a test from.",
+      "levels": {
+        "5": "The cause names why the parameter is never read, evidence cites the file, and `reproduction` gives an input with expected-versus-actual.",
+        "3": "A plausible cause, but `reproduction` is too vague to write a test from.",
+        "1": "Restates the report as the cause, or gives no evidence."
+      },
+      "min": 4
+    }
+  }
+}

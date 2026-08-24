@@ -523,13 +523,26 @@ Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
   it working, what just happened, is it getting better, where should effort go — are about
   outcomes, timings and rates, and all of them were observable from the Actions jobs API without
   new instrumentation. Per-model and per-agent points carry the OTEL GenAI semantic conventions so
-  an agent-aware backend needs no teaching.
+  an agent-aware backend needs no teaching. gh-aw's own OTLP exporter is wired at the same time,
+  since it emits the agent spans nothing outside an agent could produce.
+- **A zero-authoring path.** `lockstep init --adopt all` writes a manifest, a profile and a
+  `.gitignore`, and inherits four pipelines the compiler ships — triage, implement, review, fix —
+  which between them are a whole loop. They are inherited rather than copied, so tuning an agent
+  inside its published band, overlaying a step, and writing a pipeline of your own that runs beside
+  them are all things that cost nothing later. Nine builtins were promoted out of `examples/` to
+  make them possible, because a shipped pipeline cannot depend on an extension package in an
+  example — and cannot carry scripts, since a script in the library is untested code arriving in
+  every adopter.
+
+  What remains: write-back to Jira. Reading works from either tracker in one shape; the triage
+  agent posts through gh-aw's safe outputs, which are a GitHub mechanism, so a Jira shop adds a
+  step. And these are a starting point rather than a product — the facts that make a pipeline good
+  in a particular repository are the ones only that repository can write.
 
 | Gap | What is missing here | Why it matters |
 |---|---|---|
 | **Run history, transcripts, replay** | Nothing is retained. A run's reasoning is gone when the job log rotates. | They ship `analyze-transcript` and `replay-session` skills, a metrics repository, and an independent audit layer over their own review agent's performance. This is the operational half of the 2am story, and it is also the only way to tell whether a prompt change helped. |
 | **A retro loop** | Nothing carries a run's outcome back to the spec. `collect-patterns` is deferred below with no caller. | Their sixth agent analyses a completed workflow — timings, iterations, patterns — and files improvement proposals. A framework whose thesis is that prompts are reviewable artifacts should be able to say which of them are working. |
-| **A zero-authoring path** | Partly closed. `lockstep init --adopt` writes a manifest and a profile and inherits the pipelines the compiler ships; `triage` is the first, reading from GitHub or Jira in one shape. Implement, review and fix are still `examples/` you copy rather than pipelines you inherit, and Jira write-back needs a step you add. | They install a GitHub App, enroll a repository, and six agents start working. That is the difference between a framework and a product, and it is the decisive gap for the smallest adopters — the ones with no platform team, who are also the ones most likely to try it. |
 
 Three things they have that are deliberately **not** on this list. Work prioritization by RICE scoring
 is a pipeline somebody could build with this framework, not a capability the framework lacks. A fixed
