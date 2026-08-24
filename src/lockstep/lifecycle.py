@@ -156,12 +156,20 @@ def resolve_ref(repo: str, ref: str) -> str:
 
     Branches matter for inheritance in a way they do not for capabilities: a canary consumer tracks
     `@main` so an upstream change that breaks a real overlay surfaces before the tag is cut.
+
+    **An annotated tag is not a commit.** `git ls-remote` reports the tag *object* for one, and
+    Actions resolves `uses: owner/repo/action@<sha>` against commits only — so a pin taken from that
+    line is a forty-character reference that looks exactly like a good one and cannot be checked
+    out. The commit is on the peeled `<ref>^{}` line, which has to be asked for by name: a pattern
+    matching `<ref>` does not match `<ref>^{}`, and `--refs` suppresses peeled lines outright.
+
+    This was invisible until the first tag existed. Nothing offline can tell the two apart.
     """
     owner_repo = "/".join(repo.split("/")[:2])
     url = f"https://github.com/{owner_repo}.git"
     try:
         result = subprocess.run(
-            ["git", "ls-remote", "--tags", "--heads", "--refs", url, ref],
+            ["git", "ls-remote", "--tags", "--heads", url, ref, f"{ref}^{{}}"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -174,7 +182,19 @@ def resolve_ref(repo: str, ref: str) -> str:
             f"no tag or branch {ref!r} in {owner_repo}",
             hint="check the ref in pipeline.yaml, or pass --sha to pin by hand",
         )
-    return result.stdout.split()[0]
+
+    peeled = ""
+    unpeeled = ""
+    for line in result.stdout.splitlines():
+        sha, _, name = line.partition("\t")
+        if not sha.strip():
+            continue
+        if name.endswith("^{}"):
+            peeled = sha.strip()
+        elif not unpeeled:
+            unpeeled = sha.strip()
+    # A lightweight tag and a branch have no peeled line, and their own sha is already the commit.
+    return peeled or unpeeled
 
 
 def _pins_path(root: Path) -> Path:

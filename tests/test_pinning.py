@@ -16,7 +16,7 @@ from lockstep.checks import doctor
 from lockstep.emit import compile_spec
 from lockstep.emit.context import PLACEHOLDER_DIGEST, PLACEHOLDER_SHA, Pins
 from lockstep.errors import EmitError
-from lockstep.lifecycle import pin, write_pins
+from lockstep.lifecycle import pin, resolve_ref, write_pins
 from lockstep.spec.load import load_spec
 
 SHA = "a" * 40
@@ -173,3 +173,56 @@ def test_a_real_pin_is_not_a_placeholder(basic_root):
     assert pins.placeholders() == []
     assert doctor(load_spec(basic_root), basic_root).ok
     assert not [note for note in compile_spec(basic_root).notes if "placeholder" in note]
+
+
+# --- resolving a ref to a commit ------------------------------------------------------------------
+#
+# These exist because the first real tag this project ever cut was annotated, and `lockstep pin`
+# recorded the tag *object* for it. Actions resolves `uses: owner/repo/action@<sha>` against commits
+# only, so the pin was forty plausible characters naming something nothing can check out — the exact
+# class of failure pinning exists to prevent, in the one place nobody was looking.
+
+
+def _ls_remote(monkeypatch, stdout: str):
+    import subprocess
+
+    def fake_run(argv, **kwargs):
+        assert argv[:2] == ["git", "ls-remote"]
+        # The peeled line has to be asked for by name: a pattern matching `<ref>` does not match
+        # `<ref>^{}`. If this stops being requested, the resolution silently loses the commit.
+        assert any(arg.endswith("^{}") for arg in argv), argv
+        assert "--refs" not in argv, "--refs suppresses the peeled line entirely"
+        return subprocess.CompletedProcess(argv, 0, stdout, "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+
+TAG_OBJECT = "a103eeb4316721ee42ce32076864f628bdf0d81a"
+COMMIT = "aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a"
+
+
+def test_an_annotated_tag_resolves_to_its_commit_not_its_tag_object(monkeypatch):
+    _ls_remote(
+        monkeypatch,
+        f"{TAG_OBJECT}\trefs/tags/actions-v0.1.0\n{COMMIT}\trefs/tags/actions-v0.1.0^{{}}\n",
+    )
+    assert resolve_ref("in-lockstep/lockstep/actions", "actions-v0.1.0") == COMMIT
+
+
+def test_the_order_of_the_lines_does_not_decide_it(monkeypatch):
+    """git makes no promise about which line comes first, and the old code took whichever did."""
+    _ls_remote(
+        monkeypatch,
+        f"{COMMIT}\trefs/tags/actions-v0.1.0^{{}}\n{TAG_OBJECT}\trefs/tags/actions-v0.1.0\n",
+    )
+    assert resolve_ref("in-lockstep/lockstep/actions", "actions-v0.1.0") == COMMIT
+
+
+def test_a_lightweight_tag_has_no_peeled_line_and_is_already_the_commit(monkeypatch):
+    _ls_remote(monkeypatch, f"{COMMIT}\trefs/tags/actions-v0.1.0\n")
+    assert resolve_ref("in-lockstep/lockstep/actions", "actions-v0.1.0") == COMMIT
+
+
+def test_a_branch_resolves_to_its_head(monkeypatch):
+    _ls_remote(monkeypatch, f"{COMMIT}\trefs/heads/main\n")
+    assert resolve_ref("acme/standards", "main") == COMMIT
