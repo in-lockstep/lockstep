@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--source=\"{source}\" --issue=\"{issue}\" --output={output_dir}/issue.json"
+  },
+  "command": "implement/implement",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "fetch-issue",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "issue-fetch"
+}

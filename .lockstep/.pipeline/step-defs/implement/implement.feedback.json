@@ -1,0 +1,18 @@
+{
+  "args": {
+    "args": "--pr=\"{pull_request}\" --output={output_dir}/feedback.json"
+  },
+  "command": "implement/implement",
+  "context_files": [],
+  "fingerprint": "",
+  "foreach": null,
+  "id": "feedback",
+  "input": "",
+  "kind": "builtin",
+  "on_failure": "",
+  "output": "",
+  "parallel": 0,
+  "post": "",
+  "pre": "",
+  "target": "pr-feedback"
+}

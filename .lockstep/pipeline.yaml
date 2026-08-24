@@ -30,16 +30,18 @@ capabilities:
 # knowledge of a codebase the framework has never seen.
 inherits:
   review: lockstep:review
+  implement: lockstep:implement
 
-# A full `/review` runs four lenses at their published defaults — 90 + 50 + 50 + 40 — so 300 is the
-# run with every lens requested plus room for one being tuned up. Enforced by the substrate before a
-# run starts, not measured afterwards.
+# Sized by the most expensive command rather than by the cheapest. `/review` is four lenses at
+# their published defaults — 90 + 50 + 50 + 40 = 230 — and `/implement` is four agents summing to
+# 340, so 400 covers the larger one with room for a single agent tuned up inside its band. `doctor`
+# fails the build when a command's agents sum past this, which is a better place to find out than
+# partway through a run that has already spent most of it.
 #
-# The daily ceiling is per agent and exists for the failure this cannot otherwise survive: a lens
-# stuck in a retry loop, or a comment trigger that fires on its own output. Roughly five full days'
-# worth of reviews for the most expensive lens, at the volume this repository actually sees.
+# The daily ceiling is per agent and exists for the failure a per-run cap cannot survive: an agent
+# stuck in a retry loop, or a comment trigger that fires on its own output.
 budgets:
-  per_run_ai_credits: 300
+  per_run_ai_credits: 400
   per_agent_daily_ai_credits: 500
 
 # One line per run, on a branch, because artifacts expire and job logs rotate. Turned on the day
