@@ -97,15 +97,19 @@ def test_adopting_writes_a_manifest_a_profile_and_the_two_layers_you_will_add(tm
     inherited agent — which is the situation the eval loop exists to verify, and the one an adopter
     would otherwise reach without noticing.
     """
-    written = scaffold(tmp_path / "a", "acme", "repo", adopt=tuple(SHIPPED))
-    assert sorted(written) == [
+    written = sorted(scaffold(tmp_path / "a", "acme", "repo", adopt=tuple(SHIPPED)))
+    assert [p for p in written if not p.startswith("evals/")] == [
         ".gitignore",
         "README.md",
+        "agents/eval-judge.md",
         "contexts/codebase.md",
         "guardrails/house-style.md",
         "pipeline.yaml",
         "profiles/repo.md",
     ]
+    # The judge is an agent, and an agent with no cases cannot be changed safely — least of all the
+    # one that decides whether every other agent passed.
+    assert [p for p in written if p.startswith("evals/eval-judge/")]
 
 
 def test_a_repository_that_authored_nothing_lints_clean(adopter):

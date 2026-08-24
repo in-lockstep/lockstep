@@ -57,6 +57,10 @@ select = ["E", "F", "I", "UP", "B"]
 # real application, so cosmetic rules do not apply to it and — more importantly — `make fmt` must
 # never silently rewrite it. Changes here should be deliberate and reviewed against the origin.
 [tool.ruff.lint.per-file-ignores]
+# The scaffold carries the files a new repository starts with, verbatim, inside string literals.
+# Rewrapping them to satisfy a line-length rule would change what a user's first eval case looks
+# like to suit this repository's formatter.
+"src/lockstep/scaffold.py" = ["E501"]
 "packages/pipeline-exec/src/pipeline_exec/executors/*" = ["E501", "B007"]
 # discovery.py is excluded: it was rewritten here rather than extracted, so it is held to this
 # repo's rules like anything else.

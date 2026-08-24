@@ -135,10 +135,45 @@ def test_the_judge_is_skipped_when_no_case_carries_a_rubric(basic_root):
     )
 
 
-def test_a_judge_naming_an_agent_that_does_not_exist_is_ignored(basic_root):
-    """A typo should not silently produce a job calling a workflow nobody generated."""
+def test_a_judge_naming_an_agent_that_does_not_exist_is_refused(basic_root):
+    """This used to be ignored, which turns out to be the worst of the three options.
+
+    Every case worth writing carries a rubric, and a rubric nobody judges is reported as undecided.
+    So a typo here silently leaves the whole suite deciding nothing — while `pass_rate` and the
+    comparison keep reporting, and the merge gate never fires. A compile error is cheaper than
+    discovering that months later.
+    """
+    from lockstep.errors import EmitError
+
     add_judge(basic_root, "no-such-agent")
-    assert f"judge-{AGENT}" not in suite(basic_root)["jobs"]
+    with pytest.raises(EmitError, match="does not produce a workflow for"):
+        suite(basic_root)
+
+
+def test_a_judge_no_command_runs_is_still_compiled(basic_root):
+    """The eval suite is a caller. An agent nothing compiled leaves its `uses:` pointing at nothing.
+
+    That compiled cleanly and lint-clean, and failed at the first run with an unresolvable
+    reference — which is the most expensive place to find out.
+    """
+    judge = basic_root / "agents" / "eval-judge.md"
+    judge.write_text(
+        "---\nname: eval-judge\ndescription: Judge a rubric\nmodel: claude-sonnet-4-6\n"
+        "provider: anthropic\nmax_tool_turns: 2\nguardrails: [common]\n"
+        "github:\n  max-ai-credits: 20\n---\n\nJudge it.\n",
+        encoding="utf-8",
+    )
+    cases = basic_root / "evals" / "eval-judge" / "cases"
+    cases.mkdir(parents=True)
+    (cases / "one.json").write_text(
+        json.dumps({"input": {"rubric": "x", "output": {}}, "expect": {"equals": {"passed": False}}}),
+        encoding="utf-8",
+    )
+    add_judge(basic_root, "eval-judge")
+
+    files = compile_spec(basic_root).files
+    assert ".github/workflows/aw-eval-judge.md" in files
+    assert suite(basic_root)["jobs"][f"judge-{AGENT}"]["uses"].endswith("aw-eval-judge.lock.yml")
 
 
 def test_a_minimum_pass_rate_reaches_the_grader(basic_root):

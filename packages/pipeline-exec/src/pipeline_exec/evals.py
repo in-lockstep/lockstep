@@ -527,7 +527,10 @@ def summarize(
     pending = [r["case"] for r in results if r.get("rubric_pending")]
     failed = [r["case"] for r in results if r["case"] not in pending and not r["passed"]]
     decided = total - len(pending)
-    rate = (decided - len(failed)) / decided if decided else 1.0
+    # `None`, not 1.0, when nothing was decided. Every shipped case carries a rubric, so a suite run
+    # without a judge decides *nothing* — and a rate of 1.0 there is a perfect score computed from
+    # no evidence, recorded into the ledger as a baseline and compared against forever.
+    rate = (decided - len(failed)) / decided if decided else None
 
     scores = {
         r["case"]: r["score"] for r in results if r["case"] not in pending and isinstance(r.get("score"), int)
@@ -539,7 +542,7 @@ def summarize(
         "passed": decided - len(failed),
         "failed": failed,
         "pending_rubric": pending,
-        "pass_rate": round(rate, 4),
+        "pass_rate": round(rate, 4) if rate is not None else None,
         "scores": scores,
         "mean_score": mean,
         # The distribution, not just the average: four 5s and a 1 average the same as five 4.2s and
@@ -548,7 +551,13 @@ def summarize(
             str(value): sorted(scores.values()).count(value) for value in sorted(set(scores.values()))
         },
     }
-    summary["ok"] = not failed if min_pass_rate is None else rate >= min_pass_rate
+    # A suite that decided nothing has not failed, but it has not passed either. `ok` stays true so
+    # a run is not blocked by its own honesty; `pass_rate: null` and `pending_rubric` are what say
+    # the number is absent, and `eval-compare` refuses to build a direction on it.
+    if min_pass_rate is None or rate is None:
+        summary["ok"] = not failed
+    else:
+        summary["ok"] = rate >= min_pass_rate
     # A mean below the floor fails a suite in which every case individually passed. That is the
     # regression a binary gate cannot see, so it is the one this exists to catch.
     if min_score is not None and mean is not None and mean < min_score:

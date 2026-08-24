@@ -306,6 +306,7 @@ to a job, so the report says so by leaving the figure out rather than guessing a
 **Verify an inherited agent you have *not* customized.** Its upstream already does, against the
 prompt they wrote. Re-running their cases here would pay to re-test their lens.
 
-**Judge a rubric.** The comparison reads `pass_rate` and `mean_score` as the grader reported them,
-so a suite with no judge configured has rubrics pending and compares on its deterministic half
-alone. That is a thinner signal, and it is the same thinness the eval report already declares.
+**Work without a judge.** This is the one dependency worth stating plainly. Every case worth writing
+carries a rubric, so a repository with `evals.judge` unset decides nothing at all — the comparison
+reports `nothing decided` and the merge gate cannot fire. Both scaffolds write a judge into your
+repository for exactly this reason. `docs/evals.md` has the argument.

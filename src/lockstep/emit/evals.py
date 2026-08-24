@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import library
+from ..errors import EmitError
 from ..spec.model import INHERITED_DIR, Agent, Profile, Spec
 from .agentic import lock_filename, workflow_filename
 from .ci import fetch_steps
@@ -112,15 +113,32 @@ def agents_with_cases(spec: Spec) -> list[str]:
 
 
 def emit_evals(
-    spec: Spec, ctx: EmitContext, *, agent_secrets: dict[str, list[str]] | None = None
+    spec: Spec,
+    ctx: EmitContext,
+    *,
+    agent_secrets: dict[str, list[str]] | None = None,
+    compiled: set[str] | None = None,
 ) -> dict[str, Any] | None:
     """The eval workflow, or nothing when there is no agent this repository can evaluate."""
     agents = agents_with_cases(spec)
+    compiled = compiled if compiled is not None else set(spec.agents)
     if not agents:
         return None
 
     config = spec.manifest.evals
-    judge = config.judge if config.judge in spec.agents else ""
+    # A judge has to be an agent this compile actually produces a workflow for. An agent no command
+    # runs is in the spec and never compiled, and pointing the judging job at its `.lock.yml` emits
+    # a `uses:` for a file that does not exist — which compiles, lints clean, and fails at the first
+    # run with an unresolvable reference.
+    judge = config.judge if config.judge in compiled else ""
+    if config.judge and not judge:
+        raise EmitError(
+            f"evals.judge names {config.judge!r}, which this compile does not produce a workflow for",
+            location=spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml",
+            hint="a judge is an agent like any other: some command has to run it, or it is never "
+            "compiled. Add a step that uses it, or name one of: "
+            + (", ".join(sorted(compiled)) or "(no agents)"),
+        )
     jobs: dict[str, Any] = {}
     for agent in agents:
         jobs.update(_agent_jobs(spec, ctx, agent, judge=judge, secrets=agent_secrets or {}))

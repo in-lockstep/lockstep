@@ -700,3 +700,21 @@ def test_the_cases_command_refuses_a_broken_fixture_rather_than_running_the_agen
     )
     assert result.exit_code != 0
     assert "no fixture at" in result.output
+
+
+def test_a_suite_that_decided_nothing_reports_no_pass_rate():
+    """1.0 there would be a perfect score computed from no evidence.
+
+    Every shipped case carries a rubric, so a repository without a judge is in exactly this state —
+    and that number went into the ledger as a baseline and was compared against forever.
+    """
+    summary = summarize([{"case": "a", "passed": False, "rubric_pending": True}])
+    assert summary["pass_rate"] is None
+    assert summary["pending_rubric"] == ["a"]
+    # Not a failure either: the run did what it could, and `pass_rate: null` is what says so.
+    assert summary["ok"] is True
+
+
+def test_a_minimum_pass_rate_cannot_fail_a_suite_that_decided_nothing():
+    """There is no rate to be below. Failing here would block on the absence of a judge."""
+    assert summarize([{"case": "a", "passed": False, "rubric_pending": True}], min_pass_rate=0.9)["ok"]

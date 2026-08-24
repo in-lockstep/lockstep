@@ -18,6 +18,173 @@ class ScaffoldError(LockstepError):
     code = "LS500"
 
 
+# The judge's own eval cases, and the reason they are purely deterministic: a judge answers JSON —
+# `{"passed": bool}` or `{"score": int}` — which `equals` settles exactly. So the one agent whose
+# cases would otherwise need a judge is the one agent that does not, and the recursion that makes
+# "who evaluates the evaluator" awkward never starts.
+JUDGE_CASES = {
+    "meets-the-rubric": """{
+  "input": {
+    "case": "one-item",
+    "rubric": "Two sentences: what the item is, and why it matters. Says nothing the item does not.",
+    "scored": false,
+    "output": {
+      "summary": "Item 1 is a billing export that runs nightly. It matters because finance reconciles against it every morning."
+    }
+  },
+  "expect": {
+    "schema": [
+      "passed",
+      "reason"
+    ],
+    "equals": {
+      "passed": true
+    }
+  }
+}
+""",
+    "misses-what-the-rubric-asked": """{
+  "input": {
+    "case": "one-item",
+    "rubric": "Two sentences: what the item is, and why it matters. Says nothing the item does not.",
+    "scored": false,
+    "output": {
+      "summary": "Item 1 is a billing export."
+    }
+  },
+  "expect": {
+    "schema": [
+      "passed",
+      "reason"
+    ],
+    "equals": {
+      "passed": false
+    }
+  }
+}
+""",
+    "does-not-round-up-for-confident-prose": """{
+  "input": {
+    "case": "one-item",
+    "rubric": "Two sentences: what the item is, and why it matters. Says nothing the item does not.",
+    "scored": false,
+    "output": {
+      "summary": "Item 1 is unquestionably one of the most consequential pipelines in the estate, and its importance can hardly be overstated."
+    }
+  },
+  "expect": {
+    "schema": [
+      "passed",
+      "reason"
+    ],
+    "equals": {
+      "passed": false
+    }
+  }
+}
+""",
+    "an-unreadable-answer-is-not-a-pass": """{
+  "input": {
+    "case": "one-item",
+    "rubric": "Two sentences: what the item is, and why it matters.",
+    "scored": false,
+    "output": {}
+  },
+  "expect": {
+    "schema": [
+      "passed",
+      "reason"
+    ],
+    "equals": {
+      "passed": false
+    }
+  }
+}
+""",
+    "uses-the-levels-it-was-given": """{
+  "input": {
+    "case": "one-item",
+    "rubric": "Says what the item is and why it matters.",
+    "scored": true,
+    "levels": {
+      "5": "Names the item and states, concretely, who depends on it.",
+      "3": "Names the item without saying who depends on it.",
+      "1": "Neither."
+    },
+    "scale": {
+      "min": 1,
+      "max": 5
+    },
+    "min_score": 4,
+    "output": {
+      "summary": "Item 1 is a billing export."
+    }
+  },
+  "expect": {
+    "schema": [
+      "score",
+      "reason"
+    ],
+    "equals": {
+      "score": 3
+    }
+  }
+}
+""",
+}
+
+
+JUDGE_AGENT = """---
+name: eval-judge
+description: Decide whether an answer met a case's rubric
+model: {{ default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }}
+provider: anthropic
+max_tool_turns: 2
+guardrails: [{guardrail}]
+github:
+  # Small, and read-only by construction. Judging one answer against one rubric is a short task, and
+  # a judge with room to wander is a judge that costs more than the agent it is judging.
+  max-ai-credits: {{ default: 15, min: 5, max: 60 }}
+  timeout-minutes: {{ default: 10, max: 30 }}
+---
+
+You decide whether one answer met one rubric. Nothing else.
+
+Your input is `{{"case", "rubric", "scored", "output"}}` — and, for a scored rubric, `levels`,
+`scale` and `min_score` as well.
+
+**Binary rubric** (`scored: false`) — answer `{{"passed": bool, "reason": "one sentence"}}`.
+
+**Scored rubric** (`scored: true`) — answer `{{"score": <integer in scale>, "reason": "one sentence"}}`.
+Use the `levels` you were given. They say what earns each score; inventing your own scale is how two
+runs of the same suite stop being comparable, which is the whole reason the levels are sent to you.
+
+## How to read a rubric
+
+Judge the answer against what the rubric asks, not against what you would have written. An answer
+that is correct, complete and phrased differently from your preference passes.
+
+Quote the part of the output you are judging on. A verdict with no citation is one nobody can check,
+and yours is the number a merge gate reads.
+
+Where the rubric asks for several things and the answer did some of them, that is what the levels
+are for. Do not round up because the answer is well written, and do not round down because it is
+terse.
+
+## The two ways this goes wrong
+
+**Agreeableness.** An answer that sounds confident and misses the point is the case the suite exists
+to catch, and the easiest to wave through. If the rubric names something the answer does not
+contain, it did not do it.
+
+**Judging the wrong thing.** You are not reviewing the agent's prose, its formatting, or whether you
+would have approached the task that way. Only the rubric.
+
+If the output is unreadable — truncated, not the shape the rubric assumes, empty — say so in
+`reason` and fail it. An answer nobody can evaluate has not met anything.
+"""
+
+
 # The agent a reader is most likely to want to verify first, per shipped pipeline. Used only to make
 # a commented example concrete; a name that drifts costs a reader one `ls`, not a broken build.
 FIRST_AGENT = {
@@ -52,9 +219,18 @@ class Adopt:
             # evaluated. Shipped as working files rather than as advice.
             "contexts/codebase.md": self._context(),
             "guardrails/house-style.md": self._house_guardrail(),
+            # Every shipped eval case carries a rubric, so without a judge the suites decide
+            # nothing: the comparison has no evidence and the merge gate can never fire. Scaffolded
+            # into your repository rather than shipped by the framework — whose prose decides
+            # whether your agents pass is not a decision a compiler should make for you.
+            "agents/eval-judge.md": self._judge(),
+            **{f"evals/eval-judge/cases/{name}.json": text for name, text in JUDGE_CASES.items()},
             ".gitignore": ".pipeline/inherited/\noutputs/\n",
             "README.md": self._readme(),
         }
+
+    def _judge(self) -> str:
+        return JUDGE_AGENT.format(guardrail="house-style")
 
     def _context(self) -> str:
         return """---
@@ -163,8 +339,16 @@ evals:
   #
   # inherited: [{first}/{first_agent}]
 
+  # The agent that judges the `rubric` half of a case, scaffolded at `agents/eval-judge.md`.
+  #
+  # Every case the shipped pipelines carry has a rubric — "says what an attacker does with it" is
+  # not a substring match — and a rubric nobody judges is reported as undecided. So without this the
+  # suites decide nothing at all, and the gate that would refuse a bad change can never fire. Edit
+  # that agent, or point this elsewhere; do not leave it unset.
+  judge: eval-judge
+
   # The cron that makes a comparison mean anything: it re-runs a suite against a prompt nobody
-  # changed, and that spread is the noise floor. Uncomment it with the line above.
+  # changed, and that spread is the noise floor. Uncomment it with `inherited:` above.
   # baseline: '0 4 * * 1'
 """
 
@@ -258,6 +442,13 @@ class Scaffold:
             "scripts/collect-items.py": self._script(),
             "tests/test_collect_items.py": self._script_test(),
             "evals/summarizer/cases/one-item.json": self._eval_case(),
+            # Without this the loop is decorative. Every case worth writing carries a `rubric` —
+            # "says nothing the item does not" is not a substring match — and a rubric nobody
+            # judges is reported as undecided, so a suite of them decides nothing and the gate can
+            # never fire. Scaffolded rather than shipped by the framework: a judge is a strong
+            # opinion, and this one is yours to edit.
+            "agents/eval-judge.md": self._judge(),
+            **{f"evals/eval-judge/cases/{name}.json": text for name, text in JUDGE_CASES.items()},
             ".gitignore": self._gitignore(),
             "README.md": self._readme(),
         }
@@ -310,10 +501,13 @@ evals:
   # usable floor. Nightly gets there in three days and costs seven times as much. Pick knowingly.
   baseline: '0 4 * * 1'
 
-  # An agent of your own that judges the `rubric` half of a case. Without one the deterministic
-  # half still runs and rubrics are reported as undecided, which is the honest answer rather than
-  # a missing one.
-  # judge: eval-judge
+  # The agent that judges the `rubric` half of a case, scaffolded at `agents/eval-judge.md`.
+  #
+  # Not optional in practice. Any case worth writing has a rubric — the deterministic half cannot
+  # settle "says nothing the item does not" — and a rubric nobody judges is reported as undecided.
+  # A suite of undecided cases decides nothing, so the comparison has no evidence and the merge
+  # gate can never fire. Point this somewhere else, or edit that agent, but do not leave it unset.
+  judge: eval-judge
 
 # Turn the loop on, and it tells you what to change:
 #
@@ -476,6 +670,9 @@ def test_keys_are_unique():
 def test_the_limit_is_honoured():
     assert len(collect_items.collect(2)) == 2
 '''
+
+    def _judge(self) -> str:
+        return JUDGE_AGENT.format(guardrail="common")
 
     def _eval_case(self) -> str:
         # The first eval anybody reads, so it shows both halves of the contract: checks that mean

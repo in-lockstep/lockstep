@@ -79,9 +79,13 @@ def eval_record(report: dict[str, Any], *, prompt: str, identity: dict[str, Any]
             case["case"]: {
                 "passed": bool(case.get("passed")),
                 "score": case.get("score"),
-                # A case the agent never answered is not evidence about the prompt. Carried through
-                # so a comparison can tell "got it wrong" from "never ran".
+                # Two ways a case can produce no evidence, and neither is the agent being wrong.
+                # `answered`: the run never happened — an outage, a rate limit, a cancelled leg.
+                # `judged`: it carries a rubric nobody judged, because no judge is configured. A
+                # case in either state reads as `passed: false` and would otherwise look like a
+                # failure that a later change could appear to fix.
                 "answered": case.get("answered", True),
+                "judged": not case.get("rubric_pending", False),
             }
             for case in (report.get("cases") or [])
         },
@@ -110,6 +114,11 @@ def baseline_runs(records: list[dict[str, Any]], *, candidate_prompt: str) -> li
         return []
     latest = others[-1]["prompt"]
     return [r for r in others if r["prompt"] == latest]
+
+
+def _decided(entry: dict[str, Any]) -> bool:
+    """Did this case actually produce evidence about the prompt?"""
+    return bool(entry.get("answered", True)) and bool(entry.get("judged", True))
 
 
 def _spread(values: list[float]) -> float:
@@ -201,16 +210,17 @@ def case_verdicts(runs: list[dict[str, Any]], candidate: dict[str, Any]) -> list
         # Only baseline runs where the agent actually answered. A run that fell over tells you
         # about the day, not about the prompt, and counting it as a baseline failure would make the
         # next change look like a fix.
-        seen = [
-            r
-            for r in runs
-            if name in (r.get("cases") or {}) and (r["cases"][name] or {}).get("answered", True)
-        ]
+        seen = [r for r in runs if name in (r.get("cases") or {}) and _decided(r["cases"][name] or {})]
         passes = sum(1 for r in seen if (r["cases"][name] or {}).get("passed"))
         entry = cases.get(name) or {}
         now = bool(entry.get("passed"))
 
-        if name in cases and not entry.get("answered", True):
+        if name in cases and not entry.get("judged", True):
+            # Its rubric was never judged, so `passed: false` is the grader declining to score it
+            # rather than the agent getting it wrong. Configure `evals.judge` and this case starts
+            # deciding things.
+            verdict = "unjudged"
+        elif name in cases and not entry.get("answered", True):
             # The candidate never ran this case. Whatever the baseline says, this is not a
             # regression — it is a suite that did not finish, and blocking a merge on it would be
             # blocking on a provider outage.
@@ -248,9 +258,14 @@ class Comparison:
         cases = case_verdicts(self.runs, self.candidate)
         regressed = [c.case for c in cases if c.verdict == "regressed"]
         not_run = [c.case for c in cases if c.verdict == "not run"]
+        unjudged = [c.case for c in cases if c.verdict == "unjudged"]
         fixed = [c.case for c in cases if c.verdict == "fixed"]
         flaky = [c.case for c in cases if c.verdict == "flaky"]
 
+        # Every shipped eval case carries a rubric, so a repository with no judge configured decides
+        # nothing at all — and a comparison over nothing would report "within noise", which is a
+        # reassuring verdict computed from no evidence. Said at the top instead.
+        decided = [c for c in cases if c.verdict not in ("unjudged", "not run")]
         return {
             "agent": self.agent,
             "baseline": {
@@ -270,7 +285,10 @@ class Comparison:
             # about the prompt, and a report that stayed silent about it would be a comparison
             # quietly covering less than it appears to.
             "not_run": not_run,
-            "verdict": self._verdict(metrics, regressed, fixed, measurable),
+            "unjudged": unjudged,
+            "verdict": "nothing decided"
+            if cases and not decided
+            else self._verdict(metrics, regressed, fixed, measurable),
         }
 
     def _verdict(
@@ -296,6 +314,20 @@ def render(comparison: dict[str, Any]) -> str:
     """The comparison, for the pull request comment where somebody will decide on it."""
     baseline = comparison["baseline"]
     lines = [f"### `{comparison['agent']}` — {comparison['verdict']}", ""]
+
+    if comparison["verdict"] == "nothing decided":
+        lines += [
+            "**Not one case in this suite decided anything.**",
+            "",
+            "Every case here carries a `rubric`, and no judge is configured — so the grader reports "
+            "each of them as awaiting judgement rather than scoring prose it has no model for. "
+            "Nothing was compared, and nothing could have been: a verdict here would be a number "
+            "computed from no evidence.",
+            "",
+            "Set `evals.judge` to an agent in this pipeline. Until then the deterministic half of "
+            "each case still runs and this comparison stays silent, which is the honest answer.",
+        ]
+        return "\n".join(lines) + "\n"
 
     if comparison["verdict"] == "no baseline":
         lines += [
@@ -333,6 +365,14 @@ def render(comparison: dict[str, Any]) -> str:
             "",
             "**Cases that failed every baseline run and pass now:** "
             + ", ".join(f"`{name}`" for name in comparison["fixed"]),
+        ]
+    if comparison["unjudged"]:
+        lines += [
+            "",
+            "**Carry a rubric nobody judged:** "
+            + ", ".join(f"`{name}`" for name in comparison["unjudged"])
+            + ". Their deterministic half ran; the prose half is undecided because no `evals.judge` "
+            "is configured. They are excluded from the verdict rather than counted as failures.",
         ]
     if comparison["not_run"]:
         lines += [

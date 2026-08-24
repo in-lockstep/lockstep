@@ -182,7 +182,7 @@ def compile_spec(root: Path) -> CompilePlan:
     # same compiled workflows the pipeline does, so it has to hand over exactly the same secrets —
     # a reusable workflow whose required secret is not passed fails at the call, which is how a
     # suite for an agent with an MCP credential could never have run at all.
-    suite = emit_evals(spec, ci_ctx, agent_secrets=required_secrets)
+    suite = emit_evals(spec, ci_ctx, agent_secrets=required_secrets, compiled=set(required_secrets))
     if suite is not None:
         normalized_suite = normalize(suite)
         validate_workflow(EVALS_WORKFLOW, normalized_suite)
@@ -257,6 +257,13 @@ def _resolve_agent_layers(spec: Spec, commands: dict[str, Command], profile: Pro
                 )
             resolved.setdefault(step.target, layers)
             origin.setdefault(step.target, command.name)
+
+    # The judge is used by the eval suite rather than by a command, and it is used all the same. An
+    # agent nothing compiled is an agent the suite's `uses:` points at a file that does not exist —
+    # which compiles, lints clean, and fails at the first run with an unresolvable reference.
+    judge = spec.manifest.evals.judge
+    if judge and judge in spec.agents and judge not in resolved:
+        resolved[judge] = resolve_layers(spec.agents[judge], None, profile, spec)
     return resolved
 
 

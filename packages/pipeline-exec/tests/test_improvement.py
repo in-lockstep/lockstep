@@ -183,7 +183,7 @@ def test_a_record_carries_the_prompt_it_scored():
     }
     record = eval_record(report, prompt="abc123", identity={"run_id": "9"})
     assert record["kind"] == "eval" and record["prompt"] == "abc123"
-    assert record["cases"]["traversal"] == {"passed": True, "score": 5, "answered": True}
+    assert record["cases"]["traversal"] == {"passed": True, "score": 5, "answered": True, "judged": True}
     assert record["decided"] == 2
 
 
@@ -326,3 +326,60 @@ def test_records_from_before_this_distinction_existed_are_read_as_answered():
     assert compare(run("new", 4.4, {"traversal": False, "nothing-to-find": True}), runs)["regressed"] == [
         "traversal"
     ]
+
+
+# --- a suite with no judge decides nothing -----------------------------------
+#
+# Every case worth writing carries a rubric — "says what an attacker does with it" is not a
+# substring match — and a rubric nobody judges is reported as undecided. Before this, that produced
+# a pass_rate of 1.0 in the ledger, every case reading as "unchanged" forever, and a merge gate that
+# could never fire. A comfortable number from no evidence is the one thing this module exists to
+# refuse, so it has to refuse it here too.
+
+
+def pending(prompt, day=10):
+    report = {
+        "agent": "reviewer",
+        "summary": {"total": 2, "pending_rubric": ["a", "b"], "pass_rate": None, "mean_score": None},
+        "cases": [
+            {"case": "a", "passed": False, "rubric_pending": True},
+            {"case": "b", "passed": False, "rubric_pending": True},
+        ],
+    }
+    return eval_record(report, prompt=prompt, identity={"finished": f"2026-08-{day:02d}"})
+
+
+def test_an_unjudged_case_is_recorded_as_undecided():
+    assert pending("old")["cases"]["a"] == {"passed": False, "score": None, "answered": True, "judged": False}
+
+
+def test_a_suite_that_decided_nothing_says_so_instead_of_reporting_a_direction():
+    runs = [pending("old", day=10 + i) for i in range(3)]
+    result = compare(pending("new"), runs)
+    assert result["verdict"] == "nothing decided"
+    assert result["unjudged"] == ["a", "b"]
+    assert result["regressed"] == []
+    text = render(result)
+    assert "Not one case in this suite decided anything" in text
+    assert "evals.judge" in text
+
+
+def test_an_unjudged_case_cannot_be_mistaken_for_a_baseline_failure():
+    """`passes == 0` on every baseline run made every later change look like it fixed nothing."""
+    runs = [pending("old", day=10 + i) for i in range(3)]
+    verdicts = {v.case: v.verdict for v in case_verdicts(runs, pending("new"))}
+    assert set(verdicts.values()) == {"unjudged"}
+
+
+def test_a_judged_case_alongside_unjudged_ones_still_decides():
+    """The suite is not written off because part of it awaits judgement."""
+    runs = []
+    for i in range(3):
+        record = pending("old", day=10 + i)
+        record["cases"]["c"] = {"passed": True, "score": 5, "answered": True, "judged": True}
+        runs.append(record)
+    candidate = pending("new")
+    candidate["cases"]["c"] = {"passed": False, "score": 1, "answered": True, "judged": True}
+    result = compare(candidate, runs)
+    assert result["regressed"] == ["c"]
+    assert result["verdict"] == "regressed"

@@ -252,10 +252,25 @@ evals:
 ```
 
 A framework-provided prompt deciding whether your agents pass is a strong opinion to impose, and it
-could not be evaluated without evaluating the thing that evaluates it. Without a judge the
-deterministic half still runs and rubrics stay undecided, which is the honest answer rather than a
-missing one. A judge naming an agent that does not exist is ignored rather than compiled into a job
-calling a workflow nobody generated.
+could not be evaluated without evaluating the thing that evaluates it. So the framework ships none —
+but **both scaffolds write one into your repository**, because without it the loop is decorative.
+
+That is worth being blunt about. Every case worth writing carries a rubric; the deterministic half
+cannot settle *"says what an attacker does with it"*. A rubric nobody judges is reported as
+undecided, and a suite of undecided cases decides **nothing** — so the comparison has no evidence,
+and the merge gate can never fire. `pipeline-exec eval-compare` reports that state as
+`nothing decided` rather than as a verdict, and `pass_rate` comes back `null` rather than a
+fabricated 1.0.
+
+The judge is an agent like any other: it needs eval cases, and it gets its workflow compiled because
+the eval suite is a caller even when no command runs it. Its own cases are purely deterministic —
+a judge answers `{"passed": bool}` or `{"score": int}`, which `equals` settles exactly — so the one
+agent whose cases would otherwise need a judge is the one agent that does not, and the recursion
+never starts.
+
+A judge naming an agent this compile produces no workflow for is a **compile error**. It used to be
+ignored, which is the worst of the options: a typo silently left the whole suite deciding nothing
+while everything kept reporting.
 
 The judge reads `{case, rubric, scored, output}` and answers `{"passed": bool, "reason": str}` — or,
 for a scored rubric, reads the `levels`, `scale` and `min_score` as well and answers
