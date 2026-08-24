@@ -104,6 +104,8 @@ jobs:
       id: diff
       if: ${{ steps.cache-diff.outputs.hit != 'true' }}
       run: pipeline-exec pr-diff --pr="${{ needs.command-gate.outputs.pull_request }}" --output=outputs/diff.json
+      env:
+        GH_TOKEN: ${{ github.token }}
     - name: Publish diff outputs
       if: ${{ steps.cache-diff.outputs.hit != 'true' }}
       uses: in-lockstep/lockstep/actions/step-cache/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
@@ -115,6 +117,8 @@ jobs:
     - name: Work out which reviews are still due
       id: state
       run: pipeline-exec review-state --pr="${{ needs.command-gate.outputs.pull_request }}" --requested="${{ needs.command-gate.outputs.positional }}" --available=security,intent,performance,tests --output-dir=outputs/pending
+      env:
+        GH_TOKEN: ${{ github.token }}
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
@@ -280,6 +284,8 @@ jobs:
     - name: Post one review per aspect
       id: post
       run: pipeline-exec post-reviews --pr="${{ needs.command-gate.outputs.pull_request }}" --reviews=outputs/reviews --pending=outputs/pending --diff=outputs/diff.json
+      env:
+        GH_TOKEN: ${{ github.token }}
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1

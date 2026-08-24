@@ -62,7 +62,7 @@
       "sources": []
     },
     ".github/workflows/review.yml": {
-      "sha": "c850a27f",
+      "sha": "ce024024",
       "sources": [
         "commands/review.md@97ef9fce"
       ]

@@ -45,6 +45,33 @@ AVAILABLE = frozenset(
     }
 )
 
+# Builtins that reach the GitHub API, and therefore need a token in their step environment.
+#
+# `pipeline-exec` shells out to `gh`, and `gh` refuses to run inside Actions without `GH_TOKEN` —
+# it does not fall back to anything. So `pr-diff` failed with the CLI's own advice printed at it:
+# "To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable."
+#
+# Named rather than granted to every step. A `script:` step is arbitrary code a pipeline author
+# wrote, and handing it the repository token because some *other* step needed one is how a
+# deterministic step quietly gains reach it was never reviewed for. The list is checked against the
+# runtime in `tests/test_contract.py`, so a builtin that starts calling `gh` cannot stay off it
+# silently.
+NEEDS_GITHUB_TOKEN = frozenset(
+    {
+        "pr-diff",
+        "pr-feedback",
+        "review-state",
+        "post-reviews",
+        "await-checks",
+        "gh-issue-fetch",
+        # `--source=github` reaches the API; `--source=jira` uses its own credential from the
+        # profile. The token is emitted either way because which source a run uses is a runtime
+        # value, and a compile-time guess would fail exactly when somebody switched tracker.
+        "issue-fetch",
+    }
+)
+
+
 # Commands the compiler emits itself, as fan-out glue or from inside a composite action. They are
 # not spec surface: a `builtin:` step naming one of these would be describing plumbing, not work.
 INTERNAL = frozenset(

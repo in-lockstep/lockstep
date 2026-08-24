@@ -55,7 +55,7 @@
       "sources": []
     },
     ".github/workflows/implement.yml": {
-      "sha": "a75a5cde",
+      "sha": "14f59e5e",
       "sources": [
         "commands/implement.md@aa792623"
       ]
