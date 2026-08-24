@@ -24,6 +24,12 @@ def doctor_of(root):
     return doctor(load_spec(root), root)
 
 
+def drop_evals(root, agent="story-extractor"):
+    """Remove the fixture's cases, for tests about an agent that has none."""
+    for case in (root / "evals" / agent / "cases").glob("*.json"):
+        case.unlink()
+
+
 def give_evals(root, *agents):
     for name in agents:
         cases = root / "evals" / name / "cases"
@@ -37,6 +43,9 @@ def give_evals(root, *agents):
 
 
 def test_an_agent_without_evals_is_an_error(basic_root):
+    # The fixture ships cases, because a canonical fixture that fails its own lint is a strange
+    # thing to hold everything else to. This test creates the condition it is about.
+    drop_evals(basic_root)
     report = lint_of(basic_root)
     assert "LNT001" in codes(report)
     assert any(f.severity is Severity.ERROR for f in report.findings if f.code == "LNT001")
@@ -190,6 +199,7 @@ def test_an_over_limit_timeout_is_an_error(basic_root):
 
 @pytest.mark.parametrize("code", ["LNT001", "DOC006"])
 def test_findings_render_with_a_hint(basic_root, code):
+    drop_evals(basic_root)
     agent = basic_root / "agents" / "story-extractor.md"
     agent.write_text(agent.read_text().replace("  max-ai-credits: 40\n", ""))
     report = lint_of(basic_root) if code.startswith("LNT") else doctor_of(basic_root)

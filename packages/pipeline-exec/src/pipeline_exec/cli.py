@@ -659,14 +659,73 @@ def _issue_number(issue: str) -> str:
     return tail
 
 
+@main.command(name="eval-cases")
+@click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
+@click.option("--output-dir", required=True, type=click.Path(path_type=Path))
+def eval_cases(cases: Path, output_dir: Path) -> None:
+    """Write one agent input per eval case, and list them for a fan-out.
+
+    An eval is not a special way of running an agent. It is the ordinary way — `input_path` in,
+    `output_path` out — with the input coming from a case file instead of an earlier step.
+    """
+    from .evals import Case, CaseError, expand
+
+    files = sorted(cases.glob("*.json"))
+    if not files:
+        _fail(f"no cases in {cases}")
+    try:
+        parsed = [Case.load(path) for path in files]
+    except CaseError as error:
+        _fail(str(error))
+
+    items = expand(parsed, output_dir)
+    _emit_output("cases", json.dumps([item["case"] for item in items]))
+    _emit_output("count", str(len(items)))
+    click.echo(f"{len(items)} case(s) -> {output_dir}")
+
+
+@main.command(name="eval-judge-prep")
+@click.option("--cases", required=True, type=click.Path(path_type=Path))
+@click.option("--outputs", required=True, type=click.Path(path_type=Path), help="What the agent answered.")
+@click.option("--output-dir", required=True, type=click.Path(path_type=Path))
+def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
+    """Pair each rubric with the answer it is about, for a judging agent to read.
+
+    Only cases carrying a rubric that also produced an answer. A case with no answer has already
+    failed for that reason; sending it to a judge would spend a model call to be told so again.
+    """
+    from .evals import Case, CaseError, judge_inputs
+
+    try:
+        parsed = [Case.load(path) for path in sorted(cases.glob("*.json"))]
+    except CaseError as error:
+        _fail(str(error))
+
+    pending = judge_inputs(parsed, outputs, output_dir)
+    _emit_output("pending", json.dumps(pending))
+    _emit_output("count", str(len(pending)))
+    click.echo(f"{len(pending)} rubric(s) to judge -> {output_dir}")
+
+
 @main.command(name="eval-grade")
 @click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
 @click.option("--outputs", required=True, type=click.Path(path_type=Path), help="Directory of agent outputs.")
 @click.option("--output", required=True, type=click.Path(path_type=Path), help="Where to write the report.")
 @click.option("--agent", default="", help="Name recorded in the report.")
 @click.option("--min-pass-rate", type=float, default=None, help="Fail below this rate of decided cases.")
+@click.option(
+    "--judgements",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory of judge verdicts, one per case. Without it, rubrics stay undecided.",
+)
 def eval_grade(
-    cases: Path, outputs: Path, output: Path, agent: str, min_pass_rate: float | None
+    cases: Path,
+    outputs: Path,
+    output: Path,
+    agent: str,
+    min_pass_rate: float | None,
+    judgements: Path | None,
 ) -> None:
     """Grade an agent's answers against its eval cases.
 
@@ -677,7 +736,7 @@ def eval_grade(
     An output file missing for a case is a failure, not a skip. The agent was asked and did not
     answer, which is exactly the regression an eval suite is for.
     """
-    from .evals import Case, CaseError, grade, summarize
+    from .evals import Case, CaseError, apply_judgement, grade, summarize
 
     files = sorted(cases.glob("*.json"))
     if not files:
@@ -708,7 +767,14 @@ def eval_grade(
             answer = json.loads(answer_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as error:
             _fail(f"{case.name}: the agent's output is not valid JSON ({error.msg})")
-        results.append(grade(case, answer))
+        result = grade(case, answer)
+        verdict_path = (judgements / f"{case.name}.json") if judgements else None
+        if result["rubric_pending"] and verdict_path and verdict_path.is_file():
+            try:
+                result = apply_judgement(result, json.loads(verdict_path.read_text(encoding="utf-8")))
+            except json.JSONDecodeError:
+                result = apply_judgement(result, None)
+        results.append(result)
 
     summary = summarize(results, min_pass_rate=min_pass_rate)
     report = {"agent": agent, "summary": summary, "cases": results}

@@ -108,10 +108,68 @@ pipeline-exec eval-grade \
 It publishes `passed`, `pass_rate` and `pending_rubric` as step outputs, so a later step can gate on
 them.
 
-What produces `--outputs` is the agent itself, and that is the half not built yet: invoking an agent
-per case needs a running gh-aw and the credits to go with it, and neither exists until the
-capabilities are published. `docs/status.md` says so. The contract, the grader and the lint rules do
-not wait on that — they are what makes the eventual run mean something.
+What produces `--outputs` is the agent, and that is what `evals.yml` is for.
+
+---
+
+## The workflow
+
+`lockstep compile` emits one eval suite for the repository, with a group of jobs per agent that has
+cases. The shape is deliberately the ordinary one:
+
+```
+cases-<agent>   expand the case files into agent inputs, and list them
+run-<agent>     the agent itself, once per case, as a matrix
+prep-<agent>    pair each rubric with the answer it is about        (only with a judge)
+judge-<agent>   judge those pairs, once per rubric                  (only with a judge)
+grade-<agent>   apply the checks, fold in the verdicts, gate
+```
+
+`run-<agent>` calls **the same compiled workflow the pipeline calls** —
+`./.github/workflows/aw-<agent>.lock.yml`, with `input_path` and `output_path`. An eval is not a
+special way of running an agent; it is the ordinary way, with the input coming from a case file
+instead of an earlier step. A suite that ran the agent some other way would be evidence about the
+harness.
+
+Two details worth reading twice:
+
+- **It never runs on every push.** A suite spends credits. It is dispatched, or it runs when a
+  prompt layer changes — `agents/`, `guardrails/`, `skills/`, `contexts/`, `evals/` — which is
+  exactly what an eval exists to gate, and the only thing that can move an agent's behaviour. Set
+  `evals.on-prompt-change: false` to leave only the dispatch.
+- **`grade` runs on `!cancelled()`**, not on success. A case whose agent run failed is a case the
+  suite should report on, not one that takes the report down with it.
+
+### The judge
+
+Rubrics are judged by an agent **your pipeline declares**, not one the framework ships:
+
+```yaml
+evals:
+  judge: eval-judge        # an agent in this pipeline
+  min-pass-rate: 0.9
+```
+
+A framework-provided prompt deciding whether your agents pass is a strong opinion to impose, and it
+could not be evaluated without evaluating the thing that evaluates it. Without a judge the
+deterministic half still runs and rubrics stay undecided, which is the honest answer rather than a
+missing one. A judge naming an agent that does not exist is ignored rather than compiled into a job
+calling a workflow nobody generated.
+
+The judge reads `{case, rubric, output}` and answers `{"passed": bool, "reason": str}`. A verdict
+that cannot be read is **not** a pass: an agent that answered in an unexpected shape has not judged
+anything, and treating that as approval is how a suite starts reporting green for the wrong reason.
+
+Only cases that carry a rubric *and* produced an answer reach the judge. A case with no answer has
+already failed for that reason, and judging it would spend a model call to be told so again.
+
+---
+
+## What still waits on a runner
+
+Nothing has executed. The suite compiles, drift-checks and is covered by the gate like every other
+workflow here, and it runs the first time an agent runs at all — which needs the capabilities
+published. `docs/status.md` tracks that.
 
 ---
 

@@ -382,6 +382,23 @@ class Capabilities:
 
 
 @dataclass
+class EvalConfig:
+    """How this pipeline runs its eval suites.
+
+    `judge` names an agent in this pipeline, not one the framework ships. A framework-provided
+    prompt deciding whether your agents pass is a strong opinion to impose, and it could not be
+    evaluated without evaluating the thing that evaluates it. Without a judge the deterministic
+    half still runs and rubrics are reported as undecided, which is the honest answer.
+    """
+
+    judge: str = ""
+    min_pass_rate: float | None = None
+    # Evals cost credits, so the suite is dispatched or triggered by a change to the prompt layers
+    # it covers — never on every push. A prompt change is exactly what an eval exists to gate.
+    on_prompt_change: bool = True
+
+
+@dataclass
 class TargetConfig:
     out: str = ".github/workflows"
     fuse_script_steps: bool = True
@@ -433,6 +450,7 @@ class Manifest:
     capabilities: Capabilities = field(default_factory=Capabilities)
     target: TargetConfig = field(default_factory=TargetConfig)
     per_run_ai_credits: int | None = None
+    evals: EvalConfig = field(default_factory=EvalConfig)
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
     uses: dict[str, CommandUse] = field(default_factory=dict)
     extensions: Extensions = field(default_factory=Extensions)

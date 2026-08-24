@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "4425b8f2",
+      "sha": "2fffa87e",
       "sources": []
     },
     ".github/workflows/aw-bug-analyst.md": {
@@ -52,6 +52,10 @@
         "skills/codebase-navigation.md@1c4aab59",
         "contexts/target-app.md@b2f31518"
       ]
+    },
+    ".github/workflows/evals.yml": {
+      "sha": "760b4204",
+      "sources": []
     },
     ".github/workflows/fix-bugs.yml": {
       "sha": "eff3186b",

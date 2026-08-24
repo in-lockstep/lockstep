@@ -19,6 +19,7 @@ from .model import (
     Capabilities,
     Command,
     CommandUse,
+    EvalConfig,
     Extensions,
     Manifest,
     SourceFile,
@@ -75,6 +76,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     caps_raw = data.get("capabilities", {}) or {}
     target_raw = (data.get("targets", {}) or {}).get("github-agentic", {}) or {}
     budgets = data.get("budgets", {}) or {}
+    evals_raw = data.get("evals", {}) or {}
     extensions_raw = data.get("extensions", {}) or {}
 
     commands_raw = data.get("commands", {}) or {}
@@ -112,6 +114,13 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             watch=[str(p) for p in (target_raw.get("watch", []) or [])],
         ),
         per_run_ai_credits=budgets.get("per_run_ai_credits"),
+        evals=EvalConfig(
+            judge=str(evals_raw.get("judge", "") or ""),
+            min_pass_rate=(
+                float(evals_raw["min-pass-rate"]) if evals_raw.get("min-pass-rate") is not None else None
+            ),
+            on_prompt_change=bool(evals_raw.get("on-prompt-change", True)),
+        ),
         commands=data.get("commands", {}) or {},
         extensions=Extensions(
             builtins=[str(name) for name in (extensions_raw.get("builtins") or [])],

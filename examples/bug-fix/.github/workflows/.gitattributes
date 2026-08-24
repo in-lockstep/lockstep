@@ -5,6 +5,7 @@ aw-bug-analyst.md linguist-generated=true
 aw-fix-reviewer.md linguist-generated=true
 aw-fix-writer.md linguist-generated=true
 aw-reproducer-writer.md linguist-generated=true
+evals.yml linguist-generated=true
 fix-bugs.yml linguist-generated=true
 pipeline-ci.yml linguist-generated=true
 shared/context-target-app.md linguist-generated=true

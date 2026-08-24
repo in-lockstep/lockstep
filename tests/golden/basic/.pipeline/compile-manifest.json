@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "e40d1485",
+      "sha": "0c81e717",
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
@@ -20,6 +20,10 @@
       "sources": [
         "commands/discover.md@65153630"
       ]
+    },
+    ".github/workflows/evals.yml": {
+      "sha": "bfeba711",
+      "sources": []
     },
     ".github/workflows/generate-tests.yml": {
       "sha": "b0ecf883",

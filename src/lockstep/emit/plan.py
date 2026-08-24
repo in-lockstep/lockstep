@@ -30,6 +30,8 @@ from .agentic import (
 from .ci import WORKFLOW_NAME as CI_WORKFLOW
 from .ci import emit_ci
 from .context import EmitContext, Pins
+from .evals import WORKFLOW_NAME as EVALS_WORKFLOW
+from .evals import emit_evals
 from .fragments import emit_fragments, resolve_layers
 from .orchestrator import WorkflowResult, emit_command, normalize
 from .overlay import Overlay, apply_mapping_ops, apply_prompt_ops, load_overlays
@@ -168,6 +170,18 @@ def compile_spec(root: Path) -> CompilePlan:
             ci_ctx.header([spec.manifest.src]),
         ),
     )
+    suite = emit_evals(spec, ci_ctx)
+    if suite is not None:
+        normalized_suite = normalize(suite)
+        validate_workflow(EVALS_WORKFLOW, normalized_suite)
+        plan.add(
+            f"{spec.manifest.target.out}/{EVALS_WORKFLOW}",
+            yamlio.with_header(
+                yamlio.annotate_pins(yamlio.dump(normalized_suite), pins.sha_tags()),
+                ci_ctx.header([spec.manifest.src]),
+            ),
+        )
+
     plan.add(f"{spec.manifest.target.out}/.gitattributes", _gitattributes(plan, spec.manifest.target.out))
     plan.add(spec.repo_path(SECRETS_DOC), _secrets_doc(spec, profiles))
     plan.add(spec.repo_path(MANIFEST_PATH), _compile_manifest(plan, spec))

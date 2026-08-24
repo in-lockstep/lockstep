@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "fb6c7ea0",
+      "sha": "fb462137",
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
@@ -15,6 +15,10 @@
         "lockstep:skills/test-script-format.md@b83cd2fa",
         "contexts/httpbin.md@bc2ca0cd"
       ]
+    },
+    ".github/workflows/evals.yml": {
+      "sha": "bec3bd02",
+      "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {
       "sha": "b41d5521",

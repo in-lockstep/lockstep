@@ -20,7 +20,6 @@ AVAILABLE = frozenset(
         "wait-for",
         "pr-feedback",
         "gh-issue-fetch",
-        "eval-grade",
         # Introspection: how a pipeline repository proves in CI that the builtins its spec names
         # actually exist, extensions included.
         "list-commands",
@@ -36,6 +35,11 @@ INTERNAL = frozenset(
         "shard-run",
         "cache-key",
         "parse-command",
+        # Eval plumbing. The compiler writes these into the eval workflow itself; a `builtin:` step
+        # naming one would be describing the harness rather than the work.
+        "eval-cases",
+        "eval-judge-prep",
+        "eval-grade",
     }
 )
 

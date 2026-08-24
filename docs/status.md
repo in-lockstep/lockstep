@@ -317,9 +317,18 @@ the rubric as outstanding, and the roll-up counts those separately: a suite clai
 of it was never judged is the reassuring number the contract exists to remove. A case with no output
 file fails rather than being skipped — the agent was asked and did not answer.
 
-What is not built is the half that needs a model: invoking an agent once per case requires a running
-gh-aw and the credits, so nothing produces the outputs `eval-grade` reads yet. The contract, the
-grader and the rules do not wait on that; they are what will make the run mean something.
+`lockstep compile` now emits `evals.yml`: per agent with cases, a job to expand the cases into agent
+inputs, a matrix that runs the agent once per case through **the same compiled workflow the pipeline
+calls**, an optional pair of jobs that judge rubrics, and a grading job that gates. It never runs on
+every push — dispatch, or a change to the prompt layers it covers, which is the only thing that can
+move an agent's behaviour.
+
+The judge is an agent the pipeline declares, not one the framework ships: a framework-provided
+prompt deciding whether your agents pass could not itself be evaluated without evaluating the
+evaluator. Without one the deterministic half still runs and rubrics stay undecided.
+
+Nothing has executed. The suite compiles and is covered by the drift gate like every other workflow
+here; it runs the first time an agent runs at all, which needs the capabilities published.
 
 Migrating the 22 existing cases found two in `examples/httpbin` asserting exact field values through
 keys nothing read, which is where the `equals` expectation came from.

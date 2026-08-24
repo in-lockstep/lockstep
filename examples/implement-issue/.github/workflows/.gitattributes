@@ -5,6 +5,7 @@ aw-change-writer.md linguist-generated=true
 aw-planner.md linguist-generated=true
 aw-requirements-analyst.md linguist-generated=true
 aw-test-writer.md linguist-generated=true
+evals.yml linguist-generated=true
 implement.yml linguist-generated=true
 pipeline-ci.yml linguist-generated=true
 shared/context-repository.md linguist-generated=true

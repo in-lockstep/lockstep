@@ -3,6 +3,7 @@
 *.lock.yml linguist-generated=true
 aw-story-extractor.md linguist-generated=true
 discover.yml linguist-generated=true
+evals.yml linguist-generated=true
 generate-tests.yml linguist-generated=true
 pipeline-ci.yml linguist-generated=true
 repair.yml linguist-generated=true

@@ -95,6 +95,8 @@ def test_notes_surface_deferred_capabilities(basic_root):
 
 
 def test_lint_fails_on_an_error(basic_root):
+    for case in (basic_root / "evals" / "story-extractor" / "cases").glob("*.json"):
+        case.unlink()
     result = run("lint", "--root", str(basic_root))
     assert result.exit_code == EXIT_DRIFT
     assert "LNT001" in result.output
@@ -102,7 +104,7 @@ def test_lint_fails_on_an_error(basic_root):
 
 def test_lint_strict_promotes_warnings(basic_root):
     cases = basic_root / "evals" / "story-extractor" / "cases"
-    cases.mkdir(parents=True)
+    cases.mkdir(parents=True, exist_ok=True)
     (cases / "one.json").write_text(
         '{"input": {"key": "one"}, "expect": {"schema": ["summary"]}}', encoding="utf-8"
     )

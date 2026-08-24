@@ -247,3 +247,113 @@ def test_a_malformed_case_stops_the_run(suite):
     result = run(cases, outputs, report)
     assert result.exit_code == 1
     assert "no `input`" in result.output
+
+
+# --- the loop: cases in, answers out, rubrics judged -------------------------
+
+
+def test_expanding_writes_one_agent_input_per_case(tmp_path):
+    """The agent contract is input_path/output_path; a case is just where the input came from."""
+    from pipeline_exec.evals import expand
+
+    items = expand([Case("a", {"k": 1}, {"rubric": "x"}), Case("b", {"k": 2}, {"schema": ["s"]})], tmp_path)
+    assert json.loads((tmp_path / "a.json").read_text()) == {"k": 1}
+    assert [i["case"] for i in items] == ["a", "b"]
+    assert [i["rubric"] for i in items] == [True, False]
+
+
+def test_only_rubric_cases_with_an_answer_reach_the_judge(tmp_path):
+    """A case with no answer already failed for that reason; judging it spends a call to repeat it."""
+    from pipeline_exec.evals import judge_inputs
+
+    outputs = tmp_path / "out"
+    outputs.mkdir()
+    (outputs / "answered.json").write_text(json.dumps(FINDINGS), encoding="utf-8")
+    cases = [
+        Case("answered", {}, {"rubric": "judge me"}),
+        Case("unanswered", {}, {"rubric": "judge me"}),
+        Case("no-rubric", {}, {"schema": ["findings"]}),
+    ]
+    pending = judge_inputs(cases, outputs, tmp_path / "judge")
+    assert pending == ["answered"]
+    paired = json.loads((tmp_path / "judge" / "answered.json").read_text())
+    assert paired["rubric"] == "judge me"
+    assert paired["output"] == FINDINGS
+
+
+def test_a_judge_verdict_decides_a_pending_case():
+    from pipeline_exec.evals import apply_judgement
+
+    graded = grade(case(contains=["src/files.py"], rubric="Cites the file"), FINDINGS)
+    decided = apply_judgement(graded, {"passed": True, "reason": "cites src/files.py:2"})
+    assert decided["rubric_pending"] is False
+    assert decided["passed"] is True
+    assert decided["rubric_verdict"]["reason"] == "cites src/files.py:2"
+
+
+def test_a_rejected_rubric_fails_even_with_the_checks_green():
+    from pipeline_exec.evals import apply_judgement
+
+    graded = grade(case(contains=["src/files.py"], rubric="Says what an attacker does"), FINDINGS)
+    decided = apply_judgement(graded, {"passed": False, "reason": "never says what an attacker does"})
+    assert decided["deterministic_passed"] is True
+    assert decided["passed"] is False
+    assert summarize([decided])["failed"] == ["c"]
+
+
+def test_an_unreadable_verdict_is_not_a_pass():
+    """A judge that answered in an unexpected shape has not judged anything."""
+    from pipeline_exec.evals import apply_judgement
+
+    graded = grade(case(rubric="x"), FINDINGS)
+    for nonsense in (None, {}, {"passed": "yes"}, ["passed"], {"verdict": True}):
+        decided = apply_judgement(graded, nonsense)
+        assert decided["passed"] is False
+        assert decided["rubric_pending"] is False
+        assert "did not answer" in decided["rubric_verdict"]["reason"]
+
+
+# --- the commands -------------------------------------------------------------
+
+
+def test_the_cases_command_publishes_the_fan_out_list(tmp_path):
+    cases = tmp_path / "cases"
+    cases.mkdir()
+    (cases / "one.json").write_text(
+        json.dumps({"input": {"k": 1}, "expect": {"schema": ["s"]}}), encoding="utf-8"
+    )
+    result = CliRunner().invoke(
+        main, ["eval-cases", f"--cases={cases}", f"--output-dir={tmp_path / 'inputs'}"]
+    )
+    assert result.exit_code == 0, result.output
+    assert 'cases=["one"]' in result.output
+    assert json.loads((tmp_path / "inputs" / "one.json").read_text()) == {"k": 1}
+
+
+def test_grading_folds_in_a_judgement_when_one_is_supplied(suite):
+    cases, outputs, report = suite
+    (cases / "judged.json").write_text(
+        json.dumps({"input": {}, "expect": {"rubric": "Cites the file"}}), encoding="utf-8"
+    )
+    (outputs / "judged.json").write_text(json.dumps(FINDINGS), encoding="utf-8")
+    verdicts = cases.parent / "verdicts"
+    verdicts.mkdir()
+    (verdicts / "judged.json").write_text(json.dumps({"passed": True, "reason": "ok"}), encoding="utf-8")
+
+    result = run(cases, outputs, report, f"--judgements={verdicts}")
+    assert result.exit_code == 0, result.output
+    summary = json.loads(report.read_text())["summary"]
+    assert summary["pending_rubric"] == []
+    assert summary["passed"] == 2
+
+
+def test_without_judgements_a_rubric_case_stays_undecided(suite):
+    cases, outputs, report = suite
+    (cases / "judged.json").write_text(
+        json.dumps({"input": {}, "expect": {"rubric": "Cites the file"}}), encoding="utf-8"
+    )
+    (outputs / "judged.json").write_text(json.dumps(FINDINGS), encoding="utf-8")
+    result = run(cases, outputs, report)
+    assert result.exit_code == 0, result.output
+    assert json.loads(report.read_text())["summary"]["pending_rubric"] == ["judged"]
+

@@ -2,6 +2,7 @@
 # Only what the compiler wrote: anything else in this directory belongs to the repository.
 *.lock.yml linguist-generated=true
 aw-test-writer.md linguist-generated=true
+evals.yml linguist-generated=true
 pipeline-ci.yml linguist-generated=true
 shared/context-httpbin.md linguist-generated=true
 shared/guardrail-api-tests.md linguist-generated=true

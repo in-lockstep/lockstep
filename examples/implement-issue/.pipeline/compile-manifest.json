@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "344210a6",
+      "sha": "df380e73",
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
@@ -49,6 +49,10 @@
         "skills/repo-conventions.md@5fe054f8",
         "contexts/repository.md@0c062bee"
       ]
+    },
+    ".github/workflows/evals.yml": {
+      "sha": "d2ba5b25",
+      "sources": []
     },
     ".github/workflows/implement.yml": {
       "sha": "eb520ef2",
