@@ -39,7 +39,7 @@ runs:
 
     - name: Publish to the durable layer
       if: steps.resolved.outputs.skip != 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
       with:
         # Artifacts are per-run, so a forced refresh with unchanged inputs publishes a newer copy
         # that the probe will prefer — which is what an immutable cache key cannot express.
@@ -52,7 +52,7 @@ runs:
     - name: Publish to the fast layer
       if: steps.resolved.outputs.skip != 'true'
       continue-on-error: true          # a key that already exists is not an error here
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
       with:
         key: ${{ steps.resolved.outputs.key }}
         path: ${{ inputs.outputs }}

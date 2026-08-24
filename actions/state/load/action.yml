@@ -22,7 +22,7 @@ runs:
         echo "dir=$(dirname "${{ inputs.path }}")" >> "$GITHUB_OUTPUT"
 
     - name: Download database
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
       continue-on-error: true          # the first job to use state creates it
       with:
         name: ${{ steps.prepare.outputs.name }}
