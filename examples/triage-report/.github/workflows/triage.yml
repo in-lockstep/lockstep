@@ -84,11 +84,10 @@ jobs:
           outputs/issues.json
         force: ${{ inputs.force }}
         force-steps: ${{ inputs.force_steps }}
-        key-extra: ${{ inputs.jql }} ${{ inputs.limit }}
     - name: Search the tracker
       id: search
       if: ${{ steps.cache-search.outputs.hit != 'true' }}
-      run: pipeline-exec jql-search --jql="${{ inputs.jql }}" --limit=${{ inputs.limit }} --output=outputs/issues.json
+      run: pipeline-exec jql-search --jql="${{ inputs.jql || 'project = APP AND status = ''Needs Triage'' ORDER BY created DESC' }}" --limit=${{ inputs.limit || '60' }} --output=outputs/issues.json
     - name: Publish search outputs
       if: ${{ steps.cache-search.outputs.hit != 'true' }}
       uses: in-lockstep/lockstep/actions/step-cache/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
@@ -173,7 +172,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
     - name: Render the site
       id: render
-      run: uv run python3 scripts/render-site.py --report=outputs/report.json --summary=outputs/summary.json --title="${{ inputs.title }}" --output-dir=outputs/site
+      run: uv run python3 scripts/render-site.py --report=outputs/report.json --summary=outputs/summary.json --title="${{ inputs.title || 'Triage report' }}" --output-dir=outputs/site
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
@@ -197,6 +196,6 @@ jobs:
         source: outputs/site
         destination: .
         branch: report/triage
-        title: ${{ inputs.title }}
+        title: ${{ inputs.title || 'Triage report' }}
         labels: report,triage,needs-review
         base: gh-pages

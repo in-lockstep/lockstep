@@ -267,18 +267,26 @@ class EmitContext:
             chat = command.github.command
             from_comment = set(chat.arguments) if chat else set()
             for parameter in command.parameters:
-                reference = "${{ inputs." + parameter.input_name + " }}"
+                # A chain, first non-empty wins, because the same pipeline is reachable several ways
+                # and a step should not care which one fired.
+                #
+                # `inputs` exists only for `workflow_dispatch` and `workflow_call`. On a comment or
+                # a schedule it is empty — and a declared default reaches the dispatch input
+                # definition, not the expression. So `source`, declared `default: github`, arrived
+                # as the empty string on the comment path and `issue-fetch` refused it:
+                # "Invalid value for '--source': '' is not one of 'github', 'jira'". `issue`
+                # survived only because it is a command argument and had the gate to fall back to.
+                sources = ["inputs." + parameter.input_name]
                 if parameter.name in from_comment:
-                    # The same pipeline is reachable two ways. A dispatch supplies inputs; a comment
-                    # supplies the same values through the gate, and a step should not care which.
-                    reference = (
-                        "${{ inputs."
-                        + parameter.input_name
-                        + " || needs.command-gate.outputs."
-                        + parameter.input_name
-                        + " }}"
-                    )
-                text = text.replace("{" + parameter.name + "}", reference)
+                    # A comment supplies the same values through the gate.
+                    sources.append("needs.command-gate.outputs." + parameter.input_name)
+                if parameter.default:
+                    # Last, so an explicit value always wins over it. Single quotes doubled, which
+                    # is how a GitHub expression escapes one.
+                    sources.append("'" + parameter.default.replace("'", "''") + "'")
+                text = text.replace(
+                    "{" + parameter.name + "}", "${{ " + " || ".join(sources) + " }}"
+                )
             if chat:
                 # What the human actually wrote after the command — usually the point of the run.
                 text = text.replace("{instruction}", "${{ needs.command-gate.outputs.instruction }}")

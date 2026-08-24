@@ -141,7 +141,6 @@ jobs:
           outputs/bugs.json
         force: ${{ inputs.force }}
         force-steps: ${{ inputs.force_steps }}
-        key-extra: ${{ inputs.jql }} ${{ inputs.limit }}
     - name: Install the pipeline's extensions
       id: install-extensions
       run: |
@@ -151,7 +150,7 @@ jobs:
     - name: Fetch triaged bugs
       id: fetch-bugs
       if: ${{ steps.cache-fetch-bugs.outputs.hit != 'true' }}
-      run: pipeline-exec jira-fetch --jql="${{ inputs.jql }}" --limit=${{ inputs.limit }} --only="${{ inputs.only || needs.command-gate.outputs.only }}" --output=outputs/bugs.json
+      run: pipeline-exec jira-fetch --jql="${{ inputs.jql || 'project = APP AND type = Bug AND status = Triaged AND labels = auto-fix' }}" --limit=${{ inputs.limit || '5' }} --only="${{ inputs.only || needs.command-gate.outputs.only }}" --output=outputs/bugs.json
     - name: Set up the application being fixed
       id: setup-target
       uses: ./extensions/actions/setup-target

@@ -19,6 +19,7 @@ from pipeline_exec.cli import main as exec_cli
 
 from lockstep.emit import compile_spec
 from lockstep.emit.builtins import AVAILABLE, INTERNAL, MATRIX_CAP
+from lockstep.spec.load import load_spec
 
 FIXTURE = Path(__file__).parent / "fixtures" / "basic"
 # Every pipeline in the repository, not just the fixture. A referenced action that does not exist is
@@ -587,3 +588,80 @@ def test_the_declaration_is_not_silently_swallowed_as_an_argument(tmp_path):
     root = _with_step(tmp_path, "   - github-token: true\n")
     text = compile_spec(root).files[".github/workflows/discover.yml"]
     assert "github-token" not in text
+
+
+# --- a declared default has to survive every trigger ----------------------------------------------
+#
+# `inputs` exists only for `workflow_dispatch` and `workflow_call`. On a comment or a schedule it is
+# empty, and a parameter's declared default reaches the *dispatch input definition* rather than the
+# expression a step is built from.
+#
+# So `/implement 18`, commented on an issue, ran `issue-fetch --source=""` and was refused:
+# "Invalid value for '--source': '' is not one of 'github', 'jira'". `issue` survived only because
+# it is a declared command argument and therefore had the gate to fall back to — which is why the
+# failure looked like one parameter being wrong rather than every defaulted one.
+
+
+def name_of(expression: str) -> str:
+    return expression.split(".", 1)[1].split()[0].strip()
+
+
+def _expansions(root: Path) -> list[tuple[str, str]]:
+    """Every `${{ … }}` reading a command input, with the workflow it came from."""
+    found: list[tuple[str, str]] = []
+    for path, text in compile_spec(root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for match in re.finditer(r"\$\{\{\s*(inputs\.[a-z_0-9]+[^}]*?)\s*\}\}", text):
+            found.append((path, match.group(1)))
+    return found
+
+
+@pytest.mark.parametrize("root", ALL_PIPELINES, ids=lambda p: p.name)
+def test_a_parameter_with_a_default_falls_back_to_it(root):
+    """Every reference to a defaulted parameter ends in a literal, so no trigger can empty it."""
+    spec = load_spec(root)
+    defaulted = {
+        parameter.input_name: parameter.default
+        for command in spec.commands.values()
+        for parameter in command.parameters
+        if parameter.default
+    }
+    if not defaulted:
+        pytest.skip("no defaulted parameters in this pipeline")
+
+    bare: list[str] = []
+    for path, expression in _expansions(root):
+        # Value substitutions only. A step *condition* compiles to a comparison
+        # (`inputs.skip_discovery != true`) which already reasons about the empty case — a
+        # different construct with its own semantics, and not what this is about.
+        if not re.fullmatch(r"inputs\.[a-z_0-9]+(\s*\|\|\s*[^|]+)*", expression.strip()):
+            continue
+        # The step-cache action's own `force` inputs are emitted by the caching layer rather than by
+        # `expand()`, and are safe for a narrower reason: they default to false and the action tests
+        # for the literal "true", so an empty string means the same thing. Left alone deliberately —
+        # threading the command through `emit_probe` to make them consistent would be a signature
+        # change for no behavioural gain.
+        if name_of(expression) in ("force", "force_steps"):
+            continue
+        name = expression.split(".", 1)[1].split()[0].strip()
+        if name in defaulted and "'" not in expression:
+            bare.append(f"{path}: ${{{{ {expression} }}}}")
+    assert not bare, (
+        "these read a defaulted parameter with no literal fallback, so a comment or a schedule "
+        "supplies the empty string:\n  " + "\n  ".join(sorted(set(bare)))
+    )
+
+
+def test_an_explicit_value_still_wins_over_the_default():
+    """The default is last in the chain, so a dispatch or a comment overrides it."""
+    from lockstep.emit.context import EmitContext  # noqa: F401
+
+    text = compile_spec(FIXTURE).files[".github/workflows/generate-tests.yml"]
+    for expression in re.findall(r"\$\{\{\s*inputs\.[^}]*?\|\|[^}]*?\}\}", text):
+        parts = [part.strip() for part in expression.strip("${} ").split("||")]
+        assert parts[0].startswith("inputs."), expression
+        literals = [i for i, part in enumerate(parts) if part.startswith("'")]
+        assert not literals or literals[0] == len(parts) - 1, (
+            f"a literal default must come last so an explicit value wins: {expression}"
+        )
