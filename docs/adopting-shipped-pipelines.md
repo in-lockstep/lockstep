@@ -182,6 +182,43 @@ kind of thing a bot has to do once to be turned off.
 
 ---
 
+## Every shipped pull request names the work it came from
+
+`implement` and `fix` open pull requests, and every commit they make carries the tracker reference as
+a git trailer:
+
+```
+Implement 412
+
+Issue: #412
+```
+
+That is the same line for either tracker — `#412` on GitHub, `PLAT-412` on Jira — and both read it
+where it is. GitHub autolinks `#412` anywhere in a commit message; Jira's connector matches
+`ABC-123` the same way. A trailer rather than a subject line because it survives a squash and is
+parseable by anything that wants to walk the history later.
+
+**Deliberately not a closing keyword.** `Fixes #412` would close the issue the moment the pull
+request merges, and whether the work is actually done is a judgement for whoever reviewed it.
+
+Two things make this a requirement rather than a convention:
+
+- **The key comes from the tracker, not from the command line.** `propose.issue-from` names a file
+  — the one the fetch step wrote — rather than interpolating the `{issue}` parameter. A run invoked
+  with `412`, or with a pasted issue URL, still records the canonical `#412`.
+- **A commit that cannot find the key fails.** Not a warning, not a commit without it. A change
+  nobody can trace back to the work item that asked for it is precisely what this prevents, and it
+  is not worth preventing softly.
+
+A test holds the library to it: every shipped command that opens a pull request must declare
+`issue-from`, and the test fails if fewer than two commands were checked, so the rule cannot quietly
+stop applying.
+
+This is not imposed on pipelines you write. A dependency bump has no work item, and demanding one
+would be a gate with nothing behind it — `issue-from` is there when you want the same guarantee.
+
+---
+
 ## Rules a shipped pipeline is held to
 
 **No scripts.** A script here would be untested code arriving in every repository that adopts it:

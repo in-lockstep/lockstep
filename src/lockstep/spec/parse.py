@@ -284,6 +284,7 @@ def parse_command(src: SourceFile) -> Command:
             labels=str(propose_raw.get("labels", "pipeline,generated") or ""),
             base=str(propose_raw.get("base", "") or ""),
             reuse_branch=bool(propose_raw.get("reuse-branch", False)),
+            issue_from=str(propose_raw.get("issue-from", "") or ""),
         )
 
     state = str(meta.get("state", "")).lower()

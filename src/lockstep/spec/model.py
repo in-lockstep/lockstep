@@ -153,6 +153,15 @@ class Propose:
     # work that supersedes itself: three upstream bumps in a week should leave one pull request
     # showing the current state, and a reviewer who commented on it keeps their thread.
     reuse_branch: bool = False
+    # A JSON file whose `key` is the tracker reference this work came from — `#412` on GitHub,
+    # `PLAT-412` on Jira. Read from the file rather than from the command's parameter because the
+    # parameter is what somebody typed and the file is what the tracker actually answered: a run
+    # invoked with `412`, or with a URL, still records the canonical key.
+    #
+    # When set, a commit that could not find the key fails rather than landing without it. A commit
+    # nobody can trace back to the work item it came from is the thing this exists to prevent, and
+    # it is not worth preventing softly.
+    issue_from: str = ""
 
 
 @dataclass

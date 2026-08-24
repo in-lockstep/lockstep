@@ -287,3 +287,26 @@ def test_the_agent_that_generates_them_can_write_nothing():
 def test_no_proposal_job_without_a_declared_destination(basic_spec_dir):
     workflow = yaml.safe_load(compile_spec(basic_spec_dir).files[".github/workflows/validate.yml"])
     assert "propose-generated-artifacts" not in workflow["jobs"]
+
+
+def test_a_work_item_reference_reaches_the_proposing_action(tmp_path):
+    """A commit nobody can trace back to what asked for it is what `issue-from` prevents.
+
+    The value is a path rather than a string because the parameter is what somebody typed and the
+    file is what the tracker answered — a run invoked with `412`, or with a URL, records `#412`.
+    """
+    import shutil
+    from pathlib import Path
+
+    root = tmp_path / "httpbin"
+    shutil.copytree(Path(__file__).parent.parent / "examples" / "httpbin", root)
+    command = next(p for p in (root / "commands").glob("*.md") if "propose:" in p.read_text())
+    command.write_text(
+        command.read_text().replace(
+            "  propose:\n", '  propose:\n    issue-from: "{output_dir}/issue.json"\n', 1
+        ),
+        encoding="utf-8",
+    )
+    workflow = yaml.safe_load(compile_spec(root).files[".github/workflows/validate-api.yml"])
+    step = workflow["jobs"]["propose-generated-artifacts"]["steps"][-1]
+    assert step["with"]["issue-from"] == "outputs/issue.json"

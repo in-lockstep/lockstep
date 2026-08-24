@@ -29,6 +29,11 @@ github:
     branch: "{branch}"
     title: "Implement {issue}"
     labels: "lockstep,needs-review"
+    # The canonical key the tracker answered with, recorded as an `Issue:` trailer on the commit.
+    # From the file rather than from `{issue}`, because that parameter is what somebody typed — a
+    # run invoked with `412`, or with a URL, still records `#412`. A commit that cannot find the key
+    # fails rather than landing untraceable.
+    issue-from: "{output_dir}/issue.json"
 ---
 
 ## Steps

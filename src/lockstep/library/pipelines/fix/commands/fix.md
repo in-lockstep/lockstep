@@ -28,6 +28,9 @@ github:
     branch: "fix/{issue}"
     title: "Fix {issue}"
     labels: "lockstep,bug-fix,needs-review"
+    # The canonical key, as an `Issue:` trailer on the commit. A fix nobody can trace back to the
+    # report that asked for it is a fix nobody can close the report with.
+    issue-from: "{output_dir}/bug.json"
 ---
 
 ## Steps

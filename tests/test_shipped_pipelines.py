@@ -273,3 +273,59 @@ def test_the_gate_reads_a_list_because_the_condition_is_a_membership_test(adopte
     workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/triage-triage.yml"])
     assert "fromJSON(needs.issue.outputs.writeback)" in workflow["jobs"]["write-back"]["if"]
     assert workflow["jobs"]["issue"]["outputs"]["writeback"]
+
+
+# --- every shipped pull request is traceable --------------------------------
+
+
+def shipped_commands():
+    """Every command file the compiler ships, with its parsed front matter."""
+    for name, path in sorted(library.pipelines().items()):
+        for command in sorted((path / "commands").glob("*.md")):
+            front = yaml.safe_load(command.read_text().split("---")[1])
+            yield f"{name}/{command.stem}", front
+
+
+def test_every_shipped_command_that_opens_a_pull_request_records_the_work_item():
+    """The hard requirement: a shipped pipeline never commits work nobody can trace back.
+
+    Enforced over the library rather than over every pipeline, because a consumer may legitimately
+    open a pull request that came from no tracker at all — a dependency bump has no issue.
+    """
+    checked = 0
+    for name, front in shipped_commands():
+        propose = (front.get("github") or {}).get("propose")
+        if not propose:
+            continue
+        checked += 1
+        assert propose.get("issue-from"), f"{name} opens a pull request without recording the issue"
+    assert checked >= 2, f"only {checked} proposing command(s) checked; the rule is not being applied"
+
+
+def test_the_key_comes_from_the_tracker_not_from_what_somebody_typed():
+    """`{issue}` is the parameter. A run invoked with `412`, or a URL, must still record `#412`."""
+    for name, front in shipped_commands():
+        propose = (front.get("github") or {}).get("propose")
+        if propose:
+            assert "{issue}" != propose["issue-from"], name
+            assert propose["issue-from"].endswith(".json"), name
+
+
+def test_the_reference_reaches_the_compiled_workflow(adopter):
+    files = compile_spec(adopter).files
+    for path in (".github/workflows/implement-implement.yml", ".github/workflows/fix-fix.yml"):
+        workflow = yaml.safe_load(files[path])
+        step = workflow["jobs"]["propose-generated-artifacts"]["steps"][-1]
+        assert step["with"]["issue-from"], path
+
+
+def test_a_pipeline_that_does_not_ask_for_it_is_not_forced_to(basic_root):
+    """A dependency bump has no work item, and demanding one would be a gate with nothing behind it."""
+    files = compile_spec(basic_root).files
+    for path, text in files.items():
+        if not path.endswith(".yml"):
+            continue
+        jobs = (yaml.safe_load(text) or {}).get("jobs") or {}
+        propose = jobs.get("propose-generated-artifacts")
+        if propose:
+            assert "issue-from" not in propose["steps"][-1]["with"]
