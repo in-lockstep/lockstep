@@ -83,10 +83,21 @@ jobs:
         # A published image that cannot execute the commands the compiler writes into workflows is
         # the failure this catches. `list-commands` is the introspection surface: it names every
         # builtin, so a missing entry point fails here rather than in somebody's pipeline.
+        env:
+          PUBLISHED: ${{ startsWith(github.ref, 'refs/tags/exec-v') || inputs.push }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          ref="${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
-          if [ -z "${{ steps.build.outputs.digest }}" ]; then ref="${{ env.IMAGE }}:${{ github.ref_name }}"; fi
+          # Which reference to smoke-test is decided by whether the image was pushed, not by whether
+          # a digest exists. `load:` also produces a digest, but it names a manifest that only lives
+          # in the registry — so a digest reference is always resolved by pulling, and the dry run
+          # neither pushed nor logged in. It has to test the tag it loaded.
+          if [ "$PUBLISHED" = "true" ]; then
+            ref="${IMAGE}@${DIGEST}"
+          else
+            ref="${IMAGE}:${GITHUB_REF_NAME}"
+          fi
+          echo "smoke-testing $ref"
           docker run --rm "$ref" pipeline-exec --version
           docker run --rm "$ref" pipeline-exec list-commands
           # The runtimes a `script:` step dispatches on by file extension.
