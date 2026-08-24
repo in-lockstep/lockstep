@@ -5,10 +5,10 @@ check: fmt lint typecheck test
 ci: lint typecheck cov
 
 fmt:
-	uv run ruff format src tests packages
+	uv run ruff format src tests packages conftest.py
 
 lint:
-	uv run ruff check src tests packages
+	uv run ruff check src tests packages conftest.py
 
 typecheck:
 	uv run mypy src packages/pipeline-exec/src

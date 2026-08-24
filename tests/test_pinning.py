@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import ready_but_unpublished
 
+from conftest import ready_but_unpublished
 from lockstep.checks import doctor
 from lockstep.emit import compile_spec
 from lockstep.emit.context import PLACEHOLDER_DIGEST, PLACEHOLDER_SHA, Pins

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import ready_but_unpublished
 
+from conftest import ready_but_unpublished
 from lockstep.checks import Severity, doctor, lint
 from lockstep.errors import SpecError
 from lockstep.spec.load import load_spec

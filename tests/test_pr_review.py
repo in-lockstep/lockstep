@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import ready_but_unpublished
 
+from conftest import ready_but_unpublished
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
