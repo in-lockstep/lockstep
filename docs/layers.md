@@ -63,6 +63,12 @@ should be one layer.
 
 Guardrails are inlined into the prompt first, ahead of the agent's own body, because position is a
 security property: instructions that arrive after a constraint read as an attempt to relax it.
+
+One honest qualification on the enforceable half. `enforce.network: deny-all` compiles to a squid
+firewall that gh-aw configures, and that firewall carries its own baseline allow-list — the model
+API, GitHub, the package registries, the certificate authorities a runner needs. So `deny-all` means
+*no domains beyond that baseline*, not zero egress. It is a real constraint enforced outside the
+model's reach, and it is not the absolute the name suggests.
 Skills and contexts are imported after. A guardrail's `enforce:` block also compiles to workflow
 permissions and tool deny-lists, which is the part a model cannot talk its way past.
 

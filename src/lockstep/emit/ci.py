@@ -61,13 +61,26 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
             *(extra or []),
         ]
 
+    # The drift gate regenerates the `.lock.yml` files and compares them, so it needs the tool that
+    # produces them — pinned, because a lock file is a function of the markdown *and* of the version
+    # that compiled it. `gh` itself is already on every GitHub-hosted runner.
+    gh_aw_setup: list[dict[str, Any]] = []
+    if spec.manifest.capabilities.gh_aw:
+        gh_aw_setup.append(
+            {
+                "name": f"Install gh-aw {spec.manifest.capabilities.gh_aw}",
+                "run": f"gh extension install github/gh-aw --pin {spec.manifest.capabilities.gh_aw}",
+                "env": {"GH_TOKEN": "${{ github.token }}"},
+            }
+        )
+
     jobs: dict[str, Any] = {
         "drift": {
             "name": "Drift gate",
             "runs-on": ctx.runs_on,
             "permissions": {"contents": "read"},
             "steps": [
-                *setup(),
+                *setup(gh_aw_setup),
                 {
                     "name": "Recompile and compare",
                     # Committed output must equal a fresh compile of spec + overlays + pins. A

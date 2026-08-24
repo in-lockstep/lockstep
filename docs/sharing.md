@@ -93,7 +93,7 @@ capabilities:
   actions: github.com/acme/pipeline-actions@v1.4.0
   exec-image: quay.io/acme/pipeline-exec
   compiler: in-lockstep>=0.1,<1.0
-  gh-aw: v0.34.0
+  gh-aw: v0.86.2
 
 targets:
   github-agentic:
@@ -185,7 +185,7 @@ built to merge:
 | **Sealed guardrails** | Both arrive, unnamed, in every agent — the consumer's own agents included. |
 | **Ceilings** | Lowest wins. Organization caps credits at 200, team at 60: every agent gets 60. Neither upstream has to know the other set one. |
 | **Denied tools** | Unioned. A tool either upstream denies is denied. |
-| **Egress** | `deny-all` is sticky. Once either upstream closes egress, the other cannot reopen it. |
+| **Egress** | `deny-all` is sticky. Once either upstream closes egress, the other cannot reopen it. It means *no domains beyond gh-aw's own baseline*, not zero egress — see `docs/status.md`. |
 | **Bands** | Belong to the agent that publishes them, so they never interact. |
 
 The one thing alias order *does* decide is the order sealed guardrails are inlined in — and that is

@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-change-writer.md": {
-      "sha": "5ce71ded",
+      "sha": "6ba21818",
       "sources": [
         "agents/change-writer.md@34293872",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-planner.md": {
-      "sha": "87fbcb3c",
+      "sha": "efc34094",
       "sources": [
         "agents/planner.md@90765a5d",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -29,7 +29,7 @@
       ]
     },
     ".github/workflows/aw-requirements-analyst.md": {
-      "sha": "2526b478",
+      "sha": "98dd4388",
       "sources": [
         "agents/requirements-analyst.md@b33ecd89",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -40,7 +40,7 @@
       ]
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "be1e9f9f",
+      "sha": "d986cf18",
       "sources": [
         "agents/test-writer.md@6af5ad4a",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -51,13 +51,13 @@
       ]
     },
     ".github/workflows/implement.yml": {
-      "sha": "a09c4c4b",
+      "sha": "eb520ef2",
       "sources": [
         "commands/implement.md@aa792623"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "2feb055a",
+      "sha": "cc927d5f",
       "sources": []
     },
     ".github/workflows/shared/context-repository.md": {

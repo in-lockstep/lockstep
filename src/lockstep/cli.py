@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import click
 
-from . import __version__
+from . import __version__, ghaw
 from .emit import compile_spec, show_surface
 from .emit import semantic_diff as sd
 from .emit.writer import check_plan, write_plan
@@ -17,6 +17,7 @@ from .errors import LockstepError
 
 if TYPE_CHECKING:
     from .checks import Report
+    from .emit.plan import CompilePlan
     from .spec.model import Spec
 
 EXIT_OK = 0
@@ -73,8 +74,11 @@ def compile_cmd(
         click.echo(show_surface.render(root))
         return
 
+    from .spec.load import load_spec
+
     try:
         plan = compile_spec(root)
+        spec = load_spec(root)
     except LockstepError as error:
         click.echo(click.style(error.render(), fg="red"), err=True)
         sys.exit(EXIT_SPEC)
@@ -107,9 +111,14 @@ def compile_cmd(
                 ),
                 err=True,
             )
+        try:
+            locks = _check_locks(root, spec, plan)
+        except LockstepError as error:
+            click.echo(click.style(error.render(), fg="red"), err=True)
+            sys.exit(EXIT_SPEC)
         _emit_diff(diff)
         blocked = fail_on_blocking and diff is not None and diff.blocking
-        sys.exit(EXIT_OK if report.clean and not blocked else EXIT_DRIFT)
+        sys.exit(EXIT_OK if report.clean and locks and not blocked else EXIT_DRIFT)
 
     written = write_plan(root, plan, prune=not no_prune)
     for path in written.created:
@@ -122,9 +131,96 @@ def compile_cmd(
         f"wrote {len(written.created) + len(written.updated)} files "
         f"({len(written.unchanged)} unchanged, {len(written.removed)} pruned)"
     )
-    if plan.stats.get("agentic"):
-        click.echo("next: run `gh aw compile` to produce the .lock.yml files the orchestrators call")
+    try:
+        _write_locks(root, spec, plan)
+    except LockstepError as error:
+        click.echo(click.style(error.render(), fg="red"), err=True)
+        sys.exit(EXIT_SPEC)
     _emit_diff(diff)
+
+
+def _workflows_dir(root: Path, spec: Spec) -> Path:
+    return root / spec.manifest.target.out
+
+
+def _prune_orphan_locks(workflows: Path) -> list[str]:
+    """A lock file whose agent is gone is a workflow nobody generates and nothing can regenerate."""
+    removed = []
+    for lock in sorted(workflows.glob(f"*{ghaw.LOCK_SUFFIX}")):
+        if not (workflows / (lock.name.removesuffix(ghaw.LOCK_SUFFIX) + ".md")).is_file():
+            lock.unlink()
+            removed.append(lock.name)
+    return removed
+
+
+def _write_locks(root: Path, spec: Spec, plan: CompilePlan) -> None:
+    """Produce the `.lock.yml` files the orchestrators call.
+
+    Part of compiling rather than a step afterwards: an orchestrator emitted by this compiler names
+    these files, so a compile that does not produce them has emitted a workflow GitHub will reject.
+    """
+    workflows = _workflows_dir(root, spec)
+    for name in _prune_orphan_locks(workflows):
+        click.echo(f"  - {spec.manifest.target.out}/{name}")
+    if not plan.stats.get("agentic"):
+        return
+
+    ghaw.require(spec.manifest.capabilities.gh_aw, cwd=root)
+    produced = ghaw.compile_locks(workflows)
+    changed = 0
+    for name, content in produced.items():
+        target = workflows / name
+        if target.is_file() and target.read_text(encoding="utf-8") == content:
+            continue
+        target.write_text(content, encoding="utf-8")
+        click.echo(f"  ~ {spec.manifest.target.out}/{name}")
+        changed += 1
+    click.echo(f"gh-aw: {len(produced)} lock file(s), {changed} changed")
+
+
+def _check_locks(root: Path, spec: Spec, plan: CompilePlan) -> bool:
+    """Regenerate the lock files from the committed markdown and compare.
+
+    This is the half of the gate that covers what actually runs. `gh aw` missing is a failure, not
+    a skip — a check that could not look at the artifact has not checked it, and reporting success
+    would be the most expensive kind of green.
+    """
+    workflows = _workflows_dir(root, spec)
+    orphans = [
+        lock.name
+        for lock in sorted(workflows.glob(f"*{ghaw.LOCK_SUFFIX}"))
+        if not (workflows / (lock.name.removesuffix(ghaw.LOCK_SUFFIX) + ".md")).is_file()
+    ]
+    if not plan.stats.get("agentic") and not orphans:
+        return True
+
+    ghaw.require(spec.manifest.capabilities.gh_aw, cwd=root)
+    produced = ghaw.compile_locks(workflows)
+    clean = True
+    for name in orphans:
+        click.echo(click.style(f"orphaned: {spec.manifest.target.out}/{name}", fg="red"), err=True)
+        clean = False
+    for name, content in sorted(produced.items()):
+        target = workflows / name
+        rel = f"{spec.manifest.target.out}/{name}"
+        if not target.is_file():
+            click.echo(click.style(f"missing:  {rel}", fg="red"), err=True)
+            clean = False
+        elif target.read_text(encoding="utf-8") != content:
+            click.echo(click.style(f"modified: {rel}", fg="red"), err=True)
+            clean = False
+    if clean:
+        click.echo(click.style(f"gh-aw: {len(produced)} lock file(s) match", fg="green"))
+    else:
+        click.echo(
+            click.style(
+                "the workflows that actually run do not match the agents they came from — "
+                "run `lockstep compile`",
+                fg="red",
+            ),
+            err=True,
+        )
+    return clean
 
 
 def _report_lifecycle(root: Path, plan: object) -> None:

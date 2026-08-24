@@ -300,7 +300,8 @@ def test_the_compiled_pipeline_is_reachable_end_to_end(consumer):
 
 def credits(root):
     front = yaml.safe_load(compile_spec(root).files[AGENT].split("---")[1])
-    return front["max-ai-credits"], front["engine"]["model"], front["timeout-minutes"]
+    # `model` is top level; `engine.model` is the form gh-aw deprecated.
+    return front["max-ai-credits"], front["model"], front["timeout-minutes"]
 
 
 def test_a_consumer_moves_a_dial_within_the_band(consumer):

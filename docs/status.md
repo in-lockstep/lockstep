@@ -300,6 +300,45 @@ not write, and the `scripts` job not triggering on the tests it runs.
 It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
 `container:`, and that image is one of the unpublished capabilities below.
 
+## The gh-aw seam
+
+`lockstep compile` emits an agent as markdown; `gh aw compile` turns that markdown into the
+`.lock.yml` a runner executes. Everything the drift gate proved stopped one layer above that file: a
+reviewer approved a turn limit and a tool deny-list in a document GitHub never reads, and no lock
+file had ever been produced at all, so every orchestrator referenced a workflow that did not exist.
+
+The seam is inside the gate now. `lockstep compile` produces the lock files, `compile --check`
+regenerates them from the committed markdown and byte-compares, and a missing `gh aw` is an error
+rather than a skip — a check that could not look at the artifact has not checked it. The generated
+drift job installs the pinned extension itself.
+
+Two properties make it work, both established by running the tool rather than assumed. `gh aw
+compile` is **deterministic**: the same markdown gives byte-identical output across runs, which is
+what makes byte-comparison a gate rather than a coin toss. And its safe-update approval of new
+secrets and actions is recorded **inside the lock file**, so a committed lock file is its own
+baseline and regeneration beside it needs no interactive approval. A version other than the one
+`capabilities.gh-aw` pins is refused, because a lock file compiled by a different version is a
+different file and comparing them proves nothing.
+
+Running the real tool corrected three things the compiler had wrong:
+
+| Found | Was | Now |
+|---|---|---|
+| `engine.model` is deprecated | emitted nested, warned on every compile | top-level `model:` |
+| the pinned version did not exist | `gh-aw: v0.34.0`, against v0.86.2 installed | pinned to a version that exists |
+| no lock files anywhere | orchestrators named files never produced | 14 committed, covered by the gate |
+
+It also confirmed two claims that had been assertions: `max-turns` reaches the agent CLI as
+`--max-turns`, and `max-ai-credits` reaches the API proxy as `GH_AW_MAX_AI_CREDITS`. Both are
+substrate. `ANTHROPIC_API_KEY` is the credential gh-aw asks for, which is what `ENGINE_SECRET`
+already said.
+
+**One claim it corrected in the other direction.** `enforce.network: deny-all` does not produce zero
+egress: gh-aw compiles a squid firewall with its own baseline allow-list — the model API, GitHub,
+package registries, certificate authorities. What deny-all means is *no domains beyond that
+baseline*, which is a real constraint and not the one the wording implies. `docs/layers.md` and the
+semantic diff describe it accurately now.
+
 ## Pinning the compiler, and naming the engine credential
 
 Two things a pre-launch review found missing from a system whose premise is that nothing floats.

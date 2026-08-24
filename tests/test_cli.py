@@ -16,7 +16,10 @@ def test_compile_writes_the_workflow_tree(basic_root):
     assert result.exit_code == EXIT_OK
     assert (basic_root / ".github/workflows/generate-tests.yml").is_file()
     assert (basic_root / ".github/workflows/aw-story-extractor.md").is_file()
-    assert "gh aw compile" in result.output
+    # Compiling produces the lock files too — an orchestrator naming a file this compile did not
+    # write is a workflow GitHub rejects, so the stage is part of compiling rather than after it.
+    assert (basic_root / ".github/workflows/aw-story-extractor.lock.yml").is_file()
+    assert "gh-aw: 1 lock file(s)" in result.output
 
 
 def test_compile_reports_the_deterministic_ratio(basic_root):

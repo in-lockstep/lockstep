@@ -29,7 +29,7 @@ on:
         default: ''
 engine:
   id: claude
-  model: claude-opus-4-6
+model: claude-opus-4-6
 max-turns: 16
 max-ai-credits: 250
 timeout-minutes: 20

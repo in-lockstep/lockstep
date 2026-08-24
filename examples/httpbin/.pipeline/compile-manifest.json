@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-test-writer.md": {
-      "sha": "2d8740ed",
+      "sha": "12065db4",
       "sources": [
         "agents/test-writer.md@e0f43915",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "bb4ad94b",
+      "sha": "b41d5521",
       "sources": []
     },
     ".github/workflows/shared/context-httpbin.md": {
@@ -41,7 +41,7 @@
       "sources": []
     },
     ".github/workflows/validate-api.yml": {
-      "sha": "2281e1fc",
+      "sha": "f147a747",
       "sources": [
         "commands/validate-api.md@70999f26"
       ]

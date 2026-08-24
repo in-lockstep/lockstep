@@ -29,7 +29,7 @@ on:
         default: ''
 engine:
   id: claude
-  model: claude-sonnet-4-6
+model: claude-sonnet-4-6
 max-turns: 0
 max-ai-credits: 40
 timeout-minutes: 20

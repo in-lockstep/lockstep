@@ -141,7 +141,10 @@ def build_agent(
     frontmatter: dict[str, Any] = {
         "description": agent.description or f"{agent.name} agent",
         "on": {"workflow_call": call},
-        "engine": {"id": resolve_engine(agent), "model": resolve_model(agent)},
+        "engine": {"id": resolve_engine(agent)},
+        # Top level, not `engine.model`. gh-aw deprecated the nested form and warns on every
+        # compile; a deprecation nobody sees is one that becomes a breakage at an upgrade.
+        "model": resolve_model(agent),
         "max-turns": agent.max_tool_turns,
         "max-ai-credits": agent.github.max_ai_credits,
         "timeout-minutes": agent.github.timeout_minutes or 20,

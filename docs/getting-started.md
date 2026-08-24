@@ -50,7 +50,7 @@ capabilities:
   exec: in-lockstep-exec==0.1.0
   exec-image: ghcr.io/in-lockstep/pipeline-exec
   compiler: in-lockstep>=0.1,<1.0
-  gh-aw: v0.34.0
+  gh-aw: v0.86.2
 
 targets:
   github-agentic:

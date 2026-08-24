@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-story-extractor.md": {
-      "sha": "e8f22c45",
+      "sha": "6c41bbe8",
       "sources": [
         "agents/story-extractor.md@9480178e",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -16,23 +16,23 @@
       ]
     },
     ".github/workflows/discover.yml": {
-      "sha": "8ebc73f5",
+      "sha": "f75ba3aa",
       "sources": [
         "commands/discover.md@65153630"
       ]
     },
     ".github/workflows/generate-tests.yml": {
-      "sha": "7b21e966",
+      "sha": "b0ecf883",
       "sources": [
         "commands/generate-tests.md@440e3547"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "a6e55c78",
+      "sha": "8f876ec9",
       "sources": []
     },
     ".github/workflows/repair.yml": {
-      "sha": "89e28a15",
+      "sha": "04b42975",
       "sources": [
         "commands/repair.md@d19a5139"
       ]
@@ -54,7 +54,7 @@
       "sources": []
     },
     ".github/workflows/validate.yml": {
-      "sha": "4d828302",
+      "sha": "48c201c9",
       "sources": [
         "commands/validate.md@dcc72949"
       ]
