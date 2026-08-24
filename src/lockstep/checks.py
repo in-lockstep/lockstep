@@ -20,7 +20,8 @@ from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
 from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH, Pins
 from .emit.validate import MAX_JOB_MINUTES
-from .spec.model import CapabilityUse, Spec, StepKind
+from .errors import LockstepError
+from .spec.model import LOCKSTEP_DIR, CapabilityUse, Spec, StepKind
 
 # Work an agent should never be doing: deterministic transformations cost tokens, vary run to run,
 # and are the exact thing a script does better.
@@ -241,6 +242,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     pins = Pins.load(spec)
     _check_pins(pins, spec.capabilities_used(), report)
     _check_inherits(spec, root, report)
+    _check_missing_upstreams(spec, report)
     _check_runtime_compiler(spec, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)
@@ -366,6 +368,56 @@ def _check_inherits(spec: Spec, root: Path, report: Report) -> None:
                 f"{alias!r} is inherited from {source} but is not pinned to a commit",
                 hint="run `lockstep pin` — an unpinned upstream can change what this pipeline runs "
                 "without anything in this repository changing",
+            )
+
+
+def _upstream_key(source: str) -> str:
+    """Identity of an upstream, ignoring the ref it is pinned at.
+
+    A consumer on `@v3.1.0` and an upstream on `@v3.2.0` name the same standards repository, and the
+    question here is only whether the consumer has it at all.
+    """
+    base = source.partition("@")[0].rstrip("/")
+    if base.startswith("github.com/"):
+        return "/".join(base.removeprefix("github.com/").split("/")[:2]).lower()
+    return Path(base).name.lower()
+
+
+def _check_missing_upstreams(spec: Spec, report: Report) -> None:
+    """An upstream this repository inherits, inherits something this repository does not.
+
+    This is the cost of refusing transitive inheritance, and it fails in the quiet direction. A team
+    publishes pipelines under an organization's sealed standards; a component repository inherits the
+    team and forgets the organization. It compiles, lints and doctors clean while standing on none of
+    those standards — the team's agents arrive with the organization's guardrails stripped out,
+    because the team's inheritance was never the consumer's.
+
+    A warning rather than an error: nothing here can tell a repository that forgot from one that
+    declined, and only the repository knows which it did.
+    """
+    from .spec.load import load_manifest_only
+    from .spec.model import INHERITED_DIR
+
+    mine = {_upstream_key(source) for source in spec.manifest.inherits.values()}
+    for alias in spec.manifest.inherits:
+        directory = spec.home / INHERITED_DIR / alias
+        if not (directory / "pipeline.yaml").is_file() and not (directory / LOCKSTEP_DIR).is_dir():
+            continue  # not fetched — `lockstep fetch` is a different, louder failure
+        try:
+            upstream = load_manifest_only(directory)
+        except LockstepError:
+            continue  # an upstream whose manifest will not parse is its own error, reported elsewhere
+        for their_alias, source in sorted(upstream.manifest.inherits.items()):
+            if _upstream_key(source) in mine:
+                continue
+            report.add(
+                Severity.WARNING,
+                "DOC022",
+                f"{alias!r} inherits {their_alias!r} ({source}), which this repository does not",
+                location=spec.repo_path("pipeline.yaml"),
+                hint=f"anything sealed in {source} does not reach this repository through {alias!r} "
+                f"— inheritance is not transitive. Add `{their_alias}: {source}` to `inherits:` to "
+                f"stand on it too, or ignore this if {alias!r} is deliberately the only standard here",
             )
 
 

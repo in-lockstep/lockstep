@@ -67,7 +67,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: fix-bugs-production
+  group: fix-bugs-production-${{ github.event.issue.number || github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 env:
   OUTPUT_DIR: outputs

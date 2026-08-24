@@ -1075,10 +1075,35 @@ def _on_block(command: Command, ctx: EmitContext, step_to_job: dict[str, str]) -
     return on
 
 
+# The subject a run is about, when its trigger carries one. `||` in a GitHub expression falls
+# through on null, so this reads the issue number, then the pull request number, then the ref.
+SUBJECT = "${{ github.event.issue.number || github.event.pull_request.number || github.ref }}"
+
+# Triggers whose payload names a specific issue or pull request. A command reachable through any of
+# these is doing work *about* something, and two of them are two pieces of work.
+SUBJECT_TRIGGERS = frozenset(
+    {"issue_comment", "pull_request_review_comment", "pull_request", "pull_request_target", "issues"}
+)
+
+
 def _concurrency(command: Command, ctx: EmitContext) -> dict[str, Any]:
+    """One run at a time — per subject, not per repository.
+
+    The group used to be `{command}-{profile}`, which is repository-wide. For a scheduled report
+    that is right: two runs writing the same file should queue. For chat-ops it is wrong and quietly
+    so — `/review` on one pull request and `/review` on another share a group, and since GitHub
+    keeps at most one pending run per group, a third invocation evicts the queued second. Somebody
+    types a command, gets no error, and no review ever appears.
+
+    So a command whose trigger names an issue or a pull request is grouped by that subject.
+    Everything else keeps the repository-wide group it had.
+    """
     if command.github.concurrency:
         return command.github.concurrency
-    return {"group": f"{command.name}-{ctx.profile.name}", "cancel-in-progress": False}
+    group = f"{command.name}-{ctx.profile.name}"
+    if command.github.command or (SUBJECT_TRIGGERS & set(command.github.triggers)):
+        group = f"{group}-{SUBJECT}"
+    return {"group": group, "cancel-in-progress": False}
 
 
 # GitHub does not care about key order, but reviewers and diffs do. Overlay-inserted keys land in

@@ -212,11 +212,25 @@ A component repository that names `team` and forgets `org` compiles clean, lints
 clean — while silently standing on none of the organization's standards. It is the quiet direction to
 fail in, and it is the one real cost of refusing transitivity.
 
-Nothing detects it today. The information is available — `.pipeline/inherited/team/pipeline.yaml`
-carries the team repository's own `inherits:` — so a check that says *"`team` inherits `org`, which
-you do not"* is the obvious guard, and it should be a warning rather than an error, because the
-framework cannot know whether an omission is deliberate. Until it exists, the thing that catches it
-is a review of the `inherits:` block, which is at least one short list in one file.
+`lockstep doctor` reports it as **DOC022**:
+
+```
+warning: DOC022: 'team' inherits 'org' (github.com/acme/org-standards@v3.2.0), which this
+                 repository does not
+       anything sealed in github.com/acme/org-standards@v3.2.0 does not reach this repository
+       through 'team' — inheritance is not transitive. Add `org: github.com/acme/org-standards@v3.2.0`
+       to `inherits:` to stand on it too, or ignore this if 'team' is deliberately the only
+       standard here
+```
+
+It reads each fetched upstream's own manifest, so the information comes from the upstream rather
+than from anything the consumer had to declare twice. Refs are ignored when comparing: a consumer
+pinned a version behind the team still *has* the organization's standards, and saying otherwise
+would train people to ignore the warning.
+
+A warning rather than an error, deliberately — nothing here can tell a repository that forgot from
+one that declined, and only the repository knows which it did. Run `doctor --strict` in CI if your
+organization wants the stronger answer.
 
 ### Where imports come from, and how they are pinned
 

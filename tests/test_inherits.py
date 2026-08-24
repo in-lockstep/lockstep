@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from lockstep.checks import doctor, lint
+from lockstep.checks import Severity, doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
 from lockstep.errors import EmitError, MissingDefinition, SpecError
@@ -495,4 +495,58 @@ def test_a_second_upstream_cannot_reopen_egress_the_first_closed(consumer):
     )
     agent = yaml.safe_load(compile_spec(consumer).files[AGENT].split("---")[1])
     assert agent["network"] == {"allowed": []}
+
+
+# --- the cost of refusing transitivity --------------------------------------
+
+
+def upstream_inherits(consumer, block):
+    """Give the fetched `review` tree an upstream of its own — the team-standards shape."""
+    manifest = consumer / ".pipeline/inherited/review/pipeline.yaml"
+    manifest.write_text(manifest.read_text() + block, encoding="utf-8")
+
+
+def test_an_upstream_of_an_upstream_this_repository_lacks_is_reported(consumer):
+    """A team publishes under an organization's standards; a consumer takes the team and forgets it.
+
+    Nothing else catches this. It compiles, lints and doctors clean while the team's agents arrive
+    with the organization's sealed guardrails stripped out.
+    """
+    upstream_inherits(consumer, "\ninherits:\n  org: github.com/acme/org-standards@v3.2.0\n")
+    report = doctor(load_spec(consumer), consumer)
+    finding = next(f for f in report.findings if f.code == "DOC022")
+    assert finding.severity is Severity.WARNING
+    assert "'review' inherits 'org'" in finding.message
+    assert "github.com/acme/org-standards@v3.2.0" in finding.message
+    assert "not transitive" in finding.hint
+
+
+def test_it_is_quiet_when_this_repository_inherits_it_too(consumer):
+    """The recommended shape: both upstreams named directly. Nothing to say."""
+    upstream_inherits(consumer, "\ninherits:\n  org: ../upstream-standards\n")
+    assert "DOC022" not in {f.code for f in doctor(load_spec(consumer), consumer).findings}
+
+
+def test_a_different_ref_of_the_same_upstream_still_counts_as_having_it(consumer):
+    """A consumer one version behind has the standards; it is not missing them."""
+    edit(
+        consumer,
+        "pipeline.yaml",
+        {"standards: ../upstream-standards": "standards: github.com/acme/std@v3.1.0"},
+    )
+    upstream_inherits(consumer, "\ninherits:\n  org: github.com/acme/std@v3.9.9\n")
+    assert "DOC022" not in {f.code for f in doctor(load_spec(consumer), consumer).findings}
+
+
+def test_an_unfetched_upstream_is_not_also_a_transitivity_warning(consumer):
+    """One missing tree should produce one clear error, not a second confusing warning."""
+    import shutil
+
+    shutil.rmtree(consumer / ".pipeline/inherited/review")
+    codes = set()
+    try:
+        codes = {f.code for f in doctor(load_spec(consumer), consumer).findings}
+    except MissingDefinition:
+        pass
+    assert "DOC022" not in codes
 

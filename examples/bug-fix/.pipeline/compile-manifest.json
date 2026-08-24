@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/fix-bugs.yml": {
-      "sha": "60c001f9",
+      "sha": "f172d4c1",
       "sources": [
         "commands/fix-bugs.md@e099e18d"
       ]

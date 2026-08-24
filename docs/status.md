@@ -355,7 +355,6 @@ leaving something believable in place.
 | Gap | Why it is not built |
 |---|---|
 | Transitive inheritance | An import that imports is a package manager. A consumer lists every upstream directly — fan-in is supported and documented in `docs/sharing.md`; only following an upstream's own `inherits:` is refused. |
-| A warning for an upstream this repository does not also inherit | The gap fan-in leaves: a consumer that names `team` and forgets `org` loses the organization's sealed guardrails silently. `.pipeline/inherited/<alias>/pipeline.yaml` carries what each upstream inherits, so the check is available to write. |
 | Private-repo fetch in a consumer's CI | A consumer's `GITHUB_TOKEN` cannot read another private repository, so `lockstep fetch` there needs a GitHub App or a PAT. Nothing in the framework can solve that for an organization. |
 | A `/review` on this repository's own pull requests | Needs the first `actions-v*` and `exec-v*` tags pushed. The lenses are designed — `docs/self-hosting.md` names them. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
