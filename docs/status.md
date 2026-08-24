@@ -300,6 +300,26 @@ not write, and the `scripts` job not triggering on the tests it runs.
 It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
 `container:`, and that image is one of the unpublished capabilities below.
 
+## Reading a private upstream
+
+A consumer's `GITHUB_TOKEN` is scoped to the repository it belongs to and cannot read another one,
+so a private upstream needs a credential from elsewhere. That was listed here as something the
+framework could not solve for an organization, which was half true: it cannot create or install an
+App, but it was also not wiring in the credential once somebody had.
+
+`inherits-auth:` now declares it — a GitHub App (`app-id` + `private-key`) or a plain token — and the
+compiler emits the minting step and the fetch environment, pins `actions/create-github-app-token`
+like any other action, and lists what to set in `SECRETS.md`. `docs/inheriting.md` carries the setup
+recipe and the argument for an App over a PAT.
+
+`lockstep fetch` authenticates the way `actions/checkout` does, with a per-invocation header rather
+than a token in the remote URL, and redacts the credential from any error it raises — git quotes
+URLs back, and a credential in a build log is a leaked credential.
+
+Requiring the App action to be pinned everywhere would have made every existing lock file fail
+DOC012, so `Spec.external_actions_used()` answers which third-party actions a pipeline's output
+actually references — the same shape as `capabilities_used()`.
+
 ## Eval cases assert something now
 
 `lockstep lint` refused an agent with no eval cases and checked that a `.json` file existed. Every
@@ -448,7 +468,6 @@ leaving something believable in place.
 | Gap | Why it is not built |
 |---|---|
 | Transitive inheritance | An import that imports is a package manager. A consumer lists every upstream directly — fan-in is supported and documented in `docs/sharing.md`; only following an upstream's own `inherits:` is refused. |
-| Private-repo fetch in a consumer's CI | A consumer's `GITHUB_TOKEN` cannot read another private repository, so `lockstep fetch` there needs a GitHub App or a PAT. Nothing in the framework can solve that for an organization. |
 | A `/review` on this repository's own pull requests | Needs the first `actions-v*` and `exec-v*` tags pushed. The lenses are designed — `docs/self-hosting.md` names them. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |

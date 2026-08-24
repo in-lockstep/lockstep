@@ -386,6 +386,32 @@ def _secrets_doc(spec: Spec, profiles: list[Profile]) -> str:
         "",
     ]
 
+    auth = spec.manifest.inherits_auth
+    if auth.declared:
+        lines += ["## Reading the private upstreams", ""]
+        if auth.uses_app:
+            lines += [
+                f"- `{auth.app_id}` — **variable**, the GitHub App's id",
+                f"- `{auth.private_key}` — the App's private key",
+                "",
+                "The App must be installed on the upstream repositories, not only on this one.",
+                "",
+                "```bash",
+                f"gh variable set {auth.app_id}",
+                f"gh secret set {auth.private_key}",
+                "```",
+                "",
+            ]
+        else:
+            lines += [
+                f"- `{auth.token}` — a token that can read the inherited repositories",
+                "",
+                "```bash",
+                f"gh secret set {auth.token}",
+                "```",
+                "",
+            ]
+
     credentials = engine_credentials(spec)
     if credentials:
         lines += [

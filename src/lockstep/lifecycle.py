@@ -7,7 +7,9 @@ cannot express — recorded, snapshotted, and tracked, so a fork is a decision r
 
 from __future__ import annotations
 
+import base64
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -56,28 +58,56 @@ def fetch(spec: Spec, root: Path) -> list[str]:
                 f"{alias}: no commit recorded for {source}",
                 hint="run `lockstep pin` first — fetching a moving ref would defeat the lock file",
             )
-        _clone_at(entry.get("repo", ""), sha, destination)
+        _clone_at(entry.get("repo", ""), sha, destination, token=os.environ.get(FETCH_TOKEN_ENV, ""))
         notes.append(f"{alias}: {entry.get('repo')}@{sha[:12]}")
 
     return notes
 
 
-def _clone_at(repo: str, sha: str, destination: Path) -> None:
+# Where a credential for reading a private upstream is read from. One name, deliberately: a fetch
+# that silently fell back to whatever token happened to be in the environment would send a
+# repository's own credential to somebody else's repository without anyone having asked for it.
+FETCH_TOKEN_ENV = "LOCKSTEP_FETCH_TOKEN"
+
+
+def _auth_args(token: str) -> list[str]:
+    """Authenticate the way `actions/checkout` does, without writing the token anywhere.
+
+    `-c` applies the header to this invocation only, so nothing lands in `.git/config` — and the
+    token never appears in the remote URL, which is the form that ends up quoted back in error
+    messages and stored in the fetched tree.
+    """
+    if not token:
+        return []
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["-c", f"http.extraheader=AUTHORIZATION: basic {basic}"]
+
+
+def _clone_at(repo: str, sha: str, destination: Path, *, token: str = "") -> None:
     """Fetch exactly one commit. Not a branch that happens to point at it today."""
     url = f"https://github.com/{repo}.git"
     destination.mkdir(parents=True, exist_ok=True)
+    auth = _auth_args(token)
     steps = (
         ["git", "init", "--quiet"],
         ["git", "remote", "add", "origin", url],
-        ["git", "fetch", "--quiet", "--depth", "1", "origin", sha],
+        ["git", *auth, "fetch", "--quiet", "--depth", "1", "origin", sha],
         ["git", "checkout", "--quiet", "FETCH_HEAD"],
     )
     for args in steps:
         result = subprocess.run(args, cwd=destination, capture_output=True, text=True, check=False)
         if result.returncode != 0:
+            detail = result.stderr.strip()[:200]
+            if token:
+                detail = detail.replace(token, "***")
             raise PinError(
-                f"could not fetch {repo}@{sha[:12]}: {result.stderr.strip()[:200]}",
-                hint="the commit must exist and be reachable with the token this job holds",
+                f"could not fetch {repo}@{sha[:12]}: {detail}",
+                hint="the commit must exist and be readable with the credential this job holds. A "
+                f"private upstream needs one: set `inherits-auth` in pipeline.yaml so the fetch step "
+                f"carries {FETCH_TOKEN_ENV}"
+                if not token
+                else "the credential reached git but the commit was not readable with it — check the "
+                "installation or token has access to that repository",
             )
     shutil.rmtree(destination / ".git", ignore_errors=True)
 
@@ -202,6 +232,11 @@ def pin(
     # The compiler also emits third-party actions; leaving those floating would defeat the point.
     external = data.setdefault("external", {})
     for action, tag in sorted(EXTERNAL_ACTIONS.items()):
+        if action not in spec.external_actions_used():
+            # Resolving one this pipeline never emits would put a pin in the lock for something no
+            # workflow references, and move it on every upgrade for nobody's benefit.
+            external.pop(action, None)
+            continue
         entry = external.setdefault(action, {})
         entry["tag"] = tag
         if entry.get("sha"):

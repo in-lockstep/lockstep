@@ -18,7 +18,6 @@ from typing import Any
 
 from . import __version__
 from .emit.agentic import ENGINE_BY_PROVIDER, UNMAPPED_PROVIDERS
-from .emit.builtins import EXTERNAL_ACTIONS
 from .emit.context import PINS_PATH, Pins
 from .emit.validate import MAX_JOB_MINUTES
 from .errors import LockstepError
@@ -302,7 +301,7 @@ def _product_terms(spec: Spec) -> set[str]:
 def doctor(spec: Spec, root: Path) -> Report:
     report = Report()
     pins = Pins.load(spec)
-    _check_pins(pins, spec.capabilities_used(), report)
+    _check_pins(pins, spec.capabilities_used(), spec.external_actions_used(), report)
     _check_inherits(spec, root, report)
     _check_missing_upstreams(spec, report)
     _check_runtime_compiler(spec, report)
@@ -315,7 +314,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     return report
 
 
-def _check_pins(pins: Pins, used: CapabilityUse, report: Report) -> None:
+def _check_pins(pins: Pins, used: CapabilityUse, external_used: set[str], report: Report) -> None:
     if used.actions and not pins.actions_sha:
         report.add(
             Severity.ERROR,
@@ -331,7 +330,7 @@ def _check_pins(pins: Pins, used: CapabilityUse, report: Report) -> None:
             "the executor image is not pinned by digest",
             hint="run `lockstep pin`, or record capabilities.exec.digest in .pipeline/pins.lock",
         )
-    for action in sorted(EXTERNAL_ACTIONS):
+    for action in sorted(external_used):
         if not pins.external.get(action):
             report.add(
                 Severity.ERROR,

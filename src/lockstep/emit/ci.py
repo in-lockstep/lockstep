@@ -30,6 +30,47 @@ SPEC_PATHS = [
 ]
 
 
+FETCH_TOKEN_ENV = "LOCKSTEP_FETCH_TOKEN"
+APP_TOKEN_STEP = "inherits-token"
+
+
+def _fetch_steps(spec: Spec, ctx: EmitContext) -> list[dict[str, Any]]:
+    """Materialize the inherited trees, with a credential when the upstreams are private.
+
+    A public upstream needs nothing: `lockstep fetch` reads it anonymously. A private one cannot be
+    read by the consumer's own `GITHUB_TOKEN` at all — that token is scoped to the repository it
+    belongs to — so the credential has to be declared, and this is where it is wired in rather than
+    left to a comment in a README that every consuming repository re-derives.
+    """
+    auth = spec.manifest.inherits_auth
+    steps: list[dict[str, Any]] = []
+    token = ""
+
+    if auth.uses_app:
+        steps.append(
+            {
+                "name": "Mint a token for the private upstreams",
+                "id": APP_TOKEN_STEP,
+                "uses": ctx.pins.external_action("actions/create-github-app-token"),
+                "with": {
+                    "app-id": "${{ vars." + auth.app_id + " }}",
+                    "private-key": "${{ secrets." + auth.private_key + " }}",
+                    # The App is installed on the upstreams, not on this repository.
+                    "owner": "${{ github.repository_owner }}",
+                },
+            }
+        )
+        token = "${{ steps." + APP_TOKEN_STEP + ".outputs.token }}"
+    elif auth.token:
+        token = "${{ secrets." + auth.token + " }}"
+
+    fetch: dict[str, Any] = {"name": "Fetch inherited pipelines", "run": "lockstep fetch"}
+    if token:
+        fetch["env"] = {FETCH_TOKEN_ENV: token}
+    steps.append(fetch)
+    return steps
+
+
 def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
     compiler = ctx.pins.compiler_install()
     checkout = ctx.pins.external_action("actions/checkout")
@@ -45,19 +86,10 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
                 "name": "Install the pinned compiler",
                 "run": f'uv tool install "{compiler}"',
             },
-            *(
-                [
-                    {
-                        # Inherited definitions are resolved state, not committed source, so every
-                        # check that compiles has to materialize them first — at the commits the
-                        # lock file records, which is what keeps `--check` byte-for-byte honest.
-                        "name": "Fetch inherited pipelines",
-                        "run": "lockstep fetch",
-                    }
-                ]
-                if spec.manifest.inherits
-                else []
-            ),
+            # Inherited definitions are resolved state, not committed source, so every check that
+            # compiles has to materialize them first — at the commits the lock file records, which
+            # is what keeps `--check` byte-for-byte honest.
+            *(_fetch_steps(spec, ctx) if spec.manifest.inherits else []),
             *(extra or []),
         ]
 

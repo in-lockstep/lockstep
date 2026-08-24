@@ -480,7 +480,87 @@ change into a build failure rather than a customization that quietly stopped app
   demonstrably reach the emitted workflow. `runs-on` looked like an obvious fourth and is not: an
   agentic workflow's runner does not come from the agent, so banding it would have published a dial
   connected to nothing.
-- **Private repositories need a credential.** A consumer's `GITHUB_TOKEN` cannot read another private
-  repository, so `lockstep fetch` in CI needs a GitHub App or a PAT. Nothing here solves that for you.
+- **Private repositories need a credential**, and `inherits-auth:` is where you declare it. See
+  *Reading a private upstream* below.
 - **Nothing has run on a real GitHub runner.** The capability actions and executor image these
   pipelines reference have never been published; see the note in the README.
+
+
+---
+
+## Reading a private upstream
+
+A consumer's `GITHUB_TOKEN` is scoped to the repository it belongs to. It cannot read another
+repository — this is not a permissions setting somebody forgot, it is what that token *is*. So an
+upstream that is private needs a credential from somewhere else, and `lockstep fetch` fails with a
+404 until it has one.
+
+Declare it once, in the consumer's manifest:
+
+```yaml
+inherits:
+  standards: github.com/acme/pipeline-standards@v3
+
+inherits-auth:
+  app-id: PIPELINE_APP_ID              # a repository or organization variable
+  private-key: PIPELINE_APP_PRIVATE_KEY  # a secret
+```
+
+The compiler wires it into the generated drift gate — mint a short-lived token, then fetch with it:
+
+```yaml
+- name: Mint a token for the private upstreams
+  id: inherits-token
+  uses: actions/create-github-app-token@<sha>   # pinned like every other action
+  with:
+    app-id: ${{ vars.PIPELINE_APP_ID }}
+    private-key: ${{ secrets.PIPELINE_APP_PRIVATE_KEY }}
+    owner: ${{ github.repository_owner }}
+- name: Fetch inherited pipelines
+  run: lockstep fetch
+  env:
+    LOCKSTEP_FETCH_TOKEN: ${{ steps.inherits-token.outputs.token }}
+```
+
+`SECRETS.md` lists what to set, with the `gh` commands, like every other secret this pipeline needs.
+
+### Use an App, not a PAT
+
+Both work. `inherits-auth: {token: SOME_SECRET}` takes any token that can read the upstreams, and
+skips the minting step. It is the wrong default, for reasons that have nothing to do with this
+framework:
+
+| | GitHub App | Personal access token |
+|---|---|---|
+| Lifetime | minted per run, expires in an hour | until somebody rotates it |
+| Scope | the repositories the App is installed on | everything its owner can reach, or a list somebody maintains |
+| Belongs to | the organization | a person, who may change teams or leave |
+| Rotation | automatic | a calendar reminder |
+
+The App you want probably already exists. The [upstream notifier](#or-let-the-pipeline-do-it) uses an
+App's installation list as its consumer registry — the same App, installed on the standards
+repository and on every repository that inherits from it, answers both questions: *who should I tell
+when this moves* and *who may read this*.
+
+### Setting it up
+
+1. **Create an organization App.** Settings → Developer settings → GitHub Apps → New. No webhook, no
+   user permissions. One repository permission: **Contents: Read-only**. That is all `lockstep fetch`
+   does — a shallow fetch of one commit.
+2. **Install it** on the upstream repositories *and* on every consuming repository. The consumer is
+   where the token is minted, so the App has to be installed there to mint one at all; the upstream
+   is what the token then reads.
+3. **Record the credentials** at the organization level, so a new consuming repository inherits them
+   rather than re-doing this: a variable `PIPELINE_APP_ID` and a secret `PIPELINE_APP_PRIVATE_KEY`.
+4. **Declare `inherits-auth`** in each consumer and recompile. The diff is the two steps above.
+
+### What the framework does not do
+
+It does not create the App, install it, or rotate anything. Those are organization decisions with
+real blast radius, and a compiler that made them by side effect would be making them for you.
+
+What it does is make the wiring declared rather than folklore: the credential is named in the
+manifest, appears in `SECRETS.md`, is pinned like every other action, and is covered by the drift
+gate. And `lockstep fetch` never puts the token in a remote URL or echoes it in an error — a
+credential in a build log is a leaked credential, and git is fond of quoting URLs back at you.
+

@@ -382,6 +382,32 @@ class Capabilities:
 
 
 @dataclass
+class InheritsAuth:
+    """How this repository reads an upstream that is private.
+
+    A consumer's own `GITHUB_TOKEN` can only read the repository it belongs to, so a private
+    upstream needs a credential from somewhere else. Two shapes, and the App is the one to reach
+    for: an installation token is minted per run, expires in an hour, and is scoped to the
+    repositories the App was installed on. A PAT is somebody's account, does not expire on its own,
+    and outlives their employment.
+    """
+
+    # A repository or environment secret holding a token.
+    token: str = ""
+    # A GitHub App: `app-id` names a variable, `private-key` a secret.
+    app_id: str = ""
+    private_key: str = ""
+
+    @property
+    def declared(self) -> bool:
+        return bool(self.token or (self.app_id and self.private_key))
+
+    @property
+    def uses_app(self) -> bool:
+        return bool(self.app_id and self.private_key)
+
+
+@dataclass
 class EvalConfig:
     """How this pipeline runs its eval suites.
 
@@ -451,6 +477,7 @@ class Manifest:
     target: TargetConfig = field(default_factory=TargetConfig)
     per_run_ai_credits: int | None = None
     evals: EvalConfig = field(default_factory=EvalConfig)
+    inherits_auth: InheritsAuth = field(default_factory=InheritsAuth)
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
     uses: dict[str, CommandUse] = field(default_factory=dict)
     extensions: Extensions = field(default_factory=Extensions)
@@ -552,6 +579,19 @@ class Spec:
                 if not step.uses_compiler:
                     use = replace(use, executor=True)
         return use
+
+    def external_actions_used(self) -> set[str]:
+        """Third-party actions this pipeline's output will reference.
+
+        Checkout is in every generated workflow. The App-token action is in exactly one, and only
+        when a repository declares that its upstreams are private — so requiring a pin for it
+        everywhere would be the same red-gate-with-nothing-behind-it that `capabilities_used`
+        exists to avoid.
+        """
+        used = {"actions/checkout"}
+        if self.manifest.inherits_auth.uses_app:
+            used.add("actions/create-github-app-token")
+        return used
 
     def compiled_profiles(self) -> list[Profile]:
         """Profiles to compile a workflow set for, in declared order."""

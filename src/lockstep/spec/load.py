@@ -21,6 +21,7 @@ from .model import (
     CommandUse,
     EvalConfig,
     Extensions,
+    InheritsAuth,
     Manifest,
     SourceFile,
     Spec,
@@ -77,6 +78,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     target_raw = (data.get("targets", {}) or {}).get("github-agentic", {}) or {}
     budgets = data.get("budgets", {}) or {}
     evals_raw = data.get("evals", {}) or {}
+    auth_raw = data.get("inherits-auth", {}) or {}
     extensions_raw = data.get("extensions", {}) or {}
 
     commands_raw = data.get("commands", {}) or {}
@@ -120,6 +122,11 @@ def load_manifest(home: Path, root: Path) -> Manifest:
                 float(evals_raw["min-pass-rate"]) if evals_raw.get("min-pass-rate") is not None else None
             ),
             on_prompt_change=bool(evals_raw.get("on-prompt-change", True)),
+        ),
+        inherits_auth=InheritsAuth(
+            token=str(auth_raw.get("token", "") or ""),
+            app_id=str(auth_raw.get("app-id", "") or ""),
+            private_key=str(auth_raw.get("private-key", "") or ""),
         ),
         commands=data.get("commands", {}) or {},
         extensions=Extensions(
