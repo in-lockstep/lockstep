@@ -455,6 +455,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     _check_inherits(spec, root, report)
     _check_missing_upstreams(spec, report)
     _check_collector_reachable(spec, report)
+    _check_customized_inherited_agents(spec, report)
     _check_runtime_compiler(spec, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)
@@ -659,6 +660,53 @@ def _check_collector_reachable(spec: Spec, report: Report) -> None:
                 hint="its spans will not be exported. That is the guardrail working — relax it for "
                 "this agent, or accept that this one reports through the run metrics only",
             )
+
+
+def _check_customized_inherited_agents(spec: Spec, report: Report) -> None:
+    """Inherited agents this repository changed, that nothing here evaluates.
+
+    Upstream evaluated the prompt upstream wrote. Add a guardrail, a skill, a context or a tuned
+    dial and what runs here is a different prompt — one no eval suite anywhere describes. The change
+    is invisible in the most expensive way: everything compiles, everything passes, and the lens
+    quietly does something else.
+
+    Grouped by cause rather than reported per agent. One `contexts:` entry in a profile reaches
+    every agent in the repository, so a repository that adopted five pipelines would otherwise get
+    thirteen identical warnings — and a report that repeats itself thirteen times is one people mute
+    rather than read.
+
+    A warning rather than an error, because those suites cost credits and how much verification a
+    customization is worth is the consuming repository's call. `evals.inherited` is how they answer.
+    """
+    from .emit.evals import agents_with_cases, customization
+
+    evaluated = set(agents_with_cases(spec))
+    profiles = spec.compiled_profiles()
+    if not profiles:
+        return
+
+    grouped: dict[tuple[str, ...], list[str]] = {}
+    for name, agent in sorted(spec.agents.items()):
+        if not agent.inherited_from or name in evaluated:
+            continue
+        reasons = customization(spec, agent, profiles[0])
+        if reasons:
+            grouped.setdefault(tuple(reasons), []).append(name)
+
+    for cause, agents in sorted(grouped.items()):
+        reasons = list(cause)
+        listed = ", ".join(agents[:3]) + (f" and {len(agents) - 3} more" if len(agents) > 3 else "")
+        report.add(
+            Severity.WARNING,
+            "DOC025",
+            f"{len(agents)} inherited agent(s) are customized here and nothing evaluates them: {listed}",
+            location=spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml",
+            hint=f"this repository adds {', '.join(reasons[:4])}"
+            + (f" and {len(reasons) - 4} more" if len(reasons) > 4 else "")
+            + ", so their upstreams evaluated a different prompt. List the ones worth verifying "
+            "under `evals.inherited` — upstream's cases run as a regression contract, plus any you "
+            "write yourself",
+        )
 
 
 def _upstream_key(source: str) -> str:

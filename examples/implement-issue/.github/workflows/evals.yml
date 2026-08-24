@@ -33,9 +33,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/change-writer/cases
+        cp -R evals/change-writer/cases/. outputs/evals/change-writer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/change-writer/cases --output-dir=outputs/evals/change-writer/inputs --repo-dir=outputs/evals/change-writer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/change-writer/cases --output-dir=outputs/evals/change-writer/inputs --repo-dir=outputs/evals/change-writer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -67,7 +71,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/change-writer/cases --outputs=outputs/evals/change-writer/answers --agent=change-writer --output=outputs/evals/change-writer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/change-writer/cases --outputs=outputs/evals/change-writer/answers --agent=change-writer --output=outputs/evals/change-writer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -84,9 +88,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/planner/cases
+        cp -R evals/planner/cases/. outputs/evals/planner/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/planner/cases --output-dir=outputs/evals/planner/inputs --repo-dir=outputs/evals/planner/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/planner/cases --output-dir=outputs/evals/planner/inputs --repo-dir=outputs/evals/planner/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -118,7 +126,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/planner/cases --outputs=outputs/evals/planner/answers --agent=planner --output=outputs/evals/planner.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/planner/cases --outputs=outputs/evals/planner/answers --agent=planner --output=outputs/evals/planner.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -135,9 +143,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/requirements-analyst/cases
+        cp -R evals/requirements-analyst/cases/. outputs/evals/requirements-analyst/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/requirements-analyst/cases --output-dir=outputs/evals/requirements-analyst/inputs --repo-dir=outputs/evals/requirements-analyst/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/requirements-analyst/cases --output-dir=outputs/evals/requirements-analyst/inputs --repo-dir=outputs/evals/requirements-analyst/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -169,7 +181,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/requirements-analyst/cases --outputs=outputs/evals/requirements-analyst/answers --agent=requirements-analyst --output=outputs/evals/requirements-analyst.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/requirements-analyst/cases --outputs=outputs/evals/requirements-analyst/answers --agent=requirements-analyst --output=outputs/evals/requirements-analyst.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -186,9 +198,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/test-writer/cases
+        cp -R evals/test-writer/cases/. outputs/evals/test-writer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/test-writer/cases --output-dir=outputs/evals/test-writer/inputs --repo-dir=outputs/evals/test-writer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/test-writer/cases --output-dir=outputs/evals/test-writer/inputs --repo-dir=outputs/evals/test-writer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -220,7 +236,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/test-writer/cases --outputs=outputs/evals/test-writer/answers --agent=test-writer --output=outputs/evals/test-writer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/test-writer/cases --outputs=outputs/evals/test-writer/answers --agent=test-writer --output=outputs/evals/test-writer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0

@@ -33,9 +33,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/intent-reviewer/cases
+        cp -R evals/intent-reviewer/cases/. outputs/evals/intent-reviewer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/intent-reviewer/cases --output-dir=outputs/evals/intent-reviewer/inputs --repo-dir=outputs/evals/intent-reviewer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/intent-reviewer/cases --output-dir=outputs/evals/intent-reviewer/inputs --repo-dir=outputs/evals/intent-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -67,7 +71,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/intent-reviewer/cases --outputs=outputs/evals/intent-reviewer/answers --agent=intent-reviewer --output=outputs/evals/intent-reviewer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/intent-reviewer/cases --outputs=outputs/evals/intent-reviewer/answers --agent=intent-reviewer --output=outputs/evals/intent-reviewer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -84,9 +88,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/performance-reviewer/cases
+        cp -R evals/performance-reviewer/cases/. outputs/evals/performance-reviewer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/performance-reviewer/cases --output-dir=outputs/evals/performance-reviewer/inputs --repo-dir=outputs/evals/performance-reviewer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/performance-reviewer/cases --output-dir=outputs/evals/performance-reviewer/inputs --repo-dir=outputs/evals/performance-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -118,7 +126,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/performance-reviewer/cases --outputs=outputs/evals/performance-reviewer/answers --agent=performance-reviewer --output=outputs/evals/performance-reviewer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/performance-reviewer/cases --outputs=outputs/evals/performance-reviewer/answers --agent=performance-reviewer --output=outputs/evals/performance-reviewer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -135,9 +143,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/security-reviewer/cases
+        cp -R evals/security-reviewer/cases/. outputs/evals/security-reviewer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/security-reviewer/cases --output-dir=outputs/evals/security-reviewer/inputs --repo-dir=outputs/evals/security-reviewer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/security-reviewer/cases --output-dir=outputs/evals/security-reviewer/inputs --repo-dir=outputs/evals/security-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -169,7 +181,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/security-reviewer/cases --outputs=outputs/evals/security-reviewer/answers --agent=security-reviewer --output=outputs/evals/security-reviewer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/security-reviewer/cases --outputs=outputs/evals/security-reviewer/answers --agent=security-reviewer --output=outputs/evals/security-reviewer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -186,9 +198,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/tests-reviewer/cases
+        cp -R evals/tests-reviewer/cases/. outputs/evals/tests-reviewer/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/tests-reviewer/cases --output-dir=outputs/evals/tests-reviewer/inputs --repo-dir=outputs/evals/tests-reviewer/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/tests-reviewer/cases --output-dir=outputs/evals/tests-reviewer/inputs --repo-dir=outputs/evals/tests-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -220,7 +236,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/tests-reviewer/cases --outputs=outputs/evals/tests-reviewer/answers --agent=tests-reviewer --output=outputs/evals/tests-reviewer.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/tests-reviewer/cases --outputs=outputs/evals/tests-reviewer/answers --agent=tests-reviewer --output=outputs/evals/tests-reviewer.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0

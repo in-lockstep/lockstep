@@ -295,6 +295,7 @@ def grade(case: Case, output: Any) -> dict[str, Any]:
     rubric = case.rubric
     result: dict[str, Any] = {
         "case": case.name,
+        "answered": True,
         "checks": [check.as_dict() for check in checks],
         "deterministic_passed": deterministic_passed,
         # A rubric is not graded here. `passed` is therefore provisional whenever one exists, and
@@ -323,6 +324,11 @@ def unanswered(case: Case) -> dict[str, Any]:
     result: dict[str, Any] = {
         "case": case.name,
         "checks": [{"check": "answered", "target": case.name, "passed": False, "detail": "no output"}],
+        # Recorded distinctly from "answered wrongly". A run that never happened — a provider
+        # outage, a rate limit, a cancelled leg — is a failure of the suite, not evidence about the
+        # prompt, and a comparison that could not tell them apart would grade an outage as a
+        # regression and block a merge for a reason nobody can act on.
+        "answered": False,
         "deterministic_passed": False,
         "rubric": rubric.criteria if rubric else "",
         "rubric_scored": bool(rubric and rubric.scored),
@@ -548,3 +554,30 @@ def summarize(
     if min_score is not None and mean is not None and mean < min_score:
         summary["ok"] = False
     return summary
+
+
+def gather(directories: list[Path]) -> list[Path]:
+    """Case files from several directories, as one suite.
+
+    A consumer who customizes an inherited agent needs both sets: the upstream's cases are the
+    regression contract — did my guardrail stop their lens finding what it used to? — and their own
+    test what the customization was actually for.
+
+    A name appearing in two directories is refused rather than resolved. Letting the later one win
+    would silently delete an upstream case, which is exactly the check the consumer least wants to
+    lose and least likely to notice going.
+    """
+    seen: dict[str, Path] = {}
+    files: list[Path] = []
+    for directory in directories:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.json")):
+            if path.stem in seen:
+                raise CaseError(
+                    f"two cases are called {path.stem!r}: {seen[path.stem]} and {path}. "
+                    f"Rename one — resolving it silently would drop the other"
+                )
+            seen[path.stem] = path
+            files.append(path)
+    return files

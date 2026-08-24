@@ -242,6 +242,57 @@ Step 4 is the one that makes the rest more than a suggestion.
 
 ---
 
+## Customize an inherited agent, and you own its verification
+
+This is the case most repositories reach first, and the one that used to be silent.
+
+Adding a guardrail with `add-guardrails:`, tuning a band, writing an overlay — or, most commonly,
+putting one `contexts:` entry in a profile — changes the compiled prompt of the agents involved. A
+profile context reaches **every agent this repository compiles**, inherited ones included.
+
+So the agent running here is not the agent its upstream evaluated. Their cases described their
+prompt. Nothing describes yours.
+
+`lockstep doctor` says so, once, naming the cause rather than repeating itself per agent:
+
+```
+DOC025: 14 inherited agent(s) are customized here and nothing evaluates them:
+        fix/bug-analyst, fix/fix-reviewer, fix/fix-writer and 11 more
+        this repository adds context:codebase, so their upstreams evaluated a different prompt.
+```
+
+The answer is to list the ones worth checking:
+
+```yaml
+evals:
+  inherited: [review/security-reviewer]
+```
+
+Which runs **two sets of cases against your compiled agent**:
+
+- **Upstream's**, fetched with the pipeline, as a regression contract — did what you added stop
+  their lens finding what it used to?
+- **Yours**, at `evals/<alias>/<agent>/cases/`, testing what the customization was *for*.
+
+A name appearing in both is refused rather than resolved. Letting one win would silently drop an
+upstream case, which is the check you least want to lose and least likely to notice going.
+
+Upstream's *scores* never enter your ledger. The fingerprint is your compiled agent, so your
+baseline is your own previous prompt and your noise floor is measured on your own runs. Comparing
+against upstream's numbers would be comparing across a different prompt, a different profile and
+possibly a different judge.
+
+It is per agent rather than a flag, because a repository that adopted five pipelines has no reason
+to pay for thirteen suites when it customized one lens.
+
+**One mechanical consequence.** Inherited cases live under `.pipeline/`, which is resolved state
+rather than committed source — gitignored, like a virtualenv. So a suite that reads them fetches
+first, which needs the compiler, which the executor image deliberately does not carry. That job
+therefore runs on the bare runner and installs both. A suite over your own agents reads committed
+files and does none of this.
+
+---
+
 ## What this does not do
 
 **Replay.** The ledger says which run to look at; it does not reconstruct one. gh-aw retains the
@@ -252,10 +303,8 @@ to a job, so the report says so by leaving the figure out rather than guessing a
 
 **Act on its own findings.** By construction, and permanently.
 
-**Verify a change to an inherited agent.** A repository that adopts shipped pipelines has no eval
-suite for them — an inherited agent is evaluated by whoever published it, and re-running somebody
-else's cases would be paying to re-test their lens. So the comparison covers the agents you own. A
-change to a shipped agent is verified in the repository that ships it.
+**Verify an inherited agent you have *not* customized.** Its upstream already does, against the
+prompt they wrote. Re-running their cases here would pay to re-test their lens.
 
 **Judge a rubric.** The comparison reads `pass_rate` and `mean_score` as the grader reported them,
 so a suite with no judge configured has rubrics pending and compares on its deterministic half

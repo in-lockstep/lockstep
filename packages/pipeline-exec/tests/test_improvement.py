@@ -183,7 +183,7 @@ def test_a_record_carries_the_prompt_it_scored():
     }
     record = eval_record(report, prompt="abc123", identity={"run_id": "9"})
     assert record["kind"] == "eval" and record["prompt"] == "abc123"
-    assert record["cases"]["traversal"] == {"passed": True, "score": 5}
+    assert record["cases"]["traversal"] == {"passed": True, "score": 5, "answered": True}
     assert record["decided"] == 2
 
 
@@ -208,3 +208,121 @@ def test_an_unmeasured_noise_floor_is_stated_before_the_numbers():
 def test_the_comparison_is_json_a_later_step_can_gate_on():
     result = compare(run("new", 4.9, {"traversal": False, "nothing-to-find": True}), baseline())
     assert json.loads(json.dumps(result))["regressed"] == ["traversal"]
+
+
+# --- day one ----------------------------------------------------------------
+
+
+def test_a_ledger_branch_that_does_not_exist_yet_is_not_a_failure(tmp_path):
+    """The first eval run on every repository that turns the loop on takes this path.
+
+    Treating a missing branch as a usage error would fail that run before there was anything it
+    could have compared against.
+    """
+    import subprocess
+
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "agent": "reviewer",
+                "summary": {"total": 1, "pending_rubric": [], "pass_rate": 1.0, "mean_score": 5},
+                "cases": [{"case": "traversal", "passed": True}],
+            }
+        )
+    )
+    (tmp_path / "agent.md").write_text("prompt")
+
+    import os
+
+    cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = CliRunner().invoke(
+            main,
+            [
+                "eval-compare",
+                "--agent=reviewer",
+                f"--report={report}",
+                "--prompt-file=agent.md",
+                "--branch=pipeline-history",
+                f"--output={tmp_path / 'out.json'}",
+            ],
+        )
+    finally:
+        os.chdir(cwd)
+
+    assert result.exit_code == 0, result.output
+    assert json.loads((tmp_path / "out.json").read_text())["verdict"] == "no baseline"
+
+
+def test_neither_a_ledger_nor_a_branch_is_still_a_usage_error(tmp_path):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps({"agent": "a", "summary": {}, "cases": []}))
+    (tmp_path / "agent.md").write_text("prompt")
+    result = CliRunner().invoke(
+        main,
+        [
+            "eval-compare",
+            "--agent=a",
+            f"--report={report}",
+            f"--prompt-file={tmp_path / 'agent.md'}",
+            f"--output={tmp_path / 'out.json'}",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--ledger or --branch" in result.output
+
+
+# --- an outage is not a regression ------------------------------------------
+
+
+def test_a_case_the_agent_never_answered_does_not_block_a_merge():
+    """A provider outage, a rate limit or a cancelled leg is a failure of the suite, not evidence.
+
+    Without this the chain is airtight and wrong: a missing answer file becomes `passed: False`,
+    counts as decided, reads as a case that always passed and now fails, and exits 1 on the pull
+    request — blocking a merge for a reason nobody can act on.
+    """
+    candidate = run("new", 4.4, SOLID)
+    candidate["cases"]["traversal"]["answered"] = False
+    candidate["cases"]["traversal"]["passed"] = False
+    result = compare(candidate, baseline())
+    assert result["regressed"] == []
+    assert result["not_run"] == ["traversal"]
+    assert result["verdict"] != "regressed"
+    assert "Never ran, so they say nothing either way" in render(result)
+
+
+def test_a_baseline_run_that_never_answered_is_not_a_baseline_failure():
+    """Counting it would make the next change look like a fix."""
+    runs = baseline()
+    for record in runs:
+        record["cases"]["traversal"] = {"passed": False, "score": None, "answered": False}
+    verdicts = {v.case: v.verdict for v in case_verdicts(runs, run("new", 4.4, SOLID))}
+    # Every baseline observation was discarded, so there is nothing to compare against.
+    assert verdicts["traversal"] == "new case"
+
+
+def test_an_answered_failure_is_still_a_regression():
+    """The distinction must not become a way for real regressions to escape."""
+    candidate = run("new", 4.4, {"traversal": False, "nothing-to-find": True})
+    assert compare(candidate, baseline())["regressed"] == ["traversal"]
+
+
+def test_records_from_before_this_distinction_existed_are_read_as_answered():
+    """`answered` defaults to true, so a ledger written by an older executor still compares."""
+    runs = baseline()
+    for record in runs:
+        for entry in record["cases"].values():
+            entry.pop("answered", None)
+    assert compare(run("new", 4.4, {"traversal": False, "nothing-to-find": True}), runs)["regressed"] == [
+        "traversal"
+    ]

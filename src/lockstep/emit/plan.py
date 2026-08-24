@@ -83,6 +83,12 @@ def compile_spec(root: Path) -> CompilePlan:
     agentic_count = 0
     deterministic_count = 0
 
+    # Accumulated across profiles rather than read out of the loop variable afterwards: the eval
+    # suite is emitted once for the repository and needs every agent's required secrets, and a
+    # dictionary that happened to survive the last iteration is a thing that stops being true the
+    # day somebody moves the call.
+    required_secrets: dict[str, list[str]] = {}
+
     for profile in profiles:
         ctx = EmitContext(spec=spec, pins=pins, profile=profile, multi_profile=multi)
         layers_by_agent = _resolve_agent_layers(spec, commands, profile)
@@ -99,6 +105,7 @@ def compile_spec(root: Path) -> CompilePlan:
             agent_files[filename] = artifact
             agent_lock[agent_name] = lock_filename(agent_name, profile if multi else None)
             agent_secrets[agent_name] = artifact.required_secrets
+            required_secrets[agent_name] = artifact.required_secrets
             fragments.update(emit_fragments(layers, ctx))
 
         sub_workflow = {name: _workflow_filename(name, profile, multi) for name in commands}
@@ -171,7 +178,11 @@ def compile_spec(root: Path) -> CompilePlan:
             ci_ctx.header([spec.manifest.src]),
         ),
     )
-    suite = emit_evals(spec, ci_ctx)
+    # The secrets each agent's `workflow_call` declares required. The eval suite calls exactly the
+    # same compiled workflows the pipeline does, so it has to hand over exactly the same secrets —
+    # a reusable workflow whose required secret is not passed fails at the call, which is how a
+    # suite for an agent with an MCP credential could never have run at all.
+    suite = emit_evals(spec, ci_ctx, agent_secrets=required_secrets)
     if suite is not None:
         normalized_suite = normalize(suite)
         validate_workflow(EVALS_WORKFLOW, normalized_suite)

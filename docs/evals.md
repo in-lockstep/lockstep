@@ -288,6 +288,18 @@ lint accepts and the grader ignores would be an expectation that passes review a
 
 ---
 
+## An outage is not a regression
+
+A case with no answer file is a failure — the agent was asked and did not answer. But it is recorded
+as `answered: false`, separately from a case the agent answered *wrongly*, and the comparison
+excludes it from every verdict.
+
+Without that distinction the chain is airtight and wrong: a provider outage or a rate limit produces
+a missing answer, which counts as decided, which reads as a case that always passed and now fails,
+which blocks the merge. A gate that fires on somebody else's downtime is one people route around.
+
+---
+
 ## The rules
 
 - **LNT001** — an agent with no cases at all.

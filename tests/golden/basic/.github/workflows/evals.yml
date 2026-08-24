@@ -33,9 +33,13 @@ jobs:
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/story-extractor/cases
+        cp -R evals/story-extractor/cases/. outputs/evals/story-extractor/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/story-extractor/cases --output-dir=outputs/evals/story-extractor/inputs --repo-dir=outputs/evals/story-extractor/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/story-extractor/cases --output-dir=outputs/evals/story-extractor/inputs --repo-dir=outputs/evals/story-extractor/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
@@ -50,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/story-extractor/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/story-extractor/answers/${{ matrix.case }}.json
+    secrets:
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   grade-story-extractor:
     name: Grade story-extractor
     needs:
@@ -67,7 +73,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/story-extractor/cases --outputs=outputs/evals/story-extractor/answers --agent=story-extractor --output=outputs/evals/story-extractor.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/story-extractor/cases --outputs=outputs/evals/story-extractor/answers --agent=story-extractor --output=outputs/evals/story-extractor.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2

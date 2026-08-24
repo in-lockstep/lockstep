@@ -76,7 +76,13 @@ def eval_record(report: dict[str, Any], *, prompt: str, identity: dict[str, Any]
         "decided": summary.get("total", 0) - len(summary.get("pending_rubric") or []),
         # Per case, because the aggregate hides the thing worth acting on: which case broke.
         "cases": {
-            case["case"]: {"passed": bool(case.get("passed")), "score": case.get("score")}
+            case["case"]: {
+                "passed": bool(case.get("passed")),
+                "score": case.get("score"),
+                # A case the agent never answered is not evidence about the prompt. Carried through
+                # so a comparison can tell "got it wrong" from "never ran".
+                "answered": case.get("answered", True),
+            }
             for case in (report.get("cases") or [])
         },
     }
@@ -192,11 +198,24 @@ def case_verdicts(runs: list[dict[str, Any]], candidate: dict[str, Any]) -> list
     cases = (candidate.get("cases") or {}) if candidate else {}
     verdicts: list[CaseVerdict] = []
     for name in sorted(set(cases) | {c for r in runs for c in (r.get("cases") or {})}):
-        seen = [r for r in runs if name in (r.get("cases") or {})]
+        # Only baseline runs where the agent actually answered. A run that fell over tells you
+        # about the day, not about the prompt, and counting it as a baseline failure would make the
+        # next change look like a fix.
+        seen = [
+            r
+            for r in runs
+            if name in (r.get("cases") or {}) and (r["cases"][name] or {}).get("answered", True)
+        ]
         passes = sum(1 for r in seen if (r["cases"][name] or {}).get("passed"))
-        now = bool((cases.get(name) or {}).get("passed"))
+        entry = cases.get(name) or {}
+        now = bool(entry.get("passed"))
 
-        if not seen:
+        if name in cases and not entry.get("answered", True):
+            # The candidate never ran this case. Whatever the baseline says, this is not a
+            # regression — it is a suite that did not finish, and blocking a merge on it would be
+            # blocking on a provider outage.
+            verdict = "not run"
+        elif not seen:
             verdict = "new case"
         elif len(seen) < MIN_BASELINE_RUNS:
             verdict = "too few baseline runs"
@@ -228,6 +247,7 @@ class Comparison:
         ]
         cases = case_verdicts(self.runs, self.candidate)
         regressed = [c.case for c in cases if c.verdict == "regressed"]
+        not_run = [c.case for c in cases if c.verdict == "not run"]
         fixed = [c.case for c in cases if c.verdict == "fixed"]
         flaky = [c.case for c in cases if c.verdict == "flaky"]
 
@@ -246,6 +266,10 @@ class Comparison:
             "regressed": regressed,
             "fixed": fixed,
             "flaky": flaky,
+            # Named rather than folded into a verdict. A case the agent never answered says nothing
+            # about the prompt, and a report that stayed silent about it would be a comparison
+            # quietly covering less than it appears to.
+            "not_run": not_run,
             "verdict": self._verdict(metrics, regressed, fixed, measurable),
         }
 
@@ -309,6 +333,14 @@ def render(comparison: dict[str, Any]) -> str:
             "",
             "**Cases that failed every baseline run and pass now:** "
             + ", ".join(f"`{name}`" for name in comparison["fixed"]),
+        ]
+    if comparison["not_run"]:
+        lines += [
+            "",
+            "**Never ran, so they say nothing either way:** "
+            + ", ".join(f"`{name}`" for name in comparison["not_run"])
+            + ". The agent produced no answer for these — an outage, a rate limit or a cancelled "
+            "leg. They are excluded from the verdict rather than counted as failures.",
         ]
     if comparison["flaky"]:
         lines += [

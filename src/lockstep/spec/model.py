@@ -492,6 +492,11 @@ class EvalConfig:
     # the comparison mean anything, and they cost credits, which is why it is a decision rather
     # than a default.
     baseline: str = ""
+    # Inherited agents to evaluate here: an alias, or `alias/agent`. Empty means none, which is
+    # right until this repository changes one — after that its upstream's evaluation describes a
+    # prompt nobody is running. Per agent rather than a flag, because a repository that adopted
+    # five pipelines has no reason to pay for thirteen suites when it customized one lens.
+    inherited: list[str] = field(default_factory=list)
 
 
 @dataclass

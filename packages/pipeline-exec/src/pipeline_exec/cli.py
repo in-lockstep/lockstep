@@ -734,7 +734,13 @@ def scan_input(inputs: tuple[Path, ...], mode: str, fail_on: str, report: Path |
 
 
 @main.command(name="eval-cases")
-@click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
+@click.option(
+    "--cases",
+    required=True,
+    multiple=True,
+    type=click.Path(path_type=Path),
+    help="Directory of case files. Repeatable: an inherited suite plus your own.",
+)
 @click.option("--output-dir", required=True, type=click.Path(path_type=Path))
 @click.option(
     "--repo-dir",
@@ -742,7 +748,7 @@ def scan_input(inputs: tuple[Path, ...], mode: str, fail_on: str, report: Path |
     default=None,
     help="Where to lay down each case's fixture tree, one directory per case.",
 )
-def eval_cases(cases: Path, output_dir: Path, repo_dir: Path | None) -> None:
+def eval_cases(cases: tuple[Path, ...], output_dir: Path, repo_dir: Path | None) -> None:
     """Write one agent input per eval case, and list them for a fan-out.
 
     An eval is not a special way of running an agent. It is the ordinary way — `input_path` in,
@@ -751,12 +757,12 @@ def eval_cases(cases: Path, output_dir: Path, repo_dir: Path | None) -> None:
     A case naming a fixture also gets that tree copied under `--repo-dir`, and the path written into
     the input it is handed. An agent asked to review code needs code to read.
     """
-    from .evals import Case, CaseError, expand
+    from .evals import Case, CaseError, expand, gather
 
-    files = sorted(cases.glob("*.json"))
-    if not files:
-        _fail(f"no cases in {cases}")
     try:
+        files = gather(list(cases))
+        if not files:
+            _fail("no cases in " + ", ".join(str(c) for c in cases))
         parsed = [Case.load(path) for path in files]
         items = expand(parsed, output_dir, repos=repo_dir)
     except CaseError as error:
@@ -772,19 +778,19 @@ def eval_cases(cases: Path, output_dir: Path, repo_dir: Path | None) -> None:
 
 
 @main.command(name="eval-judge-prep")
-@click.option("--cases", required=True, type=click.Path(path_type=Path))
+@click.option("--cases", required=True, multiple=True, type=click.Path(path_type=Path))
 @click.option("--outputs", required=True, type=click.Path(path_type=Path), help="What the agent answered.")
 @click.option("--output-dir", required=True, type=click.Path(path_type=Path))
-def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
+def eval_judge_prep(cases: tuple[Path, ...], outputs: Path, output_dir: Path) -> None:
     """Pair each rubric with the answer it is about, for a judging agent to read.
 
     Only cases carrying a rubric that also produced an answer. A case with no answer has already
     failed for that reason; sending it to a judge would spend a model call to be told so again.
     """
-    from .evals import Case, CaseError, judge_inputs
+    from .evals import Case, CaseError, gather, judge_inputs
 
     try:
-        parsed = [Case.load(path) for path in sorted(cases.glob("*.json"))]
+        parsed = [Case.load(path) for path in gather(list(cases))]
     except CaseError as error:
         _fail(str(error))
 
@@ -795,7 +801,13 @@ def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
 
 
 @main.command(name="eval-grade")
-@click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
+@click.option(
+    "--cases",
+    required=True,
+    multiple=True,
+    type=click.Path(path_type=Path),
+    help="Directory of case files. Repeatable: an inherited suite plus your own.",
+)
 @click.option("--outputs", required=True, type=click.Path(path_type=Path), help="Directory of agent outputs.")
 @click.option("--output", required=True, type=click.Path(path_type=Path), help="Where to write the report.")
 @click.option("--agent", default="", help="Name recorded in the report.")
@@ -825,7 +837,7 @@ def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
     help="The compiled agent workflow, hashed to fingerprint the prompt this run scored.",
 )
 def eval_grade(
-    cases: Path,
+    cases: tuple[Path, ...],
     outputs: Path,
     output: Path,
     agent: str,
@@ -844,11 +856,14 @@ def eval_grade(
     An output file missing for a case is a failure, not a skip. The agent was asked and did not
     answer, which is exactly the regression an eval suite is for.
     """
-    from .evals import Case, CaseError, apply_judgement, grade, summarize, unanswered
+    from .evals import Case, CaseError, apply_judgement, gather, grade, summarize, unanswered
 
-    files = sorted(cases.glob("*.json"))
+    try:
+        files = gather(list(cases))
+    except CaseError as error:
+        _fail(str(error))
     if not files:
-        _fail(f"no cases in {cases}")
+        _fail("no cases in " + ", ".join(str(c) for c in cases))
 
     results: list[dict[str, Any]] = []
     for path in files:
@@ -1878,11 +1893,12 @@ def eval_compare(
         try:
             directory = materialize_branch(branch, path=path)
         except LedgerError as error:
-            # A branch that does not exist yet is the first run rather than a failure: there is no
-            # baseline, which the comparison reports as such.
+            # A branch that does not exist yet is the *first run*, not a failure. This is the day-one
+            # path on every repository that turns the loop on, and treating it as a usage error
+            # would fail the very first eval before there was anything it could have compared.
             click.echo(f"no ledger on {branch!r} yet ({error})", err=True)
             directory = None
-    if directory is None and ledger is None:
+    elif ledger is None:
         _fail("pass --ledger or --branch")
 
     records = read_eval_records(directory, agent=agent) if directory and directory.is_dir() else []

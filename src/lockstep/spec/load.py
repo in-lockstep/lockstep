@@ -138,6 +138,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             min_score=(float(evals_raw["min-score"]) if evals_raw.get("min-score") is not None else None),
             on_prompt_change=bool(evals_raw.get("on-prompt-change", True)),
             baseline=str(evals_raw.get("baseline", "") or ""),
+            inherited=[str(name) for name in (evals_raw.get("inherited") or [])],
         ),
         otel=OtelConfig(
             export=str(otel_raw.get("export", "") or ""),

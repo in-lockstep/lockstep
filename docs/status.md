@@ -564,6 +564,13 @@ Five are now closed — `docs/evals.md`, `docs/metering.md`, `docs/adopting-ship
   it has not read any agent's output, so it says what a case should assert and never invents an
   input.
 
+  Both scaffolds ship the loop. `lockstep init` inherits the retro and turns on retention and a
+  weekly baseline; `lockstep init --adopt` additionally ships the two layers every adopter writes —
+  a context and a house guardrail — because either of them changes the prompt of every inherited
+  agent into one its upstream never evaluated. `evals.inherited` names the agents worth verifying
+  after that, running upstream's cases as a regression contract alongside any the consumer wrote,
+  and `DOC025` reports the situation once per cause rather than once per agent.
+
   Three things it deliberately does not do: replay a run (the ledger says which run, gh-aw still
   holds the transcript until it expires), attribute cost per agent (the usage artifacts carry no
   name to join on, so the figure is omitted rather than guessed), and verify a change to an

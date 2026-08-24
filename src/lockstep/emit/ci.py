@@ -34,7 +34,7 @@ FETCH_TOKEN_ENV = "LOCKSTEP_FETCH_TOKEN"
 APP_TOKEN_STEP = "inherits-token"
 
 
-def _fetch_steps(spec: Spec, ctx: EmitContext) -> list[dict[str, Any]]:
+def fetch_steps(spec: Spec, ctx: EmitContext) -> list[dict[str, Any]]:
     """Materialize the inherited trees, with a credential when the upstreams are private.
 
     A public upstream needs nothing: `lockstep fetch` reads it anonymously. A private one cannot be
@@ -89,7 +89,7 @@ def emit_ci(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
             # Inherited definitions are resolved state, not committed source, so every check that
             # compiles has to materialize them first — at the commits the lock file records, which
             # is what keeps `--check` byte-for-byte honest.
-            *(_fetch_steps(spec, ctx) if spec.manifest.inherits else []),
+            *(fetch_steps(spec, ctx) if spec.manifest.inherits else []),
             *(extra or []),
         ]
 

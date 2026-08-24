@@ -33,6 +33,13 @@ def pipeline(tmp_path):
     root = tmp_path / "new"
     root.mkdir()
     scaffold(root, "release-notes", "staging")
+    # The scaffold inherits the retro pipeline, so its definitions have to be on disk before
+    # anything compiles. For a `lockstep:` upstream this copies from the installed compiler — no
+    # network, no lock entry — which is why `init` can reasonably print it as the next step.
+    from lockstep.lifecycle import fetch
+    from lockstep.spec.load import load_manifest_only
+
+    fetch(load_manifest_only(root), root)
     return root
 
 
@@ -41,7 +48,11 @@ def pinned(pipeline):
     from lockstep.lifecycle import pin, write_pins
 
     data, _, _ = pin(load_spec(pipeline), pipeline, actions_sha=SHA, exec_digest=DIGEST, offline=True)
-    data.setdefault("external", {})["actions/checkout"] = {"tag": "v4", "sha": "c" * 40}
+    external = data.setdefault("external", {})
+    external["actions/checkout"] = {"tag": "v4", "sha": "c" * 40}
+    # The scaffold retains run history, which puts a metering job in every workflow.
+    for action in ("actions/download-artifact", "actions/upload-artifact"):
+        external[action] = {"tag": "v5", "sha": "d" * 40}
     write_pins(pipeline, data)
     return pipeline
 

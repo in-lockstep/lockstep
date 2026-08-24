@@ -447,7 +447,10 @@ def init(root: Path, name: str, profile: str, target: str, force: bool, adopt: s
     click.echo("\nnext:")
     click.echo(f"  cd {root}")
     click.echo("  lockstep pin        # resolve capability tags to commits")
-    if chosen:
+    # Whenever the manifest inherits anything, not only for `--adopt`. The scaffolded pipeline
+    # inherits the retro, so `compile` refuses until its definitions are on disk — and for a
+    # `lockstep:` upstream this copies from the installed compiler, so it is instant and offline.
+    if chosen or "\ninherits:" in (root / "pipeline.yaml").read_text(encoding="utf-8"):
         click.echo("  lockstep fetch      # materialize the pipelines you inherited")
     click.echo("  lockstep compile    # generate the workflows")
     click.echo("  lockstep lint       # check the spec")

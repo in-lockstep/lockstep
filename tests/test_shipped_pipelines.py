@@ -37,12 +37,15 @@ def adopter(tmp_path, basic_root):
     scaffold(root, "acme-app", "repo", adopt=tuple(SHIPPED))
     # The pins the fixture already resolved; `pin` itself is exercised separately below.
     (root / ".pipeline").mkdir(exist_ok=True)
-    (root / ".pipeline" / "pins.lock").write_text(
-        (basic_root / ".pipeline" / "pins.lock").read_text(), encoding="utf-8"
-    )
+    pins = json.loads((basic_root / ".pipeline" / "pins.lock").read_text())
+    # The scaffold retains run history, which puts a metering job in every workflow — and that job
+    # names two actions this fixture's lock does not carry. `lockstep pin` adds them for a real
+    # repository; a copied static lock has to be told.
+    for action in ("actions/download-artifact", "actions/upload-artifact"):
+        pins.setdefault("external", {})[action] = {"tag": "v5", "sha": "0" * 40}
+    (root / ".pipeline" / "pins.lock").write_text(json.dumps(pins, indent=2) + "\n", encoding="utf-8")
     manifest = root / "pipeline.yaml"
-    locked = json.loads((root / ".pipeline" / "pins.lock").read_text())
-    tag = locked["capabilities"]["actions"]["tag"]
+    tag = pins["capabilities"]["actions"]["tag"]
     manifest.write_text(
         manifest.read_text().replace("actions@actions-v1.0.0", f"actions@{tag}"), encoding="utf-8"
     )
@@ -87,9 +90,22 @@ def test_no_shipped_pipeline_claims_capabilities(tmp_path):
 # --- the zero-authoring path ------------------------------------------------
 
 
-def test_adopting_writes_a_manifest_and_a_profile_and_nothing_else(tmp_path):
+def test_adopting_writes_a_manifest_a_profile_and_the_two_layers_you_will_add(tmp_path):
+    """The context and the guardrail are the customization every adopter makes.
+
+    Shipped as working files rather than as advice, because each of them changes the prompt of every
+    inherited agent — which is the situation the eval loop exists to verify, and the one an adopter
+    would otherwise reach without noticing.
+    """
     written = scaffold(tmp_path / "a", "acme", "repo", adopt=tuple(SHIPPED))
-    assert sorted(written) == [".gitignore", "README.md", "pipeline.yaml", "profiles/repo.md"]
+    assert sorted(written) == [
+        ".gitignore",
+        "README.md",
+        "contexts/codebase.md",
+        "guardrails/house-style.md",
+        "pipeline.yaml",
+        "profiles/repo.md",
+    ]
 
 
 def test_a_repository_that_authored_nothing_lints_clean(adopter):

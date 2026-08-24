@@ -167,6 +167,14 @@ class Pins:
             return f"{requirement_name(requirement)}=={self.compiler_version}"
         return requirement
 
+    def exec_requirement(self) -> str:
+        """The executor, pinned exactly, for the rare job that installs it rather than running in it.
+
+        A job that has to materialize inherited definitions needs the compiler, which the executor
+        image deliberately lacks — so it runs on the bare runner and installs both.
+        """
+        return f"{self.exec_package}=={self.exec_version}" if self.exec_version else self.exec_package
+
     def exec_container(self) -> str:
         if not self.exec_image:
             raise EmitError(

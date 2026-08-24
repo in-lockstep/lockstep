@@ -33,9 +33,13 @@ jobs:
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+    - name: Stage the cases
+      run: |-
+        mkdir -p outputs/evals/triage-reporter/cases
+        cp -R evals/triage-reporter/cases/. outputs/evals/triage-reporter/cases/
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/triage-reporter/cases --output-dir=outputs/evals/triage-reporter/inputs --repo-dir=outputs/evals/triage-reporter/repos
+      run: pipeline-exec eval-cases --cases=outputs/evals/triage-reporter/cases --output-dir=outputs/evals/triage-reporter/inputs --repo-dir=outputs/evals/triage-reporter/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -67,7 +71,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Grade the answers
       id: grade
-      run: pipeline-exec eval-grade --cases=evals/triage-reporter/cases --outputs=outputs/evals/triage-reporter/answers --agent=triage-reporter --output=outputs/evals/triage-reporter.json
+      run: pipeline-exec eval-grade --cases=outputs/evals/triage-reporter/cases --outputs=outputs/evals/triage-reporter/answers --agent=triage-reporter --output=outputs/evals/triage-reporter.json
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
