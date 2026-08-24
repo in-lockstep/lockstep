@@ -29,16 +29,33 @@ def repo_root() -> Path:
     return Path(__file__).parent.parent
 
 
-# Every example and fixture here pins its capabilities to placeholders, because
-# `in-lockstep/lockstep/actions` and its executor image have never been published anywhere. That is
-# a real reason not to be target-ready, and doctor says so — DOC015. These helpers assert that
-# everything *else* holds, so the day the capabilities are published the assertions get stronger
-# rather than needing rewriting.
+# That day came. `actions-v0.1.0` and `exec-v0.1.0` are published, so **the examples pin real
+# capabilities** and their doctor reports are expected to be clean — `target_ready` is the stronger
+# assertion the weaker one was standing in for.
+#
+# The fixtures deliberately did *not* move. Something has to keep exercising what doctor does with a
+# placeholder, and `ready_but_unpublished` is that: DOC015 is still reported, still an error, and
+# still the only thing between an otherwise sound spec and a runner. A fixture that pinned real
+# capabilities would leave that path untested the moment it mattered least and most.
 UNPUBLISHED = "DOC015"
 
 
 def ready_but_unpublished(report, *also_expected: str) -> None:
+    """A spec that would run, except that its capabilities are placeholders. Fixtures only."""
     codes = {finding.code for finding in report.findings}
     assert UNPUBLISHED in codes, "placeholder pins should be reported, not passed over"
     assert codes == {UNPUBLISHED, *also_expected}
     assert all(finding.code == UNPUBLISHED for finding in report.errors)
+
+
+def target_ready(report, *expected_warnings: str) -> None:
+    """Nothing stands between this spec and a runner.
+
+    Examples are held to this rather than to `ready_but_unpublished`: now that the capabilities
+    exist, a placeholder pin in an example is a regression rather than the status quo, and asserting
+    its *absence* is what stops one drifting back in unnoticed.
+    """
+    codes = {finding.code for finding in report.findings}
+    assert UNPUBLISHED not in codes, "an example pinning a placeholder is a regression now"
+    assert codes == set(expected_warnings)
+    assert report.errors == []

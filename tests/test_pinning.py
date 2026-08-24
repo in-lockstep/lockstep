@@ -150,11 +150,18 @@ def test_the_check_catches_zeros_and_not_invention(basic_spec_dir):
     assert not [entry for entry in pins.placeholders() if "actions" in entry]
 
 
-def test_every_example_is_honest_about_being_unpublished(repo_root):
+def test_no_example_still_pins_a_placeholder(repo_root):
+    """The inverse of what this asserted before the capabilities were published.
+
+    It used to require every example to admit it could not run, because a zero has the shape of a
+    pin and nothing else would have said so. `actions-v0.1.0` and `exec-v0.1.0` exist now, so the
+    same test earns its keep pointing the other way: an example that drifts back to a placeholder is
+    one that compiles, lints and simulates exactly like the others and cannot run.
+    """
     for example in sorted((repo_root / "examples").iterdir()):
         if not (example / "pipeline.yaml").is_file():
             continue
-        assert Pins.load(load_spec(example)).placeholders(), example.name
+        assert Pins.load(load_spec(example)).placeholders() == [], example.name
 
 
 def test_doctor_treats_a_placeholder_as_unpinned(basic_spec_dir):

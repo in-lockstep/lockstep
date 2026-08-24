@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conftest import ready_but_unpublished
+from conftest import target_ready
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
@@ -36,8 +36,8 @@ def test_the_example_lints_clean():
     assert lint(load_spec(EXAMPLE)).findings == []
 
 
-def test_the_example_is_target_ready_apart_from_being_unpublished():
-    ready_but_unpublished(doctor(load_spec(EXAMPLE), EXAMPLE), "DOC014")
+def test_the_example_is_target_ready():
+    target_ready(doctor(load_spec(EXAMPLE), EXAMPLE), "DOC014")
 
 
 def test_the_pipeline_is_reachable_end_to_end(workflow):

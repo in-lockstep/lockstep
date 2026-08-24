@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conftest import ready_but_unpublished
+from conftest import target_ready
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
@@ -37,7 +37,7 @@ def test_the_example_lints_clean():
 
 
 def test_the_example_is_target_ready_apart_from_unverifiable_extensions():
-    ready_but_unpublished(doctor(load_spec(EXAMPLE), EXAMPLE), "DOC014")
+    target_ready(doctor(load_spec(EXAMPLE), EXAMPLE), "DOC014")
 
 
 AUTHORIZED = {"command-gate": {"authorized": "true"}}

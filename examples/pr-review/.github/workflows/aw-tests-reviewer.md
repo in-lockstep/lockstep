@@ -39,9 +39,9 @@ network:
   - defaults
   - otel.acme.internal
 steps:
-- uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
+- uses: in-lockstep/lockstep/actions/restore@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
 post-steps:
-- uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
+- uses: in-lockstep/lockstep/actions/save@aad2f112b8263ca9cf9a6169e1247d02d6ba9e7a  # actions-v0.1.0
   with:
     paths: ${{ inputs.output_path }}
 max-daily-ai-credits: 2000

@@ -47,7 +47,7 @@ def adopter(tmp_path, basic_root):
     manifest = root / "pipeline.yaml"
     tag = pins["capabilities"]["actions"]["tag"]
     manifest.write_text(
-        manifest.read_text().replace("actions@actions-v1.0.0", f"actions@{tag}"), encoding="utf-8"
+        manifest.read_text().replace("actions@actions-v0.1.0", f"actions@{tag}"), encoding="utf-8"
     )
     fetch(load_manifest_only(root), root)
     return root

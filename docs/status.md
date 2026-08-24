@@ -440,30 +440,50 @@ other scans every shipped spec for a capability naming a distribution this repos
 
 ## What remains open
 
-**The capabilities have not been published yet.** `capabilities.actions` points at
-`github.com/in-lockstep/lockstep/actions` and `capabilities.exec-image` at `ghcr.io/in-lockstep/pipeline-exec`.
-The release workflows exist — `release-actions.yml` and `release-exec-image.yml`, on `actions-v*` and
-`exec-v*` tags — but no tag has been pushed, so every example and fixture here still pins both to
-forty zeros.
+**The capabilities are published.** `actions-v0.1.0` resolves to commit `aad2f112`, and
+`exec-v0.1.0` published `ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f80…`. Every example pins
+both for real, and `lockstep doctor` reports no findings where it used to report `DOC015` on all of
+them.
 
-The composite actions need no separate repository: `uses: in-lockstep/lockstep/actions/restore@<sha>`
-resolves against a subdirectory of this one, and `resolve_ref` already slices `repo.split("/")[:2]`
-to pin it. That removes a second repository and the cross-repository push credential a split would
+The composite actions needed no separate repository: `uses: in-lockstep/lockstep/actions/restore@<sha>`
+resolves against a subdirectory of this one, and `resolve_ref` already sliced `repo.split("/")[:2]`
+to pin it. That removed a second repository and the cross-repository push credential a split would
 have needed. The two capabilities keep their own tag lines rather than the compiler's, so a pin moves
 when the thing behind it moved.
 
-That was invisible for longer than it should have been — a zero has the shape of a pin, so the
-examples compiled, linted and simulated exactly like ones that would run. It is now stated in three
-places rather than left to be noticed: `lockstep doctor` reports `DOC015` as an error and treats a
-placeholder as unpinned, `lockstep compile` prints "this output cannot run as emitted" on every run,
-and the readiness tests assert the disclosure is present rather than asserting a clean bill of
-health. `tests/test_pinning.py::test_every_example_is_honest_about_being_unpublished` fails if an
-example ever stops saying so.
+The `basic` fixture still pins placeholders, deliberately. Something has to keep exercising what
+doctor does with an unpinned capability, and a fixture that moved with the examples would have
+retired that path at the moment it stopped being the common case. So `ready_but_unpublished` still
+exists for fixtures, and `target_ready` — which asserts DOC015 is *absent* — is what the examples are
+held to now. `test_no_example_still_pins_a_placeholder` is the same test as before pointing the other
+way.
 
-The check catches zeros, not invention. Nothing offline can tell a fabricated commit from a real one
-— the `basic` fixture's actions SHA is made up and looks entirely plausible. Only `lockstep pin`
-contacting the remote can settle that, which is why it reports what it could not resolve instead of
+### What publishing found
+
+Six defects, none of them reachable from a green local check, which is the argument for doing it
+rather than planning it:
+
+| Defect | Why nothing caught it |
+|---|---|
+| Seven composite actions used floating tags (`upload-artifact@v4` and friends) | `release-actions.yml` had always refused this; no tag had ever run it. A consumer pinning the actions to a commit got the mutability handed back through their dependencies. |
+| Thirty-eight tests were not hermetic | Actions injects `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY` and six more the executors read. The commands were right; the tests asserted on stdout and had only ever run where those variables were absent. A root `conftest.py` now strips them by prefix. |
+| `release-exec-image` built `pipeline-exec`, a distribution that does not exist | The org-prefixed names were chosen deliberately and the release workflow was never told. `uv build` fails outright, so the first exec tag would have died before Docker started. |
+| The Playwright *Python* base image has no `npm` | It bundles a private node binary for its own driver. `.ts` and `.js` script steps would have had no runtime. Node now comes from NodeSource, since noble ships EOL 18.x. |
+| The image workflow's dry run could never pass | It chose its smoke-test reference by asking whether a digest existed, and `load:` emits one too — but that digest names a registry manifest, so `docker run` always pulls, and the dry run never logged in. |
+| **`lockstep pin` recorded the annotated tag object, not the commit** | The worst of them. Actions resolves `uses: …@<sha>` against commits only, so every pipeline pinned to an annotated tag emitted forty plausible characters naming something no runner can check out — the exact failure pinning exists to prevent. `--refs` suppresses peeled lines and a pattern matching `<ref>` does not match `<ref>^{}`, so the commit was never in the output to be chosen. `resolve_ref` had no tests; it has four now. |
+
+The last one is the general case worth keeping: **nothing offline can tell a tag object from a
+commit**, just as nothing offline can tell a fabricated SHA from a real one. Only `lockstep pin`
+contacting the remote settles either, which is why it reports what it could not resolve instead of
 leaving something believable in place.
+
+### Still unpublished: the Python distributions
+
+`in-lockstep` and `in-lockstep-exec` are not on any index. Compiled pipelines run
+`uv tool install "in-lockstep=="` in the drift-gate job and `uv tool install "in-lockstep-exec=="`
+in an eval job that materializes inherited definitions, so a consumer repository cannot yet run
+either. Both names are free. This was never on this list, which is its own small lesson about what
+"published" was taken to mean.
 
 ## Two of those gaps are closed
 

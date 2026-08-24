@@ -15,8 +15,9 @@ pipelines, and the five-person team who will author nothing and wants the loop b
 
 | | Need | Who | Kind | Status |
 |---|---|---|---|---|
-| **N1** | Publish the capabilities | everyone | tag push | already open, now gating |
-| **N2** | Run the loop on this repository | everyone | self-hosting | already listed, now gating |
+| **N1** | Publish the capabilities | everyone | tag push | **done** — `actions-v0.1.0`, `exec-v0.1.0` |
+| **N2** | Run the loop on this repository | everyone | self-hosting | now unblocked, and gating |
+| **N14** | Publish the Python distributions | everyone | release | new — found by doing N1 |
 | **N3** | A measured time to first value | leader, small team | measurement | new |
 | **N4** | A shorter first day | small team | code | new |
 | **N5** | A way to tell a working judge from a broken one | small team | code | new |
@@ -33,18 +34,22 @@ pipelines, and the five-person team who will author nothing and wants the loop b
 
 ## The two that gate the rest
 
-### N1 — Publish the capabilities
+### N1 — Publish the capabilities — **done**
 
-Every example in this repository pins `capabilities.actions` and `capabilities.exec-image` to forty
-zeros, and the compiler prints *this output cannot run as emitted* on every run. That disclosure is
-deliberate and a test enforces it.
+`actions-v0.1.0` resolves to commit `aad2f112`; `exec-v0.1.0` published
+`ghcr.io/in-lockstep/pipeline-exec@sha256:70de3f80…`. Every example pins both for real, and
+`lockstep doctor` reports no findings where it used to report `DOC015` on all of them. The compiler
+no longer prints *this output cannot run as emitted*.
 
-It is also the answer to the first question every one of the five asks, in different words: who runs
-this? Today, nobody has. The release workflows exist and the actions need no second repository — the
-work is pushing the first `actions-v*` and `exec-v*` tags and running `lockstep pin`.
+Worth recording what it cost, because it is the evidence for how this whole list is ordered. Six
+defects surfaced, and **not one was reachable from a green local check** — the suite passed 1257
+tests immediately before the first push. `docs/status.md` lists them. The worst was `lockstep pin`
+recording an annotated tag's *object* rather than its commit: forty plausible characters naming
+something no runner can check out, in the one mechanism the entire design rests on, unreachable
+until a real tag existed.
 
-**Nothing else on this list can be claimed on a website until this is done**, because the framework
-is honest enough to contradict the claim in its own output.
+That is the argument for N2 in one sentence. Publishing found six defects that planning could not;
+running will find the next set.
 
 ### N2 — Run the loop on this repository
 
@@ -56,9 +61,28 @@ costs no case study, no consenting customer, and no new code. It is also the onl
 exist for some time — there are no adopters yet, and the fleet dashboard (N6) is waiting on the same
 absence.
 
+N1 removed the blocker and left one behind: the agent jobs install the compiler and the executor
+from a Python index, and N14 has not happened. Nothing has *executed* yet — the actions resolve and
+the image pulls, but no agent has run.
+
 ---
 
 ## Adoption
+
+### N14 — Publish the Python distributions
+
+Found by doing N1, which is the only reason it is on the list: compiled pipelines run
+`uv tool install "in-lockstep=="` in the drift-gate job and `uv tool install "in-lockstep-exec=="`
+in the eval job that materializes inherited definitions. Neither distribution is on any index.
+
+So "publish the capabilities" turned out to name two of four things. The actions and the image were
+the two this repository had written release workflows for, and the two `status.md` listed — which is
+how a gap list derived from a design misses what the design merely assumes.
+
+Both names are free on PyPI. Until they are taken, a consumer repository can resolve every action
+and pull the image, and still cannot install the tools its own workflows invoke.
+
+---
 
 ### N3 — A measured time to first value
 

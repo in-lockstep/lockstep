@@ -57,12 +57,17 @@ capabilities:
   exec-image: quay.io/<owner>/pipeline-exec    # any registry; resolved to a digest
 ```
 
-> [!IMPORTANT]
-> **Neither has been published anywhere.** `in-lockstep/lockstep/actions` and its executor image do
-> not exist — the examples in this repository pin both to forty zeros, so they compile, lint and
-> simulate, and **cannot run on a real runner**. `lockstep doctor` reports it as `DOC015` and
-> `lockstep compile` says so on every run. Publishing them, then `lockstep pin`, is what makes a
-> pipeline here deployable.
+Both are published, and the examples here pin them for real:
+
+```yaml
+capabilities:
+  actions: github.com/in-lockstep/lockstep/actions@actions-v0.1.0   # -> aad2f112…
+  exec-image: ghcr.io/in-lockstep/pipeline-exec                     # -> sha256:70de3f80…
+```
+
+`lockstep doctor` reports no findings on them, where it used to report `DOC015` on every one. The
+`basic` test fixture still pins placeholders deliberately, because something has to keep exercising
+what the compiler does when a capability is unpinned.
 
 **[Extending the framework](docs/extending.md)** covers the two extension points — third-party
 builtins in `pipeline-exec`, and your own composite actions — worked through a pipeline that fixes

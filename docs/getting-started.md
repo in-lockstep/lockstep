@@ -46,7 +46,7 @@ spec: 1
 name: httpbin-contract
 
 capabilities:
-  actions: github.com/in-lockstep/lockstep/actions@actions-v1.0.0
+  actions: github.com/in-lockstep/lockstep/actions@actions-v0.1.0
   exec: in-lockstep-exec==0.1.0
   exec-image: ghcr.io/in-lockstep/pipeline-exec
   compiler: in-lockstep>=0.1,<1.0

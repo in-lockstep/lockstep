@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conftest import ready_but_unpublished
+from conftest import ready_but_unpublished, target_ready
 from lockstep.checks import Severity, doctor, lint
 from lockstep.errors import SpecError
 from lockstep.spec.load import load_spec
@@ -217,7 +217,7 @@ def test_the_example_pipeline_lints_and_doctors_clean():
 
     example = Path(__file__).parent.parent / "examples" / "httpbin"
     assert lint(load_spec(example)).findings == []
-    ready_but_unpublished(doctor(load_spec(example), example))
+    target_ready(doctor(load_spec(example), example))
 
 
 # --- extensions ------------------------------------------------------------
