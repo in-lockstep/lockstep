@@ -63,6 +63,7 @@ STRUCTURAL_KEYS = {
     "targets",
     "min-success-rate",
     "job-boundary",
+    "github-token",
     "max-iterations",
     "fingerprint",
 } | HOOK_KEYS
@@ -214,6 +215,8 @@ def _apply_subkeys(step: Step, pending: dict[str, str], location: str) -> None:
             step.max_iterations = int(value) if value.isdigit() else 0
         elif key == "job-boundary":
             step.job_boundary = value.strip().lower() in ("true", "yes", "1")
+        elif key == "github-token":
+            step.github_token = value.strip().lower() in ("true", "yes", "1")
         elif key == "pre":
             step.pre = value
         elif key == "post":

@@ -696,7 +696,15 @@ def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
     # builtins: a `script:` step is code a pipeline author wrote, and handing it the repository
     # token because a different step needed one is how a deterministic step gains reach nobody
     # reviewed.
-    if step.kind is StepKind.BUILTIN and step.target in NEEDS_GITHUB_TOKEN:
+    #
+    # A step may also ask for it. That is the only route a consumer has: a `script:` step or a
+    # builtin from `extensions.builtins` is code the framework has never seen, so it cannot be on
+    # the list above — and without a way to declare it, the workaround is a personal access token
+    # in a profile secret, which is a standing credential where a job-scoped one would do.
+    needs_token = step.github_token or (
+        step.kind is StepKind.BUILTIN and step.target in NEEDS_GITHUB_TOKEN
+    )
+    if needs_token:
         emitted["env"] = {"GH_TOKEN": "${{ github.token }}"}
     return emitted
 

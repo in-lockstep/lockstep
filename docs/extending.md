@@ -19,6 +19,31 @@ below was run against it.
 
 ---
 
+## Reaching the GitHub API from a step you wrote
+
+`gh` reads `GH_TOKEN` and nothing else, and refuses to run inside Actions without it. The framework's
+own builtins that call the API are handed one because the compiler knows they do — but a `script:`
+step, or a builtin from `extensions.builtins`, is code the framework has never seen. It asks:
+
+```
+3. **Label the issue** → script: scripts/label.sh
+   - github-token: true
+```
+
+The default is closed, deliberately. A script is arbitrary code a pipeline author wrote, and a token
+it did not ask for is reach nobody reviewed.
+
+**It grants no authority the job did not already have.** `github.token` is bounded by the job's
+`permissions:` block, which the compiler computes and the semantic diff tracks as a security
+surface — so a script holding it inside a `contents: read` job can read and nothing else. The
+instinct on reading `github-token: true` is that it is a skeleton key; the reason it is not lives in
+a different part of the design, which is why it is worth saying here.
+
+The alternative, before this existed, was a personal access token in a profile secret. That is a
+standing credential with broader scope than the job needs, which somebody has to create, scope and
+rotate — a worse trade forced by a missing field.
+
+
 ## The pipeline we're building
 
 ```

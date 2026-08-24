@@ -96,6 +96,17 @@ class Step:
     # github: block on the step
     targets: list[str] = field(default_factory=list)
     job_boundary: bool = False
+    # Whether this step is handed the workflow's own GitHub token.
+    #
+    # `gh` reads `GH_TOKEN` and nothing else, and the framework's builtins that reach the API get
+    # one automatically. Anything a consumer writes — a `script:` step, or a builtin from
+    # `extensions.builtins` — has no other route to it, and the alternative is a personal access
+    # token in a profile secret: a standing credential where a job-scoped one would do.
+    #
+    # Declaring it grants no authority the job did not already have. `github.token` is bounded by
+    # the job's `permissions:` block, which the compiler computes and the semantic diff tracks, so a
+    # script holding it inside a `contents: read` job can read and nothing else.
+    github_token: bool = False
     min_success_rate: float | None = None
     max_iterations: int = 0
     # Shell command producing a hash of live target state, so a redeploy invalidates cached output.

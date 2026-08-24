@@ -534,3 +534,56 @@ def test_every_cache_key_is_a_legal_artifact_name(root):
         if ARTIFACT_FORBIDDEN & set(prefix)
     ]
     assert not bad, "these become artifact names GitHub refuses:\n  " + "\n  ".join(bad)
+# --- a consumer can ask for the token too ---------------------------------------------------------
+#
+# The framework's own builtins get one because the framework knows they call `gh`. A `script:` step
+# or a builtin from `extensions.builtins` is code the framework has never seen, so it cannot be on
+# that list — and without a way to declare it the only workaround is a personal access token in a
+# profile secret, which is a standing credential where a job-scoped one would do.
+
+
+def _step_env(root, workflow: str, step_id: str) -> dict:
+    data = yaml.safe_load(compile_spec(root).files[workflow]) or {}
+    for job in (data.get("jobs") or {}).values():
+        for step in job.get("steps") or []:
+            if step.get("id") == step_id:
+                return step.get("env") or {}
+    raise AssertionError(f"no step {step_id!r} in {workflow}")
+
+
+def _with_step(tmp_path, attribute: str) -> Path:
+    """The basic fixture with one script step carrying the given attribute."""
+    import shutil
+
+    root = tmp_path / "spec"
+    shutil.copytree(FIXTURE, root)
+    command = root / "commands" / "discover.md"
+    text = command.read_text(encoding="utf-8")
+    marker = "2. **Discover UI structure** \u2192 script: scripts/discover-ui.py\n"
+    assert marker in text, "fixture step shape changed"
+    command.write_text(
+        text.replace(marker, marker + "   - id: uistep\n" + attribute, 1), encoding="utf-8"
+    )
+    return root
+
+
+def test_a_script_step_can_ask_for_the_github_token(tmp_path):
+    root = _with_step(tmp_path, "   - github-token: true\n")
+    assert _step_env(root, ".github/workflows/discover.yml", "uistep") == {
+        "GH_TOKEN": "${{ github.token }}"
+    }
+
+
+def test_a_step_that_does_not_ask_does_not_receive(tmp_path):
+    """The default stays closed: a script is arbitrary code, and a token it did not ask for is
+    reach nobody reviewed."""
+    root = _with_step(tmp_path, "")
+    assert "GH_TOKEN" not in _step_env(root, ".github/workflows/discover.yml", "uistep")
+
+
+def test_the_declaration_is_not_silently_swallowed_as_an_argument(tmp_path):
+    """Unknown step keys become `args`, so a typo'd or unparsed attribute would land in the command
+    line instead of failing — and the step would run with the flag pasted onto it."""
+    root = _with_step(tmp_path, "   - github-token: true\n")
+    text = compile_spec(root).files[".github/workflows/discover.yml"]
+    assert "github-token" not in text
