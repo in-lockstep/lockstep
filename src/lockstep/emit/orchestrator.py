@@ -14,7 +14,7 @@ from ..errors import EmitError, SpecError
 from ..spec.model import Command, Condition, Spec, Step, StepKind
 from ..util.text import slug
 from .agentic import AGENT_CALLER_PERMISSIONS
-from .builtins import AVAILABLE, MATRIX_CAP
+from .builtins import AVAILABLE, MATRIX_CAP, NEEDS_GITHUB_TOKEN
 from .caching import cache_spec_for, emit_fingerprint, emit_probe, emit_save, render_step_def, step_def_path
 from .context import EmitContext
 from .profiles import env_block, secret_ref
@@ -690,7 +690,15 @@ def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
             "pipeline-exec shard-run --slice='${{ toJSON(matrix.item) }}' "
             f"--input={source} --key={step.foreach.key_field} -- {run}"
         )
-    return {"name": step.label, "id": step.id, "run": run}
+    emitted: dict[str, Any] = {"name": step.label, "id": step.id, "run": run}
+    # `gh` refuses to run inside Actions without GH_TOKEN and does not fall back to anything, so a
+    # builtin that reaches the GitHub API needs one in its own step environment. Only those
+    # builtins: a `script:` step is code a pipeline author wrote, and handing it the repository
+    # token because a different step needed one is how a deterministic step gains reach nobody
+    # reviewed.
+    if step.kind is StepKind.BUILTIN and step.target in NEEDS_GITHUB_TOKEN:
+        emitted["env"] = {"GH_TOKEN": "${{ github.token }}"}
+    return emitted
 
 
 def _strategy(group: JobGroup, fanout_ref: str) -> dict[str, Any]:

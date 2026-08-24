@@ -420,3 +420,78 @@ def test_every_job_that_runs_the_executor_can_reach_it(root):
         "these jobs invoke `pipeline-exec` with neither the executor container nor an install, "
         "so they fail at run time with `command not found`:\n  " + "\n  ".join(missing)
     )
+
+
+# --- builtins that reach the GitHub API need a token ----------------------------------------------
+#
+# `pr-diff` failed at run time with the CLI's own advice printed at it: "To use GitHub CLI in a
+# GitHub Actions workflow, set the GH_TOKEN environment variable." `gh` refuses to run inside
+# Actions without it and falls back to nothing, so a builtin that shells out to it needs one in its
+# own step environment.
+#
+# Declared rather than granted to everything: a `script:` step is code a pipeline author wrote, and
+# handing it the repository token because a different step needed one is how a deterministic step
+# gains reach nobody reviewed. Which makes the declaration something that can drift, so it is
+# checked against the runtime here.
+
+
+def test_the_token_list_names_only_real_builtins():
+    from lockstep.emit.builtins import AVAILABLE, NEEDS_GITHUB_TOKEN
+
+    assert NEEDS_GITHUB_TOKEN <= AVAILABLE, sorted(NEEDS_GITHUB_TOKEN - AVAILABLE)
+
+
+def test_every_builtin_that_shells_out_to_gh_is_declared():
+    """Read the runtime's source rather than trusting the list.
+
+    A builtin that starts calling `gh` and is not added here fails at run time, in somebody's
+    pipeline, with an error about an environment variable they never set.
+    """
+    from lockstep.emit.builtins import NEEDS_GITHUB_TOKEN
+
+    source = (
+        Path(__file__).parent.parent / "packages/pipeline-exec/src/pipeline_exec/cli.py"
+    ).read_text(encoding="utf-8")
+
+    # Command functions are `def name(...)` with hyphens becoming underscores in the CLI name.
+    reaching: set[str] = set()
+    current = ""
+    for line in source.splitlines():
+        match = re.match(r"^def ([a-z_0-9]+)\(", line)
+        if match:
+            current = match.group(1)
+        if current and ("_gh_json(" in line or "_gh_send(" in line):
+            reaching.add(current.replace("_", "-"))
+
+    # Helpers and internals are not spec surface; only compare what a `builtin:` step may name.
+    declared_or_internal = NEEDS_GITHUB_TOKEN | INTERNAL | {"-gh-json", "-gh-send"}
+    undeclared = {
+        name
+        for name in reaching
+        if name not in declared_or_internal and name.replace("-", "_") not in {"_gh_json", "_gh_send"}
+    }
+    # `issue-fetch` reaches the API by calling `gh-issue-fetch`, which this scan attributes to the
+    # callee — both are declared, so the set stays empty either way.
+    assert not undeclared, (
+        "these builtins call the GitHub API and are not in NEEDS_GITHUB_TOKEN, so the compiler "
+        f"emits them without GH_TOKEN and they fail at run time: {sorted(undeclared)}"
+    )
+
+
+@pytest.mark.parametrize("root", ALL_PIPELINES, ids=lambda p: p.name)
+def test_emitted_github_builtins_carry_a_token(root):
+    from lockstep.emit.builtins import NEEDS_GITHUB_TOKEN
+
+    missing: list[str] = []
+    for path, text in compile_spec(root).files.items():
+        if not path.endswith(".yml"):
+            continue
+        for job_name, job in (yaml.safe_load(text) or {}).get("jobs", {}).items():
+            if not isinstance(job, dict):
+                continue
+            for step in job.get("steps") or []:
+                run = step.get("run", "")
+                for builtin in NEEDS_GITHUB_TOKEN:
+                    if f"pipeline-exec {builtin} " in run and "GH_TOKEN" not in str(step.get("env", "")):
+                        missing.append(f"{path}:{job_name}:{builtin}")
+    assert not missing, "emitted without GH_TOKEN:\n  " + "\n  ".join(sorted(set(missing)))
