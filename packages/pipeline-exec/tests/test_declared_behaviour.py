@@ -140,9 +140,7 @@ def test_a_provider_link_is_chosen_before_the_form():
 
 def test_a_page_that_never_accepts_the_password_reports_failure():
     browser = FakeBrowser(failing=("#pass",))
-    assert not asyncio.run(
-        sign_in(browser, recipe(), url="https://app.test", username="u", password="p")
-    )
+    assert not asyncio.run(sign_in(browser, recipe(), url="https://app.test", username="u", password="p"))
 
 
 def test_expiry_is_only_detected_when_the_pipeline_says_what_it_looks_like():

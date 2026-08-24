@@ -6,9 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location(
-    "repin", Path(__file__).parent.parent / "scripts" / "repin.py"
-)
+spec = importlib.util.spec_from_file_location("repin", Path(__file__).parent.parent / "scripts" / "repin.py")
 repin = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(repin)
 

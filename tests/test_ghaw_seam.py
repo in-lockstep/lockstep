@@ -56,9 +56,7 @@ def test_compiling_produces_the_file_the_orchestrator_names(compiled):
     """An orchestrator naming a file the compile did not write is a workflow GitHub rejects."""
     referenced = [
         job["uses"]
-        for job in yaml.safe_load(
-            (workflows(compiled) / "generate-tests.yml").read_text()
-        )["jobs"].values()
+        for job in yaml.safe_load((workflows(compiled) / "generate-tests.yml").read_text())["jobs"].values()
         if "uses" in job
     ]
     assert any(ref.endswith(f"{AGENT}{ghaw.LOCK_SUFFIX}") for ref in referenced), referenced

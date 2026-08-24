@@ -30,19 +30,12 @@ def recorded(lock: Path) -> dict[str, str]:
         data = json.loads(lock.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
-    return {
-        alias: str(entry.get("sha") or "")
-        for alias, entry in (data.get("inherits") or {}).items()
-    }
+    return {alias: str(entry.get("sha") or "") for alias, entry in (data.get("inherits") or {}).items()}
 
 
 def moved(before: dict[str, str], after: dict[str, str]) -> list[str]:
     """Aliases whose commit changed, plus any that appeared. Sorted, so the output is stable."""
-    return sorted(
-        alias
-        for alias, sha in after.items()
-        if sha and before.get(alias) != sha
-    )
+    return sorted(alias for alias, sha in after.items() if sha and before.get(alias) != sha)
 
 
 def emit(name: str, value: str) -> None:

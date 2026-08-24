@@ -112,9 +112,7 @@ def codes(root):
 def test_a_constraint_in_a_skill_is_flagged(basic_root):
     """The exact shape that was in bug-fix/skills/patch-format.md before the migration."""
     skill = basic_root / "skills" / "test" / "common.md"
-    skill.write_text(
-        skill.read_text() + "\nYou MUST NOT edit anything under `.github/`.\n", encoding="utf-8"
-    )
+    skill.write_text(skill.read_text() + "\nYou MUST NOT edit anything under `.github/`.\n", encoding="utf-8")
     assert "LNT005" in codes(basic_root)
 
 
