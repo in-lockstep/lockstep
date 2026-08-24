@@ -38,3 +38,10 @@ RUN pip install --no-cache-dir "/opt/pipeline-exec[browser]" && pipeline-exec --
 
 # Actions runs steps as root in a container job and mounts the workspace over /github/workspace.
 WORKDIR /github/workspace
+
+# Last, so it costs a metadata layer rather than invalidating every expensive one above it. GHCR
+# uses this to link the package to the repository, which is what makes the published image's page
+# show the source that built it and inherit its access.
+LABEL org.opencontainers.image.source="https://github.com/in-lockstep/lockstep" \
+      org.opencontainers.image.description="Deterministic executors for pipelines compiled by lockstep." \
+      org.opencontainers.image.licenses="Apache-2.0"
