@@ -120,7 +120,11 @@ jobs:
           name: distributions
           path: dist
       - name: Upload to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
+        # v1.14.2 or newer, and the floor is load-bearing rather than hygiene: it is the first
+        # release carrying Twine 7, and Twine below that rejects core metadata 2.5 outright. Both
+        # distributions are 2.5, because hatchling emits PEP 639 `License-Expression` for the
+        # `license = "Apache-2.0"` these manifests declare.
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         with:
           packages-dir: dist/${{ matrix.project }}
           # One tag publishes both distributions, and they do not always both move. A version already
