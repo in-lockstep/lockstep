@@ -31,6 +31,10 @@ capabilities:
 inherits:
   review: lockstep:review
   implement: lockstep:implement
+  # Reads the ledger the other two write. Added once there was something in it: a retro against an
+  # empty branch can only report `too few runs`, which is correct and useless, and the weekly
+  # schedule would have been teaching everybody to ignore it before it ever had anything to say.
+  retro: lockstep:retro
 
 # Sized by the most expensive command rather than by the cheapest. `/review` is four lenses at
 # their published defaults — 90 + 50 + 50 + 40 = 230 — and `/implement` is four agents summing to

@@ -11,7 +11,7 @@ Set once for the repository, not per profile. These are read by the workflows
 why they are listed here rather than left to be discovered when a run fails to
 authenticate.
 
-- `ANTHROPIC_API_KEY` — engine `claude` (implement/change-writer, implement/planner, implement/requirements-analyst, implement/test-writer, review/intent-reviewer, review/performance-reviewer, review/security-reviewer, review/tests-reviewer)
+- `ANTHROPIC_API_KEY` — engine `claude` (implement/change-writer, implement/planner, implement/requirements-analyst, implement/test-writer, retro/retro-analyst, review/intent-reviewer, review/performance-reviewer, review/security-reviewer, review/tests-reviewer)
 
 ```bash
 gh secret set ANTHROPIC_API_KEY

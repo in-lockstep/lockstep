@@ -2,7 +2,7 @@
   "compiler": "0.1.0",
   "files": {
     ".github/workflows/.gitattributes": {
-      "sha": "30dba929",
+      "sha": "a4228711",
       "sources": []
     },
     ".github/workflows/aw-implement-change-writer.md": {
@@ -40,6 +40,15 @@
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "implement:skills/change-format.md@babdb34a",
+        "contexts/codebase.md@923544b2"
+      ]
+    },
+    ".github/workflows/aw-retro-retro-analyst.md": {
+      "sha": "ba652296",
+      "sources": [
+        "retro:agents/retro-analyst.md@13ec5ff3",
+        "lockstep:guardrails/baseline.md@7875122b",
+        "retro:guardrails/retro.md@f06fdc5a",
         "contexts/codebase.md@923544b2"
       ]
     },
@@ -88,17 +97,23 @@
       ]
     },
     ".github/workflows/implement-implement.yml": {
-      "sha": "73896c49",
+      "sha": "58749e29",
       "sources": [
         "implement:commands/implement.md@2ba58b8d"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "fc8e76f2",
+      "sha": "b80f8bbb",
       "sources": []
     },
+    ".github/workflows/retro-retro.yml": {
+      "sha": "0c516ce2",
+      "sources": [
+        "retro:commands/retro.md@dc884317"
+      ]
+    },
     ".github/workflows/review-review.yml": {
-      "sha": "80d064c7",
+      "sha": "0852146d",
       "sources": [
         "review:commands/review.md@76ce9d76"
       ]
@@ -113,6 +128,10 @@
     },
     ".github/workflows/shared/guardrail-implement-implementing.md": {
       "sha": "281b25ad",
+      "sources": []
+    },
+    ".github/workflows/shared/guardrail-retro-retro.md": {
+      "sha": "ad8f3369",
       "sources": []
     },
     ".github/workflows/shared/guardrail-review-reviewing.md": {
@@ -143,17 +162,22 @@
       "sha": "96adc22d",
       "sources": []
     },
+    ".lockstep/.pipeline/step-defs/retro/retro.history.json": {
+      "sha": "856a0d46",
+      "sources": []
+    },
     ".lockstep/.pipeline/step-defs/review/review.diff.json": {
       "sha": "57b738b9",
       "sources": []
     },
     ".lockstep/SECRETS.md": {
-      "sha": "9dc46937",
+      "sha": "5227545f",
       "sources": []
     }
   },
   "inherits": {
     "implement": "lockstep:implement",
+    "retro": "lockstep:retro",
     "review": "lockstep:review"
   },
   "pipeline": "lockstep",
