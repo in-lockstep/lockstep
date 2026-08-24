@@ -67,10 +67,15 @@ def test_the_site_is_what_gets_proposed(workflow):
 
 
 def test_parameters_in_the_proposal_are_expanded(workflow):
-    """A literal `{title}` is not noticed until somebody is looking at a pull request called that."""
+    """A literal `{title}` is not noticed until somebody is looking at a pull request called that.
+
+    The declared default is part of the expansion now: `inputs` exists only for a dispatch, so on a
+    comment or a schedule the bare reference is the empty string — which for a pull request title
+    means one called nothing at all.
+    """
     title = propose_step(workflow)["with"]["title"]
-    assert title == "${{ inputs.title }}"
-    assert "{title}" not in title.replace("${{ inputs.title }}", "")
+    assert title == "${{ inputs.title || 'Triage report' }}"
+    assert "{title}" not in title
 
 
 def test_a_proposal_without_a_base_still_targets_the_current_branch():

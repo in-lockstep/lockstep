@@ -116,11 +116,10 @@ jobs:
           outputs/issue.json
         force: ${{ inputs.force }}
         force-steps: ${{ inputs.force_steps }}
-        key-extra: ${{ inputs.source }}
     - name: Read the issue
       id: fetch-issue
       if: ${{ steps.cache-fetch-issue.outputs.hit != 'true' }}
-      run: pipeline-exec issue-fetch --source="${{ inputs.source }}" --issue="${{ inputs.issue || needs.command-gate.outputs.issue }}" --output=outputs/issue.json
+      run: pipeline-exec issue-fetch --source="${{ inputs.source || 'github' }}" --issue="${{ inputs.issue || needs.command-gate.outputs.issue }}" --output=outputs/issue.json
       env:
         GH_TOKEN: ${{ github.token }}
     - name: Publish fetch-issue outputs
