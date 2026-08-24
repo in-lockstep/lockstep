@@ -65,10 +65,39 @@ class AcknowledgementError(ValueError):
     """An acknowledgment that would pass the gate without saying anything."""
 
 
+# A git trailer lives in the **last paragraph**, and every line of that paragraph is one. Anywhere
+# else is prose that happens to look like a trailer.
+#
+# That distinction is load-bearing rather than pedantic. The commit that introduced this mechanism
+# explained the format with an indented example in its body, and a parser scanning the whole message
+# read the example as a real acknowledgment — so a commit that merely *documents* the trailer, or
+# quotes an earlier one, silently clears a gate. Matching git's own definition removes the whole
+# class: prose can say anything.
+TRAILER_LINE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*[ \t]*:[ \t]*\S")
+
+
+def trailer_block(message: str) -> str:
+    """The trailing run of paragraphs that consist entirely of trailers.
+
+    Walking back rather than taking only the last paragraph, because people routinely separate
+    `Co-Authored-By` from the rest with a blank line and losing the trailer above it would be a
+    surprise nobody could debug. Walking stops at the first paragraph containing prose, which is
+    what keeps an example inside the body from ever counting.
+    """
+    paragraphs = [block for block in re.split(r"\n[ \t]*\n", (message or "").strip()) if block.strip()]
+    kept: list[str] = []
+    for block in reversed(paragraphs):
+        lines = [line for line in block.splitlines() if line.strip()]
+        if not lines or not all(TRAILER_LINE.match(line) for line in lines):
+            break
+        kept.append(block)
+    return "\n".join(reversed(kept))
+
+
 def parse_acknowledgements(text: str) -> set[str]:
-    """Categories acknowledged by `Security-Surface:` trailers in a commit message or range."""
+    """Categories acknowledged by `Security-Surface:` trailers in one commit message."""
     found: set[str] = set()
-    for match in ACK_TRAILER.finditer(text or ""):
+    for match in ACK_TRAILER.finditer(trailer_block(text)):
         for raw in match.group("categories").split(","):
             category = raw.strip().lower()
             if not category:
@@ -91,7 +120,9 @@ def acknowledgements_since(root: Path, ref: str) -> set[str]:
     import subprocess
 
     result = subprocess.run(
-        ["git", "log", "--format=%B", f"{ref}..HEAD"],
+        # NUL-separated, because a trailer is defined relative to the end of *one* message and
+        # concatenating them would put the next commit's subject after the previous one's trailers.
+        ["git", "log", "--format=%B%x00", f"{ref}..HEAD"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -101,7 +132,10 @@ def acknowledgements_since(root: Path, ref: str) -> set[str]:
         # No range to read — comparing against the working tree, a shallow clone, or a ref that is
         # not an ancestor. Nothing is acknowledged, which fails closed.
         return set()
-    return parse_acknowledgements(result.stdout)
+    found: set[str] = set()
+    for message in result.stdout.split("\0"):
+        found |= parse_acknowledgements(message)
+    return found
 
 
 @dataclass
@@ -174,7 +208,20 @@ def surface_of(path: str, text: str) -> dict[str, Any]:
     if path.endswith(".yml"):
         data = yaml.safe_load(text) or {}
         if isinstance(data, dict):
-            surface["permissions"] = data.get("permissions")
+            # Workflow level *and* per job. Only the first was read for a long time, and the
+            # consequence was not theoretical: the job that publishes the run ledger carries
+            # `contents: write` while the workflow around it stays `contents: read`, and the diff
+            # reported no permissions change at all. It surfaced only because that job also has a
+            # container and so appeared in the sandbox map — a job granted write *without* one
+            # would have passed this gate in silence, which is the exact change it exists to catch.
+            surface["permissions"] = {
+                "workflow": data.get("permissions"),
+                "jobs": {
+                    name: job.get("permissions")
+                    for name, job in (data.get("jobs") or {}).items()
+                    if isinstance(job, dict) and job.get("permissions") is not None
+                },
+            }
             surface["triggers"] = sorted((data.get(True) or data.get("on") or {}).keys())
             surface["sandbox"] = {
                 name: (job.get("container") or {}).get("options")
@@ -225,10 +272,35 @@ def diff_surfaces(old: dict[str, dict[str, Any]], new: dict[str, dict[str, Any]]
         for category in sorted(set(before) | set(after)):
             was, now = before.get(category), after.get(category)
             if was != now:
-                result.deltas.append(
-                    Delta(category if category in BLOCKING else category, path, f"{was!r} -> {now!r}")
-                )
+                result.deltas.append(Delta(category, path, describe(was, now)))
     return result
+
+
+def describe(was: Any, now: Any) -> str:
+    """What moved, rather than both states in full.
+
+    A surface keyed by job name renders as two near-identical dicts, and a reviewer has to diff
+    seven keys by eye to find the one that changed. This is the one output meant to be read by
+    somebody who cannot read the generated YAML, so burying the delta in its own context defeats
+    the point — and a security report people skim is one they stop reading.
+    """
+    if not (isinstance(was, dict) and isinstance(now, dict)):
+        return f"{was!r} -> {now!r}"
+
+    lines: list[str] = []
+    for key in sorted(set(was) | set(now)):
+        before_value, after_value = was.get(key), now.get(key)
+        if before_value == after_value:
+            continue
+        if key not in was:
+            lines.append(f"+{key}: {after_value!r}")
+        elif key not in now:
+            lines.append(f"-{key}: {before_value!r}")
+        else:
+            lines.append(f"~{key}: {before_value!r} -> {after_value!r}")
+    # Nested one level: `permissions` is {"workflow": ..., "jobs": {...}}, and a change inside
+    # `jobs` would otherwise render as the whole map again.
+    return "; ".join(lines) if lines else f"{was!r} -> {now!r}"
 
 
 def against_disk(root: Path, plan: CompilePlan) -> SemanticDiff:

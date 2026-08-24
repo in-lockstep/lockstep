@@ -10,6 +10,7 @@ from lockstep.emit.semantic_diff import (
     Delta,
     SemanticDiff,
     against_disk,
+    describe,
     diff_surfaces,
     parse_acknowledgements,
     surfaces,
@@ -148,3 +149,102 @@ def test_an_acknowledgement_for_a_category_that_did_not_move_is_reported():
     diff = _diff("sandbox", acknowledged={"sandbox", "network"})
     assert diff.unacknowledged == []
     assert diff.stale_acknowledgements == ["network"]
+
+
+# --- job-level permissions ------------------------------------------------------------------------
+#
+# Only the workflow-level block was ever read. The job that publishes the run ledger carries
+# `contents: write` while the workflow around it stays `contents: read`, and the diff reported no
+# permissions change at all — it surfaced only because that job also has a container and so appeared
+# in the sandbox map. A job granted write *without* a container passed this gate in silence, which
+# is precisely the change it exists to catch.
+
+WORKFLOW = """
+name: w
+on: {push: {}}
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+"""
+
+
+def _surface(text: str):
+    return surfaces({".github/workflows/w.yml": text})
+
+
+def test_a_job_granted_write_is_a_permissions_delta():
+    widened = WORKFLOW.replace(
+        "    permissions:\n      contents: read", "    permissions:\n      contents: write"
+    )
+    diff = diff_surfaces(_surface(WORKFLOW), _surface(widened))
+    assert [d.category for d in diff.deltas] == ["permissions"]
+    assert diff.blocking
+
+
+def test_a_new_job_carrying_write_is_a_permissions_delta():
+    """The meter job's shape: the workflow stays read-only and a new job underneath it writes."""
+    added = WORKFLOW + """  meter:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+"""
+    diff = diff_surfaces(_surface(WORKFLOW), _surface(added))
+    assert "permissions" in [d.category for d in diff.deltas]
+
+
+def test_the_workflow_level_block_is_still_watched():
+    widened = WORKFLOW.replace("permissions:\n  contents: read", "permissions:\n  contents: write", 1)
+    assert "permissions" in [d.category for d in diff_surfaces(_surface(WORKFLOW), _surface(widened)).deltas]
+
+
+def test_an_unchanged_workflow_has_no_permissions_delta():
+    assert diff_surfaces(_surface(WORKFLOW), _surface(WORKFLOW)).deltas == []
+
+
+# --- rendering ------------------------------------------------------------------------------------
+
+
+def test_a_delta_names_what_moved_rather_than_both_states():
+    """Two near-identical maps make a reviewer diff seven keys by eye, in the one output written
+    for somebody who cannot read the generated YAML."""
+    detail = describe({"a": 1, "b": 2}, {"a": 1, "b": 2, "c": 3})
+    assert detail == "+c: 3"
+
+
+def test_removals_and_changes_are_distinguished():
+    assert describe({"a": 1, "b": 2}, {"a": 9}) == "~a: 1 -> 9; -b: 2"
+
+
+def test_non_mapping_values_render_as_before_and_after():
+    assert describe("read-all", "write-all") == "'read-all' -> 'write-all'"
+
+
+# --- trailers are trailers, not prose -------------------------------------------------------------
+
+
+def test_an_example_in_the_body_is_not_an_acknowledgement():
+    """The commit that introduced this mechanism documented the format with an indented example,
+    and a parser reading the whole message treated the example as a real acknowledgment — so a
+    commit that merely describes the trailer would clear a gate."""
+    message = (
+        "Make the gate clearable\n\n"
+        "Acknowledgment is a commit trailer:\n\n"
+        "    Security-Surface: sandbox, permissions\n\n"
+        "A trailer rather than a file, because prose.\n"
+    )
+    assert parse_acknowledgements(message) == set()
+
+
+def test_prose_mentioning_the_trailer_acknowledges_nothing():
+    assert parse_acknowledgements("We should add Security-Surface: network someday.") == set()
+
+
+def test_a_trailer_above_co_authored_by_still_counts():
+    """People routinely separate trailers with a blank line, and losing one there would be a
+    surprise nobody could debug."""
+    message = "Subject\n\nBody.\n\nSecurity-Surface: sandbox\n\nCo-Authored-By: Someone <a@b.c>\n"
+    assert parse_acknowledgements(message) == {"sandbox"}
