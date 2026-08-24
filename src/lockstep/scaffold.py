@@ -48,9 +48,9 @@ capabilities:
   # Where the capabilities live. These are the two addresses you have to change: point them at
   # wherever you published the composite actions and the executor image, then `lockstep pin` to
   # resolve them into `.pipeline/pins.lock`. Any registry works for the image.
-  actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
+  actions: github.com/in-lockstep/lockstep/actions@actions-v1.0.0
   exec: pipeline-exec==0.1.0
-  exec-image: ghcr.io/pipeline-fw/pipeline-exec
+  exec-image: ghcr.io/in-lockstep/pipeline-exec
   compiler: lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 

@@ -1,12 +1,12 @@
 {
   "capabilities": {
     "actions": {
-      "repo": "pipeline-fw/pipeline-actions",
+      "repo": "in-lockstep/lockstep/actions",
       "sha": "8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470",
-      "tag": "v1.6.2"
+      "tag": "actions-v1.6.2"
     },
     "exec": {
-      "image": "ghcr.io/pipeline-fw/pipeline-exec",
+      "image": "ghcr.io/in-lockstep/pipeline-exec",
       "package": "pipeline-exec",
       "version": "1.4.2",
       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"

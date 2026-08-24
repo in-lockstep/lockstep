@@ -38,9 +38,9 @@ network:
   allowed:
   - defaults
 steps:
-- uses: pipeline-fw/pipeline-actions/restore@0000000000000000000000000000000000000000  # v1.0.0
+- uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
 post-steps:
-- uses: pipeline-fw/pipeline-actions/save@0000000000000000000000000000000000000000  # v1.0.0
+- uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
   with:
     paths: ${{ inputs.output_path }}
 mcp-servers:

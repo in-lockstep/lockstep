@@ -44,9 +44,9 @@ network:
   - '*.atlassian.net'
   - jira-mirror.acme.internal
 steps:
-- uses: pipeline-fw/pipeline-actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2
+- uses: in-lockstep/lockstep/actions/restore@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
 post-steps:
-- uses: pipeline-fw/pipeline-actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # v1.6.2
+- uses: in-lockstep/lockstep/actions/save@8c44e0d2ab19f3c5d7e6b4a2091f83cc55d1e470  # actions-v1.6.2
   with:
     paths: ${{ inputs.output_path }}
 mcp-servers:

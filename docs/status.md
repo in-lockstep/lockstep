@@ -298,10 +298,17 @@ It stops at the drift gate. A pipeline with any script or builtin step compiles 
 
 ## What remains open
 
-**The capabilities have never been published.** `capabilities.actions` points at
-`github.com/pipeline-fw/pipeline-actions` and `capabilities.exec-image` at an executor image, and
-neither exists: the name was chosen during the design and nothing was ever pushed to it. Every
-example and fixture here pins both to forty zeros.
+**The capabilities have not been published yet.** `capabilities.actions` points at
+`github.com/in-lockstep/lockstep/actions` and `capabilities.exec-image` at `ghcr.io/in-lockstep/pipeline-exec`.
+The release workflows exist — `release-actions.yml` and `release-exec-image.yml`, on `actions-v*` and
+`exec-v*` tags — but no tag has been pushed, so every example and fixture here still pins both to
+forty zeros.
+
+The composite actions need no separate repository: `uses: in-lockstep/lockstep/actions/restore@<sha>`
+resolves against a subdirectory of this one, and `resolve_ref` already slices `repo.split("/")[:2]`
+to pin it. That removes a second repository and the cross-repository push credential a split would
+have needed. The two capabilities keep their own tag lines rather than the compiler's, so a pin moves
+when the thing behind it moved.
 
 That was invisible for longer than it should have been — a zero has the shape of a pin, so the
 examples compiled, linted and simulated exactly like ones that would run. It is now stated in three
@@ -320,8 +327,7 @@ leaving something believable in place.
 |---|---|
 | Transitive inheritance | An import that imports is a package manager. A consumer lists both upstreams; `docs/sharing.md` says why. |
 | Private-repo fetch in a consumer's CI | A consumer's `GITHUB_TOKEN` cannot read another private repository, so `lockstep fetch` there needs a GitHub App or a PAT. Nothing in the framework can solve that for an organization. |
-| A `/review` on this repository's own pull requests | Agent workflows and the chat-ops gate need `pipeline-actions` published. The lenses are designed — `docs/self-hosting.md` names them. |
-| Publishing `actions/` and the executor image | Needs an owner to publish under. Everything else is in place: `lockstep pin --sha/--exec-digest` records them, and the drift gate keeps the result honest. |
+| A `/review` on this repository's own pull requests | Needs the first `actions-v*` and `exec-v*` tags pushed. The lenses are designed — `docs/self-hosting.md` names them. |
 | Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |
 | The fleet dashboard | Needs real consumer repositories to report on. |

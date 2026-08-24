@@ -37,7 +37,7 @@ def context_for(root) -> EmitContext:
 def test_a_step_declaring_an_output_is_wrapped_in_a_cache_probe(basic_spec_dir):
     steps = steps_of(basic_spec_dir, "generate-tests.yml", "fetch-issues")
     probe = by_id(steps, "cache-fetch-issues")
-    assert probe["uses"].startswith("pipeline-fw/pipeline-actions/step-cache@")
+    assert probe["uses"].startswith("in-lockstep/lockstep/actions/step-cache@")
     assert probe["with"]["outputs"].strip() == "outputs/jira-issues.json"
 
 

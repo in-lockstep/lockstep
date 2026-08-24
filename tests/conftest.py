@@ -30,7 +30,7 @@ def repo_root() -> Path:
 
 
 # Every example and fixture here pins its capabilities to placeholders, because
-# `pipeline-fw/pipeline-actions` and its executor image have never been published anywhere. That is
+# `in-lockstep/lockstep/actions` and its executor image have never been published anywhere. That is
 # a real reason not to be target-ready, and doctor says so — DOC015. These helpers assert that
 # everything *else* holds, so the day the capabilities are published the assertions get stronger
 # rather than needing rewriting.

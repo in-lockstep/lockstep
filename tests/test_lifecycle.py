@@ -26,7 +26,7 @@ def test_pinning_records_the_supplied_commit_and_digest(basic_root):
 
     stored = load_pins(basic_root)["capabilities"]
     assert stored["actions"]["sha"] == SHA
-    assert stored["actions"]["tag"] == "v1.6.2"
+    assert stored["actions"]["tag"] == "actions-v1.6.2"
     assert stored["exec"]["digest"] == DIGEST
     assert any("supplied" in note for note in notes)
 

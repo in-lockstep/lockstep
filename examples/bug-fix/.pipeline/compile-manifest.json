@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-bug-analyst.md": {
-      "sha": "b97423a8",
+      "sha": "524365c4",
       "sources": [
         "agents/bug-analyst.md@d4646d55",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-fix-reviewer.md": {
-      "sha": "20b4883f",
+      "sha": "50b8f3b5",
       "sources": [
         "agents/fix-reviewer.md@06f985bb",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -29,7 +29,7 @@
       ]
     },
     ".github/workflows/aw-fix-writer.md": {
-      "sha": "2641ba95",
+      "sha": "93ce032d",
       "sources": [
         "agents/fix-writer.md@d3fdaded",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -43,7 +43,7 @@
       ]
     },
     ".github/workflows/aw-reproducer-writer.md": {
-      "sha": "6599a1ff",
+      "sha": "d980b8b8",
       "sources": [
         "agents/reproducer-writer.md@39c23b00",
         "lockstep:guardrails/baseline.md@f12c42fc",
@@ -54,13 +54,13 @@
       ]
     },
     ".github/workflows/fix-bugs.yml": {
-      "sha": "b683c0b1",
+      "sha": "45244174",
       "sources": [
         "commands/fix-bugs.md@e099e18d"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "651f8587",
+      "sha": "9a69b26e",
       "sources": []
     },
     ".github/workflows/shared/context-target-app.md": {

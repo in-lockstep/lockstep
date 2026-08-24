@@ -81,7 +81,7 @@ def test_the_gate_names_nothing_unpublished(repo_root):
     """The composite actions and the executor image do not exist yet; this gate needs neither."""
     text = compile_spec(repo_root).files[CI]
     assert "container:" not in text
-    assert "pipeline-actions" not in text
+    assert "/actions/" not in text
     assert "0000000000000000" not in text
 
 

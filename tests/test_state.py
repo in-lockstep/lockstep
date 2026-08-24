@@ -23,8 +23,8 @@ def by_name(steps, name):
 def test_state_is_loaded_and_saved_around_the_owning_job(basic_spec_dir):
     steps = steps_of(basic_spec_dir, "discover.yml", "discover-api-surface")
     load, save = by_name(steps, "Load state"), by_name(steps, "Save state")
-    assert load["uses"].startswith("pipeline-fw/pipeline-actions/state/load@")
-    assert save["uses"].startswith("pipeline-fw/pipeline-actions/state/save@")
+    assert load["uses"].startswith("in-lockstep/lockstep/actions/state/load@")
+    assert save["uses"].startswith("in-lockstep/lockstep/actions/state/save@")
     assert load["with"]["path"] == "outputs/.state/user-story-validation.db"
     assert save["if"] == "${{ always() }}"
 

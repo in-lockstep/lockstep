@@ -46,9 +46,9 @@ spec: 1
 name: httpbin-contract
 
 capabilities:
-  actions: github.com/pipeline-fw/pipeline-actions@v1.0.0
+  actions: github.com/in-lockstep/lockstep/actions@actions-v1.0.0
   exec: pipeline-exec==0.1.0
-  exec-image: ghcr.io/pipeline-fw/pipeline-exec
+  exec-image: ghcr.io/in-lockstep/pipeline-exec
   compiler: lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 
@@ -615,7 +615,7 @@ script into a script: the AI is used once to generate, and the generation is the
 - The composite actions and the executor image are contract-tested against exactly what the compiler
   emits, but they have **never executed on a real runner**. Your first live run will find things no
   local test can.
-- `pipeline-fw/pipeline-actions` is a placeholder. Publish the `actions/` directory somewhere and
+- `in-lockstep/lockstep/actions` is a placeholder. Publish the `actions/` directory somewhere and
   point `capabilities.actions` at it.
 - Browser and CLI test execution is extracted and working, but the deploy modes that stand an
   application up for it aren't wired to the compiler yet. API tests against a deployed target — what

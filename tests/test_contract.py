@@ -152,13 +152,19 @@ def test_no_generated_workflow_plumbs_step_outputs_by_hand():
 # --- the composite actions the compiler references -------------------------
 
 ACTIONS_ROOT = Path(__file__).parent.parent / "actions"
+# The capability actions ship from `actions/` in this repository, so a `uses:` naming them starts
+# with this. An extension may publish composite actions of its own from its own path; those are the
+# extension's contract to keep, not this one's.
+CAPABILITY_PREFIX = "in-lockstep/lockstep/actions/"
 
 
 def _walk_actions(node, used: dict, outputs_read: set) -> None:
     if isinstance(node, dict):
         ref = node.get("uses")
-        if isinstance(ref, str) and "pipeline-actions/" in ref:
-            name = ref.split("pipeline-actions/")[1].split("@")[0]
+        # `<owner>/<repo>/actions/<name>@<sha>` — the composite actions ship from a subdirectory
+        # of the repository that builds them, so one tag covers the action and its own tests.
+        if isinstance(ref, str) and ref.startswith(CAPABILITY_PREFIX):
+            name = ref[len(CAPABILITY_PREFIX) :].split("@")[0]
             passed, read = used.setdefault(name, (set(), set()))
             passed.update((node.get("with") or {}).keys())
             step_id = node.get("id")

@@ -69,12 +69,12 @@ pipeline is an addition to your CI, never a replacement for it.**
 ## Why this pipeline has no steps
 
 `pipeline-ci.yml` is the only thing `.lockstep/` compiles to, and that is deliberate. Two of the
-three packaging units are unpublished: `pipeline-fw/pipeline-actions` and the `pipeline-exec`
+three packaging units are unpublished: `in-lockstep/lockstep/actions` and the `pipeline-exec`
 container image are both pinned to placeholders across the examples, which
 `lockstep compile` says out loud on every run. A step compiles to a job with
 
 ```yaml
-container: ghcr.io/pipeline-fw/pipeline-exec@sha256:0000…
+container: ghcr.io/in-lockstep/pipeline-exec@sha256:0000…
 ```
 
 so any pipeline with a script or builtin step in it is a pipeline that cannot run yet. `pipeline-ci`

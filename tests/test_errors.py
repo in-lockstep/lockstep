@@ -164,5 +164,5 @@ def test_named_secrets_reports_only_what_is_consumed():
 def test_pins_without_a_lockfile_carry_manifest_tags(basic_root):
     (basic_root / ".pipeline" / "pins.lock").unlink()
     pins = Pins.load(load_spec(basic_root))
-    assert pins.actions_tag == "v1.6.2"
+    assert pins.actions_tag == "actions-v1.6.2"
     assert pins.resolved is False

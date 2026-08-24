@@ -21,8 +21,8 @@ from lockstep.spec.load import load_spec
 
 SHA = "a" * 40
 DIGEST = "sha256:" + "b" * 64
-QUAY = {"exec_image: ghcr.io/pipeline-fw/pipeline-exec": "exec-image: quay.io/acme/exec"}
-UNSET = {"exec_image: ghcr.io/pipeline-fw/pipeline-exec": ""}
+QUAY = {"exec_image: ghcr.io/in-lockstep/pipeline-exec": "exec-image: quay.io/acme/exec"}
+UNSET = {"exec_image: ghcr.io/in-lockstep/pipeline-exec": ""}
 
 
 def manifest(root, **replacements):
@@ -87,7 +87,9 @@ def test_a_lock_resolved_against_a_different_image_is_refused(basic_root):
 
 def test_a_lock_resolved_against_a_different_actions_repo_is_refused(basic_root):
     moved = {
-        "actions: github.com/pipeline-fw/pipeline-actions@v1.6.2": "actions: github.com/acme/actions@v1.6.2"
+        "actions: github.com/in-lockstep/lockstep/actions@actions-v1.6.2": (
+            "actions: github.com/acme/actions@v1.6.2"
+        )
     }
     manifest(basic_root, **moved)
     with pytest.raises(EmitError) as excinfo:
@@ -109,7 +111,7 @@ def test_an_unset_image_is_refused_rather_than_guessed(basic_root):
 
 
 def test_an_unset_actions_repo_is_refused_rather_than_guessed(basic_root):
-    manifest(basic_root, **{"actions: github.com/pipeline-fw/pipeline-actions@v1.6.2": ""})
+    manifest(basic_root, **{"actions: github.com/in-lockstep/lockstep/actions@actions-v1.6.2": ""})
     data = lock(basic_root)
     data["capabilities"].pop("actions")
     write_lock(basic_root, data)
@@ -133,7 +135,7 @@ def test_doctor_names_a_missing_image(basic_root):
 def test_a_zero_pin_is_reported_as_a_placeholder(basic_spec_dir):
     pins = Pins.load(load_spec(basic_spec_dir))
     assert pins.exec_digest == PLACEHOLDER_DIGEST
-    assert pins.placeholders() == ["executor image (ghcr.io/pipeline-fw/pipeline-exec)"]
+    assert pins.placeholders() == ["executor image (ghcr.io/in-lockstep/pipeline-exec)"]
 
 
 def test_the_check_catches_zeros_and_not_invention(basic_spec_dir):

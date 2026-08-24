@@ -71,7 +71,7 @@ def test_show_surface_renders_the_whole_github_surface(basic_root):
     result = run("show-surface", "--root", str(basic_root))
     assert result.exit_code == EXIT_OK
     assert "# GitHub target surface — user-story-validation" in result.output
-    assert "pipeline-fw/pipeline-actions@v1.6.2" in result.output
+    assert "in-lockstep/lockstep/actions@actions-v1.6.2" in result.output
     assert "overlays/github/generate-tests.yml" in result.output
     assert "local-only" in result.output
 
