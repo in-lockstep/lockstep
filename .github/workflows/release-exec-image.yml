@@ -46,8 +46,10 @@ jobs:
           set -euo pipefail
           uv sync
           uv run pytest packages/pipeline-exec -q
-          uv build --package pipeline-exec --out-dir dist
-          test -f dist/pipeline_exec-*.whl
+          # The distribution is `in-lockstep-exec`, not `pipeline-exec`: the bare name belongs to an
+          # unrelated project on PyPI. The import name and the console script stay `pipeline_exec`.
+          uv build --package in-lockstep-exec --out-dir dist
+          test -f dist/in_lockstep_exec-*.whl
 
       - uses: docker/setup-buildx-action@v3
 
