@@ -75,11 +75,11 @@
       "security-reviewer"
     ],
     "rubric": {
-      "criteria": "Gets from the numbers to a change somebody could make, and does not skip the outlier.",
+      "criteria": "Gets from the numbers to a change somebody could make, proposes the eval case that would keep it checked, and does not skip the outlier.",
       "levels": {
-        "5": "Names the security lens going from 0% to 31% over 12 and 13 runs, connects it to the credits and duration rising together, proposes something specific to check \u2014 and reports the 9.5x run and the four reruns as evidence pointing the same way.",
-        "3": "Reports the failure rate correctly but proposes something vague, or ignores the outlier.",
-        "1": "Restates the deltas without a proposal, or proposes against the wrong subject."
+        "5": "Names the security lens going from 0% to 31% over 12 and 13 runs, connects it to the credits and duration rising together, proposes something specific to check, and reports the 9.5x run and the four reruns as evidence pointing the same way. Adds an `eval_case` naming what it should assert and the run_url to derive the input from \u2014 never an invented input.",
+        "3": "Reports the failure rate correctly but proposes something vague, ignores the outlier, or proposes a case with no run to derive it from.",
+        "1": "Restates the deltas without a proposal, proposes against the wrong subject, or writes a case `input` it could not have seen \u2014 the ledger carries no outputs."
       },
       "min": 4
     }

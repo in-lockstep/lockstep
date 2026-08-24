@@ -221,3 +221,94 @@ def test_case_inputs_and_answers_do_not_share_a_directory(basic_spec_dir):
     run_job = suite(basic_spec_dir)["jobs"][f"run-{AGENT}"]["with"]
     assert run_job["input_path"] != run_job["output_path"]
     assert json.dumps(run_job).count("/inputs/") == 1
+
+
+# --- verifying that a change was an improvement ------------------------------
+#
+# A retro agent can say what to try; it cannot say whether the attempt worked. The suite can, and
+# these hold the workflow that lets it: record a baseline off the default branch, compare a
+# candidate against it, and refuse a change that broke a case the previous prompt always passed.
+
+
+def with_history(root, extra=""):
+    manifest = root / "pipeline.yaml"
+    manifest.write_text(
+        manifest.read_text() + "\nhistory:\n  branch: pipeline-history\n" + extra, encoding="utf-8"
+    )
+    lock = root / ".pipeline" / "pins.lock"
+    data = json.loads(lock.read_text())
+    for action in ("actions/download-artifact", "actions/upload-artifact"):
+        data["external"][action] = {"sha": "0" * 40, "tag": "v5"}
+    lock.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return root
+
+
+def grade_steps(root):
+    return suite(root)["jobs"][f"grade-{AGENT}"]["steps"]
+
+
+def test_without_retention_there_is_nothing_to_compare_against(basic_spec_dir):
+    """The comparison needs a baseline, and a baseline needs somewhere durable to have been kept."""
+    names = " ".join(
+        step.get("name", "") for step in suite(basic_spec_dir)["jobs"][f"grade-{AGENT}"]["steps"]
+    )
+    assert "Compare" not in names
+
+
+def test_a_candidates_scores_never_become_the_baseline(basic_root):
+    """Otherwise a regression establishes itself as normal simply by being merged."""
+    steps = {s.get("name"): s for s in grade_steps(with_history(basic_root))}
+    assert steps["Record this run as a baseline"]["if"] == "${{ github.event_name != 'pull_request' }}"
+    assert steps["Publish the baseline"]["if"] == "${{ github.event_name != 'pull_request' }}"
+
+
+def test_the_baseline_is_published_before_the_comparison_can_fail(basic_root):
+    """A run on the default branch is the prompt that now ships, whether or not it scored worse.
+
+    Publishing after the comparison would leave a regressed merge unrecorded, and the next change
+    comparing against something two versions old.
+    """
+    order = [s.get("name") for s in grade_steps(with_history(basic_root)) if s.get("name")]
+    assert order.index("Publish the baseline") < order.index("Compare against the prompt this replaces")
+
+
+def test_the_comparison_fingerprints_the_prompt_it_scored(basic_root):
+    """Two runs are only comparable when nothing that could move behaviour differs."""
+    steps = {s.get("name"): s for s in grade_steps(with_history(basic_root))}
+    assert (
+        f"--prompt-file=.github/workflows/aw-{AGENT}.md"
+        in steps["Compare against the prompt this replaces"]["run"]
+    )
+
+
+def test_the_gate_fires_only_on_a_pull_request(basic_root):
+    """A scheduled baseline run compares against the previous prompt every night.
+
+    Failing it would report the same regression forever, and a red build nobody can clear is one
+    people stop reading.
+    """
+    gate = next(s for s in grade_steps(with_history(basic_root)) if s.get("name", "").startswith("Refuse"))
+    assert "github.event_name == 'pull_request'" in gate["if"]
+    assert "steps.compare.outputs.regressed != ''" in gate["if"]
+    assert "exit 1" in gate["run"]
+
+
+def test_recording_a_baseline_needs_the_write_it_makes(basic_root):
+    assert suite(with_history(basic_root))["jobs"][f"grade-{AGENT}"]["permissions"]["contents"] == "write"
+
+
+def test_eval_jobs_that_write_nothing_ask_for_nothing(basic_spec_dir):
+    for name, job in suite(basic_spec_dir)["jobs"].items():
+        if "permissions" in job:
+            assert job["permissions"]["contents"] == "read", name
+
+
+def test_a_baseline_schedule_re_runs_an_unchanged_prompt(basic_root):
+    """Which is the only way a noise floor is ever measured: one run of a prompt has no spread."""
+    root = with_history(basic_root, extra="\nevals:\n  baseline: '0 3 * * *'\n")
+    assert triggers(root)["schedule"] == [{"cron": "0 3 * * *"}]
+
+
+def test_no_schedule_unless_somebody_asks_for_one(basic_root):
+    """Repeats cost credits. Measuring the noise floor is a decision, not a default."""
+    assert "schedule" not in triggers(with_history(basic_root))

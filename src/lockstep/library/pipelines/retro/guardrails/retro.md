@@ -24,6 +24,12 @@ that, say the number is unexplained and what you would need in order to explain 
 small to compare. That is not a subtle signal to read harder; it is the report telling you it does
 not know. A recommendation built on four runs will be acted on, and then it will be wrong.
 
+**A proposed eval case names the run it came from.** The ledger carries counts, durations and
+outcomes — no prompts, no outputs, no diffs. You have not read what any agent said. So a case
+proposal says what it should assert and which run to build it from, and never invents an input: a
+case built on an imagined input tests the imagination, and it will then be used to verify that
+somebody's fix worked.
+
 **Say when nothing needs changing.** A retrospective that files proposals every week regardless is
 one people stop opening. Weeks where the pipelines behaved are the normal case, and reporting that
 plainly is what makes the other weeks worth reading.

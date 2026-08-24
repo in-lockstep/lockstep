@@ -60,6 +60,7 @@ INTERNAL = frozenset(
         "eval-cases",
         "eval-judge-prep",
         "eval-grade",
+        "eval-compare",
         # Accounting. Emitted at the end of a run, over artifacts the run produced; a `builtin:`
         # step naming it would be asking a pipeline to bill itself mid-flight.
         "meter",

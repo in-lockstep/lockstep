@@ -551,9 +551,23 @@ Five are now closed — `docs/evals.md`, `docs/metering.md`, `docs/adopting-ship
   constraints in name only — so its output goes through `/implement` and review like any other
   change. `docs/history-and-retro.md` has the whole shape.
 
-  Two things it deliberately does not do: replay a run (the ledger says which run, gh-aw still
-  holds the transcript until it expires) and attribute cost per agent (the usage artifacts carry no
-  name to join on, so the figure is omitted rather than guessed).
+  The loop closes on the eval suite rather than on the retro's opinion. Each suite run is recorded
+  against a fingerprint of the prompt it scored — the compiled agent file, hashed — so a pull
+  request that changes a prompt is compared against what the previous one scored, past the noise
+  floor measured across repeated runs of that same prompt. A delta inside the noise is reported as
+  noise; a baseline under three runs reports no direction at all; a case that passed *every*
+  baseline run and now fails blocks the merge even when the aggregate improved, which is exactly
+  what an average absorbs. `evals.baseline` is the schedule that makes the noise measurable, and it
+  is a decision rather than a default because repeats cost credits.
+
+  The retro proposes the eval case alongside the prompt change, naming the run to derive it from —
+  it has not read any agent's output, so it says what a case should assert and never invents an
+  input.
+
+  Three things it deliberately does not do: replay a run (the ledger says which run, gh-aw still
+  holds the transcript until it expires), attribute cost per agent (the usage artifacts carry no
+  name to join on, so the figure is omitted rather than guessed), and verify a change to an
+  *inherited* agent (its suite belongs to whoever published it).
 
   These remain a starting point rather than a product: the facts that make a pipeline good in a
   particular repository — which layer was audited, how its tests are laid out — are the ones only

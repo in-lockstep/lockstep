@@ -484,6 +484,14 @@ class EvalConfig:
     # Evals cost credits, so the suite is dispatched or triggered by a change to the prompt layers
     # it covers — never on every push. A prompt change is exactly what an eval exists to gate.
     on_prompt_change: bool = True
+    # A cron for re-running the suite against a prompt that has not changed.
+    #
+    # Without it there is no noise floor. Evals triggered only by a prompt change give each prompt
+    # exactly one run, and one run has no spread — so `eval-compare` can report numbers but never a
+    # direction, because it cannot tell a real movement from sampling. These repeats are what make
+    # the comparison mean anything, and they cost credits, which is why it is a decision rather
+    # than a default.
+    baseline: str = ""
 
 
 @dataclass

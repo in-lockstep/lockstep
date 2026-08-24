@@ -106,9 +106,10 @@ different agent:
 A floor set on a suite where nothing was scored decides nothing, and `eval-grade` says so rather
 than reporting a pass the floor had no part in.
 
-**Comparing this run to last month's is not built yet.** The scores are recorded, the mean is
-gated, and the run-over-run history that would turn "4.2" into "4.2, down from 4.8" waits on run
-history — `docs/status.md` tracks it.
+**Comparing this run to the last one is built, and it needs a noise floor to mean anything.** With
+`history.branch` set, each suite run is recorded against a fingerprint of the prompt it scored, and
+a pull request that changes a prompt is compared against what the previous one scored — past the
+spread measured across repeated runs of that same prompt. `docs/history-and-retro.md` has it.
 
 ---
 

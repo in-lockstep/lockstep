@@ -133,6 +133,115 @@ empty `findings` list.
 
 ---
 
+## Closing the loop: was the change actually an improvement?
+
+The retro says what to try. That is a judgement made by the same kind of thing as the agent being
+changed, and it is worth exactly as much as one. The eval suite can say whether the attempt *worked*
+— and with the ledger in place it can say it without paying to re-run the old prompt.
+
+On a pull request that touches a prompt layer, the suite runs and the result is compared against
+what the previous prompt scored:
+
+```
+### `security-reviewer` — regressed
+
+| Metric     | Baseline | Now    | Delta   | Noise  |               |
+|------------|----------|--------|---------|--------|---------------|
+| pass_rate  | 0.833    | 0.667  | -0.167  | ±0.333 | within noise  |
+| mean_score | 4.425    | 4.6    | +0.175  | ±0.4   | within noise  |
+
+**Cases that passed every baseline run and fail now:** `path-traversal`
+```
+
+Read that example carefully, because it is the whole argument. The mean score went **up**. Both
+aggregates are within the noise. And the change is still a regression, because a case that passed
+every single run of the old prompt now fails — which is exactly what an average absorbs.
+
+### The noise floor is the point
+
+Agents are non-deterministic. Run the identical suite against the identical prompt twice and the
+scores differ. So a before-and-after comparison, done naively, reports improvements and regressions
+that are pure sampling — and a gate built on that is *worse than no gate*, because it blocks good
+changes and waves through bad ones with equal confidence.
+
+**A comparison that does not know its own noise floor is an opinion with arithmetic on it.**
+
+Both halves come out of the ledger for free:
+
+- **The baseline** is what the previous prompt scored. The default branch already ran it.
+- **The noise floor** is the spread across runs *of that same prompt*. Those runs differed by
+  nothing except sampling, which makes their variation the definition of a meaningless delta.
+
+A delta inside the noise is reported as `within noise`. A baseline with fewer than three runs is
+reported as **`no noise floor`** — the numbers are still shown, the *direction* is not claimed.
+
+### Which means the schedule is not optional
+
+```yaml
+evals:
+  baseline: '0 3 * * *'
+```
+
+Evals triggered only by a prompt change give each prompt exactly one run, and one run has no spread.
+Without this, every comparison correctly reports that it cannot tell a movement from sampling.
+
+These repeats cost credits, which is why it is a decision rather than a default. It is also the
+cheapest honest way to know whether your prompt changes are working.
+
+### Flaky cases are named, and decide nothing
+
+A case that passed three baseline runs out of five was never evidence of anything, and its flip
+today is not either. It is reported as flaky and excluded from the verdict — which is a defect in
+the case rather than a finding about the agent, and worth fixing as one.
+
+This is how a suite stops accumulating gates that fire at random.
+
+### What is fingerprinted
+
+The compiled agent workflow, hashed. That file *is* the prompt: its body, every guardrail, skill and
+context, the model, the budget, the turn cap. Two runs share a fingerprint exactly when nothing that
+could move behaviour differs — which is the condition under which their difference is sampling.
+
+### The gate
+
+A pull request fails when a case that passed **every** baseline run now fails. Only on a pull
+request: a scheduled baseline run compares against the previous prompt every night, and failing it
+would report the same regression forever — a red build nobody can clear is one people stop reading.
+
+A candidate's scores never become the baseline. Recording happens off the default branch only, or a
+regression would establish itself as normal simply by being merged.
+
+---
+
+## The retro proposes cases, not just prose
+
+A proposal changes a prompt once. A case makes the change checkable and *keeps* it checked — and the
+verification above is only as good as the suite, so a failure the suite does not cover is one it
+cannot confirm you fixed.
+
+So a finding about an agent getting something wrong carries an `eval_case`: which agent, what it
+should assert, and **the `run_url` to derive the input from**.
+
+That last part is a hard constraint, and it is a consequence of what the ledger holds. The retro
+reads counts, durations and outcomes — no prompts, no outputs, no diffs. **It has not seen what the
+agent said.** So it can say what a case should assert and which run to build it from; it cannot
+write the case's `input`, and one it invented would test its imagination rather than the failure.
+
+It proposes no case for a finding about cost or duration. A suite does not measure those.
+
+### The whole loop
+
+1. Runs leave records in the ledger.
+2. The retro reads them and proposes a change — and the case that would keep it checked.
+3. Somebody, or `/implement`, makes the change.
+4. The eval suite runs on the pull request and compares against the previous prompt, past the noise.
+5. A case that used to pass and now fails blocks the merge.
+6. Merging records a new baseline, and the schedule starts measuring its noise.
+
+Step 4 is the one that makes the rest more than a suggestion.
+
+---
+
 ## What this does not do
 
 **Replay.** The ledger says which run to look at; it does not reconstruct one. gh-aw retains the
@@ -142,3 +251,12 @@ transcripts and `gh aw logs <run-id>` fetches them while they last.
 to a job, so the report says so by leaving the figure out rather than guessing at it.
 
 **Act on its own findings.** By construction, and permanently.
+
+**Verify a change to an inherited agent.** A repository that adopts shipped pipelines has no eval
+suite for them — an inherited agent is evaluated by whoever published it, and re-running somebody
+else's cases would be paying to re-test their lens. So the comparison covers the agents you own. A
+change to a shipped agent is verified in the repository that ships it.
+
+**Judge a rubric.** The comparison reads `pass_rate` and `mean_score` as the grader reported them,
+so a suite with no judge configured has rubrics pending and compares on its deterministic half
+alone. That is a thinner signal, and it is the same thinness the eval report already declares.

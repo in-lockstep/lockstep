@@ -24,10 +24,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..spec.model import Spec
-from .agentic import lock_filename
+from .agentic import lock_filename, workflow_filename
 from .context import EmitContext
 
 WORKFLOW_NAME = "evals.yml"
+HISTORY_DIR = "outputs/history"
 
 # The layers that can change what an agent does. A case says nothing about the rest of the tree.
 PROMPT_PATHS = ("agents/**", "guardrails/**", "skills/**", "contexts/**", "evals/**")
@@ -65,6 +66,11 @@ def emit_evals(spec: Spec, ctx: EmitContext) -> dict[str, Any] | None:
     triggers: dict[str, Any] = {"workflow_dispatch": {}}
     if config.on_prompt_change:
         triggers["pull_request"] = {"paths": [spec.repo_path(path) for path in PROMPT_PATHS]}
+    if config.baseline:
+        # Re-runs the suite against a prompt nobody changed. Those repeats are the only way the
+        # noise floor gets measured: a prompt evaluated once has no spread, and a comparison
+        # without a spread can report a number but not a direction.
+        triggers["schedule"] = [{"cron": config.baseline}]
 
     return {
         "name": "evals",
@@ -121,8 +127,13 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
     }
 
     grade_needs = [f"cases-{key}", f"run-{key}"]
+    report = f"outputs/evals/{key}.json"
+    # The compiled agent, hashed to fingerprint what this run scored. Any change to its body, a
+    # guardrail, a skill, a context, its model or its budget changes this file — which is exactly
+    # the condition under which two runs are no longer comparable.
+    prompt_file = f"{ctx.out_dir}/{workflow_filename(agent, ctx.profile if ctx.multi_profile else None)}"
     grade = f"pipeline-exec eval-grade --cases={cases_dir} --outputs={answers} --agent={agent}"
-    grade += f" --output=outputs/evals/{key}.json"
+    grade += f" --output={report}"
     if spec.manifest.evals.min_pass_rate is not None:
         grade += f" --min-pass-rate={spec.manifest.evals.min_pass_rate}"
     if spec.manifest.evals.min_score is not None:
@@ -163,6 +174,58 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
         grade_needs.append(f"judge-{key}")
         grade += f" --judgements={verdicts}"
 
+    history = spec.manifest.history
+    steps: list[dict[str, Any]] = [{"name": "Grade the answers", "id": "grade", "run": grade}]
+    if history.enabled:
+        on_default = "${{ github.event_name != 'pull_request' }}"
+        # Recorded only off a pull request. A candidate's scores must not become the baseline the
+        # next candidate is measured against — that would let a regression establish itself as
+        # normal simply by being merged.
+        steps.append(
+            {
+                "name": "Record this run as a baseline",
+                "if": on_default,
+                "run": grade + f" --history-dir={HISTORY_DIR} --prompt-file={prompt_file}",
+            }
+        )
+        # Published *before* the comparison, deliberately. The comparison can fail, and a run on the
+        # default branch is the prompt that now ships whether or not it scored worse — a ledger
+        # missing it would leave the next change comparing against something two versions old.
+        steps.append(
+            {
+                "name": "Publish the baseline",
+                "if": on_default,
+                "uses": ctx.pins.action("publish-history"),
+                "with": {"source": HISTORY_DIR, "branch": history.branch, "path": history.path},
+            }
+        )
+        steps.append(
+            {
+                "name": "Compare against the prompt this replaces",
+                "id": "compare",
+                "run": (
+                    f"pipeline-exec eval-compare --agent={agent} --report={report} "
+                    f"--prompt-file={prompt_file} --branch={history.branch} --path={history.path} "
+                    f"--output=outputs/evals/{key}-comparison.json"
+                ),
+            }
+        )
+        # The gate is a step of its own rather than a flag on the comparison, so that it is visible
+        # in the workflow — and so it fires only on a pull request. A scheduled baseline run
+        # compares against the previous prompt every night; failing it would report the same
+        # regression forever, and a red build nobody can clear is one people stop reading.
+        steps.append(
+            {
+                "name": "Refuse a change that broke a case",
+                "if": ("${{ github.event_name == 'pull_request' && steps.compare.outputs.regressed != '' }}"),
+                "run": (
+                    'echo "::error::these cases passed every baseline run of the previous prompt '
+                    'and fail with this change: ${{ steps.compare.outputs.regressed }}"\n'
+                    "exit 1"
+                ),
+            }
+        )
+
     jobs[f"grade-{key}"] = _exec_job(
         ctx,
         name=f"Grade {agent}",
@@ -170,7 +233,8 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
         # `!cancelled()` rather than success: a case whose agent run failed is a case the suite
         # should report on, not one that takes the report down with it.
         condition="${{ !cancelled() }}",
-        steps=[{"name": "Grade the answers", "id": "grade", "run": grade}],
+        steps=steps,
+        writes=history.enabled,
     )
     return jobs
 
@@ -183,8 +247,14 @@ def _exec_job(
     needs: list[str] | None = None,
     outputs: dict[str, str] | None = None,
     condition: str = "",
+    writes: bool = False,
 ) -> dict[str, Any]:
-    job: dict[str, Any] = {"name": name, "runs-on": ctx.runs_on, "permissions": {"contents": "read"}}
+    job: dict[str, Any] = {
+        "name": name,
+        "runs-on": ctx.runs_on,
+        # Writing a baseline is the only write any eval job makes, and only the grading job makes it.
+        "permissions": {"contents": "write" if writes else "read"},
+    }
     if needs:
         job["needs"] = needs
     if condition:

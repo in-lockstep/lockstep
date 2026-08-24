@@ -28,6 +28,10 @@ from typing import Any
 MIN_RUNS = 5
 
 
+class LedgerError(RuntimeError):
+    """The ledger could not be read, which is different from it being empty."""
+
+
 def read_ledger(directory: Path) -> list[dict[str, Any]]:
     """Every record under a directory of month files, oldest first.
 
@@ -244,3 +248,36 @@ class Report:
             "workflows": compare(by_workflow(before), by_workflow(after), min_runs=min_runs),
             "outliers": [o.as_dict() for o in outliers(after)],
         }
+
+
+def materialize_branch(branch: str, *, path: str = "history", depth: int = 50) -> Path:
+    """Put the ledger branch's files somewhere readable, from inside an ordinary checkout.
+
+    Not a clone of the working directory, which is the obvious thing and does not work: the checkout
+    a workflow runs in has fetched only the ref that triggered it, so the ledger branch is not in it
+    and cloning `.` fails with "remote branch not found". Fetching from `origin` reuses the
+    credentials the checkout already configured, and a detached worktree reads the files without
+    disturbing the tree the rest of the pipeline is standing in.
+    """
+    import subprocess
+    import tempfile
+
+    fetch = subprocess.run(
+        ["git", "fetch", "-q", f"--depth={depth}", "origin", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if fetch.returncode != 0:
+        raise LedgerError(f"could not fetch {branch!r}: {fetch.stderr.strip()[:200]}")
+
+    directory = Path(tempfile.mkdtemp()) / "ledger"
+    added = subprocess.run(
+        ["git", "worktree", "add", "-q", "--detach", str(directory), "FETCH_HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if added.returncode != 0:
+        raise LedgerError(f"could not read {branch!r}: {added.stderr.strip()[:200]}")
+    return directory / path

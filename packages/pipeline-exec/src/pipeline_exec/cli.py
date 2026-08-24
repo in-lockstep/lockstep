@@ -812,6 +812,18 @@ def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
     default=None,
     help="Directory of judge verdicts, one per case. Without it, rubrics stay undecided.",
 )
+@click.option(
+    "--history-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Record this run in the ledger, so a later change can be compared against it.",
+)
+@click.option(
+    "--prompt-file",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="The compiled agent workflow, hashed to fingerprint the prompt this run scored.",
+)
 def eval_grade(
     cases: Path,
     outputs: Path,
@@ -820,6 +832,8 @@ def eval_grade(
     min_pass_rate: float | None,
     min_score: float | None,
     judgements: Path | None,
+    history_dir: Path | None,
+    prompt_file: Path | None,
 ) -> None:
     """Grade an agent's answers against its eval cases.
 
@@ -863,6 +877,9 @@ def eval_grade(
     report = {"agent": agent, "summary": summary, "cases": results}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    if history_dir:
+        _record_eval(report, history_dir, prompt_file)
 
     for result in results:
         if not result["deterministic_passed"]:
@@ -1734,36 +1751,15 @@ def run_history(
     reported as *too few runs* rather than as a direction, because noise presented as a trend is
     worse than silence. Somebody acts on it.
     """
-    import tempfile
     from datetime import timedelta
 
-    from .history import Report, read_ledger
+    from .history import LedgerError, Report, materialize_branch, read_ledger
 
     if branch:
-        # Cloned here rather than checked out by the workflow: the ledger lives on a branch whose
-        # contents have nothing to do with the one this runs on, and checking it out would replace
-        # the working tree the rest of the pipeline is standing in.
-        directory = Path(tempfile.mkdtemp()) / "ledger"
-        cloned = subprocess.run(
-            [
-                "git",
-                "clone",
-                "-q",
-                "--depth",
-                "1",
-                "--branch",
-                branch,
-                "--single-branch",
-                ".",
-                str(directory),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if cloned.returncode != 0:
-            _fail(f"could not read the ledger branch {branch!r}: {cloned.stderr.strip()[:200]}")
-        ledger = directory / path
+        try:
+            ledger = materialize_branch(branch, path=path)
+        except LedgerError as error:
+            _fail(f"could not read the ledger branch {branch!r}: {error}")
     if ledger is None:
         _fail("pass --ledger or --branch")
     if not ledger.is_dir():
@@ -1791,3 +1787,122 @@ def run_history(
         click.echo("no baseline window: this is a snapshot, not a comparison")
     for entry in report["outliers"]:
         click.echo(f"  outlier: {entry['workflow']} run {entry['run_id']} — {entry['times_median']}x median")
+
+
+def _record_eval(report: dict[str, Any], history_dir: Path, prompt_file: Path | None) -> None:
+    """Append this suite run to the ledger, fingerprinted by the prompt it scored.
+
+    Without the fingerprint the record is unusable: a baseline is only a baseline if it ran the
+    prompt this one replaces, and a ledger that mixed several prompts together would call their
+    differences noise.
+    """
+    from datetime import UTC, datetime
+
+    from .improvement import eval_record, fingerprint
+    from .otel import history_file, history_line
+
+    prompt = fingerprint(prompt_file) if prompt_file else ""
+    if not prompt:
+        click.echo(
+            "not recording this run: no prompt fingerprint, so nothing could be compared to it",
+            err=True,
+        )
+        return
+
+    finished = datetime.now(UTC).isoformat(timespec="seconds")
+    entry = eval_record(
+        report,
+        prompt=prompt,
+        identity={
+            "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+            "run_url": (
+                f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+                f"{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/"
+                f"{os.environ.get('GITHUB_RUN_ID', '')}"
+            ),
+            "ref": os.environ.get("GITHUB_REF_NAME", ""),
+            "sha": os.environ.get("GITHUB_SHA", ""),
+            "finished": finished,
+        },
+    )
+    target = history_dir / Path(history_file(finished)).name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(history_line(entry))
+    click.echo(f"recorded {entry['agent']} at prompt {prompt} -> {target}")
+
+
+@main.command(name="eval-compare")
+@click.option("--agent", required=True, help="Whose suite this is.")
+@click.option("--report", required=True, type=click.Path(path_type=Path), help="This run's report.")
+@click.option("--prompt-file", required=True, type=click.Path(path_type=Path))
+@click.option("--ledger", type=click.Path(path_type=Path), help="Directory of recorded runs.")
+@click.option("--branch", default="", help="Read the ledger from this branch instead.")
+@click.option("--path", default="history", show_default=True, help="Directory within that branch.")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option(
+    "--fail-on-regression",
+    is_flag=True,
+    help="Exit non-zero when a case that passed every baseline run now fails.",
+)
+def eval_compare(
+    agent: str,
+    report: Path,
+    prompt_file: Path,
+    ledger: Path | None,
+    branch: str,
+    path: str,
+    output: Path,
+    fail_on_regression: bool,
+) -> None:
+    """Say whether a change to a prompt made the agent better, and how confidently.
+
+    The baseline is what the previous prompt scored — the default branch already ran it, so nothing
+    here pays to re-run an old prompt. The noise floor is the spread across those runs, which
+    differed by nothing except sampling, and a delta smaller than it is reported as noise rather
+    than as a direction.
+
+    A comparison that does not know its own noise floor is an opinion with arithmetic on it, so a
+    baseline too thin to measure one says so instead of reporting a verdict.
+    """
+    from .history import LedgerError, materialize_branch
+    from .improvement import Comparison, baseline_runs, eval_record, fingerprint, read_eval_records, render
+    from .improvement import load as load_report
+
+    prompt = fingerprint(prompt_file)
+    if not prompt:
+        _fail(f"no compiled agent at {prompt_file} — nothing to fingerprint")
+
+    directory = ledger
+    if branch:
+        try:
+            directory = materialize_branch(branch, path=path)
+        except LedgerError as error:
+            # A branch that does not exist yet is the first run rather than a failure: there is no
+            # baseline, which the comparison reports as such.
+            click.echo(f"no ledger on {branch!r} yet ({error})", err=True)
+            directory = None
+    if directory is None and ledger is None:
+        _fail("pass --ledger or --branch")
+
+    records = read_eval_records(directory, agent=agent) if directory and directory.is_dir() else []
+    candidate = eval_record(load_report(report), prompt=prompt, identity={})
+    comparison = Comparison(
+        agent=agent, candidate=candidate, runs=baseline_runs(records, candidate_prompt=prompt)
+    ).build()
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(comparison, indent=2) + "\n", encoding="utf-8")
+
+    rendered = render(comparison)
+    click.echo(rendered)
+    _summary(rendered)
+    _emit_output("verdict", comparison["verdict"])
+    _emit_output("regressed", ",".join(comparison["regressed"]))
+    _emit_output("noise_measured", "true" if comparison["baseline"]["noise_measured"] else "false")
+
+    if fail_on_regression and comparison["regressed"]:
+        _fail(
+            f"{len(comparison['regressed'])} case(s) that passed every baseline run now fail: "
+            + ", ".join(comparison["regressed"])
+        )
