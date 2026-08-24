@@ -37,6 +37,7 @@ permissions: read-all
 network:
   allowed:
   - defaults
+  - otel.acme.internal
 steps:
 - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
 post-steps:
@@ -44,6 +45,12 @@ post-steps:
   with:
     paths: ${{ inputs.output_path }}
 max-daily-ai-credits: 2000
+observability:
+  otlp:
+    endpoint:
+    - url: ${{ vars.OTEL_ENDPOINT }}
+      headers:
+        Authorization: ${{ secrets.OTEL_AUTHORIZATION }}
 safe-outputs:
   upload-artifact:
     allowed-paths:

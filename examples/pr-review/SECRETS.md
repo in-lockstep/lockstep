@@ -19,5 +19,15 @@ gh secret set ANTHROPIC_API_KEY
 
 ## Profile `repo` — environment `repo`
 
+### Secrets
+
+- `OTEL_AUTHORIZATION`
+
+### Variables
+
+- `OTEL_ENDPOINT`
+
 ```bash
+gh secret set OTEL_AUTHORIZATION --env repo
+gh variable set OTEL_ENDPOINT --env repo
 ```

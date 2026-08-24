@@ -454,6 +454,7 @@ def doctor(spec: Spec, root: Path) -> Report:
     _check_pins(pins, spec.capabilities_used(), spec.external_actions_used(), report)
     _check_inherits(spec, root, report)
     _check_missing_upstreams(spec, report)
+    _check_collector_reachable(spec, report)
     _check_runtime_compiler(spec, report)
     _check_engines(spec, report)
     _check_budgets(spec, report)
@@ -616,6 +617,47 @@ def _check_inherits(spec: Spec, root: Path, report: Report) -> None:
                 f"{alias!r} is inherited from {source} but is not pinned to a commit",
                 hint="run `lockstep pin` — an unpinned upstream can change what this pipeline runs "
                 "without anything in this repository changing",
+            )
+
+
+def _check_collector_reachable(spec: Spec, report: Report) -> None:
+    """Exporting to a collector an agent's firewall will drop.
+
+    An agent's egress is computed and closed. gh-aw opens the collector's host itself when the URL
+    is a literal it can read at compile time; when the URL is a `${NAME}` resolved at run time,
+    neither it nor this compiler can know the hostname — and the failure is silent, because an
+    exporter that cannot reach its collector does not fail the run that produced the telemetry.
+    """
+    config = spec.manifest.otel
+    if not config.to_endpoint or not config.endpoint:
+        return
+    location = spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml"
+    if not config.collector_host:
+        report.add(
+            Severity.WARNING,
+            "DOC024",
+            "otel.endpoint is resolved at run time, so nothing can open egress to the collector",
+            location=location,
+            hint="set `otel.host` to the collector's hostname. An agent's network policy is closed, "
+            "and telemetry it cannot reach is dropped without failing anything",
+        )
+        return
+    sealed = {fragment.name for fragment in spec.sealed_guardrails()}
+    for name, agent in sorted(spec.agents.items()):
+        reachable = set(agent.guardrails) | sealed
+        denied = any(
+            spec.guardrails[guardrail].enforce.network == "deny-all"
+            for guardrail in reachable
+            if guardrail in spec.guardrails
+        )
+        if denied:
+            report.add(
+                Severity.WARNING,
+                "DOC024",
+                f"agent {name!r} is under `deny-all` egress and cannot reach the collector",
+                location=agent.src.rel if agent.src else name,
+                hint="its spans will not be exported. That is the guardrail working — relax it for "
+                "this agent, or accept that this one reports through the run metrics only",
             )
 
 

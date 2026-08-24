@@ -17,6 +17,7 @@ from ..util.text import slug
 from .context import EmitContext
 from .fragments import PromptLayers, import_paths, inlined_guardrails
 from .mcp import emit_mcp_servers, secrets_used
+from .profiles import resolve_value
 
 # The framework's providers, mapped onto gh-aw engines.
 ENGINE_BY_PROVIDER = {
@@ -111,6 +112,42 @@ class AgentArtifact:
     tool_floor: dict[str, list[str]] = field(default_factory=dict)
 
 
+def _observability(spec: Spec, ctx: EmitContext) -> dict[str, Any]:
+    """Point gh-aw's own exporter at the collector this pipeline already named.
+
+    gh-aw emits the spans that actually describe an agent — model, tokens, finish reason, tool
+    calls, under the GenAI semantic conventions — and it does that natively once `observability.otlp`
+    is set. Nothing here could produce those from the outside.
+
+    So the compiler wires it rather than reimplementing it. A user cannot do this by hand: agents are
+    generated, and the frontmatter it would go in is overwritten on every compile. Configuring the
+    collector twice, once for the framework's metrics and once per agent for the spans, is exactly
+    the kind of thing that ends with half the telemetry silently going nowhere.
+
+    Setting it also has a side effect worth knowing: gh-aw adds the collector's host to the agent's
+    egress allow-list. An agent that could not reach the collector would export nothing, and a
+    pipeline whose network policy is computed would otherwise have to be told about it separately.
+    """
+    config = spec.manifest.otel
+    if not config.to_endpoint or not config.endpoint:
+        return {}
+
+    location = spec.manifest.src.rel if spec.manifest.src else "pipeline.yaml"
+    endpoint: dict[str, Any] = {"url": resolve_value(config.endpoint, ctx.profile, location=location)}
+    if config.headers:
+        endpoint["headers"] = {
+            name: resolve_value(value, ctx.profile, location=location)
+            for name, value in sorted(config.headers.items())
+        }
+    otlp: dict[str, Any] = {"endpoint": [endpoint]}
+    if config.service_name:
+        # A namespace rather than a service name: gh-aw names the service after the workflow, which
+        # is what keeps one agent's spans distinguishable from another's. Overwriting that with one
+        # name for the whole pipeline would collapse exactly the distinction worth having.
+        otlp["resource-attributes"] = {"service.namespace": config.service_name}
+    return {"otlp": otlp}
+
+
 def build_agent(
     agent: Agent,
     layers: PromptLayers,
@@ -137,6 +174,14 @@ def build_agent(
         call["secrets"] = {name: {"required": True} for name in secrets}
 
     network = [] if enforce.network == "deny-all" else ["defaults", *agent.github.network]
+    # The collector, if this pipeline exports to one. gh-aw allow-lists the host itself when the URL
+    # is a literal it can read at compile time — it cannot when the URL is a runtime expression, and
+    # the result is a firewall that drops the telemetry without failing anything. Added here so the
+    # policy says what it means either way. A `deny-all` guardrail still wins: a pipeline forbidden
+    # to reach the network does not get an exception carved for its own metrics.
+    host = spec.manifest.otel.collector_host
+    if network and spec.manifest.otel.to_endpoint and host and host not in network:
+        network.append(host)
 
     frontmatter: dict[str, Any] = {
         "description": agent.description or f"{agent.name} agent",
@@ -161,6 +206,10 @@ def build_agent(
     # command triggered four hundred times in an afternoon actually moves.
     if spec.manifest.per_agent_daily_ai_credits is not None:
         frontmatter["max-daily-ai-credits"] = spec.manifest.per_agent_daily_ai_credits
+
+    observability = _observability(spec, ctx)
+    if observability:
+        frontmatter["observability"] = observability
 
     if servers:
         frontmatter["mcp-servers"] = servers

@@ -139,6 +139,8 @@ def load_manifest(home: Path, root: Path) -> Manifest:
         otel=OtelConfig(
             export=str(otel_raw.get("export", "") or ""),
             endpoint=str(otel_raw.get("endpoint", "") or ""),
+            headers={str(k): str(v) for k, v in (otel_raw.get("headers") or {}).items()},
+            host=str(otel_raw.get("host", "") or ""),
             service_name=str(otel_raw.get("service-name", "") or ""),
             pricing={str(k): float(v) for k, v in (otel_raw.get("pricing") or {}).items()},
         ),

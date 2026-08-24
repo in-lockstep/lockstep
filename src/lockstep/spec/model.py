@@ -490,7 +490,17 @@ class OtelConfig:
     """
 
     export: str = ""  # "" (off) | "artifact" | "endpoint" | "both"
+    # The collector's **base** URL, per the OTLP convention for `OTEL_EXPORTER_OTLP_ENDPOINT`: each
+    # signal appends its own path. Two exporters read this — gh-aw's, for the agent spans, and the
+    # meter's, for the run metrics — and giving them a signal-specific URL would send one of them
+    # to the wrong place.
     endpoint: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    # The collector's hostname, for the egress allow-list. An agent's network policy is computed and
+    # closed, so a host nothing added is a host the firewall drops — silently, because an exporter
+    # that cannot reach its collector does not fail a run. Derived from `endpoint` when that is a
+    # literal URL; declared here when it is a `${NAME}` an organization would rather not inline.
+    host: str = ""
     service_name: str = ""
     pricing: dict[str, float] = field(default_factory=dict)
 
@@ -505,6 +515,17 @@ class OtelConfig:
     @property
     def to_endpoint(self) -> bool:
         return self.export in ("endpoint", "both")
+
+    @property
+    def collector_host(self) -> str:
+        """The host to open egress to, from the endpoint when it is a literal."""
+        if self.host:
+            return self.host
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.endpoint)
+        # A `${...}` endpoint parses to nothing useful, which is the case `host` exists for.
+        return parsed.hostname or ""
 
 
 @dataclass

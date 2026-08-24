@@ -61,6 +61,64 @@ unrecognised model family gets **no** `gen_ai.system` rather than a guessed one.
 
 ---
 
+## Two exporters, one collector
+
+gh-aw exports telemetry natively. Once `observability.otlp` is set on an agentic workflow it emits
+the spans that actually describe an agent — model, tokens, finish reason, tool calls — under the
+GenAI semantic conventions, and mirrors them to `otel.jsonl` in its `agent` artifact. Nothing here
+could produce those from the outside.
+
+So the compiler wires it rather than reimplementing it. Declaring `otel.endpoint` configures **both**
+exporters against the same collector:
+
+| | Emits | Covers |
+|---|---|---|
+| gh-aw, natively | spans | inside each agent: the model call, its tokens, its tools |
+| the metering job | metrics | the run: cost in dollars, outcomes and timings of *every* job |
+
+Neither is redundant. gh-aw sees inside one agent and cannot see the pipeline; the meter sees the
+pipeline and cannot see inside an agent. And gh-aw has no rate table, because your negotiated price
+is not something the substrate can know.
+
+**A user cannot wire the gh-aw half by hand.** Agents are generated: frontmatter added to one is
+overwritten on the next compile. Configuring a collector twice — once for the framework and once per
+agent — is how half of somebody's telemetry ends up going nowhere.
+
+`endpoint` is the collector's **base** URL, per the OTLP convention for
+`OTEL_EXPORTER_OTLP_ENDPOINT`. Each exporter appends its own signal path; a URL naming one signal
+would send the other exporter to the wrong place.
+
+### The host has to be allowed
+
+This is the part that fails silently, and it took a compiled lock file to notice.
+
+An agent's egress is computed and closed. gh-aw adds the collector's host to that allow-list itself
+— **but only when the URL is a literal it can read at compile time.** Point `endpoint` at a
+`${OTEL_ENDPOINT}` resolved from a repository variable, and the allow-list comes out as
+`["defaults"]`. The firewall then drops every span, and nothing fails: an exporter that cannot reach
+its collector does not fail the run that produced the telemetry.
+
+So `otel.host` declares it, and the compiler puts it in the agent's `network.allowed`:
+
+```yaml
+otel:
+  export: both
+  endpoint: ${OTEL_ENDPOINT}
+  host: otel.acme.internal
+  headers:
+    Authorization: ${OTEL_AUTHORIZATION}
+```
+
+`DOC024` warns when the endpoint is an expression and no host is declared. It also warns per agent
+when a guardrail enforces `deny-all` egress — that agent's spans will not be exported, which is the
+guardrail working rather than a bug, and worth being told about rather than discovering from an
+empty dashboard.
+
+A `deny-all` guardrail always wins. A pipeline forbidden the network does not get an exception
+carved out for its own metrics.
+
+---
+
 ## Wall clock is not the sum of a fan-out
 
 Twelve reviewers finishing in four minutes took four minutes. `lockstep.run.duration` is the wall
