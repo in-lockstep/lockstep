@@ -1,0 +1,28 @@
+# Who has to approve a change here.
+#
+# This file names owners. It does not require anything on its own — GitHub only asks a code owner
+# for review when a ruleset or branch protection on `main` has "Require review from Code Owners"
+# turned on, with "Dismiss stale approvals" and "Require branches to be up to date" alongside it.
+# Without that, every line below is documentation. The setting lives in repository settings and is
+# not something this repository can grant itself.
+
+# Everything, unless something more specific below claims it. The last matching pattern wins.
+*                           @tpouyer
+
+# The parts where a mistake is not a bug but a policy change.
+#
+# `enforce:` compiles to workflow permissions, egress allow-lists, tool deny-lists and the credit
+# ceilings — the half of a guardrail a model cannot talk its way past. `library/` ships the baseline
+# guardrail inlined into every agent in every pipeline. A change to either reaches every consumer of
+# every pipeline built on this framework, which is a different kind of review from a bug fix.
+/src/lockstep/library/      @tpouyer
+/src/lockstep/emit/agentic.py   @tpouyer
+/actions/                   @tpouyer
+
+# Generated, but generated is not the same as unreviewed: these are what actually runs.
+/.github/workflows/         @tpouyer
+/.lockstep/                 @tpouyer
+
+# Licensing and attribution.
+/LICENSE                    @tpouyer
+/NOTICE                     @tpouyer

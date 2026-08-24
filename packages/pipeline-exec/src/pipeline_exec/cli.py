@@ -598,6 +598,67 @@ def pr_feedback(pr: str, repo: str, output: Path, from_dir: Path | None, by_path
     click.echo(f"collected {feedback['count']} piece(s) of feedback -> {output}")
 
 
+@main.command(name="gh-issue-fetch")
+@click.option("--issue", required=True, help="Issue number, `#123`, or the issue's URL.")
+@click.option("--repo", envvar="GITHUB_REPOSITORY", default="")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--no-discussion", is_flag=True, help="Skip the comment thread.")
+@click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
+def gh_issue_fetch(
+    issue: str, repo: str, output: Path, no_discussion: bool, from_dir: Path | None
+) -> None:
+    """Fetch one GitHub issue and reduce it to what an implementing agent needs.
+
+    The counterpart to a tracker-specific fetcher, and simpler than one: acceptance criteria are a
+    task list or a heading, both of which GitHub renders itself, so nothing here has to guess which
+    custom field somebody put them in.
+    """
+    from .issues import reduce_issue
+
+    number = _issue_number(issue)
+    if from_dir:
+
+        def load(name: str, default: Any) -> Any:
+            path = from_dir / f"{name}.json"
+            return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else default
+
+        raw, comments = load("issue", {}), load("comments", [])
+        repo = repo or str(raw.get("repository", ""))
+    else:
+        if not repo:
+            _fail("--repo is required (or set GITHUB_REPOSITORY)")
+        raw = _gh_json(f"repos/{repo}/issues/{number}")
+        if raw.get("pull_request"):
+            # The issues endpoint answers for pull requests too, and returns something that looks
+            # like an issue. Implementing a pull request as if it were an issue is not a thing.
+            _fail(f"{repo}#{number} is a pull request, not an issue")
+        comments = [] if no_discussion else _gh_json(f"repos/{repo}/issues/{number}/comments", "--paginate")
+
+    document = reduce_issue(raw, [] if no_discussion else comments, repo=repo)
+    if not document["number"]:
+        _fail(f"no issue found for {issue!r}")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+    _emit_output("number", str(document["number"]))
+    _emit_output("state", document["state"])
+    _emit_output("criteria", str(len(document["acceptance_criteria"])))
+    click.echo(
+        f"fetched {document['key']} \u2014 {len(document['acceptance_criteria'])} criteria, "
+        f"{len(document['discussion'])} comment(s) -> {output}"
+    )
+
+
+def _issue_number(issue: str) -> str:
+    """`123`, `#123`, `owner/repo#123` and a browser URL all name the same issue."""
+    text = issue.strip().rstrip("/")
+    tail = text.rsplit("/", 1)[-1].rsplit("#", 1)[-1]
+    if not tail.isdigit():
+        _fail(f"cannot read an issue number out of {issue!r}")
+    return tail
+
+
 @main.command(name="parse-command")
 @click.option("--command", required=True, help="The slash command to look for, e.g. /implement.")
 @click.option("--body", default="", help="The comment body.")

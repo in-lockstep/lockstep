@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Compiles pipeline-framework definitions into GitHub Agentic Workflows"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",

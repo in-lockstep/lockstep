@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Deterministic executors for compiled pipeline workflows"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 dependencies = [
     "click>=8.1",
     "httpx>=0.27",
@@ -25,5 +27,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pipeline_exec"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/pipeline_exec/reports/templates" = "pipeline_exec/reports/templates"
+# No `force-include` for the report templates: they live inside the package directory, so hatchling
+# already ships them, and naming them again added the same file to the archive twice — which is a
+# hard build error, not a warning. This package did not build at all until that came out.
