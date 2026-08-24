@@ -47,10 +47,22 @@ def test_the_pipeline_lives_in_the_lockstep_directory(repo_root):
     assert spec.in_lockstep_dir
 
 
+# This repository adds `context:codebase` to a profile, which reaches the four inherited review
+# lenses and makes each of them an agent its upstream never evaluated. DOC025 says so, and it is
+# right: nothing here verifies that teaching the lenses this codebase left them still able to find
+# what their own cases plant. Closing it means `evals.inherited` and a judge, which costs credits per
+# pull request — a decision, not an oversight.
+#
+# Named rather than tolerated, so that any *other* finding still fails this.
+CUSTOMIZED_AND_UNVERIFIED = "DOC025"
+
+
 def test_the_spec_and_the_target_both_pass_their_own_checks(repo_root):
     spec = load_spec(repo_root)
     assert lint(spec).findings == []
-    assert doctor(spec, repo_root).findings == []
+    report = doctor(spec, repo_root)
+    assert {finding.code for finding in report.findings} == {CUSTOMIZED_AND_UNVERIFIED}
+    assert report.errors == []
 
 
 # --- built for a compiler that can move -------------------------------------
@@ -85,10 +97,31 @@ def test_the_gate_names_nothing_unpublished(repo_root):
     assert "0000000000000000" not in text
 
 
-def test_the_only_workflows_generated_here_are_the_gate_and_its_marker(repo_root):
-    """A pipeline with no steps compiles to its own CI and nothing else — which is the point."""
-    workflows = {p for p in compile_spec(repo_root).files if p.startswith(".github/workflows/")}
-    assert workflows == {CI, ".github/workflows/.gitattributes"}
+# Hand-written, permanently. `ci.yml` is the gate no compiler change can rewrite, and the three
+# release workflows publish the artifacts a compiler change would otherwise be able to republish.
+HAND_WRITTEN = {
+    ".github/workflows/ci.yml",
+    ".github/workflows/release-actions.yml",
+    ".github/workflows/release-exec-image.yml",
+    ".github/workflows/release-python.yml",
+}
+
+
+def test_the_compiler_generates_the_gate_and_the_review_and_nothing_hand_written(repo_root):
+    """This used to assert the gate and nothing else, because the pipeline had no steps.
+
+    It has steps now — the framework reviews its own pull requests with the pipeline it ships — so
+    the property worth pinning is no longer "nothing else generated" but **which files the compiler
+    is allowed to own**. A compile that started emitting `ci.yml` would be a compile that can
+    rewrite the one workflow checking it.
+    """
+    generated = {p for p in compile_spec(repo_root).files if p.startswith(".github/workflows/")}
+    assert generated & HAND_WRITTEN == set()
+    assert CI in generated
+    assert ".github/workflows/review-review.yml" in generated
+    # One agentic workflow per lens, and the prompt layers they import.
+    assert len({p for p in generated if p.startswith(".github/workflows/aw-review-")}) == 4
+    assert ".github/workflows/shared/context-codebase.md" in generated
 
 
 # --- and it does not disturb the workflow that gates the compiler ------------
@@ -107,11 +140,26 @@ def test_the_hand_written_workflow_survives_a_compile(repo_root):
     assert ".github/workflows/ci.yml" not in compile_spec(repo_root).files
 
 
-def test_the_surface_calls_an_unused_capability_unused(repo_root):
-    """`UNPINNED` on a capability the output never names reads as a pipeline that is not ready."""
+def test_the_surface_calls_an_unused_capability_unused(tmp_path):
+    """`UNPINNED` on a capability the output never names reads as a pipeline that is not ready.
+
+    Written against this repository until it grew a pipeline with steps, at which point every
+    capability it declares became one the output really names. The behaviour is unchanged and worth
+    keeping — a pipeline whose work is all compiler steps pulls no container and calls no composite
+    action — so it gets a spec of its own rather than a repository that will keep evolving out from
+    under it.
+    """
     from lockstep.emit.show_surface import render
 
-    surface = render(repo_root)
+    # No commands at all: the drift gate is generated for the spec itself, so this compiles to one
+    # workflow that installs the compiler and runs it. Exactly what this repository was.
+    (tmp_path / "pipeline.yaml").write_text(
+        "spec: 1\nname: stepless\n"
+        "capabilities:\n  compiler: in-lockstep>=0.1,<1.0\n"
+        "targets:\n  github-agentic:\n    out: .github/workflows\n",
+        encoding="utf-8",
+    )
+    surface = render(tmp_path)
     assert "- capability actions: `(unused)`" in surface
     assert "UNPINNED" not in surface
 

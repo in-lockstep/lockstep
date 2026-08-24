@@ -4,6 +4,19 @@
 
 Every secret and variable this pipeline needs, by environment.
 
+## Engine credentials
+
+Set once for the repository, not per profile. These are read by the workflows
+`gh aw compile` produces — nothing this compiler emits references them, which is exactly
+why they are listed here rather than left to be discovered when a run fails to
+authenticate.
+
+- `ANTHROPIC_API_KEY` — engine `claude` (review/intent-reviewer, review/performance-reviewer, review/security-reviewer, review/tests-reviewer)
+
+```bash
+gh secret set ANTHROPIC_API_KEY
+```
+
 ## Profile `repo` — environment `(repository level)`
 
 ```bash

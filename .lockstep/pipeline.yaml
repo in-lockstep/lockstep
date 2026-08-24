@@ -10,11 +10,37 @@ name: lockstep
 # with the previous pull request's compiler and pass — and `watch` puts the compiler's own source on
 # the trigger, because a change to the emitter is the change most worth recompiling.
 #
-# No `actions`, `exec` or `exec-image`: this pipeline has no steps, so its output names no composite
-# action and pulls no container. When it grows one, those get declared and pinned like anywhere else.
+# The other three are declared now because this repository grew a pipeline with steps. `/review`
+# fetches a diff and works out what is still due through builtins, which is a job with a
+# `container:` and composite actions around it — so the placeholders that made this impossible are
+# the published `actions-v0.1.0` and `exec-v0.1.0`.
 
 capabilities:
   compiler: "."
+  actions: github.com/in-lockstep/lockstep/actions@actions-v0.1.0
+  exec: in-lockstep-exec==0.1.0
+  exec-image: ghcr.io/in-lockstep/pipeline-exec
+  gh-aw: v0.86.2
+
+# The framework reviewing its own pull requests with the pipeline it ships.
+#
+# Inherited rather than written, deliberately: a bespoke review pipeline here would be the one
+# consumers cannot have, and its lenses would stop being the ones under eval. What this repository
+# adds is the half a shipped pipeline is forbidden to carry — `contexts/codebase.md`, which is
+# knowledge of a codebase the framework has never seen.
+inherits:
+  review: lockstep:review
+
+# A full `/review` runs four lenses at their published defaults — 90 + 50 + 50 + 40 — so 300 is the
+# run with every lens requested plus room for one being tuned up. Enforced by the substrate before a
+# run starts, not measured afterwards.
+#
+# The daily ceiling is per agent and exists for the failure this cannot otherwise survive: a lens
+# stuck in a retry loop, or a comment trigger that fires on its own output. Roughly five full days'
+# worth of reviews for the most expensive lens, at the volume this repository actually sees.
+budgets:
+  per_run_ai_credits: 300
+  per_agent_daily_ai_credits: 500
 
 targets:
   github-agentic:
