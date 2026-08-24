@@ -482,8 +482,22 @@ class Spec:
         return self.root / LOCKSTEP_DIR if self.in_lockstep_dir else self.root
 
     def sealed_guardrails(self) -> list[Fragment]:
-        """Inherited standards, in alias order. Every agent gets these whether it asks or not."""
-        return [f for _, f in sorted(self.guardrails.items()) if f.sealed]
+        """Inherited standards, in the order this repository declares its upstreams.
+
+        Every agent gets these whether it asks or not, so the order they arrive in is the order they
+        are inlined in — and position is a property that carries meaning: a later instruction reads
+        as a refinement of an earlier one. Sorting the aliases alphabetically made that meaning
+        accidental, decided by a name. `inherits:` is a list the author writes, so it is the list
+        that decides: declare the broadest standard first and it stays first.
+
+        Within one upstream the order is by name, because a directory of guardrails has no declared
+        order and only the repository publishing them can rename a file.
+        """
+        order = {alias: index for index, alias in enumerate(self.manifest.inherits)}
+        return sorted(
+            (fragment for fragment in self.guardrails.values() if fragment.sealed),
+            key=lambda fragment: (order.get(fragment.inherited_from, len(order)), fragment.name),
+        )
 
     def repo_path(self, relative: str) -> str:
         """A definition-relative path, expressed from the repository root.

@@ -188,10 +188,23 @@ built to merge:
 | **Egress** | `deny-all` is sticky. Once either upstream closes egress, the other cannot reopen it. |
 | **Bands** | Belong to the agent that publishes them, so they never interact. |
 
-The one thing that *is* decided by alias order is the order sealed guardrails are inlined in, which
-sorts alphabetically. That matters for prose precedence — a later instruction reads as a refinement
-of an earlier one — and not for anything enforced. Name the broader standard's alias so it sorts
-first if you care; `org` before `team` happens to.
+The one thing alias order *does* decide is the order sealed guardrails are inlined in — and that is
+decided by the order you declare them, not alphabetically:
+
+```yaml
+inherits:
+  org:  github.com/acme/org-standards@v3.2.0      # inlined first
+  team: github.com/billing-team/standards@v1.4.0  # then this
+```
+
+Position carries meaning in a prompt: a later instruction reads as a refinement of an earlier one,
+which is why guardrails go ahead of the agent's own body at all. So declare the broadest standard
+first. Nothing enforced depends on this — ceilings, denied tools and egress all merge
+order-independently — but the prose does, and it should be a decision rather than a consequence of
+what somebody named an upstream.
+
+Two positions are not yours to choose. The framework's shipped baseline is always first, because a
+floor a repository could push below itself is not a floor. Local guardrails are always last.
 
 ### The failure mode to know about
 

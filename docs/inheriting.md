@@ -252,6 +252,12 @@ baseline  →  standards/data-handling  →  review/house  →  house-style
 
 Each may add to the one before it. None may weaken it.
 
+The middle of that line is **the order this repository declares its upstreams in**, not alphabetical:
+`inherits:` is a list somebody writes, so it is the list that decides which standard a later one
+refines. Declare the broadest first. The two ends are not yours to move — the framework's baseline is
+always first, because a floor a repository could push below itself is not a floor, and local
+guardrails are always last.
+
 ### Namespacing
 
 Everything inherited is namespaced by its alias, and **a definition resolves its references inside

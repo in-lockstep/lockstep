@@ -153,7 +153,9 @@ def load_spec(root: Path) -> Spec:
 
     # Inherited definitions load first so a local file of the same name is a collision the loader can
     # see and refuse, rather than an overwrite whose direction depends on dictionary order.
-    for alias in sorted(manifest.inherits):
+    # Declaration order, not alphabetical: `inherits:` is the authority order for the standards
+    # every agent receives, and a repository should be able to decide it rather than discover it.
+    for alias in manifest.inherits:
         _load_definitions(spec, home / INHERITED_DIR / alias, alias=alias, home=home)
     _load_definitions(spec, home, alias="", home=home)
 

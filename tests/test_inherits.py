@@ -117,6 +117,50 @@ def test_authority_runs_framework_then_organization_then_repository(consumer):
     ]
 
 
+def test_sealed_standards_arrive_in_the_order_the_repository_declares_them(consumer):
+    """Position carries meaning — a later instruction reads as a refinement of an earlier one.
+
+    So the author decides it. Sorting the aliases made the authority order a consequence of what
+    somebody named an upstream, which is the kind of thing that is right by luck until a rename.
+    """
+    extra = consumer / ".pipeline/inherited/review/guardrails/review-standard.md"
+    extra.write_text("---\nname: review-standard\nsealed: true\n---\n\nA review rule.\n", encoding="utf-8")
+    assert guardrail_order(consumer)[:3] == [
+        "baseline",
+        "standards/data-handling",
+        "review/review-standard",
+    ]
+
+    edit(
+        consumer,
+        "pipeline.yaml",
+        {
+            "  standards: ../upstream-standards\n  review: ../upstream-review": (
+                "  review: ../upstream-review\n  standards: ../upstream-standards"
+            )
+        },
+    )
+    assert guardrail_order(consumer)[:3] == [
+        "baseline",
+        "review/review-standard",
+        "standards/data-handling",
+    ]
+
+
+def test_the_frameworks_baseline_stays_first_whatever_a_repository_declares(consumer):
+    """The one position no repository chooses: a floor a consumer could push down is not a floor."""
+    edit(
+        consumer,
+        "pipeline.yaml",
+        {
+            "  standards: ../upstream-standards\n  review: ../upstream-review": (
+                "  review: ../upstream-review\n  standards: ../upstream-standards"
+            )
+        },
+    )
+    assert guardrail_order(consumer)[0] == "baseline"
+
+
 def test_a_profile_cannot_exclude_a_sealed_standard(consumer):
     sealed = "contexts: [repo]\nexclude_guardrails: [standards/data-handling]"
     edit(consumer, "profiles/repo.md", {"contexts: [repo]": sealed})
