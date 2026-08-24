@@ -518,18 +518,26 @@ Two are now closed — `docs/evals.md` describes both:
 | **Budgets in money** | `per_run_ai_credits` and `max-ai-credits` are gh-aw credits. | Their eval cases cap `max_cost_usd: 2.00`. Credits are the substrate's unit; dollars are the unit the person approving the budget uses, and the translation is not something a compiler should leave to the reader. |
 | **Run history, transcripts, replay** | Nothing is retained. A run's reasoning is gone when the job log rotates. | They ship `analyze-transcript` and `replay-session` skills, a metrics repository, and an independent audit layer over their own review agent's performance. This is the operational half of the 2am story, and it is also the only way to tell whether a prompt change helped. |
 | **A retro loop** | Nothing carries a run's outcome back to the spec. `collect-patterns` is deferred below with no caller. | Their sixth agent analyses a completed workflow — timings, iterations, patterns — and files improvement proposals. A framework whose thesis is that prompts are reviewable artifacts should be able to say which of them are working. |
-| **More than one forge** | The CLI hard-refuses every target but `github-agentic`, at three call sites. | They abstract the forge (ADR 0005) and support GitHub, GitLab and Forgejo. The round-trip eval item below is the small version of this; the honest version is that "GitHub-only" is a scope choice that should be stated as one rather than discovered. |
 | **A zero-authoring path** | `lockstep init` scaffolds one pipeline that an author then finishes. | They install a GitHub App, enroll a repository, and six agents start working. That is the difference between a framework and a product, and it is the decisive gap for the smallest adopters — the ones with no platform team, who are also the ones most likely to try it. |
 
-Two things they have that are deliberately **not** on this list. Work prioritization by RICE scoring is
-a pipeline somebody could build with this framework, not a capability the framework lacks. And a fixed
+Three things they have that are deliberately **not** on this list. Work prioritization by RICE scoring
+is a pipeline somebody could build with this framework, not a capability the framework lacks. A fixed
 set of six agents is the opposite of what this is for.
+
+And **more than one forge**. They abstract the forge and support GitHub, GitLab and Forgejo; this
+compiles to GitHub Agentic Workflows and to nothing else. That is a scope choice rather than an
+omission, so it is stated here rather than left to be discovered: the CLI hard-refuses every target
+but `github-agentic` at three call sites, and it is meant to. Much of what this framework is *for*
+lives in the substrate — gh-aw's engine contract, the `permissions:`/`secrets:`/egress model, safe
+outputs, credit budgets — and an abstraction over three forges would have to compile to the
+intersection of what they can all enforce. The enforcement floor is the product; a portable version
+of it would be a weaker one.
 
 | Gap | Why it is not built |
 |---|---|
 | Transitive inheritance | An import that imports is a package manager. A consumer lists every upstream directly — fan-in is supported and documented in `docs/sharing.md`; only following an upstream's own `inherits:` is refused. |
 | A `/review` on this repository's own pull requests | Needs the first `actions-v*` and `exec-v*` tags pushed. The lenses are designed — `docs/self-hosting.md` names them. |
-| Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. See also the multi-forge row above. |
+| Round-trip evals across backends | Needs `pipeline-framework`, which this repo deliberately does not depend on. The conformance suite proves the compiled graph behaves as specified; this would prove both backends behave alike. Two runtimes for one spec, not two forges — the target stays GitHub-only. |
 | Deleting the framework's copy of the executors | A change to a repository with substantial uncommitted work in it. |
 | The fleet dashboard | Needs real consumer repositories to report on. |
 | Per-command agent variants | An agent resolving to different prompt layers in different commands is refused rather than emitted as variants. |
