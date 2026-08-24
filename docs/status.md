@@ -498,10 +498,23 @@ pipeline built here *can express*, and every one of them is something they demon
 Listed separately from the table below because the provenance matters: these were not derived from
 this design, and the fact that somebody needed them in production is the argument for each.
 
+Two are now closed — `docs/evals.md` describes both:
+
+- **Eval cases with a fixture repository.** A case names a `fixture`, and the tree is laid down in
+  its own directory before the agent runs, with the path written into the input as `repo`. The
+  worked example in `examples/pr-review` is the shape their strongest case has: the diff adds a
+  query parameter, and whether that is a finding depends on a file the diff never touches. Its
+  deterministic half asserts that the review names that file, which a patch-only reviewer cannot
+  do by luck.
+- **Graded evals, not pass/fail.** A rubric may carry `levels` saying what a 5 requires versus a 3,
+  and a `min` the case has to reach. The levels travel to the judge, because a judge inventing the
+  scale on each call produces numbers that cannot be compared between runs. `evals.min-score` gates
+  the suite on the *mean*, which is the regression a pass rate cannot see: every case clearing its
+  own floor while the suite slides from 4.8 to 4.1. Comparing this run to last month's is the part
+  still missing, and it is the run-history row below.
+
 | Gap | What is missing here | Why it matters |
 |---|---|---|
-| **Eval cases with a fixture repository** | A case carries `input`. An agent that must read code to answer is given no code to read. | Their triage cases carry `input.yaml` **and a `repo/` tree**, with hooks that create an ephemeral repository per case and tear it down after. Their strongest case turns on the agent noticing that a regex contradicts the issue that reports it — which is unanswerable without the source. |
-| **Graded evals, not pass/fail** | `eval-grade` answers `passed: true|false`. | Their rubrics specify what a **5** requires versus a **3**. Prompt work is regression-prone in degrees, and a binary gate cannot show an agent getting worse while still passing. |
 | **Budgets in money** | `per_run_ai_credits` and `max-ai-credits` are gh-aw credits. | Their eval cases cap `max_cost_usd: 2.00`. Credits are the substrate's unit; dollars are the unit the person approving the budget uses, and the translation is not something a compiler should leave to the reader. |
 | **Run history, transcripts, replay** | Nothing is retained. A run's reasoning is gone when the job log rotates. | They ship `analyze-transcript` and `replay-session` skills, a metrics repository, and an independent audit layer over their own review agent's performance. This is the operational half of the 2am story, and it is also the only way to tell whether a prompt change helped. |
 | **A retro loop** | Nothing carries a run's outcome back to the spec. `collect-patterns` is deferred below with no caller. | Their sixth agent analyses a completed workflow — timings, iterations, patterns — and files improvement proposals. A framework whose thesis is that prompts are reviewable artifacts should be able to say which of them are working. |

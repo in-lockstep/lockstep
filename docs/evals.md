@@ -57,6 +57,105 @@ it, and `LNT008` refuses it.
 
 ---
 
+## A rubric can ask for a score
+
+Prompt work does not degrade all at once. An agent that used to name the exploit and now only
+notices the unvalidated input is worse, and a rubric that answers *passed* reports both as green.
+
+So a rubric may be prose, or a scale:
+
+```json
+"rubric": {
+  "criteria": "Follows the new query parameter out of the diff and into the code it reaches.",
+  "levels": {
+    "5": "Traces `format` into export_report, names the join in src/reports/export.py, and says an attacker reads any file back in the response",
+    "3": "Says the parameter is unvalidated and reaches a file read, without following it or saying what an attacker gets",
+    "1": "Reports nothing, or only that input should be validated"
+  },
+  "min": 4
+}
+```
+
+The scale is whatever the levels say it is — two levels or ten, 1-5 or 0-10. Three rules, all of
+them there because a number nobody can compare across runs is worth no more than a boolean:
+
+- **The levels are written down, and they travel to the judge.** A judge told only *"score this out
+  of 5"* invents the scale on every call, and two runs of the same suite are then not comparable —
+  which was the entire reason for scoring instead of deciding.
+- **`min` is required.** It is the score this case has to reach. Without one the grader would be
+  inventing the threshold it reports against.
+- **A level says what earns it.** `"3": "okay"` is prose pretending to be a scale.
+
+`min` decides the case; the *mean* decides the suite:
+
+```yaml
+evals:
+  judge: eval-judge
+  min-score: 4.0
+```
+
+That is the gate a pass rate cannot express. Every case can clear its own `min` while the suite
+slides from 4.8 to 4.1, and `--min-pass-rate` reports 100% throughout. The grade report carries the
+distribution as well as the mean, because four 5s and a 1 average the same as five 4.2s and are a
+different agent:
+
+```json
+{ "pass_rate": 1.0, "mean_score": 4.2, "score_counts": {"1": 1, "5": 4}, "scores": {…} }
+```
+
+A floor set on a suite where nothing was scored decides nothing, and `eval-grade` says so rather
+than reporting a pass the floor had no part in.
+
+**Comparing this run to last month's is not built yet.** The scores are recorded, the mean is
+gated, and the run-over-run history that would turn "4.2" into "4.2, down from 4.8" waits on run
+history — `docs/status.md` tracks it.
+
+---
+
+## A case can carry a repository
+
+A case carries `input`. An agent asked to review code was therefore being handed a JSON object and
+asked to reason about a patch fragment — which tests its ability to reason about patch fragments.
+
+A case can name a fixture instead:
+
+```
+evals/security-reviewer/
+  cases/format-from-the-query.json      "fixture": "format-from-the-query"
+  fixtures/format-from-the-query/
+    src/repo.py
+    src/reports/routes.py               ← the file the diff touches
+    src/reports/export.py               ← the file that makes it a vulnerability
+```
+
+Before the agent runs, that tree is copied to its own directory and the path is written into the
+input the agent is handed, as `repo`. **A name, not a path**: a case that could write `../../..`
+would be a way to hand an agent the repository running the eval. Its own directory per case, because
+two cases sharing one checkout would let the first case's run change what the second one sees, and
+from scratch each time, because a file left over from an earlier run is a fixture nobody wrote.
+
+The example above is the shape worth copying. The diff adds a `?format=` query parameter and passes
+it along; whether that is a finding depends entirely on `export.py`, which the diff never touches.
+Its deterministic half is one line:
+
+```json
+"contains": ["src/reports/export.py"]
+```
+
+A review that names a file it was never shown read the repository. A patch-only reviewer cannot pass
+that by luck.
+
+**The agent has to be told this is how it works.** In a real run the checkout is at the workspace
+root and `repo` is `"."`; in an eval it is somewhere under `outputs/`. An agent that read its working
+directory instead would review whatever repository the eval suite happened to be running in — so the
+pipeline that feeds it in production sets `repo` too, and the eval sends the shape production sends.
+`examples/pr-review` does both.
+
+`LNT009` refuses a fixture that is not there, one that is empty, a name that is a path, and a case
+that sets `input.repo` itself.
+
+---
+
 ## Why `contains` searches everything
 
 An agent may legitimately put a file path in a nested finding, in an array, or in a sentence. A case
@@ -102,11 +201,12 @@ pipeline-exec eval-grade \
   --outputs=outputs/evals/security-reviewer \
   --output=outputs/evals/security-reviewer.json \
   --agent=security-reviewer \
-  --min-pass-rate=0.9
+  --min-pass-rate=0.9 \
+  --min-score=4.0
 ```
 
-It publishes `passed`, `pass_rate` and `pending_rubric` as step outputs, so a later step can gate on
-them.
+It publishes `passed`, `pass_rate`, `pending_rubric` and `mean_score` as step outputs, so a later
+step can gate on them.
 
 What produces `--outputs` is the agent, and that is what `evals.yml` is for.
 
@@ -118,7 +218,7 @@ What produces `--outputs` is the agent, and that is what `evals.yml` is for.
 cases. The shape is deliberately the ordinary one:
 
 ```
-cases-<agent>   expand the case files into agent inputs, and list them
+cases-<agent>   expand the cases into agent inputs and fixture trees, and list them
 run-<agent>     the agent itself, once per case, as a matrix
 prep-<agent>    pair each rubric with the answer it is about        (only with a judge)
 judge-<agent>   judge those pairs, once per rubric                  (only with a judge)
@@ -156,9 +256,14 @@ deterministic half still runs and rubrics stay undecided, which is the honest an
 missing one. A judge naming an agent that does not exist is ignored rather than compiled into a job
 calling a workflow nobody generated.
 
-The judge reads `{case, rubric, output}` and answers `{"passed": bool, "reason": str}`. A verdict
-that cannot be read is **not** a pass: an agent that answered in an unexpected shape has not judged
-anything, and treating that as approval is how a suite starts reporting green for the wrong reason.
+The judge reads `{case, rubric, scored, output}` and answers `{"passed": bool, "reason": str}` — or,
+for a scored rubric, reads the `levels`, `scale` and `min_score` as well and answers
+`{"score": int, "reason": str}`.
+
+A verdict that cannot be read is **not** a pass: an agent that answered in an unexpected shape has
+not judged anything, and treating that as approval is how a suite starts reporting green for the
+wrong reason. That covers a boolean answer to a scored rubric — `true` is an `int` in Python and
+would otherwise become a silent 1 — and a score outside the scale it was given.
 
 Only cases that carry a rubric *and* produced an answer reach the judge. A case with no answer has
 already failed for that reason, and judging it would spend a model call to be told so again.
@@ -187,7 +292,11 @@ lint accepts and the grader ignores would be an expectation that passes review a
 - **LNT001** — an agent with no cases at all.
 - **LNT007** — a case that is not valid JSON, or has no `input`.
 - **LNT008** — a case with an unknown expectation, or one that asserts nothing. An unrecognised key
-  is not a stricter case; it is one that never runs.
+  is not a stricter case; it is one that never runs. Also a rubric a judge could not apply the same
+  way twice: no levels, one level, a level that says nothing about what earns it, or a `min` outside
+  the scale.
+- **LNT009** — a fixture that is not there, is empty, or is written as a path rather than a name;
+  and a case that sets `input.repo`, which is where the fixture's path goes.
 
-All three are errors. The migration that introduced them found two cases in `examples/httpbin` that
+All four are errors. The migration that introduced them found two cases in `examples/httpbin` that
 were asserting exact field values through keys nothing read — which is how `equals` came to exist.

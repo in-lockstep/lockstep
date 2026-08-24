@@ -32,11 +32,13 @@ def triggers(root):
     return workflow.get("on") or workflow.get(True)
 
 
-def add_judge(root, agent, *, min_pass_rate=None):
+def add_judge(root, agent, *, min_pass_rate=None, min_score=None):
     manifest = root / "pipeline.yaml"
     block = f"\nevals:\n  judge: {agent}\n"
     if min_pass_rate is not None:
         block += f"  min-pass-rate: {min_pass_rate}\n"
+    if min_score is not None:
+        block += f"  min-score: {min_score}\n"
     manifest.write_text(manifest.read_text() + block, encoding="utf-8")
 
 
@@ -142,6 +144,33 @@ def test_a_judge_naming_an_agent_that_does_not_exist_is_ignored(basic_root):
 def test_a_minimum_pass_rate_reaches_the_grader(basic_root):
     add_judge(basic_root, AGENT, min_pass_rate=0.9)
     assert "--min-pass-rate=0.9" in _grade_command(basic_root)
+
+
+def test_a_score_floor_reaches_the_grader(basic_root):
+    """The gate a pass rate cannot express: everything passing, all of it answered less well."""
+    add_judge(basic_root, AGENT, min_score=4)
+    assert "--min-score=4.0" in _grade_command(basic_root)
+
+
+def test_no_score_floor_unless_one_is_declared(basic_spec_dir):
+    assert "--min-score" not in _grade_command(basic_spec_dir)
+
+
+def test_every_case_gets_somewhere_to_put_a_fixture(basic_spec_dir):
+    """A case with a tree of source needs it laid down before the agent job starts."""
+    job = suite(basic_spec_dir)["jobs"][f"cases-{AGENT}"]
+    command = " ".join(step.get("run", "") for step in job["steps"])
+    assert f"--repo-dir=outputs/evals/{AGENT}/repos" in command
+
+
+def test_a_fixture_does_not_land_where_the_inputs_or_answers_go(basic_spec_dir):
+    """One directory per purpose: a checkout written over an answer is a case grading itself."""
+    jobs = suite(basic_spec_dir)["jobs"]
+    cases = " ".join(step.get("run", "") for step in jobs[f"cases-{AGENT}"]["steps"])
+    repos = [word for word in cases.split() if word.startswith("--repo-dir=")][0]
+    inputs = [word for word in cases.split() if word.startswith("--output-dir=")][0]
+    assert repos.split("=", 1)[1] != inputs.split("=", 1)[1]
+    assert repos.split("=", 1)[1] not in json.dumps(jobs[f"run-{AGENT}"]["with"])
 
 
 def _grade_command(root):

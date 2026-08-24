@@ -337,3 +337,38 @@ def test_the_expectations_lint_knows_are_the_ones_the_grader_applies():
 
     assert set(compiler_keys) == set(runtime_keys)
 
+
+def test_the_rubric_keys_lint_knows_are_the_ones_the_grader_reads():
+    """The same two-copies problem one level down.
+
+    A scored rubric is validated by the compiler and applied by the runtime. A key lint accepts and
+    the grader ignores is a threshold that passes review and never gates anything.
+    """
+    from pipeline_exec.evals import RUBRIC_KEYS as runtime_keys
+
+    from lockstep.checks import RUBRIC_KEYS as compiler_keys
+
+    assert set(compiler_keys) == set(runtime_keys)
+
+
+def test_the_key_a_fixture_path_is_written_into_is_the_one_lint_reserves(tmp_path):
+    """Lint refuses a case that sets it; the runtime writes it. Two names would let both be true.
+
+    The directory a fixture is looked up in has to agree too — lint checking one place while the
+    grader reads another is a green review of a suite that cannot run.
+    """
+    from pipeline_exec.evals import FIXTURES_DIR as runtime_dir
+    from pipeline_exec.evals import REPO_KEY
+
+    from lockstep.checks import FIXTURES_DIR as compiler_dir
+    from lockstep.checks import Report, _check_fixture
+
+    assert compiler_dir == runtime_dir
+
+    fixture = tmp_path / "cases" / ".." / runtime_dir / "tree"
+    fixture.mkdir(parents=True)
+    (fixture / "main.py").write_text("x = 1\n", encoding="utf-8")
+
+    report = Report()
+    _check_fixture("tree", {REPO_KEY: "/elsewhere"}, tmp_path / "cases", "one.json", report)
+    assert [f.code for f in report.findings] == ["LNT009"]

@@ -604,9 +604,7 @@ def pr_feedback(pr: str, repo: str, output: Path, from_dir: Path | None, by_path
 @click.option("--output", required=True, type=click.Path(path_type=Path))
 @click.option("--no-discussion", is_flag=True, help="Skip the comment thread.")
 @click.option("--from-dir", type=click.Path(path_type=Path), help="Read fixtures instead of the API.")
-def gh_issue_fetch(
-    issue: str, repo: str, output: Path, no_discussion: bool, from_dir: Path | None
-) -> None:
+def gh_issue_fetch(issue: str, repo: str, output: Path, no_discussion: bool, from_dir: Path | None) -> None:
     """Fetch one GitHub issue and reduce it to what an implementing agent needs.
 
     The counterpart to a tracker-specific fetcher, and simpler than one: acceptance criteria are a
@@ -714,8 +712,7 @@ def scan_input(inputs: tuple[Path, ...], mode: str, fail_on: str, report: Path |
 
     for hit in findings:
         click.echo(
-            f"  {hit['severity']:8} {hit['category']:22} "
-            f"{hit['file']}:{hit['line']}  {hit['excerpt']}"
+            f"  {hit['severity']:8} {hit['category']:22} {hit['file']}:{hit['line']}  {hit['excerpt']}"
         )
 
     blocking = [hit for hit in findings if ranks[str(hit["severity"])] >= ranks[fail_on]]
@@ -734,11 +731,20 @@ def scan_input(inputs: tuple[Path, ...], mode: str, fail_on: str, report: Path |
 @main.command(name="eval-cases")
 @click.option("--cases", required=True, type=click.Path(path_type=Path), help="Directory of case files.")
 @click.option("--output-dir", required=True, type=click.Path(path_type=Path))
-def eval_cases(cases: Path, output_dir: Path) -> None:
+@click.option(
+    "--repo-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Where to lay down each case's fixture tree, one directory per case.",
+)
+def eval_cases(cases: Path, output_dir: Path, repo_dir: Path | None) -> None:
     """Write one agent input per eval case, and list them for a fan-out.
 
     An eval is not a special way of running an agent. It is the ordinary way — `input_path` in,
     `output_path` out — with the input coming from a case file instead of an earlier step.
+
+    A case naming a fixture also gets that tree copied under `--repo-dir`, and the path written into
+    the input it is handed. An agent asked to review code needs code to read.
     """
     from .evals import Case, CaseError, expand
 
@@ -747,13 +753,17 @@ def eval_cases(cases: Path, output_dir: Path) -> None:
         _fail(f"no cases in {cases}")
     try:
         parsed = [Case.load(path) for path in files]
+        items = expand(parsed, output_dir, repos=repo_dir)
     except CaseError as error:
         _fail(str(error))
 
-    items = expand(parsed, output_dir)
+    fixtures = sum(1 for item in items if item["fixture"])
     _emit_output("cases", json.dumps([item["case"] for item in items]))
     _emit_output("count", str(len(items)))
-    click.echo(f"{len(items)} case(s) -> {output_dir}")
+    click.echo(
+        f"{len(items)} case(s) -> {output_dir}"
+        + (f", {fixtures} with a fixture -> {repo_dir}" if fixtures else "")
+    )
 
 
 @main.command(name="eval-judge-prep")
@@ -786,6 +796,12 @@ def eval_judge_prep(cases: Path, outputs: Path, output_dir: Path) -> None:
 @click.option("--agent", default="", help="Name recorded in the report.")
 @click.option("--min-pass-rate", type=float, default=None, help="Fail below this rate of decided cases.")
 @click.option(
+    "--min-score",
+    type=float,
+    default=None,
+    help="Fail below this mean score across the scored cases a judge decided.",
+)
+@click.option(
     "--judgements",
     type=click.Path(path_type=Path),
     default=None,
@@ -797,6 +813,7 @@ def eval_grade(
     output: Path,
     agent: str,
     min_pass_rate: float | None,
+    min_score: float | None,
     judgements: Path | None,
 ) -> None:
     """Grade an agent's answers against its eval cases.
@@ -808,7 +825,7 @@ def eval_grade(
     An output file missing for a case is a failure, not a skip. The agent was asked and did not
     answer, which is exactly the regression an eval suite is for.
     """
-    from .evals import Case, CaseError, apply_judgement, grade, summarize
+    from .evals import Case, CaseError, apply_judgement, grade, summarize, unanswered
 
     files = sorted(cases.glob("*.json"))
     if not files:
@@ -822,18 +839,7 @@ def eval_grade(
             _fail(str(error))
         answer_path = outputs / f"{case.name}.json"
         if not answer_path.is_file():
-            results.append(
-                {
-                    "case": case.name,
-                    "checks": [
-                        {"check": "answered", "target": case.name, "passed": False, "detail": "no output"}
-                    ],
-                    "deterministic_passed": False,
-                    "rubric": case.rubric,
-                    "rubric_pending": False,
-                    "passed": False,
-                }
-            )
+            results.append(unanswered(case))
             continue
         try:
             answer = json.loads(answer_path.read_text(encoding="utf-8"))
@@ -848,7 +854,7 @@ def eval_grade(
                 result = apply_judgement(result, None)
         results.append(result)
 
-    summary = summarize(results, min_pass_rate=min_pass_rate)
+    summary = summarize(results, min_pass_rate=min_pass_rate, min_score=min_score)
     report = {"agent": agent, "summary": summary, "cases": results}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -864,11 +870,17 @@ def eval_grade(
     _emit_output("passed", "true" if summary["ok"] else "false")
     _emit_output("pass_rate", str(summary["pass_rate"]))
     _emit_output("pending_rubric", str(len(summary["pending_rubric"])))
+    _emit_output("mean_score", "" if summary["mean_score"] is None else str(summary["mean_score"]))
     click.echo(
         f"{summary['passed']}/{summary['total'] - len(summary['pending_rubric'])} decided case(s) passed"
         + (f", {len(summary['pending_rubric'])} awaiting judgement" if summary["pending_rubric"] else "")
+        + (f", mean score {summary['mean_score']}" if summary["mean_score"] is not None else "")
         + f" -> {output}"
     )
+    # A floor on a suite where nothing was scored is a gate with nothing behind it. Say so rather
+    # than reporting a pass that the floor had no part in.
+    if min_score is not None and summary["mean_score"] is None:
+        click.echo(f"note: --min-score={min_score} decided nothing — no scored rubric was judged")
     if not summary["ok"]:
         sys.exit(1)
 

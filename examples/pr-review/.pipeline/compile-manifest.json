@@ -30,9 +30,9 @@
       ]
     },
     ".github/workflows/aw-security-reviewer.md": {
-      "sha": "cc705392",
+      "sha": "e89e2ebf",
       "sources": [
-        "agents/security-reviewer.md@5710c8ce",
+        "agents/security-reviewer.md@92f96a8a",
         "lockstep:guardrails/baseline.md@7875122b",
         "guardrails/common.md@ebc5073f",
         "guardrails/reviewing.md@a6010f09",
@@ -54,7 +54,7 @@
       ]
     },
     ".github/workflows/evals.yml": {
-      "sha": "6f3be3ca",
+      "sha": "666e10c7",
       "sources": []
     },
     ".github/workflows/pipeline-ci.yml": {

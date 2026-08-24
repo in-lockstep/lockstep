@@ -127,6 +127,11 @@ def plan(
             continue
 
         item = dict(aspect)
+        # Where the code is. The agent job has the pull request checked out at the workspace root,
+        # so in a real run this is always ".". It is written down rather than assumed because an
+        # eval case hands the same agent a fixture tree somewhere else, and an agent that read the
+        # working directory would be reviewing whatever repository the suite happened to run in.
+        item["repo"] = "."
         if seen:
             item["previous_review_id"] = seen["id"]
             item["previous_review"] = seen["body"]

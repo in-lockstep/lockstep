@@ -13,7 +13,7 @@ import json
 import pytest
 from click.testing import CliRunner
 from pipeline_exec.cli import main
-from pipeline_exec.evals import Case, CaseError, grade, summarize
+from pipeline_exec.evals import Case, CaseError, grade, parse_rubric, summarize
 
 FINDINGS = {
     "findings": [{"path": "src/files.py", "line": 2, "note": "traversal via name"}],
@@ -357,3 +357,346 @@ def test_without_judgements_a_rubric_case_stays_undecided(suite):
     assert result.exit_code == 0, result.output
     assert json.loads(report.read_text())["summary"]["pending_rubric"] == ["judged"]
 
+
+# --- scored rubrics ---------------------------------------------------------
+#
+# A binary rubric cannot show an agent getting worse while still passing, and prompt work degrades
+# in degrees rather than all at once. These hold the scored form to the same standard as the rest of
+# the contract: a number nobody can compare across runs is not better than a boolean.
+
+
+SCALE = {
+    "criteria": "Says what an attacker does with it.",
+    "levels": {"5": "Names the exploit and the line", "3": "Notices the input", "1": "Misses it"},
+    "min": 4,
+}
+
+
+def scored(**overrides):
+    return Case(name="c", input={}, expect={"rubric": {**SCALE, **overrides}})
+
+
+def test_a_rubric_may_be_prose_or_a_scale():
+    assert case(rubric="prose").rubric.scored is False
+    assert scored().rubric.scored is True
+    assert scored().rubric.scale == (1, 5)
+    assert scored().rubric.threshold == 4
+
+
+def test_one_level_is_not_a_scale():
+    with pytest.raises(CaseError, match="at least two scores"):
+        parse_rubric({**SCALE, "levels": {"5": "good"}}, name="c")
+
+
+def test_a_scored_rubric_without_a_threshold_is_refused():
+    with pytest.raises(CaseError, match="needs `min`"):
+        parse_rubric({k: v for k, v in SCALE.items() if k != "min"}, name="c")
+
+
+def test_a_threshold_outside_the_scale_is_refused():
+    with pytest.raises(CaseError, match="outside the scale"):
+        parse_rubric({**SCALE, "min": 9}, name="c")
+
+
+def test_a_level_that_is_not_a_score_is_refused():
+    with pytest.raises(CaseError, match="not a score"):
+        parse_rubric({**SCALE, "levels": {"good": "…", "bad": "…"}}, name="c")
+
+
+def test_a_level_that_says_nothing_about_what_earns_it_is_refused():
+    with pytest.raises(CaseError, match="says nothing"):
+        parse_rubric({**SCALE, "levels": {"5": "Names the exploit", "1": "  "}}, name="c")
+
+
+def test_a_rubric_needs_criteria():
+    with pytest.raises(CaseError, match="needs `criteria`"):
+        parse_rubric({**SCALE, "criteria": ""}, name="c")
+
+
+def test_an_unknown_rubric_key_is_refused_rather_than_ignored():
+    with pytest.raises(CaseError, match="unknown rubric key"):
+        parse_rubric({**SCALE, "treshold": 4}, name="c")
+
+
+def test_an_empty_rubric_asks_the_judge_nothing():
+    with pytest.raises(CaseError, match="empty"):
+        parse_rubric("   ", name="c")
+
+
+def test_a_malformed_rubric_is_caught_when_the_case_is_read_not_after_the_agent_ran():
+    """A model call to be told the case is broken is a model call wasted."""
+    with pytest.raises(CaseError, match="at least two scores"):
+        Case.parse(
+            {"input": {}, "expect": {"rubric": {"criteria": "x", "levels": {"5": "y"}, "min": 5}}}, name="c"
+        )
+
+
+def test_the_scale_travels_with_the_graded_case():
+    result = grade(scored(), FINDINGS)
+    assert result["rubric_scored"] is True
+    assert result["rubric_scale"] == {"min": 1, "max": 5}
+    assert result["rubric_min_score"] == 4
+
+
+def test_the_judge_is_given_the_levels_not_just_the_scale(tmp_path):
+    """A judge told only 'score this out of 5' invents the scale on every call."""
+    from pipeline_exec.evals import judge_inputs
+
+    (tmp_path / "answers").mkdir()
+    (tmp_path / "answers" / "c.json").write_text(json.dumps(FINDINGS))
+    judge_inputs([scored()], tmp_path / "answers", tmp_path / "judge")
+
+    payload = json.loads((tmp_path / "judge" / "c.json").read_text())
+    assert payload["scored"] is True
+    assert payload["levels"]["3"] == "Notices the input"
+    assert payload["scale"] == {"min": 1, "max": 5}
+    assert payload["min_score"] == 4
+
+
+def test_a_score_at_the_threshold_passes():
+    from pipeline_exec.evals import apply_judgement
+
+    decided = apply_judgement(grade(scored(), FINDINGS), {"score": 4, "reason": "close enough"})
+    assert decided["passed"] is True
+    assert decided["score"] == 4
+
+
+def test_a_score_below_the_threshold_fails_a_case_whose_checks_all_passed():
+    from pipeline_exec.evals import apply_judgement
+
+    result = grade(scored(), FINDINGS)
+    decided = apply_judgement(result, {"score": 3, "reason": "did not say what an attacker does"})
+    assert decided["deterministic_passed"] is True
+    assert decided["passed"] is False
+    assert decided["rubric_verdict"]["score"] == 3
+
+
+def test_a_boolean_answer_to_a_scored_rubric_is_not_a_pass():
+    """`True` is an `int` in Python; taken as a score it would silently become a 1."""
+    from pipeline_exec.evals import apply_judgement
+
+    decided = apply_judgement(grade(scored(), FINDINGS), {"passed": True, "reason": "looks good"})
+    assert decided["passed"] is False
+    assert "whole number" in decided["rubric_verdict"]["reason"]
+
+
+def test_a_score_outside_the_scale_is_not_a_pass():
+    from pipeline_exec.evals import apply_judgement
+
+    decided = apply_judgement(grade(scored(), FINDINGS), {"score": 9})
+    assert decided["passed"] is False
+    assert "outside the scale" in decided["rubric_verdict"]["reason"]
+
+
+def test_a_perfect_score_does_not_rescue_a_failed_check():
+    from pipeline_exec.evals import apply_judgement
+
+    result = grade(Case(name="c", input={}, expect={"schema": ["missing"], "rubric": SCALE}), FINDINGS)
+    decided = apply_judgement(result, {"score": 5})
+    assert decided["passed"] is False
+
+
+def test_the_summary_reports_the_mean_and_the_distribution():
+    results = [
+        {"case": "a", "passed": True, "score": 5},
+        {"case": "b", "passed": True, "score": 5},
+        {"case": "c", "passed": True, "score": 2},
+    ]
+    summary = summarize(results)
+    assert summary["mean_score"] == 4.0
+    assert summary["score_counts"] == {"2": 1, "5": 2}
+    assert summary["scores"] == {"a": 5, "b": 5, "c": 2}
+
+
+def test_a_slide_in_the_mean_fails_a_suite_in_which_every_case_passed():
+    """The regression a pass rate cannot see, which is the reason scores exist."""
+    results = [{"case": "a", "passed": True, "score": 4}, {"case": "b", "passed": True, "score": 4}]
+    assert summarize(results, min_score=4)["ok"] is True
+    assert summarize(results, min_score=4.5)["ok"] is False
+    assert summarize(results, min_score=4.5)["pass_rate"] == 1.0
+
+
+def test_an_undecided_score_is_left_out_of_the_mean():
+    results = [
+        {"case": "a", "passed": True, "score": 5},
+        {"case": "b", "passed": False, "rubric_pending": True, "score": 1},
+    ]
+    summary = summarize(results)
+    assert summary["mean_score"] == 5.0
+    assert summary["pending_rubric"] == ["b"]
+
+
+def test_an_unanswered_scored_case_reports_like_every_other_case(tmp_path):
+    """One shape for a report, built in one place.
+
+    The unanswered branch used to assemble the result itself, which is how it came to be writing a
+    rubric object where every other case writes prose — a crash in the grader, at the end of a run
+    that had already spent the credits.
+    """
+    cases = tmp_path / "cases"
+    cases.mkdir()
+    (cases / "one.json").write_text(json.dumps({"input": {}, "expect": {"rubric": SCALE}}))
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "eval-grade",
+            f"--cases={cases}",
+            f"--outputs={tmp_path / 'answers'}",
+            f"--output={tmp_path / 'report.json'}",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    entry = json.loads((tmp_path / "report.json").read_text())["cases"][0]
+    assert entry["rubric"] == SCALE["criteria"]
+    assert entry["rubric_scored"] is True
+    assert entry["passed"] is False
+    assert entry["rubric_pending"] is False
+
+
+def test_a_floor_with_nothing_scored_behind_it_does_not_invent_a_verdict():
+    results = [{"case": "a", "passed": True}]
+    summary = summarize(results, min_score=5)
+    assert summary["mean_score"] is None
+    assert summary["ok"] is True
+
+
+# --- fixture repositories ---------------------------------------------------
+#
+# A case carries `input`, and an agent asked to review code was being handed a JSON object and asked
+# to reason about a patch fragment. These cover the tree: where it comes from, where it lands, and
+# what happens when a case says it has one and does not.
+
+
+def suite_with_fixture(tmp_path, *, files=None, case_extra=None):
+    cases = tmp_path / "evals" / "reviewer" / "cases"
+    cases.mkdir(parents=True)
+    fixture = tmp_path / "evals" / "reviewer" / "fixtures" / "traversal"
+    (fixture / "src").mkdir(parents=True)
+    for name, body in (files or {"src/files.py": "def serve(name):\n    return open(name).read()\n"}).items():
+        target = fixture / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body)
+    payload = {
+        "input": {"pull_request": {"title": "t"}},
+        "fixture": "traversal",
+        "expect": {"contains": ["src/files.py"]},
+        **(case_extra or {}),
+    }
+    (cases / "one.json").write_text(json.dumps(payload))
+    return cases
+
+
+def test_a_fixture_is_laid_down_per_case_and_the_input_says_where(tmp_path):
+    from pipeline_exec.evals import expand
+
+    cases = suite_with_fixture(tmp_path)
+    expand([Case.load(cases / "one.json")], tmp_path / "inputs", repos=tmp_path / "repos")
+
+    written = json.loads((tmp_path / "inputs" / "one.json").read_text())
+    assert written["repo"] == str(tmp_path / "repos" / "one")
+    assert (tmp_path / "repos" / "one" / "src" / "files.py").is_file()
+    # The case file itself is untouched by the path that only exists at run time.
+    assert "repo" not in json.loads((cases / "one.json").read_text())["input"]
+
+
+def test_a_stale_file_from_an_earlier_run_does_not_survive(tmp_path):
+    """An agent answering because of a file nobody wrote is reporting on the wrong repository."""
+    from pipeline_exec.evals import expand
+
+    cases = suite_with_fixture(tmp_path)
+    stale = tmp_path / "repos" / "one" / "leftover.py"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("# from the last run\n")
+
+    expand([Case.load(cases / "one.json")], tmp_path / "inputs", repos=tmp_path / "repos")
+    assert not stale.exists()
+    assert (tmp_path / "repos" / "one" / "src" / "files.py").is_file()
+
+
+def test_a_case_cannot_set_the_key_the_fixture_path_goes_in(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    payload = json.loads((cases / "one.json").read_text())
+    payload["input"]["repo"] = "/somewhere/else"
+    (cases / "one.json").write_text(json.dumps(payload))
+
+    with pytest.raises(CaseError, match="input.repo"):
+        Case.load(cases / "one.json")
+
+
+def test_a_fixture_name_cannot_be_a_path(tmp_path):
+    """A case that could write `../../..` would hand the agent the repository running the eval."""
+    cases = suite_with_fixture(tmp_path)
+    payload = json.loads((cases / "one.json").read_text())
+    payload["fixture"] = "../../../.."
+    (cases / "one.json").write_text(json.dumps(payload))
+
+    with pytest.raises(CaseError, match="directory name"):
+        Case.load(cases / "one.json")
+
+
+def test_a_fixture_that_is_not_there_is_an_error_not_an_empty_checkout(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    payload = json.loads((cases / "one.json").read_text())
+    payload["fixture"] = "no-such-tree"
+    (cases / "one.json").write_text(json.dumps(payload))
+
+    with pytest.raises(CaseError, match="no fixture at"):
+        Case.load(cases / "one.json")
+
+
+def test_an_empty_fixture_directory_is_refused(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    for path in sorted((tmp_path / "evals" / "reviewer" / "fixtures" / "traversal").rglob("*")):
+        if path.is_file():
+            path.unlink()
+
+    with pytest.raises(CaseError, match="no files"):
+        Case.load(cases / "one.json")
+
+
+def test_a_fixture_needs_somewhere_to_record_the_path(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    payload = json.loads((cases / "one.json").read_text())
+    payload["input"] = "a string"
+    (cases / "one.json").write_text(json.dumps(payload))
+
+    with pytest.raises(CaseError, match="object for `input`"):
+        Case.load(cases / "one.json")
+
+
+def test_expanding_a_fixture_case_with_nowhere_to_put_it_says_so(tmp_path):
+    from pipeline_exec.evals import expand
+
+    cases = suite_with_fixture(tmp_path)
+    with pytest.raises(CaseError, match="no directory was given"):
+        expand([Case.load(cases / "one.json")], tmp_path / "inputs")
+
+
+def test_the_cases_command_materializes_the_tree(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        [
+            "eval-cases",
+            f"--cases={cases}",
+            f"--output-dir={tmp_path / 'inputs'}",
+            f"--repo-dir={tmp_path / 'repos'}",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "1 with a fixture" in result.output
+    assert (tmp_path / "repos" / "one" / "src" / "files.py").is_file()
+
+
+def test_the_cases_command_refuses_a_broken_fixture_rather_than_running_the_agent(tmp_path):
+    cases = suite_with_fixture(tmp_path)
+    payload = json.loads((cases / "one.json").read_text())
+    payload["fixture"] = "no-such-tree"
+    (cases / "one.json").write_text(json.dumps(payload))
+
+    result = CliRunner().invoke(
+        main, ["eval-cases", f"--cases={cases}", f"--output-dir={tmp_path / 'inputs'}"]
+    )
+    assert result.exit_code != 0
+    assert "no fixture at" in result.output

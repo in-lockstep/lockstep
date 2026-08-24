@@ -8,7 +8,7 @@ of running an agent — it is `input_path` in, `output_path` out, the same contr
 uses, with the input coming from a case file instead of an earlier step. That is what makes a green
 suite evidence about the agent that ships rather than about a test harness.
 
-    cases-<agent>   expand the case files into agent inputs, and list them
+    cases-<agent>   expand the case files into agent inputs and fixture trees, and list them
     run-<agent>     the agent itself, once per case, as a matrix
     judge-<agent>   pair each rubric with its answer, and judge  (only with `evals.judge`)
     grade-<agent>   apply the deterministic checks, fold in verdicts, gate
@@ -84,6 +84,7 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
     key = _slug(agent)
     cases_dir = spec.repo_path(f"evals/{agent}/cases")
     inputs = f"outputs/evals/{key}/inputs"
+    repos = f"outputs/evals/{key}/repos"
     answers = f"outputs/evals/{key}/answers"
     verdicts = f"outputs/evals/{key}/verdicts"
     judge_inputs = f"outputs/evals/{key}/judge"
@@ -96,7 +97,10 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
                 {
                     "name": "Expand the cases into agent inputs",
                     "id": "cases",
-                    "run": f"pipeline-exec eval-cases --cases={cases_dir} --output-dir={inputs}",
+                    "run": (
+                        f"pipeline-exec eval-cases --cases={cases_dir} --output-dir={inputs} "
+                        f"--repo-dir={repos}"
+                    ),
                 }
             ],
             outputs={"cases": "${{ steps.cases.outputs.cases }}"},
@@ -121,6 +125,8 @@ def _agent_jobs(spec: Spec, ctx: EmitContext, agent: str, *, judge: str) -> dict
     grade += f" --output=outputs/evals/{key}.json"
     if spec.manifest.evals.min_pass_rate is not None:
         grade += f" --min-pass-rate={spec.manifest.evals.min_pass_rate}"
+    if spec.manifest.evals.min_score is not None:
+        grade += f" --min-score={spec.manifest.evals.min_score}"
 
     if judge:
         jobs[f"prep-{key}"] = _exec_job(

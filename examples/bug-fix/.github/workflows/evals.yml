@@ -35,7 +35,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/bug-analyst/cases --output-dir=outputs/evals/bug-analyst/inputs
+      run: pipeline-exec eval-cases --cases=evals/bug-analyst/cases --output-dir=outputs/evals/bug-analyst/inputs --repo-dir=outputs/evals/bug-analyst/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -86,7 +86,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/fix-reviewer/cases --output-dir=outputs/evals/fix-reviewer/inputs
+      run: pipeline-exec eval-cases --cases=evals/fix-reviewer/cases --output-dir=outputs/evals/fix-reviewer/inputs --repo-dir=outputs/evals/fix-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -137,7 +137,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/fix-writer/cases --output-dir=outputs/evals/fix-writer/inputs
+      run: pipeline-exec eval-cases --cases=evals/fix-writer/cases --output-dir=outputs/evals/fix-writer/inputs --repo-dir=outputs/evals/fix-writer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -188,7 +188,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/reproducer-writer/cases --output-dir=outputs/evals/reproducer-writer/inputs
+      run: pipeline-exec eval-cases --cases=evals/reproducer-writer/cases --output-dir=outputs/evals/reproducer-writer/inputs --repo-dir=outputs/evals/reproducer-writer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0

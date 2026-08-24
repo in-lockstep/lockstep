@@ -32,3 +32,13 @@ even when it looks parameterised, because it is outside the layer that was audit
 
 The webhook handler has produced two SSRF findings before. Treat any outbound request whose URL is
 built from request data as suspect until the diff shows what constrains it.
+
+## Reading the code
+
+The input names a `repo`: the repository this change is in, checked out and ready to read. The diff
+is what changed; the repository is what it changed.
+
+Follow a modified line into the function it calls whenever the answer depends on what happens
+there. A parameter that reaches a call you cannot see is not a finding and not a clean bill of
+health — it is a question, and the answer is in the file. Cite the file you found it in, including
+when the diff never touched it.

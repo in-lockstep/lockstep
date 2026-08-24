@@ -133,6 +133,13 @@ def _check_agents_have_evals(spec: Spec, report: Report) -> None:
 # the runtime, so `tests/test_contract.py` holds the two copies to each other instead.
 EXPECT_KEYS = ("schema", "equals", "contains", "absent", "count", "rubric")
 
+# What a scored rubric may declare. Same two-copies arrangement, same test holding them together.
+RUBRIC_KEYS = ("criteria", "levels", "min")
+
+# The sibling directory a case's `fixture` names. A name, not a path: a case that could write
+# `../../..` would be a way to hand an agent the repository running the eval.
+FIXTURES_DIR = "fixtures"
+
 
 def _check_case_shape(cases: Path, where: str, report: Report) -> None:
     """A case that asserts nothing passed before anybody wrote it.
@@ -185,6 +192,149 @@ def _check_case_shape(cases: Path, where: str, report: Report) -> None:
                 "model; the rest are checked by `pipeline-exec eval-grade` and mean the same thing "
                 "on every run",
             )
+        if "rubric" in expect:
+            _check_rubric(expect["rubric"], location, report)
+        if raw.get("fixture"):
+            _check_fixture(str(raw["fixture"]), raw.get("input"), cases, location, report)
+
+
+def _check_rubric(raw: object, location: str, report: Report) -> None:
+    """A rubric is prose, or a scale that says what each score requires.
+
+    The scored form exists because prompt work degrades in degrees. That only holds if the levels
+    are written down: a judge told to score out of 5 with nothing else invents the scale on each
+    call, and two runs of the suite are then not comparable at all.
+    """
+    if isinstance(raw, str):
+        if not raw.strip():
+            report.add(
+                Severity.ERROR,
+                "LNT008",
+                "eval case has an empty `rubric`, so it asks the judge nothing",
+                location=location,
+            )
+        return
+    if not isinstance(raw, dict):
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            f"`rubric` is prose or an object with levels, not {type(raw).__name__}",
+            location=location,
+        )
+        return
+
+    unknown = sorted(set(raw) - set(RUBRIC_KEYS))
+    if unknown:
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            f"eval case declares unknown rubric key(s): {', '.join(unknown)}",
+            location=location,
+            hint=f"known: {', '.join(RUBRIC_KEYS)}",
+        )
+    criteria = raw.get("criteria")
+    if not isinstance(criteria, str) or not criteria.strip():
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            "a scored rubric needs `criteria` — prose saying what a good answer does",
+            location=location,
+        )
+
+    levels = raw.get("levels")
+    if not isinstance(levels, dict) or len(levels) < 2:
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            "a scored rubric needs `levels` mapping at least two scores to what earns them",
+            location=location,
+            hint="one level is not a scale, and a rubric with no levels is prose — write it as a "
+            "string instead",
+        )
+        return
+
+    scores: list[int] = []
+    for key, description in levels.items():
+        try:
+            scores.append(int(str(key)))
+        except ValueError:
+            report.add(Severity.ERROR, "LNT008", f"rubric level {key!r} is not a score", location=location)
+            return
+        if not isinstance(description, str) or not description.strip():
+            report.add(
+                Severity.ERROR,
+                "LNT008",
+                f"rubric level {key} says nothing about what earns it",
+                location=location,
+            )
+
+    threshold = raw.get("min")
+    if not isinstance(threshold, int) or isinstance(threshold, bool):
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            "a scored rubric needs `min` — the score this case has to reach",
+            location=location,
+            hint="without one the grader would be inventing the threshold it reports against",
+        )
+    elif not min(scores) <= threshold <= max(scores):
+        report.add(
+            Severity.ERROR,
+            "LNT008",
+            f"rubric `min` of {threshold} is outside the scale ({min(scores)}-{max(scores)})",
+            location=location,
+        )
+
+
+def _check_fixture(name: str, case_input: object, cases: Path, location: str, report: Report) -> None:
+    """A fixture is a directory of source the agent is given, and it has to exist.
+
+    A case declaring one and finding nothing there does not fail loudly at run time — the agent is
+    handed a path to an empty directory and answers about a repository that is not there.
+    """
+    if name.startswith(".") or "/" in name or "\\" in name:
+        report.add(
+            Severity.ERROR,
+            "LNT009",
+            f"fixture {name!r} is a directory name under {FIXTURES_DIR}/, not a path",
+            location=location,
+        )
+        return
+
+    directory = cases.parent / FIXTURES_DIR / name
+    if not directory.is_dir():
+        report.add(
+            Severity.ERROR,
+            "LNT009",
+            f"eval case names fixture {name!r}, and there is no {directory}",
+            location=location,
+            hint="a case with a fixture hands the agent a tree of source to read; put it beside "
+            "the cases directory",
+        )
+        return
+    if not any(path.is_file() for path in directory.rglob("*")):
+        report.add(
+            Severity.ERROR,
+            "LNT009",
+            f"fixture {name!r} has no files, so the agent is given nothing to read",
+            location=location,
+        )
+
+    if not isinstance(case_input, dict):
+        report.add(
+            Severity.ERROR,
+            "LNT009",
+            "a case with a fixture needs an object for `input`",
+            location=location,
+            hint="the fixture's path is written into the input, and there is nowhere to put it",
+        )
+    elif "repo" in case_input:
+        report.add(
+            Severity.ERROR,
+            "LNT009",
+            "`input.repo` is where the fixture path goes, so a case cannot set it as well",
+            location=location,
+        )
 
 
 def _check_scripts_have_tests(spec: Spec, report: Report) -> None:

@@ -278,3 +278,125 @@ def test_no_ceiling_anywhere_constrains_nothing(basic_spec_dir):
     spec = load_spec(basic_spec_dir)
     assert all(fragment.enforce.max_turns is None for fragment in spec.guardrails.values())
     assert all(fragment.enforce.max_ai_credits is None for fragment in spec.guardrails.values())
+
+
+# --- the shape of an eval case ----------------------------------------------
+#
+# `lockstep lint` used to check that a file existed. These are about the thing inside it: a case
+# that asserts nothing, a rubric a judge cannot apply consistently, and a fixture that is not there.
+
+
+CASES = "evals/story-extractor/cases"
+
+
+def write_case(root, payload, name="one.json"):
+    cases = root / CASES
+    cases.mkdir(parents=True, exist_ok=True)
+    (cases / name).write_text(json.dumps(payload), encoding="utf-8")
+    return cases
+
+
+def messages(report, code):
+    return " ".join(f.message + " " + (f.hint or "") for f in report.findings if f.code == code)
+
+
+def test_a_case_that_is_not_json_is_an_error(basic_root):
+    (basic_root / CASES / "one.json").write_text("{not json", encoding="utf-8")
+    assert "LNT007" in codes(lint_of(basic_root))
+
+
+def test_a_case_with_no_input_is_an_error(basic_root):
+    write_case(basic_root, {"expect": {"schema": ["summary"]}})
+    assert "LNT007" in codes(lint_of(basic_root))
+
+
+def test_a_case_that_asserts_nothing_is_an_error(basic_root):
+    write_case(basic_root, {"input": {}, "expect": {}})
+    assert "LNT008" in codes(lint_of(basic_root))
+
+
+def test_an_unknown_expectation_is_an_error_rather_than_a_stricter_case(basic_root):
+    write_case(basic_root, {"input": {}, "expect": {"contians": ["x"]}})
+    assert "contians" in messages(lint_of(basic_root), "LNT008")
+
+
+def test_a_scored_rubric_needs_levels_that_say_what_earns_them(basic_root):
+    """A judge told to score out of 5 with nothing else invents the scale on every call."""
+    write_case(
+        basic_root,
+        {"input": {}, "expect": {"rubric": {"criteria": "Finds it", "levels": {"5": "good"}, "min": 5}}},
+    )
+    assert "at least two scores" in messages(lint_of(basic_root), "LNT008")
+
+
+def test_a_scored_rubric_needs_a_threshold(basic_root):
+    write_case(
+        basic_root,
+        {"input": {}, "expect": {"rubric": {"criteria": "F", "levels": {"5": "a", "1": "b"}}}},
+    )
+    assert "needs `min`" in messages(lint_of(basic_root), "LNT008")
+
+
+def test_a_threshold_outside_the_scale_is_an_error(basic_root):
+    write_case(
+        basic_root,
+        {"input": {}, "expect": {"rubric": {"criteria": "F", "levels": {"5": "a", "1": "b"}, "min": 7}}},
+    )
+    assert "outside the scale" in messages(lint_of(basic_root), "LNT008")
+
+
+def test_an_empty_rubric_is_an_error(basic_root):
+    write_case(basic_root, {"input": {}, "expect": {"rubric": "   "}})
+    assert "empty" in messages(lint_of(basic_root), "LNT008")
+
+
+def test_a_well_formed_scored_rubric_passes(basic_root):
+    write_case(
+        basic_root,
+        {
+            "input": {},
+            "expect": {
+                "rubric": {
+                    "criteria": "Says what an attacker does with it.",
+                    "levels": {"5": "Names the exploit", "3": "Notices the input", "1": "Misses it"},
+                    "min": 4,
+                }
+            },
+        },
+    )
+    assert "LNT008" not in codes(lint_of(basic_root))
+
+
+def test_a_case_naming_a_fixture_that_is_not_there_is_an_error(basic_root):
+    write_case(basic_root, {"input": {}, "fixture": "traversal", "expect": {"contains": ["x"]}})
+    assert "LNT009" in codes(lint_of(basic_root))
+
+
+def test_a_fixture_cannot_be_a_path_out_of_the_suite(basic_root):
+    write_case(basic_root, {"input": {}, "fixture": "../../..", "expect": {"contains": ["x"]}})
+    assert "directory name" in messages(lint_of(basic_root), "LNT009")
+
+
+def test_an_empty_fixture_directory_is_an_error(basic_root):
+    write_case(basic_root, {"input": {}, "fixture": "traversal", "expect": {"contains": ["x"]}})
+    (basic_root / "evals/story-extractor/fixtures/traversal").mkdir(parents=True)
+    assert "no files" in messages(lint_of(basic_root), "LNT009")
+
+
+def test_a_case_cannot_set_the_key_the_fixture_path_goes_in(basic_root):
+    write_case(
+        basic_root,
+        {"input": {"repo": "/elsewhere"}, "fixture": "traversal", "expect": {"contains": ["x"]}},
+    )
+    fixture = basic_root / "evals/story-extractor/fixtures/traversal"
+    fixture.mkdir(parents=True)
+    (fixture / "main.py").write_text("x = 1\n", encoding="utf-8")
+    assert "input.repo" in messages(lint_of(basic_root), "LNT009")
+
+
+def test_a_fixture_that_is_there_passes(basic_root):
+    write_case(basic_root, {"input": {}, "fixture": "traversal", "expect": {"contains": ["x"]}})
+    fixture = basic_root / "evals/story-extractor/fixtures/traversal"
+    (fixture / "src").mkdir(parents=True)
+    (fixture / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
+    assert "LNT009" not in codes(lint_of(basic_root))

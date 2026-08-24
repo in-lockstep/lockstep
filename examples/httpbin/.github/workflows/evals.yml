@@ -35,7 +35,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/test-writer/cases --output-dir=outputs/evals/test-writer/inputs
+      run: pipeline-exec eval-cases --cases=evals/test-writer/cases --output-dir=outputs/evals/test-writer/inputs --repo-dir=outputs/evals/test-writer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0

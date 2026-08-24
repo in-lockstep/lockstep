@@ -1,0 +1,39 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Let a caller choose the export format",
+      "body": "Adds ?format= to the report endpoint. The formats are the templates we ship.",
+      "head_sha": "b7e1f204",
+      "files": [
+        {
+          "path": "src/reports/routes.py",
+          "patch": "@@ -9,4 +9,5 @@\n @bp.get(\"/reports/<report_id>\")\n def get_report(report_id: str) -> str:\n-    return export_report(report_id, \"pdf.tmpl\")\n+    fmt = request.args.get(\"format\", \"pdf.tmpl\")\n+    return export_report(report_id, fmt)"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "fixture": "format-from-the-query",
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "contains": [
+      "src/reports/export.py"
+    ],
+    "count": {
+      "findings": {
+        "min": 1
+      }
+    },
+    "rubric": {
+      "criteria": "Follows the new query parameter out of the diff and into the code it reaches.",
+      "levels": {
+        "5": "Traces `format` from the query string into export_report, names `TEMPLATES / template_name` in src/reports/export.py as the join, and says an attacker sets ?format=../../../../etc/passwd and reads the file back in the response body.",
+        "3": "Says the query parameter is unvalidated and reaches a file read, without following it into export.py or saying what an attacker gets.",
+        "1": "Reports nothing, reports only that input should be validated, or reports something the diff did not change."
+      },
+      "min": 4
+    }
+  }
+}

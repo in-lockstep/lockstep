@@ -130,6 +130,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             min_pass_rate=(
                 float(evals_raw["min-pass-rate"]) if evals_raw.get("min-pass-rate") is not None else None
             ),
+            min_score=(float(evals_raw["min-score"]) if evals_raw.get("min-score") is not None else None),
             on_prompt_change=bool(evals_raw.get("on-prompt-change", True)),
         ),
         inherits_auth=InheritsAuth(

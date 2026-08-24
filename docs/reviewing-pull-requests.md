@@ -102,6 +102,7 @@ three things that turn out to matter.
 ```
 evals/security-reviewer/cases/
 ├── path-traversal.json                 finds it, cites the line, says what an attacker does
+├── format-from-the-query.json          follows the new parameter into a file the diff never touched
 ├── query-outside-the-repo-layer.json   flags a parameterised query outside src/repo.py
 ├── nothing-to-find.json                a changelog typo: reports nothing, in one sentence
 └── revising-a-fixed-finding.json       says "fixed" rather than repeating or silently dropping
@@ -109,8 +110,14 @@ evals/security-reviewer/cases/
 
 With one shared agent this cannot be expressed — and the eval that existed had a hand-copied
 one-sentence excerpt of the lens pasted into its input, which had already drifted from the real file.
-Now the case supplies only the diff; the lens comes from the agent under test, so there is nothing to
-drift.
+Now the case supplies the diff and, where the answer depends on code the diff did not touch, a
+fixture tree beside it; the lens comes from the agent under test, so there is nothing to drift.
+
+The second case is the one worth reading. It carries `fixtures/format-from-the-query/`, and its
+deterministic half asserts that the review names `src/reports/export.py` — a file that appears in no
+patch. A reviewer working from the diff alone cannot pass that line by luck. Its rubric is scored
+rather than decided, so the difference between *traces the parameter into the file read* and *says
+the parameter is unvalidated* is a 5 and a 3 rather than two passes. See [evals](evals.md).
 
 **Budget and model per lens.** A security review is worth more than a test-coverage review, and can
 now cost more:

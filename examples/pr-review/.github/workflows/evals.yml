@@ -35,7 +35,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/intent-reviewer/cases --output-dir=outputs/evals/intent-reviewer/inputs
+      run: pipeline-exec eval-cases --cases=evals/intent-reviewer/cases --output-dir=outputs/evals/intent-reviewer/inputs --repo-dir=outputs/evals/intent-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -86,7 +86,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/performance-reviewer/cases --output-dir=outputs/evals/performance-reviewer/inputs
+      run: pipeline-exec eval-cases --cases=evals/performance-reviewer/cases --output-dir=outputs/evals/performance-reviewer/inputs --repo-dir=outputs/evals/performance-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -137,7 +137,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/security-reviewer/cases --output-dir=outputs/evals/security-reviewer/inputs
+      run: pipeline-exec eval-cases --cases=evals/security-reviewer/cases --output-dir=outputs/evals/security-reviewer/inputs --repo-dir=outputs/evals/security-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0
@@ -188,7 +188,7 @@ jobs:
     - uses: in-lockstep/lockstep/actions/restore@0000000000000000000000000000000000000000  # actions-v1.0.0
     - name: Expand the cases into agent inputs
       id: cases
-      run: pipeline-exec eval-cases --cases=evals/tests-reviewer/cases --output-dir=outputs/evals/tests-reviewer/inputs
+      run: pipeline-exec eval-cases --cases=evals/tests-reviewer/cases --output-dir=outputs/evals/tests-reviewer/inputs --repo-dir=outputs/evals/tests-reviewer/repos
     - id: save-workspace
       if: ${{ always() }}
       uses: in-lockstep/lockstep/actions/save@0000000000000000000000000000000000000000  # actions-v1.0.0

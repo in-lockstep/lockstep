@@ -25,6 +25,14 @@
         "min": 1
       }
     },
-    "rubric": "Finds the traversal: a `name` of `../../etc/passwd` reaches open(). Cites src/files.py with a line. Says what an attacker does. Reports nothing about the missing test \u2014 that is another review's job."
+    "rubric": {
+      "criteria": "Finds the traversal and says what an attacker does with it.",
+      "levels": {
+        "5": "Names `../../etc/passwd` as the `name` that reaches open(), cites src/files.py with a line, and reports nothing about the missing test \u2014 that is another review's job.",
+        "3": "Says `name` is unvalidated and reaches the filesystem, without the exploit or the line.",
+        "1": "Misses the traversal, or reports the missing test instead of it."
+      },
+      "min": 4
+    }
   }
 }

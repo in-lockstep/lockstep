@@ -463,6 +463,10 @@ class EvalConfig:
 
     judge: str = ""
     min_pass_rate: float | None = None
+    # A floor on the mean of the scored rubrics a judge decided. Separate from `min_pass_rate`
+    # because it catches the regression a pass rate cannot: every case still passing, all of them
+    # answered less well than they were last month.
+    min_score: float | None = None
     # Evals cost credits, so the suite is dispatched or triggered by a change to the prompt layers
     # it covers — never on every push. A prompt change is exactly what an eval exists to gate.
     on_prompt_change: bool = True
