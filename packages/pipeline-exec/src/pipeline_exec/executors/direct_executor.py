@@ -284,6 +284,7 @@ class DirectExecutor:
             self._config.profile_password,
             self._config.profile_auth_method,
             self._config.profile_auth_login_path,
+            insecure_tls=self._config.profile_insecure_tls.strip().lower() in ("1", "true", "yes"),
         )
         cli_session = CliSession()
         browser: BrowserSession | None = None

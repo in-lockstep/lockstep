@@ -24,6 +24,7 @@ class ApiSession:
         auth_method: str = "jwt",
         login_path: str = "",
         api_key_header: str = "",
+        insecure_tls: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._username = username
@@ -37,10 +38,28 @@ class ApiSession:
         self._last_request_time = 0.0
         self._request_log: list[str] = []
 
-        # Trust self-signed certs
-        self._ssl_context = ssl.create_default_context()
-        self._ssl_context.check_hostname = False
-        self._ssl_context.verify_mode = ssl.CERT_NONE
+        # Certificates are verified unless a profile has explicitly asked otherwise.
+        #
+        # This was unconditional — `check_hostname = False`, `verify_mode = CERT_NONE`, and
+        # `verify=False` on every request. It arrived with code extracted from a harness pointed at
+        # one staging environment behind a self-signed certificate, where it was a reasonable local
+        # convenience. In a runtime that holds a profile's credentials and talks to whatever host a
+        # pipeline names, it is that convenience made permanent for everybody: anything able to
+        # intercept the connection reads the credentials and rewrites the responses the pipeline
+        # then reports on as test results.
+        #
+        # The staging case is real, so it is still reachable — declared per profile, visible in the
+        # spec, and never inherited by a profile that did not ask for it.
+        self._verify: ssl.SSLContext | bool = True
+        if insecure_tls:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            self._verify = context
+            log.warning(
+                "    API: TLS verification is OFF for %s - the profile declares insecure_tls",
+                self._base_url,
+            )
 
     async def _ensure_authenticated(self) -> None:
         if self._authenticated:
@@ -67,7 +86,7 @@ class ApiSession:
         # JWT auth with rate limit retry
         for attempt in range(10):
             try:
-                async with httpx.AsyncClient(verify=False, timeout=30) as client:
+                async with httpx.AsyncClient(verify=self._verify, timeout=30) as client:
                     response = await client.post(
                         f"{self._base_url}{self._login_path}",
                         json={"username": self._username, "password": self._password},
@@ -136,7 +155,7 @@ class ApiSession:
         if isinstance(extra_headers, dict) and extra_headers:
             headers.update(extra_headers)
 
-        async with httpx.AsyncClient(verify=False, timeout=60) as client:
+        async with httpx.AsyncClient(verify=self._verify, timeout=60) as client:
             # Rate limit retry: up to 10 times with random 10-30s backoff
             response: httpx.Response | None = None
             for rl_attempt in range(11):

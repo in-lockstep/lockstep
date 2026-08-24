@@ -7,7 +7,7 @@
     },
     "exec": {
       "image": "ghcr.io/in-lockstep/pipeline-exec",
-      "package": "pipeline-exec",
+      "package": "in-lockstep-exec",
       "version": "0.1.0",
       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     }

@@ -51,13 +51,13 @@
       ]
     },
     ".github/workflows/implement.yml": {
-      "sha": "fc0811a5",
+      "sha": "6b452b7a",
       "sources": [
         "commands/implement.md@aa792623"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "9830497b",
+      "sha": "78afd5de",
       "sources": []
     },
     ".github/workflows/shared/context-repository.md": {

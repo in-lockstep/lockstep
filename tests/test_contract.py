@@ -267,3 +267,61 @@ def test_an_unknown_builtin_is_a_compile_error(basic_root):
     with pytest.raises(EmitError) as excinfo:
         compile_spec(basic_root)
     assert "not provided by pipeline-exec" in excinfo.value.render()
+
+
+# --- the distributions this repository actually publishes -------------------
+
+
+def _distribution_name(pyproject: Path) -> str:
+    import tomllib
+
+    return tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["name"]
+
+
+REPO = Path(__file__).parent.parent
+
+
+def test_the_capability_names_are_distributions_this_repository_builds():
+    """A generated gate runs `uv tool install "<capabilities.compiler>"` against a public index.
+
+    If that string is not a distribution this project publishes, the best case is an install that
+    fails and the worst is one that succeeds — resolving to whoever does own the name, whose code
+    then runs inside every consumer's security gate. Both bare names (`lockstep`, `pipeline-exec`)
+    belong to unrelated projects on PyPI, which is why the distributions carry the org prefix while
+    the import name and the console script do not.
+    """
+    from lockstep.spec.load import load_spec
+
+    compiler = _distribution_name(REPO / "pyproject.toml")
+    runtime = _distribution_name(REPO / "packages/pipeline-exec/pyproject.toml")
+
+    capabilities = load_spec(FIXTURE).manifest.capabilities
+    assert capabilities.compiler.split(">")[0].split("=")[0].strip() == compiler
+    assert capabilities.exec.partition("==")[0] == runtime
+
+
+def test_no_shipped_spec_names_a_distribution_somebody_else_owns():
+    """Every example and fixture, not just the one the contract tests compile."""
+    compiler = _distribution_name(REPO / "pyproject.toml")
+    runtime = _distribution_name(REPO / "packages/pipeline-exec/pyproject.toml")
+
+    manifests = [
+        *(REPO / "examples").glob("*/pipeline.yaml"),
+        *(REPO / "tests/fixtures").glob("*/pipeline.yaml"),
+        REPO / ".lockstep/pipeline.yaml",
+    ]
+    checked = 0
+    for manifest in manifests:
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            key, _, raw = line.strip().partition(":")
+            value = raw.strip().strip("\"'")
+            if key == "compiler" and value != ".":
+                # `.` is this repository compiling itself from the checkout; every other spec names
+                # a distribution, and it has to be one that exists.
+                assert value.startswith(compiler), f"{manifest}: {value}"
+                checked += 1
+            elif key == "exec":
+                assert value.startswith(runtime), f"{manifest}: {value}"
+                checked += 1
+    assert checked >= 12, f"only {checked} capability lines checked; the scan is not finding them"
+

@@ -17,7 +17,7 @@
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "041aaf97",
+      "sha": "9425cfdd",
       "sources": []
     },
     ".github/workflows/shared/context-httpbin.md": {
@@ -41,7 +41,7 @@
       "sources": []
     },
     ".github/workflows/validate-api.yml": {
-      "sha": "91942c0e",
+      "sha": "2281e1fc",
       "sources": [
         "commands/validate-api.md@70999f26"
       ]

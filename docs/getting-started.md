@@ -47,9 +47,9 @@ name: httpbin-contract
 
 capabilities:
   actions: github.com/in-lockstep/lockstep/actions@actions-v1.0.0
-  exec: pipeline-exec==0.1.0
+  exec: in-lockstep-exec==0.1.0
   exec-image: ghcr.io/in-lockstep/pipeline-exec
-  compiler: lockstep>=0.1,<1.0
+  compiler: in-lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 
 targets:

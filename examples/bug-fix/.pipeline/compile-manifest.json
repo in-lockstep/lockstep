@@ -54,13 +54,13 @@
       ]
     },
     ".github/workflows/fix-bugs.yml": {
-      "sha": "45244174",
+      "sha": "60c001f9",
       "sources": [
         "commands/fix-bugs.md@e099e18d"
       ]
     },
     ".github/workflows/pipeline-ci.yml": {
-      "sha": "9a69b26e",
+      "sha": "7cb157aa",
       "sources": []
     },
     ".github/workflows/shared/context-target-app.md": {

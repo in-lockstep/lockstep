@@ -92,7 +92,7 @@ commands:
 capabilities:
   actions: github.com/acme/pipeline-actions@v1.4.0
   exec-image: quay.io/acme/pipeline-exec
-  compiler: lockstep>=0.1,<1.0
+  compiler: in-lockstep>=0.1,<1.0
   gh-aw: v0.34.0
 
 targets:

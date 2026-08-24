@@ -55,7 +55,7 @@ of the pull request, so a change that breaks the emitter emits its own broken ga
 gate is what runs.
 
 So [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) stays **hand-written, permanently**. It
-runs `make ci` — 724 tests, the golden output tree, the compiler/runtime contract — and no compiler
+runs `make ci` — the whole suite, the golden output tree, the compiler/runtime contract — and no compiler
 change can rewrite it. Among those tests is
 [`tests/test_selfhost.py`](../tests/test_selfhost.py), which recompiles `.lockstep/` and compares it
 to what is committed. The trusted workflow checks the generated one; the generated one does not

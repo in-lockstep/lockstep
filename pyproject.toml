@@ -1,5 +1,5 @@
 [project]
-name = "lockstep"
+name = "in-lockstep"
 version = "0.1.0"
 description = "Compiles pipeline-framework definitions into GitHub Agentic Workflows"
 readme = "README.md"
@@ -21,17 +21,23 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0",
     "pytest-cov>=7.1.0",
-    "pipeline-exec",
+    "in-lockstep-exec",
 ]
 
-# One repo, two distributions. The compiler emits `pipeline-exec` invocations as literal text, so the
-# two are developed and tested together — see tests/test_contract.py. A generated pipeline repo
-# installs only pipeline-exec, never the compiler.
+# One repo, two distributions: `in-lockstep` (this) and `in-lockstep-exec` (the runtime). The
+# distribution names carry the organization prefix because the bare names belong to unrelated
+# projects on PyPI — and a generated workflow that installs the compiler by name from a public index
+# must not be able to resolve to somebody else's package. Import names and console scripts are
+# unaffected: the module is still `lockstep`, the command is still `lockstep`.
+#
+# The compiler emits `pipeline-exec` invocations as literal text, so the two are developed and
+# tested together — see tests/test_contract.py. A generated pipeline repo installs only the runtime,
+# never the compiler.
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
-pipeline-exec = { workspace = true }
+in-lockstep-exec = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

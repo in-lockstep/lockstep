@@ -202,10 +202,16 @@ All of them are fixed; the table is kept because the *shape* of each mistake is 
 
 Both are warnings, and all five examples are clean.
 
-### One thing left, deliberately
+### The one left deliberately, since taken
 
-`executors/api_session.py` disables TLS verification unconditionally — `check_hostname = False`,
-`verify_mode = CERT_NONE`. That is not application knowledge, so nothing above catches it, but it is
-the same category of mistake: a convenience for one test environment, made permanent for everybody.
-It is extracted code whose behaviour this repository preserves deliberately, so changing it is a
-decision to take on its own rather than fold into a cleanup.
+`executors/api_session.py` disabled TLS verification unconditionally — `check_hostname = False`,
+`verify_mode = CERT_NONE`, and an unverified client on every request. Nothing above catches it,
+because it is not application knowledge; it is the same *category* of mistake, a convenience for one
+test environment made permanent for everybody. It was left alone as extracted behaviour this
+repository preserved on purpose, to be changed as its own decision rather than folded into a cleanup.
+
+That decision has now been taken. Verification is the default; a profile that genuinely faces a
+self-signed certificate declares `insecure_tls=true`, which is visible in the spec, scoped to that
+profile, logged at runtime, and never inherited by a profile that did not ask for it. The rule this
+follows is the same one the rest of the document argues for: the *mechanism* — verify, or don't —
+belongs in code, and *which environment needs the exception* is a profile's answer.

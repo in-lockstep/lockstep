@@ -1,5 +1,5 @@
 [project]
-name = "pipeline-exec"
+name = "in-lockstep-exec"
 version = "0.1.0"
 description = "Deterministic executors for compiled pipeline workflows"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Browser tests need Playwright, which is large. API and CLI tests do not, so it is opt-in:
-# `pip install pipeline-exec[browser]`, or use the exec container image which bakes it in.
+# `pip install in-lockstep-exec[browser]`, or use the exec container image which bakes it in.
 browser = ["playwright>=1.44"]
 
 [project.scripts]

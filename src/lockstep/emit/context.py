@@ -36,7 +36,7 @@ class Pins:
     actions_repo: str = ""
     actions_tag: str = ""
     actions_sha: str = ""
-    exec_package: str = "pipeline-exec"
+    exec_package: str = "in-lockstep-exec"
     exec_version: str = ""
     exec_image: str = ""
     exec_digest: str = ""
@@ -58,7 +58,7 @@ class Pins:
         pins = cls(
             actions_repo=actions_repo,
             actions_tag=actions_tag,
-            exec_package=exec_package or "pipeline-exec",
+            exec_package=exec_package or "in-lockstep-exec",
             exec_version=exec_version,
             exec_image=caps.exec_image,
             gh_aw_version=caps.gh_aw,

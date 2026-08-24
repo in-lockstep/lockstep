@@ -22,6 +22,10 @@ PROFILE_KEYS = (
     "password",
     "auth_method",
     "auth_login_path",
+    # Opt out of TLS verification for this profile only. A staging environment behind a self-signed
+    # certificate is a real case; making it the unconditional default was not. Declared per profile
+    # so a production profile cannot inherit a convenience somebody needed once.
+    "insecure_tls",
 )
 
 
@@ -54,6 +58,8 @@ class ExecConfig:
     # it fails at the target, not here. The profile declares both. See docs/layers.md.
     profile_auth_method: str = "none"
     profile_auth_login_path: str = ""
+    # Read as a string like every other profile value; "1"/"true"/"yes" turn verification off.
+    profile_insecure_tls: str = ""
 
     # Report templates ship inside this package rather than being located relative to a checkout.
     framework_dir: Path = field(default_factory=lambda: Path(__file__).parent)

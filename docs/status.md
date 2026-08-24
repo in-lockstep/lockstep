@@ -62,8 +62,8 @@ convergence outputs and overlay `insert-step` anchors both have something stable
 - **Per-command agent variants** — an agent resolving to different prompt layers in different commands
   is still refused rather than emitted as variants.
 - **`.lock.yml` production** — `gh aw compile` remains a separate stage.
-- **`lockstep pin`, `eject`/`uneject`, `upgrade`** — Phase 5 lifecycle tooling. `pins.lock` is read but
-  not resolved by the tool; ejection is honoured by the writer but has no command yet.
+- **`upgrade` with migration maps** — the rest of Phase 5 shipped; this did not. See the end of this
+  document.
 
 ## Phase 3 — the executor package
 
@@ -264,7 +264,11 @@ speculation.
 
 ## Testing
 
-724 tests; 94% line coverage of the compiler, 91% counting the runtime. The golden tree in `tests/golden/basic/` pins the complete output of the
+Over 750 tests. `make ci` fails below 90% line coverage across the compiler and the runtime
+together; the figure is currently 91%, and 94% for the compiler alone. Exact counts are deliberately
+not repeated here — a number nobody can maintain is the first thing in a status document to go
+stale, which is a poor look on a tool that exists to catch drift. `make ci` is the source of truth.
+The golden tree in `tests/golden/basic/` pins the complete output of the
 fixture pipeline, which exercises fusion, fan-out with a coverage gate, caching with a live-target
 fingerprint, a state database, nested commands, and a three-iteration convergence loop.
 `make golden` rewrites it after an intentional change. `pipeline-exec` adds unit and end-to-end tests
@@ -295,6 +299,31 @@ not write, and the `scripts` job not triggering on the tests it runs.
 
 It stops at the drift gate. A pipeline with any script or builtin step compiles to a job with a
 `container:`, and that image is one of the unpublished capabilities below.
+
+## TLS verification
+
+`executors/api_session.py` verified no certificates: `check_hostname = False`,
+`verify_mode = CERT_NONE`, and an unverified client on every request, in a runtime that holds a
+profile's credentials and talks to whatever host a pipeline names. It came in with extracted code
+and `docs/layers.md` recorded it as a decision deferred rather than an oversight.
+
+Taken now. Verification is the default. A profile facing a genuinely self-signed certificate
+declares `insecure_tls=true` — visible in the spec, scoped to one profile, warned about at runtime,
+never inherited. `packages/pipeline-exec/tests/test_tls.py` fails if any client in that module is
+constructed with verification off, so the unconditional version cannot come back quietly.
+
+## Distribution names
+
+The two distributions are `in-lockstep` (the compiler) and `in-lockstep-exec` (the runtime). The
+bare names `lockstep` and `pipeline-exec` both belong to unrelated projects on PyPI, and a generated
+drift gate runs `uv tool install "<capabilities.compiler>"` against a public index — so a name this
+project does not own is not merely an install that fails. It is one that could succeed, resolving to
+somebody else's package, inside every consumer's security gate.
+
+Import names and console scripts are unaffected: the module is still `lockstep`, the commands are
+still `lockstep` and `pipeline-exec`. Two contract tests hold the line — one binds
+`capabilities.compiler` and `capabilities.exec` to the names in the two `pyproject.toml` files, the
+other scans every shipped spec for a capability naming a distribution this repository does not build.
 
 ## What remains open
 

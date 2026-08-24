@@ -1,7 +1,7 @@
 {
   "capabilities": {
     "actions": { "repo": "acme/pipeline-actions", "tag": "v1.4.0", "sha": "1111111111111111111111111111111111111111" },
-    "exec": { "image": "quay.io/acme/pipeline-exec", "package": "pipeline-exec", "version": "0.1.0", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
+    "exec": { "image": "quay.io/acme/pipeline-exec", "package": "in-lockstep-exec", "version": "0.1.0", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
   },
   "external": {
     "actions/checkout": { "tag": "v4", "sha": "11d5960a326750d5838078e36cf38b85af677262" }
