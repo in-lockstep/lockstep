@@ -67,7 +67,10 @@ def test_semantic_diff_flags_blocking_deltas(basic_root):
 
     result = run("compile", "--root", str(basic_root), "--check", "--semantic-diff")
     assert "[BLOCK] mcp-tools" in result.output
-    assert "require explicit acknowledgment" in result.output
+    # Naming the delta is half the job; the other half is saying how to clear it. A gate whose
+    # output does not tell you that is one people learn to bypass instead of answer.
+    assert "unacknowledged security-surface delta(s)" in result.output
+    assert "Security-Surface: mcp-tools" in result.output
 
 
 def test_show_surface_renders_the_whole_github_surface(basic_root):

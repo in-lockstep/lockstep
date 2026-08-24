@@ -3,7 +3,21 @@
 Reviewers cannot meaningfully read thousands of lines of generated YAML, and the drift gate already
 proves the output matches its inputs. What is left worth reading is this: permissions, triggers,
 egress, MCP tool allow-lists, safe-output caps, secrets, pins and budgets. Deltas in the blocking
-categories are meant to fail a required check until explicitly acknowledged.
+categories fail a required check until explicitly acknowledged.
+
+**Acknowledgment is a commit trailer**, named per category:
+
+    Security-Surface: sandbox, permissions
+
+It is a trailer rather than a file because a delta exists only between a base and a head. Once the
+change merges there is no delta left, so an in-tree acknowledgment would go stale the moment it
+landed and the file would accumulate entries describing changes nobody can still see. A trailer is
+scoped to the commit that moved the surface, survives a squash, and stays as the permanent answer to
+"why does this pipeline have that permission" — which is the question somebody actually asks later.
+
+There is no blanket form on purpose. `all` and `*` are refused: a gate that can be cleared without
+reading it is a gate people clear without reading it. Acknowledging a category with no delta in it is
+reported too — an acknowledgment copied forward from a previous change is how the habit decays.
 """
 
 from __future__ import annotations
@@ -37,6 +51,59 @@ BLOCKING = {
 }
 
 
+# `Security-Surface: sandbox, permissions`. Case-insensitive on the key, because git trailers
+# conventionally are, and a rejected acknowledgment over capitalization would be infuriating.
+ACK_TRAILER = re.compile(
+    r"^[ \t]*Security-Surface[ \t]*:[ \t]*(?P<categories>.+?)[ \t]*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+# Refused: an acknowledgment that names everything has stopped being a statement about this change.
+BLANKET = {"all", "*", "any", "everything"}
+
+
+class AcknowledgementError(ValueError):
+    """An acknowledgment that would pass the gate without saying anything."""
+
+
+def parse_acknowledgements(text: str) -> set[str]:
+    """Categories acknowledged by `Security-Surface:` trailers in a commit message or range."""
+    found: set[str] = set()
+    for match in ACK_TRAILER.finditer(text or ""):
+        for raw in match.group("categories").split(","):
+            category = raw.strip().lower()
+            if not category:
+                continue
+            if category in BLANKET:
+                raise AcknowledgementError(
+                    f"`Security-Surface: {category}` acknowledges everything, which is not a "
+                    "statement about this change — name the categories the diff reported"
+                )
+            found.add(category)
+    return found
+
+
+def acknowledgements_since(root: Path, ref: str) -> set[str]:
+    """Read the trailers from every commit between `ref` and HEAD.
+
+    Every commit in the range, not just the tip: the commit that widens the surface is the one that
+    should carry the reason, and it is rarely the last one written.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "log", "--format=%B", f"{ref}..HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        # No range to read — comparing against the working tree, a shallow clone, or a ref that is
+        # not an ancestor. Nothing is acknowledged, which fails closed.
+        return set()
+    return parse_acknowledgements(result.stdout)
+
+
 @dataclass
 class Delta:
     category: str
@@ -47,23 +114,47 @@ class Delta:
     def blocking(self) -> bool:
         return self.category in BLOCKING
 
-    def render(self) -> str:
-        mark = "BLOCK" if self.blocking else " info"
+    def render(self, *, acknowledged: bool = False) -> str:
+        if not self.blocking:
+            mark = " info"
+        else:
+            mark = "ack'd" if acknowledged else "BLOCK"
         return f"  [{mark}] {self.category}: {self.path} — {self.detail}"
 
 
 @dataclass
 class SemanticDiff:
     deltas: list[Delta] = field(default_factory=list)
+    acknowledged: set[str] = field(default_factory=set)
 
     @property
     def blocking(self) -> list[Delta]:
         return [d for d in self.deltas if d.blocking]
 
+    @property
+    def unacknowledged(self) -> list[Delta]:
+        """What still fails the gate: a blocking delta whose category nobody named."""
+        return [d for d in self.blocking if d.category not in self.acknowledged]
+
+    @property
+    def stale_acknowledgements(self) -> list[str]:
+        """Acknowledged categories the diff did not report.
+
+        Not a failure — nothing unsafe merges because of one. But an acknowledgment carried forward
+        from an earlier change is how the trailer stops meaning anything, and the only moment anyone
+        would notice is here.
+        """
+        present = {d.category for d in self.blocking}
+        return sorted(category for category in self.acknowledged if category not in present)
+
     def render(self) -> str:
         if not self.deltas:
             return "  no changes to the security or cost surface"
-        return "\n".join(d.render() for d in sorted(self.deltas, key=lambda d: (not d.blocking, d.path)))
+        lines = [
+            d.render(acknowledged=d.category in self.acknowledged)
+            for d in sorted(self.deltas, key=lambda d: (not d.blocking, d.path))
+        ]
+        return "\n".join(lines)
 
 
 def _load_frontmatter(text: str) -> dict[str, Any]:
@@ -170,4 +261,8 @@ def against_ref(root: Path, plan: CompilePlan, ref: str) -> SemanticDiff:
         )
         if result.returncode == 0:
             baseline[relative] = result.stdout
-    return diff_surfaces(surfaces(baseline), surfaces(plan.files))
+    diff = diff_surfaces(surfaces(baseline), surfaces(plan.files))
+    # From the same ref the comparison is against, so what counts as acknowledged is exactly what
+    # this change added on top of the base.
+    diff.acknowledged = acknowledgements_since(root, ref)
+    return diff

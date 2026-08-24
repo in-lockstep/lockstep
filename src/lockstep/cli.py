@@ -117,7 +117,7 @@ def compile_cmd(
             click.echo(click.style(error.render(), fg="red"), err=True)
             sys.exit(EXIT_SPEC)
         _emit_diff(diff)
-        blocked = fail_on_blocking and diff is not None and diff.blocking
+        blocked = fail_on_blocking and diff is not None and diff.unacknowledged
         sys.exit(EXIT_OK if report.clean and locks and not blocked else EXIT_DRIFT)
 
     written = write_plan(root, plan, prune=not no_prune)
@@ -243,13 +243,36 @@ def _emit_diff(diff: sd.SemanticDiff | None) -> None:
     click.echo("")
     click.echo("semantic diff (security and cost surface):")
     click.echo(diff.render())
-    if diff.blocking:
+
+    for category in diff.stale_acknowledgements:
         click.echo(
             click.style(
-                f"{len(diff.blocking)} blocking delta(s) — these require explicit acknowledgment",
+                f"note: `Security-Surface: {category}` acknowledges a category this change does not "
+                "touch — an acknowledgment carried forward stops meaning anything",
                 fg="yellow",
             )
         )
+
+    outstanding = diff.unacknowledged
+    if not outstanding:
+        if diff.blocking:
+            click.echo(
+                click.style(
+                    f"{len(diff.blocking)} security-surface delta(s), all acknowledged", fg="green"
+                )
+            )
+        return
+
+    categories = ", ".join(sorted({delta.category for delta in outstanding}))
+    click.echo(
+        click.style(
+            f"{len(outstanding)} unacknowledged security-surface delta(s).\n"
+            "Acknowledge them in a commit message on this branch, naming what moved:\n"
+            f"\n    Security-Surface: {categories}\n\n"
+            "The trailer stays in the history as the answer to why this pipeline has that surface.",
+            fg="yellow",
+        )
+    )
 
 
 def _run_checks(root: Path, report_fn: Callable[[Spec], Report], title: str, strict: bool) -> None:
