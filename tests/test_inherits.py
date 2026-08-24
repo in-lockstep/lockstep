@@ -199,7 +199,7 @@ def test_sealing_your_own_guardrail_seals_it_against_yourself(consumer):
 
 def test_the_enforce_floor_merges_across_tiers(consumer):
     front = yaml.safe_load(compile_spec(consumer).files[AGENT].split("---")[1])
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
 # --- namespacing ------------------------------------------------------------

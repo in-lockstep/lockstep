@@ -27,7 +27,10 @@ def test_agent_compiles_to_a_single_item_workflow_call(basic_spec_dir):
 
 
 def test_agent_job_is_read_only(basic_spec_dir):
-    assert frontmatter(compile_spec(basic_spec_dir).files[AGENT_FILE])["permissions"] == "read-all"
+    granted = frontmatter(compile_spec(basic_spec_dir).files[AGENT_FILE])["permissions"]
+    # An explicit read-only map rather than `read-all`: a calling job cannot grant the latter
+    # without enumerating every scope GitHub has, so an agent asking for it cannot start.
+    assert granted == {"actions": "read", "contents": "read"}
 
 
 def test_turn_cap_and_credit_budget_are_carried_over(basic_spec_dir):

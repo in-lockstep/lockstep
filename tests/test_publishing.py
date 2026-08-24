@@ -11,6 +11,7 @@ from conftest import target_ready
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
+from lockstep.emit.agentic import AGENT_CALLER_PERMISSIONS
 from lockstep.spec.load import load_spec
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "triage-report"
@@ -79,9 +80,25 @@ def test_a_proposal_without_a_base_still_targets_the_current_branch():
     assert "base" not in propose_step(workflow)["with"]
 
 
-def test_publishing_holds_the_only_write_permission(workflow):
-    writers = [name for name, job in workflow["jobs"].items() if "write" in str(job.get("permissions", ""))]
-    assert writers == ["propose-generated-artifacts"]
+def test_publishing_holds_the_only_write_permission_that_runs_anything(workflow):
+    """One job publishes, and nothing else executes code while holding a write token.
+
+    Agent-calling jobs hold `issues: write` as well, and they are a different thing. A job with
+    `uses:` and no `steps:` runs no code, so it cannot spend a permission — it can only hand it to
+    the workflow it calls, whose own agent job is `read-all` and is asserted separately. gh-aw's
+    generated `conclusion` and `safe_outputs` jobs require it, and without it GitHub refuses the
+    whole workflow at startup.
+    """
+    executing = [
+        name
+        for name, job in workflow["jobs"].items()
+        if "write" in str(job.get("permissions", "")) and "steps" in job
+    ]
+    assert executing == ["propose-generated-artifacts"]
+
+    for name, job in workflow["jobs"].items():
+        if "uses" in job and "write" in str(job.get("permissions", "")):
+            assert job["permissions"] == AGENT_CALLER_PERMISSIONS, name
 
 
 # --- the prompt layers ------------------------------------------------------
@@ -126,4 +143,4 @@ def test_the_reporting_agent_needs_no_tools():
     )
     assert front["max-turns"] == 0
     assert "mcp-servers" not in front
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"

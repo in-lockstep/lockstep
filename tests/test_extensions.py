@@ -18,6 +18,7 @@ from conftest import target_ready
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
+from lockstep.emit.agentic import AGENT_CALLER_PERMISSIONS
 from lockstep.spec.load import load_spec
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "bug-fix"
@@ -121,12 +122,28 @@ def test_no_agent_in_this_pipeline_can_write_anything():
     assert len(agents) == 4
     for path in agents:
         front = yaml.safe_load(files[path].split("---")[1])
-        assert front["permissions"] == "read-all"
+        assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
-def test_only_the_proposal_job_may_write(workflow):
-    writers = [name for name, job in workflow["jobs"].items() if "write" in str(job.get("permissions", ""))]
-    assert writers == ["propose-generated-artifacts"]
+def test_only_the_proposal_job_runs_code_with_a_write_token(workflow):
+    """One job proposes, and nothing else executes code while holding a write token.
+
+    Agent-calling jobs hold `issues: write` as well, and they are a different thing. A job with
+    `uses:` and no `steps:` runs no code, so it cannot spend a permission — it can only hand it to
+    the workflow it calls, whose own agent job is `read-all` and is asserted separately. gh-aw's
+    generated `conclusion` and `safe_outputs` jobs require it, and without it GitHub refuses the
+    whole workflow at startup.
+    """
+    executing = [
+        name
+        for name, job in workflow["jobs"].items()
+        if "write" in str(job.get("permissions", "")) and "steps" in job
+    ]
+    assert executing == ["propose-generated-artifacts"]
+
+    for name, job in workflow["jobs"].items():
+        if "uses" in job and "write" in str(job.get("permissions", "")):
+            assert job["permissions"] == AGENT_CALLER_PERMISSIONS, name
 
 
 def test_the_guardrails_deny_write_tools_to_every_agent():

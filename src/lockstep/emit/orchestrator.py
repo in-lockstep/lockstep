@@ -13,6 +13,7 @@ from typing import Any
 from ..errors import EmitError, SpecError
 from ..spec.model import Command, Condition, Spec, Step, StepKind
 from ..util.text import slug
+from .agentic import AGENT_CALLER_PERMISSIONS
 from .builtins import AVAILABLE, MATRIX_CAP
 from .caching import cache_spec_for, emit_fingerprint, emit_probe, emit_save, render_step_def, step_def_path
 from .context import EmitContext
@@ -723,6 +724,10 @@ def _agent_job(
     lock = agent_lock.get(step.target)
     if not lock:
         raise EmitError(f"no compiled workflow for agent {step.target!r}")
+    # Without this the callee is allowed nothing but `contents: read` and GitHub refuses the whole
+    # workflow at startup. See AGENT_CALLER_PERMISSIONS for what each scope is for and why granting
+    # `issues: write` here does not let an agent write.
+    job["permissions"] = dict(AGENT_CALLER_PERMISSIONS)
     job["uses"] = f"./.github/workflows/{lock}"
 
     with_block: dict[str, Any] = {}

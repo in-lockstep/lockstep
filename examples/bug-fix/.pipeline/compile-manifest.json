@@ -6,7 +6,7 @@
       "sources": []
     },
     ".github/workflows/aw-bug-analyst.md": {
-      "sha": "ece368b0",
+      "sha": "486cb9de",
       "sources": [
         "agents/bug-analyst.md@d4646d55",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -18,7 +18,7 @@
       ]
     },
     ".github/workflows/aw-fix-reviewer.md": {
-      "sha": "3f47fbef",
+      "sha": "ef3b6ca6",
       "sources": [
         "agents/fix-reviewer.md@06f985bb",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -29,7 +29,7 @@
       ]
     },
     ".github/workflows/aw-fix-writer.md": {
-      "sha": "a3b4cbd1",
+      "sha": "ac9a250e",
       "sources": [
         "agents/fix-writer.md@d3fdaded",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -43,7 +43,7 @@
       ]
     },
     ".github/workflows/aw-reproducer-writer.md": {
-      "sha": "40e1ff1e",
+      "sha": "2b7c293b",
       "sources": [
         "agents/reproducer-writer.md@39c23b00",
         "lockstep:guardrails/baseline.md@7875122b",
@@ -58,7 +58,7 @@
       "sources": []
     },
     ".github/workflows/fix-bugs.yml": {
-      "sha": "21b39319",
+      "sha": "aa2dc2a8",
       "sources": [
         "commands/fix-bugs.md@e099e18d"
       ]

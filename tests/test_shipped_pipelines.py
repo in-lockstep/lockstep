@@ -270,7 +270,8 @@ def test_nothing_shipped_writes_to_the_repository_itself(adopter):
     """
     for path, text in compile_spec(adopter).files.items():
         if "/aw-" in path and path.endswith(".md"):
-            assert yaml.safe_load(text.split("---")[1])["permissions"] == "read-all", path
+            granted = yaml.safe_load(text.split("---")[1])["permissions"]
+            assert granted == {"actions": "read", "contents": "read"}, path
 
 
 def test_triage_writes_back_to_jira_and_only_to_jira(adopter):

@@ -37,7 +37,9 @@ model: claude-sonnet-4-6
 max-turns: 8
 max-ai-credits: 40
 timeout-minutes: 20
-permissions: read-all
+permissions:
+  actions: read
+  contents: read
 network:
   allowed:
   - defaults

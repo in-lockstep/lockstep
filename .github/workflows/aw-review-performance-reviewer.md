@@ -33,7 +33,9 @@ model: claude-haiku-4-5
 max-turns: 4
 max-ai-credits: 40
 timeout-minutes: 15
-permissions: read-all
+permissions:
+  actions: read
+  contents: read
 network:
   allowed:
   - defaults

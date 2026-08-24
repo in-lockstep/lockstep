@@ -102,7 +102,7 @@ def test_a_compiled_scaffold_passes_its_own_drift_gate(pinned):
 def test_the_scaffolded_agent_is_read_only(pinned):
     text = compile_spec(pinned).files[".github/workflows/aw-summarizer.md"]
     front = yaml.safe_load(text.split("---")[1])
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}
     assert front["max-ai-credits"] == 20
 
 

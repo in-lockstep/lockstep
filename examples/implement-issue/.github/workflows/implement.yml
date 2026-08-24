@@ -194,6 +194,10 @@ jobs:
     - fetch-issue
     - scan-interpret-the-requirements
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-requirements-analyst.lock.yml
     with:
       input_path: outputs/issue.json
@@ -226,6 +230,10 @@ jobs:
     - interpret-the-requirements
     - scan-plan-the-change
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-planner.lock.yml
     with:
       input_path: outputs/requirements.json
@@ -258,6 +266,10 @@ jobs:
     - plan-the-change
     - scan-write-tests-the-repository-s-ci-will-run
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-test-writer.lock.yml
     with:
       input_path: outputs/plan.json
@@ -290,6 +302,10 @@ jobs:
     - write-tests-the-repository-s-ci-will-run
     - scan-write-the-change
     if: ${{ !failure() && !cancelled() && needs.command-gate.outputs.authorized == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/aw-change-writer.lock.yml
     with:
       input_path: outputs/plan.json

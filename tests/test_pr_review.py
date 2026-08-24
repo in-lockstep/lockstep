@@ -18,6 +18,7 @@ from conftest import target_ready
 from lockstep.checks import doctor, lint
 from lockstep.conformance import simulate
 from lockstep.emit import compile_spec
+from lockstep.emit.agentic import AGENT_CALLER_PERMISSIONS
 from lockstep.spec.load import load_spec
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "pr-review"
@@ -179,17 +180,29 @@ def test_no_reviewer_can_write(aspect):
     front = yaml.safe_load(
         compile_spec(EXAMPLE).files[f".github/workflows/aw-{aspect}-reviewer.md"].split("---")[1]
     )
-    assert front["permissions"] == "read-all"
+    assert front["permissions"] == {"actions": "read", "contents": "read"}, "the agent can write"
 
 
-def test_only_the_posting_job_may_write(workflow):
-    writers = {
+def test_only_the_posting_job_runs_code_with_a_write_token(workflow):
+    """The review is posted by one deterministic job and nothing else executes while holding write.
+
+    Agent-calling jobs hold `issues: write` as well, and they are a different thing. A job with
+    `uses:` and no `steps:` runs no code, so it cannot spend a permission — it can only hand it to
+    the workflow it calls, whose own agent job is `read-all` and is asserted separately. gh-aw's
+    generated `conclusion` and `safe_outputs` jobs require it, and without it GitHub refuses the
+    whole workflow at startup.
+    """
+    executing = {
         name: job["permissions"]
         for name, job in workflow["jobs"].items()
-        if "write" in str(job.get("permissions", ""))
+        if "write" in str(job.get("permissions", "")) and "steps" in job
     }
-    assert set(writers) == {"post"}
-    assert writers["post"] == {"contents": "read", "pull-requests": "write"}
+    assert set(executing) == {"post"}
+    assert executing["post"] == {"contents": "read", "pull-requests": "write"}
+
+    for name, job in workflow["jobs"].items():
+        if "uses" in job and "write" in str(job.get("permissions", "")):
+            assert job["permissions"] == AGENT_CALLER_PERMISSIONS, name
 
 
 def test_an_outside_contributor_cannot_spend_the_projects_budget_by_default():
