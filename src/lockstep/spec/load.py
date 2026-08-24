@@ -21,6 +21,7 @@ from .model import (
     CommandUse,
     EvalConfig,
     Extensions,
+    HistoryConfig,
     InheritsAuth,
     Manifest,
     OtelConfig,
@@ -82,6 +83,7 @@ def load_manifest(home: Path, root: Path) -> Manifest:
     budgets = data.get("budgets", {}) or {}
     evals_raw = data.get("evals", {}) or {}
     otel_raw = data.get("otel", {}) or {}
+    history_raw = data.get("history", {}) or {}
     auth_raw = data.get("inherits-auth", {}) or {}
     extensions_raw = data.get("extensions", {}) or {}
 
@@ -143,6 +145,10 @@ def load_manifest(home: Path, root: Path) -> Manifest:
             host=str(otel_raw.get("host", "") or ""),
             service_name=str(otel_raw.get("service-name", "") or ""),
             pricing={str(k): float(v) for k, v in (otel_raw.get("pricing") or {}).items()},
+        ),
+        history=HistoryConfig(
+            branch=str(history_raw.get("branch", "") or ""),
+            path=str(history_raw.get("path", "history") or "history"),
         ),
         inherits_auth=InheritsAuth(
             token=str(auth_raw.get("token", "") or ""),

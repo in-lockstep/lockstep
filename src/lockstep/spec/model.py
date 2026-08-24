@@ -538,6 +538,26 @@ class OtelConfig:
 
 
 @dataclass
+class HistoryConfig:
+    """Where a durable record of what the pipelines did is kept.
+
+    Off unless declared. Artifacts expire and job logs rotate, so a repository that retains nothing
+    cannot answer whether a prompt change helped — the runs it would have compared are gone.
+
+    On the manifest rather than on a profile, unlike reports. A report describes the application a
+    profile points at; this describes the pipelines themselves, and there is one history however
+    many targets they run against.
+    """
+
+    branch: str = ""
+    path: str = "history"
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.branch)
+
+
+@dataclass
 class TargetConfig:
     out: str = ".github/workflows"
     fuse_script_steps: bool = True
@@ -596,6 +616,7 @@ class Manifest:
     per_agent_daily_ai_credits: int | None = None
     evals: EvalConfig = field(default_factory=EvalConfig)
     otel: OtelConfig = field(default_factory=OtelConfig)
+    history: HistoryConfig = field(default_factory=HistoryConfig)
     inherits_auth: InheritsAuth = field(default_factory=InheritsAuth)
     commands: dict[str, dict[str, Any]] = field(default_factory=dict)
     uses: dict[str, CommandUse] = field(default_factory=dict)
@@ -710,7 +731,7 @@ class Spec:
         used = {"actions/checkout"}
         if self.manifest.inherits_auth.uses_app:
             used.add("actions/create-github-app-token")
-        if self.manifest.otel.enabled:
+        if self.manifest.otel.enabled or self.manifest.history.enabled:
             # Read off the manifest alone, like the App-token line above. `lockstep pin` runs before
             # `fetch` and therefore sees a manifest without its agents loaded; a condition that also
             # asked about agents would answer differently in `pin` and in `doctor`, and the pin

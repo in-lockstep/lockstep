@@ -237,3 +237,38 @@ def test_a_deny_all_guardrail_still_wins_over_telemetry(basic_root):
     ]
     assert agents, "no agent compiled, so this asserts nothing"
     assert all(front["network"]["allowed"] == [] for front in agents)
+
+
+# --- what is kept -----------------------------------------------------------
+
+
+HISTORY = "history:\n  branch: pipeline-history\n"
+
+
+def test_history_alone_is_reason_enough_for_the_job(basic_root):
+    """A repository may want a durable record without running a collector."""
+    job = meter_of(enable(basic_root, HISTORY))
+    assert job is not None
+    assert "--history-dir=" in _run(job)
+
+
+def test_recording_needs_the_write_it_performs(basic_root):
+    """And it is the only write this job ever makes."""
+    assert meter_of(enable(basic_root, HISTORY))["permissions"]["contents"] == "write"
+
+
+def test_a_pipeline_that_keeps_nothing_asks_for_no_write(basic_root):
+    assert meter_of(enable(basic_root))["permissions"]["contents"] == "read"
+
+
+def test_the_record_is_published_to_the_branch(basic_root):
+    job = meter_of(enable(basic_root, HISTORY))
+    step = next(s for s in job["steps"] if "publish-history" in str(s.get("uses", "")))
+    assert step["with"]["branch"] == "pipeline-history"
+
+
+def test_a_collector_alone_records_nothing(basic_root):
+    """Metrics go to the collector. Keeping a ledger is a separate thing to ask for."""
+    job = meter_of(enable(basic_root))
+    assert "--history-dir=" not in _run(job)
+    assert not any("publish-history" in str(s.get("uses", "")) for s in job["steps"])

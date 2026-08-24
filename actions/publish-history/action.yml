@@ -1,0 +1,117 @@
+name: Publish run history
+description: >-
+  Append this run's record to a durable ledger on a branch.
+
+  Artifacts expire and job logs rotate, so a repository that retains nothing cannot answer whether a
+  prompt change helped — the runs it would have compared are gone. This keeps one line per run in
+  the only place a repository always has.
+
+  Appended rather than written. Several pipelines finish at once, and appends commute: a push that
+  loses a race is retried against the branch as it now is, and both lines survive. A rewrite would
+  keep whichever run pushed last.
+
+inputs:
+  source:
+    description: Directory holding the month files the run wrote.
+    required: true
+  branch:
+    description: Branch the ledger lives on. Orphaned on first use.
+    required: false
+    default: "pipeline-history"
+  path:
+    description: Directory within the branch.
+    required: false
+    default: "history"
+  attempts:
+    description: How many times to retry a push that lost a race.
+    required: false
+    default: "5"
+
+outputs:
+  appended:
+    description: Number of records appended, empty when there was nothing to append.
+    value: ${{ steps.publish.outputs.appended }}
+
+runs:
+  using: composite
+  steps:
+    - name: Publish
+      id: publish
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        source='${{ inputs.source }}'
+        branch='${{ inputs.branch }}'
+        prefix='${{ inputs.path }}'
+        attempts='${{ inputs.attempts }}'
+
+        if [ ! -d "$source" ] || [ -z "$(find "$source" -name '*.jsonl' 2>/dev/null | head -1)" ]; then
+          echo "no run record to publish from $source"
+          echo "appended=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        staging="$(mktemp -d)"
+        cp -R "$source/." "$staging/"
+        appended=$(cat "$staging"/*.jsonl | grep -c . || true)
+
+        git config --global --add safe.directory "$PWD" || true
+        remote="$(git remote get-url origin)"
+
+        n=0
+        until [ "$n" -ge "$attempts" ]; do
+          n=$((n + 1))
+          work="$(mktemp -d)"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git clone --depth 1 --branch "$branch" --single-branch "$remote" "$work" -q
+          else
+            git clone --depth 1 "$remote" "$work" -q
+            git -C "$work" checkout -q --orphan "$branch"
+            git -C "$work" rm -rqf . >/dev/null 2>&1 || true
+          fi
+          git -C "$work" config user.name "github-actions[bot]"
+          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p "$work/$prefix"
+          # Concatenate onto whatever is already there. Re-done inside the loop rather than once,
+          # because a retry has to append to the branch as it is now, not as it was when we lost.
+          for file in "$staging"/*.jsonl; do
+            cat "$file" >> "$work/$prefix/$(basename "$file")"
+          done
+
+          {
+            echo "# Run history"
+            echo
+            echo "One line per pipeline run: what it did, how long it took, what it spent."
+            echo "No prompts, no diffs, no source — the reasoning stays in each run's own artifacts."
+            echo
+            echo "| Month | Runs |"
+            echo "|---|---|"
+            for file in "$work/$prefix"/*.jsonl; do
+              [ -e "$file" ] || continue
+              echo "| [$(basename "$file" .jsonl)]($prefix/$(basename "$file")) | $(grep -c . "$file") |"
+            done
+          } > "$work/README.md"
+
+          git -C "$work" add -A "$prefix" README.md
+          if git -C "$work" diff --cached --quiet; then
+            echo "nothing new to record"
+            echo "appended=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -C "$work" commit -q -m "Record run ${GITHUB_RUN_ID}"
+          if git -C "$work" push -q origin "$branch" 2>/dev/null; then
+            echo "appended $appended record(s) to $branch"
+            echo "appended=$appended" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "push lost a race, retrying ($n/$attempts)" >&2
+          sleep $((n * 2))
+        done
+
+        # Not a failure. The run did its work; losing its record is worth a warning, and failing the
+        # pipeline over bookkeeping would teach people to turn the bookkeeping off.
+        echo "::warning::could not record run ${GITHUB_RUN_ID} after ${attempts} attempts"
+        echo "appended=0" >> "$GITHUB_OUTPUT"

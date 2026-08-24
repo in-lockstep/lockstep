@@ -737,3 +737,76 @@ def run_shape(jobs: list[Job]) -> dict[str, Any]:
         # than about waiting for the job before it. That one answers "is work being picked up".
         "pickup_seconds": round(min(delays) if delays else 0.0, 3),
     }
+
+
+# --- what is kept -------------------------------------------------------------------------------
+#
+# Metrics go to a collector, which is where trends belong. But a collector is a thing an
+# organization has to run, and a repository without one still needs to answer "did that prompt
+# change help" three months later — which artifacts expiring and job logs rotating make impossible.
+#
+# So one line per run is written to a branch. Small enough that ten thousand runs are a few
+# megabytes, plain enough to read with `grep`, and durable in the only place a repository always has.
+#
+# What it deliberately does not carry is content. No prompt, completion, diff or source — the same
+# line the metrics draw, for the same reason: this file is as readable as the repository, and a
+# transcript in it is a transcript in everybody's clone forever. The reasoning stays in gh-aw's own
+# artifacts under that repository's access controls, and the record points at the run that holds it.
+
+
+def run_record(
+    priced: Priced,
+    jobs: list[Job],
+    *,
+    identity: dict[str, Any],
+    attempt: int = 1,
+) -> dict[str, Any]:
+    """One run, as the line that outlives it."""
+    summary = priced.summary()
+    shape = run_shape(jobs) if jobs else {}
+    return {
+        "run_id": identity.get("run_id", ""),
+        "run_url": identity.get("run_url", ""),
+        "workflow": identity.get("workflow", ""),
+        "event": identity.get("event", ""),
+        "ref": identity.get("ref", ""),
+        "sha": identity.get("sha", ""),
+        "finished": identity.get("finished", ""),
+        "attempt": attempt,
+        "credits": summary["credits"],
+        "tokens": summary["tokens"],
+        "cost_usd": summary["dollars"],
+        # Recorded beside the cost, because a total covering three quarters of a run is not a total
+        # and a reader three months from now has no other way to know which they are looking at.
+        "priced_fraction": summary["priced_fraction"],
+        "models": {model: entry["credits"] for model, entry in summary["by_model"].items()},
+        "wall_seconds": shape.get("wall_seconds", 0.0),
+        "busy_seconds": shape.get("busy_seconds", 0.0),
+        "jobs": shape.get("jobs", 0),
+        "outcomes": shape.get("outcomes", {}),
+        "failed": shape.get("failed", []),
+        # Per agent, because "which lens is failing" is the question a retro asks first.
+        "agents": {
+            job.name.split("aw-", 1)[-1]: {
+                "outcome": job.outcome,
+                "seconds": job.duration_seconds or 0.0,
+            }
+            for job in jobs
+            if job.agentic
+        },
+    }
+
+
+def history_line(record: dict[str, Any]) -> str:
+    """JSON on one line, keys sorted, so a diff of the ledger reads as one run added."""
+    return json.dumps(record, sort_keys=True) + "\n"
+
+
+def history_file(finished: str, *, path: str = "history") -> str:
+    """Sharded by month.
+
+    One file per run makes a directory git walks slowly; one file forever makes a diff nobody can
+    read. A month is small enough to append to and large enough that the count stays bounded.
+    """
+    month = (finished or "")[:7] or "unknown"
+    return f"{path}/{month}.jsonl"

@@ -10,8 +10,9 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import click
 
@@ -25,7 +26,9 @@ EXIT_OK = 0
 EXIT_FAILED = 1
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
+    """Say why, and stop. `NoReturn` because it does not return, and saying so lets a type checker
+    see that everything after a `_fail` is a branch that cannot be reached."""
     click.echo(click.style(message, fg="red"), err=True)
     sys.exit(EXIT_FAILED)
 
@@ -973,6 +976,12 @@ _registered = register(main)
     default=None,
     help="A saved /actions/runs/{id}/jobs response: outcomes, durations and queue times.",
 )
+@click.option(
+    "--history-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write the run's durable record under here, sharded by month.",
+)
 @click.option("--explain", is_flag=True, help="Print every file read and every number matched.")
 @click.option(
     "--require-usage",
@@ -987,6 +996,7 @@ def meter(
     service_name: str,
     title: str,
     jobs: Path | None,
+    history_dir: Path | None,
     explain: bool,
     require_usage: bool,
 ) -> None:
@@ -999,7 +1009,17 @@ def meter(
     """
     import time
 
-    from .otel import metrics_document, price, read_jobs, read_usage, render_summary, run_shape
+    from .otel import (
+        history_file,
+        history_line,
+        metrics_document,
+        price,
+        read_jobs,
+        read_usage,
+        render_summary,
+        run_record,
+        run_shape,
+    )
 
     rates: dict[str, float] = {}
     if pricing and pricing.is_file():
@@ -1046,6 +1066,34 @@ def meter(
         _emit_output("wall_seconds", str(shape["wall_seconds"]))
         _emit_output("busy_seconds", str(shape["busy_seconds"]))
         _emit_output("failed_jobs", str(len(shape["failed"])))
+
+    if history_dir:
+        finished = datetime.now(UTC).isoformat(timespec="seconds")
+        entry = run_record(
+            priced,
+            run_jobs,
+            attempt=attempt,
+            identity={
+                "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+                "run_url": (
+                    f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+                    f"{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/"
+                    f"{os.environ.get('GITHUB_RUN_ID', '')}"
+                ),
+                "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+                "event": os.environ.get("GITHUB_EVENT_NAME", ""),
+                "ref": os.environ.get("GITHUB_REF_NAME", ""),
+                "sha": os.environ.get("GITHUB_SHA", ""),
+                "finished": finished,
+            },
+        )
+        target = history_dir / Path(history_file(finished)).name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Appended, not written: the publishing step re-clones the branch and appends again on a
+        # conflict, and appends commute. A rewrite would lose whichever run pushed first.
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(history_line(entry))
+        click.echo(f"recorded run {entry['run_id'] or '(local)'} -> {target}")
 
     if endpoint:
         _post_metrics(endpoint, document)
@@ -1661,3 +1709,85 @@ def _jira_get(base_url: str, token: str, path: str) -> Any:
         # is a duplicate comment rather than a failed run.
         click.echo(f"could not read existing comments on {path}", err=True)
         return {}
+
+
+@main.command(name="run-history")
+@click.option(
+    "--ledger",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory of month files. Omit when reading from --branch.",
+)
+@click.option("--branch", default="", help="Read the ledger from this branch instead of a directory.")
+@click.option("--path", default="history", show_default=True, help="Directory within that branch.")
+@click.option("--output", required=True, type=click.Path(path_type=Path))
+@click.option("--since", default="", help="ISO timestamp splitting the baseline from the window.")
+@click.option("--days", default=0, type=int, help="Window size in days, if --since is not given.")
+@click.option("--min-runs", default=5, show_default=True, type=int, help="Below this, report no trend.")
+def run_history(
+    ledger: Path | None, branch: str, path: str, output: Path, since: str, days: int, min_runs: int
+) -> None:
+    """Read the run ledger and report what moved.
+
+    The ledger answers the one question a dashboard cannot: is this getting better or worse. That
+    needs two windows, so everything here is a comparison — and a window with too few runs in it is
+    reported as *too few runs* rather than as a direction, because noise presented as a trend is
+    worse than silence. Somebody acts on it.
+    """
+    import tempfile
+    from datetime import timedelta
+
+    from .history import Report, read_ledger
+
+    if branch:
+        # Cloned here rather than checked out by the workflow: the ledger lives on a branch whose
+        # contents have nothing to do with the one this runs on, and checking it out would replace
+        # the working tree the rest of the pipeline is standing in.
+        directory = Path(tempfile.mkdtemp()) / "ledger"
+        cloned = subprocess.run(
+            [
+                "git",
+                "clone",
+                "-q",
+                "--depth",
+                "1",
+                "--branch",
+                branch,
+                "--single-branch",
+                ".",
+                str(directory),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if cloned.returncode != 0:
+            _fail(f"could not read the ledger branch {branch!r}: {cloned.stderr.strip()[:200]}")
+        ledger = directory / path
+    if ledger is None:
+        _fail("pass --ledger or --branch")
+    if not ledger.is_dir():
+        _fail(f"no ledger at {ledger} — nothing has been recorded yet")
+    records = read_ledger(ledger)
+    if not records:
+        _fail(f"no run records under {ledger}")
+
+    if not since and days:
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+
+    report = Report(records=records, since=since).build(min_runs=min_runs)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    window, totals = report["window"], report["totals"]
+    _emit_output("runs", str(totals["runs"]))
+    _emit_output("compared", "true" if window["compared"] else "false")
+    _emit_output("outliers", str(len(report["outliers"])))
+    click.echo(
+        f"{totals['runs']} run(s), {totals['failed_runs']} failed, ${totals['cost_usd']:,.2f} -> {output}"
+    )
+    if not window["compared"]:
+        # A snapshot read as a trend is how a first month becomes a regression.
+        click.echo("no baseline window: this is a snapshot, not a comparison")
+    for entry in report["outliers"]:
+        click.echo(f"  outlier: {entry['workflow']} run {entry['run_id']} — {entry['times_median']}x median")

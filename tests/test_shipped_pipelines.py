@@ -329,3 +329,54 @@ def test_a_pipeline_that_does_not_ask_for_it_is_not_forced_to(basic_root):
         propose = jobs.get("propose-generated-artifacts")
         if propose:
             assert "issue-from" not in propose["steps"][-1]["with"]
+
+
+# --- the retro proposes, it does not edit ------------------------------------
+
+
+def test_retro_ships():
+    assert "retro" in SHIPPED
+
+
+def test_the_retro_computes_its_numbers_in_code_not_in_a_prompt(adopter):
+    """Two runs over the same window must produce the same figures.
+
+    A trend an agent averaged for itself would be a different trend each time, and one nobody could
+    check against the ledger.
+    """
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/retro-retro.yml"])
+    command = " ".join(
+        step.get("run", "") for job in workflow["jobs"].values() for step in job.get("steps", []) or []
+    )
+    assert "pipeline-exec run-history" in command
+
+
+def test_the_retro_cannot_edit_what_constrains_it(adopter):
+    """A pipeline able to rewrite the guardrails that constrain it has guardrails in name only.
+
+    So the retro's output is an issue somebody reads, not a change to a prompt. Every agent is
+    read-only anyway; this checks the retro was not given a `propose:` block to get around it.
+    """
+    library_path = library.pipelines()["retro"]
+    front = yaml.safe_load((library_path / "commands" / "retro.md").read_text().split("---")[1])
+    assert "propose" not in (front.get("github") or {})
+
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/retro-retro.yml"])
+    assert "propose-generated-artifacts" not in workflow["jobs"]
+
+    guardrail = (library_path / "guardrails" / "retro.md").read_text()
+    for denied in ("create_pull_request", "merge_pull_request"):
+        assert denied in guardrail
+
+
+def test_the_retro_files_one_issue_and_no_more(adopter):
+    files = compile_spec(adopter).files
+    agent = next(t for p, t in files.items() if "aw-retro-" in p and p.endswith(".md"))
+    front = yaml.safe_load(agent.split("---")[1])
+    assert front["safe-outputs"]["create-issue"]["max"] == 1
+
+
+def test_the_retro_runs_on_a_schedule_because_a_trend_is_not_an_event(adopter):
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/retro-retro.yml"])
+    triggers = workflow.get("on") or workflow.get(True)
+    assert "schedule" in triggers

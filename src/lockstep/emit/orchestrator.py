@@ -1051,11 +1051,7 @@ def _emit_proposal(
                     "branch": ctx.expand(propose.branch, command),
                     "title": ctx.expand(propose.title, command),
                     "labels": propose.labels,
-                    **(
-                        {"issue-from": ctx.expand(propose.issue_from, command)}
-                        if propose.issue_from
-                        else {}
-                    ),
+                    **({"issue-from": ctx.expand(propose.issue_from, command)} if propose.issue_from else {}),
                     **({"base": ctx.expand(propose.base, command)} if propose.base else {}),
                     **({"reuse-branch": "true"} if propose.reuse_branch else {}),
                 },

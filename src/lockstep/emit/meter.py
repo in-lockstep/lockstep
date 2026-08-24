@@ -34,6 +34,7 @@ USAGE_DIR = "outputs/usage"
 METRICS_PATH = "outputs/otel/metrics.json"
 PRICING_PATH = "outputs/otel/pricing.json"
 JOBS_PATH = "outputs/otel/jobs.json"
+HISTORY_DIR = "outputs/history"
 
 # gh-aw names each agent's usage artifact `<prefix>usage`. One pattern collects every agent in the
 # run without the compiler having to know what the prefixes came out as.
@@ -43,7 +44,10 @@ USAGE_PATTERN = "*usage*"
 def meter_job(spec: Spec, ctx: EmitContext, *, needs: list[str], title: str) -> dict[str, Any] | None:
     """The metering job for one command workflow, or nothing when there is nothing to meter."""
     config = spec.manifest.otel
-    if not config.enabled or not needs:
+    history = spec.manifest.history
+    # Either reason is enough. A repository may want a durable record without running a collector,
+    # and a collector without keeping anything of its own.
+    if not (config.enabled or history.enabled) or not needs:
         return None
 
     endpoint = ""
@@ -65,6 +69,8 @@ def meter_job(spec: Spec, ctx: EmitContext, *, needs: list[str], title: str) -> 
     ]
     if endpoint:
         command.append(f'--endpoint="{endpoint}"')
+    if history.enabled:
+        command.append(f"--history-dir={HISTORY_DIR}")
 
     steps: list[dict[str, Any]] = [
         {"uses": ctx.pins.external_action("actions/checkout")},
@@ -103,6 +109,14 @@ def meter_job(spec: Spec, ctx: EmitContext, *, needs: list[str], title: str) -> 
         },
         {"name": "Price it", "id": "meter", "run": " ".join(command)},
     ]
+    if history.enabled:
+        steps.append(
+            {
+                "name": "Record the run",
+                "uses": ctx.pins.action("publish-history"),
+                "with": {"source": HISTORY_DIR, "branch": history.branch, "path": history.path},
+            }
+        )
     if config.to_artifact:
         steps.append(
             {
@@ -122,7 +136,11 @@ def meter_job(spec: Spec, ctx: EmitContext, *, needs: list[str], title: str) -> 
         # set of runs whose cost is most worth knowing.
         "if": "${{ !cancelled() }}",
         "runs-on": ctx.runs_on,
-        "permissions": {"contents": "read", "actions": "read"},
+        "permissions": {
+            # Writing the ledger needs a write, and it is the only one this job ever performs.
+            "contents": "write" if history.enabled else "read",
+            "actions": "read",
+        },
         # Bookkeeping about finished work. A collector being down is not a red build.
         "continue-on-error": True,
         "container": ctx.container(),

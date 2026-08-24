@@ -498,7 +498,7 @@ pipeline built here *can express*, and every one of them is something they demon
 Listed separately from the table below because the provenance matters: these were not derived from
 this design, and the fact that somebody needed them in production is the argument for each.
 
-Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
+Five are now closed — `docs/evals.md`, `docs/metering.md`, `docs/adopting-shipped-pipelines.md` and `docs/history-and-retro.md` describe them:
 
 - **Eval cases with a fixture repository.** A case names a `fixture`, and the tree is laid down in
   its own directory before the agent runs, with the path written into the input as `repo`. The
@@ -510,8 +510,8 @@ Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
   and a `min` the case has to reach. The levels travel to the judge, because a judge inventing the
   scale on each call produces numbers that cannot be compared between runs. `evals.min-score` gates
   the suite on the *mean*, which is the regression a pass rate cannot see: every case clearing its
-  own floor while the suite slides from 4.8 to 4.1. Comparing this run to last month's is the part
-  still missing, and it is the run-history row below.
+  own floor while the suite slides from 4.8 to 4.1. Comparing a suite to last month's is a run
+  ledger away — `docs/history-and-retro.md` — though nothing yet writes eval scores into it.
 - **Budgets in money.** `otel:` adds a metering job that reads what gh-aw measured, prices it
   against a rate table in the manifest, and publishes OTLP metrics plus a cost line in the run
   summary. Credits are measured and dollars are derived, so a model with no rate is reported as
@@ -526,8 +526,8 @@ Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
   an agent-aware backend needs no teaching. gh-aw's own OTLP exporter is wired at the same time,
   since it emits the agent spans nothing outside an agent could produce.
 - **A zero-authoring path.** `lockstep init --adopt all` writes a manifest, a profile and a
-  `.gitignore`, and inherits four pipelines the compiler ships — triage, implement, review, fix —
-  which between them are a whole loop. They are inherited rather than copied, so tuning an agent
+  `.gitignore`, and inherits five pipelines the compiler ships — triage, implement, review, fix,
+  retro — which between them are a whole loop that also looks at itself. They are inherited rather than copied, so tuning an agent
   inside its published band, overlaying a step, and writing a pipeline of your own that runs beside
   them are all things that cost nothing later. Nine builtins were promoted out of `examples/` to
   make them possible, because a shipped pipeline cannot depend on an extension package in an
@@ -539,14 +539,30 @@ Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
   equivalent — the agent writes a file, a deterministic step performs the write, labels are added
   rather than replaced, and nothing transitions an issue.
 
+- **Run history, and a retro loop that reads it.** `history.branch` appends one line per run to a
+  ledger on a branch — durable where artifacts expire and job logs rotate — and `run-history`
+  compares two windows over it. Every number is computed in code, because a trend an agent averaged
+  for itself would differ each run and nobody could check it. A window below five runs reports *too
+  few runs* rather than a direction, a metric nothing measured is absent rather than zero, and a
+  report with no baseline says it is a snapshot.
+
+  The shipped `retro` pipeline reads that report weekly and files one issue. It **cannot edit an
+  agent, a guardrail or a workflow** — a pipeline able to rewrite the constraints on itself has
+  constraints in name only — so its output goes through `/implement` and review like any other
+  change. `docs/history-and-retro.md` has the whole shape.
+
+  Two things it deliberately does not do: replay a run (the ledger says which run, gh-aw still
+  holds the transcript until it expires) and attribute cost per agent (the usage artifacts carry no
+  name to join on, so the figure is omitted rather than guessed).
+
   These remain a starting point rather than a product: the facts that make a pipeline good in a
   particular repository — which layer was audited, how its tests are laid out — are the ones only
   that repository can write, and each shipped agent says so where it would otherwise be guessing.
 
-| Gap | What is missing here | Why it matters |
-|---|---|---|
-| **Run history, transcripts, replay** | Nothing is retained. A run's reasoning is gone when the job log rotates. | They ship `analyze-transcript` and `replay-session` skills, a metrics repository, and an independent audit layer over their own review agent's performance. This is the operational half of the 2am story, and it is also the only way to tell whether a prompt change helped. |
-| **A retro loop** | Nothing carries a run's outcome back to the spec. `collect-patterns` is deferred below with no caller. | Their sixth agent analyses a completed workflow — timings, iterations, patterns — and files improvement proposals. A framework whose thesis is that prompts are reviewable artifacts should be able to say which of them are working. |
+**The list is closed.** Every gap this comparison found has been built, which is worth stating
+plainly and also worth not over-reading: these were the gaps *visible from reading another project*.
+They were real and they were worth closing, and closing them does not mean nothing is missing —
+`what remains open` above is the list derived from this design rather than from somebody else's.
 
 Three things they have that are deliberately **not** on this list. Work prioritization by RICE scoring
 is a pipeline somebody could build with this framework, not a capability the framework lacks. A fixed
@@ -570,6 +586,6 @@ of it would be a weaker one.
 | The fleet dashboard | Needs real consumer repositories to report on. |
 | Per-command agent variants | An agent resolving to different prompt layers in different commands is refused rather than emitted as variants. |
 | Deploy modes | Profile `deploy.mode` (services / external / steps), readiness gates, CLI provisioning. `wait-for` exists; nothing emits it yet. |
-| `cost-rollup`, `collect-patterns` | Deferred until token accounting and the learning loop have a caller. The retro-loop row above says what that caller should be. |
+| `cost-rollup`, `collect-patterns` | Superseded rather than built. `meter` does the accounting and `run-history` does the trend analysis, both over data the substrate already produces — neither needed a builtin that pipelines would have had to call by hand. |
 | Coverage of the session executors | They drive a real browser, API and shell against a running application. `make cov-all` reports the true figure; closing it needs a fixture application. |
 | `upgrade` with migration maps | Pinning, ejection and the drift gate are in place; automated overlay-anchor migration across capability majors is not. |

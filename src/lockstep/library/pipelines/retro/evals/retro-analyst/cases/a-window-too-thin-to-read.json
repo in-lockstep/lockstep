@@ -1,0 +1,51 @@
+{
+  "input": {
+    "window": {
+      "since": "2026-08-20",
+      "runs": 4,
+      "baseline_runs": 3,
+      "compared": true
+    },
+    "totals": {
+      "runs": 4,
+      "credits": 240,
+      "cost_usd": 0.5,
+      "failed_runs": 1,
+      "reruns": 0
+    },
+    "agents": [
+      {
+        "name": "tests-reviewer",
+        "change": "too few runs",
+        "before": {
+          "runs": 3,
+          "failure_rate": 0.0
+        },
+        "after": {
+          "runs": 4,
+          "failure_rate": 0.25
+        }
+      }
+    ],
+    "workflows": [],
+    "outliers": []
+  },
+  "expect": {
+    "schema": [
+      "verdict",
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": {
+      "criteria": "Treats `too few runs` as the report saying it does not know.",
+      "levels": {
+        "5": "No proposal about the tests lens; says the window was too small and, if anything, that more runs are needed before the 25% means anything.",
+        "3": "Mentions the small sample but still proposes a change.",
+        "1": "Reports a 25% failure rate as a regression."
+      },
+      "min": 4
+    }
+  }
+}

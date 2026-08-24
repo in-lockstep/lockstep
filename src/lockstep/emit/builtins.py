@@ -26,6 +26,9 @@ AVAILABLE = frozenset(
         # One shape from either tracker, so a pipeline reading `acceptance_criteria` does not have
         # to know which one delivered it.
         "issue-fetch",
+        # Reading the durable ledger a run leaves behind. Spec surface, unlike `meter` — a retro
+        # pipeline names it as a step, because looking at history is work rather than plumbing.
+        "run-history",
         # The counterpart to gh-aw's safe outputs, for the tracker that has none.
         "jira-update",
         # Reviewing a pull request. Promoted out of `examples/pr-review` so a shipped pipeline can
