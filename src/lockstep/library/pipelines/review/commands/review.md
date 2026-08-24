@@ -35,7 +35,7 @@ Adding an aspect means adding an agent, a step here, and its eval cases.
 2. **Work out which reviews are still due** → builtin: review-state
    - id: state
    - emits: pending
-   - args: --pr="{pull_request}" --requested="{positional}" --available=security,intent,performance,tests --output-dir={output_dir}/pending
+   - args: --pr="{pull_request}" --requested='{positional}' --available=security,intent,performance,tests --output-dir={output_dir}/pending
 
 3. **Review for security** → agent: security-reviewer
    (if security in {state.pending})

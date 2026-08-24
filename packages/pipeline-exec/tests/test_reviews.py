@@ -15,6 +15,7 @@ from click.testing import CliRunner
 from pipeline_exec.cli import main
 from pipeline_exec.reviews import (
     MAX_PATCH,
+    ReviewError,
     assemble,
     commits_since,
     inline_comments,
@@ -23,6 +24,7 @@ from pipeline_exec.reviews import (
     plan,
     previous_reviews,
     render_review,
+    requested_aspects,
     review_payload,
 )
 
@@ -400,3 +402,47 @@ def test_which_review_to_revise_comes_from_the_pipeline_not_the_agent(tmp_path):
         main, ["post-reviews", "--pr=7", f"--reviews={reviews}", f"--pending={pending}", "--dry-run"]
     )
     assert "(revise)" in result.output
+
+
+# --- what the gate actually hands over -------------------------------------------------------------
+#
+# `/review` and `/review security` both failed on PR #26, at the step that decides which reviews are
+# due. The gate hands `{positional}` over as a JSON array, and two things went wrong with it.
+#
+# `[]` means "nothing was requested", which parses successfully to an empty list — and the old code,
+# seeing no words and a non-empty string, fell through to the word split and produced a request for
+# an aspect literally called `[]`. A successful parse to empty is not a failed parse.
+#
+# `[security]` is what the shell delivers when a JSON array is interpolated inside double quotes:
+# the inner quotes are consumed by the outer ones. That one is still refused, because it is
+# malformed input rather than a request — the compiler is what had to stop producing it.
+
+ASPECT_NAMES = ["security", "intent", "performance", "tests"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("[]", sorted(ASPECT_NAMES)),
+        ("", sorted(ASPECT_NAMES)),
+        ('["security"]', ["security"]),
+        ('["security", "intent"]', ["security", "intent"]),
+        ("security", ["security"]),
+        ("security intent", ["security", "intent"]),
+        ("security,intent", ["security", "intent"]),
+    ],
+)
+def test_what_the_gate_hands_over_is_understood(raw, expected):
+    assert requested_aspects(raw, ASPECT_NAMES) == expected
+
+
+def test_an_empty_request_is_not_a_request_for_an_aspect_called_empty():
+    """The specific regression: `/review` with no arguments reviewed nothing and failed."""
+    assert requested_aspects("[]", ASPECT_NAMES) == sorted(ASPECT_NAMES)
+
+
+def test_a_shell_mangled_array_is_still_refused():
+    """`[security]` is what double-quoting a JSON array produces. Refusing it is correct — the fix
+    belongs in whatever emitted it, and accepting it would hide that."""
+    with pytest.raises(ReviewError):
+        requested_aspects("[security]", ASPECT_NAMES)

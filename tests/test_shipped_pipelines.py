@@ -16,6 +16,7 @@ pipeline that lints clean and compiles.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -401,3 +402,36 @@ def test_the_retro_runs_on_a_schedule_because_a_trend_is_not_an_event(adopter):
     workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/retro-retro.yml"])
     triggers = workflow.get("on") or workflow.get(True)
     assert "schedule" in triggers
+
+
+# --- a JSON value cannot survive double quotes in a shell argument --------------------------------
+#
+# `/review` and `/review security` both failed at the step deciding which reviews were due. The gate
+# hands `{positional}` over as a JSON array, and the shipped command interpolated it inside double
+# quotes — so `["security"]` reached the runtime as `[security]`, the inner quotes eaten by the
+# outer ones, and `[]` reached it as a request for an aspect called `[]`.
+#
+# The placeholders that carry JSON are the ones this matters for. A bare `{issue}` is a number and
+# double quotes are right for it.
+
+JSON_PLACEHOLDERS = ("{positional}",)
+
+
+def test_json_placeholders_are_not_wrapped_in_double_quotes():
+    """Single quotes, so the value's own quotes reach the process that has to parse them."""
+    bad: list[str] = []
+    commands = [
+        path
+        for root in library.pipelines().values()
+        for path in sorted(Path(root).glob("commands/*.md"))
+    ]
+    assert commands, "no shipped commands found, so this would prove nothing"
+    for command in commands:
+        for number, line in enumerate(command.read_text(encoding="utf-8").splitlines(), 1):
+            for placeholder in JSON_PLACEHOLDERS:
+                if f'"{placeholder}"' in line:
+                    bad.append(f"{command.name}:{number}: {line.strip()}")
+    assert not bad, (
+        "these interpolate a JSON value inside double quotes, so the shell eats its quotes before "
+        "anything can parse it:\n  " + "\n  ".join(bad)
+    )
