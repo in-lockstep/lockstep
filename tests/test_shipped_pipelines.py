@@ -251,3 +251,25 @@ def test_nothing_shipped_writes_to_the_repository_itself(adopter):
     for path, text in compile_spec(adopter).files.items():
         if "/aw-" in path and path.endswith(".md"):
             assert yaml.safe_load(text.split("---")[1])["permissions"] == "read-all", path
+
+
+def test_triage_writes_back_to_jira_and_only_to_jira(adopter):
+    """On GitHub the agent's safe outputs already did it; a second write would duplicate the comment.
+
+    The gate reads what the fetch step left outstanding rather than the `source` parameter, because
+    the question is which tracker actually answered.
+    """
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/triage-triage.yml"])
+    write_back = workflow["jobs"]["write-back"]
+    assert "jira" in write_back["if"] and "needs.issue.outputs.writeback" in write_back["if"]
+    command = " ".join(step.get("run", "") for step in write_back["steps"])
+    assert "pipeline-exec jira-update" in command
+    # Additive writes only. Nothing here transitions an issue.
+    assert "--transition" not in command
+
+
+def test_the_gate_reads_a_list_because_the_condition_is_a_membership_test(adopter):
+    """`fromJSON` on a bare word fails the run, so the output it reads has to be a JSON array."""
+    workflow = yaml.safe_load(compile_spec(adopter).files[".github/workflows/triage-triage.yml"])
+    assert "fromJSON(needs.issue.outputs.writeback)" in workflow["jobs"]["write-back"]["if"]
+    assert workflow["jobs"]["issue"]["outputs"]["writeback"]

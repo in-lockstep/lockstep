@@ -641,6 +641,8 @@ def gh_issue_fetch(issue: str, repo: str, output: Path, no_discussion: bool, fro
 
     _emit_output("number", str(document["number"]))
     _emit_output("state", document["state"])
+    # Nothing outstanding: on GitHub an agent's conclusions reach the issue through safe outputs.
+    _emit_output("writeback", json.dumps([]))
     _emit_output("criteria", str(len(document["acceptance_criteria"])))
     click.echo(
         f"fetched {document['key']} \u2014 {len(document['acceptance_criteria'])} criteria, "
@@ -1148,6 +1150,10 @@ def issue_fetch(
     output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     _emit_output("key", document["key"])
     _emit_output("state", document["state"])
+    # What this fetch left for a later step to write back. A list, because the step conditions that
+    # read it are membership tests — and because "the write-backs still outstanding" is the honest
+    # reading: on GitHub the agent's safe outputs do it and nothing is outstanding.
+    _emit_output("writeback", json.dumps(["jira"]))
     _emit_output("criteria", str(len(document["acceptance_criteria"])))
     # Published because "none found" and "guessed from a field nobody configured" are different
     # situations, and a step that reported only a count would make them look identical.
@@ -1510,3 +1516,148 @@ def render_plan_command(plan: Path, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render_plan(load_plan(plan)), encoding="utf-8")
     click.echo(f"rendered the plan -> {output}")
+
+
+@main.command(name="jira-update")
+@click.option("--issue", required=True, help="The issue key to write to.")
+@click.option("--from", "source", required=True, type=click.Path(path_type=Path), help="Agent output.")
+@click.option("--base-url", envvar="JIRA_BASE_URL", default="")
+@click.option(
+    "--name",
+    default="",
+    help="Distinguishes this pipeline's comment marker when several comment on one issue.",
+)
+@click.option("--comment", "post_comment", is_flag=True, help="Post or revise the `comment` field.")
+@click.option("--labels", "add_labels", is_flag=True, help="Add the `labels` field.")
+@click.option("--priority", "set_priority", is_flag=True, help="Set the `priority` field.")
+@click.option("--max-labels", default=5, show_default=True, type=int, help="Cap on labels per run.")
+@click.option("--dry-run", is_flag=True, help="Report what would be written and write nothing.")
+def jira_update(
+    issue: str,
+    source: Path,
+    base_url: str,
+    name: str,
+    post_comment: bool,
+    add_labels: bool,
+    set_priority: bool,
+    max_labels: int,
+    dry_run: bool,
+) -> None:
+    """Write an agent's conclusions back to a Jira issue.
+
+    The counterpart to gh-aw's safe outputs, which is how the same conclusions reach a GitHub issue.
+    The shape is deliberately the same: the agent writes a JSON file and never holds a credential,
+    and this deterministic step is the only thing that writes.
+
+    Every write is additive. Labels are *added* — sending a replacement set would silently delete
+    whatever a person put on the issue, which is the most destructive thing a write-back could do
+    and the easiest to do by accident. Nothing here transitions an issue: a transition fires
+    workflow automation, notifications and SLA timers, and a triage bot should not be starting
+    those. Add a step of your own if you want that, deliberately.
+
+    Commenting is idempotent. The comment carries a marker, and a second run revises the comment it
+    left last time rather than posting beside it.
+    """
+    from .issues import JiraWriteError, find_marked_comment, label_update, priority_update, with_marker
+
+    if not source.is_file():
+        _fail(f"{source} does not exist — the agent wrote nothing to write back")
+    try:
+        result = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        _fail(f"{source} is not valid JSON ({error.msg})")
+    if not isinstance(result, dict):
+        _fail(f"{source} holds {type(result).__name__}, not an object")
+
+    if not (post_comment or add_labels or set_priority):
+        _fail("nothing asked for — pass --comment, --labels or --priority")
+
+    token = os.environ.get("JIRA_API_TOKEN", "")
+    if not dry_run and (not base_url or not token):
+        _fail("JIRA_BASE_URL and JIRA_API_TOKEN are required unless --dry-run is given")
+
+    written: list[str] = []
+    fields: dict[str, Any] = {}
+    try:
+        if add_labels and result.get("labels"):
+            fields.update(label_update(list(result["labels"]), cap=max_labels))
+        if set_priority and result.get("priority"):
+            payload = priority_update(str(result["priority"]))
+            fields.setdefault("fields", {}).update(payload["fields"])
+    except JiraWriteError as error:
+        _fail(str(error))
+
+    if fields:
+        if dry_run:
+            click.echo(f"would update {issue}: {json.dumps(fields)}")
+            written.append("fields")
+        elif _jira_send("PUT", base_url, token, f"issue/{issue}", fields):
+            written.append("fields")
+        else:
+            _fail(f"could not update {issue}")
+
+    if post_comment and str(result.get("comment") or "").strip():
+        body = with_marker(str(result["comment"]), name=name)
+        existing = None
+        if not dry_run:
+            payload = _jira_get(base_url, token, f"issue/{issue}/comment") or {}
+            existing = find_marked_comment(list(payload.get("comments") or []), name=name)
+        if dry_run:
+            click.echo(f"would comment on {issue}:\n{body}")
+            written.append("comment")
+        else:
+            path = f"issue/{issue}/comment/{existing['id']}" if existing else f"issue/{issue}/comment"
+            method = "PUT" if existing else "POST"
+            if _jira_send(method, base_url, token, path, {"body": body}):
+                written.append("revised comment" if existing else "comment")
+            else:
+                _fail(f"could not comment on {issue}")
+
+    _emit_output("written", ",".join(written))
+    verb = "would write" if dry_run else "wrote"
+    click.echo(f"{issue}: " + (f"{verb} {', '.join(written)}" if written else "nothing to write"))
+
+
+def _jira_request(method: str, base_url: str, token: str, path: str, payload: Any) -> Any:
+    import urllib.error
+    import urllib.request
+
+    url = f"{base_url.rstrip('/')}/rest/api/2/{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        body = response.read().decode("utf-8")
+    return json.loads(body) if body.strip() else {}
+
+
+def _jira_send(method: str, base_url: str, token: str, path: str, payload: dict[str, Any]) -> bool:
+    import urllib.error
+
+    try:
+        _jira_request(method, base_url, token, path, payload)
+    except urllib.error.HTTPError as error:
+        # Jira answers a rejected write with a body naming the field; the status alone does not.
+        detail = error.read().decode("utf-8", errors="replace")[:300]
+        click.echo(click.style(f"{method} {path} -> {error.code}: {detail}", fg="red"), err=True)
+        return False
+    except (urllib.error.URLError, OSError) as error:
+        click.echo(click.style(f"{method} {path} failed: {error}", fg="red"), err=True)
+        return False
+    return True
+
+
+def _jira_get(base_url: str, token: str, path: str) -> Any:
+    import urllib.error
+
+    try:
+        return _jira_request("GET", base_url, token, path, None)
+    except (urllib.error.URLError, OSError):
+        # Not fatal: without the existing comments this posts a new one rather than revising, which
+        # is a duplicate comment rather than a failed run.
+        click.echo(f"could not read existing comments on {path}", err=True)
+        return {}

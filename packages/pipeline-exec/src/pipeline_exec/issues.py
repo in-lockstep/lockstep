@@ -181,3 +181,74 @@ def reduce_jira_issue(
         "components": [c.get("name", "") for c in fields.get("components") or []],
         "priority": (fields.get("priority") or {}).get("name", ""),
     }
+
+
+# --- writing back ---------------------------------------------------------------------------------
+#
+# On GitHub an agent's conclusions reach the issue through gh-aw's safe outputs: the agent emits a
+# request, and machinery it does not control validates and performs it. The agent never holds the
+# token. That property is the reason the whole framework can leave agents `read-all`.
+#
+# Jira has no equivalent, so this reproduces the shape rather than the mechanism. The agent writes a
+# JSON file; a deterministic step reads it and performs the write, under the same three rules the
+# safe-output caps enforce on the other side.
+
+# A visible footer rather than a hidden one. Jira comments are not HTML, so there is nowhere to hide
+# a marker — and a bot comment that says which bot wrote it is better manners anyway.
+JIRA_MARKER = "[lockstep]"
+
+# What one run may add. A model that decides on forty labels has misunderstood the task, and the
+# place to find that out is here rather than on the issue.
+MAX_LABELS = 5
+
+
+class JiraWriteError(ValueError):
+    """A write refused before it was attempted."""
+
+
+def marker_for_update(name: str = "") -> str:
+    """`[lockstep]`, or `[lockstep:triage]` when several pipelines comment on the same issue."""
+    return f"[lockstep:{name}]" if name else JIRA_MARKER
+
+
+def with_marker(body: str, *, name: str) -> str:
+    """The comment, footed with the marker that lets the next run find it."""
+    marker = marker_for_update(name)
+    text = body.rstrip()
+    return text if text.endswith(marker) else f"{text}\n\n{marker}"
+
+
+def find_marked_comment(comments: list[dict[str, Any]], *, name: str) -> dict[str, Any] | None:
+    """This pipeline's own most recent comment, if it has commented before.
+
+    Latest wins, and only this pipeline's own: editing somebody else's comment because it happened
+    to mention the same words is the kind of thing a bot only has to do once to be turned off.
+    """
+    marker = marker_for_update(name)
+    found = None
+    for comment in comments:
+        if marker in str(comment.get("body") or ""):
+            found = comment
+    return found
+
+
+def label_update(labels: list[str], *, cap: int = MAX_LABELS) -> dict[str, Any]:
+    """Labels to *add*, never a replacement set.
+
+    Jira's `update` verb adds without touching what is already there. Sending `fields.labels`
+    instead would replace the list, silently deleting whatever a person put on the issue — which is
+    the single most destructive thing a write-back could do and the easiest to do by accident.
+    """
+    wanted = [str(label).strip() for label in labels if str(label).strip()]
+    if len(wanted) > cap:
+        raise JiraWriteError(f"{len(wanted)} labels is more than the cap of {cap}: {', '.join(wanted)}")
+    # Jira rejects a label containing whitespace, and does it with a 400 that names nothing useful.
+    bad = [label for label in wanted if any(c.isspace() for c in label)]
+    if bad:
+        raise JiraWriteError(f"Jira labels cannot contain spaces: {', '.join(bad)}")
+    return {"update": {"labels": [{"add": label} for label in wanted]}}
+
+
+def priority_update(name: str) -> dict[str, Any]:
+    """One field, set to what the agent decided. Not a transition."""
+    return {"fields": {"priority": {"name": str(name).strip()}}}

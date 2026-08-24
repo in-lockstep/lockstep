@@ -143,9 +143,42 @@ than the one before, and the output says which one answered — because "this is
 and "we guessed" are different situations, and an agent handed them silently would treat them the
 same. The shipped triage agent is told to read that field and say so.
 
-**Write-back is GitHub-only today.** The triage agent posts its comment and labels through gh-aw's
-safe outputs, which are a GitHub mechanism. Reading from Jira works; writing back to Jira needs a
-step you add. That is a real gap rather than a design position — `docs/status.md` carries it.
+### Writing back
+
+On GitHub an agent's conclusions reach the issue through gh-aw's **safe outputs**: the agent emits a
+request, and machinery it does not control validates and performs it. The agent never holds a
+credential, which is what lets every agent here stay `read-all`.
+
+Jira has no equivalent, so `jira-update` reproduces the *shape* rather than the mechanism — the
+agent writes a JSON file, and a deterministic step is the only thing that writes to the tracker.
+Shipped `triage` runs it as a third step, gated on what the fetch left outstanding:
+
+```
+3. **Write it back to Jira** → builtin: jira-update
+   (if jira in {issue.writeback})
+```
+
+The condition asks the fetch step rather than reading the `source` parameter back, because the
+question is which tracker actually answered. On GitHub the fetch reports nothing outstanding and the
+step is skipped — a second write there would be a duplicate comment.
+
+Three rules are enforced in code, because the safe-output caps that enforce them on the other side
+do not exist here:
+
+- **Labels are added, never replaced.** Sending `fields.labels` would replace the list and silently
+  delete whatever a person put on the issue. That is the most destructive thing a write-back could
+  do and the easiest to do by accident, so the additive `update` verb is the only one used.
+- **There is a cap.** A model that decided on forty labels has misunderstood the task, and the place
+  to find that out is before the issue, not on it.
+- **Nothing transitions an issue.** A transition fires workflow automation, notifications and SLA
+  timers. A triage bot should not start those, and a pipeline that wants to can add the step
+  deliberately.
+
+Commenting is idempotent: the comment carries a `[lockstep:triage]` marker and a second run revises
+the comment it left last time rather than posting beside it. The marker is visible, because a Jira
+comment is not HTML and there is nowhere to hide one — and a bot comment that says which bot wrote
+it is better manners anyway. It only ever matches its own: editing somebody else's comment is the
+kind of thing a bot has to do once to be turned off.
 
 ---
 

@@ -534,10 +534,14 @@ Three are now closed — `docs/evals.md` and `docs/metering.md` describe them:
   example — and cannot carry scripts, since a script in the library is untested code arriving in
   every adopter.
 
-  What remains: write-back to Jira. Reading works from either tracker in one shape; the triage
-  agent posts through gh-aw's safe outputs, which are a GitHub mechanism, so a Jira shop adds a
-  step. And these are a starting point rather than a product — the facts that make a pipeline good
-  in a particular repository are the ones only that repository can write.
+  Both trackers work end to end. Reading is one shape from either; writing back on GitHub goes
+  through gh-aw's safe outputs, and `jira-update` reproduces that shape for the tracker that has no
+  equivalent — the agent writes a file, a deterministic step performs the write, labels are added
+  rather than replaced, and nothing transitions an issue.
+
+  These remain a starting point rather than a product: the facts that make a pipeline good in a
+  particular repository — which layer was audited, how its tests are laid out — are the ones only
+  that repository can write, and each shipped agent says so where it would otherwise be guessing.
 
 | Gap | What is missing here | Why it matters |
 |---|---|---|

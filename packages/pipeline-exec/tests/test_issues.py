@@ -7,6 +7,7 @@ put them are a task list and a heading. Reading neither means an agent implement
 
 from __future__ import annotations
 
+import io
 import json
 
 import pytest
@@ -347,3 +348,304 @@ def test_jira_without_credentials_says_which_ones(tmp_path):
     )
     assert result.exit_code != 0
     assert "JIRA_BASE_URL" in result.output
+
+
+# --- writing back to Jira ---------------------------------------------------
+#
+# On GitHub an agent's conclusions reach the issue through gh-aw's safe outputs: the agent emits a
+# request and machinery it does not control performs it. Jira has no equivalent, so this reproduces
+# the shape — the agent writes a file, a deterministic step writes to the tracker — and the rules
+# the safe-output caps enforce on the other side have to be enforced here in code.
+
+
+def test_labels_are_added_never_replaced():
+    """The single most destructive thing a write-back could do, and the easiest by accident.
+
+    `fields.labels` would replace the list and silently delete whatever a person put on the issue.
+    """
+    from pipeline_exec.issues import label_update
+
+    payload = label_update(["reporting", "triaged"])
+    assert payload == {"update": {"labels": [{"add": "reporting"}, {"add": "triaged"}]}}
+    assert "fields" not in payload
+
+
+def test_more_labels_than_the_cap_is_refused():
+    """A model that decided on forty labels has misunderstood the task."""
+    from pipeline_exec.issues import JiraWriteError, label_update
+
+    with pytest.raises(JiraWriteError, match="cap of 5"):
+        label_update([f"l{n}" for n in range(6)])
+
+
+def test_a_label_with_a_space_is_refused_here_rather_than_by_a_400():
+    from pipeline_exec.issues import JiraWriteError, label_update
+
+    with pytest.raises(JiraWriteError, match="cannot contain spaces"):
+        label_update(["needs triage"])
+
+
+def test_setting_a_priority_is_a_field_edit_not_a_transition():
+    from pipeline_exec.issues import priority_update
+
+    assert priority_update("High") == {"fields": {"priority": {"name": "High"}}}
+
+
+def test_a_comment_carries_a_marker_so_the_next_run_can_find_it():
+    from pipeline_exec.issues import find_marked_comment, with_marker
+
+    body = with_marker("Placed as a bug.", name="triage")
+    assert body.endswith("[lockstep:triage]")
+    found = find_marked_comment([{"id": "1", "body": body}], name="triage")
+    assert found is not None and found["id"] == "1"
+
+
+def test_the_marker_is_not_added_twice_when_a_comment_is_revised():
+    from pipeline_exec.issues import with_marker
+
+    once = with_marker("Placed as a bug.", name="triage")
+    assert with_marker(once, name="triage").count("[lockstep:triage]") == 1
+
+
+def test_another_pipelines_comment_is_not_mistaken_for_this_one():
+    """Editing somebody else's comment is the kind of thing a bot only has to do once."""
+    from pipeline_exec.issues import find_marked_comment, with_marker
+
+    theirs = with_marker("A review.", name="review")
+    assert find_marked_comment([{"id": "1", "body": theirs}], name="triage") is None
+    assert find_marked_comment([{"id": "1", "body": "A human wrote this."}], name="triage") is None
+
+
+def test_the_latest_marked_comment_wins():
+    from pipeline_exec.issues import find_marked_comment, with_marker
+
+    comments = [
+        {"id": "1", "body": with_marker("old", name="triage")},
+        {"id": "2", "body": with_marker("new", name="triage")},
+    ]
+    assert find_marked_comment(comments, name="triage")["id"] == "2"
+
+
+def triage_result(**overrides):
+    base = {"kind": "bug", "priority": "High", "comment": "Placed as a bug.", "labels": ["reporting"]}
+    base.update(overrides)
+    return base
+
+
+def run_update(tmp_path, result, *flags):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    path = tmp_path / "triage.json"
+    path.write_text(json.dumps(result))
+    return CliRunner().invoke(main, ["jira-update", "--issue=P-1", f"--from={path}", "--dry-run", *flags])
+
+
+def test_nothing_is_written_unless_something_was_asked_for(tmp_path):
+    result = run_update(tmp_path, triage_result())
+    assert result.exit_code != 0
+    assert "nothing asked for" in result.output
+
+
+def test_only_what_was_asked_for_is_written(tmp_path):
+    result = run_update(tmp_path, triage_result(), "--labels")
+    assert result.exit_code == 0
+    assert "labels" in result.output
+    assert "priority" not in result.output
+
+
+def test_an_agent_that_wrote_nothing_is_an_error_not_a_silent_pass(tmp_path):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    result = CliRunner().invoke(
+        main, ["jira-update", "--issue=P-1", f"--from={tmp_path / 'nope.json'}", "--comment", "--dry-run"]
+    )
+    assert result.exit_code != 0
+    assert "wrote nothing to write back" in result.output
+
+
+def test_an_empty_comment_is_not_posted(tmp_path):
+    result = run_update(tmp_path, triage_result(comment="   "), "--comment")
+    assert result.exit_code == 0
+    assert "nothing to write" in result.output
+
+
+def test_a_dry_run_says_it_would_write_rather_than_that_it_did(tmp_path):
+    result = run_update(tmp_path, triage_result(), "--comment", "--labels")
+    assert "would write" in result.output
+
+
+def test_credentials_are_required_for_a_real_write(tmp_path):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps(triage_result()))
+    result = CliRunner().invoke(
+        main, ["jira-update", "--issue=P-1", f"--from={path}", "--comment"], env={"JIRA_API_TOKEN": ""}
+    )
+    assert result.exit_code != 0
+    assert "JIRA_BASE_URL" in result.output
+
+
+def test_the_fetch_says_what_it_left_outstanding(tmp_path):
+    """The write-back step gates on this, so it has to answer for the tracker that actually ran."""
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    fixtures = tmp_path / "fx"
+    fixtures.mkdir()
+    (fixtures / "issue.json").write_text(json.dumps(jira()))
+    out = tmp_path / "issue.json"
+    result = CliRunner().invoke(
+        main, ["issue-fetch", "--source=jira", "--issue=P-1", f"--from-dir={fixtures}", f"--output={out}"]
+    )
+    assert 'writeback=["jira"]' in result.output
+
+
+def test_github_leaves_nothing_outstanding(tmp_path):
+    """Safe outputs already did it; a second write would be a duplicate comment."""
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    fixtures = tmp_path / "fx"
+    fixtures.mkdir()
+    (fixtures / "issue.json").write_text(json.dumps({"number": 5, "title": "t", "body": "", "state": "open"}))
+    result = CliRunner().invoke(
+        main,
+        [
+            "issue-fetch",
+            "--source=github",
+            "--issue=5",
+            "--repo=o/r",
+            f"--from-dir={fixtures}",
+            f"--output={tmp_path / 'o.json'}",
+        ],
+    )
+    assert "writeback=[]" in result.output
+
+
+# --- talking to Jira --------------------------------------------------------
+
+
+class FakeResponse:
+    def __init__(self, body=""):
+        self._body = body.encode("utf-8")
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def stub_jira(monkeypatch, handler):
+    """Stand in for the network, recording what would have been sent."""
+    import urllib.request
+
+    sent = []
+
+    def fake_urlopen(request, timeout=0):
+        sent.append((request.get_method(), request.full_url, request.data))
+        return handler(request)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    return sent
+
+
+def test_a_first_comment_is_posted(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    sent = stub_jira(monkeypatch, lambda request: FakeResponse('{"comments": []}'))
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps(triage_result()))
+    result = CliRunner().invoke(
+        main,
+        ["jira-update", "--issue=P-1", f"--from={path}", "--comment", "--base-url=https://jira.test"],
+        env={"JIRA_API_TOKEN": "tok"},
+    )
+    assert result.exit_code == 0, result.output
+    methods = [(method, url.rsplit("/rest/api/2/", 1)[-1]) for method, url, _ in sent]
+    assert ("GET", "issue/P-1/comment") in methods
+    assert ("POST", "issue/P-1/comment") in methods
+    assert "wrote comment" in result.output
+
+
+def test_a_second_run_revises_the_comment_it_left(tmp_path, monkeypatch):
+    """Otherwise every run adds another identical comment to the issue."""
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+    from pipeline_exec.issues import with_marker
+
+    existing = json.dumps({"comments": [{"id": "77", "body": with_marker("old", name="triage")}]})
+    sent = stub_jira(monkeypatch, lambda request: FakeResponse(existing))
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps(triage_result()))
+    result = CliRunner().invoke(
+        main,
+        [
+            "jira-update",
+            "--issue=P-1",
+            f"--from={path}",
+            "--name=triage",
+            "--comment",
+            "--base-url=https://jira.test",
+        ],
+        env={"JIRA_API_TOKEN": "tok"},
+    )
+    assert result.exit_code == 0, result.output
+    assert any(method == "PUT" and url.endswith("issue/P-1/comment/77") for method, url, _ in sent)
+    assert "revised comment" in result.output
+
+
+def test_a_rejected_write_reports_what_jira_said(tmp_path, monkeypatch):
+    """The status alone names nothing; Jira puts the offending field in the body."""
+    import urllib.error
+
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    def reject(request):
+        raise urllib.error.HTTPError(
+            request.full_url, 400, "Bad Request", {}, io.BytesIO(b'{"errors":{"labels":"not valid"}}')
+        )
+
+    stub_jira(monkeypatch, reject)
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps(triage_result()))
+    result = CliRunner().invoke(
+        main,
+        ["jira-update", "--issue=P-1", f"--from={path}", "--labels", "--base-url=https://jira.test"],
+        env={"JIRA_API_TOKEN": "tok"},
+    )
+    assert result.exit_code != 0
+    assert "not valid" in result.output
+
+
+def test_unreadable_comments_mean_a_new_one_not_a_failed_run(tmp_path, monkeypatch):
+    """A duplicate comment is a worse outcome than none, but it is not worth failing the run over."""
+    import urllib.error
+
+    from click.testing import CliRunner
+    from pipeline_exec.cli import main
+
+    def flaky(request):
+        if request.get_method() == "GET":
+            raise urllib.error.URLError("no route to host")
+        return FakeResponse("{}")
+
+    sent = stub_jira(monkeypatch, flaky)
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps(triage_result()))
+    result = CliRunner().invoke(
+        main,
+        ["jira-update", "--issue=P-1", f"--from={path}", "--comment", "--base-url=https://jira.test"],
+        env={"JIRA_API_TOKEN": "tok"},
+    )
+    assert result.exit_code == 0, result.output
+    assert any(method == "POST" for method, _, _ in sent)
