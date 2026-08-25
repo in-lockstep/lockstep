@@ -98,10 +98,18 @@ runs:
         base='${{ inputs.base }}'
         [ -n "$base" ] || base="${GITHUB_REF_NAME}"
         reuse='${{ inputs.reuse-branch }}'
+        # An input that arrives empty means "not supplied" — the same reading `base` gets on the
+        # line above. Actions applies a declared default only to an *absent* input, and the compiler
+        # always passes this one, so a command whose `branch` parameter defaults to "" hands over
+        # the empty string and the default declared at the top of this file never fires. Left alone
+        # that built `-${GITHUB_RUN_ID}`, which git rejects as a branch name — at the last step of a
+        # run that had already paid for every agent in the pipeline.
+        prefix='${{ inputs.branch }}'
+        [ -n "$prefix" ] || prefix="pipeline/generated"
         if [ "$reuse" = "true" ]; then
-          branch="${{ inputs.branch }}"
+          branch="$prefix"
         else
-          branch="${{ inputs.branch }}-${GITHUB_RUN_ID}"
+          branch="$prefix-${GITHUB_RUN_ID}"
         fi
 
         if [ "$base" != "${GITHUB_REF_NAME}" ]; then
