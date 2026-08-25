@@ -45,8 +45,8 @@ inherits:
 # The daily ceiling is per agent and exists for the failure a per-run cap cannot survive: an agent
 # stuck in a retry loop, or a comment trigger that fires on its own output.
 budgets:
-  per_run_ai_credits: 400
-  per_agent_daily_ai_credits: 500
+  per_run_ai_credits: 25000
+  per_agent_daily_ai_credits: 500000
 
 # One line per run, on a branch, because artifacts expire and job logs rotate. Turned on the day
 # `/review` went live rather than the day something wanted to read it: a run that finishes before
