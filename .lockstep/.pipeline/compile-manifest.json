@@ -6,9 +6,9 @@
       "sources": []
     },
     ".github/workflows/aw-implement-change-writer.md": {
-      "sha": "0ad10537",
+      "sha": "de340469",
       "sources": [
-        "implement:agents/change-writer.md@39c33239",
+        "implement:agents/change-writer.md@c6f71fa4",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "implement:skills/change-format.md@babdb34a",
@@ -16,27 +16,27 @@
       ]
     },
     ".github/workflows/aw-implement-planner.md": {
-      "sha": "75f015d9",
+      "sha": "04059ec7",
       "sources": [
-        "implement:agents/planner.md@c0f3e827",
+        "implement:agents/planner.md@60a24853",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-implement-requirements-analyst.md": {
-      "sha": "d9b946e6",
+      "sha": "c7340858",
       "sources": [
-        "implement:agents/requirements-analyst.md@1e3431e4",
+        "implement:agents/requirements-analyst.md@98c2b307",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-implement-test-writer.md": {
-      "sha": "6d492a4d",
+      "sha": "3e16b4e5",
       "sources": [
-        "implement:agents/test-writer.md@a09e7b5f",
+        "implement:agents/test-writer.md@4a4965e5",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "implement:skills/change-format.md@babdb34a",
@@ -44,18 +44,18 @@
       ]
     },
     ".github/workflows/aw-retro-retro-analyst.md": {
-      "sha": "9d34ab6c",
+      "sha": "ceaa5b66",
       "sources": [
-        "retro:agents/retro-analyst.md@13ec5ff3",
+        "retro:agents/retro-analyst.md@16db83b5",
         "lockstep:guardrails/baseline.md@7875122b",
         "retro:guardrails/retro.md@f06fdc5a",
         "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-review-intent-reviewer.md": {
-      "sha": "774db7fb",
+      "sha": "988e3a54",
       "sources": [
-        "review:agents/intent-reviewer.md@4b04de94",
+        "review:agents/intent-reviewer.md@df41ad2b",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
@@ -64,9 +64,9 @@
       ]
     },
     ".github/workflows/aw-review-performance-reviewer.md": {
-      "sha": "c8ffac39",
+      "sha": "9ea981cf",
       "sources": [
-        "review:agents/performance-reviewer.md@077c07d5",
+        "review:agents/performance-reviewer.md@c99e31af",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
@@ -75,9 +75,9 @@
       ]
     },
     ".github/workflows/aw-review-security-reviewer.md": {
-      "sha": "452c5cec",
+      "sha": "d95fe143",
       "sources": [
-        "review:agents/security-reviewer.md@9091ec35",
+        "review:agents/security-reviewer.md@7886fbd0",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",
@@ -86,9 +86,9 @@
       ]
     },
     ".github/workflows/aw-review-tests-reviewer.md": {
-      "sha": "22d37fdc",
+      "sha": "8a65667a",
       "sources": [
-        "review:agents/tests-reviewer.md@df9f4591",
+        "review:agents/tests-reviewer.md@4f93e100",
         "lockstep:guardrails/baseline.md@7875122b",
         "review:guardrails/reviewing.md@dd106a9d",
         "review:skills/review-format.md@4dd44c89",

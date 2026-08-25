@@ -3,7 +3,11 @@ name: requirements-analyst
 description: Turn an issue into requirements that can be checked
 model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5, claude-haiku-4-5] }
 provider: anthropic
-max_tool_turns: 4
+# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
+# number a consumer can move; this one is deliberately not bandable, so it must sit above the
+# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
+# 150 credits at the ~5 a tool turn measured on run 32792379720 is 30 turns.
+max_tool_turns: 30
 guardrails: [implementing]
 github:
   max-ai-credits: { default: 40, min: 15, max: 150 }

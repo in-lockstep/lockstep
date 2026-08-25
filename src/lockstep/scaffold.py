@@ -139,7 +139,7 @@ name: eval-judge
 description: Decide whether an answer met a case's rubric
 model: {{ default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }}
 provider: anthropic
-max_tool_turns: 2
+max_tool_turns: 12
 guardrails: [{guardrail}]
 github:
   # Small, and read-only by construction. Judging one answer against one rubric is a short task, and

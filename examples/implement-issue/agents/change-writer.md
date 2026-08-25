@@ -3,7 +3,7 @@ name: change-writer
 description: Write the change the plan describes
 model: claude-opus-4-6
 provider: vertex-claude
-max_tool_turns: 16
+max_tool_turns: 50
 guardrails: [common, source-analysis, minimal-change]
 skills: [repo-conventions]
 mcp: [filesystem]

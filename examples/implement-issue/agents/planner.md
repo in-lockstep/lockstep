@@ -3,7 +3,7 @@ name: planner
 description: Decide how the change will be made, before any of it is written
 model: claude-opus-4-6
 provider: vertex-claude
-max_tool_turns: 12
+max_tool_turns: 30
 guardrails: [common, source-analysis]
 skills: [repo-conventions]
 mcp: [filesystem, git]

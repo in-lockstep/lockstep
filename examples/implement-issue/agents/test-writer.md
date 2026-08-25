@@ -3,7 +3,7 @@ name: test-writer
 description: Write tests the repository's own CI will run
 model: claude-sonnet-4-6
 provider: vertex-claude
-max_tool_turns: 8
+max_tool_turns: 20
 guardrails: [common, source-analysis]
 skills: [repo-conventions]
 mcp: [filesystem]
