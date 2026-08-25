@@ -185,6 +185,37 @@ def test_the_pipeline_working_directory_does_not_land_in_the_pull_request(worksp
     assert not [path for path in committed if path.startswith("outputs/")], committed
 
 
+def test_the_workspace_is_marked_safe_before_any_repository_command(workspace: Path) -> None:
+    """This action runs in the executor container, as root, over a runner-owned checkout.
+
+    `actions/checkout` clears git's ownership check with a temporary global `safe.directory` scoped
+    to its own invocations, and a composite action's `run:` step does not inherit it. Without its
+    own, git's discovery refuses the repository and the first command reports `fatal: not in a git
+    directory` — which is exactly how run 32797177324 ended, after four agents had been paid for.
+
+    Asserted structurally rather than behaviourally: reproducing it needs a checkout owned by
+    another user, which a test running as its own author cannot arrange. So the property checked is
+    the one that fixes it — the exemption is configured, and configured first.
+    """
+    # Commands only. The paragraph above the fix mentions `safe.directory` too, and a comment is
+    # not a thing git reads.
+    commands = [
+        (number, line.strip())
+        for number, line in enumerate(action_script(COMPILER_PASSES).splitlines())
+        if line.strip().startswith("git ")
+    ]
+    assert commands, "the script runs no git commands at all, which cannot be right"
+
+    exemptions = [n for n, line in commands if "safe.directory" in line]
+    assert exemptions, "nothing marks the workspace safe, so git refuses it inside a container"
+
+    # `--global` is the only scope available: writing `--local` needs the repository git is refusing.
+    assert all("--global" in dict(commands)[n] for n in exemptions), commands
+
+    needs_repository = [n for n, line in commands if "safe.directory" not in line]
+    assert min(exemptions) < min(needs_repository), "the exemption comes after a command needing it"
+
+
 def test_a_run_that_generated_nothing_opens_no_pull_request(workspace: Path) -> None:
     for path in sorted((workspace / "outputs" / "change").rglob("*"), reverse=True):
         path.unlink() if path.is_file() else path.rmdir()

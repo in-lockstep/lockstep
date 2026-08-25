@@ -85,6 +85,13 @@ runs:
         mkdir -p "$destination"
         cp -R "$source/." "$destination/"
 
+        # This job runs in the executor container, as root, against a workspace the runner owns.
+        # `actions/checkout` handles that with a temporary global `safe.directory` scoped to its own
+        # git invocations, which a composite action's `run:` step does not inherit — so git's
+        # discovery rejects the repository and every command here reports `fatal: not in a git
+        # directory`. Nothing caught it for the life of the project: each earlier run exited above,
+        # at "nothing was generated", so no git command in this action had ever executed on a runner.
+        git config --global --add safe.directory "$(pwd)"
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
