@@ -3,7 +3,11 @@ name: planner
 description: Decide how the change will be made, before making it
 model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
 provider: anthropic
-max_tool_turns: 6
+# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
+# number a consumer can move; this one is deliberately not bandable, so it must sit above the
+# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
+# 300 credits at the ~5 a tool turn measured on run 32792379720 is 60 turns.
+max_tool_turns: 60
 guardrails: [implementing]
 github:
   max-ai-credits: { default: 70, min: 25, max: 300 }

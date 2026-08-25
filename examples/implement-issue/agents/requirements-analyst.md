@@ -3,7 +3,7 @@ name: requirements-analyst
 description: Turn an issue and any review feedback into requirements somebody can build against
 model: claude-sonnet-4-6
 provider: vertex-claude
-max_tool_turns: 6
+max_tool_turns: 20
 guardrails: [common, source-analysis]
 skills: [repo-conventions]
 mcp: [filesystem]

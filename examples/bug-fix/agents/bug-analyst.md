@@ -3,7 +3,7 @@ name: bug-analyst
 description: Locate the cause of one bug in the application source
 model: claude-sonnet-4-6
 provider: vertex-claude
-max_tool_turns: 12
+max_tool_turns: 20
 guardrails: [common, source-analysis, review-response]
 skills: [codebase-navigation]
 mcp: [filesystem, git]

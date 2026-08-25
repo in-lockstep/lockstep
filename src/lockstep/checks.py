@@ -782,6 +782,12 @@ def _check_engines(spec: Spec, report: Report) -> None:
             )
 
 
+# Credits a single tool turn can plausibly cost, measured rather than guessed: run 32792379720 spent
+# 34 AI credits across 6 turns of a Sonnet agent reading an unfamiliar repository. Used to tell a
+# turn cap that is a backstop from one that has quietly become the budget.
+CREDITS_PER_TURN = 5
+
+
 def _check_budgets(spec: Spec, report: Report) -> None:
     for name, agent in sorted(spec.agents.items()):
         if agent.github.max_ai_credits is None:
@@ -804,6 +810,38 @@ def _check_budgets(spec: Spec, report: Report) -> None:
             hint="set budgets.per_run_ai_credits in pipeline.yaml so a runaway run fails loudly",
         )
         return
+
+    # `max-ai-credits` is banded, so a consumer can tune it; `max_tool_turns` deliberately is not,
+    # because a band governs cost and never capability. That only holds up while credits are the
+    # limit an agent actually reaches. When the turn cap is the tighter of the two it silently
+    # becomes the budget — and it is the one number nobody downstream can move.
+    #
+    # The threshold is measured, not guessed. On run 32792379720 the planner spent 34 credits across
+    # its 6 tool turns before the cap stopped it with a plan unwritten: a little under six credits a
+    # turn, for a Sonnet agent reading an unfamiliar repository. An agent allowed more credits per
+    # turn than that cannot spend its budget before it runs out of turns.
+    for name, agent in sorted(spec.agents.items()):
+        band = agent.bands.get("max-ai-credits")
+        # The top of the band, not its default: a consumer who raises credits to the ceiling the
+        # publisher offered should still find credits binding. If the turn cap overtakes them
+        # partway up, the upper half of the band is decoration.
+        credits = (band.maximum if band and band.maximum is not None else None) or agent.github.max_ai_credits
+        # `max_tool_turns: 0` is a text-only agent with no tools at all, which has no turns to cap.
+        if not credits or agent.max_tool_turns <= 0:
+            continue
+        affordable = agent.max_tool_turns * CREDITS_PER_TURN
+        if credits > affordable:
+            report.add(
+                Severity.WARNING,
+                "DOC026",
+                f"agent {name!r} runs out of turns before it runs out of credits "
+                f"({agent.max_tool_turns} turns buys about {affordable}, and it may be raised to "
+                f"{credits})",
+                location=agent.src.rel if agent.src else name,
+                hint="raise max_tool_turns until credits bind across the whole band. The turn cap is "
+                "a runaway-loop backstop, not a budget — and unlike max-ai-credits it is not "
+                "bandable, so an adopter who hits it has no lever",
+            )
 
     # A band lets a consumer raise one agent; the run budget is the ceiling over all of them. Raising
     # past it is a run that fails partway through, which is the most expensive way to find out.

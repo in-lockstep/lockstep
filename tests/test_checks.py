@@ -171,6 +171,53 @@ def test_a_missing_per_run_budget_is_a_warning(basic_root):
     assert "DOC007" in codes(doctor_of(basic_root))
 
 
+def test_a_turn_cap_below_the_credit_budget_is_a_warning(basic_root):
+    """The backstop must not quietly become the budget.
+
+    `max-ai-credits` is bandable and `max_tool_turns` deliberately is not, so an agent that runs out
+    of turns first is being bounded by the one number a consumer cannot move. Run 32792379720 was
+    that: the planner stopped at 6 turns with 34 of its 70 credits unspent, and no plan written.
+    """
+    agent = basic_root / "agents" / "story-extractor.md"
+    # 8 turns buys about 40 credits, which is exactly what the fixture allows. One more and the
+    # turns run out first.
+    agent.write_text(agent.read_text().replace("  max-ai-credits: 40\n", "  max-ai-credits: 60\n"))
+    assert "DOC026" in codes(doctor_of(basic_root))
+
+
+def test_a_turn_cap_is_measured_against_the_top_of_the_credit_band(basic_root):
+    """A band whose upper half the turn cap swallows is decoration, so the ceiling is what counts."""
+    agent = basic_root / "agents" / "story-extractor.md"
+    agent.write_text(
+        agent.read_text().replace(
+            "  max-ai-credits: 40\n",
+            "  max-ai-credits: { default: 40, min: 20, max: 300 }\n",
+        )
+    )
+    assert "DOC026" in codes(doctor_of(basic_root))
+
+
+def test_a_turn_cap_above_the_whole_band_is_fine(basic_root):
+    agent = basic_root / "agents" / "story-extractor.md"
+    agent.write_text(
+        agent.read_text()
+        .replace("max_tool_turns: 8", "max_tool_turns: 60")
+        .replace("  max-ai-credits: 40\n", "  max-ai-credits: { default: 40, min: 20, max: 300 }\n")
+    )
+    assert "DOC026" not in codes(doctor_of(basic_root))
+
+
+def test_a_text_only_agent_has_no_turns_to_cap(basic_root):
+    """`max_tool_turns: 0` means no tools at all, which is a choice rather than a tight backstop."""
+    agent = basic_root / "agents" / "story-extractor.md"
+    agent.write_text(
+        agent.read_text()
+        .replace("max_tool_turns: 8", "max_tool_turns: 0")
+        .replace("  max-ai-credits: 40\n", "  max-ai-credits: 300\n")
+    )
+    assert "DOC026" not in codes(doctor_of(basic_root))
+
+
 def test_an_undeclared_credential_reference_is_an_error(basic_root):
     profile = basic_root / "profiles" / "my-app.md"
     profile.write_text(profile.read_text().replace("auth_method=jwt", "token=${MYSTERY_TOKEN}"))

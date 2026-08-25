@@ -3,7 +3,7 @@ name: fix-writer
 description: Write the smallest change that makes a reproducer pass
 model: claude-opus-4-6
 provider: vertex-claude
-max_tool_turns: 8
+max_tool_turns: 40
 guardrails: [common, source-analysis, minimal-change, review-response]
 skills: [codebase-navigation, patch-format]
 mcp: [filesystem]

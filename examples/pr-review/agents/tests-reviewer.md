@@ -3,7 +3,7 @@ name: tests-reviewer
 description: Review whether a pull request is actually covered
 model: claude-sonnet-4-6
 provider: vertex-claude
-max_tool_turns: 6
+max_tool_turns: 20
 guardrails: [common, reviewing]
 skills: [review-writing, review-revision]
 github:
