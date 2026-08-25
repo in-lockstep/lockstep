@@ -45,7 +45,7 @@ post-steps:
 - uses: in-lockstep/lockstep/actions/save@45f5a996ffbe35ba03ee18d540de6dcd3f9c6011  # actions-v0.1.1
   with:
     paths: ${{ inputs.output_path }}
-max-daily-ai-credits: 500
+max-daily-ai-credits: 500000
 safe-outputs:
   upload-artifact:
     allowed-paths:
