@@ -701,9 +701,7 @@ def _run_step(step: Step, ctx: EmitContext, command: Command) -> dict[str, Any]:
     # builtin from `extensions.builtins` is code the framework has never seen, so it cannot be on
     # the list above — and without a way to declare it, the workaround is a personal access token
     # in a profile secret, which is a standing credential where a job-scoped one would do.
-    needs_token = step.github_token or (
-        step.kind is StepKind.BUILTIN and step.target in NEEDS_GITHUB_TOKEN
-    )
+    needs_token = step.github_token or (step.kind is StepKind.BUILTIN and step.target in NEEDS_GITHUB_TOKEN)
     if needs_token:
         emitted["env"] = {"GH_TOKEN": "${{ github.token }}"}
     return emitted

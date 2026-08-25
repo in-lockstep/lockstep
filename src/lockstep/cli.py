@@ -257,9 +257,7 @@ def _emit_diff(diff: sd.SemanticDiff | None) -> None:
     if not outstanding:
         if diff.blocking:
             click.echo(
-                click.style(
-                    f"{len(diff.blocking)} security-surface delta(s), all acknowledged", fg="green"
-                )
+                click.style(f"{len(diff.blocking)} security-surface delta(s), all acknowledged", fg="green")
             )
         return
 

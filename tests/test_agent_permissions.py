@@ -139,9 +139,7 @@ def test_every_agent_call_hands_over_the_engine_credential(repo_root):
     assert calls, "no agent calls found, so this would prove nothing"
 
     known = set(ENGINE_SECRET.values())
-    missing = [
-        f"{path}:{job}" for path, job, secrets in calls if not (known & set(secrets))
-    ]
+    missing = [f"{path}:{job}" for path, job, secrets in calls if not (known & set(secrets))]
     assert not missing, (
         "these call an agent workflow without passing an engine credential, so the run authorizes "
         "and then dies in activation:\n  " + "\n  ".join(missing)

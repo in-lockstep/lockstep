@@ -59,7 +59,10 @@ def workspace(tmp_path: Path) -> Path:
 
     repo = tmp_path / "repo"
     repo.mkdir()
-    run = lambda *args: subprocess.run(args, cwd=repo, check=True, capture_output=True)
+
+    def run(*args: str) -> None:
+        subprocess.run(args, cwd=repo, check=True, capture_output=True)
+
     run("git", "init", "-q", "-b", "main", ".")
     run("git", "config", "user.email", "t@example.com")
     run("git", "config", "user.name", "t")
@@ -71,7 +74,7 @@ def workspace(tmp_path: Path) -> Path:
 
     generated = repo / "outputs" / "change" / "src"
     generated.mkdir(parents=True)
-    (generated / "answer.py" ).write_text("VALUE = 1\n", encoding="utf-8")
+    (generated / "answer.py").write_text("VALUE = 1\n", encoding="utf-8")
     (repo / "outputs" / "issue.json").write_text('{"key": "#30"}\n', encoding="utf-8")
 
     # `gh pr create` is the only thing here that would reach the network. Stubbed rather than
@@ -105,9 +108,7 @@ def propose(workspace: Path, overrides: dict[str, str] | None = None) -> subproc
     for path in ("step-output", "step-summary", "gh-calls"):
         (workspace.parent / path).write_text("", encoding="utf-8")
     script = action_script({**COMPILER_PASSES, **(overrides or {})})
-    return subprocess.run(
-        ["bash", "-c", script], cwd=workspace, env=env, capture_output=True, text=True
-    )
+    return subprocess.run(["bash", "-c", script], cwd=workspace, env=env, capture_output=True, text=True)
 
 
 def pushed_branches(workspace: Path) -> list[str]:
