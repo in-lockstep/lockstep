@@ -87,7 +87,20 @@ runs:
 
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add -A "$destination"
+
+        # Stage what was copied, not everything the run left lying around. `destination: .` is the
+        # ordinary case — a pipeline proposing changes to the repository it ran in — and `git add -A .`
+        # there also sees the output directory sitting in the workspace: the fetched issue, the plan,
+        # the scan reports, and a second copy of the generated tree. Whether those reached the
+        # proposal was decided by whether the repository happened to ignore `outputs/`, which is not
+        # a thing a proposal's contents should depend on.
+        stage() {
+          for entry in "$source"/* "$source"/.[!.]*; do
+            [ -e "$entry" ] || continue
+            git add -A "$destination/$(basename "$entry")"
+          done
+        }
+        stage
 
         if git diff --cached --quiet; then
           echo "generated output matches what is already committed; nothing to propose"
@@ -124,7 +137,7 @@ runs:
             git rm -rq --cached . 2>/dev/null || true
           fi
           git stash pop -q 2>/dev/null || true
-          git add -A "$destination"
+          stage
         else
           git checkout -q -b "$branch"
         fi

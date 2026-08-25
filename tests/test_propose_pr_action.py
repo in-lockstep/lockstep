@@ -164,6 +164,27 @@ def test_the_generated_files_land_where_the_destination_says(workspace: Path) ->
     assert "Issue: #30" in show.stdout
 
 
+def test_the_pipeline_working_directory_does_not_land_in_the_pull_request(workspace: Path) -> None:
+    """`destination: .` means `git add -A .`, which sees `outputs/` sitting right there.
+
+    Every intermediate the run produced — the fetched issue, the plan, the scan reports, and a
+    second copy of the generated tree — is untracked in the same checkout. Whether they end up in
+    the proposal is decided entirely by whether the repository ignores the output directory.
+    """
+    result = propose(workspace)
+    assert result.returncode == 0, result.stderr
+
+    committed = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert "src/answer.py" in committed
+    assert not [path for path in committed if path.startswith("outputs/")], committed
+
+
 def test_a_run_that_generated_nothing_opens_no_pull_request(workspace: Path) -> None:
     for path in sorted((workspace / "outputs" / "change").rglob("*"), reverse=True):
         path.unlink() if path.is_file() else path.rmdir()
