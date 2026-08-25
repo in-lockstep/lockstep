@@ -467,4 +467,11 @@ def test_the_suite_hands_the_agent_the_secrets_it_declares(basic_spec_dir):
     )
     required = list(((agent.get("on") or agent.get(True))["workflow_call"] or {}).get("secrets") or [])
     assert required, "this fixture's agent needs no secrets; the test asserts nothing"
-    assert sorted(suite(basic_spec_dir)["jobs"][f"run-{AGENT}"]["secrets"]) == sorted(required)
+
+    # Plus the engine credential, which `gh aw compile` declares on the lock file rather than this
+    # compiler declaring it on the markdown — and which a called workflow does not inherit either.
+    from lockstep.emit.agentic import ENGINE_SECRET
+
+    passed = suite(basic_spec_dir)["jobs"][f"run-{AGENT}"]["secrets"]
+    assert set(required) <= set(passed), "a declared secret is not being handed over"
+    assert set(passed) & set(ENGINE_SECRET.values()), "no engine credential reaches the agent"

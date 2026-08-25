@@ -80,10 +80,22 @@ def test_agent_job_calls_the_compiled_lock_file(basic_spec_dir):
 
 
 def test_agent_job_receives_only_the_secrets_its_workflow_declares(basic_spec_dir):
-    """Never `secrets: inherit`, and never a secret the callee did not ask for."""
+    """Never `secrets: inherit`, and never a secret the callee did not ask for.
+
+    Two declare the callee's needs, not one. This compiler writes the MCP-derived secrets into the
+    agent's frontmatter; `gh aw compile` adds the engine credential to the lock file it generates.
+    A called workflow inherits nothing, so the caller passes both — without the engine one the run
+    authorizes, activates, and dies with "None of the following secrets are set".
+    """
+    from lockstep.emit.agentic import ENGINE_SECRET
+
     job = jobs_of(basic_spec_dir, "generate-tests.yml")["extract-stories-from-each-issue"]
-    assert job["secrets"] == {"JIRA_API_TOKEN": "${{ secrets.JIRA_API_TOKEN }}"}
+    assert job["secrets"] == {
+        "JIRA_API_TOKEN": "${{ secrets.JIRA_API_TOKEN }}",
+        "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
+    }
     assert "APP_PASSWORD" not in job["secrets"]
+    assert set(job["secrets"]) & set(ENGINE_SECRET.values()), "no engine credential is handed over"
 
 
 def test_condition_becomes_a_job_level_if(basic_spec_dir):

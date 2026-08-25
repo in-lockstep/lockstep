@@ -97,7 +97,7 @@
       ]
     },
     ".github/workflows/implement-implement.yml": {
-      "sha": "26c0173c",
+      "sha": "0433b976",
       "sources": [
         "implement:commands/implement.md@59fbee68"
       ]
@@ -107,13 +107,13 @@
       "sources": []
     },
     ".github/workflows/retro-retro.yml": {
-      "sha": "7cc1708f",
+      "sha": "0329d297",
       "sources": [
         "retro:commands/retro.md@dc884317"
       ]
     },
     ".github/workflows/review-review.yml": {
-      "sha": "1ecb90f6",
+      "sha": "ecf5e575",
       "sources": [
         "review:commands/review.md@d26c7d20"
       ]

@@ -54,6 +54,8 @@ jobs:
     with:
       input_path: outputs/evals/change-writer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/change-writer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-change-writer:
     name: Grade change-writer
     needs:
@@ -109,6 +111,8 @@ jobs:
     with:
       input_path: outputs/evals/planner/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/planner/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-planner:
     name: Grade planner
     needs:
@@ -164,6 +168,8 @@ jobs:
     with:
       input_path: outputs/evals/requirements-analyst/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/requirements-analyst/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-requirements-analyst:
     name: Grade requirements-analyst
     needs:
@@ -219,6 +225,8 @@ jobs:
     with:
       input_path: outputs/evals/test-writer/inputs/${{ matrix.case }}.json
       output_path: outputs/evals/test-writer/answers/${{ matrix.case }}.json
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   grade-test-writer:
     name: Grade test-writer
     needs:
