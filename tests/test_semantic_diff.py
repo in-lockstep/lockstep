@@ -187,11 +187,14 @@ def test_a_job_granted_write_is_a_permissions_delta():
 
 def test_a_new_job_carrying_write_is_a_permissions_delta():
     """The meter job's shape: the workflow stays read-only and a new job underneath it writes."""
-    added = WORKFLOW + """  meter:
+    added = (
+        WORKFLOW
+        + """  meter:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
 """
+    )
     diff = diff_surfaces(_surface(WORKFLOW), _surface(added))
     assert "permissions" in [d.category for d in diff.deltas]
 

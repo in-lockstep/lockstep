@@ -452,9 +452,9 @@ def test_every_builtin_that_shells_out_to_gh_is_declared():
     """
     from lockstep.emit.builtins import NEEDS_GITHUB_TOKEN
 
-    source = (
-        Path(__file__).parent.parent / "packages/pipeline-exec/src/pipeline_exec/cli.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parent.parent / "packages/pipeline-exec/src/pipeline_exec/cli.py").read_text(
+        encoding="utf-8"
+    )
 
     # Command functions are `def name(...)` with hyphens becoming underscores in the CLI name.
     reaching: set[str] = set()
@@ -531,12 +531,10 @@ def _key_prefixes(root: Path) -> list[tuple[str, str]]:
 
 @pytest.mark.parametrize("root", ALL_PIPELINES, ids=lambda p: p.name)
 def test_every_cache_key_is_a_legal_artifact_name(root):
-    bad = [
-        f"{path}: {prefix}"
-        for path, prefix in _key_prefixes(root)
-        if ARTIFACT_FORBIDDEN & set(prefix)
-    ]
+    bad = [f"{path}: {prefix}" for path, prefix in _key_prefixes(root) if ARTIFACT_FORBIDDEN & set(prefix)]
     assert not bad, "these become artifact names GitHub refuses:\n  " + "\n  ".join(bad)
+
+
 # --- a consumer can ask for the token too ---------------------------------------------------------
 #
 # The framework's own builtins get one because the framework knows they call `gh`. A `script:` step
@@ -564,17 +562,13 @@ def _with_step(tmp_path, attribute: str) -> Path:
     text = command.read_text(encoding="utf-8")
     marker = "2. **Discover UI structure** \u2192 script: scripts/discover-ui.py\n"
     assert marker in text, "fixture step shape changed"
-    command.write_text(
-        text.replace(marker, marker + "   - id: uistep\n" + attribute, 1), encoding="utf-8"
-    )
+    command.write_text(text.replace(marker, marker + "   - id: uistep\n" + attribute, 1), encoding="utf-8")
     return root
 
 
 def test_a_script_step_can_ask_for_the_github_token(tmp_path):
     root = _with_step(tmp_path, "   - github-token: true\n")
-    assert _step_env(root, ".github/workflows/discover.yml", "uistep") == {
-        "GH_TOKEN": "${{ github.token }}"
-    }
+    assert _step_env(root, ".github/workflows/discover.yml", "uistep") == {"GH_TOKEN": "${{ github.token }}"}
 
 
 def test_a_step_that_does_not_ask_does_not_receive(tmp_path):

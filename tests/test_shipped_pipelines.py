@@ -421,9 +421,7 @@ def test_json_placeholders_are_not_wrapped_in_double_quotes():
     """Single quotes, so the value's own quotes reach the process that has to parse them."""
     bad: list[str] = []
     commands = [
-        path
-        for root in library.pipelines().values()
-        for path in sorted(Path(root).glob("commands/*.md"))
+        path for root in library.pipelines().values() for path in sorted(Path(root).glob("commands/*.md"))
     ]
     assert commands, "no shipped commands found, so this would prove nothing"
     for command in commands:

@@ -290,9 +290,7 @@ class EmitContext:
                     # Last, so an explicit value always wins over it. Single quotes doubled, which
                     # is how a GitHub expression escapes one.
                     sources.append("'" + parameter.default.replace("'", "''") + "'")
-                text = text.replace(
-                    "{" + parameter.name + "}", "${{ " + " || ".join(sources) + " }}"
-                )
+                text = text.replace("{" + parameter.name + "}", "${{ " + " || ".join(sources) + " }}")
             if chat:
                 # What the human actually wrote after the command — usually the point of the run.
                 text = text.replace("{instruction}", "${{ needs.command-gate.outputs.instruction }}")
