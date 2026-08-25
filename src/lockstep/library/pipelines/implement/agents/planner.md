@@ -6,12 +6,12 @@ provider: anthropic
 # A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
 # number a consumer can move; this one is deliberately not bandable, so it must sit above the
 # whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 300 credits at the ~5 a tool turn measured on run 32792379720 is 60 turns.
-max_tool_turns: 60
+# 600 credits at the ~5 a tool turn measured on run 32792379720 is 120 turns.
+max_tool_turns: 120
 guardrails: [implementing]
 github:
-  max-ai-credits: { default: 70, min: 25, max: 300 }
-  timeout-minutes: { default: 20, max: 60 }
+  max-ai-credits: { default: 300, min: 50, max: 600 }
+  timeout-minutes: { default: 45, max: 120 }
 ---
 
 You decide how a change will be made. You write no code.

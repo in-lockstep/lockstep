@@ -6,9 +6,9 @@
       "sources": []
     },
     ".github/workflows/aw-implement-change-writer.md": {
-      "sha": "10cb4b4d",
+      "sha": "aeb91f00",
       "sources": [
-        "implement:agents/change-writer.md@c6f71fa4",
+        "implement:agents/change-writer.md@35ecc1b6",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "implement:skills/change-format.md@babdb34a",
@@ -16,27 +16,27 @@
       ]
     },
     ".github/workflows/aw-implement-planner.md": {
-      "sha": "b1572b1a",
+      "sha": "883588d3",
       "sources": [
-        "implement:agents/planner.md@60a24853",
+        "implement:agents/planner.md@1c184d81",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-implement-requirements-analyst.md": {
-      "sha": "8c262264",
+      "sha": "e8caa390",
       "sources": [
-        "implement:agents/requirements-analyst.md@98c2b307",
+        "implement:agents/requirements-analyst.md@63a4e44d",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "contexts/codebase.md@923544b2"
       ]
     },
     ".github/workflows/aw-implement-test-writer.md": {
-      "sha": "6d6dc0fd",
+      "sha": "c01e6f3d",
       "sources": [
-        "implement:agents/test-writer.md@4a4965e5",
+        "implement:agents/test-writer.md@0c2338a1",
         "lockstep:guardrails/baseline.md@7875122b",
         "implement:guardrails/implementing.md@7740e516",
         "implement:skills/change-format.md@babdb34a",
