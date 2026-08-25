@@ -40,9 +40,9 @@ network:
   allowed:
   - defaults
 steps:
-- uses: in-lockstep/lockstep/actions/restore@bffebf3ec11101b4911348d2de214f949c24a625  # actions-v0.1.3
+- uses: in-lockstep/lockstep/actions/restore@1d1f2f2d7a9cca4dab2cbc6efbc186bd4e00f2e1  # actions-v0.1.4
 post-steps:
-- uses: in-lockstep/lockstep/actions/save@bffebf3ec11101b4911348d2de214f949c24a625  # actions-v0.1.3
+- uses: in-lockstep/lockstep/actions/save@1d1f2f2d7a9cca4dab2cbc6efbc186bd4e00f2e1  # actions-v0.1.4
   with:
     paths: ${{ inputs.output_path }}
 max-daily-ai-credits: 500000
