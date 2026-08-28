@@ -1,145 +1,94 @@
-# Lockstep
+# in-lockstep
 
-Compiles pipeline definitions — commands, agents, guardrails, skills, contexts, profiles — into
-GitHub Agentic Workflows.
-
-The markdown spec stays the single source of truth. Lockstep lowers it onto GitHub-native
-primitives: orchestration becomes plain Actions YAML (jobs, `needs:`, matrix fan-out), and each
-agent becomes a [gh-aw](https://github.github.com/gh-aw/) agentic workflow. A drift gate recompiles
-on every pull request, so committed output can never silently diverge from the spec.
-
-```
-spec (commands/ agents/ guardrails/ skills/ contexts/ profiles/ mcp/ + pipeline.yaml + overlays/)
-        │  lockstep compile
-        ▼
-.github/workflows/<command>.yml      orchestrators (plain Actions)
-.github/workflows/aw-<agent>.md      agentic workflow sources
-.github/workflows/shared/*.md        flattened prompt layers
-        │  gh aw compile
-        ▼
-.github/workflows/aw-<agent>.lock.yml   what actually runs
-```
-
-## Start here
-
-**[Getting started](docs/getting-started.md)** walks through building a real pipeline against a live
-public API, and explains each part of the framework as you meet it — including what happens once the
-output is hosted on GitHub: how changes get reviewed, where output is stored, and how reports survive
-long enough to show a trend.
-
-## Install
+An agentic SDLC framework for Python. Your lifecycle is executable code — not a manifest, not a
+spec, and not something that generates a pipeline. The module you write is the thing that runs.
 
 ```bash
-uv tool install in-lockstep         # the compiler
+uv tool install 'in-lockstep[anthropic]'
+in-lockstep init
 ```
 
-The runtime, `in-lockstep-exec`, is installed by compiled pipelines rather than by you — jobs run it
-as the container image, and only a job that materializes inherited definitions installs the package.
+```python
+# lockstep.py — the whole configuration
+from in_lockstep import Lockstep, workflow
+from in_lockstep.adapters import PytestTest, RuffValidate
+from in_lockstep.middleware import CostBudget, otel
 
-## Usage
-
-```bash
-lockstep compile                    # generate workflows
-lockstep compile --check            # drift gate: verify committed output matches the spec
-lockstep compile --semantic-diff    # report security and cost surface deltas
-lockstep show-surface               # every GitHub-target decision in one document
+lockstep = Lockstep.detect()
+lockstep.bind(Test, PytestTest(args=["-q"]))
+lockstep.bind(Validate, RuffValidate())
+lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
-## Packages
+## Why code rather than configuration
 
-A compiled pipeline references three things, and only the first is a dev dependency:
+A change to your review policy becomes a diff in a pull request, with blame, history and rollback.
+You extend a verb by subclassing, override behaviour by rebinding, and compose cross-cutting
+concerns as middleware — because those are language features, and reinventing them in YAML
+produces a worse version of each.
 
-| Unit | Role | Where it runs |
-|---|---|---|
-| `lockstep` | the compiler, lint, drift gate | your machine, and the drift gate |
-| [`actions/`](actions) | the composite actions every workflow calls | the runner, as `uses:` pinned to a commit |
-| [`packages/pipeline-exec`](packages/pipeline-exec) | fan-out, sharding, coverage gates, executors | the runner, as the job `container:` |
-
-`actions/` and `pipeline-exec` share this repository with the compiler because the compiler emits
-references to both as literal text: `tests/test_contract.py` parses every emitted invocation against
-the real CLI and every input against the real action, so a renamed flag fails a build rather than a
-scheduled run. A pipeline points at wherever you published them:
-
-```yaml
-capabilities:
-  actions: github.com/<owner>/<repo>@v1.0.0    # resolved to a commit by `lockstep pin`
-  exec-image: quay.io/<owner>/pipeline-exec    # any registry; resolved to a digest
-```
-
-Both are published, and the examples here pin them for real:
-
-```yaml
-capabilities:
-  actions: github.com/in-lockstep/lockstep/actions@actions-v0.1.1   # -> aad2f112…
-  exec-image: ghcr.io/in-lockstep/pipeline-exec                     # -> sha256:70de3f80…
-```
-
-`lockstep doctor` reports no findings on them, where it used to report `DOC015` on every one. The
-`basic` test fixture still pins placeholders deliberately, because something has to keep exercising
-what the compiler does when a capability is unpinned.
-
-**[Extending the framework](docs/extending.md)** covers the two extension points — third-party
-builtins in `pipeline-exec`, and your own composite actions — worked through a pipeline that fixes
-bugs from an issue tracker and opens pull requests.
-
-**[Implementing an issue by review](docs/implementing-issues.md)** builds a pipeline that turns an
-issue into a pull request, and lets reviewers revise the plan or the code with ordinary PR comments
-plus a slash command.
-
-**[Publishing a report to GitHub Pages](docs/publishing-reports.md)** builds a triage-report
-pipeline, and uses it to look closely at how context, guardrails and skills shape what an agent
-produces.
-
-**[Reviewing pull requests on request](docs/reviewing-pull-requests.md)** builds a `/review security
-intent` bot — one review per aspect, revised in place, and silent when nothing has changed.
-
-**[Adding a pipeline to a repository you already have](docs/adopting.md)** covers adoption into an
-existing project with its own CI, and the security model for pull requests from forks.
-
-**[What goes where](docs/layers.md)** is the rule that keeps application knowledge out of the
-framework: which tier code belongs to, and which of the three prompt layers a piece of prose belongs
-in.
-
-**[Inheriting a pipeline from another repository](docs/inheriting.md)** walks through one team owning
-the standards and many repositories inheriting them: a consuming repository writes four files, gets
-guardrails it cannot weaken, and reviews an upstream change as a diff of the prompt text.
-
-**[Sharing pipelines across an organization](docs/sharing.md)** is the design behind that: which
-layers travel, what a consumer may tune, and how an inherited pipeline opens its own bump pull
-request when upstream moves.
-
-**[What an eval case promises](docs/evals.md)** is the grading contract: which expectations a
-machine settles, which need a model, and why a case carrying a rubric is never reported as passed.
-
-**[What the people who would adopt this need next](docs/needs.md)** is the backlog derived from five
-adopter personas rather than from the design: what gates a public launch, what a security lead has to
-write themselves today, and what the run ledger measures that a director is not asking about.
-
-**[This repository compiles its own drift gate](docs/self-hosting.md)** covers self-hosting: why the
-gate installs the checkout rather than a release, why the hand-written CI workflow stays
-hand-written, and the defects dogfooding surfaced.
+The cost is that a container is harder to read than a manifest, which is what `in-lockstep ls` is
+for: it prints what will actually run.
 
 ## Commands
 
 ```bash
-lockstep init --name=my-pipeline    # scaffold a working pipeline
-lockstep pin                        # resolve capability tags to commits
-lockstep compile                    # generate the workflows
-lockstep compile --check            # drift gate: committed output must match the spec
-lockstep lint                       # is the spec well built?
-lockstep doctor                     # will GitHub accept it?
-lockstep show-surface               # every target decision in one document
-lockstep eject <file>               # take ownership of one generated file
+in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
+in-lockstep review --base ...    # review a change, one lens at a time
+in-lockstep show-prompt <lens>   # what the model is told, offline, no key
+in-lockstep ls                   # the resolved container, middleware and policy
+in-lockstep doctor               # are the controls actually in place?
+in-lockstep eval report          # the corpus, offline
+in-lockstep apply --from-artifact # the privileged half of the two-job trampoline
 ```
 
-## Status
+## Working without keys or spend
 
-All seven phases of the design are implemented. See [docs/status.md](docs/status.md) for what each
-covers and what remains open — chiefly round-trip evals across both backends, which need
-`pipeline-framework`.
+`--dry-run` proves the wiring. `--offline` replays a cassette: deterministic, free, and no
+credentials. Cassettes sit at the `LLMInput`/`LLMOutput` seam, so one recorded against a provider
+replays against a different one, and they capture tool IO as well as model IO. This is the
+debugging story, the testing story and the eval story at once.
+
+## Two things worth knowing before running it unattended
+
+**Model invocation happens in your process.** That is what makes the framework a library rather
+than a service, and it removes an execution substrate that was also an egress firewall, an
+out-of-process spend ceiling and a privilege split between the process holding a key and the
+process able to write. [`docs/controls-crosswalk.md`](docs/controls-crosswalk.md) accounts for
+every one of those: what replaced it, what is weaker, and the one that was lost rather than
+replaced. `in-lockstep doctor` checks the same list.
+
+**Configuration is loaded from a trusted ref.** `lockstep.py` defines every binding, policy and
+protected path. Under review, loading it from the branch being reviewed would let a change rewrite
+the constraints that apply to reviewing it — so it comes from the base ref instead.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md)
+- [Extending](docs/extending.md) — adapters, prompts, organisation standards, strategies
+- [Controls crosswalk](docs/controls-crosswalk.md) — what in-process invocation costs, honestly
+- [Design](design/in-lockstep-design.md) and [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md)
+- [Exit gates](design/gates.md)
+
+## Packages
+
+| Unit | Role |
+|---|---|
+| `in-lockstep` | the framework |
+| [`packages/pipeline-exec`](packages/pipeline-exec) | deterministic executors — browser, API and CLI drivers, test running, reports |
+
+Provider SDKs are extras: `in-lockstep[anthropic]`, `[openai]`, `[google]`, `[bedrock]`, `[all]`.
+A bare install pulls none of them, because cold start matters in CI.
+
+## History
+
+Through `0.1.x` this project was a compiler that lowered a markdown spec into GitHub Agentic
+Workflows. `1.0` is a different product under the same name; the compiler line is archived at
+`compiler-v0.1.x`. [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md) records why, and
+what the change cost.
 
 ## Development
 
 ```bash
-make check      # format, lint, typecheck, test
+make check     # format, lint, typecheck, test
 ```

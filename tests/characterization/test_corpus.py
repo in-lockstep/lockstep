@@ -63,12 +63,12 @@ def test_body_sits_between_guardrails_and_skills(scope: str, key: str, entry: di
     kinds = [s.split(":", 1)[0] for s in proj]
     assert all(k == "guardrail" for k in kinds[:at]), f"{key}: non-guardrail before body: {proj[:at]}"
     assert all(k in ("skill", "context") for k in kinds[at + 1 :]), (
-        f"{key}: unexpected section after body: {proj[at + 1:]}"
+        f"{key}: unexpected section after body: {proj[at + 1 :]}"
     )
     tail = kinds[at + 1 :]
     if "context" in tail:
         assert tail.index("context") >= (len(tail) - tail.count("context")), (
-            f"{key}: contexts must come after skills: {proj[at + 1:]}"
+            f"{key}: contexts must come after skills: {proj[at + 1 :]}"
         )
 
 

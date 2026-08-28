@@ -1,6 +1,0 @@
-spec: 1
-name: lockstep-triage
-
-# No `capabilities:` block. An inherited pipeline runs under the consumer's capabilities — their
-# actions, their executor image, their compiler — and a version pinned here would be a second
-# opinion about which code runs, held by a repository that is not the one running it.

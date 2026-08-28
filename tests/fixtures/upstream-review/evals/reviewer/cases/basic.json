@@ -1,8 +1,0 @@
-{
-  "input": {
-    "diff": "\u2026"
-  },
-  "expect": {
-    "rubric": "Reports the finding and does not approve."
-  }
-}

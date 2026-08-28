@@ -1,0 +1,53 @@
+# Invokes the CLI. Contains no lifecycle logic, and nothing generates or checks it.
+#
+# Two jobs rather than one. The job that talks to a model holds the provider credential and only
+# read access; the job that writes holds write access and no provider credential. A single job
+# would put an API key and a write token in the same process — which is the arrangement the
+# previous execution substrate specifically avoided, and the reason it is reproduced here.
+#
+# `run` is given the base ref because configuration is loaded from it. Loading lockstep.py from
+# the ref under review would let a pull request supply the file defining the bindings, the policy
+# and the path tiers that constrain reviewing it.
+name: lockstep
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lockstep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - name: Are the controls in place?
+        run: uv run in-lockstep doctor
+        continue-on-error: true
+      - name: Review
+        run: |
+          uv run in-lockstep review \
+            --base "origin/${GITHUB_BASE_REF}" \
+            --head "${GITHUB_SHA}" \
+            --aspect security
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_EGRESS: enforced
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lockstep-run
+          path: .in-lockstep/
+          if-no-files-found: ignore

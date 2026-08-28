@@ -1,6 +1,6 @@
 # Publishing the two Python distributions this repository builds.
 #
-# `in-lockstep` is the compiler and `in-lockstep-exec` is the runtime, and a compiled pipeline
+# `in-lockstep` is the framework and `in-lockstep-exec` is the deterministic-executor runtime. A pipeline
 # installs both **by name from a public index**: the drift-gate job runs
 # `uv tool install "in-lockstep=="`, and an eval job that materializes inherited definitions installs
 # the executor alongside it because the exec image deliberately does not carry the compiler. So
@@ -76,23 +76,30 @@ jobs:
           uvx twine check dist/*/*
 
       - name: A clean install carries what is not Python
-        # The failure this exists for: the compiler ships five pipelines as markdown under
-        # `lockstep/library/`, and the executor ships Jinja report templates. Neither is a `.py`
-        # file, so a packaging change can drop them while every test in this repository still passes
-        # — they are read from the source tree here and from site-packages everywhere else.
-        # `init --adopt all` reads the library, so it fails if the library did not travel.
+        # The failure this exists for: the framework ships twenty-four prompts as markdown and
+        # twenty-seven eval cases as JSON. Neither is a `.py` file, so a packaging change can drop
+        # them while every test in this repository still passes — they are read from the source
+        # tree here and from site-packages everywhere else.
+        #
+        # `show-prompt` reads a prompt body and `eval report` reads the corpus, so both fail if
+        # the data did not travel. The compiler this check used to exercise was removed in phase 7;
+        # the failure mode it was written for did not go with it.
         run: |
           set -euo pipefail
           python3 -m venv /tmp/proof
           /tmp/proof/bin/pip install -q dist/in-lockstep/*.whl dist/in-lockstep-exec/*.whl
-          /tmp/proof/bin/lockstep --version
+          /tmp/proof/bin/in-lockstep --version
           /tmp/proof/bin/pipeline-exec --version
           /tmp/proof/bin/pipeline-exec list-commands > /dev/null
+          # A prompt body, read from site-packages rather than from a checkout.
+          /tmp/proof/bin/in-lockstep show-prompt security | grep -q "guardrail:baseline"
+          # And the eval corpus.
+          /tmp/proof/bin/in-lockstep eval report | grep -q "27"
           mkdir -p /tmp/proof-repo && cd /tmp/proof-repo
-          /tmp/proof/bin/lockstep init --name proof --adopt all
-          test -d .lockstep || test -f pipeline.yaml
-          /tmp/proof/bin/lockstep fetch
-          echo "the shipped library survived packaging"
+          /tmp/proof/bin/in-lockstep init
+          test -f lockstep.py
+          test -f .github/workflows/lockstep.yml
+          echo "the shipped prompts and corpus survived packaging"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:

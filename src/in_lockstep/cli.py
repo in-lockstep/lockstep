@@ -26,7 +26,26 @@ EXIT_BLOCKED = 3
 
 
 def _default_lockstep() -> tuple[Lockstep, Recorder]:
-    """The zero-config binding set. A real repo overrides any line of this in its own module."""
+    """A repository's own module if it has one, else detected defaults.
+
+    The module is loaded from a trusted ref, never from the ref under review.
+    """
+    from .loader import NoLifecycle, load, lockstep_from
+
+    try:
+        module, ref = load(
+            ".",
+            base=os.environ.get("GITHUB_BASE_REF", ""),
+            reviewing=os.environ.get("GITHUB_EVENT_NAME", "") in ("pull_request", "pull_request_target"),
+        )
+        configured = lockstep_from(module)
+        recorder = Recorder()
+        if not configured.middleware:
+            configured.middleware = [otel(recorder), CostBudget(usd=2.00)]
+        return configured, recorder
+    except NoLifecycle:
+        pass
+
     lockstep = Lockstep.detect()
     lockstep.bind(Validate, RuffValidate(cwd=lockstep.repo.root))
     lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], cwd=lockstep.repo.root))

@@ -1,16 +1,7 @@
 name: CI
 
-# Hand-written and permanent. `docs/self-hosting.md` explains why this one is not generated: the
-# gate that proves the compiler works cannot itself be compiler output.
-#
-# Two jobs, split in phase 0 of the pivot. `compiler` is wired to the thing being deleted — it
-# resolves the inherited spec and gates the code that ships today. `framework` has no dependency on
-# the compiler at all, so `in_lockstep` is never gated on `lockstep` being installable, and the
-# framework's coverage floor cannot stay green by measuring frozen code.
-#
-# The generated drift gate (pipeline-ci.yml) was retired here. It compared committed output against
-# a fresh compile, which stops meaning anything once the emitter is being deleted; GATE-TEST-4 (the
-# golden tree hash, pinned to the phase-0 tag) covers the same ground from pytest instead.
+# Hand-written and permanent. The gate that proves the framework works cannot be framework output,
+# which is the same reason this file was hand-written when the repository shipped a compiler.
 
 on:
   push:
@@ -21,8 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  framework:
-    name: framework (in_lockstep)
+  check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -30,15 +20,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv sync
-      - run: make ci-framework
-
-  compiler:
-    name: compiler (lockstep)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.11'
-      - run: uv sync
-      - run: make ci-compiler
+      - run: make ci

@@ -1,4 +1,0 @@
-# Files this repository has taken ownership of. The compiler will not touch them, and
-# `lockstep compile --check` reports when their source has moved on without them.
-files:
-- .github/workflows/pipeline-ci.yml

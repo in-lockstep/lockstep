@@ -1,7 +1,7 @@
 [project]
 name = "in-lockstep"
 version = "0.1.0"
-description = "Compiles pipeline-framework definitions into GitHub Agentic Workflows"
+description = "An agentic SDLC framework for Python. Your lifecycle is executable code, not a manifest."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -23,9 +23,6 @@ openai = ["openai>=1.40"]
 all = ["anthropic[bedrock,vertex]>=0.40", "google-genai>=1.0", "openai>=1.40"]
 
 [project.scripts]
-# Both coexist through the pivot: `make fetch` still needs `lockstep`, while every new phase
-# asserts on `in-lockstep`. Only `in-lockstep` survives Phase 7.
-lockstep = "lockstep.cli:main"
 in-lockstep = "in_lockstep.cli:main"
 
 [project.urls]
@@ -64,7 +61,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lockstep", "src/in_lockstep"]
+packages = ["src/in_lockstep"]
 
 # Prompts and eval cases are package data, not Python. This is the failure mode that never shows
 # up in a source checkout and always shows up in a clean install.
@@ -83,10 +80,6 @@ select = ["E", "F", "I", "UP", "B"]
 # real application, so cosmetic rules do not apply to it and — more importantly — `make fmt` must
 # never silently rewrite it. Changes here should be deliberate and reviewed against the origin.
 [tool.ruff.lint.per-file-ignores]
-# The scaffold carries the files a new repository starts with, verbatim, inside string literals.
-# Rewrapping them to satisfy a line-length rule would change what a user's first eval case looks
-# like to suit this repository's formatter.
-"src/lockstep/scaffold.py" = ["E501"]
 "packages/pipeline-exec/src/pipeline_exec/executors/*" = ["E501", "B007"]
 # discovery.py is excluded: it was rewritten here rather than extracted, so it is held to this
 # repo's rules like anything else.
