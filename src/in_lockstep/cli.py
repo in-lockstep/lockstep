@@ -328,11 +328,11 @@ def review_cmd(
     from .ai.auth import Auth
     from .ai.bootstrap import credentials_for, default_registry
     from .ai.invoker import AiInvoker, InvokePolicy
-    from .ai.llm.interface import LLMProvider
-    from .ai.llm.registry import Model
     from .ai.pricing import default_table
     from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
     from .core.spend import Budget
+    from .llm.interface import LLMProvider
+    from .llm.registry import Model
 
     lockstep = Lockstep.detect()
     lockstep.budget = Budget(usd=budget)

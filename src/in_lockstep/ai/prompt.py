@@ -23,8 +23,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, ClassVar, Generic, TypeVar
 
+from ..llm.types import Message
 from .context import ContextPackage
-from .llm.types import Message
 
 P = TypeVar("P")
 S = TypeVar("S")

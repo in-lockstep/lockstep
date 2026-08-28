@@ -5,6 +5,11 @@
 **Direction:** one-way. There is no re-sync obligation and no upstream trust relationship after
 import. Changes here are ordinary in-tree changes reviewed like any other code.
 
+**Where it sits:** `in_lockstep.llm`, a sibling of `ai`, not `in_lockstep.ai.llm`. It was moved out
+after 1.0 because nesting made a claim the layering test could not check. As a leaf layer declaring
+an empty allowance, the test now enforces both directions: this package may import provider SDKs
+and itself and nothing else of ours, and `ai` is the only layer permitted to reach it.
+
 **Why vendored rather than depended on:** the package is unpublished. (An earlier draft claimed the
 subtree was dirty — it was not; that described a different part of that repository.)
 

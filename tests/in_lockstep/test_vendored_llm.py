@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.ai.llm import (
+from in_lockstep.llm import (
     ContextLengthError,
     Credentials,
     DataPolicy,
@@ -29,9 +29,9 @@ from in_lockstep.ai.llm import (
     TokenUsage,
     TransientError,
 )
-from in_lockstep.ai.llm._errors import classify
+from in_lockstep.llm._errors import classify
 
-LLM_ROOT = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "ai" / "llm"
+LLM_ROOT = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "llm"
 PROVIDERS = sorted((LLM_ROOT / "providers").glob("*.py"))
 
 
@@ -190,7 +190,7 @@ def test_token_usage_carries_cache_accounting() -> None:
 
 def test_generate_signature_is_preserved_byte_identically() -> None:
     """The substitution this pivot committed to. Changing it would break the whole premise."""
-    from in_lockstep.ai.llm.types import LLMOutput
+    from in_lockstep.llm.types import LLMOutput
 
     sig = inspect.signature(LLMProvider.generate)
     assert list(sig.parameters) == ["self", "input"]

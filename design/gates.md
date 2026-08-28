@@ -11,7 +11,7 @@ it rather than restating it.
 
 | Gate | Phase | Assertion |
 |---|---|---|
-| `GATE-ASYNC-1` | P0 | AST scan of `in_lockstep/ai/llm/providers/*.py`: every client constructor names a class matching `^Async`, or is `httpx.AsyncClient`. |
+| `GATE-ASYNC-1` | P0 | AST scan of `in_lockstep/llm/providers/*.py`: every client constructor names a class matching `^Async`, or is `httpx.AsyncClient`. |
 | `GATE-ASYNC-2` | P0 | `asyncio.wait_for(provider.generate(...), 0.1)` against a 5s stub raises `TimeoutError` AND the stub records connection-closed-before-completion. |
 | `GATE-ASYNC-3` | P1 | With `IN_LOCKSTEP_DISABLE` set mid-run, a workflow with steps remaining reaches a terminal `Outcome` without executing another adapter. (Arbitration wrote this against `fan_out`, which is post-1.0 by the §17.11 cut line — the branch variant is `GATE-ASYNC-3b`.) |
 | `GATE-ASYNC-3b` | P10 | With `IN_LOCKSTEP_DISABLE` set mid-run, an in-flight 3-branch `fan_out` reaches a terminal `Outcome` within 2s. |

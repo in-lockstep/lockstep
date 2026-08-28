@@ -1,4 +1,4 @@
-# Provenance record for src/in_lockstep/ai/llm/ — see VENDORED.md.
+# Provenance record for src/in_lockstep/llm/ — see VENDORED.md.
 # Hashes are of the ORIGIN files at the commit below, not of the vendored copies.
 origin_repo: pipeline-framework
 origin_commit: 6ac3cde908b0b6230f06d33210d39ef352dafd20

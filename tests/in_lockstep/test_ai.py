@@ -18,8 +18,6 @@ from in_lockstep.ai.context import (
 )
 from in_lockstep.ai.injection import scan
 from in_lockstep.ai.invoker import AiInvoker, InvocationBlocked, InvokePolicy
-from in_lockstep.ai.llm.interface import LLMProvider, RateLimitError, TransientError
-from in_lockstep.ai.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.ai.replay import Cassette, RecordingProvider, ReplayProvider
 from in_lockstep.ai.retry import RetryPolicy
@@ -27,6 +25,8 @@ from in_lockstep.ai.structured import SchemaError, parse, repair_truncated, vali
 from in_lockstep.ai.tools import AmbiguousTool, Tool, ToolSet, undeclared_is_dangerous
 from in_lockstep.core.spend import Budget, Spend, Unpriced
 from in_lockstep.core.verbs import Capability
+from in_lockstep.llm.interface import LLMProvider, RateLimitError, TransientError
+from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
 
@@ -301,7 +301,7 @@ def test_gate_retry_1_transport_retries_exactly_three_times() -> None:
 
 
 def test_non_retryable_errors_are_attempted_once() -> None:
-    from in_lockstep.ai.llm.interface import AuthenticationError
+    from in_lockstep.llm.interface import AuthenticationError
 
     calls = {"n": 0}
 

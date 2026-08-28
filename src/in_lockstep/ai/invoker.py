@@ -29,11 +29,11 @@ from typing import Protocol
 from ..core.context import killswitch_engaged
 from ..core.outcome import Cost
 from ..core.spend import Spend, Unpriced
+from ..llm.interface import LLMProvider
+from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
 from ..privileged.redact import Redact
 from . import injection
 from .context import ContextPackage, Provenance
-from .llm.interface import LLMProvider
-from .llm.types import LLMInput, LLMOutput, Message, ToolCall
 from .pricing import CostTable
 from .retry import RetryPolicy
 from .tools import ToolNotAllowed, ToolSet

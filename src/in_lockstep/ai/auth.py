@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
+from ..llm.interface import Credentials, SecretStr
 from ..privileged.redact import SecretRegistry, redact_registry
-from .llm.interface import Credentials, SecretStr
 
 
 class AuthTarget(Enum):

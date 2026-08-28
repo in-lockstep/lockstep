@@ -183,7 +183,7 @@ def _prompt_bodies(
 
 
 def _supply_chain(report: Report, root: Path) -> None:
-    vendor = root / "src" / "in_lockstep" / "ai" / "llm" / "vendor.lock"
+    vendor = root / "src" / "in_lockstep" / "llm" / "vendor.lock"
     if not vendor.exists():
         report.add(
             "DOC150",

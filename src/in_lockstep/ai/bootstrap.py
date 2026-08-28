@@ -10,27 +10,27 @@ from __future__ import annotations
 
 import os
 
+from ..llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
+from ..llm.registry import ModelCaps, ProviderRegistry
 from .auth import Auth, AuthRequest, AuthTarget
-from .llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
-from .llm.registry import ModelCaps, ProviderRegistry
 
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com"
 
 
 def _anthropic(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
-    from .llm.providers.anthropic import AnthropicProvider
+    from ..llm.providers.anthropic import AnthropicProvider
 
     return AnthropicProvider(settings, creds)
 
 
 def _openai(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
-    from .llm.providers.openai_compat import OpenAIProvider
+    from ..llm.providers.openai_compat import OpenAIProvider
 
     return OpenAIProvider(settings, creds)
 
 
 def _ollama(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
-    from .llm.providers.ollama import OllamaProvider
+    from ..llm.providers.ollama import OllamaProvider
 
     return OllamaProvider(settings, creds)
 

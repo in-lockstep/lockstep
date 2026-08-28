@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
-from .llm.interface import LLMError, RateLimitError
+from ..llm.interface import LLMError, RateLimitError
 
 T = TypeVar("T")
 

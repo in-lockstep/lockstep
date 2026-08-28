@@ -20,9 +20,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..llm.interface import LLMProvider
+from ..llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from ..privileged.redact import Redact
-from .llm.interface import LLMProvider
-from .llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 
 
 def _key(request: LLMInput) -> str:

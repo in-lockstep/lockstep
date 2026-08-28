@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from ..core.verbs import Capability
-from .llm.types import ToolDefinition
+from ..llm.types import ToolDefinition
 
 BUILTIN_SERVER = "builtin"
 

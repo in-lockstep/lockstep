@@ -31,7 +31,13 @@ ALLOWED: dict[str, set[str]] = {
     "core": {"core"},
     "config_ref": set(),
     "loader": {"config_ref", "loader"},
-    "ai": {"core", "ai", "privileged"},
+    # The vendored transport is a leaf: it imports provider SDKs and itself, and nothing of ours.
+    # It used to sit at `ai/llm/`, where "nothing above `ai` reaches into the transport" was a
+    # convention this test could not see. As a sibling layer with an empty allowance, both
+    # directions are enforced — it cannot grow an edge back into the framework, and only `ai` may
+    # reach it.
+    "llm": {"llm"},
+    "ai": {"core", "ai", "llm", "privileged"},
     "prompts": {"ai", "prompts"},
     "adapters": {"core", "ai", "adapters", "prompts", "privileged"},
     "middleware": {"core", "middleware"},
@@ -43,6 +49,7 @@ ALLOWED: dict[str, set[str]] = {
     "cli": {
         "core",
         "ai",
+        "llm",
         "adapters",
         "middleware",
         "lockstep",
@@ -112,7 +119,7 @@ def test_arrows_point_down_only(path: Path) -> None:
 
 def test_core_does_not_import_implementations() -> None:
     """The specific inversion this rule exists to prevent."""
-    forbidden = {"platform", "human", "notify", "adapters", "middleware", "ai"}
+    forbidden = {"platform", "human", "notify", "adapters", "middleware", "ai", "llm"}
     for path in (SRC / "core").rglob("*.py"):
         imported = _imported_layers(ast.parse(path.read_text()), path)
         assert not (imported & forbidden), f"core/{path.name} imports {sorted(imported & forbidden)}"
