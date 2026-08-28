@@ -50,10 +50,12 @@ cov-new:
 	uv run pytest -q tests/in_lockstep tests/characterization \
 	  --cov=in_lockstep --cov-config=/dev/null --cov-report=term-missing \
 	  --cov-fail-under=$$floor || exit 1; \
-	actual=$$(uv run coverage report --format=total 2>/dev/null || echo $$floor); \
+	actual=$$(uv run python -c "import json,subprocess; \
+	print(int(json.loads(subprocess.run(['uv','run','coverage','json','-o','-','--quiet'], \
+	capture_output=True,text=True).stdout)['totals']['percent_covered']))" 2>/dev/null || echo $$floor); \
 	if [ "$$actual" -gt "$$((floor + 2))" ]; then \
 	  echo ""; \
-	  echo "coverage rose to $$actual%, floor is $$floor%."; \
+	  echo "coverage is $$actual%, floor is $$floor%."; \
 	  echo "Bump it:  echo $$actual > .coverage-floor"; \
 	  exit 1; \
 	fi; \

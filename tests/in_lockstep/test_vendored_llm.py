@@ -59,9 +59,7 @@ def test_gate_async_1_every_client_is_async(path: Path) -> None:
     tree = ast.parse(path.read_text())
     sync_clients = {"Anthropic", "AnthropicBedrock", "AnthropicVertex", "OpenAI", "Client"}
     offenders = [
-        _callee(c)
-        for c in _calls(tree)
-        if _callee(c) in sync_clients and not _callee(c).startswith("Async")
+        _callee(c) for c in _calls(tree) if _callee(c) in sync_clients and not _callee(c).startswith("Async")
     ]
     # genai.Client is the one legitimate sync constructor: the async surface hangs off `.aio`.
     if path.stem == "google_gemini":
@@ -92,9 +90,7 @@ def test_gate_retry_2_sdk_retries_disabled(path: Path) -> None:
         if starred:
             # Constructed from a kwargs dict built above; assert on the dict literal instead.
             flat = path.read_text().replace(" ", "").replace("\n", "")
-            assert '"max_retries":0' in flat, (
-                f"{path.name} builds client kwargs without max_retries=0"
-            )
+            assert '"max_retries":0' in flat, f"{path.name} builds client kwargs without max_retries=0"
             continue
         assert "max_retries" in kwargs, f"{path.name} constructs {_callee(call)} without max_retries"
 
