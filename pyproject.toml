@@ -9,10 +9,24 @@ license-files = ["LICENSE", "NOTICE"]
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
+    "httpx>=0.27",
 ]
 
+# Model SDKs are extras, not runtime dependencies. A bare `pip install in-lockstep` must not
+# drag pydantic-core, grpcio, google-auth and botocore into a job that calls one provider —
+# cold start is what R1-DEVOPS-3 resolved and what an in-process model call threatens.
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+bedrock = ["anthropic[bedrock]>=0.40"]
+google = ["anthropic[vertex]>=0.40", "google-genai>=1.0"]
+openai = ["openai>=1.40"]
+all = ["anthropic[bedrock,vertex]>=0.40", "google-genai>=1.0", "openai>=1.40"]
+
 [project.scripts]
+# Both coexist through the pivot: `make fetch` still needs `lockstep`, while every new phase
+# asserts on `in-lockstep`. Only `in-lockstep` survives Phase 7.
 lockstep = "lockstep.cli:main"
+in-lockstep = "in_lockstep.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/in-lockstep/lockstep"
@@ -50,7 +64,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lockstep"]
+packages = ["src/lockstep", "src/in_lockstep"]
 
 [tool.ruff]
 line-length = 110
@@ -75,6 +89,10 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.format]
 exclude = [
+    # Vendored one-way from pipeline-framework at 6ac3cde. See VENDORED.md / vendor.lock:
+    # the recorded hashes are of the ORIGIN files, so `make fmt` rewriting the copies would
+    # not break a gate — but it would quietly widen the diff against a reviewed import.
+    "src/in_lockstep/ai/llm/**",
     "packages/pipeline-exec/src/pipeline_exec/executors/**",
     "packages/pipeline-exec/src/pipeline_exec/builtins/test_runner.py",
     "packages/pipeline-exec/src/pipeline_exec/reports/**",
@@ -100,6 +118,19 @@ warn_return_any = false
 disallow_untyped_calls = false
 
 # Playwright is an optional extra: API and CLI tests do not need it, and the module imports it lazily.
+# Model SDKs are optional extras; the providers import them lazily inside __init__.
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*", "google.*", "google.genai.*"]
+ignore_missing_imports = true
+
+# The vendored transport, like the extracted executors before it.
+[[tool.mypy.overrides]]
+module = "in_lockstep.ai.llm.*"
+disallow_untyped_defs = false
+disallow_any_generics = false
+warn_return_any = false
+disallow_untyped_calls = false
+
 [[tool.mypy.overrides]]
 module = "playwright.*"
 ignore_missing_imports = true

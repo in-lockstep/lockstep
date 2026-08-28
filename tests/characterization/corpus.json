@@ -1,0 +1,224 @@
+{
+  "repo/implement/change-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/change-writer",
+      "skill:implement/change-format",
+      "context:codebase"
+    ],
+    "sha256": "d6ff86fabd68581a958bf604ff039c4c0241a588f152ae6e09eecf9e66a0bf7e",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|skill:implement/change-format|context:codebase"
+  },
+  "repo/implement/planner": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/planner",
+      "context:codebase"
+    ],
+    "sha256": "41c827742bbb5564a52de7406ab94b0039e50543b02c00785100cad26a574207",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|context:codebase"
+  },
+  "repo/implement/requirements-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/requirements-analyst",
+      "context:codebase"
+    ],
+    "sha256": "aecf9b5dd30c912fe89d7a701809f79a73fd152b7b92356f3ed042aa76899fc3",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|context:codebase"
+  },
+  "repo/implement/test-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/test-writer",
+      "skill:implement/change-format",
+      "context:codebase"
+    ],
+    "sha256": "e13b703038d829c6e1857dfd05cc8210cfdcf3663df1c3978da35454c7e073bb",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|skill:implement/change-format|context:codebase"
+  },
+  "repo/retro/retro-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:retro/retro",
+      "body:retro/retro-analyst",
+      "context:codebase"
+    ],
+    "sha256": "ae662558851e0e97c09eec621fdb8909031c43e084e7b590fec4e654e75ef0c4",
+    "signature_without_body": "guardrail:baseline|guardrail:retro/retro|context:codebase"
+  },
+  "repo/review/intent-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/intent-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision",
+      "context:codebase"
+    ],
+    "sha256": "920822e7c15abc16d46805fd2e92755ca63abf765cfaa4a2cbcf05511d6296bf",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision|context:codebase"
+  },
+  "repo/review/performance-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/performance-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision",
+      "context:codebase"
+    ],
+    "sha256": "a20a414a678442de1963dbdeee9675aea8824742ab9f93fb6ea4e2bfc56f53c1",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision|context:codebase"
+  },
+  "repo/review/security-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/security-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision",
+      "context:codebase"
+    ],
+    "sha256": "2b7d7ed787f42e8cea0359977080f7e6ef37aa7bba8c86755e36efef4060de85",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision|context:codebase"
+  },
+  "repo/review/tests-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/tests-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision",
+      "context:codebase"
+    ],
+    "sha256": "b389a274e58341b75a8c7db07cf3f1ae8f6e1603427cb28e96d1eeed736dbbe6",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision|context:codebase"
+  }
+}
