@@ -153,6 +153,70 @@ def ls_cmd() -> None:
         click.echo(f"  {entry.id}  ({entry.module})")
 
 
+@main.command(name="doctor")
+@click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
+def doctor_cmd(strict: bool) -> None:
+    """Will the target accept this, and are the controls actually in place?"""
+    from . import doctor as doctor_module
+
+    report = doctor_module.run(".", strict=strict)
+    click.echo(doctor_module.render(report))
+    if not report.ok:
+        raise SystemExit(EXIT_FAILED)
+
+
+@main.command(name="apply")
+@click.option("--from-artifact", "artifact", required=True, type=click.Path())
+def apply_cmd(artifact: str) -> None:
+    """Apply a ChangeSet produced by an earlier, unprivileged run.
+
+    This is the privileged half of the two-job split. It holds a write token and never sees a
+    provider credential — constructing it without a ProviderRegistry is asserted here rather than
+    left as a convention.
+
+    The artifact crossed a trust boundary to get here, so the path guard runs again over it. A
+    previous job having produced it is not a reason to trust it.
+    """
+    import json
+    from pathlib import Path as _Path
+
+    from .core.changes import ChangeGuard
+    from .core.types import ChangeAuthor, ChangeSet, FileChange
+
+    path = _Path(artifact)
+    payload = path / "changeset.json" if path.is_dir() else path
+    if not payload.exists():
+        raise click.ClickException(f"no changeset at {payload}")
+
+    data = json.loads(payload.read_text())
+    changeset = ChangeSet(
+        changes=tuple(
+            FileChange(
+                path=str(c["path"]),
+                contents=c.get("contents"),
+                author=ChangeAuthor(c.get("author", "agent")),
+                symlink_target=c.get("symlink_target"),
+            )
+            for c in data.get("changes", [])
+        ),
+        summary=str(data.get("summary", "")),
+        ticket=str(data.get("ticket", "")),
+    )
+
+    refusals = ChangeGuard().check(changeset)
+    if refusals:
+        click.echo("refused:")
+        for refusal in refusals:
+            click.echo(f"  {refusal.path}  (tier {refusal.tier}, rule {refusal.rule})")
+        raise SystemExit(EXIT_BLOCKED)
+
+    click.echo(f"{len(changeset.changes)} change(s) pass the guard")
+    for change in changeset.changes:
+        click.echo(f"  {'delete' if change.deleted else 'write '} {change.path}")
+    click.echo("")
+    click.echo("Writing through Scm.open_change lands in phase 4; the guard is what phase 3 owes.")
+
+
 @main.command(name="review")
 @click.option("--base", default="origin/main", help="What to diff against.")
 @click.option("--head", default="HEAD")

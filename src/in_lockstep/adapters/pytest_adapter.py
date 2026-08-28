@@ -11,7 +11,6 @@ declared so policy can see it.
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import tempfile
 from pathlib import Path
@@ -20,6 +19,7 @@ from typing import ClassVar
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..core.types import TestReport, TestSpec
 from ..core.verbs import Capability, Verb
+from .sandbox import Sandbox
 
 # pytest's exit code for "no tests ran".
 NO_TESTS_COLLECTED = 5
@@ -35,9 +35,17 @@ class PytestTest:
         {Capability.EXECUTES_CODE, Capability.READS_REPO}
     )
 
-    def __init__(self, args: list[str] | None = None, cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        args: list[str] | None = None,
+        cwd: str | None = None,
+        sandbox: Sandbox | None = None,
+    ) -> None:
         self.args = args or ["-q"]
         self.cwd = cwd
+        # Out of process by default. pytest executes conftest.py from the repository, so an
+        # in-process run hands repository-authored Python the credentials this process holds.
+        self.sandbox = sandbox or Sandbox()
 
     async def invoke(self, ctx: object, inp: TestSpec) -> Outcome[TestReport]:
         if shutil.which("python") is None:  # pragma: no cover - defensive
@@ -56,20 +64,14 @@ class PytestTest:
             cmd += ["-k", inp.selector]
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=self.cwd or getattr(getattr(ctx, "repo", None), "root", None),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
+            result = await self.sandbox.run(
+                cmd, cwd=self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
             )
-            stdout, _ = await proc.communicate()
-            exit_code = proc.returncode or 0
-        except FileNotFoundError as e:  # pragma: no cover - defensive
-            return Outcome.errored(f"pytest not available: {e}")
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)
 
-        text = stdout.decode(errors="replace")
+        exit_code = result.exit_code
+        text = result.stdout + result.stderr
         report = _parse(text)
 
         # pytest exits 5 for "no tests collected". That is not a red suite and it is not a green

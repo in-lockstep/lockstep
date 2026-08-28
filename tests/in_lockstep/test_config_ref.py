@@ -16,6 +16,7 @@ def _repo(tmp_path: Path) -> Path:
 
     def run(*args: str) -> None:
         subprocess.run(args, cwd=root, capture_output=True, check=True)
+
     run("git", "init", "-q")
     run("git", "config", "user.email", "t@example.test")
     run("git", "config", "user.name", "t")
