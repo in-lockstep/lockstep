@@ -65,6 +65,39 @@ class EnvResolver:
 
 
 @dataclass
+class OidcResolver:
+    """CI-native federated identity, tried before long-lived environment variables.
+
+    A short-lived token minted per run beats a secret sitting in repository settings, and this is
+    the resolver that makes "prefer federation" a default rather than advice. It resolves nothing
+    outside CI, so the chain simply falls through on a laptop.
+
+    Note the interaction with redaction: a federated token never appears in the environment, so an
+    env-scraping redactor could not see it. It is redactable only because Auth mints it.
+    """
+
+    audience: str = "in-lockstep"
+
+    def resolve(self, request: AuthRequest) -> dict[str, str]:
+        request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+        request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+        if not (request_url and request_token):
+            return {}
+        try:
+            import json
+            import urllib.request
+
+            url = f"{request_url}&audience={self.audience}"
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {request_token}"})
+            with urllib.request.urlopen(req, timeout=10) as response:  # noqa: S310
+                payload = json.loads(response.read().decode())
+        except Exception:  # noqa: BLE001 - a resolver that fails falls through to the next
+            return {}
+        token = str(payload.get("value") or "")
+        return {"id_token": token} if token else {}
+
+
+@dataclass
 class StaticResolver:
     """For tests and for explicit wiring. Never reads ambient state."""
 

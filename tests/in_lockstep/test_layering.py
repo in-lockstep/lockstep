@@ -34,6 +34,8 @@ ALLOWED: dict[str, set[str]] = {
     "prompts": {"ai", "prompts"},
     "adapters": {"core", "ai", "adapters", "prompts", "privileged"},
     "middleware": {"core", "middleware"},
+    "platform": {"core", "ai", "platform"},
+    "doctor": {"ai", "privileged", "prompts", "doctor"},
     "lockstep": {"core", "lockstep"},
     "cli": {
         "core",
