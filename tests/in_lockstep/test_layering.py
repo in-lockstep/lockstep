@@ -36,6 +36,8 @@ ALLOWED: dict[str, set[str]] = {
     "middleware": {"core", "middleware"},
     "platform": {"core", "ai", "platform"},
     "doctor": {"ai", "privileged", "prompts", "doctor"},
+    "evaluation": {"evaluation"},
+    "strategies": {"ai", "core", "strategies"},
     "lockstep": {"core", "lockstep"},
     "cli": {
         "core",
@@ -48,6 +50,8 @@ ALLOWED: dict[str, set[str]] = {
         "config_ref",
         "platform",
         "doctor",
+        "evaluation",
+        "strategies",
         "cli",
     },
 }

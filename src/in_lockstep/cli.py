@@ -170,6 +170,54 @@ def ls_cmd() -> None:
         click.echo(f"  {entry.id}  ({entry.module})")
 
 
+@main.command(name="eval")
+@click.argument("action", default="report")
+@click.option("--corpus", default="", help="Where the cases live.")
+def eval_cmd(action: str, corpus: str) -> None:
+    """Run the eval corpus offline.
+
+    Deterministic expectations are settled here. Rubric expectations are reported as OUTSTANDING,
+    because a judge has not answered them — recording them as passes would put a perfect score
+    computed from no evidence into a baseline that is then compared against forever.
+    """
+    from pathlib import Path as _Path
+
+    from .evaluation import load_cases, summarize
+    from .evaluation.cases import grade
+
+    root = _Path(corpus) if corpus else _Path(__file__).parent / "evals"
+    if not root.exists():
+        raise click.ClickException(f"no corpus at {root}")
+
+    cases = load_cases(root)
+    if action == "list":
+        for case in cases:
+            rubric = " (rubric)" if case.rubric else ""
+            click.echo(f"{case.name}{rubric}")
+        click.echo(f"\n{len(cases)} case(s)")
+        return
+
+    # No model runs here: this reports what the corpus asks of one.
+    results = [grade(case, None) for case in cases]
+    summary = summarize(results)
+
+    by_family: dict[str, int] = {}
+    for case in cases:
+        family = case.path.parent.parent.name if case.path else "?"
+        by_family[family] = by_family.get(family, 0) + 1
+    for family in sorted(by_family):
+        click.echo(f"  {family:<12} {by_family[family]} case(s)")
+
+    click.echo("")
+    click.echo(f"cases        {summary['total']}")
+    click.echo(f"decided      {summary['decided']}")
+    click.echo(f"outstanding  {summary['outstanding']}  (need a judge)")
+    rate = summary["pass_rate"]
+    click.echo(f"pass rate    {'n/a — nothing decided' if rate is None else f'{rate:.0%}'}")
+    click.echo("")
+    click.echo("A rubric nobody judged is outstanding, not passed.")
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 def doctor_cmd(strict: bool) -> None:

@@ -1,0 +1,45 @@
+{
+  "input": {
+    "key": "#412",
+    "number": 412,
+    "repo": "acme/app",
+    "state": "open",
+    "summary": "Checkout returns 500 for every card payment",
+    "description": "Since the 14:20 deploy every card payment returns a 500. Cash on delivery still works. Rolled back is not an option, the deploy also carried the tax fix.",
+    "acceptance_criteria": [],
+    "criteria_source": "none",
+    "labels": [],
+    "assignees": [],
+    "discussion": [
+      {
+        "author": "ops",
+        "body": "Confirmed on prod, ~2000 failures in the last hour."
+      }
+    ]
+  },
+  "expect": {
+    "schema": [
+      "kind",
+      "priority",
+      "reason",
+      "missing",
+      "comment"
+    ],
+    "equals": {
+      "kind": "bug",
+      "priority": "urgent"
+    },
+    "count": {
+      "missing": 0
+    },
+    "rubric": {
+      "criteria": "Places a live production failure correctly and does not ask for information it already has.",
+      "levels": {
+        "5": "urgent + bug, reason cites the 500s in production and the volume from the discussion, and `missing` is empty because the issue says what broke, when, and what still works.",
+        "3": "urgent + bug, but the reason is generic or it asks for information the issue already gave.",
+        "1": "Anything less than urgent, or a request for more information before acting."
+      },
+      "min": 4
+    }
+  }
+}

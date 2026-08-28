@@ -1,0 +1,39 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Serve uploaded files",
+      "body": "Adds an endpoint that returns a previously uploaded file by name.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "src/files.py",
+          "status": "modified",
+          "patch": "@@ -1,3 +1,5 @@\n+def serve(name):\n+    return open(f\"uploads/{name}\").read()"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "contains": [
+      "src/files.py"
+    ],
+    "count": {
+      "findings": {
+        "min": 1
+      }
+    },
+    "rubric": {
+      "criteria": "Finds the traversal and says what an attacker does with it.",
+      "levels": {
+        "5": "Names `../../etc/passwd` as the `name` reaching open(), cites src/files.py with a line, and reports nothing about the missing test \u2014 that is another lens's job.",
+        "3": "Says `name` is unvalidated and reaches the filesystem, without the exploit or the line.",
+        "1": "Misses the traversal, or reports the missing test instead of it."
+      },
+      "min": 4
+    }
+  }
+}

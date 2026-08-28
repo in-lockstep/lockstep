@@ -1,0 +1,26 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Bump the pinned formatter",
+      "body": "Routine dependency update.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "requirements-dev.txt",
+          "status": "modified",
+          "patch": "@@ -3,1 +3,1 @@\n-ruff==0.6.1\n+ruff==0.7.0"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": "Says no test is needed and stops. Insisting on one here teaches people that this lens is procedural."
+  }
+}

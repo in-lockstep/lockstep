@@ -1,0 +1,43 @@
+{
+  "input": {
+    "key": "PLAT-412",
+    "number": null,
+    "repo": "acme/app",
+    "state": "In Progress",
+    "summary": "Export endpoint ignores the format parameter",
+    "description": "## Acceptance criteria\n- The format parameter is validated against the shipped templates\n- An unknown format returns 400",
+    "acceptance_criteria": [
+      "The format parameter is validated against the shipped templates",
+      "An unknown format returns 400"
+    ],
+    "criteria_source": "description",
+    "labels": [],
+    "assignees": [],
+    "discussion": []
+  },
+  "expect": {
+    "schema": [
+      "kind",
+      "acceptance_criteria",
+      "reason"
+    ],
+    "equals": {
+      "kind": "bug"
+    },
+    "count": {
+      "acceptance_criteria": 2
+    },
+    "contains": [
+      "400"
+    ],
+    "rubric": {
+      "criteria": "Carries the stated criteria through, and says they were read out of prose rather than a field.",
+      "levels": {
+        "5": "Both criteria carried verbatim, and the reason notes `criteria_source` was the description \u2014 so these are the reporter's prose rather than a contract somebody filled in.",
+        "3": "Criteria carried through, but nothing said about where they came from.",
+        "1": "Criteria dropped, reworded into something the issue did not say, or added to."
+      },
+      "min": 4
+    }
+  }
+}

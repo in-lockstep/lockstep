@@ -1,0 +1,44 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Validate the discount code",
+      "body": "Rejects an expired code.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "src/discounts.py",
+          "status": "modified",
+          "patch": "@@ -5,0 +6,3 @@\n+def apply(code):\n+    if code.expired:\n+        raise Expired()"
+        },
+        {
+          "path": "tests/test_discounts.py",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+def test_apply():\n+    apply(valid_code())"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": {
+        "min": 1
+      }
+    },
+    "contains": [
+      "tests/test_discounts.py"
+    ],
+    "rubric": {
+      "criteria": "Notices the test would pass with the change reverted.",
+      "levels": {
+        "5": "Says the test asserts nothing about the new branch and would pass without it, and names what it should assert \u2014 that an expired code raises.",
+        "3": "Says the expired path is untested, without noticing the existing test proves nothing.",
+        "1": "Reports that tests were added, or asks for coverage generally."
+      },
+      "min": 4
+    }
+  }
+}

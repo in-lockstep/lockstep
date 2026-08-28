@@ -1,0 +1,39 @@
+{
+  "input": {
+    "issue": {
+      "key": "#77",
+      "number": 77,
+      "repo": "acme/app",
+      "state": "open",
+      "summary": "Export is slow",
+      "description": "Exports take too long.",
+      "acceptance_criteria": [],
+      "criteria_source": "none",
+      "labels": [
+        "bug"
+      ],
+      "assignees": [],
+      "discussion": []
+    }
+  },
+  "expect": {
+    "schema": [
+      "requirements",
+      "unanswerable"
+    ],
+    "count": {
+      "unanswerable": {
+        "min": 1
+      }
+    },
+    "rubric": {
+      "criteria": "Reports what the issue does not decide instead of choosing for it.",
+      "levels": {
+        "5": "`unanswerable` names what is missing \u2014 how slow is too slow, which export, measured how \u2014 and no requirement invents a target.",
+        "3": "Notes the issue is vague without saying precisely what is undecided.",
+        "1": "Invents a performance target and states it as a requirement."
+      },
+      "min": 4
+    }
+  }
+}

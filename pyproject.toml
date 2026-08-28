@@ -66,6 +66,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/lockstep", "src/in_lockstep"]
 
+# Prompts and eval cases are package data, not Python. This is the failure mode that never shows
+# up in a source checkout and always shows up in a clean install.
+[tool.hatch.build.targets.wheel.force-include]
+"src/in_lockstep/prompts" = "in_lockstep/prompts"
+"src/in_lockstep/evals" = "in_lockstep/evals"
+
 [tool.ruff]
 line-length = 110
 target-version = "py311"

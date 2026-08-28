@@ -1,0 +1,44 @@
+{
+  "input": {
+    "requirements": {
+      "requirements": [
+        {
+          "id": "R1",
+          "statement": "The format parameter selects the template",
+          "source": "acceptance criteria"
+        },
+        {
+          "id": "R2",
+          "statement": "An unknown format is rejected",
+          "source": "acceptance criteria"
+        }
+      ],
+      "assumptions": [],
+      "unanswerable": [
+        "What status code an unknown format returns"
+      ]
+    }
+  },
+  "expect": {
+    "schema": [
+      "summary",
+      "approach",
+      "changes",
+      "verification"
+    ],
+    "count": {
+      "open_questions": {
+        "min": 1
+      }
+    },
+    "rubric": {
+      "criteria": "Plans the change without resolving what the requirements could not.",
+      "levels": {
+        "5": "A concrete approach and a named file, with the status-code question carried into open_questions rather than decided, and verification stated as a test that could fail.",
+        "3": "A workable plan, but the open question quietly resolved or dropped.",
+        "1": "No approach, or `verification` that says 'add tests'."
+      },
+      "min": 4
+    }
+  }
+}

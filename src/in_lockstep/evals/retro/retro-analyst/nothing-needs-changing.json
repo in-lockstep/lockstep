@@ -1,0 +1,57 @@
+{
+  "input": {
+    "window": {
+      "since": "2026-07-01",
+      "runs": 40,
+      "baseline_runs": 38,
+      "compared": true
+    },
+    "totals": {
+      "runs": 40,
+      "credits": 2400,
+      "cost_usd": 5.04,
+      "failed_runs": 1,
+      "reruns": 0
+    },
+    "agents": [
+      {
+        "name": "security-reviewer",
+        "change": "compared",
+        "before": {
+          "runs": 38,
+          "failure_rate": 0.026,
+          "mean_seconds": 201
+        },
+        "after": {
+          "runs": 40,
+          "failure_rate": 0.025,
+          "mean_seconds": 205
+        },
+        "deltas": {
+          "failure_rate": -0.001,
+          "mean_seconds": 4
+        }
+      }
+    ],
+    "workflows": [],
+    "outliers": []
+  },
+  "expect": {
+    "schema": [
+      "verdict",
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": {
+      "criteria": "Reports that the pipelines behaved, briefly, without manufacturing a finding.",
+      "levels": {
+        "5": "Empty `findings`, a verdict saying the window was normal in a sentence or two, and no proposal invented from a four-second change.",
+        "3": "Says things look fine but pads the report with observations nobody can act on.",
+        "1": "Files a proposal against a delta of -0.001 or 4 seconds."
+      },
+      "min": 4
+    }
+  }
+}

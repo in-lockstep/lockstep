@@ -1,0 +1,37 @@
+{
+  "input": {
+    "key": "#310",
+    "number": 310,
+    "repo": "acme/app",
+    "state": "open",
+    "summary": "Export is broken",
+    "description": "The export doesn't work properly.",
+    "acceptance_criteria": [],
+    "criteria_source": "none",
+    "labels": [],
+    "assignees": [],
+    "discussion": []
+  },
+  "expect": {
+    "schema": [
+      "kind",
+      "missing",
+      "acceptance_criteria"
+    ],
+    "count": {
+      "missing": {
+        "min": 1
+      },
+      "acceptance_criteria": 0
+    },
+    "rubric": {
+      "criteria": "Reports the gap rather than filling it in.",
+      "levels": {
+        "5": "`missing` names what is absent \u2014 what was exported, what was expected, which export \u2014 and `acceptance_criteria` is empty. The comment asks the reporter for those specifics.",
+        "3": "Says more information is needed, but vaguely, without naming what.",
+        "1": "Invents an expected behaviour, or writes acceptance criteria the issue never stated."
+      },
+      "min": 4
+    }
+  }
+}

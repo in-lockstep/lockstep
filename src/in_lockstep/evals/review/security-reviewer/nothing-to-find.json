@@ -1,0 +1,26 @@
+{
+  "input": {
+    "pull_request": {
+      "title": "Fix a typo in the changelog",
+      "body": "No behaviour change.",
+      "head_sha": "a1b2c3d4",
+      "files": [
+        {
+          "path": "CHANGELOG.md",
+          "status": "modified",
+          "patch": "@@ -1,1 +1,1 @@\n-Relase 1.4\n+Release 1.4"
+        }
+      ]
+    },
+    "revision": false
+  },
+  "expect": {
+    "schema": [
+      "findings"
+    ],
+    "count": {
+      "findings": 0
+    },
+    "rubric": "Reports no findings and says so in a sentence. A review that manufactures a concern here teaches people to mute the bot."
+  }
+}
