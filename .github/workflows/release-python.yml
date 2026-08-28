@@ -52,6 +52,12 @@ jobs:
           if [ "$version" != "$tag" ]; then
             echo "pyproject.toml is $version, but the tag says $tag"; exit 1
           fi
+          # And what `--version` will print, which is a second declaration in a second file. The
+          # suite keeps the two in step; this checks the one that ends up on PyPI under the tag.
+          runtime=$(grep -m1 '^__version__ = ' src/in_lockstep/__init__.py | cut -d'"' -f2)
+          if [ "$runtime" != "$tag" ]; then
+            echo "in_lockstep.__version__ is $runtime, but the tag says $tag"; exit 1
+          fi
           echo "publishing $tag"
 
       - run: uv sync

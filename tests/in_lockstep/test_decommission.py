@@ -118,6 +118,20 @@ def test_the_executor_runtime_is_gone() -> None:
     assert data["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src"]
 
 
+def test_the_two_version_declarations_agree() -> None:
+    """`pyproject.toml` names the distribution's version; `__version__` is what `--version` prints.
+
+    They are separate declarations, and they drifted: the manifest said 0.1.0 while the package
+    said 0.2.0.dev0. The release workflow's tag check reads only the manifest, so tagging would
+    have published a wheel whose own `--version` disagreed with the name it was published under —
+    and PyPI never lets a version be reused, so that is not a mistake a follow-up release undoes.
+    """
+    import in_lockstep
+
+    manifest = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert in_lockstep.__version__ == manifest
+
+
 def test_the_release_publishes_one_distribution() -> None:
     """Two Trusted Publishing exchanges existed because two projects did. One does now."""
     text = (ROOT / ".github" / "workflows" / "release-python.yml").read_text()

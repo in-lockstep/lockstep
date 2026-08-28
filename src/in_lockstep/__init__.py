@@ -29,7 +29,9 @@ from .core import (
 )
 from .lockstep import Lockstep
 
-__version__ = "0.2.0.dev0"
+# Kept in step with `pyproject.toml` by hand, and by a test — the two are separate declarations
+# and a wheel whose `--version` disagrees with its own name is not something a tag check catches.
+__version__ = "1.0.0"
 
 __all__ = [
     "ChangeGuard",
