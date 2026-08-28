@@ -1,6 +1,6 @@
 """Error classification by type and HTTP status — never by substring.
 
-The vendored providers all did `if "429" in msg or "rate" in msg.lower()`. That matches the word
+The obvious implementation is `if "429" in msg or "rate" in msg.lower()`. That matches the word
 "gene*rate*d", "accu*rate*", and "tempe*rate*ure", so ordinary content errors were classified as
 rate limits and retried four times; and `if "401" in msg` matches any request id containing 401.
 GATE-RETRY-3 pins the exact case.
@@ -71,8 +71,14 @@ def _is_context_length(exc: BaseException, status: int | None) -> bool:
     text = str(exc).lower()
     return any(
         marker in text
-        for marker in ("context length", "context_length", "too many tokens", "maximum context",
-                       "prompt is too long", "exceeds the maximum")
+        for marker in (
+            "context length",
+            "context_length",
+            "too many tokens",
+            "maximum context",
+            "prompt is too long",
+            "exceeds the maximum",
+        )
     )
 
 
@@ -83,8 +89,7 @@ def classify(exc: BaseException, *, provider: str) -> LLMError | None:
 
     status = _status_of(exc)
     request_id = _request_id_of(exc)
-    common: dict[str, object] = {"status_code": status, "provider": provider,
-                                 "request_id": request_id}
+    common: dict[str, object] = {"status_code": status, "provider": provider, "request_id": request_id}
     message = str(exc)
 
     if status in (401, 403):
@@ -98,11 +103,19 @@ def classify(exc: BaseException, *, provider: str) -> LLMError | None:
     if status is not None and status in _TRANSIENT_STATUS:
         return TransientError(message, **common)  # type: ignore[arg-type]
 
-    # Transport-level failures carry no status. httpx is the only client library the vendored
+    # Transport-level failures carry no status. httpx is the only client library the
     # providers share, so it is the only one matched by type here.
     name = type(exc).__name__
-    if name in ("ConnectError", "ConnectTimeout", "ReadTimeout", "WriteTimeout", "PoolTimeout",
-                "RemoteProtocolError", "ReadError", "TimeoutException"):
+    if name in (
+        "ConnectError",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "WriteTimeout",
+        "PoolTimeout",
+        "RemoteProtocolError",
+        "ReadError",
+        "TimeoutException",
+    ):
         return TransientError(message, **common)  # type: ignore[arg-type]
     if isinstance(exc, TimeoutError):
         return TransientError(message, **common)  # type: ignore[arg-type]

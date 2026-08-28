@@ -64,14 +64,6 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
-[tool.ruff.format]
-exclude = [
-    # Vendored one-way from pipeline-framework at 6ac3cde. See VENDORED.md / vendor.lock:
-    # the recorded hashes are of the ORIGIN files, so `make fmt` rewriting the copies would
-    # not break a gate — but it would quietly widen the diff against a reviewed import.
-    "src/in_lockstep/llm/**",
-]
-
 [tool.mypy]
 python_version = "3.11"
 strict = true
@@ -86,15 +78,6 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = ["anthropic.*", "openai.*", "google.*", "google.genai.*"]
 ignore_missing_imports = true
-
-# The vendored transport is held to the same relaxed settings the extracted executors used to be:
-# it is type-checked, but not to strict-mode rules that would mean rewriting code imported verbatim.
-[[tool.mypy.overrides]]
-module = "in_lockstep.llm.*"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-disallow_untyped_calls = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

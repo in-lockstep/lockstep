@@ -1,7 +1,7 @@
 """Claude wire formatting, shared by the anthropic / bedrock / vertex providers.
 
 Promoted from a private cross-provider import (`from .vertex_claude import _format_claude_messages`)
-to a module of its own — that import was the only coupling in the vendored package and made
+to a module of its own — that import was the only coupling between two providers and made
 vertex_claude load-bearing for two providers that do not otherwise use it.
 """
 
@@ -68,8 +68,7 @@ def claude_kwargs(input_: object) -> dict[str, object]:
         kwargs["temperature"] = input_.temperature
     if input_.tools:
         kwargs["tools"] = [
-            {"name": t.name, "description": t.description, "input_schema": t.parameters}
-            for t in input_.tools
+            {"name": t.name, "description": t.description, "input_schema": t.parameters} for t in input_.tools
         ]
     return kwargs
 
@@ -84,9 +83,7 @@ def claude_output(response: object) -> tuple[str, list[object], object, str]:
         if hasattr(block, "text"):
             content += block.text
         elif hasattr(block, "name") and hasattr(block, "input"):
-            tool_calls.append(
-                ToolCall(id=getattr(block, "id", ""), name=block.name, input=block.input)
-            )
+            tool_calls.append(ToolCall(id=getattr(block, "id", ""), name=block.name, input=block.input))
     raw = getattr(response, "usage", None)
     usage = TokenUsage(
         input_tokens=getattr(raw, "input_tokens", 0) or 0,

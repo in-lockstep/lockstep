@@ -31,7 +31,7 @@ ALLOWED: dict[str, set[str]] = {
     "core": {"core"},
     "config_ref": set(),
     "loader": {"config_ref", "loader"},
-    # The vendored transport is a leaf: it imports provider SDKs and itself, and nothing of ours.
+    # The transport is a leaf: it imports provider SDKs and itself, and nothing else of ours.
     # It used to sit at `ai/llm/`, where "nothing above `ai` reaches into the transport" was a
     # convention this test could not see. As a sibling layer with an empty allowance, both
     # directions are enforced — it cannot grow an edge back into the framework, and `ai` is the
@@ -39,7 +39,7 @@ ALLOWED: dict[str, set[str]] = {
     #
     # That last clause was written here before it was true: `cli` imported `Model` and
     # `LLMProvider` straight from `llm`, and `ALLOWED["cli"]` was widened to let it, which made
-    # this comment and VENDORED.md assert an invariant the dict below them did not hold. The
+    # this comment assert an invariant the dict below it did not hold. The
     # names are re-exported from `ai.bootstrap` now, so the allowance could shrink to match.
     "llm": {"llm"},
     "ai": {"core", "ai", "llm", "privileged"},

@@ -96,9 +96,7 @@ class ProviderRegistry:
     def registration_for(self, model: Model) -> Registration:
         name = model.provider
         if not name:
-            raise ProviderRegistrationError(
-                f"model id {model.id!r} is unqualified; use '<provider>:<model>'"
-            )
+            raise ProviderRegistrationError(f"model id {model.id!r} is unqualified; use '<provider>:<model>'")
         try:
             return self._registrations[name]
         except KeyError:

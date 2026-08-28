@@ -69,17 +69,39 @@ GHCR image and the `exec-v0.1.x` tag are still not deleted.
 
 ### The AI layer
 
-Adopt `pipeline-framework/src/llm/` as **transport only**: `LLMProvider.generate(LLMInput) ->
-LLMOutput` is kept byte-identical. `resolver.get_provider()` is **dropped** — it binds one provider
-per process from ambient config, which makes the design's own per-verb routing example
-inexpressible. `Model`, `ModelCaps`, `CostTable`, `ModelRouter`, `Credentials`, `DataPolicy` and a
-`ProviderRegistry` stay lockstep-owned above it.
+`LLMProvider.generate(LLMInput) -> LLMOutput` is the transport seam: one method, one input type,
+one output type, all defined in this repository. `Model`, `ModelCaps`, `CostTable`, `ModelRouter`,
+`Credentials`, `DataPolicy` and `ProviderRegistry` sit above it. There is deliberately no
+`get_provider(config)`: resolving one provider per process from ambient configuration makes the
+design's own per-verb routing example inexpressible.
 
 Credentials are injected via the **constructor**, not the call — credentials are a property of the
-connection, not the request, so `Auth` can seed `Redact` at mint time without changing the adopted
-signature.
+connection, not the request, so `Auth` can seed `Redact` at mint time.
 
-Vendored one-way at origin commit `6ac3cde`, with the async rewrite applied on the way in.
+#### Amendment (post-1.0): the transport is first-party, not vendored
+
+The first cut of this layer was imported one-way from an earlier transport in another project of
+the same author's, carried `VENDORED.md` and a `vendor.lock` of origin hashes, and was excluded
+from `ruff format` and from strict mypy on the grounds that it was a reviewed verbatim import.
+
+That framing was wrong within days and got worse. By 1.0 the tree was roughly half code written
+here — `registry.py`, `_errors.py`, `_claude.py` and `providers/_claude_base.py` had no origin file
+at all, and `interface.py` had grown from 43 lines to 164. So a path fence justified as protecting
+an import from churn was in fact **exempting first-party code from this repository's own
+standards**, including `ProviderRegistry`, which enforces `GATE-AUTH-2` and decides whether this
+repository's content may be sent to a given endpoint.
+
+Every type here now originates in this repository. The fence is gone, the provenance files are
+deleted, and `doctor`'s `DOC150` — which asked every adopter for a provenance record of a tree
+they do not have — went with them. Removing the relaxed mypy override changed nothing: the code
+already passed strict. Removing the format exclude reformatted six files and changed no behaviour.
+Both facts are the argument: the exemption was never load-bearing, only unexamined.
+
+The defect list that shaped the design survives, because it is the reasoning rather than the
+provenance — blocking SDK calls inside `async def`, retry classification by substring where
+`"rate" in msg` matches "gene**rate**d", ~12 HTTP attempts per logical call from two composed retry
+layers, an unpriced model charged at another model's rate. `GATE-ASYNC-1/2` and `GATE-RETRY-2/3`
+are those defects turned into standing assertions, and they still hold.
 
 ### Capability losses, recorded rather than argued away
 

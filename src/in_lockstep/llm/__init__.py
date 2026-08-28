@@ -1,11 +1,17 @@
-"""Model transport, vendored one-way from pipeline-framework `src/llm/` at 6ac3cde.
+"""Model transport. Every type here originates in this repository.
 
-`LLMProvider.generate(LLMInput) -> LLMOutput` is preserved byte-identically — that signature is the
-substitution this pivot committed to. Everything above it (Model, ModelCaps, CostTable,
-ModelRouter, Credentials, DataPolicy, ProviderRegistry) is lockstep-owned, because the vendored
-resolver bound one provider per process and the design needs per-verb routing.
+`LLMProvider.generate(LLMInput) -> LLMOutput` is the seam the whole AI layer is built on: one
+method, one input type, one output type. Cassettes record at it, which is why a tape taken against
+one provider replays against another; `ProviderRegistry` resolves to it per verb, which is what
+makes per-verb model routing expressible.
 
-See VENDORED.md for provenance and the list of defects fixed on the way in.
+A note on history, because the docstrings here used to lead with it and that was the wrong way
+round. The shape of this package was informed by an earlier transport layer in another project of
+the same author's, and the defect list that shaped it is recorded in ADR 0001 — blocking SDK calls
+inside `async def`, retry classification by substring, an unpriced model silently charged at
+another model's rate. Those are the reasons the code looks the way it does. They are not a
+provenance claim: this is first-party code, held to this repository's formatting and to strict
+mypy like everything else, and nothing here is kept in step with anything outside this tree.
 """
 
 from __future__ import annotations

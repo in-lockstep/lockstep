@@ -18,9 +18,7 @@ class GoogleGeminiProvider(LLMProvider):
 
         self._settings = settings
         self._genai = genai
-        self._client = genai.Client(
-            vertexai=True, project=settings.project_id, location=settings.region
-        )
+        self._client = genai.Client(vertexai=True, project=settings.project_id, location=settings.region)
 
     def name(self) -> str:
         return "google-gemini"
@@ -38,9 +36,7 @@ class GoogleGeminiProvider(LLMProvider):
                 if m.content:
                     parts.append(gt.Part(text=m.content))
                 for tc in m.tool_calls:
-                    parts.append(
-                        gt.Part(function_call=gt.FunctionCall(name=tc.name, args=tc.input))
-                    )
+                    parts.append(gt.Part(function_call=gt.FunctionCall(name=tc.name, args=tc.input)))
                 contents.append(gt.Content(role="model", parts=parts))
             elif m.role == "tool_result":
                 contents.append(

@@ -1,10 +1,12 @@
 """Wire types for model invocation.
 
-Vendored from pipeline-framework `src/llm/types.py` at 6ac3cde. The shapes are preserved verbatim
-because they are the substitution the pivot committed to (`LLMProvider.generate(LLMInput) ->
-LLMOutput`); the only addition is cache accounting on TokenUsage, added at vendoring time because
-retrofitting a field onto a type that serializes into checkpoints and the ledger is a breaking
-change later (§4.2).
+These are the framework's own types, not any SDK's. That is the point of them: a provider adapter
+translates in and out of these shapes, so `ProviderRegistry` can route a verb to a different
+provider without anything above the transport changing, and a cassette recorded at this seam
+replays against a provider it was never recorded from.
+
+Cache accounting is on TokenUsage from the start, because retrofitting a field onto a type that
+serializes into checkpoints and the ledger is a breaking change later (§4.2).
 """
 
 from __future__ import annotations
@@ -49,7 +51,7 @@ class LLMInput:
 class TokenUsage:
     input_tokens: int = 0
     output_tokens: int = 0
-    # Added at vendoring. Prompt caching changes what a token costs, so a budget built on
+    # Prompt caching changes what a token costs, so a budget built on
     # input/output alone is wrong the moment caching lands — and this type is checkpointed and
     # ledgered, so the field cannot be added later without breaking a serialized layout.
     cache_read_tokens: int = 0

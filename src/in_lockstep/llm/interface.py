@@ -1,6 +1,6 @@
 """The provider seam.
 
-`generate(LLMInput) -> LLMOutput` is preserved byte-identically from the vendored source: it is the
+`generate(LLMInput) -> LLMOutput` is the one method a provider must implement. It is the
 substitution the pivot committed to. What changed is *construction* — a provider is built by the
 ProviderRegistry from an explicit (ProviderSettings, Credentials) pair rather than reading an
 ambient Config.
@@ -92,7 +92,6 @@ class LLMProvider(ABC):
     # people to disable the control locally, which is how a control dies.
     transmits: bool = True
 
-
     @abstractmethod
     async def generate(self, input: LLMInput) -> LLMOutput:
         """Send a prompt to the LLM and return the response."""
@@ -119,8 +118,9 @@ class LLMProvider(ABC):
 class LLMError(Exception):
     """Base exception for LLM errors."""
 
-    def __init__(self, message: str, *, status_code: int | None = None, provider: str = "",
-                 request_id: str = "") -> None:
+    def __init__(
+        self, message: str, *, status_code: int | None = None, provider: str = "", request_id: str = ""
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.provider = provider

@@ -49,8 +49,7 @@ class OllamaProvider(LLMProvider):
                         "role": "assistant",
                         "content": m.content,
                         "tool_calls": [
-                            {"function": {"name": tc.name, "arguments": tc.input}}
-                            for tc in m.tool_calls
+                            {"function": {"name": tc.name, "arguments": tc.input}} for tc in m.tool_calls
                         ],
                     }
                 )
@@ -103,9 +102,7 @@ class OllamaProvider(LLMProvider):
                 except json.JSONDecodeError:
                     arguments = {}
             # Ollama assigns no ids, so the loop could not pair tool_result at all.
-            tool_calls.append(
-                ToolCall(id=f"ollama-{i}", name=fn.get("name", ""), input=arguments or {})
-            )
+            tool_calls.append(ToolCall(id=f"ollama-{i}", name=fn.get("name", ""), input=arguments or {}))
 
         return LLMOutput(
             content=message.get("content", "") or "",

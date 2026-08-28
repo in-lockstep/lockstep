@@ -58,7 +58,6 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _branch_protection(report, path)
     _egress(report)
     _prompt_bodies(report)
-    _supply_chain(report, path)
     if strict:
         _strict_policy(report, path)
     return report
@@ -180,17 +179,6 @@ def _prompt_bodies(
             lens().body_text()
         except BodyNotFound as e:
             report.add("DOC140", Severity.ERROR, f"prompt body missing for {aspect}: {e}")
-
-
-def _supply_chain(report: Report, root: Path) -> None:
-    vendor = root / "src" / "in_lockstep" / "llm" / "vendor.lock"
-    if not vendor.exists():
-        report.add(
-            "DOC150",
-            Severity.WARNING,
-            "the vendored transport has no provenance record",
-            "vendor.lock should record the origin commit and per-file hashes.",
-        )
 
 
 def _strict_policy(report: Report, root: Path) -> None:

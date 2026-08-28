@@ -1,4 +1,4 @@
-"""Phase-0 gates over the vendored transport layer.
+"""Gates over the transport layer.
 
 These are structural assertions, deliberately: they hold without network, keys, or SDKs installed,
 which is what lets them run in CI from day one. The behavioural gates (GATE-ASYNC-2/4,
@@ -96,7 +96,12 @@ def test_gate_retry_2_sdk_retries_disabled(path: Path) -> None:
 
 
 def test_gate_retry_2_with_retry_is_not_imported() -> None:
-    """GATE-RETRY-2 — the upstream caller-layer retry helper is not vendored."""
+    """GATE-RETRY-2 — one retry layer, not two.
+
+    A caller-layer retry helper composing with SDK retries is how one logical call becomes ~12
+    HTTP attempts, and ~48 once middleware retries too. `RetryPolicy` is the only layer, and every
+    SDK client is constructed with max_retries=0.
+    """
     for path in LLM_ROOT.rglob("*.py"):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
@@ -181,7 +186,9 @@ def test_credentials_expose_exactly_what_redact_is_seeded_with() -> None:
 
 
 def test_token_usage_carries_cache_accounting() -> None:
-    """Added at vendoring: this type serializes into checkpoints and the ledger (§4.2)."""
+    """Cache accounting is part of the shape: this type serializes into checkpoints and the
+    ledger (§4.2), so adding a field later changes a persisted layout.
+    """
     usage = TokenUsage(input_tokens=10, output_tokens=5, cache_read_tokens=100)
     assert usage.total_tokens == 15
     assert usage.cache_read_tokens == 100
