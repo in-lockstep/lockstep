@@ -108,3 +108,110 @@ def test_run_refuses_an_unregistered_workflow_by_name(repo: Path) -> None:
     result = CliRunner().invoke(main, ["run", "nope"])
     assert result.exit_code != 0
     assert "selfcheck" in result.output
+
+
+# -- init: the first thing a new adopter runs ------------------------------------------------
+
+
+def test_init_scaffolds_commands_that_exist(repo: Path) -> None:
+    """The failure that shipped: the scaffold invoked `run review --base`, and neither exists.
+
+    `run` accepts only `selfcheck` and declares no `--base`, so the workflow every new adopter
+    committed failed on their first pull request. A scaffold is the one artifact that must not
+    describe a CLI other than the one it ships with, because nobody reads it before running it.
+    """
+    import re
+
+    import yaml
+
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
+
+    known = set(main.commands)
+    invoked = set()
+    for job in workflow["jobs"].values():
+        for step in job["steps"]:
+            for verb in re.findall(r"in-lockstep ([a-z-]+)", step.get("run", "") or ""):
+                invoked.add(verb)
+    assert invoked, "the scaffold invokes no CLI command at all"
+    assert invoked <= known, f"scaffold invokes {sorted(invoked - known)}, which do not exist"
+
+
+def test_the_scaffolded_review_passes_only_options_review_declares(repo: Path) -> None:
+    import re
+
+    CliRunner().invoke(main, ["init"])
+    text = (repo / ".github/workflows/lockstep.yml").read_text()
+    declared = {o for p in main.commands["review"].params for o in p.opts}
+    used = set(re.findall(r"(--[a-z-]+)", text.split("in-lockstep review")[1].split("env:")[0]))
+    assert used <= declared, f"scaffold passes {sorted(used - declared)} to review"
+
+
+def test_the_scaffold_uploads_a_path_something_writes(repo: Path) -> None:
+    """It pointed at `.in-lockstep/out/`, which no code path in the package ever creates."""
+    import yaml
+
+    CliRunner().invoke(main, ["init"])
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
+    paths = [
+        s["with"]["path"]
+        for j in workflow["jobs"].values()
+        for s in j["steps"]
+        if "upload-artifact" in str(s.get("uses", ""))
+    ]
+    assert paths == [".in-lockstep/"], paths
+
+
+def test_the_scaffold_carries_a_timeout(repo: Path) -> None:
+    """Without one the CI default is 360 minutes, and there is no other wall clock in the job."""
+    import yaml
+
+    CliRunner().invoke(main, ["init"])
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
+    assert all("timeout-minutes" in j for j in workflow["jobs"].values())
+
+
+def test_the_trampoline_is_independent_of_the_repository(tmp_path: Path, monkeypatch) -> None:
+    """Q4's condition: byte-identical in an empty directory and a full repository.
+
+    A compiler cannot pass this. It binds the workflow file only — `init`'s lockstep.py scaffold
+    may detect the stack freely.
+    """
+    outputs = []
+    for name, populate in (("empty", False), ("full", True)):
+        target = tmp_path / name
+        target.mkdir()
+        if populate:
+            (target / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+            (target / "tests").mkdir()
+        monkeypatch.chdir(target)
+        CliRunner().invoke(main, ["init"])
+        outputs.append((target / ".github/workflows/lockstep.yml").read_text())
+    assert outputs[0] == outputs[1]
+
+
+def test_apply_refuses_rather_than_exiting_zero_without_writing(repo: Path, tmp_path: Path) -> None:
+    """A green `apply` job is read as "the change landed"."""
+    import json
+
+    artifact = tmp_path / "changeset.json"
+    artifact.write_text(json.dumps({"changes": [{"path": "src/x.py", "body": "x = 1"}]}))
+
+    ok = CliRunner().invoke(main, ["apply", "--from-artifact", str(artifact), "--dry-run"])
+    assert ok.exit_code == 0
+    assert "nothing was written" in ok.output
+
+    refused = CliRunner().invoke(main, ["apply", "--from-artifact", str(artifact)])
+    assert refused.exit_code != 0
+    assert "does not write yet" in refused.output
+
+
+def test_init_does_not_announce_a_job_it_did_not_write(repo: Path) -> None:
+    """It described a two-job split while scaffolding one job. Prose drifts; this notices."""
+    import yaml
+
+    result = CliRunner().invoke(main, ["init"])
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
+    for job in ("run", "apply"):
+        if job not in workflow["jobs"]:
+            assert f"`{job}` holds" not in result.output

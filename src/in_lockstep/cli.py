@@ -284,7 +284,8 @@ def doctor_cmd(strict: bool) -> None:
 
 @main.command(name="apply")
 @click.option("--from-artifact", "artifact", required=True, type=click.Path())
-def apply_cmd(artifact: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Check the changeset against the guard; write nothing.")
+def apply_cmd(artifact: str, dry_run: bool) -> None:
     """Apply a ChangeSet produced by an earlier, unprivileged run.
 
     This is the privileged half of the two-job split. It holds a write token and never sees a
@@ -293,6 +294,10 @@ def apply_cmd(artifact: str) -> None:
 
     The artifact crossed a trust boundary to get here, so the path guard runs again over it. A
     previous job having produced it is not a reason to trust it.
+
+    The write itself is not implemented: `Scm.open_change` exists and nothing calls it from here.
+    So `--dry-run` checks the guard and succeeds, and a bare `apply` refuses rather than exiting 0
+    on a job that wrote nothing.
     """
     import json
     from pathlib import Path as _Path
@@ -331,7 +336,18 @@ def apply_cmd(artifact: str) -> None:
     for change in changeset.changes:
         click.echo(f"  {'delete' if change.deleted else 'write '} {change.path}")
     click.echo("")
-    click.echo("Writing through Scm.open_change lands in phase 4; the guard is what phase 3 owes.")
+    if dry_run:
+        click.echo("guard only; nothing was written")
+        return
+
+    # Exiting 0 here made a CI job that wrote nothing report success, which is worse than the
+    # missing feature: a green `apply` is read as "the change landed". The guard genuinely ran
+    # and genuinely passed — that part is real — so the message says which half is missing.
+    raise click.ClickException(
+        "the guard passed, but `apply` does not write yet: Scm.open_change is implemented and "
+        "nothing calls it from here. Nothing was applied. Pass --dry-run to check a changeset "
+        "against the guard without implying a write."
+    )
 
 
 @main.command(name="review")
@@ -535,18 +551,8 @@ def init_cmd(force: bool) -> None:
         workflow.write_text(_SCAFFOLD_TRAMPOLINE)
         click.echo(f"wrote {workflow}")
         click.echo("")
-        click.echo("Two jobs, on purpose: `run` holds the provider credential and cannot write,")
-        click.echo("`apply` can write and never sees the provider credential.")
-
-
-@main.command()
-def status() -> None:
-    """What of the framework exists so far."""
-    click.echo(f"in-lockstep {__version__} — pivot in progress")
-    click.echo("")
-    click.echo("  phase 0  decisions & safety net   done")
-    click.echo("  phase 1  dispatch core            in progress")
-    click.echo("  phase 2  AI subsystem, 1st value  not started")
+        click.echo("One job, because reviewing is read-only. Add the privileged `apply` job the")
+        click.echo("day a verb of yours produces a change to write; the file says where.")
 
 
 _SCAFFOLD_MODULE = '''"""The lifecycle for this repository.
@@ -574,9 +580,15 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 
 _SCAFFOLD_TRAMPOLINE = """# Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
 #
-# Two jobs rather than one: the job that talks to a model holds the provider credential and only
-# read access, and the job that writes holds write access and no provider credential. A single
-# job would put an API key and a write token in the same process.
+# One job, because reviewing is read-only: it needs a provider credential and `contents: read`,
+# and nothing else. The two-job split — an unprivileged job that talks to a model, a privileged
+# one that writes — is what keeps an API key and a write token out of the same process, and it
+# is what you add here the day a verb of yours produces a change to apply. Adding it now would
+# scaffold a job with nothing to do.
+#
+# The base ref is passed explicitly because configuration is loaded from it: lockstep.py comes
+# from the base branch, never from the ref under review, or a pull request could supply the file
+# defining the bindings and policy that constrain reviewing it.
 name: lockstep
 
 on:
@@ -585,42 +597,40 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: lockstep-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  run:
+  review:
     runs-on: ubuntu-24.04
+    # Without this the CI default is 360 minutes, not 20.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
-      - run: uvx --from 'in-lockstep[anthropic]' in-lockstep run review --base origin/main
+        with:
+          python-version: '3.11'
+      - name: Are the controls in place?
+        run: uvx --from 'in-lockstep[anthropic]' in-lockstep doctor
+        continue-on-error: true
+      - name: Review
+        run: |
+          uvx --from 'in-lockstep[anthropic]' in-lockstep review \
+            --base "origin/${GITHUB_BASE_REF}" \
+            --head "${GITHUB_SHA}" \
+            --aspect security
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_EGRESS: enforced
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: lockstep-changeset
-          path: .in-lockstep/out/
-
-  apply:
-    needs: run
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
-        with:
-          name: lockstep-changeset
-          path: .in-lockstep/out/
-      # No provider credential in this job. It applies what the previous one produced, and
-      # re-checks it: the artifact crossed a trust boundary to get here.
-      - run: uvx in-lockstep apply --from-artifact .in-lockstep/out/
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: lockstep-run
+          path: .in-lockstep/
+          if-no-files-found: ignore
 """
 
 
