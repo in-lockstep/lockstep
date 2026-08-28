@@ -18,6 +18,7 @@ from .core.workflow import registered, workflow
 from .lockstep import Lockstep
 from .middleware.budget import CostBudget
 from .middleware.otel import Recorder, otel
+from .privileged.redact import Redact
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -152,6 +153,198 @@ def ls_cmd() -> None:
         click.echo(f"  {entry.id}  ({entry.module})")
 
 
+@main.command(name="review")
+@click.option("--base", default="origin/main", help="What to diff against.")
+@click.option("--head", default="HEAD")
+@click.option("--aspect", default="security", help="Which lens.")
+@click.option("--model", default="anthropic:claude-sonnet-4-6")
+@click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
+@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option("--cassette", default=".in-lockstep/cassettes/review.json", show_default=True)
+@click.option("--budget", default=1.00, help="Hard ceiling, in USD.")
+@click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
+def review_cmd(
+    base: str,
+    head: str,
+    aspect: str,
+    model: str,
+    offline: bool,
+    record: bool,
+    cassette: str,
+    budget: float,
+    dry_run: bool,
+) -> None:
+    """Review a change with one lens, in-process."""
+
+    from .adapters.ai.review import AiReview, Review, ReviewSpec
+    from .ai.auth import Auth
+    from .ai.bootstrap import credentials_for, default_registry
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.llm.interface import LLMProvider
+    from .ai.llm.registry import Model
+    from .ai.pricing import default_table
+    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .core.spend import Budget
+
+    lockstep = Lockstep.detect()
+    lockstep.budget = Budget(usd=budget)
+    recorder = Recorder()
+    lockstep.middleware = [otel(recorder)]
+
+    table = default_table()
+    auth = Auth()
+    registry = default_registry(auth)
+    selected = Model(model)
+    tape = Cassette.load(cassette)
+
+    def build_invoker(_ctx: Any) -> AiInvoker:
+        provider: LLMProvider
+        if dry_run:
+            provider = DryRunProvider()
+        elif offline:
+            provider = ReplayProvider(tape)
+        else:
+            creds = credentials_for(auth, selected.provider)
+            provider = registry.provider_for(selected, creds)
+            if record:
+                provider = RecordingProvider(provider, tape, Redact())
+        return AiInvoker(
+            provider,
+            model=selected.name,
+            cost_table=table,
+            spend=_ctx.spend,
+            redact=Redact(),
+        )
+
+    lockstep.bind(
+        Review,
+        AiReview(
+            build_invoker,
+            repo_root=lockstep.repo.root,
+            policy=InvokePolicy(max_turns=1, deadline_seconds=300),
+        ),
+    )
+
+    ctx = lockstep.context(run_id=f"review-{aspect}")
+    outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
+
+    click.echo(
+        f"review/{aspect}  {outcome.status.value}"
+        + (f"  ({outcome.reason})" if outcome.reason else "")
+        + ("" if outcome.decided else "  (decided nothing)")
+    )
+    for finding in outcome.findings:
+        where = f"{finding.path}:{finding.line} " if finding.path else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+
+    cost = outcome.cost
+    click.echo("")
+    click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
+    click.echo(f"cost      ${cost.usd:.4f}")
+    click.echo(f"spans     {len(recorder.spans)}")
+
+    # The ledger line the first-value assertion checks. Written even on failure: a run that cost
+    # money and produced nothing is exactly the run worth having a record of.
+    _write_ledger(ctx, outcome, aspect, selected.id)
+
+    if outcome.status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if outcome.status is not Status.SUCCEEDED:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
+    import json
+    from pathlib import Path as _Path
+
+    record = {
+        "schema": 2,
+        "epoch": "in-process",
+        "run_id": ctx.run_id,
+        "kind": "review",
+        "aspect": aspect,
+        "model": model_id,
+        "status": outcome.status.value,
+        "decided": outcome.decided,
+        "tokens": outcome.cost.total_tokens,
+        "input_tokens": outcome.cost.input_tokens,
+        "output_tokens": outcome.cost.output_tokens,
+        "cost_usd": round(outcome.cost.usd, 6),
+        "findings": len(outcome.findings),
+        "wall_seconds": round(outcome.cost.wall_seconds, 3),
+    }
+    path = _Path(".in-lockstep/ledger") / f"{ctx.run_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+    click.echo(f"ledger    {path}")
+
+
+@main.command(name="show-prompt")
+@click.argument("aspect", default="security")
+@click.option("--projection", is_flag=True, help="Print the section-identity list only.")
+def show_prompt_cmd(aspect: str, projection: bool) -> None:
+    """Render a composed prompt offline, with per-fragment provenance.
+
+    The successor to a committed flattened prompt tree. "What was the model actually told?" needs
+    an answer that costs no run and no key — a cassette requires having already paid, and `ls`
+    prints the container rather than the prompt.
+
+    The projection it prints is the same one the characterization corpus asserts on, so one
+    artifact serves both offline inspection and migration equivalence.
+    """
+    from .prompts.review import LENSES, review_layers
+
+    lens = LENSES.get(aspect)
+    if lens is None:
+        raise click.ClickException(f"no lens named {aspect!r}; have {sorted(LENSES)}")
+
+    prompt = lens()
+    layers = review_layers()
+
+    if projection:
+        for section in layers.projection(f"review/{aspect}-reviewer"):
+            click.echo(section)
+        return
+
+    click.echo(f"# composed prompt: review/{aspect}  (version {prompt.version})")
+    click.echo("#")
+    for section in layers.projection(f"review/{aspect}-reviewer"):
+        click.echo(f"#   {section}")
+    click.echo("")
+    click.echo(prompt.system(layers))
+
+
+@main.command(name="init")
+@click.option("--force", is_flag=True, help="Overwrite lockstep.py (never the trampoline).")
+def init_cmd(force: bool) -> None:
+    """Scaffold a lifecycle definition and a CI trampoline.
+
+    The trampoline is written once and never read back: there is no drift check on it, and no
+    --force for it. The day something compares it against a freshly generated one, it has become
+    generated output rather than a scaffold, which is the line this framework exists on the other
+    side of.
+    """
+    from pathlib import Path
+
+    module = Path("lockstep.py")
+    if module.exists() and not force:
+        click.echo("lockstep.py exists (use --force to overwrite)")
+    else:
+        module.write_text(_SCAFFOLD_MODULE)
+        click.echo("wrote lockstep.py")
+
+    workflow = Path(".github/workflows/lockstep.yml")
+    if workflow.exists():
+        click.echo(f"{workflow} exists — left alone, deliberately")
+    else:
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        workflow.write_text(_SCAFFOLD_TRAMPOLINE)
+        click.echo(f"wrote {workflow}")
+        click.echo("")
+        click.echo("Two jobs, on purpose: `run` holds the provider credential and cannot write,")
+        click.echo("`apply` can write and never sees the provider credential.")
+
+
 @main.command()
 def status() -> None:
     """What of the framework exists so far."""
@@ -160,6 +353,81 @@ def status() -> None:
     click.echo("  phase 0  decisions & safety net   done")
     click.echo("  phase 1  dispatch core            in progress")
     click.echo("  phase 2  AI subsystem, 1st value  not started")
+
+
+_SCAFFOLD_MODULE = '''"""The lifecycle for this repository.
+
+This file IS the configuration: it is executed, not parsed. Anything you can express in Python
+you can express here — but keep it pure, because it is imported to be inspected as well as run.
+"""
+
+from in_lockstep import Lockstep
+from in_lockstep.adapters import PytestTest, RuffValidate
+from in_lockstep.adapters.pytest_adapter import Test
+from in_lockstep.adapters.ruff_adapter import Validate
+from in_lockstep.middleware import CostBudget, otel
+
+lockstep = Lockstep.detect()
+
+# Deterministic verbs bind adapters over real tools.
+lockstep.bind(Test, PytestTest(args=["-q"]))
+lockstep.bind(Validate, RuffValidate())
+
+# Cross-cutting behaviour is middleware. Redaction, egress and the kill switch are NOT here:
+# they are privileged, and `--no-middleware` cannot reach them.
+lockstep.middleware += [otel(), CostBudget(usd=2.00)]
+'''
+
+_SCAFFOLD_TRAMPOLINE = """# Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
+#
+# Two jobs rather than one: the job that talks to a model holds the provider credential and only
+# read access, and the job that writes holds write access and no provider credential. A single
+# job would put an API key and a write token in the same process.
+name: lockstep
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx --from 'in-lockstep[anthropic]' in-lockstep run review --base origin/main
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lockstep-changeset
+          path: .in-lockstep/out/
+
+  apply:
+    needs: run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: lockstep-changeset
+          path: .in-lockstep/out/
+      # No provider credential in this job. It applies what the previous one produced, and
+      # re-checks it: the artifact crossed a trust boundary to get here.
+      - run: uvx in-lockstep apply --from-artifact .in-lockstep/out/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+"""
 
 
 if __name__ == "__main__":  # pragma: no cover

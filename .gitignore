@@ -11,3 +11,7 @@ build/
 
 # Fetched by `lockstep fetch` at the commit pins.lock records.
 **/.pipeline/inherited/
+
+# Run-local output: cassettes are fixtures you choose to commit, out/ is transport.
+.in-lockstep/out/
+.in-lockstep/ledger/

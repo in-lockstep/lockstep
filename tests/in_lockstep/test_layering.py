@@ -24,12 +24,20 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "in_lockstep"
 
 # Which packages a layer may import from. Downward only.
 ALLOWED: dict[str, set[str]] = {
+    # `privileged` sits beside core rather than above it: redaction and egress run outside the
+    # middleware chain, so everything may reach them and they may reach nothing.
+    "privileged": set(),
     "core": {"core"},
-    "ai": {"core", "ai"},
-    "adapters": {"core", "adapters"},
+    "config_ref": set(),
+    "ai": {"core", "ai", "privileged"},
+    "prompts": {"ai", "prompts"},
+    "adapters": {"core", "ai", "adapters", "prompts", "privileged"},
     "middleware": {"core", "middleware"},
-    "cli": {"core", "ai", "adapters", "middleware", "lockstep", "cli"},
     "lockstep": {"core", "lockstep"},
+    "cli": {
+        "core", "ai", "adapters", "middleware", "lockstep", "prompts", "privileged",
+        "config_ref", "cli",
+    },
 }
 
 

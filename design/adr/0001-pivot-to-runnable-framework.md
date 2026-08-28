@@ -84,8 +84,14 @@ The generated drift gate is **retired**, not narrowed. `pipeline-ci.yml` is a ge
 it is illegal and recompiling it regenerates the problem. `GATE-TEST-4` (golden-tree hash pinned to
 the Phase-0 tag) covers the same ground from pytest and is the stated replacement.
 
-`make fetch` becomes `uvx --from in-lockstep==0.1.0 lockstep fetch` — the compiler cannot be pinned
-as a dependency, because `uv.lock:367` resolves `in-lockstep` to `source = { editable = "." }`.
+`make fetch` keeps running the working-tree compiler. Pinning it to the released 0.1.0 was tried
+and reverted in phase 2: a `lockstep:` upstream ships *inside* the compiler, so pinning the
+compiler also pins the inherited pipeline content — this tree's library had moved past the
+release, and the committed output immediately stopped matching what the spec compiles to. That is
+exactly the property `capabilities.compiler: "."` exists to protect. The decoupling that mattered
+is at the CI target instead: `ci-framework` never invokes `fetch`, so the new package is never
+gated on the old one being installable. (Note also that the compiler cannot be pinned as an
+ordinary dependency at all: `uv.lock` resolves `in-lockstep` to `source = { editable = "." }`.)
 
 ## Consequences
 

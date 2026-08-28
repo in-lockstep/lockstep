@@ -19,16 +19,22 @@ lint:
 typecheck:
 	uv run mypy src packages/pipeline-exec/src
 
-# The compiler is PINNED here, not run from the working tree, because the working tree is being
-# rebuilt underneath it. It cannot be pinned as a dependency: `uv.lock` resolves `in-lockstep` to
-# `source = { editable = "." }` and uv rejects self-dependency — so it runs from an isolated tool
-# environment instead. Spelled explicitly rather than relying on PATH shadowing order.
+# Runs the WORKING TREE compiler, deliberately, and an earlier attempt to pin it to the released
+# 0.1.0 was wrong. A `lockstep:` upstream ships *inside* the compiler, so pinning the compiler
+# also pins the inherited pipeline content — and this tree's library has moved past the release,
+# so the committed output stopped matching what the spec compiles to. That is precisely the
+# property `capabilities.compiler: "."` exists to protect, documented in .lockstep/pipeline.yaml:
+# a gate that installed the published compiler would check a pull request against the previous
+# one's library and pass.
+#
+# Decoupling the new package from the old one belongs at the CI target, not here: `ci-framework`
+# never invokes this, so `in_lockstep` is still never gated on the compiler being installable.
 #
 # `.lockstep/` inherits lockstep:review, and inherited definitions resolve into `.pipeline/`, which
 # is gitignored — resolved state, like a virtualenv. Every target that loads the spec depends on
 # this rather than on somebody having remembered.
 fetch:
-	uvx --from in-lockstep==0.1.0 lockstep fetch
+	uv run lockstep fetch
 
 test: fetch
 	uv run pytest -q
