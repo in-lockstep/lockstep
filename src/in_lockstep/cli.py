@@ -375,13 +375,11 @@ def review_cmd(
 
     from .adapters.ai.review import AiReview, Review, ReviewSpec
     from .ai.auth import Auth
-    from .ai.bootstrap import credentials_for, default_registry
+    from .ai.bootstrap import LLMProvider, Model, credentials_for, default_registry
     from .ai.invoker import AiInvoker, InvokePolicy
     from .ai.pricing import default_table
     from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
     from .core.spend import Budget
-    from .llm.interface import LLMProvider
-    from .llm.registry import Model
 
     # The repository's own module, exactly as `run` and `ls` load it. Reviewing is the command
     # that spends money, so it is the last one that should be reading a different configuration

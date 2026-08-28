@@ -34,8 +34,13 @@ ALLOWED: dict[str, set[str]] = {
     # The vendored transport is a leaf: it imports provider SDKs and itself, and nothing of ours.
     # It used to sit at `ai/llm/`, where "nothing above `ai` reaches into the transport" was a
     # convention this test could not see. As a sibling layer with an empty allowance, both
-    # directions are enforced — it cannot grow an edge back into the framework, and only `ai` may
-    # reach it.
+    # directions are enforced — it cannot grow an edge back into the framework, and `ai` is the
+    # only layer that may reach it.
+    #
+    # That last clause was written here before it was true: `cli` imported `Model` and
+    # `LLMProvider` straight from `llm`, and `ALLOWED["cli"]` was widened to let it, which made
+    # this comment and VENDORED.md assert an invariant the dict below them did not hold. The
+    # names are re-exported from `ai.bootstrap` now, so the allowance could shrink to match.
     "llm": {"llm"},
     "ai": {"core", "ai", "llm", "privileged"},
     "prompts": {"ai", "prompts"},
@@ -46,10 +51,13 @@ ALLOWED: dict[str, set[str]] = {
     "evaluation": {"evaluation"},
     "strategies": {"ai", "core", "strategies"},
     "lockstep": {"core", "lockstep"},
+    # The package facade. It re-exports the public surface, so it reaches almost everything by
+    # construction — but it was being SKIPPED rather than allowed, which is different: nothing
+    # was checking that `in_lockstep/__init__.py` stayed a facade instead of growing logic.
+    "__init__": {"core", "ai", "adapters", "lockstep", "prompts", "evaluation", "__init__"},
     "cli": {
         "core",
         "ai",
-        "llm",
         "adapters",
         "middleware",
         "lockstep",
@@ -107,8 +115,14 @@ MODULES = sorted(p for p in SRC.rglob("*.py"))
 def test_arrows_point_down_only(path: Path) -> None:
     layer = _layer_of(path)
     allowed = ALLOWED.get(layer)
-    if allowed is None:
-        pytest.skip(f"{layer} has no declared layer policy yet")
+    # An undeclared layer used to `skip`, which meant a new top-level package silently received
+    # no layering coverage at all and the suite still went green. A gate whose failure mode is
+    # "quietly checks nothing" is the failure mode this whole file exists to prevent, so an
+    # undeclared layer is now a failure that forces someone to write down where it sits.
+    assert allowed is not None, (
+        f"{layer!r} has no entry in ALLOWED. Add one saying what it may import — an omission "
+        f"reads as permission here, and nothing else in this file would notice."
+    )
     violations = _imported_layers(ast.parse(path.read_text()), path) - allowed
     assert not violations, (
         f"{path.relative_to(SRC)} is in layer {layer!r} and imports {sorted(violations)}. "

@@ -11,7 +11,13 @@ from __future__ import annotations
 import os
 
 from ..llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
-from ..llm.registry import ModelCaps, ProviderRegistry
+from ..llm.registry import Model, ModelCaps, ProviderRegistry
+
+# Re-exported deliberately, not incidentally. `ai` is the only layer permitted to reach the
+# vendored transport — a claim `test_layering.py`, this package's docstring and VENDORED.md all
+# make — and it was false, because `cli` imported `Model` and `LLMProvider` straight from `llm`
+# for a type annotation and a constructor. Naming them here is what makes the claim true.
+__all__ = ["LLMProvider", "Model", "ModelCaps", "ProviderRegistry", "credentials_for", "default_registry"]
 from .auth import Auth, AuthRequest, AuthTarget
 
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com"
