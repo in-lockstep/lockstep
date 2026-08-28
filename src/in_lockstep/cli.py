@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 import click
+from click.core import ParameterSource
 
 from . import __version__
 from .adapters.pytest_adapter import PytestTest, Test
@@ -25,10 +26,15 @@ EXIT_FAILED = 1
 EXIT_BLOCKED = 3
 
 
-def _default_lockstep() -> tuple[Lockstep, Recorder]:
+def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
     """A repository's own module if it has one, else detected defaults.
 
     The module is loaded from a trusted ref, never from the ref under review.
+
+    The recorder comes back as `None` when the module declared its own middleware. The CLI cannot
+    see through a chain it did not build, and printing `spans 0` for a run that emitted spans into
+    somebody else's exporter is a wrong number rather than a missing one — which is the same
+    reason `Outcome` carries `decided` instead of reporting an unjudged suite as passing.
     """
     from .loader import NoLifecycle, load, lockstep_from
 
@@ -39,9 +45,10 @@ def _default_lockstep() -> tuple[Lockstep, Recorder]:
             reviewing=os.environ.get("GITHUB_EVENT_NAME", "") in ("pull_request", "pull_request_target"),
         )
         configured = lockstep_from(module)
+        if configured.middleware:
+            return configured, None
         recorder = Recorder()
-        if not configured.middleware:
-            configured.middleware = [otel(recorder), CostBudget(usd=2.00)]
+        configured.middleware = [otel(recorder), CostBudget(usd=2.00)]
         return configured, recorder
     except NoLifecycle:
         pass
@@ -52,6 +59,33 @@ def _default_lockstep() -> tuple[Lockstep, Recorder]:
     recorder = Recorder()
     lockstep.middleware = [otel(recorder), CostBudget(usd=2.00)]
     return lockstep, recorder
+
+
+# One turn is what the review lens needs: no tool runner ships, so there is nothing a second turn
+# could do with a tool result. It is named rather than inlined because it is an adapter's own
+# requirement, and a policy ceiling is a different thing that has to compose with it.
+_REVIEW_TURNS = 1
+
+
+def _review_turns(lockstep: Lockstep) -> int:
+    """The lower of what the lens needs and what the policy stack allows.
+
+    A contributed ceiling can only tighten — that is what makes the stack monotone, and it is why
+    this is a `min` rather than a lookup. Today the lens needs fewer turns than any shipped floor
+    contributes, so the ceiling does not bind; wiring it anyway is the difference between a
+    constraint that happens not to be binding and a constraint nothing reads.
+    """
+    ceiling = lockstep.policy.resolve().max_turns
+    return min(_REVIEW_TURNS, ceiling) if ceiling is not None else _REVIEW_TURNS
+
+
+def _echo_telemetry(recorder: Recorder | None) -> None:
+    """What the CLI observed — or that it could not observe, which is a different statement."""
+    if recorder is None:
+        click.echo("spans     (lockstep.py declares its own middleware; the CLI is not in that chain)")
+        return
+    click.echo(f"spans     {len(recorder.spans)}")
+    click.echo(f"metrics   {len(recorder.metrics)}")
 
 
 @workflow(id="selfcheck")
@@ -124,8 +158,7 @@ def run_cmd(
             click.echo(f"          {where}{finding.id}: {finding.message}")
 
     click.echo("")
-    click.echo(f"spans     {len(recorder.spans)}")
-    click.echo(f"metrics   {len(recorder.metrics)}")
+    _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
 
     if validate is not None and validate.status is Status.BLOCKED:
@@ -334,10 +367,20 @@ def review_cmd(
     from .llm.interface import LLMProvider
     from .llm.registry import Model
 
-    lockstep = Lockstep.detect()
-    lockstep.budget = Budget(usd=budget)
-    recorder = Recorder()
-    lockstep.middleware = [otel(recorder)]
+    # The repository's own module, exactly as `run` and `ls` load it. Reviewing is the command
+    # that spends money, so it is the last one that should be reading a different configuration
+    # from the one `ls` prints — and until this call it built its own `Lockstep` from scratch,
+    # which silently discarded every binding, policy contribution, budget and middleware the
+    # module declared. "The module you write is the thing that runs" has to hold here first.
+    lockstep, recorder = _default_lockstep()
+
+    # `--budget` and `--model` override the module rather than replacing it, and only when the
+    # user actually typed them: a flag left at its default must not outrank a declared ceiling.
+    source = click.get_current_context().get_parameter_source
+    if source("budget") is not ParameterSource.DEFAULT or lockstep.budget.usd is None:
+        lockstep.budget = Budget(usd=budget)
+    if source("model") is ParameterSource.DEFAULT:
+        model = lockstep.models.routes.get("review", model)
 
     table = default_table()
     auth = Auth()
@@ -364,14 +407,17 @@ def review_cmd(
             redact=Redact(),
         )
 
-    lockstep.bind(
-        Review,
-        AiReview(
-            build_invoker,
-            repo_root=lockstep.repo.root,
-            policy=InvokePolicy(max_turns=1, deadline_seconds=300),
-        ),
-    )
+    # Only if the module did not bind one. A repository that ships its own Review adapter has
+    # said something more specific than this default, and the CLI must not overrule it.
+    if not lockstep.container.has(Review):
+        lockstep.bind(
+            Review,
+            AiReview(
+                build_invoker,
+                repo_root=lockstep.repo.root,
+                policy=InvokePolicy(max_turns=_review_turns(lockstep), deadline_seconds=300),
+            ),
+        )
 
     ctx = lockstep.context(run_id=f"review-{aspect}")
     outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
@@ -389,7 +435,7 @@ def review_cmd(
     click.echo("")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}")
-    click.echo(f"spans     {len(recorder.spans)}")
+    _echo_telemetry(recorder)
 
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
     # money and produced nothing is exactly the run worth having a record of.
