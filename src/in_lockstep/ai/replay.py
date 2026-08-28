@@ -158,6 +158,8 @@ class RecordingProvider(LLMProvider):
 class ReplayProvider(LLMProvider):
     """Serves from a cassette. No network, no keys, no spend."""
 
+    transmits = False
+
     def __init__(self, cassette: Cassette) -> None:
         self.cassette = cassette
 
@@ -176,6 +178,8 @@ class ReplayProvider(LLMProvider):
 
 class DryRunProvider(LLMProvider):
     """Canned answers, for pipeline smoke tests where the content does not matter."""
+
+    transmits = False
 
     def __init__(self, content: str = "", *, usage: TokenUsage | None = None) -> None:
         self.content = content or '{"findings": []}'

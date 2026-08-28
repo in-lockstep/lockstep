@@ -24,13 +24,15 @@ indistinguishable from one that does not exist.** Nine rows below were in that s
 | `deferred` | Past the 1.0 cut line, by the deferral recorded in the plan and ADR 0001 §17.11. |
 | `retired` | The subject was deleted; the row records what it held and why it stopped. |
 
-`unit only` is the status worth understanding. `GATE-EGRESS-1` has a thorough test that a
-`ContextPackage` carrying untrusted content under `EgressMode.NONE` raises `EgressRefused`. It is
-a real test of a real mechanism. But `EgressPolicy.check()` has no caller outside that test —
-`AiInvoker.run` never consults it — so no run has ever been refused, and the gate's actual
-assertion ("yields BLOCKED before the first model call") has never been exercised. The distinction
-this project already draws between `decided` and `succeeded` is the same one: a mechanism nobody
-invoked is outstanding, not passed.
+`unit only` is the status worth understanding, and `GATE-EGRESS-1` was the example. It had a
+thorough test that a `ContextPackage` carrying untrusted content under `EgressMode.NONE` raises
+`EgressRefused` — a real test of a real mechanism. But `EgressPolicy.check()` had no caller
+outside that test, so no run had ever been refused and the gate's actual assertion ("BLOCKED
+before the first model call") had never been exercised. It is `held` now, because `AiInvoker.run`
+calls it. The distinction this project already draws between `decided` and `succeeded` is the
+same one: a mechanism nobody invoked is outstanding, not passed.
+
+`GATE-APPROVAL-1` and `GATE-POLICY-1` are still in that state, and their rows say what is missing.
 
 ## Async and concurrency
 
@@ -112,9 +114,9 @@ no enforcement will not survive seven phases" — applies with equal force to se
 |---|---|---|---|
 | `GATE-CFG-1` | P2 | held | A `lockstep.py` modified in the head tree has **zero** effect on the resolved container; config resolves from the trusted ref. Run as a fork-simulation fixture. |
 | `GATE-CFG-2` | P3 | held | `doctor` fails when config would resolve from the ref under review. |
-| `GATE-EGRESS-1` | P3 | unit only | A `ContextPackage` containing any `UNTRUSTED_EXTERNAL` item with `EgressMode.NONE` yields `BLOCKED` before the first model call. **Missing:** a call to `EgressPolicy.check()` in `AiInvoker.run`, before the cost check. |
-| `GATE-EGRESS-2` | P3 | unit only | `ENFORCED_*` performs a live probe to a known-blocked host and refuses to start if the probe succeeds (verified, not attested). **Missing:** the same call site; the probe itself is implemented. |
-| `GATE-EGRESS-3` | P3 | unit only | An MCP tool with undeclared capability is treated as `REACHES_NETWORK`, not read-only. **Missing:** `ai/tools.py:undeclared_is_dangerous` is defined and tested but never applied to a `ToolSet`. |
+| `GATE-EGRESS-1` | P3 | held | A `ContextPackage` containing any `UNTRUSTED_EXTERNAL` item with `EgressMode.NONE` yields `BLOCKED` before the first model call. |
+| `GATE-EGRESS-2` | P3 | held | `ENFORCED_*` performs a live probe to a known-blocked host and refuses to start if the probe succeeds (verified, not attested). |
+| `GATE-EGRESS-3` | P3 | held | An MCP tool with undeclared capability is treated as `REACHES_NETWORK`, not read-only. |
 | `GATE-GUARD-1` | P2 | unmet | A synthetic MCP write to each Tier-1 path is refused on all three paths: the in-loop tool boundary, `--apply-inline`, and `apply --from-artifact`. `apply --from-artifact` enforces. **Missing:** the in-loop tool boundary (no tool runner ships) and `--apply-inline` (no such flag), so two of the three paths do not exist. |
 | `GATE-GUARD-2` | P3 | held | A `ChangeSet` whose `FileChange` resolves outside the repo root, or introduces a symlink that would, is refused — evaluated on the **post-change tree**. |
 | `GATE-GUARD-3` | P6 | held | A strategy selected from ticket-label input cannot hold the `prompts/**` grant. |

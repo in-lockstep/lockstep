@@ -67,8 +67,22 @@ class EgressPolicy:
         }.get(raw, EgressMode.NONE)
         return cls(mode=mode, allow=allow, restricted_repo=restricted_repo)
 
-    def required(self, *, capabilities: frozenset[Capability], untrusted_context: bool) -> str | None:
-        """Why enforcement is mandatory here, or None if it is not."""
+    def required(
+        self,
+        *,
+        capabilities: frozenset[Capability],
+        untrusted_context: bool,
+        transmits: bool = True,
+    ) -> str | None:
+        """Why enforcement is mandatory here, or None if it is not.
+
+        `transmits` is False when the model call is served from a cassette or a canned answer.
+        It suppresses the untrusted-content trigger and *only* that one: a tool that writes,
+        executes or reaches the network is an egress channel whether or not the model call is
+        real, so those triggers do not care. Without this split, `--offline` and `--dry-run` —
+        the two paths that exist so this can be run with no key and no spend — would demand a
+        firewall for a run that cannot put a byte on the wire.
+        """
         dangerous = {
             Capability.WRITES_FILES,
             Capability.EXECUTES_CODE,
@@ -79,14 +93,22 @@ class EgressPolicy:
             return f"the tool set grants {', '.join(granted)}"
         if self.restricted_repo:
             return "this repository is classified restricted"
-        if untrusted_context:
+        if untrusted_context and transmits:
             # The one a capability-only rule misses, and the one that actually happens.
             return "the context package contains untrusted external content"
         return None
 
-    def check(self, *, capabilities: frozenset[Capability], untrusted_context: bool) -> None:
+    def check(
+        self,
+        *,
+        capabilities: frozenset[Capability],
+        untrusted_context: bool,
+        transmits: bool = True,
+    ) -> None:
         """Raise unless the environment provides what this invocation requires."""
-        why = self.required(capabilities=capabilities, untrusted_context=untrusted_context)
+        why = self.required(
+            capabilities=capabilities, untrusted_context=untrusted_context, transmits=transmits
+        )
         if why is None:
             return
         if self.mode is EgressMode.NONE:
@@ -117,7 +139,13 @@ class EgressPolicy:
 class UnsandboxedEgress(EgressPolicy):
     """The explicit opt-out. Named after what it does, so it is greppable and reviewable."""
 
-    def check(self, *, capabilities: frozenset[Capability], untrusted_context: bool) -> None:
+    def check(
+        self,
+        *,
+        capabilities: frozenset[Capability],
+        untrusted_context: bool,
+        transmits: bool = True,
+    ) -> None:
         return None
 
     def verify(self) -> bool:

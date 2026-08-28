@@ -27,6 +27,7 @@ from in_lockstep.core.spend import Budget, Spend, Unpriced
 from in_lockstep.core.verbs import Capability
 from in_lockstep.llm.interface import LLMProvider, RateLimitError, TransientError
 from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall
+from in_lockstep.privileged.egress import EgressMode, EgressPolicy, EgressRefused
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
 
@@ -61,13 +62,19 @@ def table() -> CostTable:
     return t
 
 
-def invoker(provider, *, spend=None, cost_table=None, retry=None) -> AiInvoker:
+def invoker(provider, *, spend=None, cost_table=None, retry=None, egress=None) -> AiInvoker:
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
     return AiInvoker(
         provider,
         model="m",
         cost_table=cost_table or table(),
         spend=spend or Spend(),
         retry=retry or RetryPolicy(attempts=1, base_delay=0),
+        # Tests about the loop are not tests about egress, and the default reads the ambient
+        # environment — which would make them pass or fail on whether IN_LOCKSTEP_EGRESS happens
+        # to be set. The egress tests below pass a real policy explicitly.
+        egress=egress or UnsandboxedEgress(),
     )
 
 
@@ -95,7 +102,7 @@ def test_gate_cost_2_predictive_check_prices_the_whole_resent_history() -> None:
         per_message_tokens=40_000,
     )
     spend = Spend(budget=Budget(usd=0.60))
-    tools = ToolSet.of(Tool(server="s", name="peek"))
+    tools = ToolSet.of(Tool(server="s", name="peek", capabilities=frozenset({Capability.READS_REPO})))
 
     async def run_tool(server, name, args):
         return "x" * 4000
@@ -145,7 +152,9 @@ def test_tool_not_in_the_set_cannot_be_dispatched() -> None:
         invoker(provider).run(
             system="s",
             messages=[Message(role="user", content="go")],
-            tools=ToolSet.of(Tool(server="git", name="git_log")),
+            tools=ToolSet.of(
+                Tool(server="git", name="git_log", capabilities=frozenset({Capability.READS_REPO}))
+            ),
             run_tool=run_tool,
             policy=InvokePolicy(max_turns=3),
         )
@@ -156,9 +165,9 @@ def test_tool_not_in_the_set_cannot_be_dispatched() -> None:
 
 def test_ambiguous_tool_names_are_refused_at_construction() -> None:
     """A model emits a bare name; two servers offering it makes the question undecidable."""
-    tools = ToolSet.of(Tool(server="a", name="read_file"))
+    tools = ToolSet.of(Tool(server="a", name="read_file", capabilities=frozenset({Capability.READS_REPO})))
     with pytest.raises(AmbiguousTool, match="read_file"):
-        tools.add(Tool(server="b", name="read_file"))
+        tools.add(Tool(server="b", name="read_file", capabilities=frozenset({Capability.READS_REPO})))
 
 
 def test_tool_results_are_scanned_and_delimited() -> None:
@@ -177,7 +186,7 @@ def test_tool_results_are_scanned_and_delimited() -> None:
         invoker(provider).run(
             system="s",
             messages=[Message(role="user", content="go")],
-            tools=ToolSet.of(Tool(server="git", name="log")),
+            tools=ToolSet.of(Tool(server="git", name="log", capabilities=frozenset({Capability.READS_REPO}))),
             run_tool=run_tool,
             policy=InvokePolicy(max_turns=3),
         )
@@ -206,7 +215,7 @@ def test_exhaustion_is_explicit_not_a_provider_stop_reason() -> None:
         invoker(provider).run(
             system="s",
             messages=[Message(role="user", content="go")],
-            tools=ToolSet.of(Tool(server="s", name="t")),
+            tools=ToolSet.of(Tool(server="s", name="t", capabilities=frozenset({Capability.READS_REPO}))),
             run_tool=run_tool,
             policy=InvokePolicy(max_turns=2),
         )
@@ -233,7 +242,7 @@ def test_killswitch_is_rechecked_every_turn(monkeypatch) -> None:
             invoker(provider).run(
                 system="s",
                 messages=[Message(role="user", content="go")],
-                tools=ToolSet.of(Tool(server="s", name="t")),
+                tools=ToolSet.of(Tool(server="s", name="t", capabilities=frozenset({Capability.READS_REPO}))),
                 run_tool=run_tool,
                 policy=InvokePolicy(max_turns=4),
             )
@@ -255,7 +264,7 @@ def test_gate_deadline_1_deadline_is_rechecked_every_turn() -> None:
             invoker(provider).run(
                 system="s",
                 messages=[Message(role="user", content="go")],
-                tools=ToolSet.of(Tool(server="s", name="t")),
+                tools=ToolSet.of(Tool(server="s", name="t", capabilities=frozenset({Capability.READS_REPO}))),
                 run_tool=run_tool,
                 policy=InvokePolicy(max_turns=10, deadline_seconds=0.06),
             )
@@ -278,7 +287,7 @@ def test_a_failing_tool_is_data_not_a_crash() -> None:
         invoker(provider).run(
             system="s",
             messages=[Message(role="user", content="go")],
-            tools=ToolSet.of(Tool(server="s", name="t")),
+            tools=ToolSet.of(Tool(server="s", name="t", capabilities=frozenset({Capability.READS_REPO}))),
             run_tool=run_tool,
             policy=InvokePolicy(max_turns=3),
         )
@@ -499,3 +508,62 @@ def test_cassette_contents_pass_through_redaction(tmp_path: Path) -> None:
     recording = RecordingProvider(inner, tape, Redact(registry))
     asyncio.run(recording.generate(LLMInput(model="m", messages=[])))
     assert "sk-secret-value-here" not in (tmp_path / "c.json").read_text()
+
+
+# -- egress, at the call site rather than in isolation --------------------------------------
+#
+# `tests/in_lockstep/test_controls.py` already tests `EgressPolicy` thoroughly. That is what made
+# GATE-EGRESS-1/2/3 read as passing while `EgressPolicy.check()` had no caller anywhere in the
+# package: the class was proven, the control was not. These assert the invocation is refused,
+# which is what the gates actually say.
+
+
+def _untrusted() -> ContextPackage:
+    return ContextPackage(
+        items=[ContextItem(kind="diff", content="x", provenance=Provenance.UNTRUSTED_EXTERNAL)]
+    )
+
+
+def test_gate_egress_1_untrusted_context_blocks_the_invocation_itself() -> None:
+    provider = Stub(replies=[LLMOutput(content="never reached")])
+    ai = invoker(provider, egress=EgressPolicy(mode=EgressMode.NONE))
+
+    with pytest.raises(EgressRefused) as exc:
+        asyncio.run(ai.run(system="s", messages=[], context=_untrusted()))
+    assert exc.value.reason == "egress.unenforced"
+    assert provider.calls == [], "refused before the first model call, not after it"
+
+
+def test_gate_egress_3_an_undeclared_tool_capability_triggers_enforcement() -> None:
+    """A server that never declared itself must not drop a run below the threshold."""
+    provider = Stub(replies=[LLMOutput(content="never reached")])
+    ai = invoker(provider, egress=EgressPolicy(mode=EgressMode.NONE))
+
+    with pytest.raises(EgressRefused):
+        asyncio.run(
+            ai.run(system="s", messages=[], tools=ToolSet.of(Tool(server="mystery", name="do_it")))
+        )
+    assert provider.calls == []
+
+
+def test_a_cassette_needs_no_firewall() -> None:
+    """`--offline` and `--dry-run` exist so this runs with no key and no spend.
+
+    Demanding egress control for a run that cannot put a byte on the wire would teach people to
+    switch the control off locally, which is how a control dies. The suppression is narrow: it
+    covers the untrusted-content trigger only, never a tool that writes, executes or reaches out.
+    """
+    from in_lockstep.ai.replay import DryRunProvider
+
+    ai = invoker(DryRunProvider(), egress=EgressPolicy(mode=EgressMode.NONE))
+    assert asyncio.run(ai.run(system="s", messages=[], context=_untrusted())) is not None
+
+
+def test_an_offline_run_still_refuses_a_tool_that_can_transmit() -> None:
+    """The narrowness of the suppression, asserted rather than assumed."""
+    from in_lockstep.ai.replay import DryRunProvider
+
+    ai = invoker(DryRunProvider(), egress=EgressPolicy(mode=EgressMode.NONE))
+    fetch = Tool(server="web", name="fetch", capabilities=frozenset({Capability.REACHES_NETWORK}))
+    with pytest.raises(EgressRefused):
+        asyncio.run(ai.run(system="s", messages=[], tools=ToolSet.of(fetch)))

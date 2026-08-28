@@ -66,6 +66,9 @@ class ToolSet:
         return cls()
 
     def add(self, tool: Tool) -> None:
+        # Applied here rather than at the call site, because a fail-closed rule that each caller
+        # must remember to apply is not fail-closed. Every route into the set goes through `add`.
+        tool = undeclared_is_dangerous(tool)
         clash = [t for t in self.tools.values() if t.name == tool.name and t.server != tool.server]
         if clash:
             raise AmbiguousTool(
@@ -81,7 +84,7 @@ class ToolSet:
         return merged
 
     def allow(self, *names: str) -> ToolSet:
-        """Narrow to an explicit allowlist."""
+        """Narrow to an explicit allowlist. Narrowing cannot un-declare a capability."""
         return ToolSet({k: v for k, v in self.tools.items() if v.name in names})
 
     def deny(self, *names: str) -> ToolSet:

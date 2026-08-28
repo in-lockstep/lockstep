@@ -31,6 +31,7 @@ from ..core.outcome import Cost
 from ..core.spend import Spend, Unpriced
 from ..llm.interface import LLMProvider
 from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
+from ..privileged.egress import EgressPolicy
 from ..privileged.redact import Redact
 from . import injection
 from .context import ContextPackage, Provenance
@@ -115,6 +116,7 @@ class AiInvoker:
         redact: Redact | None = None,
         retry: RetryPolicy | None = None,
         counter: Counter | None = None,
+        egress: EgressPolicy | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -123,6 +125,10 @@ class AiInvoker:
         self.redact = redact or Redact()
         self.retry = retry or RetryPolicy()
         self.counter = counter or HeuristicCounter()
+        # Privileged, like Redact: constructed here rather than composed as middleware, so
+        # `--no-middleware` cannot reach it. `detect()` reads the environment; a repository that
+        # means to opt out binds `UnsandboxedEgress`, which is named after what it does.
+        self.egress = egress if egress is not None else EgressPolicy.detect()
 
     async def run(
         self,
@@ -137,6 +143,17 @@ class AiInvoker:
         policy = policy or InvokePolicy()
         tools = tools or ToolSet.none()
         started = time.monotonic()
+
+        # Egress first, ahead of even the pricing refusal. Whether this invocation is allowed to
+        # reach the network at all is a prior question to what it would cost — and this was the
+        # gap that made GATE-EGRESS-1 `unit only`: the policy was built, tested and never called,
+        # so `docs/controls-crosswalk.md` claimed a firewall had been replaced by a class that
+        # nothing invoked.
+        self.egress.check(
+            capabilities=tools.capabilities(),
+            untrusted_context=context.untrusted if context is not None else False,
+            transmits=getattr(self.provider, "transmits", True),
+        )
 
         # An unpriced model is refused here, before any call. Pricing it at a default rate would
         # record a fabricated cost and budget against a number nobody chose.

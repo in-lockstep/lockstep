@@ -86,6 +86,13 @@ class ProviderSettings:
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
+    # Whether calling this provider can put bytes on the network. False for a cassette or a
+    # canned answer, and that is not a detail: egress control is mandatory when a run carries
+    # untrusted content, and demanding a firewall for a run that cannot transmit would train
+    # people to disable the control locally, which is how a control dies.
+    transmits: bool = True
+
+
     @abstractmethod
     async def generate(self, input: LLMInput) -> LLMOutput:
         """Send a prompt to the LLM and return the response."""
