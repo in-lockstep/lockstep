@@ -55,8 +55,16 @@ def main() -> None:
 @click.argument("target")
 @click.option("--paths", multiple=True, help="Restrict to these paths.")
 @click.option("--no-middleware", is_flag=True, help="Bisect behaviour. Cannot disable the privileged tier.")
-def run_cmd(target: str, paths: tuple[str, ...], no_middleware: bool) -> None:
-    """Run a workflow."""
+@click.option("--recover", "recover_id", default="", help="Resume an interrupted run by id.")
+@click.option("--checkpoint/--no-checkpoint", default=False, help="Checkpoint completed steps.")
+def run_cmd(
+    target: str, paths: tuple[str, ...], no_middleware: bool, recover_id: str, checkpoint: bool
+) -> None:
+    """Run a workflow.
+
+    `--recover` restarts an interrupted run from its checkpoints. It covers machine failure only:
+    a run never waits on a person, so resuming after a human is a different mechanism entirely.
+    """
     if target != "selfcheck":
         known = ", ".join(r.id for r in registered())
         raise click.ClickException(f"unknown workflow {target!r}; registered: {known}")
@@ -67,7 +75,16 @@ def run_cmd(target: str, paths: tuple[str, ...], no_middleware: bool) -> None:
         # redaction, egress and residency are privileged rather than middleware.
         lockstep.middleware = []
 
-    ctx = lockstep.context(run_id="selfcheck-local")
+    run_id = recover_id or "selfcheck-local"
+    ctx = lockstep.context(run_id=run_id)
+    if checkpoint or recover_id:
+        from .platform.state import StateStore
+
+        ctx.state = StateStore()
+        ctx.recovering = bool(recover_id)
+        if recover_id:
+            done = ctx.state.completed(recover_id)
+            click.echo(f"recovering {recover_id}: {len(done)} completed step(s)")
     result = asyncio.run(selfcheck(ctx, paths or (lockstep.repo.root,)))
 
     validate = result["validate"]

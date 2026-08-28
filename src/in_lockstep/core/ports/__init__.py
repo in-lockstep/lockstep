@@ -57,6 +57,23 @@ class LedgerStore(Protocol):
 
 
 @runtime_checkable
+class StepStore(Protocol):
+    """Where completed step outcomes are checkpointed.
+
+    Declared here rather than imported from the platform package, because `RunContext` uses it and
+    `core` may not depend on an implementation — that edge is the one inversion the layering rule
+    exists to prevent, and a lazy import inside a function is still that edge.
+
+    `save` takes an outcome-shaped mapping rather than an `Outcome`, so the store never needs to
+    reach back into core either.
+    """
+
+    def save_step(self, run_id: str, step_id: str, outcome: object) -> None: ...
+
+    def load_step(self, run_id: str, step_id: str) -> object | None: ...
+
+
+@runtime_checkable
 class SecretResolver(Protocol):
     """Resolves a named secret at the edge. Values never enter a context package."""
 

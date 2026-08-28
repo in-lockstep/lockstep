@@ -21,6 +21,7 @@ from typing import Any, TypeVar
 from .container import Container
 from .middleware import ActionCall, Middleware, Next, compose
 from .outcome import Outcome, Status
+from .ports import StepStore
 from .spend import Spend
 from .verbs import Verb, capabilities_of, verb_of
 
@@ -82,6 +83,10 @@ class RunContext:
     tracer: Any = None
     scope_path: str = ""
     parent_run_id: str | None = None
+    # Set to a StateStore to make steps resumable. Opt-out-able: without one the model is "just a
+    # Python function", which is the simplicity the whole design trades on.
+    state: StepStore | None = None
+    recovering: bool = False
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()
@@ -125,6 +130,15 @@ class RunContext:
         step_id = self._step_id(call)
         capabilities = capabilities_of(action)
 
+        # A completed step is replayed rather than re-run. The checkpoint records the OUTCOME,
+        # not merely that a file appeared: a step that wrote half its output before the runner
+        # died must re-run, and presence alone cannot tell those apart.
+        if self.recovering and self.state is not None:
+            existing = self.state.load_step(self.run_id, str(step_id))
+            if isinstance(existing, Outcome):
+                self.last_step = step_id
+                return existing
+
         started = time.monotonic()
 
         async def terminal() -> Outcome[Any]:
@@ -139,6 +153,9 @@ class RunContext:
 
         chain: Next = compose([*self.middleware, *call.middleware], terminal, self, call)
         outcome = await chain()
+
+        if self.state is not None and outcome.terminal:
+            self.state.save_step(self.run_id, str(step_id), outcome)
 
         self.last_step = step_id
         self.last_capabilities = capabilities

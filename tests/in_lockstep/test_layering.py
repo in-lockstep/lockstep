@@ -46,6 +46,8 @@ ALLOWED: dict[str, set[str]] = {
         "prompts",
         "privileged",
         "config_ref",
+        "platform",
+        "doctor",
         "cli",
     },
 }
@@ -66,8 +68,18 @@ def _imported_layers(tree: ast.AST, path: Path) -> set[str]:
                     layers.add(node.module.split(".")[1])
                 continue
             # A relative import that walks up to the package root names a sibling layer.
-            if node.level > depth and node.module:
-                layers.add(node.module.split(".")[0])
+            if node.level > depth:
+                if node.module:
+                    layers.add(node.module.split(".")[0])
+                else:
+                    # `from . import doctor` carries no module, and skipping it left a hole in
+                    # this gate wide enough for a whole package to cross a layer through. Only
+                    # names that are actually modules count — `from . import __version__` pulls a
+                    # value out of the package __init__ and crosses nothing.
+                    for alias in node.names:
+                        name = alias.name.split(".")[0]
+                        if (SRC / f"{name}.py").exists() or (SRC / name).is_dir():
+                            layers.add(name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.startswith("in_lockstep."):
