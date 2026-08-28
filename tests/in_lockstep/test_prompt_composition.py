@@ -18,8 +18,12 @@ CORPUS = Path(__file__).resolve().parents[1] / "characterization" / "corpus.json
 
 
 @pytest.mark.parametrize("aspect", sorted(LENSES))
-def test_composition_order_matches_the_frozen_corpus(aspect: str) -> None:
-    """Guardrails, body, skills — the invariant, checked against what the compiler did."""
+def test_gate_test_2_composition_order_matches_the_frozen_corpus(aspect: str) -> None:
+    """GATE-TEST-2 — guardrails, body, skills, checked against what the compiler did.
+
+    This is the one test that closes the loop between the frozen corpus and a live composer.
+    `tests/characterization/` only checks that the frozen files agree with each other.
+    """
     projection = review_layers().projection(f"review/{aspect}-reviewer")
 
     recorded = json.loads(CORPUS.read_text())[f"repo/review/{aspect}-reviewer"]["projection"]

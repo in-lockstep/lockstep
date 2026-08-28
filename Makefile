@@ -35,6 +35,7 @@ test:
 #
 # The rcfile is passed to BOTH halves. Passing it to only one made the floor check and the ratchet
 # read different numbers off the same run, which is a gate that contradicts itself.
+# GATE-TEST-3 lives here rather than in pytest: it is a property of the run, not of a test.
 cov:
 	@floor=$$(cat .coverage-floor); \
 	uv run pytest -q --cov=in_lockstep --cov-config=/dev/null \

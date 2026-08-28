@@ -242,7 +242,8 @@ def test_killswitch_is_rechecked_every_turn(monkeypatch) -> None:
     assert len(provider.calls) == 1
 
 
-def test_deadline_is_rechecked_every_turn() -> None:
+def test_gate_deadline_1_deadline_is_rechecked_every_turn() -> None:
+    """GATE-DEADLINE-1 — a long loop is one ActionCall, so ctx.do-level middleware fires once."""
     provider = Stub(replies=[LLMOutput(content="", tool_calls=[ToolCall(id="1", name="t", input={})])] * 4)
 
     async def run_tool(server, name, args):
