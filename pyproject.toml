@@ -41,15 +41,13 @@ dev = [
     "in-lockstep-exec",
 ]
 
-# One repo, two distributions: `in-lockstep` (this) and `in-lockstep-exec` (the runtime). The
-# distribution names carry the organization prefix because the bare names belong to unrelated
-# projects on PyPI — and a generated workflow that installs the compiler by name from a public index
-# must not be able to resolve to somebody else's package. Import names and console scripts are
-# unaffected: the module is still `lockstep`, the command is still `lockstep`.
+# One repository, two distributions: `in-lockstep` (this) and `in-lockstep-exec`. The names carry
+# the organization prefix because the bare ones belong to unrelated projects on PyPI.
 #
-# The compiler emits `pipeline-exec` invocations as literal text, so the two are developed and
-# tested together — see tests/test_contract.py. A generated pipeline repo installs only the runtime,
-# never the compiler.
+# They used to be developed together because the compiler emitted `pipeline-exec` invocations as
+# literal text, and a contract test parsed every one of them against the real CLI. That contract
+# went with the compiler; `in-lockstep-exec` now stands alone and nothing in the framework imports
+# it. See docs/needs.md and packages/pipeline-exec/README.md for where that leaves it.
 [tool.uv.workspace]
 members = ["packages/*"]
 
@@ -151,19 +149,23 @@ testpaths = ["tests", "packages/pipeline-exec/tests"]
 pythonpath = ["src", "packages/pipeline-exec/src"]
 # `TestScript` is a dataclass, not a test case.
 python_classes = ["*Tests"]
+filterwarnings = [
+    "error::DeprecationWarning",
+    # Every sandboxed verb runs a child process, and `asyncio.run` closes its loop as soon as the
+    # coroutine returns. A subprocess transport collected after that raises "Event loop is closed"
+    # from `__del__`, and pytest attributes it to whichever unrelated test triggered the
+    # collection. The child has already exited and been reaped by then — the transport is closed
+    # explicitly inside the loop in adapters/sandbox.py — so this is a reporting artefact rather
+    # than a leak. Narrowed to the exact message so a real unraisable exception still fails.
+    "ignore:Exception ignored in.*BaseSubprocessTransport:pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 branch = false
 
 [tool.coverage.report]
 exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
-# The session executors drive a real browser, a real API and a real shell against a running
-# application; they cannot be meaningfully covered without one. They arrived from
-# pipeline-framework with no tests of their own, so this is inherited debt, recorded rather than
-# hidden: `make cov-all` reports the true figure, and closing it needs a fixture application.
-omit = [
-    "*/pipeline_exec/executors/api_session.py",
-    "*/pipeline_exec/executors/browser_session.py",
-    "*/pipeline_exec/executors/cli_session.py",
-    "*/pipeline_exec/executors/direct_executor.py",
-]
+# No omit list. The session executors drive a real browser, API and shell against a running
+# application and cannot be meaningfully covered without one — which is exactly why they are NOT
+# excluded any more. `make cov` passes --cov-config=/dev/null so nothing here applies to the gate,
+# and the floor is the true figure rather than a comfortable one computed over a subset.

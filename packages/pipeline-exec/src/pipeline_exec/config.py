@@ -13,7 +13,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# The profile keys the compiler exports as `PROFILE_<KEY>` and that the executors consume.
+# The `PROFILE_<KEY>` environment block the executors consume. It used to be exported by the
+# compiler; nothing exports it now — see this package's README.
 PROFILE_KEYS = (
     "url",
     "api_url",
@@ -44,7 +45,7 @@ class ExecConfig:
 
     # Two things the runtime cannot know about your application, declared rather than guessed: how
     # its sign-in page works, and what to send when it rejects a field as required. Unset means the
-    # behaviour is off, which is the honest default. See docs/layers.md.
+    # behaviour is off, which is the honest default. See the compiler-era docs/layers.md (deleted).
     login_recipe: str = ""
     recovery_rules: str = ""
 
@@ -55,7 +56,7 @@ class ExecConfig:
     profile_password: str = ""
     # No default scheme and no default login path. The runtime cannot know how your application
     # authenticates, and a guess that happens to be one application's answer is worse than an error:
-    # it fails at the target, not here. The profile declares both. See docs/layers.md.
+    # it fails at the target, not here. The profile declares both.
     profile_auth_method: str = "none"
     profile_auth_login_path: str = ""
     # Read as a string like every other profile value; "1"/"true"/"yes" turn verification off.

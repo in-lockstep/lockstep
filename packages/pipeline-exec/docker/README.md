@@ -1,11 +1,12 @@
 # The executor image
 
-The image compiled workflows run their deterministic steps in. Published from this repository by
-[`release-exec-image.yml`](../../../.github/workflows/release-exec-image.yml) on an `exec-v*` tag.
+> **No longer published.** `release-exec-image.yml` was removed with the compiler that referenced
+> this image by digest. The Dockerfile is kept because the executors it packages are still the
+> only thing here that drives a real application, and an image is what they will need if they are
+> ever wired to a `run` verb.
 
-```bash
-git tag exec-v0.1.0 && git push origin exec-v0.1.0
-```
+The image the deterministic steps of a compiled pipeline used to run in. It builds on the
+Playwright base and adds the runners dispatched on by extension.
 
 The release note carries the **digest**, which is the thing consumers pin:
 

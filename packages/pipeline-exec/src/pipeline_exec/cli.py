@@ -432,7 +432,7 @@ def discover(
     """Record the target's API surface, as declared by this pipeline.
 
     The surface is declared rather than guessed: a framework that ships a list of endpoints ships one
-    application's endpoints. See docs/layers.md.
+    application's endpoints. See the compiler-era docs/layers.md (deleted).
     """
     import asyncio
 

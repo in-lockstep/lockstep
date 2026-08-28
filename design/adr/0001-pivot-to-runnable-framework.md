@@ -63,8 +63,8 @@ Moving model invocation in-process deletes gh-aw's out-of-process envelope. Each
 | API proxy enforcing `maxAiCredits` out-of-process | `Spend`, checked predictively inside `AiInvoker` | Replaced, but now in-process — it cannot bound a process holding the raw key |
 | `max-daily-ai-credits` (per agent, per day, pre-flight) | Provider-side org spend limits + CI `concurrency` | **Genuine loss.** Enforcement moves out-of-process (stronger) but from a per-repo-per-day partition to an org-wide pool: one runaway repo can consume every other consumer's budget. The earlier claim that this was "strictly stronger" is withdrawn. |
 | Safe-outputs privilege split | Two-job trampoline (`run` unprivileged, `apply` privileged) | Replaced |
-| Workflow-file provenance (*"a fork cannot modify the workflow that reviews it"*, `docs/adopting.md:220`) | Trusted config ref — `lockstep.py` loads from base/default ref | Replaced |
-| Sealed guardrails enforced at compile time | `PolicyStack`, append-only, monotone merge, `doctor --strict` | Weaker: visibility of removal, not impossibility. Consistent with `docs/sharing.md:505`, which already states sealing "is not an access control against the repository's own owners." |
+| Workflow-file provenance (*"a fork cannot modify the workflow that reviews it"*, the then-`docs/adopting.md:220`, deleted in phase 7) | Trusted config ref — `lockstep.py` loads from base/default ref | Replaced |
+| Sealed guardrails enforced at compile time | `PolicyStack`, append-only, monotone merge, `doctor --strict` | Weaker: visibility of removal, not impossibility. Consistent with the then-`docs/sharing.md:505` (deleted in phase 7), which already stated sealing "is not an access control against the repository's own owners." |
 | Compile-time refusal of an undeclared budget (`DOC006`, ERROR) | Startup refusal, `GATE-BUDGET-1` | Replaced |
 
 A repo can also import a provider directly and bypass the entire `PolicyStack`. That is
@@ -102,6 +102,14 @@ ordinary dependency at all: `uv.lock` resolves `in-lockstep` to `source = { edit
 - Abandon criteria are written into the plan (time, architecture, cost, value) with a named cut
   line: Phases 0–4 plus docs ship as `0.9`/`1.0.0rc`, not `1.0`, because `GATE-CI-1` is what makes
   reusing the name safe.
+
+## A note on the citations above
+
+Two rows quote documents this pivot deleted. They are quoted because they are the strongest
+evidence for the decisions: the project had already written down, in its own words, both the
+fork-provenance property that made compiled review safe and the fact that sealing was never an
+access control against a repository's own owners. Those files are in git history at
+`compiler-v0.1.x`; the quotes are preserved here because the argument outlives the file.
 
 ## Provenance
 

@@ -9,8 +9,10 @@ Assertion shape is a NORMALIZED SECTION-IDENTITY PROJECTION plus a reviewed appr
 equality: the new composer must be free to add provenance delimiters and drop gh-aw frontmatter.
 A byte delta is never silently allowed — `sha256` moves only with a committed diff.
 
-Regenerate deliberately:  uv run python tools/capture_corpus.py
-                          uv run python tools/capture_corpus.py <scratch-root> shipped
+These cannot be regenerated. The compiler they were captured from was deleted in phase 7, which
+is exactly why they were captured before it was: `emit/fragments.py` held the composition order,
+and once it was gone there was nothing left to ask. A byte delta here is either a deliberate
+change to the new composer — landed per-prompt, with the diff reviewed — or a regression.
 """
 
 from __future__ import annotations

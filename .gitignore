@@ -9,9 +9,8 @@ build/
 *.egg-info/
 .coverage
 
-# Fetched by `lockstep fetch` at the commit pins.lock records.
-**/.pipeline/inherited/
-
-# Run-local output: cassettes are fixtures you choose to commit, out/ is transport.
+# Run-local state. Cassettes are fixtures you choose to commit; the rest is transport and
+# checkpoints that belong to one machine's attempt at one run.
 .in-lockstep/out/
 .in-lockstep/ledger/
+.in-lockstep/runs/

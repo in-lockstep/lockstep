@@ -5,24 +5,41 @@
 # turned on, with "Dismiss stale approvals" and "Require branches to be up to date" alongside it.
 # Without that, every line below is documentation. The setting lives in repository settings and is
 # not something this repository can grant itself.
+#
+# That caveat matters more than it used to. The framework's own protected-path list denies agent
+# writes to CODEOWNERS, but a human-authored pull request can still change it — branch protection
+# is what makes this file mean anything.
 
 # Everything, unless something more specific below claims it. The last matching pattern wins.
-*                           @tpouyer
+*                                   @tpouyer
 
 # The parts where a mistake is not a bug but a policy change.
 #
-# `enforce:` compiles to workflow permissions, egress allow-lists, tool deny-lists and the credit
-# ceilings — the half of a guardrail a model cannot talk its way past. `library/` ships the baseline
-# guardrail inlined into every agent in every pipeline. A change to either reaches every consumer of
-# every pipeline built on this framework, which is a different kind of review from a bug fix.
-/src/lockstep/library/      @tpouyer
-/src/lockstep/emit/agentic.py   @tpouyer
-/actions/                   @tpouyer
+# `lockstep.py` IS the configuration: it can rebind any adapter, drop any middleware and grant any
+# tool. It is the first entry in the protected-path deny list for that reason, and it is the file
+# whose review matters most.
+/lockstep.py                        @tpouyer
 
-# Generated, but generated is not the same as unreviewed: these are what actually runs.
-/.github/workflows/         @tpouyer
-/.lockstep/                 @tpouyer
+# The controls that run outside the middleware chain, where `--no-middleware` cannot reach them.
+/src/in_lockstep/privileged/        @tpouyer
+# Where configuration is loaded from. Getting this wrong lets a change under review supply the
+# rules that constrain reviewing it.
+/src/in_lockstep/config_ref.py      @tpouyer
+/src/in_lockstep/loader.py          @tpouyer
+# The protected-path tiers themselves.
+/src/in_lockstep/core/changes.py    @tpouyer
+# Prompts and eval cases reach every consumer of every pipeline built on this framework, which is
+# a different kind of review from a bug fix.
+/src/in_lockstep/prompts/           @tpouyer
+/src/in_lockstep/evals/             @tpouyer
+
+# Hand-written and permanent: the gate that proves the framework works cannot be framework output.
+/.github/workflows/                 @tpouyer
+
+# The record of what the pivot cost, and the composition invariant frozen before it was lost.
+/docs/controls-crosswalk.md         @tpouyer
+/tests/characterization/            @tpouyer
 
 # Licensing and attribution.
-/LICENSE                    @tpouyer
-/NOTICE                     @tpouyer
+/LICENSE                            @tpouyer
+/NOTICE                             @tpouyer

@@ -1,4 +1,4 @@
-.PHONY: check ci fmt lint typecheck test cov corpus
+.PHONY: check ci fmt lint typecheck test cov
 
 check: fmt lint typecheck test
 
@@ -46,9 +46,3 @@ cov:
 	  exit 1; \
 	fi; \
 	echo "coverage $$actual% (floor $$floor%)"
-
-# Re-capture the composed-prompt characterization corpus. Only meaningful while a compiler exists
-# to capture it FROM — which it no longer does. Kept as a record of how the corpus was made.
-corpus:
-	@echo "The compiler this captured from was removed in phase 7."
-	@echo "tests/characterization/ holds what it produced; see tools/capture_corpus.py in history."
