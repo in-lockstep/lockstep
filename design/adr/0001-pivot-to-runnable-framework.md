@@ -31,13 +31,41 @@ learning loop, and §4.7/§15 fan-out and workspaces are post-1.0.
 ### Distribution
 
 Reuse the **`in-lockstep`** name; 1.0 is the framework. One distribution with provider extras
-(`pip install 'in-lockstep[anthropic]'`); `in-lockstep-exec` folded in; the compiler archived behind
-tag `compiler-v0.1.x` with a README notice and **no formal deprecation window** — there are no
-adopters. Accepted consequence: a loose `>=0.1` constraint silently swaps products. Mitigated only
-by the fact that no such constraint exists in the wild.
+(`pip install 'in-lockstep[anthropic]'`); the compiler archived behind tag `compiler-v0.1.x` with a
+README notice and **no formal deprecation window** — there are no adopters. Accepted consequence: a
+loose `>=0.1` constraint silently swaps products. Mitigated only by the fact that no such
+constraint exists in the wild.
 
 `actions-v0.1.4` tags are permanent and are never retagged. The GHCR image stops receiving
 `:latest`; a final `exec-v0.1.x` is cut. Neither is deleted.
+
+#### Amendment (post-1.0): `in-lockstep-exec` is deleted, not folded in
+
+This decision originally said `in-lockstep-exec` was "folded in." It was not, and the word was
+doing work the code never did. The second distribution survived all seven phases untouched and
+arrived at 1.0 with **nothing in the framework importing it** — 7,928 LOC and 478 tests reachable
+only by running its own CLI.
+
+It is now deleted outright. The reasoning is the same one this ADR opens with: most of its command
+surface (`fanout`, `shard-run`, `cache-key`, `meter`, `eval-*`, `parse-command`, `scan-input`) was
+glue a compiler emitted as literal text, and it describes a system that no longer exists. Keeping
+it "in case the `run` verb wants it" was keeping a fixed answer to a question the `run` verb has
+not been asked yet, and it was doing so at the cost of a lint, type-check and coverage surface
+nobody was maintaining. The reasons it was kept in the first cleanup pass — that it was working,
+tested code — are reasons not to delete it *accidentally*, which is why this is a recorded decision
+rather than a tidy-up.
+
+What goes with it, stated rather than discovered later:
+
+| Deleted | Consequence |
+|---|---|
+| `executors/` — browser, API and CLI session drivers with 409/422 recovery, method fallback, rate-limit ladders, browser auto-login and crash recovery | The `run` verb, when it lands, starts from the design rather than from behaviour earned against a real application. This is the one genuine loss. |
+| `builtins/test_runner.py`, `builtins/discovery.py`, `reports/` | Live-application test running and its report surface. `PytestTest` was always new code, never a port of this. |
+| `improvement.py` — the noise-aware comparator | Post-1.0 §8.4's eval loop loses a starting point. The *method* is recorded in the plan and in `design/in-lockstep-design.md` §8; only the implementation goes. |
+| 478 tests, and `GATE-TEST-5`/`GATE-TEST-6` with them | Both gates are marked retired-with-subject in `design/gates.md` rather than removed, so the count they defended does not read as having silently eroded. |
+
+Recoverable from git history and from `in-lockstep-exec` on PyPI, both of which are permanent. The
+GHCR image and the `exec-v0.1.x` tag are still not deleted.
 
 ### The AI layer
 

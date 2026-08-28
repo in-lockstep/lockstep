@@ -49,8 +49,8 @@ it rather than restating it.
 | `GATE-TEST-2` | P5 | Each `in_lockstep`-composed prompt's ordered section-id list equals the corpus's; any byte delta has a committed `.diff` of identical hash. |
 | `GATE-TEST-3` | P0 | `make cov-new` runs in CI; it fails below the committed floor, and above `floor+2` it fails **as a required floor-file update** ("coverage rose to X; bump `.coverage-floor`"), not as a bare failure. `cov-new` must not inherit `[tool.coverage.report] omit`. |
 | `GATE-TEST-4` | P0-7 | ~~The golden tree's git hash equals the Phase-0 tag value.~~ **Retired at phase 7 with its subject.** It replaced the drift gate and protected generated output for the duration of the pivot; the compiler that generated that output is gone, so the gate has nothing to hold. `tests/characterization/` is what survives, and it protects the thing that outlived the emitter: the composition order. |
-| `GATE-TEST-5` | P1-7 | `pytest --collect-only -q packages/pipeline-exec/tests` count ≥ the Phase-0 baseline. |
-| `GATE-TEST-6` | P1-7 | `pyproject` `testpaths` still contains both `tests` and `packages/pipeline-exec/tests`. |
+| `GATE-TEST-5` | P1-7 | ~~`pytest --collect-only -q packages/pipeline-exec/tests` count ≥ the Phase-0 baseline.~~ **Retired with its subject.** `packages/pipeline-exec` was deleted after 1.0; the 478 tests this gate counted went with the code they covered. It existed so the pivot could not quietly erode the one test net that predated it, and it held for seven phases — the package was then removed deliberately, by decision, which is the outcome the gate was protecting the right to make. |
+| `GATE-TEST-6` | P1-7 | ~~`pyproject` `testpaths` still contains both `tests` and `packages/pipeline-exec/tests`.~~ **Retired with its subject**, for the same reason — it was `GATE-TEST-5`'s companion, guarding against the collection count being held up by a path that no longer ran. |
 | `GATE-TESTGUARD-1` | P6 | A `ChangeSet` deleting a test, or adding `skip`/`xfail` to one, without a `Ticket:` trailer is `BLOCKED`. (R1-QA-1, second half.) |
 
 ## Ledger, evals, metrics

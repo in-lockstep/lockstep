@@ -11,8 +11,8 @@ subtree was dirty — it was not; that described a different part of that reposi
 The recorded hashes below are of the **origin files**, as a provenance record. They are *not* a
 drift gate: the async rewrite invalidates them by design, and `make fmt` would invalidate any hash
 of the vendored copies. The vendored tree is excluded from `ruff format` and held to relaxed mypy
-settings, following the precedent this repository already set for the extracted `pipeline_exec`
-executors.
+settings — the same treatment the extracted `pipeline_exec` executors had, before that package was
+deleted; this is now the only code in the tree carrying it.
 
 | Origin file | LOC | sha256 (origin) |
 |---|---|---|

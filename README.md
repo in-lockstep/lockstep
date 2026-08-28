@@ -70,15 +70,10 @@ the constraints that apply to reviewing it — so it comes from the base ref ins
 - [Design](design/in-lockstep-design.md) and [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md)
 - [Exit gates](design/gates.md)
 
-## Packages
+## Installing
 
-| Unit | Role |
-|---|---|
-| `in-lockstep` | the framework |
-| [`packages/pipeline-exec`](packages/pipeline-exec) | deterministic executors — browser, API and CLI drivers, test running, reports |
-
-Provider SDKs are extras: `in-lockstep[anthropic]`, `[openai]`, `[google]`, `[bedrock]`, `[all]`.
-A bare install pulls none of them, because cold start matters in CI.
+One distribution. Provider SDKs are extras: `in-lockstep[anthropic]`, `[openai]`, `[google]`,
+`[bedrock]`, `[all]`. A bare install pulls none of them, because cold start matters in CI.
 
 ## History
 

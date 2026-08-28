@@ -38,34 +38,24 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0",
     "pytest-cov>=7.1.0",
-    "in-lockstep-exec",
 ]
 
-# One repository, two distributions: `in-lockstep` (this) and `in-lockstep-exec`. The names carry
-# the organization prefix because the bare ones belong to unrelated projects on PyPI.
-#
-# They used to be developed together because the compiler emitted `pipeline-exec` invocations as
-# literal text, and a contract test parsed every one of them against the real CLI. That contract
-# went with the compiler; `in-lockstep-exec` now stands alone and nothing in the framework imports
-# it. See docs/needs.md and packages/pipeline-exec/README.md for where that leaves it.
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-in-lockstep-exec = { workspace = true }
+# One repository, one distribution. `in-lockstep` carries the organization prefix because the bare
+# name belongs to an unrelated project on PyPI. The second distribution this repository used to
+# build, `in-lockstep-exec`, was the runtime a compiler emitted invocations of; it was deleted with
+# that compiler's last consumer. See ADR 0001.
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Prompts and eval cases are package data, not Python: the failure that never shows up in a source
+# checkout and always shows up in a clean install. They travel because they live INSIDE the package
+# directory, which hatchling copies whole — so no `force-include` is needed, and the one that used
+# to be here added each file a second time at the same archive path and made the wheel unbuildable.
+# `release-python.yml` proves the data arrives by reading it back out of site-packages.
 [tool.hatch.build.targets.wheel]
 packages = ["src/in_lockstep"]
-
-# Prompts and eval cases are package data, not Python. This is the failure mode that never shows
-# up in a source checkout and always shows up in a clean install.
-[tool.hatch.build.targets.wheel.force-include]
-"src/in_lockstep/prompts" = "in_lockstep/prompts"
-"src/in_lockstep/evals" = "in_lockstep/evals"
 
 [tool.ruff]
 line-length = 110
@@ -74,25 +64,12 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
-# Code extracted verbatim from pipeline-framework. It carries resilience behaviour earned against a
-# real application, so cosmetic rules do not apply to it and — more importantly — `make fmt` must
-# never silently rewrite it. Changes here should be deliberate and reviewed against the origin.
-[tool.ruff.lint.per-file-ignores]
-"packages/pipeline-exec/src/pipeline_exec/executors/*" = ["E501", "B007"]
-# discovery.py is excluded: it was rewritten here rather than extracted, so it is held to this
-# repo's rules like anything else.
-"packages/pipeline-exec/src/pipeline_exec/builtins/test_runner.py" = ["E501", "B007"]
-"packages/pipeline-exec/src/pipeline_exec/reports/*" = ["E501", "B007"]
-
 [tool.ruff.format]
 exclude = [
     # Vendored one-way from pipeline-framework at 6ac3cde. See VENDORED.md / vendor.lock:
     # the recorded hashes are of the ORIGIN files, so `make fmt` rewriting the copies would
     # not break a gate — but it would quietly widen the diff against a reviewed import.
     "src/in_lockstep/ai/llm/**",
-    "packages/pipeline-exec/src/pipeline_exec/executors/**",
-    "packages/pipeline-exec/src/pipeline_exec/builtins/test_runner.py",
-    "packages/pipeline-exec/src/pipeline_exec/reports/**",
 ]
 
 [tool.mypy]
@@ -105,22 +82,13 @@ disallow_untyped_defs = true
 module = "tests.*"
 disallow_untyped_defs = false
 
-# The extracted executors predate this repo's strict settings. They are type-checked, but not held to
-# strict-mode rules that would require rewriting code whose behaviour we deliberately preserved.
-[[tool.mypy.overrides]]
-module = "pipeline_exec.executors.*"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-disallow_untyped_calls = false
-
-# Playwright is an optional extra: API and CLI tests do not need it, and the module imports it lazily.
-# Model SDKs are optional extras; the providers import them lazily inside __init__.
+# Model SDKs are optional extras; the providers import them lazily inside `__init__`.
 [[tool.mypy.overrides]]
 module = ["anthropic.*", "openai.*", "google.*", "google.genai.*"]
 ignore_missing_imports = true
 
-# The vendored transport, like the extracted executors before it.
+# The vendored transport is held to the same relaxed settings the extracted executors used to be:
+# it is type-checked, but not to strict-mode rules that would mean rewriting code imported verbatim.
 [[tool.mypy.overrides]]
 module = "in_lockstep.ai.llm.*"
 disallow_untyped_defs = false
@@ -128,25 +96,9 @@ disallow_any_generics = false
 warn_return_any = false
 disallow_untyped_calls = false
 
-[[tool.mypy.overrides]]
-module = "playwright.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "pipeline_exec.builtins.test_runner"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-module = "pipeline_exec.reports.*"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/pipeline-exec/tests"]
-pythonpath = ["src", "packages/pipeline-exec/src"]
+testpaths = ["tests"]
+pythonpath = ["src"]
 # `TestScript` is a dataclass, not a test case.
 python_classes = ["*Tests"]
 filterwarnings = [

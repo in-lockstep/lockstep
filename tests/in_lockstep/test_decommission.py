@@ -43,12 +43,22 @@ def test_the_wheel_ships_only_the_framework() -> None:
     assert packages == ["src/in_lockstep"]
 
 
-def test_package_data_is_force_included() -> None:
-    """Prompts and cases are not .py files, so a packaging change can silently drop them."""
+def test_package_data_travels_inside_the_package() -> None:
+    """Prompts and cases are not .py files, so a packaging change can silently drop them.
+
+    They survive by living inside `src/in_lockstep/`, which the wheel target copies whole. A
+    `force-include` mapping them a second time is not belt-and-braces: hatchling refuses a wheel
+    that adds two files at one archive path, so the redundant table made the distribution
+    unbuildable — silently, because nothing in `make ci` builds a wheel. `release-python.yml` is
+    where the data is proven to arrive, by reading it back out of site-packages.
+    """
     data = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    include = data["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
-    assert "src/in_lockstep/prompts" in include
-    assert "src/in_lockstep/evals" in include
+    wheel = data["tool"]["hatch"]["build"]["targets"]["wheel"]
+    assert "force-include" not in wheel, "duplicates what `packages` already carries"
+
+    root = ROOT / "src" / "in_lockstep"
+    assert list((root / "prompts").rglob("*.md")), "prompt bodies are the package data"
+    assert list((root / "evals").rglob("*.json")), "eval cases are the package data"
 
 
 def test_the_repository_configures_itself_in_python() -> None:
@@ -83,3 +93,33 @@ def test_the_characterization_corpus_outlived_the_emitter() -> None:
     corpus = ROOT / "tests" / "characterization" / "corpus.json"
     assert corpus.exists()
     assert (ROOT / "tests" / "characterization" / "corpus-shipped.json").exists()
+
+
+def test_the_executor_runtime_is_gone() -> None:
+    """`pipeline-exec` was the compiler's runtime and outlived it by one release.
+
+    It reached 1.0 with nothing in the framework importing it, and was then deleted by decision
+    (ADR 0001, the amendment). Half a deletion is the failure worth guarding: a stale `testpaths`
+    entry or workspace member turns every later `uv sync` into a resolution error, and a lint or
+    mypy stanza naming a path that no longer exists is dead configuration that reads as live.
+    """
+    assert not (ROOT / "packages").exists()
+
+    text = (ROOT / "pyproject.toml").read_text()
+    # Comments are stripped first: the manifest still *explains* the deleted distribution, which is
+    # the record. What must be gone is configuration that would act on it.
+    settings = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    for trace in ("pipeline_exec", "pipeline-exec", "in-lockstep-exec"):
+        assert trace not in settings, f"pyproject still configures {trace!r}"
+
+    data = tomllib.loads(text)
+    assert "workspace" not in data.get("tool", {}).get("uv", {}), "a workspace with no members left"
+    assert data["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"]
+    assert data["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src"]
+
+
+def test_the_release_publishes_one_distribution() -> None:
+    """Two Trusted Publishing exchanges existed because two projects did. One does now."""
+    text = (ROOT / ".github" / "workflows" / "release-python.yml").read_text()
+    assert "uv build --package in-lockstep-exec" not in text
+    assert "matrix" not in text, "a one-element matrix is a fan-out over nothing"
