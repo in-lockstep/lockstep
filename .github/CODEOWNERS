@@ -31,7 +31,7 @@
 # Prompts and eval cases reach every consumer of every pipeline built on this framework, which is
 # a different kind of review from a bug fix.
 /src/in_lockstep/prompts/           @tpouyer
-/src/in_lockstep/evals/             @tpouyer
+/src/in_lockstep/corpus/            @tpouyer
 
 # Hand-written and permanent: the gate that proves the framework works cannot be framework output.
 /.github/workflows/                 @tpouyer

@@ -58,7 +58,7 @@ def test_package_data_travels_inside_the_package() -> None:
 
     root = ROOT / "src" / "in_lockstep"
     assert list((root / "prompts").rglob("*.md")), "prompt bodies are the package data"
-    assert list((root / "evals").rglob("*.json")), "eval cases are the package data"
+    assert list((root / "corpus").rglob("*.json")), "eval cases are the package data"
 
 
 def test_the_repository_configures_itself_in_python() -> None:

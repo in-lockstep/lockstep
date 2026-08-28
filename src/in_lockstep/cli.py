@@ -204,7 +204,7 @@ def eval_cmd(action: str, corpus: str) -> None:
     from .evaluation import load_cases, summarize
     from .evaluation.cases import grade
 
-    root = _Path(corpus) if corpus else _Path(__file__).parent / "evals"
+    root = _Path(corpus) if corpus else _Path(__file__).parent / "corpus"
     if not root.exists():
         raise click.ClickException(f"no corpus at {root}")
 

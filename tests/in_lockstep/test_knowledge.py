@@ -18,7 +18,7 @@ from in_lockstep.evaluation.cases import Case, CaseError, grade
 from in_lockstep.strategies import default_registry
 
 PROMPTS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "prompts"
-EVALS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "evals"
+CORPUS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "corpus"
 
 
 # -- the ported corpus ---------------------------------------------------------------
@@ -31,13 +31,13 @@ def test_every_shipped_family_has_prompts() -> None:
 
 def test_the_eval_corpus_came_across_intact() -> None:
     """27 cases, which is what solves the cold-start problem for a new adopter."""
-    cases = load_cases(EVALS)
+    cases = load_cases(CORPUS)
     assert len(cases) == 27
 
 
 def test_every_case_expects_something() -> None:
     """A case with no expectation cannot fail, and would sit in the corpus looking like coverage."""
-    for case in load_cases(EVALS):
+    for case in load_cases(CORPUS):
         assert case.expect, f"{case.name} expects nothing"
 
 
