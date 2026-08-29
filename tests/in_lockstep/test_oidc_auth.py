@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from io import BytesIO
 
+import pytest
+
 from in_lockstep.ai.auth import Auth, AuthRequest, AuthTarget, EnvResolver, OidcResolver
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
@@ -174,3 +176,151 @@ def test_api_key_falls_through_to_env_on_ci(monkeypatch) -> None:
 
     assert creds.get("api_key") == "sk-ant-ci-key-87654321"
     assert creds.source == "EnvResolver:anthropic"
+
+
+# ---------------------------------------------------------------------------
+# Anthropic workload identity federation: no ANTHROPIC_API_KEY needed at all
+# ---------------------------------------------------------------------------
+
+
+def _federation_env(monkeypatch) -> None:
+    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_IDENTITY_TOKEN", "ANTHROPIC_IDENTITY_TOKEN_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ANTHROPIC_FEDERATION_RULE_ID", "fdrl_test")
+    monkeypatch.setenv("ANTHROPIC_ORGANIZATION_ID", "org-test")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token?x=1")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
+
+
+def test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists(monkeypatch) -> None:
+    """No ANTHROPIC_API_KEY, federation configured: `credentials_for` mints the GitHub JWT itself
+    — through Auth, so it is seeded into redaction — and with the audience the federation rule
+    validates, not the chain default."""
+    from in_lockstep.ai.bootstrap import credentials_for
+
+    _federation_env(monkeypatch)
+    seen: dict[str, str] = {}
+
+    def opener(req, *, timeout=10):
+        seen["url"] = req.full_url
+        body = json.dumps({"value": "gha-jwt-for-anthropic"}).encode()
+        resp = BytesIO(body)
+        resp.__enter__ = lambda s=resp: s
+        resp.__exit__ = lambda s=resp, *a: None
+        return resp
+
+    monkeypatch.setattr("urllib.request.urlopen", opener)
+    registry = SecretRegistry()
+    creds = credentials_for(Auth(registry=registry), "anthropic")
+
+    assert creds.get("id_token") == "gha-jwt-for-anthropic"
+    assert "audience=https://api.anthropic.com" in seen["url"], (
+        "the audience is part of what the federation rule validates; the chain default "
+        "would be refused at the exchange"
+    )
+    assert "gha-jwt-for-anthropic" in registry.known(), "minted through Auth, so redaction saw it"
+
+
+def test_an_operator_supplied_token_file_defers_to_the_sdk_chain(monkeypatch) -> None:
+    """ANTHROPIC_IDENTITY_TOKEN_FILE already set means somebody wired their own supply; the
+    framework mints nothing and returns the same empty-is-ambient signal the cloud providers
+    use, so the SDK's documented chain does the reading, the exchange and the caching."""
+    from in_lockstep.ai.bootstrap import credentials_for
+
+    _federation_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_IDENTITY_TOKEN_FILE", "/tmp/gha-jwt")
+
+    def opener(req, *, timeout=10):  # pragma: no cover - must not be reached
+        raise AssertionError("nothing should be minted when the operator supplies the token")
+
+    monkeypatch.setattr("urllib.request.urlopen", opener)
+    creds = credentials_for(Auth(registry=SecretRegistry()), "anthropic")
+    assert not creds.secret_values()
+
+
+def test_a_static_key_still_wins_over_configured_federation(monkeypatch) -> None:
+    """An explicitly set key is somebody meaning it — the same precedence the SDK documents."""
+    from in_lockstep.ai.bootstrap import credentials_for
+
+    _federation_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-static-key-11112222")
+    creds = credentials_for(Auth(registry=SecretRegistry()), "anthropic")
+    assert creds.get("api_key") == "sk-ant-static-key-11112222"
+    assert creds.get("id_token") == ""
+
+
+def test_the_refusal_now_names_the_federation_path(monkeypatch) -> None:
+    from in_lockstep.ai.bootstrap import MissingCredential, credentials_for
+
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_FEDERATION_RULE_ID",
+        "ANTHROPIC_ORGANIZATION_ID",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    with pytest.raises(MissingCredential, match="ANTHROPIC_FEDERATION_RULE_ID"):
+        credentials_for(Auth(registry=SecretRegistry()), "anthropic")
+
+
+# ---------------------------------------------------------------------------
+# The provider hands the minted token to the SDK's exchange — and passes NO
+# credential argument when it has none, so the SDK's own chain can engage
+# ---------------------------------------------------------------------------
+
+
+def _client_kwargs(monkeypatch, creds, settings=None) -> dict:
+    import anthropic
+
+    from in_lockstep.llm.interface import ProviderSettings
+    from in_lockstep.llm.providers.anthropic import AnthropicProvider
+
+    settings = settings or ProviderSettings()
+    captured: dict = {}
+
+    class _Capture:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", _Capture)
+    AnthropicProvider(settings, creds)._make_client(settings, creds)
+    return captured
+
+
+def test_the_client_gets_the_federation_credentials_object(monkeypatch) -> None:
+    """The identifiers arrive through settings — the provider reads no environment
+    (GATE-AUTH-1) — and parameterise the SDK's own token exchange."""
+    from anthropic.lib.credentials import WorkloadIdentityCredentials
+
+    from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
+
+    creds = Credentials(values={"id_token": SecretStr("gha-jwt-abc")})
+    settings = ProviderSettings(
+        extra={"federation-rule-id": "fdrl_test", "federation-organization-id": "org-test"}
+    )
+    kwargs = _client_kwargs(monkeypatch, creds, settings)
+    assert "api_key" not in kwargs
+    provider = kwargs["credentials"]
+    assert isinstance(provider, WorkloadIdentityCredentials)
+    assert provider._federation_rule_id == "fdrl_test"
+    assert provider._identity_token_provider() == "gha-jwt-abc"
+    headers = kwargs.get("default_headers", {})
+    assert "federation-rule-id" not in headers, "an exchange parameter is not a request header"
+
+
+def test_an_empty_credential_passes_no_credential_argument_at_all(monkeypatch) -> None:
+    """An empty api_key is not nothing to the SDK — any explicit credential argument suppresses
+    its env chain, and passing one is what kept federation unreachable."""
+    from in_lockstep.llm.interface import Credentials
+
+    kwargs = _client_kwargs(monkeypatch, Credentials.none())
+    assert "api_key" not in kwargs and "credentials" not in kwargs
+
+
+def test_a_static_key_reaches_the_client_as_before(monkeypatch) -> None:
+    from in_lockstep.llm.interface import Credentials, SecretStr
+
+    kwargs = _client_kwargs(monkeypatch, Credentials(values={"api_key": SecretStr("sk-ant-x-12345678")}))
+    assert kwargs["api_key"] == "sk-ant-x-12345678"
+    assert "credentials" not in kwargs
