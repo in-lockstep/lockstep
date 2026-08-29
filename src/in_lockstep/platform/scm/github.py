@@ -55,6 +55,7 @@ class GitHubScm:
         workflow: str = "",
         run_id: str = "",
         base: Ref = "",
+        draft: bool = False,
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run")
         # Refused at the framework rather than relying on the token's scope, because the token is
@@ -82,6 +83,10 @@ class GitHubScm:
         args = ["pr", "create", "--title", title, "--body", rendered, "--head", branch]
         if base:
             args += ["--base", base]
+        if draft:
+            # Opened not-yet-asking-for-review. An AI change starts here and is marked ready once
+            # its tests pass, so a red or unverified change never lands in a human's review queue.
+            args += ["--draft"]
         code, out, err = self._gh(*args)
         if code != 0:
             raise RuntimeError(f"could not open a pull request: {err.strip()}")
@@ -94,7 +99,18 @@ class GitHubScm:
             title=title,
             number=number,
             trailers=trailers,
+            draft=draft,
         )
+
+    async def mark_ready(self, change: ChangeRequest) -> None:
+        """Take the pull request out of draft — it is asking for human review now. Keyed on the
+        number the request carries; a request with none (an open_change that returned only a branch)
+        is left as it is rather than guessed at."""
+        if change.number is None:
+            return None
+        code, _out, err = self._gh("pr", "ready", str(change.number))
+        if code != 0:
+            raise RuntimeError(f"could not mark PR #{change.number} ready: {err.strip()}")
 
     async def comment(self, target: int, body: str) -> None:
         self._gh("pr", "comment", str(target), "--body", body)

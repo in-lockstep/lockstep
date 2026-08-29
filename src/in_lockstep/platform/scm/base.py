@@ -58,6 +58,10 @@ class ChangeRequest:
     title: str
     number: int | None = None
     trailers: dict[str, str] = field(default_factory=dict)
+    #: Whether the pull request was opened as a draft — not yet asking for human review. An AI
+    #: change starts here by default and is marked ready once its tests pass and the workflow wants
+    #: a human to look. Always False for a host with no draft concept (local git).
+    draft: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,7 +96,13 @@ class Scm(Protocol):
         workflow: str = "",
         run_id: str = "",
         base: Ref = "",
+        draft: bool = False,
     ) -> ChangeRequest: ...
+
+    async def mark_ready(self, change: ChangeRequest) -> None:
+        """Take a draft change request out of draft — it is now asking for human review. A no-op on
+        a host with no draft concept, so a caller can always call it after a green run."""
+        ...
 
 
 class GitLocal:
@@ -132,6 +142,12 @@ class GitLocal:
         cannot be the same value: this resolves the git start-point, and `open_change` keeps the
         bare name for the API. Same bare-then-remote fallback the trusted-config ref uses.
         """
+        # Option-confusion guard: `base` becomes a git checkout start-point and a `gh --base` value,
+        # and a backport can take it from a ticket's target — so a `-`-leading ref that git or gh
+        # would read as a flag is refused here, the same way `materialize` guards its ref. Not
+        # injection (no shell), but a ref never legitimately begins with a dash.
+        if ref.startswith("-"):
+            raise RuntimeError(f"refusing a base ref that looks like an option: {ref!r}")
         if "/" in ref:
             return ref
         for candidate in (ref, f"origin/{ref}"):
@@ -253,11 +269,14 @@ class GitLocal:
         workflow: str = "",
         run_id: str = "",
         base: Ref = "",
+        draft: bool = False,
     ) -> ChangeRequest:
         """Local git has no pull requests; it makes the branch and stops there.
 
         `base` starts the branch somewhere other than HEAD — a release line, for a backport.
-        Empty keeps the old behaviour: the branch grows from wherever the tree stands.
+        Empty keeps the old behaviour: the branch grows from wherever the tree stands. `draft` has
+        no meaning without a host, so the returned request reports `draft=False`: a local branch is
+        as ready as it gets.
         """
         branch = branch_for(workflow or "change", run_id or "local")
         self.assert_run_scoped(branch)
@@ -271,3 +290,7 @@ class GitLocal:
             trailers["Ticket"] = ticket
         self.commit(title, trailers=trailers)
         return ChangeRequest(id=branch, url="", branch=branch, title=title, trailers=trailers)
+
+    async def mark_ready(self, change: ChangeRequest) -> None:
+        """No-op: local git has no draft state to leave."""
+        return None
