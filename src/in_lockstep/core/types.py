@@ -7,6 +7,7 @@ written to the ledger.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -155,6 +156,33 @@ class ChangeSet:
 
     def by_author(self, author: ChangeAuthor) -> tuple[FileChange, ...]:
         return tuple(c for c in self.changes if c.author is author)
+
+    def inverse(self, before: Mapping[str, FileChange | None]) -> ChangeSet:
+        """The change that undoes this one, given the pre-image `before`.
+
+        `before` maps each changed path to the `FileChange` that reproduces its state before this
+        change — its contents, mode and symlink target — or `None` if the path did not exist. This
+        cannot be computed from the ChangeSet alone: a `FileChange` records only its post-change
+        state, so reverting a modification needs the bytes that were there before, and reverting a
+        deletion needs the file that was removed. Those live in the tree the change was applied
+        against, not in the change — a materialiser reads them and hands them here.
+
+        A path this change created (absent in `before`) inverts to a deletion; any other path
+        inverts to whatever `before` says was there. Reverting a revert restores the change, because
+        `before` is the same either way.
+        """
+        reverted: list[FileChange] = []
+        for change in self.changes:
+            prior = before.get(change.path)
+            if prior is None:
+                reverted.append(FileChange(path=change.path, contents=None, author=change.author))
+            else:
+                reverted.append(prior)
+        return ChangeSet(
+            changes=tuple(reverted),
+            summary=f"revert: {self.summary}" if self.summary else "revert",
+            ticket=self.ticket,
+        )
 
 
 @dataclass(frozen=True)

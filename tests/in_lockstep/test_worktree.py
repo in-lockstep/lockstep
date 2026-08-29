@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 from in_lockstep.adapters.pytest_adapter import PytestTest
-from in_lockstep.adapters.worktree import WorktreeError, materialize, verdict_over_staged
+from in_lockstep.adapters.worktree import (
+    WorktreeError,
+    head_state,
+    materialize,
+    verdict_over_staged,
+)
 from in_lockstep.core.types import ChangeSet, FileChange, TestSpec
 
 
@@ -290,6 +295,56 @@ def test_verdict_over_staged_is_none_when_no_test_is_bound(tmp_path: Path) -> No
     changeset = ChangeSet(changes=(FileChange(path="x.py", contents="y = 1\n"),))
     verdict = asyncio.run(verdict_over_staged(_Ctx(root, test_bound=False), str(root), changeset))
     assert verdict is None
+
+
+# -- the revert primitive: ChangeSet.inverse + head_state ---------------------------------------
+
+
+def test_inverse_of_a_create_is_a_delete() -> None:
+    inv = ChangeSet(changes=(FileChange(path="new.py", contents="x\n"),)).inverse({"new.py": None})
+    assert inv.changes[0].path == "new.py"
+    assert inv.changes[0].deleted
+
+
+def test_inverse_of_a_modification_restores_the_prior_contents() -> None:
+    change = ChangeSet(changes=(FileChange(path="a.py", contents="new\n"),))
+    inv = change.inverse({"a.py": FileChange(path="a.py", contents="old\n")})
+    assert inv.changes[0].contents == "old\n"
+
+
+def test_inverse_of_a_deletion_recreates_the_file() -> None:
+    change = ChangeSet(changes=(FileChange(path="gone.py", contents=None),))
+    inv = change.inverse({"gone.py": FileChange(path="gone.py", contents="was here\n")})
+    assert inv.changes[0].contents == "was here\n"
+
+
+def test_head_state_reads_committed_contents_and_absence(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    state = asyncio.run(head_state(str(root), ["app.py", "absent.py"]))
+    assert state["app.py"] is not None
+    assert state["app.py"].contents == "VALUE = 1\n"
+    assert state["absent.py"] is None
+
+
+def test_inverse_read_from_head_round_trips_a_change_back(tmp_path: Path) -> None:
+    """A change plus its inverse (pre-image read from HEAD) materialises back to HEAD."""
+    root = _repo(tmp_path)
+    change = ChangeSet(
+        changes=(
+            FileChange(path="app.py", contents="VALUE = 2\n"),  # a modification
+            FileChange(path="new.py", contents="added\n"),  # a creation
+        )
+    )
+    before = asyncio.run(head_state(str(root), list(change.paths())))
+    undo = change.inverse(before)
+
+    async def check() -> None:
+        # Apply the change then its inverse, in order: the net tree is HEAD again.
+        async with materialize(str(root), ChangeSet(changes=(*change.changes, *undo.changes))) as tree:
+            assert (Path(tree) / "app.py").read_text() == "VALUE = 1\n"  # modification undone
+            assert not (Path(tree) / "new.py").exists()  # creation undone
+
+    asyncio.run(check())
 
 
 class _CwdRecordingSandbox:

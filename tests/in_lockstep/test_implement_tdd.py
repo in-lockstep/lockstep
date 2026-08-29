@@ -149,6 +149,28 @@ def test_tdd_writes_a_failing_test_then_makes_it_green(repo: Path) -> None:
     paths = set(outcome.value.changeset.paths())
     assert paths == {"test_calc.py", "calc.py"}
     assert outcome.value.strategy == "implement/tdd"
+    # Revert-and-verify confirmed the implementation is load-bearing: undo it and the suite is red.
+    assert any(f.id == "tdd.fix_verified" for f in outcome.findings)
+
+
+def test_tdd_flags_a_fix_that_is_not_load_bearing(repo: Path) -> None:
+    """If phase 2 weakens the test into passing on its own, red→green still goes green — but
+    reverting the implementation leaves it green too, and revert-and-verify catches that."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),  # red: needs calc.add
+            _done("staged the failing test"),
+            # Phase 2 rewrites the test to pass trivially, then adds an unrelated implementation.
+            _call("write_file", path="test_calc.py", contents="def test_trivial():\n    assert True\n"),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            _done("weakened the test"),
+        ]
+    )
+    outcome = _run(provider, repo)
+    # The (weakened) test passes with the implementation, so the run still succeeds...
+    assert outcome.status is Status.SUCCEEDED, outcome.findings
+    # ...but revert-and-verify shows the implementation was not what made it pass.
+    assert any(f.id == "tdd.fix_not_load_bearing" for f in outcome.findings)
 
 
 def test_tdd_refuses_when_no_test_verb_is_bound(repo: Path) -> None:
