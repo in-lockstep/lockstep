@@ -879,6 +879,9 @@ jobs:
             --aspect security
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # A variable rather than a secret: a workspace id identifies, it does not authenticate.
+          # Leave it unset unless your key is identity-linked; empty sends no header.
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
           IN_LOCKSTEP_EGRESS: enforced
       - uses: actions/upload-artifact@v4
         if: always()

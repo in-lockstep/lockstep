@@ -758,3 +758,24 @@ def test_a_stale_fixture_says_so_rather_than_raising(repo: Path) -> None:
     assert result.exit_code != 0
     assert "no longer matches the prompt" in result.output or "no cassette entry" in result.output
     assert "Traceback" not in result.output
+
+
+def test_the_scaffold_passes_a_workspace_id_as_a_variable(repo: Path) -> None:
+    """An identity-linked key 400s without it, and the scaffold is what a new adopter commits.
+
+    A variable rather than a secret, deliberately: a workspace id identifies, it does not
+    authenticate, and putting one in `secrets` would seed `Redact` with it — masking it out of
+    exactly the error messages that name it.
+    """
+    import yaml
+
+    CliRunner().invoke(main, ["init"])
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
+    env = next(
+        step["env"]
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if "env" in step and "ANTHROPIC_API_KEY" in step["env"]
+    )
+    assert env["ANTHROPIC_WORKSPACE_ID"] == "${{ vars.ANTHROPIC_WORKSPACE_ID }}"
+    assert env["ANTHROPIC_API_KEY"] == "${{ secrets.ANTHROPIC_API_KEY }}"

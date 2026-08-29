@@ -43,6 +43,11 @@ jobs:
             --aspect security
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # A variable, not a secret: a workspace id is an identifier, and putting one in
+          # `secrets` would seed Redact with it and mask it out of the errors that name it.
+          # Empty when unset, which is correct — a key that is not identity-linked needs no
+          # workspace and must not be handed an empty header.
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
           IN_LOCKSTEP_EGRESS: enforced
           IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       - uses: actions/upload-artifact@v4
