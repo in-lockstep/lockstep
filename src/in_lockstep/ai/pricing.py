@@ -99,6 +99,10 @@ class CostTable:
             usd=usd,
             wall_seconds=wall_seconds,
             priced_tokens=priced,
+            # Everything this table prices is money somebody owes. Whether it was actually owed is
+            # a different question, and only `AiInvoker` can answer it — it is the one place that
+            # knows whether the answer came off the wire or out of a cassette.
+            billed_tokens=input_tokens + output_tokens + cache_read_tokens + cache_write_tokens,
         )
 
     def project(self, model_id: str, *, input_tokens: int, max_output_tokens: int) -> Cost:

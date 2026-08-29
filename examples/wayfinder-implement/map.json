@@ -1,0 +1,18 @@
+{
+  "destination": "MAP-1",
+  "tickets": [
+    { "key": "MAP-1", "title": "Offline replay that works on a clean install",
+      "description": "The destination. Not specifiable until the two below are decided." },
+    { "key": "MAP-2", "title": "Decide what a cassette is keyed on",
+      "description": "Whole composed prompt, or something narrower?",
+      "acceptance_criteria": ["a decision recorded on the ticket"] },
+    { "key": "MAP-3", "title": "Caching, somehow" },
+    { "key": "MAP-4", "title": "Ship a recorded fixture",
+      "description": "Record one real call and commit it.",
+      "acceptance_criteria": ["fixture replays with no key"],
+      "state": "closed" }
+  ],
+  "blocked_by": {
+    "MAP-1": ["MAP-2", "MAP-3", "MAP-4"]
+  }
+}

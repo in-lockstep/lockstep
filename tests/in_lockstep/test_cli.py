@@ -735,10 +735,41 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
         "lockstep.budget = Budget(usd=0.0001)\n"
         "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
     )
-    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    # No `--diff`, so there is nothing to review. Any refusal proves the property this test is
+    # about — that `reason` reaches the record and not only `status` — and this one is reachable
+    # with no key. It used to use a budget refusal, which a dry run can no longer produce: a run
+    # that cannot spend is no longer stopped by a spending ceiling. See the test below.
+    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
     record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
     assert record["status"] == "blocked"
-    assert record["reason"] == "cost.budget_exceeded", record
+    assert record["reason"] == "review.no_content", record
+
+
+def test_a_run_that_cannot_spend_is_not_stopped_by_a_spending_ceiling(repo: Path) -> None:
+    """`--offline` and `--dry-run` exist so this can be exercised with no key and no cent.
+
+    A budget blocking them would make the free path the one that needs a budget argument — and the
+    ceiling would be refusing a run it has nothing to protect.
+    """
+    import json
+
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=0.0001)\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
+    )
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    assert result.exit_code == 0, result.output
+    assert "replayed; nothing was billed" in result.output
+
+    record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
+    assert record["cost_usd"] == 0.0
+    # The number that stops this reading as a model whose price was never known.
+    assert record["billed_fraction"] == 0.0
+    assert record["tokens"] > 0, "a replay that reported no usage would not be a replay"
 
 
 # -- the ledger keeps what was found, not only how much ---------------------------------------

@@ -1127,3 +1127,84 @@ def test_a_partial_review_says_which_part_it_did_not_read(tmp_path) -> None:
     assert outcome.status is Status.SUCCEEDED
     omitted = [f for f in outcome.findings if f.id == "review.not_reviewed"]
     assert omitted, "it reviewed part of the change and reported nothing about the rest"
+
+
+# -- a replay has real tokens and no cost -------------------------------------------------------
+#
+# The ledger this repository published contained one record reading `cost_usd: 0.0227` for a run
+# that never touched the network. `ReplayProvider` returns the recorded `LLMOutput` complete with
+# its usage, so the cost was re-derived and charged — and a repository replaying a cassette on
+# every pull request would accumulate the recording's price as though it had been spent.
+
+
+def _replay_invoker(provider) -> AiInvoker:
+    from in_lockstep.ai.pricing import CostTable, Rate
+
+    table = CostTable()
+    table.add("m", Rate(input_per_m=3.0, output_per_m=15.0))
+    return AiInvoker(
+        provider,
+        model="m",
+        cost_table=table,
+        spend=Spend(budget=Budget(usd=5.0)),
+        egress=EgressPolicy(mode=EgressMode.NONE),
+    )
+
+
+class NotOnTheWire(Stub):
+    transmits = False
+
+
+def test_a_replayed_turn_keeps_its_tokens_and_loses_its_cost() -> None:
+    reply = LLMOutput(content="ok", usage=TokenUsage(input_tokens=5000, output_tokens=400))
+    invocation = asyncio.run(
+        _replay_invoker(NotOnTheWire(replies=[reply])).run(
+            system="s", messages=[Message(role="user", content="go")]
+        )
+    )
+    assert invocation.cost.total_tokens == 5400, "a replay that reports no usage is not a replay"
+    assert invocation.cost.usd == 0.0
+    assert invocation.cost.billed_fraction == 0.0
+
+
+def test_a_live_turn_is_billed_in_full() -> None:
+    reply = LLMOutput(content="ok", usage=TokenUsage(input_tokens=5000, output_tokens=400))
+    invocation = asyncio.run(
+        _replay_invoker(Stub(replies=[reply])).run(system="s", messages=[Message(role="user", content="go")])
+    )
+    assert invocation.cost.usd > 0
+    assert invocation.cost.billed_fraction == 1.0
+
+
+def test_zero_cost_is_distinguishable_from_a_model_nobody_priced() -> None:
+    """The reading this field exists to prevent.
+
+    `pricing.py` refuses to price an unknown model precisely so `usd` is never a comfortable zero
+    standing in for "we did not recognise the name". A replay produces a zero that IS honest, and
+    without a second number the two are the same record.
+    """
+    from in_lockstep.core.outcome import Cost
+
+    replayed = Cost(input_tokens=5000, output_tokens=400, usd=0.0, priced_tokens=5400)
+    assert replayed.billed_fraction == 0.0
+    assert replayed.priced_fraction == 1.0, "the rate was known; the money was not owed"
+
+    nothing_happened = Cost()
+    assert nothing_happened.billed_fraction is None, "no billable tokens is not 'nothing billed'"
+
+
+def test_a_replayed_run_is_not_stopped_by_a_spending_ceiling() -> None:
+    """The pre-turn projection is a projection of SPEND, and a replay spends nothing."""
+    ai = _replay_invoker(NotOnTheWire(replies=[LLMOutput(content="ok")]))
+    ai.spend = Spend(budget=Budget(usd=0.0000001))
+    invocation = asyncio.run(ai.run(system="s", messages=[Message(role="user", content="go")]))
+    assert invocation.content == "ok"
+
+
+def test_costs_from_a_mixed_run_report_a_fraction_not_a_flag() -> None:
+    """Costs add, and a run that mixed a live call with a replayed one has neither answer."""
+    from in_lockstep.core.outcome import Cost
+
+    live = Cost(input_tokens=100, output_tokens=0, usd=0.3, billed_tokens=100)
+    replayed = Cost(input_tokens=300, output_tokens=0, usd=0.0, billed_tokens=0)
+    assert (live + replayed).billed_fraction == 0.25
