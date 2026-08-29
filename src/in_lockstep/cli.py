@@ -15,6 +15,7 @@ from .adapters.ruff_adapter import RuffValidate, Validate
 from .core.context import DISABLE_ENV
 from .core.outcome import Status
 from .core.types import TestSpec, ValidateSpec
+from .core.verbs import SHIPPED_VERBS, Verb, verb_of
 from .core.workflow import registered, workflow
 from .lockstep import Lockstep
 from .middleware.budget import CostBudget
@@ -185,6 +186,18 @@ def ls_cmd() -> None:
     )
     if os.environ.get(DISABLE_ENV):
         click.echo(f"DISABLED  {DISABLE_ENV} is set; no adapter will execute")
+
+    # Verbs are open, so a verb can exist that the `bindings` block below will never mention.
+    # That is exactly the shape a typo takes: `Verb("reviwe")` is a perfectly legitimate verb
+    # that nothing serves. Shipped verbs with no binding are ordinary and would only be noise
+    # here — seven of nine are unbound in a default install — so only the anomaly is printed.
+    served = {verb_of(b.impl) for b in lockstep.container.resolved() if not isinstance(b.impl, type)}
+    orphans = [v for v in Verb.known() if v not in served and v.value not in SHIPPED_VERBS]
+    if orphans:
+        click.echo("")
+        click.echo("verbs defined but unbound  (a typo makes one of these)")
+        for verb in orphans:
+            click.echo(f"  {verb.value}")
 
     click.echo("")
     click.echo("bindings")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from typing import ClassVar
 
 import pytest
@@ -492,3 +493,76 @@ def test_capabilities_for_is_empty_when_nothing_is_bound() -> None:
 
     ctx = Lockstep.detect().context(run_id="caps")
     assert capabilities_for(ctx, ActionCall(verb=None, iface=Unbound, input=None)) == frozenset()
+
+
+# -- Verb: open to extension, identical for the verbs that shipped ---------------------------
+
+
+@pytest.fixture(autouse=True)
+def _no_verb_leakage() -> Iterator[None]:
+    from in_lockstep.core.verbs import Verb
+
+    yield
+    Verb.forget_custom()
+
+
+def test_a_user_can_define_a_verb_the_framework_never_heard_of() -> None:
+    """The point of the change.
+
+    Binding a new interface already worked. What did not was *naming* the work: `verb` had to be
+    a member of a closed enum, so a benchmark adapter borrowed `Verb.RUN` and then reported itself
+    as `run` in every span, metric dimension and step id.
+    """
+    from in_lockstep.core.verbs import Verb
+
+    benchmark = Verb("benchmark")
+    assert benchmark.value == "benchmark"
+    assert benchmark is not Verb.RUN
+    assert benchmark in Verb.known()
+
+
+def test_verbs_are_interned_so_identity_still_works() -> None:
+    """`strategy.py` compares with `is`. Interning is what let the enum become an open type."""
+    from in_lockstep.core.verbs import Verb
+
+    assert Verb("test") is Verb.TEST
+    assert Verb("TEST") is Verb.TEST, "normalised, so case cannot fork a verb"
+    assert Verb("  test ") is Verb.TEST
+    assert Verb("benchmark") is Verb("benchmark")
+
+
+def test_a_typo_is_a_distinct_verb_not_a_silent_alias() -> None:
+    """It surfaces as a verb nothing is bound to, rather than work routed somewhere wrong."""
+    from in_lockstep.core.verbs import Verb
+
+    assert Verb("reviwe") is not Verb.REVIEW
+
+
+def test_a_verb_is_immutable() -> None:
+    from in_lockstep.core.verbs import Verb
+
+    with pytest.raises(AttributeError):
+        Verb.TEST.value = "something else"  # type: ignore[misc]
+
+
+def test_a_verb_survives_a_round_trip_with_its_identity() -> None:
+    """Interning that a pickle breaks would make `is` comparisons fail after a checkpoint."""
+    import pickle
+
+    from in_lockstep.core.verbs import Verb
+
+    assert pickle.loads(pickle.dumps(Verb.TEST)) is Verb.TEST
+    assert pickle.loads(pickle.dumps(Verb("benchmark"))) is Verb("benchmark")
+
+
+def test_a_custom_verb_labels_its_own_telemetry() -> None:
+    """A borrowed verb was not merely inelegant: it put a benchmark's spans under `run`."""
+    from in_lockstep.core.middleware import ActionCall
+    from in_lockstep.core.verbs import Verb
+
+    class Benchmark: ...
+
+    call = ActionCall(verb=Verb("benchmark"), iface=Benchmark, input=None)
+    assert call.verb is not None
+    assert call.verb.value == "benchmark"
+    assert "benchmark" in repr(call)

@@ -11,6 +11,7 @@ discarded every binding, budget, policy contribution and model route the module 
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,15 @@ lockstep.budget = Budget(usd={budget})
 lockstep.contribute(Policy(name="repo", source="test", max_turns={turns}))
 lockstep.models.route("review", "{model}")
 '''
+
+
+@pytest.fixture(autouse=True)
+def _no_verb_leakage() -> Iterator[None]:
+    """The intern table is process-global, so a verb one test defines outlives it."""
+    from in_lockstep.core.verbs import Verb
+
+    yield
+    Verb.forget_custom()
 
 
 @pytest.fixture
@@ -215,3 +225,30 @@ def test_init_does_not_announce_a_job_it_did_not_write(repo: Path) -> None:
     for job in ("run", "apply"):
         if job not in workflow["jobs"]:
             assert f"`{job}` holds" not in result.output
+
+
+def test_ls_surfaces_a_verb_nothing_serves(repo: Path) -> None:
+    """Verbs are open, so one can exist that the bindings block never mentions.
+
+    That is the shape a typo takes: `Verb("reviwe")` is a legitimate verb nothing serves, and
+    without this it is invisible until work silently fails to route.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.verbs import Verb\n"
+        "lockstep = Lockstep.detect()\n"
+        "Verb('reviwe')\n"
+    )
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "verbs defined but unbound" in result.output
+    assert "reviwe" in result.output
+
+
+def test_ls_stays_quiet_about_unbound_shipped_verbs(repo: Path) -> None:
+    """Seven of nine ship unbound in a default install. Printing them buries the signal."""
+    _write(repo)
+    result = CliRunner().invoke(main, ["ls"])
+    assert "verbs defined but unbound" not in result.output
+    for shipped in ("triage", "debug", "implement"):
+        assert shipped not in result.output

@@ -7,6 +7,7 @@ See design/in-lockstep-design.md, and design/adr/0001 for why this replaced a co
 """
 
 from .core import (
+    Capability,
     ChangeGuard,
     ChangeSet,
     Container,
@@ -34,6 +35,7 @@ from .lockstep import Lockstep
 __version__ = "1.0.0"
 
 __all__ = [
+    "Capability",
     "ChangeGuard",
     "ChangeSet",
     "Container",

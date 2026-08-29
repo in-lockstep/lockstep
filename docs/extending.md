@@ -8,6 +8,10 @@ DSL, because the container is already the registration mechanism.
 A verb is an interface; anything satisfying it can serve it.
 
 ```python
+from in_lockstep import Capability, Outcome, Verb
+from in_lockstep.core.types import TestReport, TestSpec
+from in_lockstep.adapters.pytest_adapter import Test   # the interface, not the implementation
+
 class ToxTest:
     verb = Verb.TEST
     capabilities = frozenset({Capability.EXECUTES_CODE, Capability.READS_REPO})
@@ -25,6 +29,45 @@ out of process, away from anything holding credentials.
 
 Note `REACHES_NETWORK` exists separately from `WRITES_FILES`. "Read-only" describes mutation, not
 transmission — a fetch tool mutates nothing and is still an egress channel.
+
+## A verb of your own
+
+The shipped verbs are not a closed set. A verb is a name — a routing key and a telemetry label —
+so declaring one is constructing it, and the interface it serves is an ordinary marker class:
+
+```python
+from in_lockstep import Capability, Outcome, Status, Verb
+
+BENCHMARK = Verb("benchmark")
+
+class Benchmark:
+    """The verb interface. Workflows ask for this; a binding decides what serves it."""
+
+class PyperfBenchmark:
+    verb = BENCHMARK
+    capabilities = frozenset({Capability.EXECUTES_CODE})
+
+    async def invoke(self, ctx, spec) -> Outcome[dict]:
+        ...
+
+lockstep.bind(Benchmark, PyperfBenchmark())
+outcome = await ctx.do(Benchmark, BenchSpec(iterations=1000))
+```
+
+`Verb` used to be a closed enum, which made binding a new interface possible and *mislabelled*:
+the adapter had to borrow a shipped member, so a benchmark reported itself as `run` in every span,
+metric dimension and step id, and shared a strategy namespace with something unrelated. Now the
+span says `benchmark`.
+
+Verbs are interned and case-normalised, so `Verb("test") is Verb.TEST` and identity comparisons
+keep working. The consequence worth knowing: a typo produces a *distinct* verb rather than
+silently aliasing an existing one. `in-lockstep ls` prints any verb that is defined and unbound,
+which is the shape that mistake takes — nothing is printed when there are none.
+
+Nothing about a custom verb is second-class. Middleware sees it, `Spend` charges against it,
+`capabilities_for` reads its adapter, and the kill switch stops it. What it does *not* get is a
+shipped strategy or model route, because those are keyed by verb and the framework has none for a
+verb it has never heard of — declare them yourself, or pass the model explicitly.
 
 ## A house prompt
 
