@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.026253,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 72,
+        "message": "The `ref` parameter is passed unsanitized directly into a `git show` argument formatted as `{ref}:{path}`. An attacker who controls `ref` (e.g. via a crafted call passing `ref=\"HEAD --upload-pack=malicious\"` or a ref name containing shell metacharacters) could manipulate the subprocess invocation. However, because `asyncio.create_subprocess_exec` is used (not `shell=True`), shell injection is not possible \u2014 but a ref value containing `:` could confuse the `ref:path` argument parsing, and a suffi\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 79,
+        "message": "File contents read from git at an arbitrary ref are decoded with `errors='replace'`, which means binary or non-UTF-8 file contents are silently mangled before being stored in a `FileChange`. If those mangled bytes are later written back into a worktree and executed as test code or source, the round-trip is lossy and the materialized file will not match the committed file. This is not an injection risk but it means the revert-and-verify logic can produce a false 'still passing' verdict for reposi\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 5981,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 554,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 6535,
+  "wall_seconds": 16.047
+}
