@@ -58,7 +58,10 @@ class CommandTest:
         self.selector_arg = tuple(selector_arg)
 
     async def invoke(self, ctx: object, inp: TestSpec) -> Outcome[TestReport]:
-        cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        # A per-call `root` (a materialized worktree) wins over the bound `cwd` wins over the
+        # repo's root: the spec is how a workflow points one bound adapter at a staged change
+        # without rebinding it.
+        cwd = inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
         selector = [*self.selector_arg, inp.selector] if (inp.selector and self.selector_arg) else []
         cmd = [*self.command, *selector, *inp.args, *(inp.paths or ())]
         result = await self.sandbox.run(cmd, cwd=cwd)

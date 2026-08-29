@@ -19,6 +19,12 @@ class TestSpec:
     # A reproducer that does not fail proves nothing. A pipeline asserts the failure before the
     # fix and the pass after it; a test passing both times has said nothing about the bug.
     expect: str = "pass"  # "pass" | "fail"
+    # Where to run, when it is not the live working tree. A staged `ChangeSet` cannot be tested in
+    # place — the change is not on disk yet, and running the suite over the unchanged tree would
+    # measure the wrong thing. `materialize` writes HEAD plus the change into a throwaway worktree
+    # and names it here, so `ctx.do(Test, TestSpec(root=that))` runs the suite against the change
+    # without touching the real tree. Empty keeps the adapter's own default (`ctx.repo.root`).
+    root: str = ""
 
 
 @dataclass(frozen=True)
