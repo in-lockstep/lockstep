@@ -1398,8 +1398,9 @@ def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_numbe
     used, else the GitHub default.
     """
     from .platform.ci import detect as detect_ci
+    from .platform.hosted import hosted_scm
     from .platform.report import marker, review_comment
-    from .platform.scm import GitHubScm, Scm
+    from .platform.scm import Scm
 
     ci_env = detect_ci()
     number = pr_number if pr_number is not None else (ci_env.pr_number if ci_env else None)
@@ -1411,7 +1412,10 @@ def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_numbe
 
     scm: Any = lockstep.container.resolve(Scm) if lockstep.container.has(Scm) else None  # type: ignore[type-abstract]
     if not hasattr(scm, "upsert_comment"):
-        scm = GitHubScm(root=lockstep.repo.root)
+        # The detected host's adapter, not GitHub's by name: on a GitLab merge-request pipeline
+        # the sticky comment goes to the MR notes API, and hardcoding GitHubScm here would post
+        # nowhere while claiming to have tried.
+        scm = hosted_scm(lockstep.repo.root)
     body = review_comment(aspect, outcome)
     try:
         asyncio.run(scm.upsert_comment(int(number), body, marker(f"review:{aspect}")))
@@ -2052,15 +2056,26 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         if found:
             click.echo(f"  detected {'; '.join(found)}")
 
-    if _write_trampoline(Path(".github/workflows/lockstep.yml"), _SCAFFOLD_TRAMPOLINE):
+    # The trampoline the detected host can actually run: a GitLab repository gets
+    # `.gitlab-ci.yml`, not a `.github/workflows/` file it would silently ignore.
+    from .platform.hosted import detect_host
+
+    host = detect_host()
+    if host == "gitlab":
+        if _write_trampoline(Path(".gitlab-ci.yml"), _SCAFFOLD_GITLAB_TRAMPOLINE):
+            click.echo("")
+            click.echo("One active job, because reviewing is read-only. The gate/work/propose split")
+            click.echo("for write-capable verbs is in the same file, commented out; it and the")
+            click.echo("host-neutral contract are documented in docs/trampoline.md.")
+    elif _write_trampoline(Path(".github/workflows/lockstep.yml"), _SCAFFOLD_TRAMPOLINE):
         click.echo("")
         click.echo("One job, because reviewing is read-only. Add the privileged `apply` job the")
         click.echo("day a verb of yours produces a change to write; the file says where.")
 
     if with_implement:
-        _scaffold_implement(module)
+        _scaffold_implement(module, host=host)
     if with_fix:
-        _scaffold_fix(module)
+        _scaffold_fix(module, host=host)
 
 
 def _write_trampoline(path: Path, template: str) -> bool:
@@ -2104,14 +2119,20 @@ def _binds_lockstep(text: str) -> bool:
     return False
 
 
-def _scaffold_implement(module: Path) -> None:
+def _scaffold_implement(module: Path, *, host: str = "") -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
     The headline feature used to require reverse-engineering this repository's own trampoline.
     The YAML holds only what CI owns — trigger, job split, credentials — and everything the
-    comment actually does is appended to lockstep.py as Python.
+    comment actually does is appended to lockstep.py as Python. On GitLab the YAML half already
+    lives in the scaffolded `.gitlab-ci.yml` (the commented gate/work/propose block), so only the
+    Python half is appended here.
     """
-    _write_trampoline(Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE)
+    if host == "gitlab":
+        click.echo("gitlab: the gate/work/propose jobs live in .gitlab-ci.yml (commented out);")
+        click.echo("        docs/trampoline.md is the contract and says how to enable them.")
+    else:
+        _write_trampoline(Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE)
 
     text = module.read_text() if module.exists() else ""
     if "implement/from-issue" in text:
@@ -2148,7 +2169,7 @@ def _scaffold_implement(module: Path) -> None:
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
 
-def _scaffold_fix(module: Path) -> None:
+def _scaffold_fix(module: Path, *, host: str = "") -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
     `fix/from-issue` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
@@ -2156,8 +2177,12 @@ def _scaffold_fix(module: Path) -> None:
     failed fix opens the next issue. The appended block guards each shared binding, so it composes
     with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
     """
-    _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
-    _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
+    if host == "gitlab":
+        click.echo("gitlab: the gate/work/propose jobs live in .gitlab-ci.yml (commented out);")
+        click.echo("        docs/trampoline.md is the contract and says how to enable them.")
+    else:
+        _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
+        _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
 
     text = module.read_text() if module.exists() else ""
     if "fix/from-issue" in text:
@@ -2343,6 +2368,138 @@ jobs:
           if-no-files-found: ignore
 """
 
+_SCAFFOLD_GITLAB_TRAMPOLINE = """\
+# Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
+#
+# The same trampoline lockstep.yml is on GitHub, in GitLab's own terms; docs/trampoline.md is the
+# host-neutral contract both are written against. One ACTIVE job, because reviewing is read-only:
+# it needs a provider credential and the read the runner already has, and nothing else. The
+# gate/work/propose split for write-capable verbs is below, commented out until its credentials
+# are provisioned.
+#
+# One GitLab-specific warning, and it is the important one: a merge-request pipeline runs THIS
+# FILE from the source branch — the change under review can edit it. The framework's own
+# configuration is safe regardless (lockstep.py is loaded from the trusted target ref, never the
+# ref under review), but the YAML is host-owned, so protect it at the host: name .gitlab-ci.yml
+# in CODEOWNERS with required approvals, or point the project's CI config path at a protected
+# location. The framework install is pinned by version for the same reason the GitHub scaffold
+# pins by version and SHA: an unpinned install feeds whatever the registry serves next to the job
+# holding the provider key. Update the pin deliberately, as a reviewed change.
+stages: [gate, review, work, propose]
+
+review:
+  stage: review
+  image: python:3.11-slim
+  # Without this the instance default applies, which is measured in hours, not minutes.
+  timeout: 20m
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    # Full history: the review diffs base...head, which a shallow clone cannot resolve.
+    GIT_DEPTH: "0"
+  script:
+    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+    # The target branch is not fetched by default on a merge-request pipeline, and the trusted
+    # config ref and the diff base both live on it.
+    - git fetch --quiet origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    # No credential needed: doctor reads config from the trusted target ref, so it never executes
+    # the change under review.
+    - in-lockstep doctor || true
+    # Skipped without a credential rather than failed: a merge request from a fork gets no
+    # protected variables, and a red check the contributor cannot fix teaches everyone to
+    # ignore red.
+    - |
+      if [ -n "$ANTHROPIC_API_KEY" ]; then
+        in-lockstep review \\
+          --base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \\
+          --head "${CI_COMMIT_SHA}" \\
+          --aspect security \\
+          --budget 0.75
+      else
+        echo "no ANTHROPIC_API_KEY (fork merge request?) — review skipped, nothing failed"
+      fi
+  artifacts:
+    when: always
+    paths: [.lockstep/]
+
+# -- write-capable verbs: the gate/work/propose credential split --------------------------------
+#
+# The same three-part split implement.yml carries on GitHub — gate authorizes the asker holding
+# no write-capable credential; work talks to the model holding the provider key and a READ
+# token; propose opens the merge request holding the write token and no provider key — expressed
+# in GitLab's terms. Who may fire it: running a pipeline with variables already requires
+# Developer here, a check GitLab makes before the pipeline exists, but the gate job still runs
+# first so the decision (and the record of who asked) lives in the framework, where it has
+# tests, not in a `rules:` clause. Every job's rules also pin the run to the DEFAULT branch:
+# the asker picks the ref when they run a pipeline, and the gate's CODEOWNERS must come from a
+# ref the asker cannot supply.
+#
+# To enable: uncomment; create environments `lockstep-work` and `lockstep-propose`; then SCOPE
+# the credentials — GitLab's default variable scope is every environment, and an unscoped
+# variable quietly puts both credentials in both jobs, which unmakes the split without any
+# visible failure. Scope ANTHROPIC_API_KEY and a read-only project access token (read_api, as
+# GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-issue can fetch the
+# issue on a private project) to lockstep-work; scope a write-capable project access token
+# (api, as GITLAB_TOKEN) to lockstep-propose; mark lockstep-propose protected with required
+# approvers — the same approval-in-the-system-of-record the GitHub scaffold's `environment:
+# implement` provides. Then run a pipeline on the default branch with LOCKSTEP_ISSUE set
+# (Run pipeline, or the trigger API).
+#
+#gate:
+#  stage: gate
+#  image: python:3.11-slim
+#  timeout: 5m
+#  rules:
+#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#  script:
+#    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+#    # No association here — GitLab computes no author_association — so the gate answers from
+#    # CODEOWNERS alone, read from this checkout, which the rules above pin to the default
+#    # branch. GitLab recognises three CODEOWNERS locations; take the first that exists.
+#    - |
+#      in-lockstep gate --actor "$GITLAB_USER_LOGIN" \\
+#        --codeowners "$(ls CODEOWNERS .gitlab/CODEOWNERS docs/CODEOWNERS 2>/dev/null | head -1)"
+#
+#work:
+#  stage: work
+#  image: python:3.11-slim
+#  timeout: 30m
+#  environment: lockstep-work
+#  rules:
+#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#  variables:
+#    GIT_DEPTH: "0"
+#  script:
+#    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+#    - in-lockstep doctor || true
+#    - |
+#      in-lockstep run implement/from-issue --arg issue="#${LOCKSTEP_ISSUE}" \\
+#        --approved-by "${GITLAB_USER_LOGIN}" --budget 2.00
+#    - in-lockstep history --bundle history.bundle || true
+#  artifacts:
+#    when: always
+#    paths: [changeset/, history.bundle]
+#
+#propose:
+#  stage: propose
+#  image: python:3.11-slim
+#  timeout: 10m
+#  environment: lockstep-propose
+#  rules:
+#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#  script:
+#    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+#    # Moved out of the workspace, deliberately: artifacts extract into it, and left there the
+#    # changeset directory would be swept into the commit open_change makes.
+#    - mv changeset /tmp/changeset
+#    - mv history.bundle /tmp/history.bundle || true
+#    # The runner's default token cannot push; the propose token can, and it is the only
+#    # credential this job holds.
+#    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+#    - in-lockstep run implement/propose --arg issue="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
+#    - in-lockstep history --from-bundle /tmp/history.bundle --push || true
+"""
+
 _SCAFFOLD_IMPLEMENT_TRAMPOLINE = """\
 # `/implement` on an issue. Hand-written and permanent; nothing generates or checks it.
 #
@@ -2512,17 +2669,19 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.propose import escalate, open_reviewable
-from in_lockstep.platform.scm import GitHubScm, Scm
-from in_lockstep.platform.tickets import GitHubIssues, TicketSource
+from in_lockstep.platform.scm import Scm
+from in_lockstep.platform.tickets import TicketSource
 from in_lockstep.strategies import default_registry as _fix_strategies
 
 # Each binding is guarded, so this block works on its own and also composes with the implement
-# scaffold without binding TicketSource, Scm, Test or the approval gate a second time.
+# scaffold without binding TicketSource, Scm, Test or the approval gate a second time. `hosted_*`
+# bind the detected host's adapters — GitHub or GitLab — so the block runs unedited on either.
 if not lockstep.container.has(TicketSource):
-    lockstep.bind(TicketSource, GitHubIssues())
+    lockstep.bind(TicketSource, hosted_tickets())
 if not lockstep.container.has(Scm):
-    lockstep.bind(Scm, GitHubScm())
+    lockstep.bind(Scm, hosted_scm())
 if not lockstep.container.has(Test):
     lockstep.bind(Test, PytestTest())
 if not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
@@ -2862,16 +3021,18 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
-from in_lockstep.platform.scm import GitHubScm, Scm
-from in_lockstep.platform.tickets import GitHubIssues, TicketSource
+from in_lockstep.platform.scm import Scm
+from in_lockstep.platform.tickets import TicketSource
 from in_lockstep.strategies import default_registry
 
 # Bound here rather than constructed inside the workflows, so `in-lockstep ls` can print what
-# will actually run and a test can substitute either one.
-lockstep.bind(TicketSource, GitHubIssues())
-lockstep.bind(Scm, GitHubScm())
+# will actually run and a test can substitute either one. `hosted_*` bind the detected host's
+# adapters — GitHub or GitLab — so this block runs unedited on either.
+lockstep.bind(TicketSource, hosted_tickets())
+lockstep.bind(Scm, hosted_scm())
 
 lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
 

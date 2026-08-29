@@ -67,6 +67,7 @@ the constraints that apply to reviewing it — so it comes from the base ref ins
 
 - [Getting started](docs/getting-started.md)
 - [Extending](docs/extending.md) — adapters, prompts, organisation standards, strategies
+- [Trampoline contract](docs/trampoline.md) — what a CI file owes the framework, on any host
 - [Controls crosswalk](docs/controls-crosswalk.md) — what in-process invocation costs, honestly
 - [Design](design/in-lockstep-design.md) and [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md)
 - [Exit gates](design/gates.md)

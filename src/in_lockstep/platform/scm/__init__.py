@@ -21,6 +21,7 @@ from .base import (
     branch_for,
 )
 from .github import GitHubScm
+from .gitlab import GitLabScm
 
 __all__ = [
     "RUN_BRANCH_PREFIX",
@@ -29,6 +30,7 @@ __all__ = [
     "Diff",
     "DirectPushRefused",
     "GitHubScm",
+    "GitLabScm",
     "GuardRefused",
     "GitLocal",
     "Ref",
