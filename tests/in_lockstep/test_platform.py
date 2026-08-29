@@ -339,6 +339,63 @@ def test_open_reviewable_leaves_an_unverified_change_a_draft() -> None:
     assert scm.marked_ready is False, "an unverified change stays a draft"
 
 
+def test_attempt_of_reads_the_highest_attempt_label() -> None:
+    from in_lockstep.platform.propose import attempt_of
+
+    assert attempt_of(()) == 0, "a human-filed issue has no attempts"
+    assert attempt_of(("bug", "ai-generated")) == 0
+    assert attempt_of(("ai-generated", "ai-attempt-2")) == 2
+    assert attempt_of(("ai-attempt-1", "ai-attempt-3")) == 3, "a stray duplicate cannot lower it"
+
+
+class _RecordingTickets:
+    """Records create/comment so the escalation decision is testable without a tracker."""
+
+    def __init__(self) -> None:
+        self.created: list = []
+        self.comments: list = []
+
+    async def get(self, key: str):  # noqa: ANN202
+        from in_lockstep.platform.tickets import Ticket
+
+        return Ticket(key=key, title="t")
+
+    async def comment(self, ticket: object, body: str) -> None:
+        self.comments.append(body)
+
+    async def create(self, draft: object):  # noqa: ANN202
+        from in_lockstep.platform.tickets import Ticket
+
+        self.created.append(draft)
+        return Ticket(key=f"#{100 + len(self.created)}", title="t")
+
+
+def test_escalate_opens_the_next_ai_generated_issue_below_the_cap() -> None:
+    from in_lockstep.platform.propose import escalate
+    from in_lockstep.platform.tickets import Ticket, TicketType
+
+    tickets = _RecordingTickets()
+    source = Ticket(key="#7", title="bug", labels=("ai-generated", "ai-attempt-1"))
+    new = asyncio.run(escalate(tickets, source, "tests failed: 3 of 5", max_attempts=3))
+    assert new is not None
+    draft = tickets.created[0]
+    assert draft.type is TicketType.BUG
+    assert "ai-generated" in draft.labels
+    assert "ai-attempt-2" in draft.labels, "the attempt count increments"
+
+
+def test_escalate_stops_and_comments_at_the_cap() -> None:
+    from in_lockstep.platform.propose import escalate
+    from in_lockstep.platform.tickets import Ticket
+
+    tickets = _RecordingTickets()
+    source = Ticket(key="#7", title="bug", labels=("ai-generated", "ai-attempt-3"))
+    new = asyncio.run(escalate(tickets, source, "tests failed", max_attempts=3))
+    assert new is None, "no further issue is opened at the cap"
+    assert not tickets.created
+    assert tickets.comments and "human is needed" in tickets.comments[0]
+
+
 def test_local_open_change_is_never_draft_and_mark_ready_is_a_noop(tmp_path: Path) -> None:
     scm = GitLocal(_repo(tmp_path))
     cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),))

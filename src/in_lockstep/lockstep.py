@@ -47,6 +47,10 @@ class Lockstep:
         self.models = Models()
         self.guard = ChangeGuard(PathPolicy())
         self.budget = Budget()
+        # How many times an automated fix may be re-attempted before a human is asked. When a run
+        # fails its tests it opens an `ai-generated` bug issue, which an agent may pick up and try
+        # again; this bounds that loop. The repo owner raises or lowers it in `lockstep.py`.
+        self.max_attempts = 3
 
     # -- configuration -------------------------------------------------------------
 

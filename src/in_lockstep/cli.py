@@ -2510,7 +2510,7 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
-from in_lockstep.platform.propose import open_reviewable
+from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.strategies import default_registry as _fix_strategies
@@ -2582,8 +2582,16 @@ async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Ou
     changeset = read_changeset(artifact)
 
     if not changeset.changes:
-        await tickets.comment(await tickets.get(issue), "`/fix` produced no verified fix.")
-        return Outcome(status=Status.FAILED, reason="fix.no_changes")
+        # A fix stages a change only when its reproducer went red-then-green, so an empty artifact
+        # means the automated fix failed. Open the next `ai-generated` issue for an agent to retry,
+        # bounded by `lockstep.max_attempts`, rather than leaving the bug with nothing said.
+        failure = "The automated fix did not reproduce the bug and turn it green."
+        source = await tickets.get(issue)
+        opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
+        reason = "fix.not_fixed" if opened is not None else "fix.attempts_exhausted"
+        if opened is not None:
+            print(f"escalated {opened.key}")
+        return Outcome(status=Status.FAILED, reason=reason, value=opened)
 
     # Ready for review, not draft: a change only reaches here when from-issue confirmed the fix
     # green (a reproducer red before, passing after), so it is asking for the human sign-off.
@@ -2751,7 +2759,7 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
-from in_lockstep.platform.propose import open_reviewable
+from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
@@ -2863,8 +2871,20 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
         await tickets.comment(await tickets.get(issue), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
-    # Draft unless the change passed its tests: an unverified or red change reaches a human as a
-    # draft, out of the review queue, while a green one is marked ready — asking for the sign-off.
+    # Tests that ran and failed do not open a pull request: they open an `ai-generated` bug issue an
+    # agent may pick up, bounded by `lockstep.max_attempts`. An unverified change (no verdict) is
+    # not a failure — it opens a draft for a human, since its tests never ran.
+    if verdict is not None and verdict.decided and not verdict.green:
+        failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
+        source = await tickets.get(issue)
+        opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
+        reason = "implement.tests_failed" if opened is not None else "implement.attempts_exhausted"
+        if opened is not None:
+            print(f"escalated {opened.key}")
+        return Outcome(status=Status.FAILED, reason=reason, value=opened)
+
+    # Draft by default; ready only when the change passed its tests — a green change awaiting a
+    # human is what is asking for the sign-off.
     ready = verdict is not None and verdict.green
     change = await open_reviewable(
         scm,
@@ -2876,7 +2896,7 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
         workflow="implement",
         run_id=ctx.run_id,
     )
-    state = "ready for review" if ready else "a draft — its tests did not pass"
+    state = "ready for review" if ready else "a draft — its tests have not passed"
     await tickets.comment(
         await tickets.get(issue),
         f"`/implement` opened {change.url or change.branch} as {state}. Nobody has read it yet.",
