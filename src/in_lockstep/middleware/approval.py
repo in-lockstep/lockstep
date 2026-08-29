@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..core.middleware import ActionCall, Next
+from ..core.middleware import ActionCall, Next, capabilities_for
 from ..core.outcome import Finding, Outcome, Severity, Status
 from ..core.verbs import Capability, capabilities_of
 
@@ -34,10 +34,7 @@ class ApprovalGate:
     granted: Callable[[ActionCall], bool] | None = None
 
     async def __call__(self, ctx: object, call: ActionCall, next: Next) -> Outcome[object]:
-        container = getattr(ctx, "container", None)
-        capabilities: frozenset[Capability] = frozenset()
-        if container is not None and container.has(call.iface, call.using):
-            capabilities = capabilities_of(container.resolve(call.iface, call.using))
+        capabilities = capabilities_for(ctx, call)
 
         gated = bool(capabilities & GATED) or (self.when is not None and self.when(call))
         if not gated:

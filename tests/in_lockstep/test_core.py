@@ -452,3 +452,43 @@ def test_no_tests_collected_is_undecided_not_a_pass() -> None:
     assert outcome.status is Status.SUCCEEDED, "collecting nothing is not a red suite"
     assert not outcome.decided, "and it is not a green one either"
     assert any(f.id == "test.no_tests_collected" for f in outcome.findings)
+
+
+def test_capabilities_for_reads_the_binding_not_the_call() -> None:
+    """The mistake this helper exists to prevent fails OPEN, which is why it is a helper.
+
+    An `ActionCall` names an interface; capabilities belong to whatever is bound to serve it.
+    `capabilities_of(call)` type-checks, returns an empty set, and a capability gate written that
+    way silently permits everything. Both shipped middleware open-coded the lookup before this.
+    """
+    from in_lockstep.core.middleware import ActionCall, capabilities_for
+    from in_lockstep.core.verbs import capabilities_of
+    from in_lockstep.lockstep import Lockstep
+
+    class Iface: ...
+
+    class Dangerous:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.WRITES_FILES})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never invoked here
+            raise AssertionError
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Iface, Dangerous())
+    ctx = lockstep.context(run_id="caps")
+    call = ActionCall(verb=None, iface=Iface, input=None)
+
+    assert capabilities_for(ctx, call) == frozenset({Capability.WRITES_FILES})
+    # The trap, asserted so it cannot be mistaken for equivalent.
+    assert capabilities_of(call) == frozenset()
+
+
+def test_capabilities_for_is_empty_when_nothing_is_bound() -> None:
+    from in_lockstep.core.middleware import ActionCall, capabilities_for
+    from in_lockstep.lockstep import Lockstep
+
+    class Unbound: ...
+
+    ctx = Lockstep.detect().context(run_id="caps")
+    assert capabilities_for(ctx, ActionCall(verb=None, iface=Unbound, input=None)) == frozenset()

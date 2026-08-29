@@ -74,6 +74,57 @@ Bumping `version` matters for a different reason than it looks. Eval identity is
 of the composed prompt, not the declared version — so a measurement is correct whether or not you
 remember to bump it. `version` is the human label that travels alongside.
 
+## Middleware
+
+Cross-cutting behaviour — tracing, budgets, retries, approval — is a middleware chain around every
+`ctx.do`. There is no before/after registration API, because `next` is an explicit parameter and
+that gives you before, after, around and instead from one hook:
+
+```python
+from in_lockstep.core.middleware import ActionCall, Next, capabilities_for
+from in_lockstep.core.outcome import Outcome
+from in_lockstep.core.verbs import Capability
+
+class FridayFreeze:
+    async def __call__(self, ctx: object, call: ActionCall, next: Next) -> Outcome[object]:
+        if _is_friday() and Capability.WRITES_FILES in capabilities_for(ctx, call):
+            return Outcome.blocked_by("policy.friday_freeze")
+        return await next()          # <- no arguments
+
+lockstep.middleware += [FridayFreeze()]
+```
+
+Two things in there are easy to get wrong, and both fail quietly rather than loudly.
+
+**`next()` takes no arguments.** The context and the call are already closed over by `compose`, so
+`await next(ctx, call)` — the obvious guess — raises `TypeError`. Returning without awaiting it is
+*instead*; awaiting it and inspecting the `Outcome` is *after*; wrapping it in a `try` is *around*.
+
+**Capabilities come from `capabilities_for(ctx, call)`, not from the call.** An `ActionCall` names
+an *interface*; capabilities belong to whatever is bound to serve it, which is the entire point of
+binding. `capabilities_of(call)` type-checks, returns an empty set, and therefore fails **open** —
+your gate silently permits everything. That is the one mistake in this section worth memorising.
+
+Order is outermost-first: `middleware[0]` sees the call before `middleware[1]` and sees the
+`Outcome` after it. Each layer is one ordinary frame in a traceback, because the chain is folded
+by plain closures rather than decorators, so a `pdb` breakpoint lands where you expect.
+
+Two constraints worth knowing before you write one.
+
+**Middleware runs once per `ctx.do`, not once per model turn.** A long agentic loop is a single
+`ActionCall`, so a ceiling you enforce here is checked before the loop starts and after it ends,
+and never in between. That is why the spend check and the deadline live *inside* `AiInvoker`,
+re-evaluated every turn, rather than being middleware. If what you are writing needs to interrupt
+a loop in progress, middleware is the wrong layer.
+
+**Some actions must not be re-invoked.** An action declaring `Capability.SPENDS_BUDGET` re-runs a
+whole agentic loop and re-pays every turn already spent, so anything that might call `next()` twice
+should refuse it — inherit `RefusesBudgetedActions` and check, as `Retry` does.
+
+What you cannot do here is redaction, egress or residency. Those are privileged: they run outside
+this chain because `--no-middleware` exists, and a debugging flag must not be able to switch off
+the thing keeping credentials out of a committed record.
+
 ## Organisation standards
 
 Bindings resolve repository-above-organisation, which is right for adapters and wrong for

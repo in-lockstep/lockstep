@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol, runtime_checkable
 
 from .outcome import Outcome
-from .verbs import Capability, Verb
+from .verbs import Capability, Verb, capabilities_of
 
 Next = Callable[[], Awaitable[Outcome[object]]]
 
@@ -76,6 +76,21 @@ def compose(middleware: Sequence[Middleware], terminal: Next, ctx: object, call:
 
         chain = step
     return chain
+
+
+def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
+    """What the action serving this call can do, or an empty set if nothing is bound.
+
+    Every capability-aware middleware needs this and none of them can get it from the `ActionCall`:
+    a call names an *interface*, and capabilities belong to whatever is bound to serve it, which is
+    the whole point of binding. `Retry` and `ApprovalGate` each open-coded the same four lines, and
+    the obvious guess — `capabilities_of(call)` — silently returns an empty set, which fails *open*
+    for both of them. A helper that fails closed by construction is worth more than the four lines.
+    """
+    container = getattr(ctx, "container", None)
+    if container is None or not container.has(call.iface, call.using):
+        return frozenset()
+    return capabilities_of(container.resolve(call.iface, call.using))
 
 
 class RefusesBudgetedActions:
