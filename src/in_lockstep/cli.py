@@ -89,6 +89,64 @@ def _context(lockstep: Lockstep, run_id: str) -> Any:
         raise click.ClickException(str(e)) from None
 
 
+def _load_changeset(artifact: str) -> Any:
+    """Read a ChangeSet from a file or an artifact directory."""
+    import json
+    from pathlib import Path as _Path
+
+    from .core.types import ChangeAuthor, ChangeSet, FileChange
+
+    path = _Path(artifact)
+    payload = path / "changeset.json" if path.is_dir() else path
+    if not payload.exists():
+        raise click.ClickException(f"no changeset at {payload}")
+
+    data = json.loads(payload.read_text())
+    return ChangeSet(
+        changes=tuple(
+            FileChange(
+                path=str(c["path"]),
+                contents=c.get("contents"),
+                author=ChangeAuthor(c.get("author", "agent")),
+                symlink_target=c.get("symlink_target"),
+            )
+            for c in data.get("changes", [])
+        ),
+        summary=str(data.get("summary", "")),
+        ticket=str(data.get("ticket", "")),
+    )
+
+
+def _guard_or_exit(changeset: Any, *, root: Any = None) -> None:
+    """The guard, and the refusal report. Shared by both apply paths on purpose.
+
+    GATE-GUARD-1 names three enforcement points, and the way a set of enforcement points goes
+    wrong is that one of them grows its own slightly different check. `--apply-inline` and
+    `apply --from-artifact` make the same call here; the in-loop boundary is the third, inside
+    `Workspace.record`, where a refusal has to be a tool result rather than an exit code.
+    """
+    from pathlib import Path as _Path
+
+    from .core.changes import ChangeGuard
+
+    base = _Path(root or ".")
+
+    def previous(path: str) -> str | None:
+        candidate = base / path
+        try:
+            return candidate.read_text() if candidate.is_file() else None
+        except OSError:  # pragma: no cover - unreadable is indistinguishable from absent here
+            return None
+
+    refusals = ChangeGuard().check(changeset, read=previous)
+    if not refusals:
+        return
+    click.echo("refused:")
+    for refusal in refusals:
+        click.echo(f"  {refusal.path}  (tier {refusal.tier}, rule {refusal.rule})")
+    raise SystemExit(EXIT_BLOCKED)
+
+
 def _echo_telemetry(recorder: Recorder | None) -> None:
     """What the CLI observed — or that it could not observe, which is a different statement."""
     if recorder is None:
@@ -329,51 +387,9 @@ def apply_cmd(artifact: str, dry_run: bool) -> None:
     So `--dry-run` checks the guard and succeeds, and a bare `apply` refuses rather than exiting 0
     on a job that wrote nothing.
     """
-    import json
-    from pathlib import Path as _Path
+    changeset = _load_changeset(artifact)
 
-    from .core.changes import ChangeGuard
-    from .core.types import ChangeAuthor, ChangeSet, FileChange
-
-    path = _Path(artifact)
-    payload = path / "changeset.json" if path.is_dir() else path
-    if not payload.exists():
-        raise click.ClickException(f"no changeset at {payload}")
-
-    data = json.loads(payload.read_text())
-    changeset = ChangeSet(
-        changes=tuple(
-            FileChange(
-                path=str(c["path"]),
-                contents=c.get("contents"),
-                author=ChangeAuthor(c.get("author", "agent")),
-                symlink_target=c.get("symlink_target"),
-            )
-            for c in data.get("changes", [])
-        ),
-        summary=str(data.get("summary", "")),
-        ticket=str(data.get("ticket", "")),
-    )
-
-    def _previous(path: str) -> str | None:
-        """The working tree's version, so "added a skip" is told from "already had one".
-
-        `apply` runs in the privileged job with the repository checked out, which is the one place
-        the pre-change content is actually available. Without it the guard fails closed, which is
-        correct but blunter than it needs to be here.
-        """
-        candidate = _Path(path)
-        try:
-            return candidate.read_text() if candidate.is_file() else None
-        except OSError:  # pragma: no cover - unreadable is indistinguishable from absent here
-            return None
-
-    refusals = ChangeGuard().check(changeset, read=_previous)
-    if refusals:
-        click.echo("refused:")
-        for refusal in refusals:
-            click.echo(f"  {refusal.path}  (tier {refusal.tier}, rule {refusal.rule})")
-        raise SystemExit(EXIT_BLOCKED)
+    _guard_or_exit(changeset)
 
     click.echo(f"{len(changeset.changes)} change(s) pass the guard")
     for change in changeset.changes:
@@ -552,6 +568,49 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
         )
     )
     click.echo(f"ledger    {ledger.path_for(ctx.run_id)}")
+
+
+@main.command(name="apply-inline")
+@click.option("--from-artifact", "artifact", required=True, type=click.Path())
+@click.option("--dry-run", is_flag=True, help="Check against the guard; write nothing.")
+def apply_inline_cmd(artifact: str, dry_run: bool) -> None:
+    """Apply a ChangeSet to the working tree. The local default, and the third guarded path.
+
+    The two-job trampoline exists because a job holding a provider credential should not also hold
+    a write token. On a laptop there is no second job and no token — the developer's own shell is
+    the privileged half — so this writes directly.
+
+    That makes it the path most easily forgotten, which is why GATE-GUARD-1 names it: it reaches
+    neither the tool boundary (a third-party MCP server writes without asking `Workspace`) nor
+    `apply --from-artifact`. It makes the identical `_guard_or_exit` call the artifact path does.
+    """
+    changeset = _load_changeset(artifact)
+    _guard_or_exit(changeset)
+
+    if dry_run:
+        click.echo(f"{len(changeset.changes)} change(s) pass the guard; nothing was written")
+        return
+
+    written = _write_changeset(changeset)
+    for path in written:
+        click.echo(f"  {path}")
+    click.echo(f"{len(written)} change(s) applied to the working tree")
+
+
+def _write_changeset(changeset: Any) -> list[str]:
+    """Apply, after the guard. Deletions and writes, nothing clever."""
+    from pathlib import Path as _Path
+
+    touched: list[str] = []
+    for change in changeset.changes:
+        target = _Path(change.path)
+        if change.deleted:
+            target.unlink(missing_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(change.contents or "")
+        touched.append(change.path)
+    return touched
 
 
 @main.command(name="show-prompt")

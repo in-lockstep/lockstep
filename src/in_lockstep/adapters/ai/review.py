@@ -13,9 +13,10 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
+from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
 from ...ai.prompt import PromptLayers
 from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
 from ...prompts.review import LENSES, REVIEW_SCHEMA, ReviewParams, ReviewPrompt, review_layers
@@ -69,11 +70,20 @@ class AiReview:
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
         lenses: Mapping[str, type[ReviewPrompt]] | None = None,
+        tools: ToolSet | None = None,
+        run_tool: ToolRunner | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=1)
         self.curator = curator or ContextCurator()
+        # No tools by default, and that is the honest default rather than a gap: one turn with the
+        # diff in the prompt is what this lens needs, and a tool set would make every review
+        # multi-turn and multiply its cost. A repository that wants the reviewer to read files it
+        # was not handed passes `builtins.read_only(Workspace(...))` — and must raise `max_turns`
+        # with it, because a tool result the loop has no turn left to read is only expense.
+        self.tools = tools
+        self.run_tool = run_tool
         # `docs/extending.md` shows how to write a house prompt and, until this parameter, no way
         # to install one: there is no `bind_prompt`, and `invoke` read the module-global `LENSES`.
         # The only routes were mutating that global from a config file — a side effect on import,
@@ -107,7 +117,12 @@ class AiReview:
         invoker: AiInvoker = self.invoker_factory(ctx)
         try:
             invocation = await invoker.run(
-                system=system, messages=messages, context=package, policy=self.policy
+                system=system,
+                messages=messages,
+                context=package,
+                tools=self.tools,
+                run_tool=self.run_tool,
+                policy=self.policy,
             )
         except InvocationBlocked as e:
             return Outcome.blocked_by(
