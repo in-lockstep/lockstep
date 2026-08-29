@@ -19,7 +19,11 @@ class BedrockProvider(ClaudeTransport):
         try:
             from anthropic import AsyncAnthropicBedrock
         except ImportError as e:  # pragma: no cover
-            raise ImportError("Install the bedrock extra: uv add 'in-lockstep[bedrock]'") from e
+            raise ImportError(
+                "the bedrock provider needs its optional dependency. In your own project: "
+                "uv add 'in-lockstep[bedrock]'. Working inside the in-lockstep repository "
+                "itself, where the package is the project: uv sync --extra bedrock."
+            ) from e
 
         kwargs: dict[str, Any] = {"timeout": settings.timeout_seconds, "max_retries": 0}
         # Upstream constructed AnthropicBedrock() with no arguments at all and ignored config

@@ -46,7 +46,11 @@ class OpenAIProvider(LLMProvider):
         try:
             from openai import AsyncOpenAI
         except ImportError as e:  # pragma: no cover
-            raise ImportError("Install the openai extra: uv add 'in-lockstep[openai]'") from e
+            raise ImportError(
+                "the openai provider needs its optional dependency. In your own project: "
+                "uv add 'in-lockstep[openai]'. Working inside the in-lockstep repository "
+                "itself, where the package is the project: uv sync --extra openai."
+            ) from e
 
         self._settings = settings
         kwargs: dict[str, Any] = {

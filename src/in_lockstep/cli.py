@@ -444,6 +444,7 @@ def review_cmd(
     from .ai.pricing import default_table
     from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
     from .core.spend import Budget
+    from .privileged.egress import EgressPolicy
 
     # The repository's own module, exactly as `run` and `ls` load it. Reviewing is the command
     # that spends money, so it is the last one that should be reading a different configuration
@@ -486,6 +487,15 @@ def review_cmd(
             cost_table=table,
             spend=_ctx.spend,
             redact=Redact(),
+            # The documented opt-out, finally read. `egress.py`'s own refusal says "or bind
+            # UnsandboxedEgress deliberately", and ADR 0001 and the crosswalk both name that
+            # binding — while nothing resolved it, so the one escape hatch the design offers was
+            # a sentence. Absent a binding this is `detect()`, which reads the environment.
+            egress=(
+                lockstep.container.resolve(EgressPolicy)
+                if lockstep.container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            ),
         )
 
     # Only if the module did not bind one. A repository that ships its own Review adapter has
@@ -503,7 +513,12 @@ def review_cmd(
         )
 
     ctx = _context(lockstep, f"review-{aspect}")
-    outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
+    try:
+        outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
+    except ImportError as e:
+        # A provider SDK is an optional extra, and its absence is a setup step rather than a bug.
+        # Forty lines of traceback for "run one command" buries the one line that helps.
+        raise click.ClickException(str(e)) from None
 
     click.echo(
         f"review/{aspect}  {outcome.status.value}"

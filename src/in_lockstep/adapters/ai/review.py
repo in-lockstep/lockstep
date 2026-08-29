@@ -19,6 +19,7 @@ from ...ai.structured import SchemaError, parse, schema_instruction, validate
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
+from ...privileged.egress import EgressRefused
 from ...prompts.review import LENSES, REVIEW_SCHEMA, ReviewParams, ReviewPrompt, review_layers
 
 
@@ -47,13 +48,24 @@ class ReviewReport:
         return not self.findings
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewSpec:
+    """What to review. Frozen like every other spec in `core.types`.
+
+    It was the one mutable one, while also being hashed for step identity and serialized into
+    checkpoints — so a mutation after dispatch would have changed a key that had already been
+    written down.
+    """
+
     base: str
     head: str
     aspect: str = "security"
     paths: tuple[str, ...] = ()
     token_budget: int = 60_000
+    # A diff supplied directly rather than read from git. The shipped cassette fixture needs one,
+    # because a cassette is keyed on the whole composed prompt and therefore on the diff inside
+    # it: a fixture that replayed against *any* diff would not be a replay of anything.
+    diff: str = ""
 
 
 class AiReview:
@@ -129,6 +141,14 @@ class AiReview:
                 e.reason,
                 findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
             )
+        except EgressRefused as e:
+            # A control refusing is precisely what BLOCKED means, and routing it through an
+            # Outcome rather than letting it escape is what gets it a ledger record: a run that
+            # was refused for a real reason should leave the same trace as one that was allowed.
+            return Outcome.blocked_by(
+                e.reason,
+                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
+            )
         except InvocationFailed as e:
             # ERRORED, not BLOCKED: §4.3 reserves BLOCKED for a policy or gate refusing, and a
             # provider that could not be made to answer is infrastructure. Filing a broken
@@ -198,7 +218,7 @@ class AiReview:
         )
 
     def _gather(self, inp: ReviewSpec) -> ContextPackage:
-        diff = _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
+        diff = inp.diff or _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
         items = [
             ContextItem(
                 kind="diff",

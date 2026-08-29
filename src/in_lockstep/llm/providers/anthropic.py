@@ -15,7 +15,11 @@ class AnthropicProvider(ClaudeTransport):
         try:
             import anthropic
         except ImportError as e:  # pragma: no cover - exercised by the extras story
-            raise ImportError("Install the anthropic extra: uv add 'in-lockstep[anthropic]'") from e
+            raise ImportError(
+                "the anthropic provider needs its optional dependency. In your own project: "
+                "uv add 'in-lockstep[anthropic]'. Working inside the in-lockstep repository "
+                "itself, where the package is the project: uv sync --extra anthropic."
+            ) from e
 
         kwargs: dict[str, Any] = {
             "api_key": creds.get("api_key"),

@@ -14,7 +14,11 @@ class GoogleGeminiProvider(LLMProvider):
         try:
             from google import genai
         except ImportError as e:  # pragma: no cover
-            raise ImportError("Install the google extra: uv add 'in-lockstep[google]'") from e
+            raise ImportError(
+                "the google provider needs its optional dependency. In your own project: "
+                "uv add 'in-lockstep[google]'. Working inside the in-lockstep repository "
+                "itself, where the package is the project: uv sync --extra google."
+            ) from e
 
         self._settings = settings
         self._genai = genai

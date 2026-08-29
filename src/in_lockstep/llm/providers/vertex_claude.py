@@ -15,7 +15,11 @@ class VertexClaudeProvider(ClaudeTransport):
         try:
             from anthropic import AsyncAnthropicVertex
         except ImportError as e:  # pragma: no cover
-            raise ImportError("Install the google extra: uv add 'in-lockstep[google]'") from e
+            raise ImportError(
+                "the google provider needs its optional dependency. In your own project: "
+                "uv add 'in-lockstep[google]'. Working inside the in-lockstep repository "
+                "itself, where the package is the project: uv sync --extra google."
+            ) from e
 
         return AsyncAnthropicVertex(
             project_id=settings.project_id,

@@ -19,6 +19,8 @@ from click.testing import CliRunner
 
 from in_lockstep.cli import main
 
+ROOT_REPO = Path(__file__).resolve().parents[2]
+
 MODULE = '''
 from in_lockstep import Lockstep, Policy
 from in_lockstep.core.spend import Budget
@@ -497,3 +499,60 @@ def test_apply_still_refuses_a_newly_added_skip(repo: Path, tmp_path: Path) -> N
     result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
     assert result.exit_code == 3, result.output
     assert "test-silenced-without-ticket" in result.output
+
+
+def test_a_bound_egress_policy_is_the_one_that_runs(repo: Path) -> None:
+    """The opt-out `egress.py`'s own refusal recommends, finally read.
+
+    "or bind UnsandboxedEgress deliberately" appears in the refusal message, in ADR 0001 and in
+    the controls crosswalk, and nothing resolved the binding — so the one escape hatch the design
+    offers was a sentence. A control whose escape hatch nobody wired is a control people work
+    around some other way.
+
+    Asserted with a policy that REFUSES rather than one that permits, deliberately. A permissive
+    binding proves nothing here: `--dry-run` sets `transmits=False`, which already lifts the
+    untrusted-content trigger, so a passing run would be consistent with the binding being ignored.
+    A refusing one can only be the bound object.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, EgressRefused\n"
+        "\n"
+        "class AlwaysRefuse(EgressPolicy):\n"
+        "    def check(self, **kw):\n"
+        "        raise EgressRefused('egress.test_binding', 'the bound policy ran')\n"
+        "\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        "lockstep.bind(EgressPolicy, AlwaysRefuse())\n"
+    )
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    assert "egress.test_binding" in result.output, result.output
+    assert "the bound policy ran" in result.output
+
+
+def test_the_unsandboxed_opt_out_permits_what_the_default_refuses(repo: Path) -> None:
+    """The pair, so the opt-out and what it lifts cannot drift apart.
+
+    `transmits=False` is why this is asserted through `EgressPolicy.required` rather than a run:
+    the CLI's only offline providers suppress the trigger this opt-out exists to lift, so a
+    command-level test would be green either way.
+    """
+    from in_lockstep.core.verbs import Capability
+    from in_lockstep.privileged.egress import EgressMode, EgressPolicy, UnsandboxedEgress
+
+    writes = frozenset({Capability.WRITES_FILES})
+    default = EgressPolicy(mode=EgressMode.NONE)
+    assert default.required(capabilities=writes, untrusted_context=True) is not None
+
+    UnsandboxedEgress().check(capabilities=writes, untrusted_context=True)
+
+
+def test_this_repository_opts_out_deliberately_and_says_so() -> None:
+    """The weakening is meant to be legible. If the line moves, the reasoning must move with it."""
+    module = (ROOT_REPO / "lockstep.py").read_text()
+    if "UnsandboxedEgress" not in module:
+        return  # the opt-out was removed, which is the other acceptable state
+    assert "OPT-OUT" in module, "the binding is here without the paragraph explaining its cost"
+    assert "IN_LOCKSTEP_EGRESS=enforced" in module, "it must say CI does not take this path"

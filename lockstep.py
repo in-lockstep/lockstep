@@ -22,6 +22,7 @@ from in_lockstep.ai.pricing import default_table
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
 from in_lockstep.middleware import CostBudget, otel
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 from in_lockstep.strategies import default_registry
 
 lockstep = Lockstep.detect()
@@ -48,6 +49,28 @@ lockstep.contribute(
         deny_tools=("shell", "write_file"),
     )
 )
+
+# -- egress -------------------------------------------------------------------------
+#
+# THIS IS AN OPT-OUT FROM A CONTROL, and it is here rather than in an options object because the
+# design's answer to "you cannot stop a repository weakening its own controls" is that weakening
+# one has to be a legible line in a diff. This is that line.
+#
+# What it switches off: a review reads a diff authored by whoever opened the change, so the
+# context package carries UNTRUSTED_EXTERNAL content, and egress enforcement is mandatory for it.
+# Development happens on laptops with open internet, where no enforcement exists and the probe
+# would refuse an asserted one — correctly. The alternative is running every local review inside
+# a constrained container, which is a real answer and not the one this repository has chosen.
+#
+# What it costs: an injection that succeeds has somewhere to send what it read. `injection.py`'s
+# own docstring is blunt about this — a scanner "is not a substitute for tool deny-lists, egress
+# rules. Those are what actually bound a successful injection." The compensating controls here are
+# that the shipped ToolSet is empty, the policy floor denies `shell` and `write_file`, and
+# `ChangeGuard` stands at all three write paths. None of them is an egress rule.
+#
+# CI does not take this path: `.github/workflows/lockstep.yml` sets IN_LOCKSTEP_EGRESS=enforced,
+# and the probe there has to pass.
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
 
 # -- budgets ------------------------------------------------------------------------
 #
