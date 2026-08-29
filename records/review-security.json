@@ -1,0 +1,28 @@
+{
+  "aspect": "security",
+  "cost_usd": 0.037119,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "review.unparseable",
+        "message": "the reply is not JSON and could not be repaired: Extra data at position 111",
+        "severity": "error"
+      }
+    ]
+  },
+  "input_tokens": 1873,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 2100,
+  "priced_fraction": 1.0,
+  "reason": "review.unparseable",
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "errored",
+  "tokens": 3973,
+  "wall_seconds": 33.083
+}
