@@ -16,10 +16,10 @@ from typing import Any
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
 from .core.context import RepoInfo, RunContext
-from .core.middleware import Middleware
+from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, Spend, UndeclaredBudget
-from .core.verbs import Capability, capabilities_of
+from .core.verbs import NEEDS_APPROVAL, Capability, UngatedAgency, capabilities_of
 
 
 @dataclass
@@ -76,6 +76,7 @@ class Lockstep:
 
     def context(self, run_id: str) -> RunContext:
         self._refuse_undeclared_budget()
+        self._refuse_ungated_agency()
         return RunContext(
             run_id=run_id,
             repo=self.repo,
@@ -104,6 +105,38 @@ class Lockstep:
             type(b.impl).__name__ if not isinstance(b.impl, type) else b.impl.__name__
             for b in self.container.resolved()
             if Capability.SPENDS_BUDGET in capabilities_of(b.impl)
+        )
+
+    def _refuse_ungated_agency(self) -> None:
+        """GATE-APPROVAL-1. At startup, not at call time.
+
+        A scoping decision, stated because it narrows the gate's literal wording. Written as "a
+        `ToolSet` granting WRITES_FILES/EXECUTES_CODE", it reads as though any dangerous
+        capability needs an approval path — but `PytestTest` declares `EXECUTES_CODE` and means
+        it, so that reading refuses every repository that runs its own tests, and a control
+        everybody has to switch off is not a control.
+
+        What makes write-or-execute need a human is **agency**: a model choosing to do it.
+        `Sandbox` is the answer for a deterministic adapter that executes code; approval is the
+        answer for an adapter that both spends money and can write. So the trigger is the
+        conjunction, and it fires for nothing shipped today — `AiReview` is read-only — which is
+        the correct answer for a framework that ships no write verb, not a hole.
+        """
+        gated = sorted(
+            type(b.impl).__name__ if not isinstance(b.impl, type) else b.impl.__name__
+            for b in self.container.resolved()
+            if Capability.SPENDS_BUDGET in capabilities_of(b.impl)
+            and capabilities_of(b.impl) & NEEDS_APPROVAL
+        )
+        if not gated:
+            return
+        if any(provides_approval(layer) for layer in self.middleware):
+            return
+        raise UngatedAgency(
+            f"{', '.join(gated)} lets a model write or execute, and no ApprovalGate is in the "
+            f"middleware chain. Add one:\n\n    lockstep.middleware += [ApprovalGate()]\n\n"
+            f"The human acts in your system of record — a review request, an environment "
+            f"approval — so the gate refuses without a grant rather than prompting."
         )
 
     def _refuse_undeclared_budget(self) -> None:

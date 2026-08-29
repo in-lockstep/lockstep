@@ -6,8 +6,9 @@ debugging flag must not be able to switch off the thing that keeps credentials o
 git-committed record.
 """
 
+from .approval import ApprovalGate, ApprovalRequired, assert_gated
 from .budget import CostBudget
 from .otel import otel
 from .retry import Retry
 
-__all__ = ["CostBudget", "Retry", "otel"]
+__all__ = ["ApprovalGate", "ApprovalRequired", "CostBudget", "Retry", "assert_gated", "otel"]

@@ -78,6 +78,17 @@ def compose(middleware: Sequence[Middleware], terminal: Next, ctx: object, call:
     return chain
 
 
+def provides_approval(layer: object) -> bool:
+    """Whether a middleware layer is an approval path.
+
+    Declared by the layer rather than recognised by class, for the same reason `Capability` is
+    declared: an organisation routing approvals through its own system of record satisfies the
+    requirement, and an `isinstance` check would tell it that it had not. `core` also cannot see
+    `middleware/` — arrows point down — so a class check here would invert the rule outright.
+    """
+    return bool(getattr(layer, "provides_approval", False))
+
+
 def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
     """What the action serving this call can do, or an empty set if nothing is bound.
 

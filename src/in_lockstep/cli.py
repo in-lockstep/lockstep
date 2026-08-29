@@ -68,20 +68,9 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
 
 # One turn is what the review lens needs: no tool runner ships, so there is nothing a second turn
 # could do with a tool result. It is named rather than inlined because it is an adapter's own
-# requirement, and a policy ceiling is a different thing that has to compose with it.
+# requirement, and a policy ceiling is a different thing that composes with it — see
+# `InvokePolicy.under`, which does the composing for every field rather than just this one.
 _REVIEW_TURNS = 1
-
-
-def _review_turns(lockstep: Lockstep) -> int:
-    """The lower of what the lens needs and what the policy stack allows.
-
-    A contributed ceiling can only tighten — that is what makes the stack monotone, and it is why
-    this is a `min` rather than a lookup. Today the lens needs fewer turns than any shipped floor
-    contributes, so the ceiling does not bind; wiring it anyway is the difference between a
-    constraint that happens not to be binding and a constraint nothing reads.
-    """
-    ceiling = lockstep.policy.resolve().max_turns
-    return min(_REVIEW_TURNS, ceiling) if ceiling is not None else _REVIEW_TURNS
 
 
 def _context(lockstep: Lockstep, run_id: str) -> Any:
@@ -92,10 +81,11 @@ def _context(lockstep: Lockstep, run_id: str) -> Any:
     the exception carries the reason, the CLI decides how a person should see it.
     """
     from .core.spend import UndeclaredBudget
+    from .core.verbs import UngatedAgency
 
     try:
         return lockstep.context(run_id=run_id)
-    except UndeclaredBudget as e:
+    except (UndeclaredBudget, UngatedAgency) as e:
         raise click.ClickException(str(e)) from None
 
 
@@ -490,7 +480,9 @@ def review_cmd(
             AiReview(
                 build_invoker,
                 repo_root=lockstep.repo.root,
-                policy=InvokePolicy(max_turns=_review_turns(lockstep), deadline_seconds=300),
+                policy=InvokePolicy.under(
+                    lockstep.policy.resolve(), max_turns=_REVIEW_TURNS, deadline_seconds=300
+                ),
             ),
         )
 

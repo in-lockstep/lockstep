@@ -12,14 +12,17 @@ and the framework exposes no inbound endpoint.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
-from ..core.middleware import ActionCall, Next, capabilities_for
+from ..core.middleware import ActionCall, Next, capabilities_for, provides_approval
 from ..core.outcome import Finding, Outcome, Severity, Status
-from ..core.verbs import Capability, capabilities_of
+from ..core.verbs import NEEDS_APPROVAL, capabilities_of
 
-GATED = frozenset({Capability.WRITES_FILES, Capability.EXECUTES_CODE})
+#: Re-exported from core, where the vocabulary belongs. Kept as a name here because
+#: this module's readers look for it here.
+GATED = NEEDS_APPROVAL
 
 
 class ApprovalRequired(Exception):
@@ -29,6 +32,10 @@ class ApprovalRequired(Exception):
 @dataclass
 class ApprovalGate:
     """Blocks until a grant exists. The grant is external; this only refuses without one."""
+
+    #: Read by `core.middleware.provides_approval`. Declared rather than inferred from the class,
+    #: so a house gate routing approvals elsewhere satisfies the startup check by saying so.
+    provides_approval: ClassVar[bool] = True
 
     when: Callable[[ActionCall], bool] | None = None
     granted: Callable[[ActionCall], bool] | None = None
@@ -62,10 +69,25 @@ class ApprovalGate:
         )
 
 
-def assert_gated(container: object, iface: type, *, name: str | None = None) -> None:
-    """GATE-APPROVAL-1: refuse a dangerous binding at resolution, not at call time."""
+def assert_gated(
+    container: object,
+    iface: type,
+    *,
+    name: str | None = None,
+    middleware: Sequence[object] = (),
+) -> None:
+    """GATE-APPROVAL-1: refuse a dangerous binding at resolution, not at call time.
+
+    `middleware` was missing, and its absence was the defect. The refusal message has always said
+    "with no ApprovalGate in the middleware chain" while nothing here looked at a chain — so this
+    could only ever have refused unconditionally, which is why calling it anywhere would have made
+    every repository that binds a test runner unusable. It is the shape of an unwired control:
+    correct-looking, never invoked, and wrong the first time it would have been.
+    """
     from ..core.container import Container
 
+    if any(provides_approval(layer) for layer in middleware):
+        return
     if not isinstance(container, Container) or not container.has(iface, name):
         return
     capabilities = capabilities_of(container.resolve(iface, name))

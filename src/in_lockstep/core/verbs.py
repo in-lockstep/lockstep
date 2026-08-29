@@ -124,6 +124,20 @@ class Capability(Enum):
     READS_REPO = "reads_repo"
 
 
+class UngatedAgency(Exception):
+    """An adapter lets a model write or execute, and no approval path is configured.
+
+    Beside `UndeclaredBudget` rather than in `middleware/`, because both are startup refusals
+    about the shape of a lifecycle, and `core` cannot see the package that implements the gate.
+    """
+
+
+#: Capabilities that need a human in the loop when an agent — rather than a person — decides to
+#: use them. `Sandbox` is the answer for a deterministic adapter that executes code; approval is
+#: the answer for one that spends money AND can write, because there a model is choosing.
+NEEDS_APPROVAL = frozenset({Capability.WRITES_FILES, Capability.EXECUTES_CODE})
+
+
 @runtime_checkable
 class Action(Protocol[InputT, ValueT]):
     """What every adapter satisfies. The verb interface knows nothing about AI or determinism."""

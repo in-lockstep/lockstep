@@ -343,3 +343,111 @@ def test_a_human_authored_change_is_not_this_rule() -> None:
 def test_writing_a_new_test_is_untouched() -> None:
     """Writing tests is a core feature; a guard that made it harder would be the wrong trade."""
     assert ChangeGuard().check(_agent_change("tests/test_new.py", "def test_x():\n    assert 1\n")) == []
+
+
+# -- GATE-APPROVAL-1: refused at startup, not at call time ------------------------------------
+
+
+def _ai_writer():
+    from in_lockstep.core.verbs import Capability, Verb
+
+    class AiImplement:
+        verb = Verb.IMPLEMENT
+        capabilities = frozenset({Capability.SPENDS_BUDGET, Capability.WRITES_FILES})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never reached
+            raise AssertionError
+
+    return AiImplement
+
+
+def test_gate_approval_1_a_model_that_can_write_needs_an_approval_path() -> None:
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.core.verbs import UngatedAgency
+    from in_lockstep.lockstep import Lockstep
+
+    class Implement: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.budget = Budget(usd=1.0)
+    lockstep.bind(Implement, _ai_writer()())
+
+    with pytest.raises(UngatedAgency) as exc:
+        lockstep.context(run_id="r")
+    assert "AiImplement" in str(exc.value)
+    assert "ApprovalGate" in str(exc.value)
+
+
+def test_an_approval_gate_in_the_chain_satisfies_it() -> None:
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.lockstep import Lockstep
+    from in_lockstep.middleware import ApprovalGate
+
+    class Implement: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.budget = Budget(usd=1.0)
+    lockstep.bind(Implement, _ai_writer()())
+    lockstep.middleware += [ApprovalGate()]
+    assert lockstep.context(run_id="r") is not None
+
+
+def test_a_house_gate_satisfies_it_by_declaring_so() -> None:
+    """Declared, not recognised by class.
+
+    An organisation routing approvals through its own system of record has satisfied the
+    requirement, and an isinstance check would tell it that it had not.
+    """
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.lockstep import Lockstep
+
+    class OurApprovals:
+        provides_approval = True
+
+        async def __call__(self, ctx, call, next):  # pragma: no cover - never invoked
+            return await next()
+
+    class Implement: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.budget = Budget(usd=1.0)
+    lockstep.bind(Implement, _ai_writer()())
+    lockstep.middleware += [OurApprovals()]
+    assert lockstep.context(run_id="r") is not None
+
+
+def test_running_tests_does_not_need_approval() -> None:
+    """PytestTest declares EXECUTES_CODE and means it.
+
+    The gate's literal wording would refuse every repository that runs its own suite, and a
+    control everybody switches off is not a control. Sandbox is the answer there; approval is the
+    answer when a MODEL is choosing.
+    """
+    from in_lockstep.adapters import PytestTest
+    from in_lockstep.adapters.pytest_adapter import Test
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Test, PytestTest())
+    assert lockstep.context(run_id="r") is not None
+
+
+def test_a_read_only_ai_verb_does_not_need_approval() -> None:
+    """Reviewing spends money and writes nothing. Nothing shipped today trips this."""
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.core.verbs import Capability, Verb
+    from in_lockstep.lockstep import Lockstep
+
+    class AiReviewLike:
+        verb = Verb.REVIEW
+        capabilities = frozenset({Capability.SPENDS_BUDGET, Capability.READS_REPO})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never reached
+            raise AssertionError
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.budget = Budget(usd=1.0)
+    lockstep.bind(Review, AiReviewLike())
+    assert lockstep.context(run_id="r") is not None

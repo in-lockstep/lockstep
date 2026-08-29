@@ -28,6 +28,7 @@ from typing import Protocol
 
 from ..core.context import killswitch_engaged
 from ..core.outcome import Cost
+from ..core.policy import ResolvedPolicy
 from ..core.spend import Spend, Unpriced
 from ..llm.interface import (
     AuthenticationError,
@@ -88,6 +89,35 @@ class InvokePolicy:
     # A tool result is model input. An unbounded one is an unbounded prompt next turn.
     max_tool_result_chars: int = 20_000
     scan_tool_results: bool = True
+    # From the policy stack. Both were resolved and read by nothing but `ls` until GATE-POLICY-1.
+    deny_tools: tuple[str, ...] = ()
+    scan_input: str = "warn"
+
+    @classmethod
+    def under(
+        cls,
+        resolved: ResolvedPolicy,
+        *,
+        max_turns: int,
+        deadline_seconds: float | None = None,
+    ) -> InvokePolicy:
+        """An adapter's own needs, tightened by whatever the policy stack contributed.
+
+        `min` rather than a lookup, because a contributed ceiling can only tighten — that is what
+        makes the stack monotone. An adapter needing four turns under a floor allowing twelve gets
+        four; under a floor allowing two it gets two.
+
+        This is the seam GATE-POLICY-1 was missing. The merge semantics were correct and tested
+        from Phase 1; `resolve()` was consumed only by `ls`, so a repository contributing
+        `deny_tools` or `scan_input="block"` was writing a comment.
+        """
+        ceiling = resolved.max_turns
+        return cls(
+            max_turns=min(max_turns, ceiling) if ceiling is not None else max_turns,
+            deadline_seconds=deadline_seconds,
+            deny_tools=tuple(resolved.deny_tools),
+            scan_input=resolved.scan_input or "warn",
+        )
 
 
 @dataclass
@@ -215,8 +245,21 @@ class AiInvoker:
         total = Cost()
         last: LLMOutput | None = None
 
+        # A denied tool is removed from the dispatch table, so it cannot be called rather than
+        # being refused when called. `ToolSet` IS the dispatch table; there is nothing to reach.
+        if policy.deny_tools:
+            tools = tools.deny(*policy.deny_tools)
+
         if context is not None:
-            findings.extend(self._scan_untrusted(context))
+            scanned = self._scan_untrusted(context)
+            findings.extend(scanned)
+            if scanned and policy.scan_input == "block":
+                ids = sorted({f.name for f in scanned})
+                raise InvocationBlocked(
+                    "injection.blocked",
+                    f"untrusted content matched {', '.join(ids)} and this policy blocks rather "
+                    f"than warns; refused before the first call",
+                )
 
         for index in range(policy.max_turns):
             self._guard_turn(policy, started, index)
