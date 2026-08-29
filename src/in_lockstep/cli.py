@@ -876,7 +876,8 @@ jobs:
           uvx --from 'in-lockstep[anthropic]' in-lockstep review \
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
-            --aspect security
+            --aspect security \
+            --budget 0.25
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.

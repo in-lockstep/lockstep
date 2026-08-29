@@ -8,6 +8,13 @@
 # `run` is given the base ref because configuration is loaded from it. Loading lockstep.py from
 # the ref under review would let a pull request supply the file defining the bindings, the policy
 # and the path tiers that constrain reviewing it.
+#
+# `--budget` is stated here rather than left to lockstep.py, because of the adoption case.
+# Configuration loads from the trusted ref — the base branch — so a repository's very first pull
+# request, the one that ADDS lockstep.py, has no config to load and therefore no declared ceiling,
+# and GATE-BUDGET-1 refuses the run. This file is itself base-ref content for a `pull_request`
+# event, which is the same property that makes config-from-base safe, so a ceiling stated here is
+# equally out of reach of the change under review.
 name: lockstep
 
 on:
@@ -40,7 +47,8 @@ jobs:
           uv run in-lockstep review \
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
-            --aspect security
+            --aspect security \
+            --budget 0.25
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # A variable, not a secret: a workspace id is an identifier, and putting one in
