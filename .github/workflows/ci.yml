@@ -1,5 +1,8 @@
 name: CI
 
+# Hand-written and permanent. The gate that proves the framework works cannot be framework output,
+# which is the same reason this file was hand-written when the repository shipped a compiler.
+
 on:
   push:
     branches: [main]

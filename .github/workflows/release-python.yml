@@ -1,25 +1,19 @@
-# Publishing the two Python distributions this repository builds.
+# Publishing `in-lockstep`, the one Python distribution this repository builds.
 #
-# `in-lockstep` is the compiler and `in-lockstep-exec` is the runtime, and a compiled pipeline
-# installs both **by name from a public index**: the drift-gate job runs
-# `uv tool install "in-lockstep=="`, and an eval job that materializes inherited definitions installs
-# the executor alongside it because the exec image deliberately does not carry the compiler. So
-# until these exist on PyPI, a consumer repository can resolve every action and pull the image and
-# still not run.
+# It used to build two. `in-lockstep-exec` was the deterministic-executor runtime a compiled
+# pipeline invoked by name, and it was deleted along with the last thing that invoked it — see
+# ADR 0001. The `exec-v0.1.x` tag and everything already on PyPI stay where they are; nothing here
+# republishes them.
 #
 # **No API token exists anywhere in this.** Publication is by Trusted Publishing: PyPI verifies a
 # short-lived OIDC credential minted by Actions for this repository, this workflow and this
 # environment. There is no secret to leak, rotate, or scope wrongly — which is the same argument
 # the rest of the framework makes about agents never holding credentials.
 #
-# The environment is **per distribution**, which is not decoration. PyPI identifies a publisher by
-# owner, repository, workflow and environment together, and refuses to register two projects behind
-# an identical configuration — otherwise one credential would speak for both, and a workflow allowed
-# to publish the runtime could publish the compiler. Naming the environment after the project is
-# what keeps each credential scoped to the one thing it may upload.
-#
-# Tagged `v*`, the compiler's own line. `actions-v*` and `exec-v*` stay separate so a pin moves when
-# the thing behind it moved.
+# The environment is still named after the project rather than left at a default. PyPI identifies a
+# publisher by owner, repository, workflow and environment together, so the name is half of what
+# scopes this credential to the one project it may upload — and it is what let a second
+# distribution exist here without one credential speaking for both.
 name: release-python
 
 on:
@@ -54,45 +48,54 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
-          for manifest in pyproject.toml packages/pipeline-exec/pyproject.toml; do
-            version=$(grep -m1 '^version = ' "$manifest" | cut -d'"' -f2)
-            if [ "$version" != "$tag" ]; then
-              echo "$manifest is $version, but the tag says $tag"; exit 1
-            fi
-          done
-          echo "both distributions are $tag"
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "$version" != "$tag" ]; then
+            echo "pyproject.toml is $version, but the tag says $tag"; exit 1
+          fi
+          # And what `--version` will print, which is a second declaration in a second file. The
+          # suite keeps the two in step; this checks the one that ends up on PyPI under the tag.
+          runtime=$(grep -m1 '^__version__ = ' src/in_lockstep/__init__.py | cut -d'"' -f2)
+          if [ "$runtime" != "$tag" ]; then
+            echo "in_lockstep.__version__ is $runtime, but the tag says $tag"; exit 1
+          fi
+          echo "publishing $tag"
 
       - run: uv sync
       - name: The suite passes
         run: uv run pytest -q
 
-      - name: Build both distributions
-        # Into separate directories: each PyPI project is a separate Trusted Publishing exchange, and
-        # an upload pointed at a directory would otherwise carry the other project's files with it.
+      - name: Build the distribution
+        # Into a named subdirectory rather than a bare `dist/`, because the publish step below
+        # points at `dist/in-lockstep` and a Trusted Publishing exchange uploads whatever it finds
+        # in the directory it is given.
         run: |
           set -euo pipefail
           uv build --package in-lockstep --out-dir dist/in-lockstep
-          uv build --package in-lockstep-exec --out-dir dist/in-lockstep-exec
           uvx twine check dist/*/*
 
       - name: A clean install carries what is not Python
-        # The failure this exists for: the compiler ships five pipelines as markdown under
-        # `lockstep/library/`, and the executor ships Jinja report templates. Neither is a `.py`
-        # file, so a packaging change can drop them while every test in this repository still passes
-        # — they are read from the source tree here and from site-packages everywhere else.
-        # `init --adopt all` reads the library, so it fails if the library did not travel.
+        # The failure this exists for: the framework ships twenty-four prompts as markdown and
+        # twenty-seven eval cases as JSON. Neither is a `.py` file, so a packaging change can drop
+        # them while every test in this repository still passes — they are read from the source
+        # tree here and from site-packages everywhere else.
+        #
+        # `show-prompt` reads a prompt body and `eval report` reads the corpus, so both fail if
+        # the data did not travel. The compiler this check used to exercise was removed in phase 7;
+        # the failure mode it was written for did not go with it.
         run: |
           set -euo pipefail
           python3 -m venv /tmp/proof
-          /tmp/proof/bin/pip install -q dist/in-lockstep/*.whl dist/in-lockstep-exec/*.whl
-          /tmp/proof/bin/lockstep --version
-          /tmp/proof/bin/pipeline-exec --version
-          /tmp/proof/bin/pipeline-exec list-commands > /dev/null
+          /tmp/proof/bin/pip install -q dist/in-lockstep/*.whl
+          /tmp/proof/bin/in-lockstep --version
+          # A prompt body, read from site-packages rather than from a checkout.
+          /tmp/proof/bin/in-lockstep show-prompt security | grep -q "guardrail:baseline"
+          # And the eval corpus.
+          /tmp/proof/bin/in-lockstep eval report | grep -q "27"
           mkdir -p /tmp/proof-repo && cd /tmp/proof-repo
-          /tmp/proof/bin/lockstep init --name proof --adopt all
-          test -d .lockstep || test -f pipeline.yaml
-          /tmp/proof/bin/lockstep fetch
-          echo "the shipped library survived packaging"
+          /tmp/proof/bin/in-lockstep init
+          test -f lockstep.py
+          test -f .github/workflows/lockstep.yml
+          echo "the shipped prompts and corpus survived packaging"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
@@ -101,19 +104,15 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish ${{ matrix.project }}
+    name: Publish in-lockstep
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
     runs-on: ubuntu-24.04
-    # pypi-in-lockstep and pypi-in-lockstep-exec. Each must match the environment recorded in that
-    # project's publisher on PyPI, or the exchange is refused.
-    environment: pypi-${{ matrix.project }}
+    # Must match the environment recorded in the project's publisher on PyPI, or the exchange is
+    # refused.
+    environment: pypi-in-lockstep
     permissions:
       id-token: write     # mint the OIDC credential PyPI verifies; nothing else is needed
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [in-lockstep, in-lockstep-exec]
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
@@ -121,13 +120,13 @@ jobs:
           path: dist
       - name: Upload to PyPI
         # v1.14.2 or newer, and the floor is load-bearing rather than hygiene: it is the first
-        # release carrying Twine 7, and Twine below that rejects core metadata 2.5 outright. Both
-        # distributions are 2.5, because hatchling emits PEP 639 `License-Expression` for the
-        # `license = "Apache-2.0"` these manifests declare.
+        # release carrying Twine 7, and Twine below that rejects core metadata 2.5 outright. This
+        # distribution is 2.5, because hatchling emits PEP 639 `License-Expression` for the
+        # `license = "Apache-2.0"` the manifest declares.
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         with:
-          packages-dir: dist/${{ matrix.project }}
-          # One tag publishes both distributions, and they do not always both move. A version already
-          # on PyPI is the normal case for the one that did not change, not a failure.
+          packages-dir: dist/in-lockstep
+          # A re-run of a tag that already published is a normal thing to do; a version already on
+          # PyPI is then not a failure.
           skip-existing: true
           print-hash: true

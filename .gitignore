@@ -9,5 +9,8 @@ build/
 *.egg-info/
 .coverage
 
-# Fetched by `lockstep fetch` at the commit pins.lock records.
-**/.pipeline/inherited/
+# Everything a run writes: ledgers, checkpoints, artifacts, and recordings. All of it belongs to
+# one machine's attempt at one run. The replay fixture that ships is tracked where it ships from,
+# in src/in_lockstep/cassettes/ — tracking a working copy here as well would be two versions of
+# one artifact, drifting apart.
+.in-lockstep/

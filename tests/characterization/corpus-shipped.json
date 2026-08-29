@@ -1,0 +1,327 @@
+{
+  "shipped/fix/bug-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:fix/fixing",
+      "body:fix/bug-analyst"
+    ],
+    "sha256": "69aa616b6456330993db168e693699d30f8943a2f8339706ba9a48e8ad44ce25",
+    "signature_without_body": "guardrail:baseline|guardrail:fix/fixing"
+  },
+  "shipped/fix/fix-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:fix/fixing",
+      "body:fix/fix-reviewer"
+    ],
+    "sha256": "497d3257206798c7036400ca5b498b6d9236357797a28f321b839639bbc81524",
+    "signature_without_body": "guardrail:baseline|guardrail:fix/fixing"
+  },
+  "shipped/fix/fix-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:fix/fixing",
+      "body:fix/fix-writer"
+    ],
+    "sha256": "a1bcc7fe800c2426c23a3038ba361a42136b7e2be80465dfb7dea1dbf5f1f75a",
+    "signature_without_body": "guardrail:baseline|guardrail:fix/fixing"
+  },
+  "shipped/fix/reproducer-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:fix/fixing",
+      "body:fix/reproducer-writer"
+    ],
+    "sha256": "beac488b6fda09fadf4f0d6313ad400156df102fca6a015caf82c009ec0d0de5",
+    "signature_without_body": "guardrail:baseline|guardrail:fix/fixing"
+  },
+  "shipped/implement/change-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/change-writer",
+      "skill:implement/change-format"
+    ],
+    "sha256": "f4342251ca9f42230fc34e58da46a3a4783cb0880d08109f22efd169448cec7b",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|skill:implement/change-format"
+  },
+  "shipped/implement/planner": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/planner"
+    ],
+    "sha256": "e8376d828f852421b10fc2fe8fcfc6abf3b918b3958a0c7d87219abb5fd364a1",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing"
+  },
+  "shipped/implement/requirements-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/requirements-analyst"
+    ],
+    "sha256": "3ebe92163b1d0f2b38f34eeb898d86fbf573cea73be1f9448ae4958d734328a2",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing"
+  },
+  "shipped/implement/test-writer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:merge_pull_request",
+        "github:delete_ref"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:implement/implementing",
+      "body:implement/test-writer",
+      "skill:implement/change-format"
+    ],
+    "sha256": "2641d9ed77273db70a22d0414aca8ce7d363fbb56b80d933c4e3f4ef63f7e2fc",
+    "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|skill:implement/change-format"
+  },
+  "shipped/retro/retro-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:retro/retro",
+      "body:retro/retro-analyst"
+    ],
+    "sha256": "5e7d9e9d9dd3b516a71a6f9856d2b1d7ef35a5de9180a00c4535e64951e594ca",
+    "signature_without_body": "guardrail:baseline|guardrail:retro/retro"
+  },
+  "shipped/review/intent-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/intent-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision"
+    ],
+    "sha256": "3e79f9551841e8991162c929c7f940aea634ec1a2aa8d3a79ef7850c25a11633",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision"
+  },
+  "shipped/review/performance-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/performance-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision"
+    ],
+    "sha256": "c0da0534c38d866921b6b0886455acae522ada977571d9849c61bb10c42c00ac",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision"
+  },
+  "shipped/review/security-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/security-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision"
+    ],
+    "sha256": "fa44743b6d57913895c7d83e3de4776786105f1fdd093ae6eea8f7d19903daa8",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision"
+  },
+  "shipped/review/tests-reviewer": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_pull_request",
+        "github:merge_pull_request",
+        "github:update_issue"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:review/reviewing",
+      "body:review/tests-reviewer",
+      "skill:review/review-format",
+      "skill:review/review-revision"
+    ],
+    "sha256": "f4bda38685696bba0421fbe1fcf1dc242c099aa2b8b424a39db439a654af5c4c",
+    "signature_without_body": "guardrail:baseline|guardrail:review/reviewing|skill:review/review-format|skill:review/review-revision"
+  },
+  "shipped/triage/triage-analyst": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [
+        "github:create_issue",
+        "github:update_issue",
+        "github:create_pull_request"
+      ],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:triage/triage",
+      "body:triage/triage-analyst",
+      "skill:triage/triage-format"
+    ],
+    "sha256": "7b938c99012b7d9240a1c3b7b55281aa635ba0c8ed6be58c0b6cc300e6053ea4",
+    "signature_without_body": "guardrail:baseline|guardrail:triage/triage|skill:triage/triage-format"
+  }
+}

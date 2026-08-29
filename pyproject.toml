@@ -1,7 +1,7 @@
 [project]
 name = "in-lockstep"
-version = "0.1.0"
-description = "Compiles pipeline-framework definitions into GitHub Agentic Workflows"
+version = "1.0.0"
+description = "An agentic SDLC framework for Python. Your lifecycle is executable code, not a manifest."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -9,10 +9,21 @@ license-files = ["LICENSE", "NOTICE"]
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
+    "httpx>=0.27",
 ]
 
+# Model SDKs are extras, not runtime dependencies. A bare `pip install in-lockstep` must not
+# drag pydantic-core, grpcio, google-auth and botocore into a job that calls one provider —
+# cold start is what R1-DEVOPS-3 resolved and what an in-process model call threatens.
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+bedrock = ["anthropic[bedrock]>=0.40"]
+google = ["anthropic[vertex]>=0.40", "google-genai>=1.0"]
+openai = ["openai>=1.40"]
+all = ["anthropic[bedrock,vertex]>=0.40", "google-genai>=1.0", "openai>=1.40"]
+
 [project.scripts]
-lockstep = "lockstep.cli:main"
+in-lockstep = "in_lockstep.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/in-lockstep/lockstep"
@@ -27,30 +38,27 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0",
     "pytest-cov>=7.1.0",
-    "in-lockstep-exec",
 ]
 
-# One repo, two distributions: `in-lockstep` (this) and `in-lockstep-exec` (the runtime). The
-# distribution names carry the organization prefix because the bare names belong to unrelated
-# projects on PyPI — and a generated workflow that installs the compiler by name from a public index
-# must not be able to resolve to somebody else's package. Import names and console scripts are
-# unaffected: the module is still `lockstep`, the command is still `lockstep`.
-#
-# The compiler emits `pipeline-exec` invocations as literal text, so the two are developed and
-# tested together — see tests/test_contract.py. A generated pipeline repo installs only the runtime,
-# never the compiler.
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-in-lockstep-exec = { workspace = true }
+# One repository, one distribution. `in-lockstep` carries the organization prefix because the bare
+# name belongs to an unrelated project on PyPI. The second distribution this repository used to
+# build, `in-lockstep-exec`, was the runtime a compiler emitted invocations of; it was deleted with
+# that compiler's last consumer. See ADR 0001.
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Prompts and eval cases are package data, not Python: the failure that never shows up in a source
+# checkout and always shows up in a clean install. They travel because they live INSIDE the package
+# directory, which hatchling copies whole — so no `force-include` is needed, and the one that used
+# to be here added each file a second time at the same archive path and made the wheel unbuildable.
+# `release-python.yml` proves the data arrives by reading it back out of site-packages.
 [tool.hatch.build.targets.wheel]
-packages = ["src/lockstep"]
+packages = ["src/in_lockstep"]
+# The replay fixture is package data like the prompts and the corpus: a .json and a .diff, so a
+# wheel build that only collected .py files would ship a `--offline` that cannot replay anything.
+artifacts = ["src/in_lockstep/cassettes/*"]
 
 [tool.ruff]
 line-length = 110
@@ -58,27 +66,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-
-# Code extracted verbatim from pipeline-framework. It carries resilience behaviour earned against a
-# real application, so cosmetic rules do not apply to it and — more importantly — `make fmt` must
-# never silently rewrite it. Changes here should be deliberate and reviewed against the origin.
-[tool.ruff.lint.per-file-ignores]
-# The scaffold carries the files a new repository starts with, verbatim, inside string literals.
-# Rewrapping them to satisfy a line-length rule would change what a user's first eval case looks
-# like to suit this repository's formatter.
-"src/lockstep/scaffold.py" = ["E501"]
-"packages/pipeline-exec/src/pipeline_exec/executors/*" = ["E501", "B007"]
-# discovery.py is excluded: it was rewritten here rather than extracted, so it is held to this
-# repo's rules like anything else.
-"packages/pipeline-exec/src/pipeline_exec/builtins/test_runner.py" = ["E501", "B007"]
-"packages/pipeline-exec/src/pipeline_exec/reports/*" = ["E501", "B007"]
-
-[tool.ruff.format]
-exclude = [
-    "packages/pipeline-exec/src/pipeline_exec/executors/**",
-    "packages/pipeline-exec/src/pipeline_exec/builtins/test_runner.py",
-    "packages/pipeline-exec/src/pipeline_exec/reports/**",
-]
 
 [tool.mypy]
 python_version = "3.11"
@@ -90,50 +77,33 @@ disallow_untyped_defs = true
 module = "tests.*"
 disallow_untyped_defs = false
 
-# The extracted executors predate this repo's strict settings. They are type-checked, but not held to
-# strict-mode rules that would require rewriting code whose behaviour we deliberately preserved.
+# Model SDKs are optional extras; the providers import them lazily inside `__init__`.
 [[tool.mypy.overrides]]
-module = "pipeline_exec.executors.*"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-disallow_untyped_calls = false
-
-# Playwright is an optional extra: API and CLI tests do not need it, and the module imports it lazily.
-[[tool.mypy.overrides]]
-module = "playwright.*"
+module = ["anthropic.*", "openai.*", "google.*", "google.genai.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "pipeline_exec.builtins.test_runner"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-module = "pipeline_exec.reports.*"
-disallow_untyped_defs = false
-disallow_any_generics = false
-warn_return_any = false
-
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/pipeline-exec/tests"]
-pythonpath = ["src", "packages/pipeline-exec/src"]
+testpaths = ["tests"]
+pythonpath = ["src"]
 # `TestScript` is a dataclass, not a test case.
 python_classes = ["*Tests"]
+filterwarnings = [
+    "error::DeprecationWarning",
+    # Every sandboxed verb runs a child process, and `asyncio.run` closes its loop as soon as the
+    # coroutine returns. A subprocess transport collected after that raises "Event loop is closed"
+    # from `__del__`, and pytest attributes it to whichever unrelated test triggered the
+    # collection. The child has already exited and been reaped by then — the transport is closed
+    # explicitly inside the loop in adapters/sandbox.py — so this is a reporting artefact rather
+    # than a leak. Narrowed to the exact message so a real unraisable exception still fails.
+    "ignore:Exception ignored in.*BaseSubprocessTransport:pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 branch = false
 
 [tool.coverage.report]
 exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
-# The session executors drive a real browser, a real API and a real shell against a running
-# application; they cannot be meaningfully covered without one. They arrived from
-# pipeline-framework with no tests of their own, so this is inherited debt, recorded rather than
-# hidden: `make cov-all` reports the true figure, and closing it needs a fixture application.
-omit = [
-    "*/pipeline_exec/executors/api_session.py",
-    "*/pipeline_exec/executors/browser_session.py",
-    "*/pipeline_exec/executors/cli_session.py",
-    "*/pipeline_exec/executors/direct_executor.py",
-]
+# No omit list. The session executors drive a real browser, API and shell against a running
+# application and cannot be meaningfully covered without one — which is exactly why they are NOT
+# excluded any more. `make cov` passes --cov-config=/dev/null so nothing here applies to the gate,
+# and the floor is the true figure rather than a comfortable one computed over a subset.
