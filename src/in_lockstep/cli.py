@@ -2151,11 +2151,13 @@ def _scaffold_implement(module: Path) -> None:
 def _scaffold_fix(module: Path) -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
-    `fix/from-issue` is also the target the ai-generated-issue hook routes to (a later slice adds
-    the trigger). The appended block guards each shared binding, so it composes with
-    `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
+    `fix/from-issue` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
+    fires on an issue labeled `ai-generated` and runs the same workflow, closing the loop where a
+    failed fix opens the next issue. The appended block guards each shared binding, so it composes
+    with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
     """
     _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
+    _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
 
     text = module.read_text() if module.exists() else ""
     if "fix/from-issue" in text:
@@ -2704,6 +2706,107 @@ jobs:
 
   propose:
     needs: [gate, fix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: fix
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/fix
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
+            --arg issue="#${ISSUE}" \\
+            --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history \\
+            --from-bundle "${RUNNER_TEMP}/fix/history.bundle" \\
+            --push
+        if: always()
+        continue-on-error: true
+"""
+
+
+_SCAFFOLD_AI_GENERATED_TRAMPOLINE = """\
+# The self-feeding half of the loop: an issue labeled `ai-generated` — by a maintainer, or by the
+# framework itself when an earlier fix failed its tests — routes straight to the fix workflow. There
+# is no gate job here, and that is deliberate: adding a label needs write access, so the label IS
+# the authorization the `/fix` comment path needs a gate to establish (anyone can comment; not
+# anyone can label). The loop is bounded by `lockstep.max_attempts` — a failed fix opens the next
+# `ai-generated` issue only until the cap — so this trigger cannot run away.
+#
+# Same credential split as fix.yml, and pinned by version and SHA for the same reason.
+name: ai-generated
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions: {}
+
+concurrency:
+  group: ai-generated-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    # `labeled` carries the one label just added; `opened` carries the whole set, because an issue
+    # created with the label fires `opened` and not always a separate `labeled`. Check both.
+    if: >-
+      github.event.label.name == 'ai-generated' ||
+      contains(github.event.issue.labels.*.name, 'ai-generated')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        continue-on-error: true
+      # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when the
+      # framework opened the follow-up. The grant is the write-gated label, not a comment.
+      - run: |
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-issue \\
+            --arg issue="#${ISSUE}" \\
+            --approved-by "labeled:${LABELER}" \\
+            --budget 3.00
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          LABELER: ${{ github.event.sender.login }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: |
+            fix-changeset/
+            history.bundle
+          if-no-files-found: ignore
+
+  propose:
+    needs: fix
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: fix
