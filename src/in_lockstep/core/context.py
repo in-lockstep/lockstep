@@ -64,11 +64,67 @@ class Approval:
 
 
 @dataclass(frozen=True)
+class RepoFacts:
+    """What detection found in the tree, so the drop-in defaults fit the repository instead of
+    assuming Python.
+
+    Pure data: the filesystem read happens in the lockstep layer (`Lockstep.detect`), and this is
+    the result it hands to the composition root, which decides what to bind. A default, never a
+    verdict — everything here is overridable, and an explicit bind in `lockstep.py` wins over any
+    binding derived from it.
+    """
+
+    stack: str = ""  # "python" | "node" | "" when neither is recognised
+    pytest: bool = False
+    test_command: tuple[str, ...] = ()  # a generic runner argv, e.g. ("npm", "test")
+    ruff: bool = False
+    eslint: bool = False
+    lint_command: tuple[str, ...] = ()  # a generic linter argv, e.g. ("npx", "eslint", ".")
+    dockerfile: bool = False
+    makefile: bool = False
+    make_targets: tuple[str, ...] = ()
+    coverage: bool = False
+    ci_host: str = ""  # "github" | "gitlab" | ""
+    readme: bool = False
+    docs: bool = False
+    agent_instructions: tuple[str, ...] = ()  # e.g. ("CLAUDE.md", "AGENTS.md")
+
+    def summary(self) -> tuple[str, ...]:
+        """A human-readable list of what was found, for `ls` and `doctor`."""
+        out: list[str] = []
+        if self.stack:
+            out.append(f"stack: {self.stack}")
+        if self.pytest:
+            out.append("tests: pytest")
+        elif self.test_command:
+            out.append(f"tests: {' '.join(self.test_command)}")
+        if self.ruff:
+            out.append("lint: ruff")
+        elif self.lint_command:
+            out.append(f"lint: {' '.join(self.lint_command)}")
+        if self.coverage:
+            out.append("coverage config")
+        if self.dockerfile:
+            out.append("Dockerfile")
+        if self.makefile:
+            targets = f" ({', '.join(self.make_targets)})" if self.make_targets else ""
+            out.append(f"Makefile{targets}")
+        if self.ci_host:
+            out.append(f"ci: {self.ci_host}")
+        if self.docs:
+            out.append("docs/")
+        for name in self.agent_instructions:
+            out.append(name)
+        return tuple(out)
+
+
+@dataclass(frozen=True)
 class RepoInfo:
     root: str
     head: str = ""
     branch: str = ""
     dirty: bool = False
+    facts: RepoFacts = field(default_factory=RepoFacts)
 
 
 @dataclass(frozen=True)

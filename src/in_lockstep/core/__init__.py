@@ -2,7 +2,7 @@
 
 from .changes import ChangeGuard, PathPolicy, Refusal
 from .container import Container, ResolutionError, Scope, Tier
-from .context import RepoInfo, RunContext, StepId, current_context, killswitch_engaged
+from .context import RepoFacts, RepoInfo, RunContext, StepId, current_context, killswitch_engaged
 from .middleware import ActionCall, Middleware, compose
 from .outcome import ArtifactRef, Cost, Finding, Outcome, Severity, Status
 from .policy import Policy, PolicyStack, ResolvedPolicy
@@ -48,6 +48,7 @@ __all__ = [
     "Policy",
     "PolicyStack",
     "Refusal",
+    "RepoFacts",
     "RepoInfo",
     "ResolutionError",
     "ResolvedPolicy",

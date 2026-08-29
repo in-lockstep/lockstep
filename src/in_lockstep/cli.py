@@ -11,8 +11,8 @@ import click
 from click.core import ParameterSource
 
 from . import __version__
-from .adapters.pytest_adapter import PytestTest, Test
-from .adapters.ruff_adapter import RuffValidate, Validate
+from .adapters.pytest_adapter import Test
+from .adapters.ruff_adapter import Validate
 from .core.context import DISABLE_ENV
 from .core.outcome import Status
 from .core.types import TestSpec, ValidateSpec
@@ -54,6 +54,10 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
             reviewing=ci_env.reviewing if ci_env else False,
         )
         configured = lockstep_from(module)
+        # Detected defaults are NOT applied here. A repository that ships a module has made its
+        # choices, and silently binding a detected adapter for a verb it left unbound would be a
+        # surprise, not a convenience — the drop-in case detection serves is the repository with
+        # no module at all, handled in the fallback below.
         # Said out loud. This is the control that replaces gh-aw's workflow-file provenance, and
         # it spent a CI run silently not applying — a bare `main` does not resolve in an
         # `actions/checkout` working directory, so configuration fell through to detected
@@ -76,11 +80,24 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
         click.echo(f"config    none ({e})", err=True)
 
     lockstep = Lockstep.detect()
-    lockstep.bind(Validate, RuffValidate(cwd=lockstep.repo.root))
-    lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], cwd=lockstep.repo.root))
+    # Bound from what the tree actually is, not from the assumption it is Python. A Node repository
+    # used to get pytest bound here regardless, which broke its first run; now it gets `npm test`
+    # if that is what detection found, and nothing for a verb detection could not place.
+    _apply_detected_defaults(lockstep)
     recorder = Recorder()
     lockstep.middleware = [otel(recorder)]
     return lockstep, recorder
+
+
+def _apply_detected_defaults(lockstep: Lockstep) -> None:
+    """Install the bindings a repository's detected parts imply, at `Tier.DEFAULT` so any explicit
+    bind in the module overrides them. Reads `lockstep.repo.facts`, which `Lockstep.detect`
+    populated."""
+    from .adapters import detected_bindings
+    from .core.container import Tier
+
+    for iface, impl in detected_bindings(lockstep.repo.facts):
+        lockstep.bind(iface, impl, tier=Tier.DEFAULT)
 
 
 def _bound_cost_table(lockstep: Lockstep) -> Any:
@@ -451,11 +468,17 @@ def _echo_telemetry(recorder: Recorder | None) -> None:
 
 @workflow(id="selfcheck")
 async def selfcheck(ctx: Any, paths: tuple[str, ...]) -> dict[str, Any]:
-    """Validate, then test. The smallest thing that proves the core actually dispatches."""
-    validate = await ctx.do(Validate, ValidateSpec(paths=paths))
-    if validate.status is Status.BLOCKED:
+    """Validate, then test. The smallest thing that proves the core actually dispatches.
+
+    Skips a verb nothing is bound to rather than raising: detection binds only what it found, so a
+    repository whose stack it could not place has no Test or Validate, and a `ResolutionError`
+    traceback there would read as a broken tool rather than an unconfigured one.
+    """
+    bound = ctx.container.has
+    validate = await ctx.do(Validate, ValidateSpec(paths=paths)) if bound(Validate) else None
+    if validate is not None and validate.status is Status.BLOCKED:
         return {"validate": validate, "tests": None}
-    tests = await ctx.do(Test, TestSpec(paths=paths))
+    tests = await ctx.do(Test, TestSpec(paths=paths)) if bound(Test) else None
     return {"validate": validate, "tests": tests}
 
 
@@ -597,6 +620,9 @@ def ls_cmd() -> None:
         f"  branch {lockstep.repo.branch or '(none)'}"
         f"{'  dirty' if lockstep.repo.dirty else ''}"
     )
+    detected = lockstep.repo.facts.summary()
+    if detected:
+        click.echo(f"detected  {'; '.join(detected)}")
     if os.environ.get(DISABLE_ENV):
         click.echo(f"DISABLED  {DISABLE_ENV} is set; no adapter will execute")
 
@@ -1692,9 +1718,13 @@ def init_cmd(force: bool, with_implement: bool) -> None:
     if module.exists() and not force:
         click.echo(f"{MODULE_FILE} exists (use --force to overwrite)")
     else:
+        facts = Lockstep.detect().repo.facts
         module.parent.mkdir(parents=True, exist_ok=True)
-        module.write_text(_SCAFFOLD_MODULE)
+        module.write_text(_scaffold_module(facts))
         click.echo(f"wrote {MODULE_FILE}")
+        found = facts.summary()
+        if found:
+            click.echo(f"  detected {'; '.join(found)}")
 
     if _write_trampoline(Path(".github/workflows/lockstep.yml"), _SCAFFOLD_TRAMPOLINE):
         click.echo("")
@@ -1790,6 +1820,65 @@ def _scaffold_implement(module: Path) -> None:
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
 
+def _scaffold_module(facts: Any) -> str:
+    """The lifecycle scaffold, reflecting what detection found in the tree.
+
+    The deterministic-verb binds are generated from the facts, the same way `detected_bindings`
+    binds the drop-in defaults: a Node repository gets `CommandTest(["npm", "test"])`, and a part
+    detection could not place is a commented stub — with its own import — rather than a wrong
+    default that runs. Only the adapters actually bound are imported, so a generated module never
+    ships an unused import. Everything else — the egress opt-out and the middleware — is identical
+    in every scaffold; the trampoline is byte-identical across repos, and this file is the one
+    `init` fits to the stack.
+    """
+    imports: list[str] = ["Test", "Validate"]
+    test_bind = _bind_line(facts, "Test", imports)
+    validate_bind = _bind_line(facts, "Validate", imports)
+    # Nothing detected for a verb → its interface is referenced only in a comment, so drop it from
+    # the import to avoid an unused name; the stub carries its own commented import instead. If
+    # nothing was placed at all, there is no adapter import line — an empty one is a syntax error.
+    used = sorted(set(imports))
+    adapter_import = (
+        f"from in_lockstep.adapters import {', '.join(used)}"
+        if used
+        else "# No adapters detected yet — bind them in the stubs below."
+    )
+    return _SCAFFOLD_MODULE.format(
+        adapter_import=adapter_import, test_bind=test_bind, validate_bind=validate_bind
+    )
+
+
+def _bind_line(facts: Any, verb: str, imports: list[str]) -> str:
+    """One deterministic-verb bind for the scaffold, plus the imports it needs (appended in place).
+    A commented, self-contained stub when detection placed nothing, so the generated module has no
+    default that runs unbidden and no name imported but unused."""
+    if verb == "Test":
+        if getattr(facts, "pytest", False):
+            imports.append("PytestTest")
+            return 'lockstep.bind(Test, PytestTest(args=["-q"]))'
+        if getattr(facts, "test_command", ()):
+            imports.append("CommandTest")
+            return f"lockstep.bind(Test, CommandTest({list(facts.test_command)!r}))"
+        imports.remove("Test")
+        return (
+            "# No test runner was detected. Bind one, e.g.:\n"
+            "#   from in_lockstep.adapters import CommandTest, Test\n"
+            '#   lockstep.bind(Test, CommandTest(["npm", "test"]))'
+        )
+    if getattr(facts, "ruff", False):
+        imports.append("RuffValidate")
+        return "lockstep.bind(Validate, RuffValidate())"
+    if getattr(facts, "lint_command", ()):
+        imports.append("CommandValidate")
+        return f"lockstep.bind(Validate, CommandValidate({list(facts.lint_command)!r}))"
+    imports.remove("Validate")
+    return (
+        "# No linter was detected. Bind one, e.g.:\n"
+        "#   from in_lockstep.adapters import RuffValidate, Validate\n"
+        "#   lockstep.bind(Validate, RuffValidate())"
+    )
+
+
 _SCAFFOLD_MODULE = '''"""The lifecycle for this repository.
 
 This file IS the configuration: it is executed, not parsed. Anything you can express in Python
@@ -1797,15 +1886,15 @@ you can express here — but keep it pure, because it is imported to be inspecte
 """
 
 from in_lockstep import Lockstep
-from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
+{adapter_import}
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
 lockstep = Lockstep.detect()
 
-# Deterministic verbs bind adapters over real tools.
-lockstep.bind(Test, PytestTest(args=["-q"]))
-lockstep.bind(Validate, RuffValidate())
+# Deterministic verbs bind adapters over real tools. `in-lockstep ls` prints what detection found.
+{test_bind}
+{validate_bind}
 
 # THIS IS AN OPT-OUT FROM A CONTROL, and it is a visible line on purpose. A review reads a diff
 # authored by whoever opened the change, so the model is sent UNTRUSTED_EXTERNAL content, and
