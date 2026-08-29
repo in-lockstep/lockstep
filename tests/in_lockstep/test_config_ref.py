@@ -80,6 +80,12 @@ def _origin_repo(tmp_path: Path, name: str = "r") -> Path:
         cwd=root,
         check=True,
     )
+    # Pinned, not assumed. `git init` uses whatever `init.defaultBranch` says, which is `main` on
+    # this machine and `master` on the CI runner — so without this the clone below has
+    # `origin/master`, neither candidate for `main` resolves, and the test fails on the fixture
+    # rather than on the thing it is testing. The helper above this section already did it; I did
+    # not copy the line, and CI caught it.
+    subprocess.run(["git", "branch", "-M", "main"], cwd=root, check=True)
     return root
 
 
