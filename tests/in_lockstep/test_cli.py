@@ -346,6 +346,46 @@ def test_the_scaffold_carries_a_timeout(repo: Path) -> None:
     assert all("timeout-minutes" in j for j in workflow["jobs"].values())
 
 
+def test_init_reflects_a_node_stack_instead_of_assuming_pytest(repo: Path) -> None:
+    """A Node repo's scaffold must bind a command runner, not pytest — the drop-in failure the
+    detection closes."""
+    (repo / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "CommandTest" in module and "PytestTest" not in module
+    assert "npm" in module
+    compile(module, "lockstep.py", "exec")
+
+
+def test_init_on_a_python_repo_is_the_familiar_pytest_scaffold(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
+    CliRunner().invoke(main, ["init"])
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "lockstep.bind(Test, PytestTest" in module
+    assert "lockstep.bind(Validate, RuffValidate" in module
+    compile(module, "lockstep.py", "exec")
+
+
+def test_init_leaves_a_commented_stub_for_an_undetected_verb(repo: Path) -> None:
+    """An empty directory gets no default that runs unbidden, and no unused import — the module
+    still compiles with both deterministic verbs as self-contained commented stubs."""
+    result = CliRunner().invoke(main, ["init"])
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "No test runner was detected" in module
+    assert "No linter was detected" in module
+    assert "lockstep.bind(Test," not in module.replace("#   lockstep.bind(Test,", "")
+    compile(module, "lockstep.py", "exec")
+    assert result.exit_code == 0
+
+
+def test_ls_reports_what_detection_found(repo: Path) -> None:
+    (repo / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    result = CliRunner().invoke(main, ["ls"])
+    assert "detected" in result.output
+    assert "stack: node" in result.output
+
+
 def test_the_scaffold_states_the_measured_budget_not_the_guessed_one(repo: Path) -> None:
     """lockstep.yml raised its ceiling from $0.25 after a real run showed what $0.25 was sized
     for — it refused the runs most worth reviewing. The scaffold had kept the old number, so a
@@ -759,6 +799,9 @@ def test_run_selfcheck_dispatches_both_verbs(repo: Path) -> None:
 
 def test_the_killswitch_halts_before_any_adapter(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """GATE-ASYNC-3, through the CLI: the flag must beat the chain, not sit inside it."""
+    # A detectable stack, so the scaffold binds a Test for the killswitch to halt before — an
+    # empty directory now binds nothing, and there would be no adapter to prove the flag beats.
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
     CliRunner().invoke(main, ["init"])
     monkeypatch.setenv("IN_LOCKSTEP_DISABLE", "1")
     result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])

@@ -15,7 +15,7 @@ from typing import Any
 
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
-from .core.context import Approval, RepoInfo, RunContext
+from .core.context import Approval, RepoFacts, RepoInfo, RunContext
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, Spend, UndeclaredBudget
@@ -180,4 +180,113 @@ def _detect_repo(path: Path) -> RepoInfo:
         head=git("rev-parse", "HEAD"),
         branch=git("rev-parse", "--abbrev-ref", "HEAD"),
         dirty=bool(git("status", "--porcelain")),
+        facts=_detect_facts(Path(root)),
     )
+
+
+def _detect_facts(root: Path) -> RepoFacts:
+    """Read the marker files, so a drop-in default fits the repository rather than assuming Python.
+
+    Deliberately conservative: every signal here is a file that exists or a string that appears in
+    one, never a heuristic that guesses. A repository this misreads binds the wrong default, and a
+    wrong default that runs is worse than an honest absence — so when in doubt this reports nothing
+    for that slot and the scaffold leaves a commented stub.
+    """
+    import json as _json
+
+    def has(*names: str) -> bool:
+        return any((root / n).exists() for n in names)
+
+    def read(name: str) -> str:
+        try:
+            return (root / name).read_text()
+        except OSError:
+            return ""
+
+    pyproject = read("pyproject.toml")
+    package_json_raw = read("package.json")
+    package: dict[str, Any] = {}
+    if package_json_raw:
+        try:
+            loaded = _json.loads(package_json_raw)
+            package = loaded if isinstance(loaded, dict) else {}
+        except ValueError:
+            package = {}
+
+    python = bool(pyproject) or has("setup.py", "setup.cfg") or has("requirements.txt")
+    node = bool(package)
+    stack = "python" if python else ("node" if node else "")
+
+    scripts = package.get("scripts") if isinstance(package.get("scripts"), dict) else {}
+    # A pytest-specific marker only, never a bare `tests/` directory: a Django or stdlib-unittest
+    # repository keeps its tests in `tests/` and does not run pytest, so binding PytestTest from
+    # the directory name is the guess this function's docstring says it will not make — and a wrong
+    # default that runs (`python -m pytest` erroring, or collecting under the wrong runner) is worse
+    # than an honest absence the scaffold leaves as a stub.
+    pytest = python and (
+        has("pytest.ini", "conftest.py") or "[tool.pytest" in pyproject or "[pytest]" in read("tox.ini")
+    )
+    test_command: tuple[str, ...] = ()
+    if not pytest and isinstance(scripts, dict) and "test" in scripts:
+        test_command = ("npm", "test")
+
+    ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
+    eslint = (
+        has(".eslintrc", ".eslintrc.js", ".eslintrc.json", ".eslintrc.yml", ".eslintrc.cjs")
+        # ESLint 9's flat config, the default since 2024 — a modern Node repo has only these.
+        or has("eslint.config.js", "eslint.config.mjs", "eslint.config.cjs")
+        or isinstance(package.get("eslintConfig"), dict)
+    )
+    lint_command: tuple[str, ...] = ("npx", "eslint", ".") if (eslint and not ruff) else ()
+
+    make_targets: tuple[str, ...] = ()
+    makefile = has("Makefile", "makefile")
+    if makefile:
+        make_targets = _make_targets(read("Makefile") or read("makefile"))
+
+    coverage = (
+        has(".coveragerc", ".coverage-floor")
+        or "[tool.coverage" in pyproject
+        or "[coverage:" in read("setup.cfg")
+    )
+
+    ci_host = (
+        "github" if (root / ".github" / "workflows").is_dir() else ("gitlab" if has(".gitlab-ci.yml") else "")
+    )
+
+    agent_instructions = tuple(n for n in ("CLAUDE.md", "AGENTS.md", ".cursorrules") if (root / n).exists())
+
+    return RepoFacts(
+        stack=stack,
+        pytest=pytest,
+        test_command=test_command,
+        ruff=ruff,
+        eslint=eslint,
+        lint_command=lint_command,
+        dockerfile=has("Dockerfile", "Containerfile"),
+        makefile=makefile,
+        make_targets=make_targets,
+        coverage=coverage,
+        ci_host=ci_host,
+        readme=has("README.md", "README.rst", "README.txt", "README"),
+        docs=(root / "docs").is_dir(),
+        agent_instructions=agent_instructions,
+    )
+
+
+def _make_targets(text: str) -> tuple[str, ...]:
+    """The named targets in a Makefile, first few, ignoring pattern rules and `.PHONY`.
+
+    The `::?(?!=)` is what keeps a simply-expanded variable assignment out: `CC:=gcc` and the
+    double-colon `X::=y` both put an `=` right after the colon(s), where a real target
+    (`check:` or a double-colon rule `x::`) does not, so the lookahead excludes the assignments a
+    bare `:` would have captured as targets.
+    """
+    import re
+
+    seen: list[str] = []
+    for match in re.finditer(r"(?m)^([A-Za-z][A-Za-z0-9_-]*)::?(?!=)", text):
+        name = match.group(1)
+        if name not in seen and not name.startswith("."):
+            seen.append(name)
+    return tuple(seen[:8])
