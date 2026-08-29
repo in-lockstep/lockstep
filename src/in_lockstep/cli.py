@@ -2015,7 +2015,13 @@ def show_prompt_cmd(name: str, projection: bool) -> None:
     is_flag=True,
     help="Also scaffold the /implement chat-ops trampoline and its two workflows.",
 )
-def init_cmd(force: bool, with_implement: bool) -> None:
+@click.option(
+    "--fix",
+    "with_fix",
+    is_flag=True,
+    help="Also scaffold the /fix chat-ops trampoline and its two workflows (the ai-generated-issue target).",
+)
+def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
     """Scaffold a lifecycle definition and a CI trampoline.
 
     The trampoline is written once and never read back: there is no drift check on it, and no
@@ -2053,6 +2059,8 @@ def init_cmd(force: bool, with_implement: bool) -> None:
 
     if with_implement:
         _scaffold_implement(module)
+    if with_fix:
+        _scaffold_fix(module)
 
 
 def _write_trampoline(path: Path, template: str) -> bool:
@@ -2138,6 +2146,32 @@ def _scaffold_implement(module: Path) -> None:
     click.echo("  3. Read the EGRESS note in the appended block: the review scaffold's")
     click.echo("     UnsandboxedEgress binding is global, so this write-capable verb inherits it.")
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
+
+
+def _scaffold_fix(module: Path) -> None:
+    """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
+
+    `fix/from-issue` is also the target the ai-generated-issue hook routes to (a later slice adds
+    the trigger). The appended block guards each shared binding, so it composes with
+    `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
+    """
+    _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
+
+    text = module.read_text() if module.exists() else ""
+    if "fix/from-issue" in text:
+        click.echo(f"{module} already defines fix/from-issue — left alone")
+    elif not _binds_lockstep(text):
+        click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
+        click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
+    else:
+        merged = text + _SCAFFOLD_FIX_MODULE
+        try:
+            compile(merged, str(module), "exec")
+        except SyntaxError as e:
+            click.echo(f"{module} would not parse after adding the fix block ({e}); left alone.")
+        else:
+            module.write_text(merged)
+            click.echo(f"extended {module} with fix/from-issue and fix/propose")
 
 
 def _scaffold_module(facts: Any) -> str:
@@ -2452,6 +2486,237 @@ jobs:
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history \\
             --from-bundle "${RUNNER_TEMP}/implement/history.bundle" \\
+            --push
+        if: always()
+        continue-on-error: true
+"""
+
+
+_SCAFFOLD_FIX_MODULE = '''
+
+# --- appended by `in-lockstep init --fix` --------------------------------------------------------
+# The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
+# comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
+# reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
+from typing import Any
+
+from in_lockstep.adapters.ai.fix import AiFix, Fix, FixSpec
+from in_lockstep.adapters.pytest_adapter import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.adapters.worktree import WorktreeRunner
+from in_lockstep.ai.bootstrap import invoker_factory
+from in_lockstep.ai.invoker import InvokePolicy
+from in_lockstep.core.outcome import Outcome, Status
+from in_lockstep.core.workflow import workflow
+from in_lockstep.middleware.approval import ApprovalGate
+from in_lockstep.platform.artifacts import read_changeset, write_changeset
+from in_lockstep.platform.scm import GitHubScm, Scm
+from in_lockstep.platform.tickets import GitHubIssues, TicketSource
+from in_lockstep.strategies import default_registry as _fix_strategies
+
+# Each binding is guarded, so this block works on its own and also composes with the implement
+# scaffold without binding TicketSource, Scm, Test or the approval gate a second time.
+if not lockstep.container.has(TicketSource):
+    lockstep.bind(TicketSource, GitHubIssues())
+if not lockstep.container.has(Scm):
+    lockstep.bind(Scm, GitHubScm())
+if not lockstep.container.has(Test):
+    lockstep.bind(Test, PytestTest())
+if not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
+    lockstep.middleware += [ApprovalGate()]
+
+lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
+
+# Fix writes and executes, like implement: a reproducer and a fix, each run in a throwaway worktree
+# inside a no-network container, so a model's command reaches neither the network nor the real
+# .git/.lockstep past ChangeGuard.
+lockstep.bind(
+    Fix,
+    AiFix(
+        invoker_factory(lockstep.models.routes.get("fix", "")),
+        registry=_fix_strategies(),
+        repo_root=lockstep.repo.root,
+        commands=WorktreeRunner(
+            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+            lockstep.repo.root,
+        ),
+        policy=InvokePolicy.under(
+            lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
+        ),
+    ),
+)
+
+#: Where the unprivileged half leaves the fix for the privileged half to open.
+FIX_CHANGESET = "fix-changeset"
+
+
+@workflow(id="fix/from-issue")
+async def fix_from_issue(ctx: Any, issue: str) -> Outcome:
+    """Read the bug, reproduce it, fix it, and leave the change staged for the privileged half.
+
+    Writes nothing to the tree. A fix that did not go green stages nothing — a broken fix must not
+    travel — and the propose half says so on the issue rather than opening a pull request.
+    """
+    tickets: TicketSource = ctx.container.resolve(TicketSource)
+    ticket = await tickets.get(issue)
+    outcome = await ctx.do(Fix, FixSpec(ticket=ticket))
+
+    report = outcome.value
+    if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
+        written = write_changeset(FIX_CHANGESET, report.changeset)
+        print(f"staged    reproducer + fix -> {written}")
+    return outcome
+
+
+@workflow(id="fix/propose")
+async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Outcome:
+    """Open the verified fix from the staged artifact, and say on the issue what happened.
+
+    Runs in the job that holds a write token and no provider credential. What it reads came from
+    another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the set before
+    it writes a byte, and refuses any branch outside the run-scoped prefix.
+    """
+    tickets: TicketSource = ctx.container.resolve(TicketSource)
+    scm: Scm = ctx.container.resolve(Scm)
+    changeset = read_changeset(artifact)
+
+    if not changeset.changes:
+        await tickets.comment(await tickets.get(issue), "`/fix` produced no verified fix.")
+        return Outcome(status=Status.FAILED, reason="fix.no_changes")
+
+    change = await scm.open_change(
+        changeset,
+        title=changeset.summary or f"Fix {issue}",
+        body=(
+            "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
+            "The issue text is untrusted input to a model that held write tools, so review this as "
+            "you would a change from a stranger who had read your repository."
+        ),
+        ticket=issue,
+        workflow="fix",
+        run_id=ctx.run_id,
+    )
+    await tickets.comment(
+        await tickets.get(issue),
+        f"`/fix` opened {change.url or change.branch}. Nobody has read it yet.",
+    )
+    print(f"change    {change.url or change.branch}")
+    return Outcome(status=Status.SUCCEEDED, value=change)
+'''
+
+
+_SCAFFOLD_FIX_TRAMPOLINE = """\
+# The /fix chat-ops flow: gate the asker, reproduce-and-fix under the provider key with no write
+# token, then open the pull request from the job that holds the token and no key. Same three-job
+# credential split as implement.yml, because fix writes too. A later slice adds an `issues:
+# labeled` trigger so an `ai-generated` bug routes here on its own.
+#
+# Pinned by version and by SHA: an unpinned install runs whatever the registry serves next, beside
+# the provider key.
+name: fix
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: fix-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: >-
+      !github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/fix')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      actor: ${{ steps.check.outputs.actor }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - id: check
+        run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep gate \\
+            --actor "$ACTOR" --association "$ASSOCIATION"
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+        env:
+          ACTOR: ${{ github.event.comment.user.login }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+
+  fix:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        continue-on-error: true
+      - run: |
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-issue \\
+            --arg issue="#${ISSUE}" \\
+            --approved-by "${ACTOR}" \\
+            --budget 3.00
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          ACTOR: ${{ needs.gate.outputs.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: |
+            fix-changeset/
+            history.bundle
+          if-no-files-found: ignore
+
+  propose:
+    needs: [gate, fix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: fix
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/fix
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
+            --arg issue="#${ISSUE}" \\
+            --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history \\
+            --from-bundle "${RUNNER_TEMP}/fix/history.bundle" \\
             --push
         if: always()
         continue-on-error: true
