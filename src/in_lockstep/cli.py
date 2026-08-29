@@ -20,7 +20,8 @@ from .core.workflow import registered, workflow
 from .lockstep import Lockstep
 from .middleware.budget import CostBudget
 from .middleware.otel import Recorder, otel
-from .privileged.redact import Redact
+from .privileged import sink
+from .privileged.redact import Redact, redact_registry
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -103,6 +104,14 @@ async def selfcheck(ctx: Any, paths: tuple[str, ...]) -> dict[str, Any]:
 @click.version_option(__version__, prog_name="in-lockstep")
 def main() -> None:
     """Run your lifecycle."""
+    # Before any command runs. CI logs are frequently public and are the sink most easily
+    # forgotten, because printing does not feel like writing somewhere — so the stream is wrapped
+    # rather than each of the sixty-odd `click.echo` calls below it. A call added later is covered
+    # without anyone remembering that it had to be.
+    sink.install_streams()
+    # Env scraping is the fallback source, not the mechanism: `Auth` registers what it mints. But
+    # a key already in the environment before a run starts is real, and this is where it is seen.
+    redact_registry.seed_from_environment()
 
 
 @main.command(name="run")
@@ -475,7 +484,6 @@ def review_cmd(
 
 
 def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
-    import json
     from pathlib import Path as _Path
 
     record = {
@@ -496,7 +504,7 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
     }
     path = _Path(".in-lockstep/ledger") / f"{ctx.run_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+    sink.write_json(path, record)
     click.echo(f"ledger    {path}")
 
 

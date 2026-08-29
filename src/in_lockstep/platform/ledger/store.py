@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ...privileged import sink
+
 SCHEMA = 2
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
@@ -43,8 +45,7 @@ class InRepoLedger:
 
     async def append(self, run_id: str, record: dict[str, object]) -> None:
         stamped = {"schema": SCHEMA, "epoch": EPOCH, "run_id": run_id, **record}
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.path_for(run_id).write_text(json.dumps(stamped, indent=2, sort_keys=True) + "\n")
+        sink.write_json(self.path_for(run_id), stamped)
 
     async def read(self, run_id: str) -> dict[str, object] | None:
         path = self.path_for(run_id)

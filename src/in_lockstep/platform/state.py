@@ -19,12 +19,11 @@ to a temporary file and rename.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
+from ..privileged import sink
 
 DEFAULT_ROOT = Path(".in-lockstep/runs")
 
@@ -89,14 +88,7 @@ class StateStore:
         target = directory / f"{_safe(checkpoint.step_id)}.json"
         payload = json.dumps(checkpoint.__dict__, indent=2, sort_keys=True, default=repr) + "\n"
         # Atomic, because the failure being recovered from is a process dying mid-write.
-        handle, temp = tempfile.mkstemp(dir=directory, suffix=".tmp")
-        try:
-            with os.fdopen(handle, "w") as f:
-                f.write(payload)
-            os.replace(temp, target)
-        except BaseException:
-            Path(temp).unlink(missing_ok=True)
-            raise
+        sink.write_text_atomic(target, payload)
 
     def load(self, run_id: str, step_id: str) -> Checkpoint | None:
         path = self.run_dir(run_id) / f"{_safe(step_id)}.json"

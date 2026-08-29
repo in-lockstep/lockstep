@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 from ..core.middleware import ActionCall, Next
 from ..core.outcome import Outcome
+from ..privileged import sink
 
 
 @dataclass
@@ -38,7 +39,7 @@ class Recorder:
         self.metrics: list[MetricRecord] = []
 
     def span(self, name: str, **attributes: object) -> SpanRecord:
-        record = SpanRecord(name=name, attributes=dict(attributes))
+        record = SpanRecord(name=name, attributes=sink.attributes(attributes))
         self.spans.append(record)
         return record
 

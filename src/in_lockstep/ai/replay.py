@@ -22,6 +22,7 @@ from typing import Any
 
 from ..llm.interface import LLMProvider
 from ..llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
+from ..privileged import sink
 from ..privileged.redact import Redact
 
 
@@ -74,18 +75,13 @@ class Cassette:
         )
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(
-                {
-                    "provider_calls": self.provider_calls,
-                    "tool_calls": self.tool_calls,
-                    "order": self.order,
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
+        sink.write_json(
+            self.path,
+            {
+                "provider_calls": self.provider_calls,
+                "tool_calls": self.tool_calls,
+                "order": self.order,
+            },
         )
 
     def record_provider(self, request: LLMInput, output: LLMOutput, redact: Redact) -> None:
