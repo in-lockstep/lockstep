@@ -1722,6 +1722,30 @@ def _write_trampoline(path: Path, template: str) -> bool:
     return True
 
 
+def _binds_lockstep(text: str) -> bool:
+    """Whether a module assigns a top-level name `lockstep` — what the appended block binds onto.
+
+    Parsed, not searched: a substring check passes on `# lockstep` in a comment, and the append
+    then fails at load with a NameError the compile() guard never sees. Empty text is not a
+    binding, so an empty pre-existing module is refused rather than turned into a broken one.
+    """
+    import ast
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return False
+    for node in tree.body:
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        if any(isinstance(t, ast.Name) and t.id == "lockstep" for t in targets):
+            return True
+    return False
+
+
 def _scaffold_implement(module: Path) -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
@@ -1734,11 +1758,13 @@ def _scaffold_implement(module: Path) -> None:
     text = module.read_text() if module.exists() else ""
     if "implement/from-issue" in text:
         click.echo(f"{module} already defines implement/from-issue — left alone")
-    elif text and "lockstep" not in text:
-        # The block appends `lockstep.bind(...)` calls, so a module that never named `lockstep`
-        # would take a NameError on its next load. Rather than clobber a file we do not
-        # understand, print the block for the author to place. A pristine scaffold, or an empty
-        # file, is safe to extend.
+    elif not _binds_lockstep(text):
+        # The block appends `lockstep.bind(...)` calls, so a module that does not assign a
+        # top-level `lockstep` would take a NameError on its next load. This is an AST check, not
+        # a substring one: the string "lockstep" in a comment or a literal (`# lockstep config`)
+        # would pass a text search, compile cleanly, and fail only at load — a NameError the
+        # compile() guard below cannot see. Rather than clobber a file we do not understand, print
+        # where to find the block.
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Add the implement workflows by hand; the block to paste is in the docs, or run")
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")

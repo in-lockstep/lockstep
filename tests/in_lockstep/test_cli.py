@@ -355,7 +355,7 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch)
 
 
 def test_init_implement_will_not_clobber_an_unrecognised_module(repo: Path) -> None:
-    """A module that never named `lockstep` would take a NameError from the appended binds, so
+    """A module that never bound `lockstep` would take a NameError from the appended binds, so
     the append is refused rather than silently breaking a file we do not understand."""
     (repo / ".lockstep").mkdir(exist_ok=True)
     (repo / ".lockstep" / "lockstep.py").write_text("# hand-written, uses a different name\nls = None\n")
@@ -363,6 +363,17 @@ def test_init_implement_will_not_clobber_an_unrecognised_module(repo: Path) -> N
     assert result.exit_code == 0
     text = (repo / ".lockstep/lockstep.py").read_text()
     assert "implement/from-issue" not in text, "must not append binds to a module it cannot verify"
+    assert "not a recognisable lockstep module" in result.output
+
+
+def test_init_implement_guard_is_a_parse_not_a_substring(repo: Path) -> None:
+    """`# lockstep config` mentions the name in a comment but binds nothing — a substring guard
+    would pass it, the append would compile, and it would NameError only at load."""
+    (repo / ".lockstep").mkdir(exist_ok=True)
+    (repo / ".lockstep" / "lockstep.py").write_text("# lockstep config, hand-written\nls = None\n")
+    result = CliRunner().invoke(main, ["init", "--implement"])
+    text = (repo / ".lockstep/lockstep.py").read_text()
+    assert "implement/from-issue" not in text
     assert "not a recognisable lockstep module" in result.output
 
 

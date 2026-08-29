@@ -281,9 +281,20 @@ def _write_lifecycle(tmp_path, body: str) -> None:
     (tmp_path / ".lockstep" / "lockstep.py").write_text(body)
 
 
-def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path) -> None:
+def _not_in_ci(monkeypatch) -> None:
+    """Doctor's route check loads config from the trusted BASE ref when it detects CI — correct
+    in a real PR pipeline, but these tests point doctor at a bare tmp_path that has no `main` to
+    resolve. Cleared here so the check loads the working-tree module the test actually wrote;
+    without this the load raises UnresolvableConfigRef and the route check is silently skipped
+    (which is why these pass on a laptop and failed only on a GitHub runner)."""
+    for var in ("GITHUB_ACTIONS", "GITLAB_CI", "GITHUB_EVENT_NAME", "GITHUB_BASE_REF"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path, monkeypatch) -> None:
     from in_lockstep import doctor
 
+    _not_in_ci(monkeypatch)
     _write_lifecycle(
         tmp_path,
         "from in_lockstep import Lockstep\n"
@@ -294,9 +305,10 @@ def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path) -> None:
     assert any(c.code == "DOC150" for c in report.checks)
 
 
-def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_path) -> None:
+def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_path, monkeypatch) -> None:
     from in_lockstep import doctor
 
+    _not_in_ci(monkeypatch)
     _write_lifecycle(
         tmp_path,
         "from in_lockstep import Lockstep\n"
@@ -307,10 +319,11 @@ def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_pat
     assert any(c.code == "DOC151" for c in report.checks)
 
 
-def test_doctor_accepts_a_route_to_a_free_local_model(tmp_path) -> None:
+def test_doctor_accepts_a_route_to_a_free_local_model(tmp_path, monkeypatch) -> None:
     """The dogfood config routes triage to local:qwen3-8b; doctor must not call that a problem."""
     from in_lockstep import doctor
 
+    _not_in_ci(monkeypatch)
     _write_lifecycle(
         tmp_path,
         "from in_lockstep import Lockstep\n"

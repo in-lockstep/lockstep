@@ -59,17 +59,26 @@ def _ollama(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
 #: header is invalid teaches nothing about where the right value lives.
 WORKSPACE_PREFIX = "wrkspc_"
 
-#: Hostnames that resolve to this machine. A `local` registration is only `free` when its
-#: endpoint is one of these — the address decides, so an env var cannot launder a hosted endpoint
-#: into a zero rate.
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"})
-
 
 def _is_local(url: str) -> bool:
+    """Whether a URL's host is genuinely this machine — what makes a `local` registration `free`.
+
+    The address decides, so an env var cannot launder a hosted endpoint into a zero rate. Loopback
+    is asked of `ipaddress`, not a hand list: `127.0.0.1` is in it and so is the rest of
+    `127.0.0.0/8` and `::1`, while `0.0.0.0` — the wildcard *bind* address, which a hosted service
+    can answer on and is not loopback to reach — is correctly excluded. A hostname that is not an
+    IP is local only when it is `localhost` or ends in `.localhost`.
+    """
+    import ipaddress
     from urllib.parse import urlparse
 
     host = urlparse(url).hostname or ""
-    return host in _LOOPBACK_HOSTS or host.endswith(".localhost")
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _anthropic_workspace() -> str:

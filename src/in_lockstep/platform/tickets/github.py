@@ -67,9 +67,13 @@ class GitHubIssues(TicketSource):
         )
 
     async def comment(self, ticket: Ticket, body: str) -> None:
-        # Best-effort like it always was: a failed comment must not sink a run that otherwise
-        # produced a change, so this swallows a non-zero exit rather than raising.
-        self._gh_raw("issue", "comment", ticket.key.lstrip("#"), "--body", body)
+        # Best-effort: a failed comment must not sink a run that otherwise produced a change, so
+        # this does not raise. But it is not silent either — a locked issue or an expired token
+        # leaves the thread dark while the work may have succeeded, and that is worth seeing in
+        # the log rather than swallowing whole.
+        code, _out, err = self._gh_raw("issue", "comment", ticket.key.lstrip("#"), "--body", body)
+        if code != 0:
+            print(f"comment    could not post to {ticket.key}: {err.strip() or f'gh exited {code}'}")
 
     async def create(self, draft: TicketDraft) -> Ticket:
         from ..scm.github import _number_from
