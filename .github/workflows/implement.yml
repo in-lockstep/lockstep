@@ -33,7 +33,9 @@ on:
   issue_comment:
     types: [created]
 
-permissions: {}
+permissions:
+  id-token: write
+  contents: read
 
 concurrency:
   # Per issue, and NOT cancel-in-progress: cancelling a run that has already called a model throws
@@ -42,6 +44,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  claude:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+      ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+      ANTHROPIC_SERVICE_ACCOUNT_ID: in-lockstep-gh-sa
+      ANTHROPIC_WORKSPACE_ID: wrkspc_01U4E3zEdEiRjzx7GUNsLuUZ
+      ANTHROPIC_IDENTITY_TOKEN_FILE: /tmp/gha-jwt
+    steps:
+      - uses: actions/checkout@v4   
+      - name: Fetch GitHub OIDC token
+        run: |
+          curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
+            | jq -r .value > /tmp/gha-jwt
+            
   gate:
     # `startsWith` rather than `contains`: `contains` would fire on any comment that MENTIONS
     # `/implement`, which includes every comment explaining why not to run it. There is no `trim`
@@ -72,6 +90,7 @@ jobs:
         env:
           ACTOR: ${{ github.event.comment.user.login }}
           ASSOCIATION: ${{ github.event.comment.author_association }}
+
 
   implement:
     needs: gate
