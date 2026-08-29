@@ -97,11 +97,17 @@ jobs:
       # The same command a developer runs, with `--approved-by` where they would type `--approve`.
       # That is the whole transition: the process does not change when a project moves from a
       # terminal to hosted triggers, only who the human is and how they were verified.
+      # `--budget` here is the ceiling that actually binds this flow: `run --budget` replaces
+      # whatever lockstep.py declares, deliberately ("--budget states one" is somebody meaning
+      # it), so raising the module's number changes nothing for /implement. $2.00 was sized for a
+      # oneshot session; implement/tdd on opus is two model phases and was refused mid-work at
+      # turn 4-5 with ~$2.1-2.3 projected. Cumulative per run, not per turn: the check is
+      # spent-so-far plus a worst-case next turn, before each call.
       - run: |
           uv run in-lockstep run implement/from-issue \
             --arg issue="#${ISSUE}" \
             --approved-by "${ACTOR}" \
-            --budget 2.00
+            --budget 25.00
         env:
           ISSUE: ${{ github.event.issue.number }}
           # A name GitHub computed and the gate above verified, not one the comment claimed.
