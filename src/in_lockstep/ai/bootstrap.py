@@ -53,6 +53,24 @@ def _ollama(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
     return OllamaProvider(settings, creds)
 
 
+def _bedrock(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
+    from ..llm.providers.bedrock import BedrockProvider
+
+    return BedrockProvider(settings, creds)
+
+
+def _vertex(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
+    from ..llm.providers.vertex_claude import VertexClaudeProvider
+
+    return VertexClaudeProvider(settings, creds)
+
+
+def _gemini(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
+    from ..llm.providers.google_gemini import GoogleGeminiProvider
+
+    return GoogleGeminiProvider(settings, creds)
+
+
 #: Workspace ids are tagged. The Anthropic SDK's own type says so: "Tagged workspace ID
 #: (`wrkspc_...`)". Checked locally because the natural mistake is to use the workspace *name* —
 #: "Default" is what the Console shows you — and paying a network round-trip to be told the
@@ -152,6 +170,55 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
             auth_target=AuthTarget.MODEL_PROVIDER.value,
         )
 
+    # Bedrock, Vertex and Gemini ship as provider classes but were reachable through no blessed
+    # path — nothing registered them, so a route to `bedrock:…` refused as an unknown provider.
+    # Registered here so a route resolves; the SDK is imported lazily at first use, so a repo that
+    # never routes to one pays nothing and never needs its optional extra. Region and project come
+    # from the cloud's own environment variables, the way those SDKs already expect them.
+    #
+    # A cloud model id is the cloud's, not the Anthropic API's (`us.anthropic.claude-…` on Bedrock,
+    # an `@version` on Vertex), and pricing keys on the id — so such a route is unpriced until the
+    # repository states its rate, which `doctor` refuses before the run spends anything. See
+    # docs/extending.md. Gemini is the exception only because `gemini-2.5-pro` is both a Vertex id
+    # and a shipped rate.
+    registry.register(
+        "bedrock",
+        lambda s, c: _bedrock(s, c),
+        settings=ProviderSettings(
+            region=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "")
+        ),
+        data_policy=DataPolicy.EXTERNAL,
+        endpoint="",
+        auth_target=AuthTarget.MODEL_PROVIDER.value,
+        caps=ModelCaps(context_window=200_000, tool_use=True, structured_output=True),
+    )
+    gcp_project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+    # Every spelling GCP tooling uses for the region, google-genai's own `GOOGLE_CLOUD_LOCATION`
+    # included — a repository that set the documented variable must not silently get an empty one.
+    gcp_region = (
+        os.environ.get("GOOGLE_CLOUD_REGION")
+        or os.environ.get("GOOGLE_CLOUD_LOCATION")
+        or os.environ.get("CLOUD_ML_REGION", "")
+    )
+    registry.register(
+        "vertex",
+        lambda s, c: _vertex(s, c),
+        settings=ProviderSettings(project_id=gcp_project, region=gcp_region),
+        data_policy=DataPolicy.EXTERNAL,
+        endpoint="",
+        auth_target=AuthTarget.MODEL_PROVIDER.value,
+        caps=ModelCaps(context_window=200_000, tool_use=True, structured_output=True),
+    )
+    registry.register(
+        "gemini",
+        lambda s, c: _gemini(s, c),
+        settings=ProviderSettings(project_id=gcp_project, region=gcp_region),
+        data_policy=DataPolicy.EXTERNAL,
+        endpoint="",
+        auth_target=AuthTarget.MODEL_PROVIDER.value,
+        caps=ModelCaps(context_window=1_000_000, tool_use=True, structured_output=True),
+    )
+
     return registry
 
 
@@ -202,11 +269,31 @@ class MissingCredential(Exception):
     """
 
 
+#: The credential keys each provider takes through `Auth`. An empty tuple means it authenticates
+#: entirely through its cloud's ambient chain — `local` needs nothing on-host, Vertex and Gemini
+#: ride GCP application-default credentials. Bedrock lists AWS keys, because supplying them through
+#: `Auth` is what seeds `Redact` and reaches the provider's explicit-key path; absent, the empty
+#: credential falls it back to the ambient AWS chain, which the framework cannot see or redact —
+#: the documented caveat of cloud ambient auth. A provider not named here takes an API key.
+_CLOUD_KEYS: dict[str, tuple[str, ...]] = {
+    "local": (),
+    "vertex": (),
+    "gemini": (),
+    "bedrock": ("access_key_id", "secret_access_key", "session_token"),
+}
+
+
 def credentials_for(auth: Auth, provider: str) -> Credentials:
-    keys = ("api_key",)
-    if provider == "local":
-        return Credentials.none()
-    creds = auth.credentials_for(AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys))
+    if provider in _CLOUD_KEYS:
+        keys = _CLOUD_KEYS[provider]
+        if not keys:
+            return Credentials.none()
+        # No `MissingCredential`: an empty result is not an error here, it is the signal to use the
+        # cloud's ambient chain. Where the keys ARE wired through Auth, they come back seeded.
+        return auth.credentials_for(AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys))
+    creds = auth.credentials_for(
+        AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=("api_key",))
+    )
     if not creds.secret_values():
         var = f"{provider.upper().replace('-', '_')}_API_KEY"
         raise MissingCredential(
@@ -226,6 +313,7 @@ def invoker_factory(
     auth: Auth | None = None,
     provider: Any = None,
     redact: Any = None,
+    registry: ProviderRegistry | None = None,
 ) -> Any:
     """A `Callable[[ctx], AiInvoker]`, which is what every AI adapter takes.
 
@@ -238,6 +326,11 @@ def invoker_factory(
     `provider` overrides the resolved one, which is how `--offline`, `--record` and `--dry-run`
     swap in a cassette without a second construction path.
 
+    `registry` is the seam for a repository that runs its own gateway or a provider the default set
+    does not ship: build one with `default_registry()`, register into it — a gateway with
+    `DataPolicy.INTERNAL` stated *in code* rather than inferred from an env var, say — and pass it
+    here. Without it the default set is used, which now reaches Bedrock, Vertex and Gemini too.
+
     The credential is resolved per call rather than at construction: a factory built at import time
     in `lockstep.py` must not read a secret while the module is merely being inspected by `ls`.
     """
@@ -246,7 +339,7 @@ def invoker_factory(
     from .invoker import AiInvoker
 
     issuer = auth or Auth()
-    registry = default_registry(issuer)
+    registry = registry if registry is not None else default_registry(issuer)
     selected = Model(model_id)
     table = table_for(registry, selected, cost_table)
 
