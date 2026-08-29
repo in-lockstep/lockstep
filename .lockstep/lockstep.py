@@ -150,7 +150,7 @@ lockstep.bind(EgressPolicy, egress)
 # close enough that a loop going wrong is stopped in cents rather than dollars.
 #
 # $2.00 was a hundredfold headroom, which is not a ceiling so much as a formality.
-lockstep.budget = Budget(usd=0.25, wall_seconds=900)
+lockstep.budget = Budget(usd=1.00, wall_seconds=900)
 
 # -- the ports those workflows resolve ----------------------------------------------
 #
