@@ -112,7 +112,7 @@ no enforcement will not survive seven phases" — applies with equal force to se
 
 | Gate | Phase | Status | Assertion |
 |---|---|---|---|
-| `GATE-CFG-1` | P2 | held | A `lockstep.py` modified in the head tree has **zero** effect on the resolved container; config resolves from the trusted ref. Run as a fork-simulation fixture. |
+| `GATE-CFG-1` | P2 | held | A `lockstep.py` modified in the head tree has **zero** effect on the resolved container; config resolves from the trusted ref. Run as a fork-simulation fixture, **and against the checkout shape CI actually produces**: a detached HEAD with `origin/main` and no local `main`, where `git show main:lockstep.py` fails for a reason that has nothing to do with the file. That case made this control silently inapplicable for a real CI run — it returned `None`, indistinguishable from "this repository has no configuration", and fell through to detected defaults. An unresolvable ref is now a refusal, and the CLI prints which ref configuration came from, because a provenance control whose output nobody can see is one whose absence nobody notices. |
 | `GATE-CFG-2` | P3 | held | `doctor` fails when config would resolve from the ref under review. |
 | `GATE-EGRESS-1` | P3 | held | A `ContextPackage` containing any `UNTRUSTED_EXTERNAL` item with `EgressMode.NONE` yields `BLOCKED` before the first model call. |
 | `GATE-EGRESS-2` | P3 | held | `ENFORCED_*` performs a live probe to a known-blocked host and refuses to start if the probe succeeds (verified, not attested). |
