@@ -1,0 +1,33 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "provider.error",
+        "message": "Token exchange failed (HTTP 400): {'error': {'message': 'Request validation failed', 'reason': 'service_account_id: does not have prefix `svac_`', 'type': 'invalid_request_error'}} [request_id=req_011CeXwqBDZQHGM1aNKSZYSH]",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "7966648f51f1b9504ec25f151bb6aa34ccc97de4",
+  "input_tokens": 0,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 0,
+  "reason": "provider.error",
+  "run_id": "review-security",
+  "schema": 4,
+  "status": "errored",
+  "tokens": 0,
+  "ts": "2026-08-29T23:57:49+00:00",
+  "wall_seconds": 1.596
+}
