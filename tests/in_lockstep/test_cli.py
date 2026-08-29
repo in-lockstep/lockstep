@@ -537,6 +537,60 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch)
         restore(state)
 
 
+def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
+    """The fix scaffold binds Fix and registers its two workflows, and its guarded binds mean it
+    also loads standalone — Test, Scm and TicketSource are bound even without --implement."""
+    from in_lockstep.adapters.ai.fix import Fix
+    from in_lockstep.adapters.pytest_adapter import Test
+    from in_lockstep.core.workflow import get, restore, snapshot
+    from in_lockstep.loader import load, lockstep_from
+    from in_lockstep.platform.scm import Scm
+    from in_lockstep.platform.tickets import TicketSource
+
+    CliRunner().invoke(main, ["init", "--fix"])
+    text = (repo / ".lockstep/lockstep.py").read_text()
+    assert "fix/from-issue" in text and "fix/propose" in text
+
+    state = snapshot()
+    try:
+        module, _ref = load(str(repo))
+        lockstep = lockstep_from(module)
+        assert lockstep.container.has(Fix)
+        assert lockstep.container.has(Scm)
+        assert lockstep.container.has(TicketSource)
+        assert lockstep.container.has(Test)
+        assert get("fix/from-issue") is not None
+        assert get("fix/propose") is not None
+    finally:
+        restore(state)
+
+
+def test_init_implement_and_fix_compose_without_binding_twice(repo: Path) -> None:
+    """Both scaffolds in one module load cleanly — the fix block's guarded binds do not re-bind
+    what --implement already did, and both verbs' workflows register."""
+    from in_lockstep.adapters.ai.fix import Fix
+    from in_lockstep.adapters.ai.implement import Implement
+    from in_lockstep.core.workflow import get, restore, snapshot
+    from in_lockstep.loader import load, lockstep_from
+
+    CliRunner().invoke(main, ["init", "--implement"])
+    CliRunner().invoke(main, ["init", "--fix"])
+
+    state = snapshot()
+    try:
+        module, _ref = load(str(repo))
+        lockstep = lockstep_from(module)
+        assert lockstep.container.has(Implement)
+        assert lockstep.container.has(Fix)
+        assert get("implement/from-issue") is not None
+        assert get("fix/from-issue") is not None
+        # One approval gate, not two: the fix block guards adding its own.
+        gates = [m for m in lockstep.middleware if getattr(m, "provides_approval", False)]
+        assert len(gates) == 1
+    finally:
+        restore(state)
+
+
 def test_init_implement_will_not_clobber_an_unrecognised_module(repo: Path) -> None:
     """A module that never bound `lockstep` would take a NameError from the appended binds, so
     the append is refused rather than silently breaking a file we do not understand."""

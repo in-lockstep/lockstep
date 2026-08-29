@@ -55,6 +55,11 @@ EXEMPT: dict[tuple[str, str, str], str] = {
         "appended to the existing scaffold. Same reasoning: no run, no credential, nothing in "
         "scope that could carry one."
     ),
+    ("cli.py", "_scaffold_fix", "write_text"): (
+        "`init --fix` writes the merged lifecycle module — a module-level string constant appended "
+        "to the existing scaffold. Same reasoning as `_scaffold_implement`: no run, no credential, "
+        "nothing in scope that could carry one."
+    ),
     ("platform/artifacts.py", "write_changeset", "write_text"): (
         "The ChangeSet artifact. Its `contents` are the change itself and must survive verbatim: "
         "masking a source file that happens to match a credential shape would corrupt the file "
