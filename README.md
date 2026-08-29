@@ -59,7 +59,7 @@ process able to write. [`docs/controls-crosswalk.md`](docs/controls-crosswalk.md
 every one of those: what replaced it, what is weaker, and the one that was lost rather than
 replaced. `in-lockstep doctor` checks the same list.
 
-**Configuration is loaded from a trusted ref.** `lockstep.py` defines every binding, policy and
+**Configuration is loaded from a trusted ref.** `.lockstep/lockstep.py` defines every binding, policy and
 protected path. Under review, loading it from the branch being reviewed would let a change rewrite
 the constraints that apply to reviewing it — so it comes from the base ref instead.
 

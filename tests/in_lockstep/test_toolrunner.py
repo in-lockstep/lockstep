@@ -93,7 +93,11 @@ def test_correcting_a_write_replaces_it(workspace: Workspace) -> None:
 
 def test_a_read_only_set_offers_no_writer(workspace: Workspace) -> None:
     tools, _ = read_only(workspace)
-    assert tools.names() == ["list_files", "read_file"]
+    assert tools.names() == ["list_files", "read_file", "search_text"]
+    # The name of this test is the property; the list above is the membership. Asserting the
+    # capability separately is what keeps a tool added to this set from quietly bringing a
+    # dangerous declaration with it.
+    assert tools.read_only
     assert Capability.WRITES_FILES not in tools.capabilities()
 
 

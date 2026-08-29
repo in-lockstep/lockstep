@@ -201,3 +201,168 @@ one measured.
 
 If your strategy holds a path grant, register it `privileged=True`. Selection can be driven by
 ticket labels, and anyone can write a ticket label.
+
+A registration whose factory returns something without `execute` is a **catalogue entry** — a name
+reserved for an approach nobody has written yet. `implement/tdd` and `implement/direct` are both
+that today. `AiImplement` refuses one by name rather than failing on a missing attribute, and
+`in-lockstep ls` is where you can see which is which.
+
+### `implement/oneshot`
+
+The one shipped strategy that actually runs. One session, one model, a tool set that can read,
+search, stage writes and run a command:
+
+```bash
+in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change
+in-lockstep apply-inline --from-artifact .lockstep/change
+```
+
+Two commands, not one, and deliberately: the session **stages** writes into a `ChangeSet` and
+touches nothing. Applying it is a separate step that runs the same path guard a second time. On CI
+those are two jobs, and only the second holds a write token.
+
+Three things have to be true before it will start, and each is a control keyed off the adapter's
+capability declaration rather than anything the strategy configures:
+
+| It refuses with | Because | What to do |
+|---|---|---|
+| `ApprovalGate` … `UngatedAgency` | A model that can write and spend needs a human in the loop. | Add `ApprovalGate()` to your middleware, or pass `--approve` for an attended local run. |
+| `egress.unenforced` | The tool set declares `EXECUTES_CODE`, which makes egress enforcement mandatory. | Run under a host that constrains egress with `IN_LOCKSTEP_EGRESS=enforced`, or `lockstep.bind(EgressPolicy, UnsandboxedEgress())`. |
+| `UndeclaredBudget` | Something bound spends money and no ceiling was declared. | `lockstep.budget = Budget(usd=2.00)`, or `--budget`. |
+
+The egress one is the surprise on a laptop, and the opt-out is a binding rather than a flag on
+purpose: `UnsandboxedEgress` is named after what it does, so it greps and it reviews.
+
+**`run_script` executes; it does not shell.** Commands arrive as an argv array — no pipes, no
+globs, no `&&` — and `argv[0]` must be in an allowlist (`ALLOWED_COMMANDS`). They run through
+whatever `CommandRunner` you supply; `--execute` supplies `Sandbox`, which drops every credential
+from the child environment and prefers a container with no network. `--no-execute` withholds the
+runner while leaving the tool declared, so what policy sees does not change with the flag.
+
+One thing to know before reading a session's transcript: the working tree `run_script` runs against
+does **not** contain that session's staged writes. It tells the model what the existing behaviour
+is, not whether its change works. Verifying a change is what the `apply` half is for.
+
+`--max-turns` defaults to 40. That is a runaway backstop, not the budget: every turn re-sends the
+accumulated history, so the thing that actually stops a long session is the per-turn spend check,
+which refuses *before* the call that would cross the ceiling.
+
+## The path a project takes
+
+The framework is built around one arc, and each stage is meant to reuse the last rather than
+replace it.
+
+**Young — a terminal.** One or two people, no CI to speak of. Processes are `@workflow` functions
+in `.lockstep/lockstep.py` and you run them by hand:
+
+```bash
+in-lockstep run implement/from-issue --arg issue='#59' --approve --budget 2.00
+```
+
+`--approve` says you are the human watching. That is a real grant and a weak one, and the ledger
+records it as `attended` so it is never confused with a stronger one.
+
+**Growing — hosted triggers.** More people, and the work should start itself. Nothing about the
+process changes: an event fires, and CI runs **the same command**.
+
+```yaml
+- run: in-lockstep run implement/from-issue --arg issue="#${ISSUE}" --approved-by "${ACTOR}"
+```
+
+`--approved-by` replaces `--approve` because nobody is watching, so the name *is* the grant and has
+to be supplied. Both land on `RunContext.approval`, and `ApprovalGate` reads it from there — which
+is what makes this a re-trigger rather than a rewrite. If the two were plumbed differently, moving
+to CI would mean reimplementing the process in YAML, which is the failure this arc exists to avoid.
+
+What the CI file adds is only what CI owns: the trigger, the job split, per-job permissions, and
+which secret each job holds. One process cannot hold two token scopes, so the split has to live
+there.
+
+**Mature — your own verbs and strategies.** `Verb` is an open, interned value type, so
+`Verb("benchmark")` is a first-class verb with its own telemetry label, step ids and strategy
+namespace. Bind an interface to an adapter, register strategies for it, and `in-lockstep ls` prints
+the result. See *A verb of your own* and *A strategy* above.
+
+**Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`, `TicketSource`
+and `LedgerStore` are protocols in `core/ports/`, and nothing in `core` knows what GitHub is. The
+*implementations* are not: `GitHubScm` and `GitHubIssues` ship, and **`GitLabScm` does not exist**.
+A GitLab project can define and run every process locally today, and would have to write that
+adapter to move to stage two. `in-lockstep gate` takes `--association` as an opaque string for the
+same reason, so it works against whatever a host calls its access levels.
+
+### Firing it from CI
+
+The rule is one line long: **process goes in `.lockstep/lockstep.py`, CI invokes it.**
+
+```python
+@workflow(id="implement/from-issue")
+async def implement_from_issue(ctx, issue: str) -> Outcome:
+    ticket = await ctx.container.resolve(TicketSource).get(issue)
+    return await ctx.do(Implement, ImplementSpec(ticket=ticket))
+```
+
+```bash
+in-lockstep run implement/from-issue --arg issue='#59' --budget 2.00
+```
+
+`--arg name=value` is repeatable and values arrive as strings, which usefully bounds what a
+CLI-runnable workflow can take: one needing a list of tickets takes a label or a path, not the
+tickets. Every dispatched run leaves a ledger record carrying its arguments, so "which issue,
+which actor" survives the run.
+
+What belongs in the CI file is the trigger, the job split, per-job permissions, and which secret
+each job gets. Those are the CI system's to grant and no Python can express them — one process
+cannot hold two different token scopes, and keeping a provider key out of the job that can write is
+the reason the trampoline has two jobs. Everything else is process, and process in YAML is process
+with no tests.
+
+`.github/workflows/implement.yml` is the worked example. A test enforces a budget on how many
+lines of shell it may contain, and fails if it starts running `git commit`, `gh pr create` or
+`gh issue comment` itself — each of those has a port behind it (`Scm.open_change`,
+`TicketSource.comment`) and reaching for the command instead is how lifecycle logic gets back in.
+
+### Firing it from a comment
+
+`.github/workflows/implement.yml` runs a session when an authorized person comments `/implement`
+on an issue, using that issue as the ticket. Three jobs, and the shape is the point:
+
+```
+gate      →  implement            →  propose
+(no key)     (provider key,          (write token,
+              contents: read)         no provider key)
+```
+
+An `issue_comment` event runs the workflow on the **default branch**, never a contributor's — the
+same provenance property `.lockstep/lockstep.py` relies on. So the comment selects a command; it cannot
+supply one.
+
+Anyone who can see a repository can comment on it, so the comment is not the authorization. That
+is `in-lockstep gate`:
+
+```bash
+in-lockstep gate --actor "$LOGIN" --association "$ASSOCIATION" --codeowners .github/CODEOWNERS
+```
+
+Exit 0 or 3. It passes an org `MEMBER`/`OWNER`, or anyone named in CODEOWNERS — two sources
+answering different questions, since an outside collaborator can own a directory without being in
+the org. Bots are refused whatever their association: a trigger a bot can fire is a loop, and this
+one spends money on every lap. `COLLABORATOR` is *not* enough on its own; a collaborator who should
+qualify is exactly the person CODEOWNERS names, and naming them is a decision somebody makes.
+
+It is a Python function with tests rather than `grep` inside a YAML `if:`, because it is the whole
+authorization and YAML review is not a control.
+
+**The gate authorizes the asker, not the issue.** Anyone can file an issue, and a member typing
+`/implement` on a drive-by hands that body to a model holding write tools. The ticket stays
+`UNTRUSTED_EXTERNAL`, writes are staged, `ChangeGuard` checks them twice, and the result arrives as
+a pull request a person reads. The gate bounds who can spend money; it does not bound what the text
+says.
+
+For unattended runs, `--approved-by "@login"` replaces `--approve` and records who asked in the
+ledger — a grant nobody can be traced to is not much of a grant. Neither is an environment approval
+in the system of record; if you want one, the `propose` job declares `environment: implement`, and
+adding required reviewers to it in repository settings makes it real.
+
+**What bounds the spend** is the actor gate, a per-issue concurrency group, and `--budget`. There
+is no per-day ceiling — see `docs/controls-crosswalk.md`, which records that as a loss rather than
+a replacement. A member who wants to spend $2 forty times can.

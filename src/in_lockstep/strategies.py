@@ -11,12 +11,20 @@ agents could not do.
 
 The registry is deliberately small at 1.0: registering a strategy nobody has fixtures for is how
 strategy sprawl starts, and ten unmeasured strategies are worse than one measured.
+
+**One of these is executable and the rest are not, and the difference is visible from here.** A
+registration whose factory returns a string is a catalogue entry — a name reserved, a description
+of an approach nobody has written. `AiImplement` refuses one by name rather than failing on a
+missing attribute, so the distinction is something you are told rather than something you deduce
+from a traceback. That this file used to contain nothing but such entries is why the registry
+looked like a dispatcher for a phase without being one.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
+from .adapters.ai.oneshot import OneshotImplement
 from .ai.strategy import StrategyRegistry
 from .core.verbs import Verb
 
@@ -37,6 +45,15 @@ def default_registry() -> StrategyRegistry:
     registry.default(Verb.REVIEW, "review/security")
 
     registry.register(
+        "implement/oneshot",
+        Verb.IMPLEMENT,
+        factory=OneshotImplement,
+        description=(
+            "One session with read, search, write and run tools. Explores the repository, stages "
+            "the change, reports what it could not do."
+        ),
+    )
+    registry.register(
         "implement/tdd",
         Verb.IMPLEMENT,
         factory=lambda: "tdd",
@@ -48,7 +65,11 @@ def default_registry() -> StrategyRegistry:
         factory=lambda: "direct",
         description="Single shot. Cheapest, and the baseline the others are measured against.",
     )
-    registry.default(Verb.IMPLEMENT, "implement/tdd")
+    # The default is the one that runs. Defaulting to `implement/tdd` was defensible while nothing
+    # dispatched strategies at all and indefensible the moment something did: `ctx.do(Implement,
+    # ...)` with no explicit choice would have refused, and the registry's own default would have
+    # been the reason. A default naming an approach nobody has written is a plan, not a default.
+    registry.default(Verb.IMPLEMENT, "implement/oneshot")
 
     registry.register(
         "fix/diagnose-then-fix",

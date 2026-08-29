@@ -25,7 +25,7 @@ from pathlib import Path
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..privileged import sink
 
-DEFAULT_ROOT = Path(".in-lockstep/runs")
+DEFAULT_ROOT = Path(".lockstep/runs")
 
 
 @dataclass

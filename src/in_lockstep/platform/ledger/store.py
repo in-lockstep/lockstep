@@ -40,13 +40,17 @@ def current_epoch() -> str:
 
 @dataclass
 class InRepoLedger:
-    """One JSON file per run under `.in-lockstep/ledger/`."""
+    """One JSON file per run under `.lockstep/ledger/`."""
 
-    root: Path = field(default_factory=lambda: Path(".in-lockstep/ledger"))
+    root: Path = field(default_factory=lambda: Path(".lockstep/ledger"))
     scope: str = LedgerScope.LOCAL
 
     def path_for(self, run_id: str) -> Path:
         return self.root / f"{run_id}.json"
+
+    def location(self, run_id: str) -> str:
+        """Where a record went, in words a person can act on."""
+        return str(self.path_for(run_id))
 
     async def append(self, run_id: str, record: dict[str, object]) -> None:
         stamped = {"schema": SCHEMA, "epoch": EPOCH, "run_id": run_id, **record}

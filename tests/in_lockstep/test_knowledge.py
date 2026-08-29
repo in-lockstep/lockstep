@@ -137,7 +137,10 @@ def test_the_declared_version_is_carried_for_display_not_identity() -> None:
 def test_the_shipped_strategies_register_with_defaults() -> None:
     registry = default_registry()
     assert registry.select(Verb.REVIEW).id == "review/security"
-    assert registry.select(Verb.IMPLEMENT).id == "implement/tdd"
+    # The default is the executable one. `implement/tdd` and `implement/direct` are catalogue
+    # entries whose factories return a string, and defaulting to one would make `ctx.do(Implement,
+    # ...)` with no explicit choice refuse — with the registry's own default as the reason.
+    assert registry.select(Verb.IMPLEMENT).id == "implement/oneshot"
     assert len(registry.for_verb(Verb.REVIEW)) == 4, "an aspect is an agent, not a data row"
 
 

@@ -102,7 +102,32 @@ _REVIEW_MAX_TOKENS = 4096
 _LEDGER_MAX_FINDINGS = 50
 
 
-def _context(lockstep: Lockstep, run_id: str) -> Any:
+def _approval(approve: bool, approved_by: str) -> Any:
+    """One grant, two provenances.
+
+    `--approve` is a person at a terminal: their identity is the shell's, and `attended` is what
+    makes it meaningful. `--approved-by` is unattended, so the name IS the grant and has to be
+    supplied. The same two flags exist on every command that can need one, because a process
+    invoked one way locally and another way from CI is a process that has to be rewritten to make
+    that transition rather than re-triggered.
+    """
+    import getpass
+
+    from .core.context import Approval
+
+    named = approved_by.strip()
+    if named:
+        return Approval(by=named, attended=False)
+    if approve:
+        try:
+            who = getpass.getuser()
+        except OSError:  # pragma: no cover - no passwd entry, which some CI images lack
+            who = "local"
+        return Approval(by=who, attended=True)
+    return Approval()
+
+
+def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
     """Start a run, turning a startup refusal into a message rather than a traceback.
 
     `UndeclaredBudget` lives in `core` and cannot inherit from `ClickException` — `core` imports
@@ -113,7 +138,7 @@ def _context(lockstep: Lockstep, run_id: str) -> Any:
     from .core.verbs import UngatedAgency
 
     try:
-        return lockstep.context(run_id=run_id)
+        return lockstep.context(run_id=run_id, approval=approval)
     except (UndeclaredBudget, UngatedAgency) as e:
         raise click.ClickException(str(e)) from None
 
@@ -155,31 +180,18 @@ def _shipped_fixture() -> dict[str, Any] | None:
 
 
 def _load_changeset(artifact: str) -> Any:
-    """Read a ChangeSet from a file or an artifact directory."""
-    import json
-    from pathlib import Path as _Path
+    """Read a ChangeSet from a file or an artifact directory.
 
-    from .core.types import ChangeAuthor, ChangeSet, FileChange
+    Thin, deliberately: `platform.artifacts` owns the format, because the writer and the reader
+    are in two different JOBS and agreeing by both being private functions in this module was
+    agreement by proximity rather than by contract.
+    """
+    from .platform.artifacts import MalformedArtifact, read_changeset
 
-    path = _Path(artifact)
-    payload = path / "changeset.json" if path.is_dir() else path
-    if not payload.exists():
-        raise click.ClickException(f"no changeset at {payload}")
-
-    data = json.loads(payload.read_text())
-    return ChangeSet(
-        changes=tuple(
-            FileChange(
-                path=str(c["path"]),
-                contents=c.get("contents"),
-                author=ChangeAuthor(c.get("author", "agent")),
-                symlink_target=c.get("symlink_target"),
-            )
-            for c in data.get("changes", [])
-        ),
-        summary=str(data.get("summary", "")),
-        ticket=str(data.get("ticket", "")),
-    )
+    try:
+        return read_changeset(artifact)
+    except MalformedArtifact as e:
+        raise click.ClickException(str(e)) from None
 
 
 def _guard_or_exit(changeset: Any, *, root: Any = None) -> None:
@@ -210,6 +222,187 @@ def _guard_or_exit(changeset: Any, *, root: Any = None) -> None:
     for refusal in refusals:
         click.echo(f"  {refusal.path}  (tier {refusal.tier}, rule {refusal.rule})")
     raise SystemExit(EXIT_BLOCKED)
+
+
+def _run_registered(
+    lockstep: Lockstep,
+    recorder: Recorder | None,
+    entry: Any,
+    args: tuple[str, ...],
+    no_middleware: bool,
+    approval: Any = None,
+) -> None:
+    """Dispatch a workflow the repository registered.
+
+    `in-lockstep run <workflow>` is the first line of the README's command table and was refused
+    for every id but one. `@workflow` registered into a registry nothing dispatched from, so a
+    repository could declare a lifecycle the CLI would not run — which is most of what this
+    framework claims to be, and the gap that gets papered over with shell in a CI file.
+    """
+    if no_middleware:
+        lockstep.middleware = []
+
+    parsed: dict[str, str] = {}
+    for item in args:
+        name, sep, value = item.partition("=")
+        if not sep or not name:
+            raise click.ClickException(f"--arg expects NAME=VALUE, got {item!r}")
+        parsed[name] = value
+
+    ctx = _context(
+        lockstep,
+        f"{entry.id.replace('/', '-')}-{os.environ.get('GITHUB_RUN_ID', 'local')}",
+        approval,
+    )
+    try:
+        result = asyncio.run(entry.fn(ctx, **parsed))
+    except TypeError as e:
+        # A signature mismatch is the common mistake here, and the traceback for it points at
+        # asyncio rather than at the workflow the user named.
+        raise click.ClickException(
+            f"{entry.id} did not accept those arguments: {e}. It takes "
+            f"{', '.join(_parameters(entry.fn)) or '(no parameters)'}."
+        ) from None
+    except _SETUP_ERRORS as e:
+        # The same translation `review` and `implement` already do. Without it the path this
+        # framework recommends — put the process in `lockstep.py`, invoke it with `run` — gives a
+        # forty-line traceback where a bespoke command gives one sentence, which is a reason not
+        # to take the recommendation.
+        raise click.ClickException(str(e)) from None
+
+    click.echo(f"{entry.id}  {_describe(result)}")
+    # Findings, not just the verdict. For a workflow whose whole product is a judgement, the
+    # status line is the least interesting part of it.
+    for finding in getattr(result, "findings", ())[:20]:
+        where = f"{finding.path}:{finding.line} " if getattr(finding, "path", "") else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+    click.echo("")
+    _echo_telemetry(recorder)
+    click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
+    _write_workflow_ledger(ctx, entry.id, result, parsed)
+    _exit_for(result)
+
+
+def _ledger(lockstep: Any = None) -> Any:
+    """Where a run record goes. One decision, made once.
+
+    Order: a store the repository bound, then the orphan branch, then a file in the working tree.
+
+    The last is a fallback and not a default. `.lockstep/` is gitignored, so a record written
+    there is written and then lost — which is what shipped, and why the ledger held no evidence
+    while the crosswalk cited it as the project's evidence. It stays for directories that are not
+    git repositories at all, where the branch cannot exist.
+    """
+    import subprocess
+
+    from .platform.ledger import GitLedger, InRepoLedger
+
+    if lockstep is not None:
+        from .core.ports import LedgerStore
+
+        if lockstep.container.has(LedgerStore):
+            return lockstep.container.resolve(LedgerStore)
+
+    try:
+        inside = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
+        return InRepoLedger()
+    return GitLedger() if inside.stdout.strip() == "true" else InRepoLedger()
+
+
+def _record(ledger: Any, run_id: str, payload: dict[str, Any]) -> None:
+    """Write it, and say plainly if it could not be written.
+
+    A run that produced a real answer should not fail because git refused — but evidence going
+    missing quietly is the exact failure this whole change is about, so the alternative to raising
+    is saying so loudly, not swallowing it.
+    """
+    from .platform.ledger import HistoryError
+
+    try:
+        asyncio.run(ledger.append(run_id, payload))
+    except (HistoryError, OSError) as e:
+        click.echo(f"ledger    NOT WRITTEN: {e}")
+        return
+    click.echo(f"ledger    {ledger.location(run_id)}")
+
+
+def _write_workflow_ledger(ctx: Any, workflow_id: str, result: Any, args: dict[str, str]) -> None:
+    """Every dispatched run leaves a record, not only the ones with a bespoke command.
+
+    Without this, moving a process out of `review`/`implement` and into a `@workflow` — which is
+    what this framework asks you to do — silently costs the run its evidence. A record that exists
+    for the built-in path and not the recommended one is an argument for not taking the
+    recommendation.
+
+    The `--arg` values are recorded because they are the provenance: which issue, which actor.
+    They pass through the same redacting writer as everything else.
+    """
+    cost = getattr(result, "cost", None)
+    findings = getattr(result, "findings", ()) or ()
+    _record(
+        _ledger(),
+        ctx.run_id,
+        {
+            "kind": "workflow",
+            "workflow": workflow_id,
+            "args": dict(args),
+            # Who asked, and whether they watched. Absent when nobody did, which is the
+            # ordinary case for a workflow needing no grant.
+            **({"approval": ctx.approval.as_record()} if ctx.approval.granted else {}),
+            "status": getattr(getattr(result, "status", None), "value", "completed"),
+            "reason": getattr(result, "reason", None),
+            "decided": getattr(result, "decided", True),
+            "tokens": ctx.spend.charged.total_tokens,
+            "cost_usd": round(ctx.spend.charged.usd, 6),
+            "wall_seconds": round(ctx.spend.charged.wall_seconds, 3),
+            **({"outcome_cost_usd": round(cost.usd, 6)} if cost is not None else {}),
+            "findings": {
+                "count": len(findings),
+                "items": [f.as_record() for f in findings[:_LEDGER_MAX_FINDINGS]],
+            },
+        },
+    )
+
+
+def _setup_errors() -> tuple[type[BaseException], ...]:
+    """Problems with the environment rather than with the run. Each has one obvious remedy."""
+    from .ai.bootstrap import MissingCredential
+    from .platform.artifacts import MalformedArtifact
+
+    # `LookupError` covers a cassette that no longer matches the prompt it was recorded against.
+    return (ImportError, LookupError, MissingCredential, MalformedArtifact)
+
+
+_SETUP_ERRORS = _setup_errors()
+
+
+def _parameters(fn: Any) -> list[str]:
+    import inspect
+
+    return [p for p in inspect.signature(fn).parameters if p != "ctx"]
+
+
+def _describe(result: Any) -> str:
+    """A workflow returns whatever it likes; say something true about it either way."""
+    status = getattr(result, "status", None)
+    if status is None:
+        return "completed"
+    reason = getattr(result, "reason", None)
+    decided = getattr(result, "decided", True)
+    return (
+        f"{status.value}" + (f"  ({reason})" if reason else "") + ("" if decided else "  (decided nothing)")
+    )
+
+
+def _exit_for(result: Any) -> None:
+    status = getattr(result, "status", None)
+    if status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if status is not None and status is not Status.SUCCEEDED:
+        raise SystemExit(EXIT_FAILED)
 
 
 def _echo_telemetry(recorder: Recorder | None) -> None:
@@ -248,22 +441,67 @@ def main() -> None:
 @main.command(name="run")
 @click.argument("target")
 @click.option("--paths", multiple=True, help="Restrict to these paths.")
+@click.option("--arg", "args", multiple=True, metavar="NAME=VALUE", help="Workflow parameter.")
 @click.option("--no-middleware", is_flag=True, help="Bisect behaviour. Cannot disable the privileged tier.")
 @click.option("--recover", "recover_id", default="", help="Resume an interrupted run by id.")
 @click.option("--checkpoint/--no-checkpoint", default=False, help="Checkpoint completed steps.")
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="Hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
+)
+@click.option("--approve", is_flag=True, help="You are the human watching this run.")
+@click.option("--approved-by", default="", help="Who asked, when nobody is watching. Recorded.")
 def run_cmd(
-    target: str, paths: tuple[str, ...], no_middleware: bool, recover_id: str, checkpoint: bool
+    target: str,
+    paths: tuple[str, ...],
+    args: tuple[str, ...],
+    no_middleware: bool,
+    recover_id: str,
+    checkpoint: bool,
+    budget: float | None,
+    approve: bool,
+    approved_by: str,
 ) -> None:
-    """Run a workflow.
+    """Run a workflow, by the id it was registered under.
+
+    This is the entry point external CI is meant to use. A process — gate, then implement, then
+    propose, then say what happened — belongs in `lockstep.py` as a `@workflow`, where it is
+    Python that can be read, tested and reasoned about. What belongs in a CI file is the trigger,
+    the job split, and which credential each job holds, because those are the CI system's to grant.
+
+    `--arg name=value`, repeatable, supplies workflow parameters. Values arrive as strings, which
+    usefully bounds what a CLI-runnable workflow can take: one needing a list of tickets takes a
+    label or a path, not the tickets.
 
     `--recover` restarts an interrupted run from its checkpoints. It covers machine failure only:
     a run never waits on a person, so resuming after a human is a different mechanism entirely.
     """
-    if target != "selfcheck":
-        known = ", ".join(r.id for r in registered())
-        raise click.ClickException(f"unknown workflow {target!r}; registered: {known}")
-
     lockstep, recorder = _default_lockstep()
+
+    # A ceiling stated at the call site, exactly as `review` takes one. A budget is operational
+    # rather than process — like a timeout — and one workflow in a module can be much more
+    # expensive than another while `Budget` is run-scoped, so the module cannot express both.
+    if budget is not None:
+        from .core.spend import Budget
+
+        lockstep.budget = Budget(usd=budget)
+
+    # After loading, because loading `lockstep.py` is what registers the module's workflows. The
+    # check used to run first, so the error listed only `selfcheck` no matter what a repository
+    # had written — it was reporting an empty registry, not an unknown id.
+    known = {r.id: r for r in registered()}
+    if target not in known:
+        raise click.ClickException(
+            f"unknown workflow {target!r}. Registered: {', '.join(sorted(known)) or '(none)'}"
+        )
+
+    if target != "selfcheck":
+        _run_registered(
+            lockstep, recorder, known[target], args, no_middleware, _approval(approve, approved_by)
+        )
+        return
     if no_middleware:
         # Note what this does NOT switch off: the kill switch is checked before the chain, and
         # redaction, egress and residency are privileged rather than middleware.
@@ -423,6 +661,65 @@ def eval_cmd(action: str, corpus: str) -> None:
     click.echo("A rubric nobody judged is outstanding, not passed.")
 
 
+@main.command(name="history")
+@click.option("--push", is_flag=True, help="Publish the branch. Needs push access; never automatic.")
+@click.option(
+    "--bundle", default="", type=click.Path(), help="Write the branch to a file to travel as an artifact."
+)
+@click.option("--from-bundle", default="", type=click.Path(), help="Take in history another job recorded.")
+@click.option("--limit", type=int, default=20, show_default=True)
+def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int) -> None:
+    """Run records, on an orphan branch that touches nothing anybody works on.
+
+    Records are committed locally as each run finishes. Publishing is a separate act, because
+    reaching a remote needs credentials and is a side effect nobody asked for by typing a command
+    in a terminal — so a laptop accumulates history and CI, or a person, pushes it.
+    """
+    from .platform.ledger import GitLedger, HistoryError
+
+    ledger = GitLedger()
+
+    # Absorb first, so `--from-bundle --push` in one invocation does what it reads like.
+    if from_bundle:
+        try:
+            ledger.absorb(from_bundle)
+        except HistoryError as e:
+            raise click.ClickException(str(e)) from None
+        click.echo(f"absorbed  {from_bundle}")
+
+    head = ledger.head()
+    if head is None:
+        click.echo(f"no history yet on {ledger.branch}; it is created by the first run that records one")
+        return
+
+    records = ledger.records()
+    click.echo(f"branch    {ledger.branch}  ({head[:12]}, {len(records)} record(s))")
+    click.echo("")
+    for record in records[-limit:]:
+        kind = str(record.get("kind", "run"))
+        status = str(record.get("status", "?"))
+        cost = record.get("cost_usd")
+        money = f"${float(cost):.4f}" if isinstance(cost, (int, float)) else "     -"
+        click.echo(f"  {str(record.get('run_id', '?')):<34} {kind:<10} {status:<10} {money}")
+
+    if bundle:
+        try:
+            written = ledger.bundle(bundle)
+        except HistoryError as e:
+            raise click.ClickException(str(e)) from None
+        click.echo("")
+        click.echo(f"bundled   {written}")
+
+    if not push:
+        return
+    try:
+        where = ledger.push()
+    except HistoryError as e:
+        raise click.ClickException(str(e)) from None
+    click.echo("")
+    click.echo(f"pushed to {where}")
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 def doctor_cmd(strict: bool) -> None:
@@ -438,22 +735,27 @@ def doctor_cmd(strict: bool) -> None:
 @main.command(name="apply")
 @click.option("--from-artifact", "artifact", required=True, type=click.Path())
 @click.option("--dry-run", is_flag=True, help="Check the changeset against the guard; write nothing.")
-def apply_cmd(artifact: str, dry_run: bool) -> None:
+@click.option("--title", default="", help="Change title. Defaults to the changeset's summary.")
+@click.option("--body", default="", help="Change description.")
+@click.option("--workflow", "workflow_id", default="implement", help="Names the run-scoped branch.")
+@click.option("--run-id", default="", help="Names the run-scoped branch. Defaults to the CI run id.")
+def apply_cmd(artifact: str, dry_run: bool, title: str, body: str, workflow_id: str, run_id: str) -> None:
     """Apply a ChangeSet produced by an earlier, unprivileged run.
 
     This is the privileged half of the two-job split. It holds a write token and never sees a
-    provider credential — constructing it without a ProviderRegistry is asserted here rather than
-    left as a convention.
+    provider credential — asserted below rather than left as a convention.
 
     The artifact crossed a trust boundary to get here, so the path guard runs again over it. A
     previous job having produced it is not a reason to trust it.
 
-    The write itself is not implemented: `Scm.open_change` exists and nothing calls it from here.
-    So `--dry-run` checks the guard and succeeds, and a bare `apply` refuses rather than exiting 0
-    on a job that wrote nothing.
+    Where it goes is `Scm.open_change`, and the branch it writes to is refused by the framework
+    unless it is run-scoped. That refusal matters because the token here is ambient and can write
+    any branch: branch protection is the host's half, and this is ours.
     """
-    changeset = _load_changeset(artifact)
+    from .core.spend import Budget
+    from .platform.scm import DirectPushRefused, GuardRefused, Scm
 
+    changeset = _load_changeset(artifact)
     _guard_or_exit(changeset)
 
     click.echo(f"{len(changeset.changes)} change(s) pass the guard")
@@ -464,13 +766,114 @@ def apply_cmd(artifact: str, dry_run: bool) -> None:
         click.echo("guard only; nothing was written")
         return
 
-    # Exiting 0 here made a CI job that wrote nothing report success, which is worse than the
-    # missing feature: a green `apply` is read as "the change landed". The guard genuinely ran
-    # and genuinely passed — that part is real — so the message says which half is missing.
+    lockstep, _ = _default_lockstep()
+    # The assertion the two-job split rests on, made about this process rather than about the
+    # workflow file that started it. A job holding a write token must not be able to reach a
+    # provider — and "we did not pass the flag" is a convention, where an empty registry at the
+    # moment of writing is a fact.
+    _refuse_provider_credential()
+    # A budget is not needed here: nothing in this command spends. Stating it keeps GATE-BUDGET-1
+    # from refusing a run that genuinely cannot spend a cent.
+    if not lockstep.declared_ceiling().declared:
+        lockstep.budget = Budget(usd=0.0)
+
+    scm: Any
+    if lockstep.container.has(Scm):
+        # `type-abstract` fires because `Scm` is a Protocol, and mypy's rule is about
+        # INSTANTIATING an abstract type. The container does not instantiate it — resolving a
+        # protocol to a bound implementation is the entire purpose of `core/ports`, and the first
+        # place in `src` to do it is here. Ignored locally rather than disabled globally, which
+        # would hide the real version of this error everywhere else.
+        scm = lockstep.container.resolve(Scm)  # type: ignore[type-abstract]
+    else:
+        scm = _detect_scm(lockstep.repo.root)
+        click.echo(f"scm       {type(scm).__name__}")
+
+    try:
+        change = asyncio.run(
+            scm.open_change(
+                changeset,
+                title=title or changeset.summary or "Proposed change",
+                body=body,
+                ticket=changeset.ticket,
+                workflow=workflow_id,
+                run_id=run_id or os.environ.get("GITHUB_RUN_ID", "local"),
+            )
+        )
+    except DirectPushRefused as e:
+        # A control refusing, not a failure. Exit 3 like every other refusal.
+        click.echo(f"refused: {e}")
+        raise SystemExit(EXIT_BLOCKED) from None
+    except GuardRefused as e:
+        click.echo(f"refused: {e}")
+        raise SystemExit(EXIT_BLOCKED) from None
+    except (OSError, RuntimeError) as e:
+        # An error, never a quiet exit 0. A green `apply` is read as "the change landed", and that
+        # reading is why this command used to refuse rather than pretend.
+        raise click.ClickException(f"nothing was applied: {e}") from None
+
+    click.echo(f"branch    {change.branch}")
+    if change.url:
+        click.echo(f"change    {change.url}")
+    else:
+        click.echo("change    (branch only; this SCM does not open pull requests)")
+
+
+def _detect_scm(root: str) -> Any:
+    """`GitHubScm` when there is a GitHub remote to open a change on, else plain git.
+
+    "Is `gh` installed" is the wrong question and was the first one asked. `gh` is on plenty of
+    laptops whose current repository has no remote at all, and the failure that produces is a push
+    to `origin` that does not exist — reported after the branch was made and the commit written,
+    which is the worst moment to discover it. What decides is whether this repository has a remote
+    a pull request could be opened against.
+
+    `GitLocal` makes the branch and stops there, which is a complete answer locally: the change is
+    committed, it is on a run-scoped branch, and a person pushes it if they want to.
+    """
+    import shutil
+    import subprocess
+
+    from .platform.scm import GitHubScm, GitLocal
+
+    try:
+        remote = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
+        return GitLocal(root)
+
+    url = remote.stdout.strip() if remote.returncode == 0 else ""
+    if url and "github" in url and shutil.which("gh"):
+        return GitHubScm(root)
+    return GitLocal(root)
+
+
+def _refuse_provider_credential() -> None:
+    """The privileged job must be constructible with no ProviderRegistry.
+
+    Checked rather than assumed, because the whole point of splitting the jobs is that this
+    process cannot call a model — and a check that lives only in a comment in a YAML file is one
+    a copied workflow silently loses.
+    """
+    from .ai.auth import Auth
+    from .ai.bootstrap import MissingCredential, credentials_for
+
+    try:
+        credentials_for(Auth(), "anthropic")
+    except MissingCredential:
+        return
+    except ImportError:  # pragma: no cover - the SDK is not installed, which is the point
+        return
     raise click.ClickException(
-        "the guard passed, but `apply` does not write yet: Scm.open_change is implemented and "
-        "nothing calls it from here. Nothing was applied. Pass --dry-run to check a changeset "
-        "against the guard without implying a write."
+        "this process can reach a model provider, and the job that writes must not. `apply` is "
+        "the privileged half of the two-job split: it holds a write token, so a provider "
+        "credential in the same process re-colocates exactly what the split separates. Remove the "
+        "credential from this job's environment."
     )
 
 
@@ -560,7 +963,7 @@ def review_cmd(
             demo_diff = ""
     else:
         demo_diff = ""
-    cassette = cassette or ".in-lockstep/cassettes/review.json"
+    cassette = cassette or ".lockstep/cassettes/review.json"
 
     table = default_table()
     auth = Auth()
@@ -602,8 +1005,10 @@ def review_cmd(
         )
 
     # Only if the module did not bind one. A repository that ships its own Review adapter has
-    # said something more specific than this default, and the CLI must not overrule it.
-    if not lockstep.container.has(Review):
+    # said something more specific than this default, and the CLI must not overrule it — and it
+    # has also chosen its own model, so `selected` below is not a fact about the run.
+    review_model_is_ours = not lockstep.container.has(Review)
+    if review_model_is_ours:
         lockstep.bind(
             Review,
             AiReview(
@@ -620,9 +1025,7 @@ def review_cmd(
 
     ctx = _context(lockstep, f"review-{aspect}")
     try:
-            outcome = asyncio.run(
-            ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect, diff=demo_diff))
-        )
+        outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect, diff=demo_diff)))
     except LookupError as e:
         raise click.ClickException(
             f"{e} If this is the shipped fixture, it no longer matches the prompt it was recorded "
@@ -650,7 +1053,7 @@ def review_cmd(
 
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
     # money and produced nothing is exactly the run worth having a record of.
-    _write_ledger(ctx, outcome, aspect, selected.id)
+    _write_ledger(ctx, outcome, aspect, selected.id if review_model_is_ours else "")
 
     if outcome.status is Status.BLOCKED:
         raise SystemExit(EXIT_BLOCKED)
@@ -667,47 +1070,430 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
     reader refuses to compare across epochs precisely so that a silent mismatch cannot average a
     credits-era number with a tokens-era one.
     """
-    from .platform.ledger.store import InRepoLedger
-
-    ledger = InRepoLedger()
-    asyncio.run(
-        ledger.append(
-            ctx.run_id,
-            {
-                "kind": "review",
-                "aspect": aspect,
-                "model": model_id,
-                "status": outcome.status.value,
-                # The machine-readable refinement, which the terminal printed and the record
-                # dropped. `reason` is what a failure is grouped by — provider.authentication is a
-                # different problem from cost.budget_exceeded, and `status` calls both "errored".
-                "reason": outcome.reason,
-                "decided": outcome.decided,
-                "tokens": outcome.cost.total_tokens,
-                "input_tokens": outcome.cost.input_tokens,
-                "output_tokens": outcome.cost.output_tokens,
-                "cost_usd": round(outcome.cost.usd, 6),
-                # The findings themselves, not only how many. A record whose purpose is evidence
-                # kept the count and discarded the content — so three real findings existed
-                # nowhere but a terminal scrollback, and the ledger could say a run found things
-                # without being able to say what. `count` is the true total; `items` is bounded,
-                # so when a run finds more than the cap the mismatch between them says so.
-                "findings": {
-                    "count": len(outcome.findings),
-                    "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
-                },
-                "wall_seconds": round(outcome.cost.wall_seconds, 3),
-                # Absent rather than zero, and absent rather than one. The ledger's own rule is
-                # that a measurement nobody took is not a measurement of nothing.
-                **(
-                    {"priced_fraction": round(outcome.cost.priced_fraction, 4)}
-                    if outcome.cost.priced_fraction is not None
-                    else {}
-                ),
+    _record(
+        _ledger(),
+        ctx.run_id,
+        {
+            "kind": "review",
+            "aspect": aspect,
+            # Omitted when the repository bound its own Review adapter and therefore chose its
+            # own model: this command's `--model` was never consulted, and writing it down
+            # would put a model that was not called into a permanent record.
+            **({"model": model_id} if model_id else {}),
+            "status": outcome.status.value,
+            # The machine-readable refinement, which the terminal printed and the record
+            # dropped. `reason` is what a failure is grouped by — provider.authentication is a
+            # different problem from cost.budget_exceeded, and `status` calls both "errored".
+            "reason": outcome.reason,
+            "decided": outcome.decided,
+            "tokens": outcome.cost.total_tokens,
+            "input_tokens": outcome.cost.input_tokens,
+            "output_tokens": outcome.cost.output_tokens,
+            "cost_usd": round(outcome.cost.usd, 6),
+            # The findings themselves, not only how many. A record whose purpose is evidence
+            # kept the count and discarded the content — so three real findings existed
+            # nowhere but a terminal scrollback, and the ledger could say a run found things
+            # without being able to say what. `count` is the true total; `items` is bounded,
+            # so when a run finds more than the cap the mismatch between them says so.
+            "findings": {
+                "count": len(outcome.findings),
+                "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
             },
-        )
+            "wall_seconds": round(outcome.cost.wall_seconds, 3),
+            # Absent rather than zero, and absent rather than one. The ledger's own rule is
+            # that a measurement nobody took is not a measurement of nothing.
+            **(
+                {"priced_fraction": round(outcome.cost.priced_fraction, 4)}
+                if outcome.cost.priced_fraction is not None
+                else {}
+            ),
+        },
     )
-    click.echo(f"ledger    {ledger.path_for(ctx.run_id)}")
+
+
+@main.command(name="gate")
+@click.option("--actor", required=True, help="The login that asked for the run.")
+@click.option("--association", default="", help="GitHub's author_association for that login.")
+@click.option(
+    "--codeowners",
+    default=".github/CODEOWNERS",
+    type=click.Path(),
+    help="Read from the TRUSTED ref, never from a change under review.",
+)
+def gate_cmd(actor: str, association: str, codeowners: str) -> None:
+    """May this person ask for a run? Exit 0 if yes, 3 if no.
+
+    A chat-ops trigger is an unauthenticated entry point wearing a familiar interface, and the
+    decision about who may fire one is security-critical enough that it should not be `grep` inside
+    a YAML `if:`. This is that decision as a Python function, where it has tests.
+
+    It authorizes the ASKER. It says nothing about the issue text, which anyone can write and which
+    the framework tags untrusted regardless of who invoked the run.
+    """
+    from pathlib import Path as _Path
+
+    from .platform.actors import authorize
+
+    file = _Path(codeowners)
+    decision = authorize(
+        actor=actor,
+        association=association,
+        codeowners=file.read_text() if file.is_file() else "",
+    )
+    click.echo(f"actor     {actor}")
+    for item in decision.considered:
+        click.echo(f"          {item}")
+    click.echo(f"{'allowed' if decision.allowed else 'refused'}   {decision.reason}")
+    if not decision.allowed:
+        raise SystemExit(EXIT_BLOCKED)
+
+
+# What an implementing session gets. Both are ceilings rather than targets, and both are
+# deliberately larger than the review lens's: a reviewer is handed everything it needs in one
+# prompt, where an implementer has to go and find it. See `adapters.ai.implement` for why forty
+# turns is chosen against the quadratic history cost rather than against patience.
+_IMPLEMENT_TURNS = 40
+_IMPLEMENT_MAX_TOKENS = 8192
+
+# What `--dry-run` returns instead of calling a model. Shaped like an implement reply, because
+# `DryRunProvider`'s own default is `{"findings": []}` — a review answer — and a wiring check that
+# fails to parse reports the wrong thing.
+#
+# It stages nothing, which a dry run cannot, so the run ends `implement.no_changes` and exits
+# non-zero. That is the honest result rather than a wart: what this flag proves is that the module
+# loaded, the container resolved, approval and egress let the run start, the prompt composed and
+# the ledger was written — everything up to the model, which is where most of the setup mistakes
+# are. It cannot prove anything about the change, because there isn't one.
+# What `run_script` runs inside by default. A default rather than a flag people remember, because
+# the alternative default is executing a command a model chose on the host that holds the key —
+# and a control whose safe setting is opt-in is a control most runs will not have.
+#
+# Under docker or podman this gets `--cap-drop=ALL`, `--security-opt=no-new-privileges` and
+# `--network=none`, which is the egress constraint an in-process framework otherwise has no way to
+# impose. A repository whose stack is not Python names its own; `--sandbox-image ''` asks for the
+# host, deliberately.
+_DEFAULT_SANDBOX_IMAGE = "docker.io/library/python:3.12-slim"
+
+_DRY_RUN_REPLY = (
+    '{"summary": "dry run: the wiring resolved and no model was called", '
+    '"notes": [], "unfinished": ["nothing was implemented"]}'
+)
+
+
+def _ticket_from_file(path: str) -> Any:
+    """A ticket read off disk, so this runs with no tracker and no network.
+
+    JSON if it parses as an object, otherwise markdown: first heading is the title, the rest is
+    the body, and acceptance criteria come from the task list — the same `criteria_from` a real
+    tracker's body goes through, because a fixture that parsed differently from the real thing
+    would be a fixture of something else.
+    """
+    import json
+    from pathlib import Path as _Path
+
+    from .platform.tickets import Ticket, criteria_from
+
+    file = _Path(path)
+    if not file.exists():
+        raise click.ClickException(f"no ticket file at {path}")
+    raw = file.read_text()
+
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        body = str(data.get("description") or data.get("body") or "")
+        return Ticket(
+            key=str(data.get("key") or data.get("id") or file.stem),
+            title=str(data.get("title") or ""),
+            description=body,
+            acceptance_criteria=tuple(data.get("acceptance_criteria") or criteria_from(body)),
+        )
+
+    lines = raw.splitlines()
+    title = lines[0].lstrip("# ").strip() if lines else file.stem
+    body = "\n".join(lines[1:]).strip()
+    return Ticket(key=file.stem, title=title, description=body, acceptance_criteria=criteria_from(body))
+
+
+@main.command(name="implement")
+@click.option("--ticket", default="", help="Issue key to fetch, e.g. '#42'.")
+@click.option("--ticket-file", default="", type=click.Path(), help="Read the ticket from a file instead.")
+@click.option("--strategy", default="", help="Which approach. Defaults to the registry's.")
+@click.option("--model", default="anthropic:claude-sonnet-4-6")
+@click.option("--out", default="", type=click.Path(), help="Write the ChangeSet here for `apply`.")
+@click.option("--max-turns", type=int, default=_IMPLEMENT_TURNS, show_default=True)
+@click.option("--execute/--no-execute", default=True, help="Let the model run commands, sandboxed.")
+@click.option(
+    "--sandbox-image",
+    default=_DEFAULT_SANDBOX_IMAGE,
+    show_default=True,
+    help="Container image for run_script. Pass '' to run on the host instead, deliberately.",
+)
+@click.option(
+    "--approve",
+    is_flag=True,
+    help="You are the human in the loop for this run. Attended, local use only.",
+)
+@click.option(
+    "--approved-by",
+    default="",
+    help="Who asked for this run. The unattended form of --approve; recorded in the ledger.",
+)
+@click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
+@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option("--cassette", default="", help="Where to read or write a recording.")
+@click.option("--budget", type=float, default=None, help="Hard ceiling, in USD.")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Canned answer. Proves everything up to the model; stages nothing, so it exits non-zero.",
+)
+def implement_cmd(
+    ticket: str,
+    ticket_file: str,
+    strategy: str,
+    model: str,
+    out: str,
+    max_turns: int,
+    execute: bool,
+    sandbox_image: str,
+    approve: bool,
+    approved_by: str,
+    offline: bool,
+    record: bool,
+    cassette: str,
+    budget: float | None,
+    dry_run: bool,
+) -> None:
+    """Implement one ticket, in-process, staging the change rather than writing it.
+
+    Nothing here touches the working tree. The session stages writes into a `ChangeSet`, which
+    `--out` serializes — and `apply-inline` or `apply --from-artifact` is what writes it, through
+    the same guard a second time. That separation is the point: a model that has just read a
+    ticket written by anybody is not the thing that should also hold the ability to write.
+    """
+
+    from .adapters.ai.implement import AiImplement, Implement, ImplementSpec
+    from .adapters.sandbox import Sandbox
+    from .ai.auth import Auth
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+    )
+    from .ai.bootstrap import (
+        default_registry as default_providers,
+    )
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.pricing import default_table
+    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .core.spend import Budget
+    from .middleware.approval import ApprovalGate
+    from .privileged.egress import EgressPolicy
+    from .strategies import default_registry as default_strategies
+
+    if bool(ticket) == bool(ticket_file):
+        raise click.ClickException("pass exactly one of --ticket or --ticket-file")
+
+    lockstep, recorder = _default_lockstep()
+
+    source = click.get_current_context().get_parameter_source
+    if budget is not None:
+        lockstep.budget = Budget(usd=budget)
+    if source("model") is ParameterSource.DEFAULT:
+        model = lockstep.models.routes.get("implement", model)
+
+    # An implementing adapter declares WRITES_FILES and SPENDS_BUDGET, so `Lockstep.context`
+    # refuses to start the run unless an approval path exists.
+    #
+    # Two forms, because the two situations differ in what is worth recording. `--approve` is the
+    # local, attended one: the person typing it is the human, and there is no useful identity to
+    # write down because it is the same person reading the output. `--approved-by` is the
+    # unattended one — a name, recorded in the ledger, because a grant nobody can be traced to is
+    # not much of a grant. A chat-ops trigger uses the second, passing the verified commenter.
+    #
+    # Neither is an environment approval in the system of record, and neither pretends to be. What
+    # makes the unattended form defensible is what stands behind it: an actor gate decides who may
+    # ask, and the change is staged into an artifact a person reviews as a pull request.
+    approval = _approval(approve, approved_by)
+    # The gate itself, only if the module has none. The GRANT lives on the context either way — a
+    # gate that has to be CONSTRUCTED differently to be satisfiable would put the local and the
+    # hosted paths back on separate plumbing, which is the seam this exists to remove.
+    if approval.granted and not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
+        lockstep.middleware = [*lockstep.middleware, ApprovalGate()]
+
+    resolved = _load_ticket(ticket, ticket_file, lockstep.repo.root)
+
+    table = default_table()
+    auth = Auth()
+    try:
+        providers = default_providers(auth)
+    except MissingCredential as e:
+        raise click.ClickException(str(e)) from None
+    selected = Model(model)
+    tape = Cassette.load(cassette or ".lockstep/cassettes/implement.json")
+
+    def build_invoker(_ctx: Any) -> AiInvoker:
+        provider: LLMProvider
+        if dry_run:
+            provider = DryRunProvider(_DRY_RUN_REPLY)
+        elif offline:
+            provider = ReplayProvider(tape)
+        else:
+            creds = credentials_for(auth, selected.provider)
+            provider = providers.provider_for(selected, creds)
+            if record:
+                provider = RecordingProvider(provider, tape, Redact())
+        return AiInvoker(
+            provider,
+            model=selected.name,
+            cost_table=table,
+            spend=_ctx.spend,
+            redact=Redact(),
+            egress=(
+                lockstep.container.resolve(EgressPolicy)
+                if lockstep.container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            ),
+        )
+
+    # Whether the CLI is the thing that chose the model. A repository shipping its own Implement
+    # adapter has chosen its own, and `selected` is then a number this command would have used —
+    # recording it would be a fabricated field in a permanent record.
+    cli_chose_the_model = not lockstep.container.has(Implement)
+    if cli_chose_the_model:
+        lockstep.bind(
+            Implement,
+            AiImplement(
+                build_invoker,
+                registry=default_strategies(),
+                repo_root=lockstep.repo.root,
+                # A sandbox, or nothing. `--no-execute` withholds the runner rather than the
+                # tool, so the capability the tool set declares — and therefore what egress and
+                # approval see — does not change with the flag. A run that could execute on some
+                # other configuration must not read as harmless on this one.
+                # `require_container` follows the image, so naming one and not getting one is a
+                # refusal rather than a quiet downgrade to running on the host. Passing
+                # `--sandbox-image ''` is the deliberate way to ask for the host, and it reads
+                # like a decision because it is one.
+                commands=(
+                    Sandbox(image=sandbox_image, require_container=bool(sandbox_image)) if execute else None
+                ),
+                policy=InvokePolicy.under(
+                    lockstep.policy.resolve(),
+                    max_turns=max_turns,
+                    max_tokens=_IMPLEMENT_MAX_TOKENS,
+                    deadline_seconds=1800,
+                ),
+            ),
+        )
+
+    ctx = _context(lockstep, f"implement-{resolved.key.lstrip('#')}", approval)
+    try:
+        outcome = asyncio.run(ctx.do(Implement, ImplementSpec(ticket=resolved, strategy=strategy)))
+    except LookupError as e:
+        raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
+    except (ImportError, MissingCredential) as e:
+        raise click.ClickException(str(e)) from None
+
+    report = outcome.value
+    label = report.strategy if report is not None and report.strategy else (strategy or "implement")
+    click.echo(
+        f"{label}  {outcome.status.value}"
+        + (f"  ({outcome.reason})" if outcome.reason else "")
+        + ("" if outcome.decided else "  (decided nothing)")
+    )
+    if report is not None and report.summary:
+        click.echo(f"  {report.summary}")
+    for finding in outcome.findings:
+        where = f"{finding.path} " if finding.path else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+
+    cost = outcome.cost
+    click.echo("")
+    click.echo(f"turns     {report.turns if report is not None else 0}")
+    click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
+    click.echo(f"cost      ${cost.usd:.4f}")
+    _echo_telemetry(recorder)
+
+    if out and report is not None and report.changeset.changes:
+        _write_artifact(out, report.changeset)
+        click.echo(f"changeset {out}")
+        click.echo("")
+        click.echo(f"Nothing was written. Apply it with:  in-lockstep apply-inline --from-artifact {out}")
+
+    _write_implement_ledger(ctx, outcome, label, selected.id if cli_chose_the_model else "", approval)
+
+    if outcome.status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    # An undecided run exits non-zero, which is where this differs from `review`. The turn cap
+    # stopped a session mid-work, so the staged change is whatever it had reached — and a zero
+    # exit beside a partial change set is the one reading that would get it applied unread.
+    if outcome.status is not Status.SUCCEEDED or not outcome.decided:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _load_ticket(key: str, path: str, root: str) -> Any:
+    if path:
+        return _ticket_from_file(path)
+    from pathlib import Path as _Path
+
+    from .platform.tickets import GitHubIssues
+
+    try:
+        return asyncio.run(GitHubIssues(root=_Path(root)).get(key))
+    except (RuntimeError, OSError) as e:
+        raise click.ClickException(f"could not read ticket {key!r}: {e}") from None
+
+
+def _write_artifact(path: str, changeset: Any) -> None:
+    from .platform.artifacts import write_changeset
+
+    write_changeset(path, changeset)
+
+
+def _write_implement_ledger(
+    ctx: Any, outcome: Any, strategy: str, model_id: str, approval: Any = None
+) -> None:
+    """The same store `review` writes through, with the fields that differ for this verb."""
+    report = outcome.value
+    _record(
+        _ledger(),
+        ctx.run_id,
+        {
+            "kind": "implement",
+            "strategy": strategy,
+            # Who asked. Absent for an attended local run, where the person reading the output
+            # is the person who approved it and a name would be noise. Present for anything
+            # unattended, where it is the only trace of a human in the loop.
+            **({"approval": approval.as_record()} if approval and approval.granted else {}),
+            # Omitted rather than guessed when the repository bound its own adapter, the same
+            # way `priced_fraction` is omitted rather than written as zero. A record naming a
+            # model that was never called is worse than one that is quiet about which was.
+            **({"model": model_id} if model_id else {}),
+            "status": outcome.status.value,
+            "reason": outcome.reason,
+            "decided": outcome.decided,
+            "turns": report.turns if report is not None else 0,
+            # The paths, not the contents. A ledger record is committed to git and meant to
+            # stay diffable; the change itself is the artifact, and duplicating it here would
+            # write every proposed file into a permanent record twice.
+            "paths": list(report.changeset.paths()) if report is not None else [],
+            "unfinished": list(report.unfinished) if report is not None else [],
+            "tokens": outcome.cost.total_tokens,
+            "input_tokens": outcome.cost.input_tokens,
+            "output_tokens": outcome.cost.output_tokens,
+            "cost_usd": round(outcome.cost.usd, 6),
+            "findings": {
+                "count": len(outcome.findings),
+                "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
+            },
+            "wall_seconds": round(outcome.cost.wall_seconds, 3),
+        },
+    )
 
 
 @main.command(name="apply-inline")
@@ -754,9 +1540,9 @@ def _write_changeset(changeset: Any) -> list[str]:
 
 
 @main.command(name="show-prompt")
-@click.argument("aspect", default="security")
+@click.argument("name", default="security")
 @click.option("--projection", is_flag=True, help="Print the section-identity list only.")
-def show_prompt_cmd(aspect: str, projection: bool) -> None:
+def show_prompt_cmd(name: str, projection: bool) -> None:
     """Render a composed prompt offline, with per-fragment provenance.
 
     The successor to a committed flattened prompt tree. "What was the model actually told?" needs
@@ -765,24 +1551,33 @@ def show_prompt_cmd(aspect: str, projection: bool) -> None:
 
     The projection it prints is the same one the characterization corpus asserts on, so one
     artifact serves both offline inspection and migration equivalence.
+
+    NAME is a review aspect (`security`) or a strategy id (`implement/oneshot`). Both, because an
+    implementing prompt is the one most worth reading before it is run: it composes a different
+    guardrail and a different skill, and it is attached to a tool set that can write.
     """
+    from .prompts.implement import PROMPTS, implement_layers
     from .prompts.review import LENSES, review_layers
 
-    lens = LENSES.get(aspect)
-    if lens is None:
-        raise click.ClickException(f"no lens named {aspect!r}; have {sorted(LENSES)}")
-
-    prompt = lens()
-    layers = review_layers()
+    if name in PROMPTS:
+        prompt: Any = PROMPTS[name]()
+        layers = implement_layers()
+        label, body_name = name, "implement/oneshot-implementer"
+    elif name in LENSES:
+        prompt = LENSES[name]()
+        layers = review_layers()
+        label, body_name = f"review/{name}", f"review/{name}-reviewer"
+    else:
+        raise click.ClickException(f"no prompt named {name!r}; have {sorted(LENSES)} and {sorted(PROMPTS)}")
 
     if projection:
-        for section in layers.projection(f"review/{aspect}-reviewer"):
+        for section in layers.projection(body_name):
             click.echo(section)
         return
 
-    click.echo(f"# composed prompt: review/{aspect}  (version {prompt.version})")
+    click.echo(f"# composed prompt: {label}  (version {prompt.version})")
     click.echo("#")
-    for section in layers.projection(f"review/{aspect}-reviewer"):
+    for section in layers.projection(body_name):
         click.echo(f"#   {section}")
     click.echo("")
     click.echo(prompt.system(layers))
@@ -800,12 +1595,24 @@ def init_cmd(force: bool) -> None:
     """
     from pathlib import Path
 
-    module = Path("lockstep.py")
+    from .loader import LEGACY_MODULE_FILE, MODULE_FILE
+
+    legacy = Path(LEGACY_MODULE_FILE)
+    if legacy.exists():
+        # Said before anything is written. Scaffolding a second lifecycle module beside one that
+        # is no longer read is how a repository ends up with two configurations and no idea which
+        # one is in effect.
+        click.echo(f"{LEGACY_MODULE_FILE} exists at the repository root, which is no longer read.")
+        click.echo(f"  mkdir -p .lockstep && git mv {LEGACY_MODULE_FILE} {MODULE_FILE}")
+        raise SystemExit(EXIT_FAILED)
+
+    module = Path(MODULE_FILE)
     if module.exists() and not force:
-        click.echo("lockstep.py exists (use --force to overwrite)")
+        click.echo(f"{MODULE_FILE} exists (use --force to overwrite)")
     else:
+        module.parent.mkdir(parents=True, exist_ok=True)
         module.write_text(_SCAFFOLD_MODULE)
-        click.echo("wrote lockstep.py")
+        click.echo(f"wrote {MODULE_FILE}")
 
     workflow = Path(".github/workflows/lockstep.yml")
     if workflow.exists():
@@ -897,7 +1704,7 @@ jobs:
         if: always()
         with:
           name: lockstep-run
-          path: .in-lockstep/
+          path: .lockstep/
           if-no-files-found: ignore
 """
 

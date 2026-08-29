@@ -51,7 +51,7 @@ def workflow(fn: F | None = None, *, id: str | None = None) -> F | Callable[[F],
     def register(func: F) -> F:
         workflow_id = id or func.__name__
         existing = _REGISTRY.get(workflow_id)
-        if existing is not None and existing.fn is not func:
+        if existing is not None and not _same_declaration(existing.fn, func):
             raise DuplicateWorkflow(
                 f"workflow id {workflow_id!r} is already registered by {existing.module}.{existing.name}"
             )
@@ -62,6 +62,25 @@ def workflow(fn: F | None = None, *, id: str | None = None) -> F | Callable[[F],
     if fn is not None:
         return register(fn)
     return register
+
+
+def _same_declaration(existing: Workflow, incoming: Workflow) -> bool:
+    """Whether these are the same `def`, not merely the same object.
+
+    Object identity was the test, and it made re-importing a module a conflict with itself. Any
+    host that loads `lockstep.py` more than once in a process hits that: a long-lived worker, a
+    test harness, two CLI invocations sharing an interpreter. Re-executing a declaration is not two
+    workflows claiming one id; it is one declaration evaluated twice, and refusing it turns
+    "configuration is code" into "configuration is code you may import exactly once".
+
+    The real conflict — two different functions claiming one id — still raises, because that is the
+    case where silently keeping one strands the other.
+    """
+    if existing is incoming:
+        return True
+    return getattr(existing, "__module__", None) == getattr(incoming, "__module__", object()) and getattr(
+        existing, "__qualname__", None
+    ) == getattr(incoming, "__qualname__", object())
 
 
 def registered() -> list[Registered]:
@@ -78,6 +97,32 @@ def id_of(fn: Workflow) -> str | None:
 
 
 def clear() -> None:
-    """Test helper. The registry is process-global by design; tests must not leak between them."""
+    """Empty the registry. Almost always the wrong tool — prefer `snapshot`/`restore`.
+
+    The framework's own `selfcheck` is registered when `in_lockstep.cli` is imported, so clearing
+    removes it for the rest of the process and every later test finds an empty registry. Both
+    callers this ever had were wrong in exactly that way, and the symptom was invisible until the
+    dispatcher stopped special-casing `selfcheck` — at which point it became
+    `unknown workflow 'selfcheck'` in tests that had nothing to do with workflows.
+    """
     _REGISTRY.clear()
     _IDS_BY_FN.clear()
+
+
+def snapshot() -> tuple[dict[str, Registered], dict[Workflow, str]]:
+    """What is registered right now, for a test that is about to register more.
+
+    `clear()` is the wrong tool for that: the framework's own `selfcheck` is registered when
+    `cli` is imported, so clearing after a test removes it for the rest of the process and every
+    later test finds an empty registry. Restoring a snapshot removes what the test added and
+    leaves what it found.
+    """
+    return dict(_REGISTRY), dict(_IDS_BY_FN)
+
+
+def restore(state: tuple[dict[str, Registered], dict[Workflow, str]]) -> None:
+    registry, by_fn = state
+    _REGISTRY.clear()
+    _REGISTRY.update(registry)
+    _IDS_BY_FN.clear()
+    _IDS_BY_FN.update(by_fn)

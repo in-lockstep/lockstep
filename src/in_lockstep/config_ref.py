@@ -21,7 +21,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-CONFIG_PATHS = ("lockstep.py", ".in-lockstep")
+#: Everything loaded from the trusted ref rather than from the change under review. One directory
+#: now: the lifecycle module, the skills, and anything else the framework reads as configuration.
+CONFIG_PATHS = (".lockstep",)
 
 
 class UntrustedConfig(Exception):

@@ -1,7 +1,13 @@
 """The run ledger.
 
-Append-only, one file per run, in the repository. One file per run means appends never conflict;
-in-repo means the record is versioned, diffable and owned by whoever owns the repository.
+Append-only, one record per run, in the repository — but on an ORPHAN BRANCH rather than in the
+working tree. One record per run means appends never conflict; in-repo means the record is
+versioned, diffable and owned by whoever owns the repository; orphan means it is none of those
+things at the cost of appearing in a diff somebody is trying to read.
+
+`GitLedger` is the default and `InRepoLedger` is the fallback for a directory that is not a git
+repository. The working-tree store was what shipped first, and it lost every local run's record:
+`.lockstep/` is gitignored, so records were written, never committed, and never seen again.
 
 Two things here exist because of a specific failure.
 
@@ -16,6 +22,7 @@ rather than averaging.
 them is how a fabricated improvement gets reported as fact.
 """
 
+from .history import DEFAULT_BRANCH, GitLedger, HistoryError
 from .store import (
     InRepoLedger,
     LedgerError,
@@ -29,6 +36,9 @@ from .store import (
 )
 
 __all__ = [
+    "DEFAULT_BRANCH",
+    "GitLedger",
+    "HistoryError",
     "InRepoLedger",
     "LedgerError",
     "LedgerScope",

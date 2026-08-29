@@ -21,7 +21,7 @@ from in_lockstep.cli import main
 
 ROOT_REPO = Path(__file__).resolve().parents[2]
 
-MODULE = '''
+MODULE = """
 from in_lockstep import Lockstep, Policy
 from in_lockstep.core.spend import Budget
 
@@ -29,16 +29,36 @@ lockstep = Lockstep.detect()
 lockstep.budget = Budget(usd={budget})
 lockstep.contribute(Policy(name="repo", source="test", max_turns={turns}))
 lockstep.models.route("review", "{model}")
-'''
+"""
+
+
+def _lifecycle(root: Path) -> Path:
+    """Where the lifecycle module lives: `.lockstep/lockstep.py`, never the repository root.
+
+    The root is on `sys.path` for anything run from there, so a module named `lockstep` sitting in
+    it is importable by the project whether or not anyone meant it to be. A dot-directory is not a
+    valid package name, which is what makes this location safe rather than merely tidy.
+    """
+    path = root / ".lockstep" / "lockstep.py"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 @pytest.fixture(autouse=True)
-def _no_verb_leakage() -> Iterator[None]:
-    """The intern table is process-global, so a verb one test defines outlives it."""
-    from in_lockstep.core.verbs import Verb
+def _no_registry_leakage() -> Iterator[None]:
+    """Both registries are process-global, so what one test defines outlives it.
 
+    `workflow.clear()` is the wrong tool: the framework's own `selfcheck` is registered when `cli`
+    is imported, so clearing after a test removes it for every later test. Restoring a snapshot
+    removes what the test added and leaves what it found.
+    """
+    from in_lockstep.core.verbs import Verb
+    from in_lockstep.core.workflow import restore, snapshot
+
+    state = snapshot()
     yield
     Verb.forget_custom()
+    restore(state)
 
 
 @pytest.fixture
@@ -61,7 +81,7 @@ def _write(
     turns: int = 9,
     model: str = "anthropic:claude-haiku-4-5",
 ) -> None:
-    (repo / "lockstep.py").write_text(MODULE.format(budget=budget, turns=turns, model=model))
+    _lifecycle(repo).write_text(MODULE.format(budget=budget, turns=turns, model=model))
 
 
 def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
@@ -71,13 +91,13 @@ def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
     assert result.exit_code == 0, result.output
     # The module routes review at a model the CLI's own default would not have chosen. A route
     # nothing reads is how `Models.route` shipped: written by the config, consumed by nobody.
-    assert "haiku" in (repo / ".in-lockstep/ledger/review-security.json").read_text()
+    assert "haiku" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
 def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> None:
     _write(repo, model="google:gemini-2.5-flash")
     CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
-    assert "gemini-2.5-flash" in (repo / ".in-lockstep/ledger/review-security.json").read_text()
+    assert "gemini-2.5-flash" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
 def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
@@ -86,7 +106,7 @@ def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
     CliRunner().invoke(
         main, ["review", "--dry-run", "--base", "HEAD", "--model", "anthropic:claude-opus-4-6"]
     )
-    assert "opus" in (repo / ".in-lockstep/ledger/review-security.json").read_text()
+    assert "opus" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
 def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
@@ -102,7 +122,7 @@ def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
 
 def test_telemetry_says_when_the_cli_cannot_see_the_chain(repo: Path) -> None:
     """`spans 0` for a run that emitted spans elsewhere is a wrong number, not a missing one."""
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.middleware import otel\n"
@@ -167,7 +187,7 @@ def test_the_scaffolded_review_passes_only_options_review_declares(repo: Path) -
 
 
 def test_the_scaffold_uploads_a_path_something_writes(repo: Path) -> None:
-    """It pointed at `.in-lockstep/out/`, which no code path in the package ever creates."""
+    """It pointed at `.lockstep/out/`, which no code path in the package ever creates."""
     import yaml
 
     CliRunner().invoke(main, ["init"])
@@ -178,7 +198,7 @@ def test_the_scaffold_uploads_a_path_something_writes(repo: Path) -> None:
         for s in j["steps"]
         if "upload-artifact" in str(s.get("uses", ""))
     ]
-    assert paths == [".in-lockstep/"], paths
+    assert paths == [".lockstep/"], paths
 
 
 def test_the_scaffold_carries_a_timeout(repo: Path) -> None:
@@ -209,20 +229,89 @@ def test_the_trampoline_is_independent_of_the_repository(tmp_path: Path, monkeyp
     assert outputs[0] == outputs[1]
 
 
-def test_apply_refuses_rather_than_exiting_zero_without_writing(repo: Path, tmp_path: Path) -> None:
-    """A green `apply` job is read as "the change landed"."""
+def _git_repo(root: Path) -> None:
+    """A real repository, because `open_change` makes a branch and commits to it."""
+    import subprocess
+
+    def run(*args: str) -> None:
+        subprocess.run(args, cwd=root, capture_output=True, check=True)
+
+    run("git", "init", "-q")
+    run("git", "config", "user.email", "t@example.test")
+    run("git", "config", "user.name", "t")
+    (root / "seed.txt").write_text("seed\n")
+    run("git", "add", "-A")
+    run("git", "commit", "-q", "-m", "base")
+    run("git", "branch", "-M", "main")
+
+
+def _staged(root: Path, path: str = "src/x.py") -> str:
     import json
 
-    artifact = tmp_path / "changeset.json"
-    artifact.write_text(json.dumps({"changes": [{"path": "src/x.py", "body": "x = 1"}]}))
+    target = root / "artifact"
+    target.mkdir(exist_ok=True)
+    (target / "changeset.json").write_text(
+        json.dumps(
+            {
+                "summary": "add x",
+                "ticket": "#1",
+                "changes": [{"path": path, "contents": "x = 1\n", "author": "agent"}],
+            }
+        )
+    )
+    return str(target)
 
-    ok = CliRunner().invoke(main, ["apply", "--from-artifact", str(artifact), "--dry-run"])
-    assert ok.exit_code == 0
-    assert "nothing was written" in ok.output
 
-    refused = CliRunner().invoke(main, ["apply", "--from-artifact", str(artifact)])
-    assert refused.exit_code != 0
-    assert "does not write yet" in refused.output
+def test_apply_dry_run_checks_the_guard_and_writes_nothing(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", _staged(repo), "--dry-run"])
+    assert result.exit_code == 0
+    assert "nothing was written" in result.output
+    assert not (repo / "src" / "x.py").exists()
+
+
+def test_apply_opens_a_change_on_a_run_scoped_branch(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #59. `apply` checked the guard and then wrote nothing, which made the privileged
+    half of the two-job split a job with nothing to do."""
+    import subprocess
+
+    from in_lockstep.platform.scm import RUN_BRANCH_PREFIX
+
+    _git_repo(repo)
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", _staged(repo)])
+    assert result.exit_code == 0, result.output
+
+    branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, capture_output=True, text=True
+    ).stdout.strip()
+    assert branch == f"{RUN_BRANCH_PREFIX}/implement/42"
+    assert (repo / "src" / "x.py").read_text() == "x = 1\n"
+
+    message = subprocess.run(
+        ["git", "log", "-1", "--pretty=%B"], cwd=repo, capture_output=True, text=True
+    ).stdout
+    assert "Ticket: #1" in message, "the trailer is what survives every migration"
+
+
+def test_apply_refuses_a_protected_path_before_it_writes(repo: Path) -> None:
+    _git_repo(repo)
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", _staged(repo, "lockstep.py")])
+    assert result.exit_code == 3, result.output
+    assert "refused" in result.output
+
+
+def test_apply_refuses_to_run_beside_a_provider_credential(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two-job split asserted about this process, not about the YAML that started it.
+
+    A check that lives only as a comment in a workflow file is one a copied workflow loses.
+    """
+    _git_repo(repo)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-not-a-real-key-but-long-enough")
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", _staged(repo)])
+    assert result.exit_code != 0
+    assert "must not" in result.output and "write" in result.output
 
 
 def test_init_does_not_announce_a_job_it_did_not_write(repo: Path) -> None:
@@ -242,7 +331,7 @@ def test_ls_surfaces_a_verb_nothing_serves(repo: Path) -> None:
     That is the shape a typo takes: `Verb("reviwe")` is a legitimate verb nothing serves, and
     without this it is invisible until work silently fails to route.
     """
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.verbs import Verb\n"
         "lockstep = Lockstep.detect()\n"
@@ -283,7 +372,7 @@ def _artifact(tmp_path: Path, *changes: dict) -> Path:
     "protected",
     [
         "lockstep.py",
-        ".in-lockstep/ledger/x.json",
+        ".lockstep/ledger/x.json",
         ".github/workflows/ci.yml",
         ".git/hooks/pre-commit",
         "pyproject.toml",
@@ -399,9 +488,7 @@ def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
     this unsatisfiable in the one place it matters: every run would have a budget nobody chose,
     and the refusal could never fire.
     """
-    (repo / "lockstep.py").write_text(
-        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
-    )
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
     result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
     assert result.exit_code != 0
     assert "no budget is declared" in result.output
@@ -409,12 +496,8 @@ def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
 
 
 def test_an_explicit_budget_flag_satisfies_it(repo: Path) -> None:
-    (repo / "lockstep.py").write_text(
-        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
-    )
-    result = CliRunner().invoke(
-        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50"]
-    )
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50"])
     assert result.exit_code == 0, result.output
 
 
@@ -424,9 +507,7 @@ def test_ls_still_works_without_a_budget(repo: Path) -> None:
     `ls` never opens a run, so it does not trip the startup check — which is what lets someone
     read the error, run `ls`, and see the adapter it named.
     """
-    (repo / "lockstep.py").write_text(
-        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
-    )
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
     result = CliRunner().invoke(main, ["ls"])
     assert result.exit_code == 0, result.output
     assert "bindings" in result.output
@@ -514,7 +595,7 @@ def test_a_bound_egress_policy_is_the_one_that_runs(repo: Path) -> None:
     untrusted-content trigger, so a passing run would be consistent with the binding being ignored.
     A refusing one can only be the bound object.
     """
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.privileged.egress import EgressPolicy, EgressRefused\n"
@@ -551,7 +632,7 @@ def test_the_unsandboxed_opt_out_permits_what_the_default_refuses(repo: Path) ->
 
 def test_this_repository_opts_out_deliberately_and_says_so() -> None:
     """The weakening is meant to be legible. If the line moves, the reasoning must move with it."""
-    module = (ROOT_REPO / "lockstep.py").read_text()
+    module = (ROOT_REPO / ".lockstep" / "lockstep.py").read_text()
     if "UnsandboxedEgress" not in module:
         return  # the opt-out was removed, which is the other acceptable state
     assert "OPT-OUT" in module, "the binding is here without the paragraph explaining its cost"
@@ -565,7 +646,7 @@ def test_a_missing_provider_credential_is_a_message_not_a_typeerror(repo: Path) 
     `messages.create` — accurate, and arriving as a traceback from a library the user did not
     call, after the budget check has passed and the run looks like it is working.
     """
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
@@ -598,7 +679,7 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
     """
     import json
 
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
@@ -607,7 +688,7 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
         "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
     )
     CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
-    record = json.loads((repo / ".in-lockstep/ledger/review-security.json").read_text())
+    record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
     assert record["status"] == "blocked"
     assert record["reason"] == "cost.budget_exceeded", record
 
@@ -616,7 +697,7 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
 
 
 def _reviewing_repo(repo: Path, *, findings: str) -> None:
-    (repo / "lockstep.py").write_text(
+    _lifecycle(repo).write_text(
         "from in_lockstep import Lockstep\n"
         "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
@@ -792,3 +873,566 @@ def test_the_scaffold_states_a_budget_for_the_adoption_case(repo: Path) -> None:
     CliRunner().invoke(main, ["init"])
     text = (repo / ".github/workflows/lockstep.yml").read_text()
     assert "--budget" in text, "a repository adopting this cannot review its own adoption PR"
+
+
+# -- implement ---------------------------------------------------------------------------------
+#
+# The second command that spends, and the first that can write and execute. What is asserted here
+# is mostly the composition root rather than the strategy: which module was loaded, whether the
+# controls that key off `AiImplement`'s capability declaration actually fire at the CLI boundary,
+# and whether the change leaves as an artifact rather than as a write. The loop itself is tested
+# against a scripted provider in `test_implement_oneshot.py`, where it costs no CLI plumbing.
+
+IMPLEMENT_MODULE = """
+from in_lockstep import Lockstep
+from in_lockstep.core.spend import Budget
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+# The documented opt-out, named after what it does. An implementing tool set declares
+# WRITES_FILES and EXECUTES_CODE, which makes egress enforcement mandatory — so on a laptop with
+# an open network this line is what a repository writes instead of a flag, and it is greppable.
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
+"""
+
+TICKET = """# Add a greeting
+
+The greeter should say hello.
+
+- [ ] `greet()` returns a greeting
+"""
+
+
+def _ticket_file(repo: Path) -> str:
+    (repo / "TICKET.md").write_text(TICKET)
+    return str(repo / "TICKET.md")
+
+
+def test_implement_needs_exactly_one_source_for_the_ticket(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["implement", "--dry-run", "--approve"])
+    assert result.exit_code != 0
+    assert "exactly one of --ticket or --ticket-file" in result.output
+
+
+def test_implement_refuses_without_an_approval_path(repo: Path) -> None:
+    """GATE-APPROVAL-1 at the CLI boundary. A model that can write needs a human somewhere."""
+    _lifecycle(repo).write_text(IMPLEMENT_MODULE)
+    result = CliRunner().invoke(main, ["implement", "--dry-run", "--ticket-file", _ticket_file(repo)])
+    assert result.exit_code != 0
+    assert "ApprovalGate" in result.output
+
+
+def test_implement_refuses_when_egress_is_unenforced(repo: Path) -> None:
+    """Declaring EXECUTES_CODE is what makes enforcement mandatory, and nothing opts out here."""
+    result = CliRunner().invoke(
+        main,
+        ["implement", "--dry-run", "--approve", "--budget", "1.00", "--ticket-file", _ticket_file(repo)],
+    )
+    assert result.exit_code != 0
+    assert "egress" in result.output
+    assert "UnsandboxedEgress" in result.output, "the refusal has to name the way out"
+
+
+def test_implement_runs_the_wiring_and_writes_a_ledger_record(repo: Path) -> None:
+    """`--dry-run` stages nothing, so this exits non-zero and still proves the setup."""
+    _lifecycle(repo).write_text(IMPLEMENT_MODULE)
+    result = CliRunner().invoke(
+        main, ["implement", "--dry-run", "--approve", "--ticket-file", _ticket_file(repo)]
+    )
+    assert "implement/oneshot" in result.output
+    assert "implement.no_changes" in result.output
+    record = (repo / ".lockstep/ledger/implement-Add a greeting.json").exists() or any(
+        p.name.startswith("implement-") for p in (repo / ".lockstep/ledger").iterdir()
+    )
+    assert record, "a run that reached the model seam leaves a record even having changed nothing"
+
+
+def test_implement_reads_a_ticket_file_and_its_task_list(repo: Path) -> None:
+    """No tracker, no network. The criteria come through the same parser a real issue body does."""
+    from in_lockstep.cli import _ticket_from_file
+
+    ticket = _ticket_from_file(_ticket_file(repo))
+    assert ticket.title == "Add a greeting"
+    assert ticket.acceptance_criteria == ("`greet()` returns a greeting",)
+
+
+def test_implement_reads_a_json_ticket(repo: Path) -> None:
+    from in_lockstep.cli import _ticket_from_file
+
+    (repo / "t.json").write_text('{"key": "PROJ-7", "title": "Do it", "description": "- [ ] it is done"}')
+    ticket = _ticket_from_file(str(repo / "t.json"))
+    assert ticket.key == "PROJ-7"
+    assert ticket.acceptance_criteria == ("it is done",)
+
+
+def test_a_missing_ticket_file_is_a_message_not_a_traceback(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["implement", "--dry-run", "--approve", "--ticket-file", "nope.md"])
+    assert result.exit_code != 0
+    assert "no ticket file at nope.md" in result.output
+
+
+def test_a_changeset_artifact_round_trips_into_apply_inline(repo: Path) -> None:
+    """The two halves have to agree on the format, and only a round trip proves they do."""
+    from in_lockstep.cli import _load_changeset, _write_artifact
+    from in_lockstep.core.types import ChangeAuthor, ChangeSet, FileChange
+
+    changeset = ChangeSet(
+        changes=(FileChange(path="src/a.py", contents="x = 1\n", author=ChangeAuthor.AGENT),),
+        summary="did it",
+        ticket="#1",
+    )
+    _write_artifact(str(repo / "out"), changeset)
+    assert _load_changeset(str(repo / "out")) == changeset
+
+    result = CliRunner().invoke(main, ["apply-inline", "--from-artifact", str(repo / "out")])
+    assert result.exit_code == 0, result.output
+    assert (repo / "src" / "a.py").read_text() == "x = 1\n"
+
+
+OWN_ADAPTER = """
+import json
+
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai.implement import AiImplement, Implement
+from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
+from in_lockstep.ai.pricing import CostTable, Rate
+from in_lockstep.core.spend import Budget
+from in_lockstep.llm.interface import LLMProvider
+from in_lockstep.llm.types import LLMOutput, TokenUsage, ToolCall
+from in_lockstep.middleware.approval import ApprovalGate
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+from in_lockstep.strategies import default_registry
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=2.00)
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
+lockstep.middleware += [ApprovalGate(granted=lambda call: True)]
+
+SCRIPT = [
+    LLMOutput(content="", tool_calls=[ToolCall(id="1", name="write_file",
+              input={"path": "src/a.py", "contents": "x = 1\\n"})]),
+    LLMOutput(content=json.dumps({"summary": "wrote it", "notes": [], "unfinished": []})),
+]
+
+
+class Scripted(LLMProvider):
+    def name(self):
+        return "scripted"
+
+    async def generate(self, input):
+        out = SCRIPT.pop(0)
+        out.usage = TokenUsage(input_tokens=100, output_tokens=20)
+        return out
+
+
+table = CostTable()
+table.add("house-model", Rate(input_per_m=1.0, output_per_m=2.0))
+
+lockstep.bind(
+    Implement,
+    AiImplement(
+        lambda ctx: AiInvoker(
+            Scripted(), model="house-model", cost_table=table, spend=ctx.spend,
+            egress=UnsandboxedEgress(),
+        ),
+        registry=default_registry(),
+        repo_root=lockstep.repo.root,
+        policy=InvokePolicy(max_turns=4, max_tokens=1024),
+    ),
+)
+"""
+
+
+def test_a_repository_that_binds_its_own_adapter_keeps_it(repo: Path) -> None:
+    """The CLI's own binding is a default, and a default must not overrule a decision."""
+    _lifecycle(repo).write_text(OWN_ADAPTER)
+    result = CliRunner().invoke(
+        main,
+        ["implement", "--ticket-file", _ticket_file(repo), "--out", str(repo / "change")],
+    )
+    assert result.exit_code == 0, result.output
+    assert "wrote it" in result.output
+    assert (repo / "change" / "changeset.json").exists()
+
+
+def test_the_ledger_does_not_name_a_model_the_cli_did_not_choose(repo: Path) -> None:
+    """A record naming a model that was never called is worse than one quiet about which was.
+
+    The same shape as `priced_fraction` being omitted rather than written as zero: a measurement
+    nobody took is not a measurement of nothing. The repository below binds its own adapter, so
+    `--model` was never consulted and there is nothing honest for this command to write.
+    """
+    import json
+
+    _lifecycle(repo).write_text(OWN_ADAPTER)
+    CliRunner().invoke(
+        main,
+        ["implement", "--ticket-file", _ticket_file(repo), "--model", "anthropic:claude-opus-4-6"],
+    )
+    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    assert "model" not in record
+    assert record["strategy"] == "implement/oneshot"
+
+
+def test_the_gate_refuses_with_exit_3_and_says_which_route_was_checked(repo: Path) -> None:
+    """A refusal that names the routes is the difference between "add them to CODEOWNERS" and
+    "invite them to the org"."""
+    (repo / "CODEOWNERS").write_text("*  @alice\n")
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "mallory", "--association", "CONTRIBUTOR", "--codeowners", "CODEOWNERS"]
+    )
+    assert result.exit_code == 3
+    assert "codeowner=no" in result.output
+    assert "association=CONTRIBUTOR" in result.output
+
+
+def test_the_gate_allows_a_code_owner(repo: Path) -> None:
+    (repo / "CODEOWNERS").write_text("*  @alice\n")
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "@Alice", "--association", "NONE", "--codeowners", "CODEOWNERS"]
+    )
+    assert result.exit_code == 0
+    assert "allowed" in result.output
+
+
+def test_a_missing_codeowners_file_is_not_a_crash(repo: Path) -> None:
+    """A repository without one is ordinary; the association route still decides."""
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--codeowners", "nope"]
+    )
+    assert result.exit_code == 0
+
+
+def test_who_approved_an_unattended_run_reaches_the_ledger(repo: Path) -> None:
+    """A grant nobody can be traced to is not much of a grant.
+
+    Absent for an attended local run, where the person reading the output approved it and a name
+    would be noise; present for anything a trigger fired.
+    """
+    import json
+
+    _lifecycle(repo).write_text(IMPLEMENT_MODULE)
+    CliRunner().invoke(
+        main,
+        ["implement", "--dry-run", "--approved-by", "@tpouyer", "--ticket-file", _ticket_file(repo)],
+    )
+    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    assert record["approval"] == {"by": "@tpouyer", "attended": False}
+
+
+def test_an_attended_run_records_who_and_that_they_watched(repo: Path) -> None:
+    import json
+
+    _lifecycle(repo).write_text(IMPLEMENT_MODULE)
+    CliRunner().invoke(main, ["implement", "--dry-run", "--approve", "--ticket-file", _ticket_file(repo)])
+    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    # Still recorded, and recorded as ATTENDED — which is the point. A person at a terminal and a
+    # gated CI actor are both grants and are not the same grant.
+    assert record["approval"]["attended"] is True
+    assert record["approval"]["by"]
+
+
+def test_approved_by_alone_satisfies_the_approval_gate(repo: Path) -> None:
+    """The unattended form has to actually grant, or a trigger can never start a run."""
+    _lifecycle(repo).write_text(
+        IMPLEMENT_MODULE.replace("lockstep.middleware += [ApprovalGate(granted=lambda call: True)]", "")
+    )
+    result = CliRunner().invoke(
+        main,
+        ["implement", "--dry-run", "--approved-by", "@tpouyer", "--ticket-file", _ticket_file(repo)],
+    )
+    assert "ApprovalGate" not in result.output, result.output
+
+
+# -- `run <workflow>`, which is the entry point external CI is meant to use --------------------
+
+
+def _workflow_repo(repo: Path, body: str) -> None:
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep, Outcome, Status, workflow\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n" + body
+    )
+
+
+def test_run_dispatches_a_registered_workflow(repo: Path) -> None:
+    """`@workflow` registered into a registry nothing dispatched from.
+
+    A repository could declare a lifecycle the CLI would not run — which is most of what this
+    framework claims to be, and the gap that gets worked around with shell in a CI file.
+    """
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\nasync def demo(ctx):\n    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/ok"])
+    assert result.exit_code == 0, result.output
+    assert "demo/ok  succeeded" in result.output
+
+
+def test_an_unknown_workflow_lists_what_the_module_registered(repo: Path) -> None:
+    """The check ran BEFORE the module loaded, so it listed an empty registry every time.
+
+    "registered: selfcheck" was true of the process and useless to the person, who had just
+    written the workflow it did not mention.
+    """
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\nasync def demo(ctx):\n    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/nope"])
+    assert result.exit_code != 0
+    assert "demo/ok" in result.output, "it must name what this repository actually registered"
+
+
+def test_arguments_reach_the_workflow(repo: Path) -> None:
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/args')\n"
+        "async def demo(ctx, who='nobody'):\n"
+        "    return Outcome(status=Status.SUCCEEDED, findings=(\n"
+        "        __import__('in_lockstep').Finding(id='hello', message=f'hello {who}'),))\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/args", "--arg", "who=world"])
+    assert "hello world" in result.output, result.output
+
+
+def test_a_signature_mismatch_names_the_parameters(repo: Path) -> None:
+    """The traceback for this points at asyncio, not at the workflow the user named."""
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/args')\n"
+        "async def demo(ctx, who='nobody'):\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/args", "--arg", "wrong=1"])
+    assert result.exit_code != 0
+    assert "It takes who" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_a_malformed_arg_is_refused(repo: Path) -> None:
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\nasync def demo(ctx):\n    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/ok", "--arg", "noequals"])
+    assert result.exit_code != 0
+    assert "NAME=VALUE" in result.output
+
+
+def test_a_blocked_workflow_exits_three(repo: Path) -> None:
+    """The exit code a control refusing produces, so CI can tell it from a failure."""
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/blocked')\nasync def demo(ctx):\n    return Outcome.blocked_by('demo.refused')\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/blocked"])
+    assert result.exit_code == 3, result.output
+    assert "demo.refused" in result.output
+
+
+def test_a_dispatched_workflow_leaves_a_ledger_record(repo: Path) -> None:
+    """Moving a process into a @workflow must not cost the run its evidence.
+
+    A record that exists for the built-in commands and not for the recommended path is an argument
+    for not taking the recommendation.
+    """
+    import json
+
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\n"
+        "async def demo(ctx, issue='#1'):\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    CliRunner().invoke(main, ["run", "demo/ok", "--arg", "issue=#59"])
+    records = list((repo / ".lockstep/ledger").glob("demo-ok-*.json"))
+    assert records, "a dispatched workflow wrote no record"
+    record = json.loads(records[0].read_text())
+    assert record["kind"] == "workflow"
+    assert record["workflow"] == "demo/ok"
+    # The provenance: which issue, which actor. Without it the record cannot say what it was for.
+    assert record["args"] == {"issue": "#59"}
+
+
+def test_run_states_a_ceiling_the_module_did_not(repo: Path) -> None:
+    """One workflow in a module can be far more expensive than another, and Budget is run-scoped."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep, Outcome, Status, workflow\n"
+        "lockstep = Lockstep.detect()\n"
+        "@workflow(id='demo/ok')\n"
+        "async def demo(ctx):\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n"
+    )
+    assert CliRunner().invoke(main, ["run", "demo/ok", "--budget", "3.00"]).exit_code == 0
+
+
+def test_selfcheck_still_works(repo: Path) -> None:
+    """The one built-in workflow, which the old dispatcher special-cased."""
+    CliRunner().invoke(main, ["init"])
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert "validate" in result.output
+
+
+def test_a_setup_error_in_a_workflow_is_a_message_not_a_traceback(repo: Path) -> None:
+    """The recommended path must not be worse than the built-in one.
+
+    `review` and `implement` translate a missing credential into one sentence. Until this, a
+    `@workflow` doing the same work produced forty lines of traceback — which is a reason not to
+    move a process into `lockstep.py`, and moving it there is the whole recommendation.
+    """
+    _workflow_repo(
+        repo,
+        "from in_lockstep.ai.bootstrap import MissingCredential\n"
+        "@workflow(id='demo/setup')\n"
+        "async def demo(ctx):\n"
+        "    raise MissingCredential('no credential for provider')\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/setup"])
+    assert result.exit_code != 0
+    assert "no credential for provider" in result.output
+    assert "Traceback" not in result.output
+
+
+# -- the seam a maturing project crosses -------------------------------------------------------
+#
+# The framework's premise is that a process is defined once and its INVOCATION changes as a project
+# grows: a terminal at first, a hosted trigger later. That only holds if the same command works on
+# both sides. Approval was where it did not — `implement` took `--approve`, `run` took nothing, and
+# the recommended path needed an environment variable a developer would have to know to export.
+
+
+def test_the_same_workflow_command_serves_a_terminal_and_a_trigger(repo: Path) -> None:
+    """One invocation, two provenances. The difference is who the human is, not the process."""
+    import json
+
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep, Outcome, Status, workflow\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.middleware.approval import ApprovalGate\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        "lockstep.middleware += [ApprovalGate()]\n"
+        "@workflow(id='demo/needs-a-human')\n"
+        "async def demo(ctx):\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n"
+    )
+
+    attended = CliRunner().invoke(main, ["run", "demo/needs-a-human", "--approve"])
+    assert attended.exit_code == 0, attended.output
+    record = json.loads(next((repo / ".lockstep/ledger").glob("demo-needs-a-human-*.json")).read_text())
+    assert record["approval"]["attended"] is True
+
+    unattended = CliRunner().invoke(main, ["run", "demo/needs-a-human", "--approved-by", "octocat"])
+    assert unattended.exit_code == 0, unattended.output
+    record = json.loads(next((repo / ".lockstep/ledger").glob("demo-needs-a-human-*.json")).read_text())
+    assert record["approval"] == {"by": "octocat", "attended": False}
+
+
+def test_a_workflow_needing_a_human_refuses_when_nobody_asked(repo: Path) -> None:
+    """No flag, no grant. The refusal names both forms rather than only the local one."""
+    import asyncio
+
+    from in_lockstep.adapters.ai.implement import Implement
+    from in_lockstep.core.container import Container
+    from in_lockstep.core.context import Approval, RunContext
+    from in_lockstep.core.middleware import ActionCall
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.core.verbs import Capability
+    from in_lockstep.middleware.approval import ApprovalGate
+
+    class Writer:
+        capabilities = frozenset({Capability.WRITES_FILES, Capability.SPENDS_BUDGET})
+
+    container = Container()
+    container.bind(Implement, Writer())
+    ctx = RunContext(run_id="r", repo=None, container=container)  # type: ignore[arg-type]
+
+    async def go(approval: Approval) -> object:
+        ctx.approval = approval
+        call = ActionCall(verb=None, iface=Implement, input=None)
+
+        async def nxt() -> object:
+            from in_lockstep.core.outcome import Outcome
+
+            return Outcome(status=Status.SUCCEEDED)
+
+        return await ApprovalGate()(ctx, call, nxt)
+
+    refused = asyncio.run(go(Approval()))
+    assert refused.status is Status.BLOCKED
+    assert "--approve" in refused.findings[0].message
+    assert "--approved-by" in refused.findings[0].message
+
+    assert asyncio.run(go(Approval(by="octocat"))).status is Status.SUCCEEDED
+
+
+# -- `history`, and where a run record actually goes --------------------------------------------
+
+
+def test_the_history_command_says_when_there_is_none_yet(repo: Path) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    result = CliRunner().invoke(main, ["history"])
+    assert result.exit_code == 0
+    assert "no history yet" in result.output
+
+
+def test_a_run_in_a_git_repository_records_to_the_orphan_branch(repo: Path) -> None:
+    """Not into the working tree, where `.lockstep/` is gitignored and the record is lost."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "t@e"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\nasync def demo(ctx):\n    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/ok"])
+    assert result.exit_code == 0, result.output
+    assert "lockstep-history:records/" in result.output
+    assert not (repo / ".lockstep" / "ledger").exists(), "it fell back to the working tree"
+
+    listing = CliRunner().invoke(main, ["history"])
+    assert "1 record(s)" in listing.output
+    assert "demo-ok" in listing.output
+
+
+def test_a_directory_that_is_not_a_repository_still_records(repo: Path) -> None:
+    """The fallback, and it is a fallback rather than a default — there is no branch to use."""
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\nasync def demo(ctx):\n    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/ok"])
+    assert result.exit_code == 0, result.output
+    assert (repo / ".lockstep" / "ledger").exists()
+
+
+def test_a_root_lockstep_py_is_named_rather_than_ignored(repo: Path) -> None:
+    """Running on detected defaults while a perfectly good configuration sits unread is the worst
+    outcome: everything appears to work, with none of the repository's bindings."""
+    (repo / "lockstep.py").write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["ls"])
+    assert "no longer where configuration is read from" in result.output
+    assert "git mv lockstep.py .lockstep/lockstep.py" in result.output
+
+
+def test_init_refuses_to_scaffold_beside_a_root_module(repo: Path) -> None:
+    """Two configurations and no way to tell which is in effect is worse than one in the wrong place."""
+    (repo / "lockstep.py").write_text("lockstep = None\n")
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code != 0
+    assert "no longer read" in result.output
+    assert not (repo / ".lockstep" / "lockstep.py").exists()
+
+
+def test_init_scaffolds_into_the_lockstep_directory(repo: Path) -> None:
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    assert (repo / ".lockstep" / "lockstep.py").is_file()
+    assert not (repo / "lockstep.py").exists(), "the root is on sys.path; nothing goes there"

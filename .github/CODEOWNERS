@@ -15,10 +15,10 @@
 
 # The parts where a mistake is not a bug but a policy change.
 #
-# `lockstep.py` IS the configuration: it can rebind any adapter, drop any middleware and grant any
+# `.lockstep/lockstep.py` IS the configuration: it can rebind any adapter, drop any middleware and grant any
 # tool. It is the first entry in the protected-path deny list for that reason, and it is the file
 # whose review matters most.
-/lockstep.py                        @tpouyer
+/.lockstep/lockstep.py                        @tpouyer
 
 # The controls that run outside the middleware chain, where `--no-middleware` cannot reach them.
 /src/in_lockstep/privileged/        @tpouyer
