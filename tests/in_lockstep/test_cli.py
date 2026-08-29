@@ -565,6 +565,31 @@ def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
         restore(state)
 
 
+def test_init_fix_writes_the_ai_generated_event_hook(repo: Path) -> None:
+    """The self-feeding half of the loop: an issue labelled `ai-generated` routes to the fix
+    workflow. It fires on the label, gates on it (no comment-gate, because labelling is
+    write-access), and keeps the same credential split — no job holds a provider key and write."""
+    import yaml
+
+    result = CliRunner().invoke(main, ["init", "--fix"])
+    assert result.exit_code == 0, result.output
+    workflow = yaml.safe_load((repo / ".github/workflows/ai-generated.yml").read_text())
+
+    # `yaml.safe_load` turns the bare `on:` key into Python True, so read it by that key.
+    triggers = workflow[True]["issues"]["types"]
+    assert "labeled" in triggers and "opened" in triggers
+    fix = workflow["jobs"]["fix"]
+    assert "ai-generated" in fix["if"], "the job is gated on the label"
+    assert set(workflow["jobs"]) == {"fix", "propose"}, "no gate job — the label is the gate"
+
+    for name, job in workflow["jobs"].items():
+        text = yaml.dump(job)
+        holds_key = "ANTHROPIC_API_KEY" in text
+        writes = (job.get("permissions") or {}).get("contents") == "write"
+        assert not (holds_key and writes), f"{name} holds a provider key and write access"
+    assert "anthropic" not in yaml.dump(workflow["jobs"]["propose"]).lower()
+
+
 def test_init_implement_and_fix_compose_without_binding_twice(repo: Path) -> None:
     """Both scaffolds in one module load cleanly — the fix block's guarded binds do not re-bind
     what --implement already did, and both verbs' workflows register."""
