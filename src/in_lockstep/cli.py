@@ -541,6 +541,13 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
                 "cost_usd": round(outcome.cost.usd, 6),
                 "findings": len(outcome.findings),
                 "wall_seconds": round(outcome.cost.wall_seconds, 3),
+                # Absent rather than zero, and absent rather than one. The ledger's own rule is
+                # that a measurement nobody took is not a measurement of nothing.
+                **(
+                    {"priced_fraction": round(outcome.cost.priced_fraction, 4)}
+                    if outcome.cost.priced_fraction is not None
+                    else {}
+                ),
             },
         )
     )

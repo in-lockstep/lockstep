@@ -85,10 +85,37 @@ class Cost:
     cache_write_tokens: int = 0
     usd: float = 0.0
     wall_seconds: float = 0.0
+    # How many billable tokens were priced from a rate that was actually declared, rather than
+    # from a substitution. See `priced_fraction`.
+    priced_tokens: int = 0
 
     @property
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
+
+    @property
+    def billable_tokens(self) -> int:
+        """Every token a provider charges for, cache included.
+
+        Distinct from `total_tokens`, which is the input/output pair the usage metric reports.
+        Cache tokens cost money and belong in the denominator of a claim about pricing coverage.
+        """
+        return self.total_tokens + self.cache_read_tokens + self.cache_write_tokens
+
+    @property
+    def priced_fraction(self) -> float | None:
+        """What share of this cost came from a declared rate. `None` when nothing was billable.
+
+        `None` rather than `1.0`, and that is the whole gate. A run that spent no tokens has not
+        achieved complete pricing coverage — it has no coverage to report, and `1.0` is a
+        reassuring number computed from an empty denominator. It is the same distinction
+        `Outcome.decided` draws and the same one `evaluation.summarize` draws by returning
+        `pass_rate: None`; a metric that reads perfect when nothing happened is how a broken
+        pipeline looks healthy.
+        """
+        if self.billable_tokens == 0:
+            return None
+        return self.priced_tokens / self.billable_tokens
 
     def __add__(self, other: Cost) -> Cost:
         return Cost(
@@ -98,6 +125,7 @@ class Cost:
             cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
             usd=self.usd + other.usd,
             wall_seconds=self.wall_seconds + other.wall_seconds,
+            priced_tokens=self.priced_tokens + other.priced_tokens,
         )
 
 

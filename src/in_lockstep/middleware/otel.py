@@ -86,4 +86,10 @@ class OtelMiddleware:
             self.recorder.metric("in_lockstep.cost.usd", outcome.cost.usd, **dimensions)
         if outcome.cost.total_tokens:
             self.recorder.metric("gen_ai.client.token.usage", float(outcome.cost.total_tokens), **dimensions)
+        # Omitted when there is nothing to report, never defaulted. A gauge that reads 1.0 for a
+        # run that spent no tokens is a dashboard saying pricing coverage is perfect because
+        # nothing happened — the same shape as a suite reporting 100% having judged nothing.
+        priced = outcome.cost.priced_fraction
+        if priced is not None:
+            self.recorder.metric("in_lockstep.cost.priced_fraction", priced, **dimensions)
         return outcome

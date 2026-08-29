@@ -918,3 +918,88 @@ def test_scan_input_warn_records_and_proceeds() -> None:
     )
     assert result.findings, "warn still records what it saw"
     assert provider.calls, "warn proceeds"
+
+
+# -- GATE-LEDGER-7 -----------------------------------------------------------------------------
+#
+# `usd` is exact only where every billable token came from a declared rate. Cache tokens are the
+# one place a rate can be partial, and the substitution there is deliberately conservative — a
+# ceiling that under-estimates is not a ceiling — which makes the total an upper bound rather than
+# a measurement. `priced_fraction` is what keeps that visible.
+
+
+def test_gate_ledger_7_a_zero_denominator_yields_none_not_one() -> None:
+    """The gate. `1.0` for a run that spent nothing is coverage computed from an empty set."""
+    from in_lockstep.core.outcome import Cost
+
+    assert Cost().priced_fraction is None
+    assert Cost(wall_seconds=3.0).priced_fraction is None, "time is not a billable token"
+
+
+def test_a_fully_declared_rate_prices_everything() -> None:
+    table = CostTable()
+    table.add("m", Rate(3.0, 15.0, cache_read_per_m=0.30, cache_write_per_m=3.75))
+    cost = table.price("m", input_tokens=100, output_tokens=50, cache_read_tokens=20, cache_write_tokens=10)
+    assert cost.priced_fraction == 1.0
+    assert cost.billable_tokens == 180
+
+
+def test_a_partial_rate_reports_the_share_it_actually_priced() -> None:
+    """A rate with no cache price still produces a number; this says how much of it is real."""
+    table = CostTable()
+    table.add("m", Rate(1.25, 10.0))  # the shape of the shipped Gemini rates
+    cost = table.price("m", input_tokens=60, output_tokens=20, cache_read_tokens=20)
+
+    assert cost.priced_fraction == 0.8, "80 of 100 billable tokens came from a declared rate"
+    assert cost.usd > 0, "the total is still an upper bound, not withheld"
+
+
+def test_the_substitution_is_conservative() -> None:
+    """It over-estimates rather than under. A budget that under-estimates is not a ceiling."""
+    table = CostTable()
+    table.add("declared", Rate(3.0, 15.0, cache_read_per_m=0.30))
+    table.add("absent", Rate(3.0, 15.0))
+
+    with_rate = table.price("declared", cache_read_tokens=1_000_000)
+    without = table.price("absent", cache_read_tokens=1_000_000)
+    assert without.usd > with_rate.usd
+    assert without.priced_fraction == 0.0
+    assert with_rate.priced_fraction == 1.0
+
+
+def test_priced_tokens_add_across_turns() -> None:
+    """Cost is summed per turn, so a per-run fraction needs the numerator to carry."""
+    table = CostTable()
+    table.add("m", Rate(1.25, 10.0))
+    priced = table.price("m", input_tokens=50, output_tokens=50)
+    partial = table.price("m", input_tokens=0, output_tokens=0, cache_read_tokens=100)
+    assert (priced + partial).priced_fraction == 0.5
+
+
+def test_the_metric_is_omitted_rather_than_defaulted() -> None:
+    """A gauge reading 1.0 because nothing happened is how a broken pipeline looks healthy."""
+    import asyncio as aio
+
+    from in_lockstep.core.outcome import Cost, Outcome, Status
+    from in_lockstep.core.verbs import Capability, Verb
+    from in_lockstep.lockstep import Lockstep
+    from in_lockstep.middleware.otel import Recorder, otel
+
+    class Free:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.READS_REPO})
+
+        async def invoke(self, ctx, inp):
+            return Outcome(status=Status.SUCCEEDED, cost=Cost(wall_seconds=0.1))
+
+    class Iface: ...
+
+    recorder = Recorder()
+    lockstep = Lockstep.detect()
+    lockstep.bind(Iface, Free())
+    lockstep.middleware += [otel(recorder)]
+    aio.run(lockstep.context(run_id="p").do(Iface, None))
+
+    names = [m.name for m in recorder.metrics]
+    assert "in_lockstep.cost.priced_fraction" not in names, "emitted with an empty denominator"
+    assert names, "nothing was emitted, so this asserted nothing"

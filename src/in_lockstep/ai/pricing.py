@@ -8,6 +8,13 @@ treated as free"); this is the same discipline applied to tokens.
 
 Rates are per million tokens, (input, output). Cache reads are priced separately where a provider
 charges differently for them.
+
+Where a rate declares no cache price, the input rate stands in — conservative, because a cache
+read is cheaper than an input token wherever it is priced separately, and a ceiling that
+under-estimates is not a ceiling. The resulting figure is therefore an upper bound rather than a
+measurement, and `Cost.priced_fraction` is what keeps the difference visible: this module refuses
+to guess a *model's* price, and reporting a partly-substituted total as though it were exact would
+be the same fabrication one level down.
 """
 
 from __future__ import annotations
@@ -66,12 +73,24 @@ class CostTable:
     ) -> Cost:
         rate = self.rate_for(model_id)
         usd = (input_tokens * rate.input_per_m + output_tokens * rate.output_per_m) / 1_000_000
+        # Input and output always come from a declared rate: `rate_for` refuses otherwise.
+        priced = input_tokens + output_tokens
+
+        # Cache tokens are the one place a rate can be partial. Substituting the input rate is
+        # conservative for a ceiling — a cache read is cheaper than an input token everywhere it
+        # is priced separately, so this over-estimates rather than under — and a budget that
+        # under-estimates is not a ceiling. But the resulting dollar figure is not a measurement,
+        # and `priced_tokens` is what stops it being read as one.
         if cache_read_tokens:
-            per_m = rate.cache_read_per_m if rate.cache_read_per_m is not None else rate.input_per_m
+            declared_read = rate.cache_read_per_m
+            per_m = declared_read if declared_read is not None else rate.input_per_m
             usd += cache_read_tokens * per_m / 1_000_000
+            priced += cache_read_tokens if declared_read is not None else 0
         if cache_write_tokens:
-            per_m = rate.cache_write_per_m if rate.cache_write_per_m is not None else rate.input_per_m
+            declared_write = rate.cache_write_per_m
+            per_m = declared_write if declared_write is not None else rate.input_per_m
             usd += cache_write_tokens * per_m / 1_000_000
+            priced += cache_write_tokens if declared_write is not None else 0
         return Cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -79,6 +98,7 @@ class CostTable:
             cache_write_tokens=cache_write_tokens,
             usd=usd,
             wall_seconds=wall_seconds,
+            priced_tokens=priced,
         )
 
     def project(self, model_id: str, *, input_tokens: int, max_output_tokens: int) -> Cost:
