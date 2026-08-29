@@ -17,6 +17,7 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class Severity(Enum):
@@ -52,16 +53,54 @@ class Report:
 def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     report = Report()
     path = Path(root)
+    lockstep = _load_configured(path)
 
     _spend_ceiling(report)
     _config_provenance(report)
     _branch_protection(report, path)
     _egress(report)
     _prompt_bodies(report)
-    _model_routes(report, path)
+    if lockstep is not None:
+        _model_routes(report, lockstep)
     if strict:
         _strict_policy(report, path)
+        if lockstep is not None:
+            _strict_baseline(report, lockstep)
+            _strict_opt_outs(report, lockstep)
+            _strict_approval_path(report, lockstep)
     return report
+
+
+def _load_configured(root: Path) -> Any | None:
+    """The repository's lifecycle, loaded once for every check that reads it.
+
+    From the TRUSTED ref, exactly as `_default_lockstep` loads it — loading the working tree here
+    would execute the change under review, which on a pull-request pipeline runs before the
+    review with the provider key in the environment. That is the fail-open GATE-CFG-2 exists to
+    refuse, and a diagnostic must not be the hole. The workflow-registry snapshot is restored,
+    because a diagnostic must not leave the process knowing about workflows nobody asked it to
+    run. None when there is no module, or when it will not load — a module that will not load
+    fails other commands loudly, not this one.
+    """
+    from .core.workflow import restore, snapshot
+    from .loader import NoLifecycle, load, lockstep_from
+    from .platform.ci import detect as detect_ci
+
+    ci_env = detect_ci()
+    state = snapshot()
+    try:
+        module, _ref = load(
+            str(root),
+            base=ci_env.base_ref if ci_env else "",
+            reviewing=ci_env.reviewing if ci_env else False,
+        )
+        return lockstep_from(module)
+    except NoLifecycle:
+        return None
+    except Exception:  # noqa: BLE001 - see docstring
+        return None
+    finally:
+        restore(state)
 
 
 def _spend_ceiling(report: Report) -> None:
@@ -200,7 +239,7 @@ def _prompt_bodies(
             report.add("DOC140", Severity.ERROR, f"prompt body missing for {aspect}: {e}")
 
 
-def _model_routes(report: Report, root: Path) -> None:
+def _model_routes(report: Report, lockstep: Any) -> None:
     """A route that would be refused at run time should say so here, where nothing is spent.
 
     An unregistered provider and an unpriced model both surface today at the first model call —
@@ -212,34 +251,9 @@ def _model_routes(report: Report, root: Path) -> None:
     from .ai.auth import Auth
     from .ai.bootstrap import Model, default_registry, table_for
     from .ai.pricing import CostTable
-    from .core.workflow import restore, snapshot
-    from .loader import NoLifecycle, load, lockstep_from
-    from .platform.ci import detect as detect_ci
 
-    # From the TRUSTED ref, exactly as `_default_lockstep` loads it — loading the working tree
-    # here would execute the change under review, which on a pull-request pipeline runs before the
-    # review with the provider key in the environment. That is the fail-open GATE-CFG-2 exists to
-    # refuse, and a diagnostic must not be the hole. Reading base also means the routes reported
-    # are the ones the run will actually use, not the head's.
-    ci_env = detect_ci()
-    # Loading the module registers its workflows in the process-global registry. Doctor only
-    # reads the routes, so it restores the snapshot: a diagnostic must not leave the process
-    # knowing about workflows nobody asked it to run.
-    state = snapshot()
-    try:
-        module, _ref = load(
-            str(root),
-            base=ci_env.base_ref if ci_env else "",
-            reviewing=ci_env.reviewing if ci_env else False,
-        )
-        lockstep = lockstep_from(module)
-    except NoLifecycle:
-        return
-    except Exception:  # a module that will not load fails other commands loudly, not this one
-        return
-    finally:
-        restore(state)
-    routes = dict(getattr(lockstep.models, "routes", None) or {})
+    models = getattr(lockstep, "models", None)
+    routes = dict(getattr(models, "routes", None) or {})
     if not routes:
         return
     try:
@@ -302,6 +316,163 @@ def _strict_policy(report: Report, root: Path) -> None:
         f"no {MODULE_FILE}; running on detected defaults",
         "That is supported, but an organisation's policy contributions cannot reach a "
         "repository that declares none.",
+    )
+
+
+def _strict_baseline(report: Report, lockstep: Any) -> None:
+    """The org baseline, checked instead of hoped for.
+
+    An organisation states its floor as environment variables in the required check's own
+    environment — the same attestation seam `IN_LOCKSTEP_ORG_SPEND_LIMIT` uses, and deliberately
+    NOT something the repository's module can supply, because the module is the thing under
+    check. Nothing here fires for a repository whose organisation states no baseline: strict
+    without a baseline is exactly what it was before.
+
+    This is also the KISS answer to the Tier.MANDATE debate: visibility through a required check
+    that an organisation controls, before any new container semantics. A repository can still
+    delete its policy layer — and this is what notices, loudly, in the check the org requires.
+    """
+    required = [
+        name.strip()
+        for name in os.environ.get("IN_LOCKSTEP_REQUIRED_POLICIES", "").split(",")
+        if name.strip()
+    ]
+    if required:
+        present = {str(getattr(layer, "name", "")) for layer in lockstep.policy.layers}
+        for name in required:
+            if name not in present:
+                report.add(
+                    "DOC162",
+                    Severity.ERROR,
+                    f"required policy layer {name!r} is not contributed",
+                    "The organisation baseline (IN_LOCKSTEP_REQUIRED_POLICIES) names layers this "
+                    f"module must contribute; present: {', '.join(sorted(present)) or '(none)'}. "
+                    "A deleted standard is a visible diff — this is the check that sees it.",
+                )
+
+    ceiling = os.environ.get("IN_LOCKSTEP_MAX_BUDGET_USD", "").strip()
+    if ceiling:
+        try:
+            org_max = float(ceiling)
+        except ValueError:
+            report.add(
+                "DOC163",
+                Severity.WARNING,
+                f"IN_LOCKSTEP_MAX_BUDGET_USD is {ceiling!r}, which is not a number",
+            )
+        else:
+            declared = getattr(lockstep.budget, "usd", None)
+            if declared is None:
+                report.add(
+                    "DOC163",
+                    Severity.ERROR,
+                    f"the organisation caps a run at ${org_max:.2f} but this module declares no budget",
+                    "Declare one in lockstep.py (`lockstep.budget = Budget(usd=...)`) at or "
+                    "under the cap. An absent ceiling is not a compliant ceiling.",
+                )
+            elif declared > org_max:
+                report.add(
+                    "DOC163",
+                    Severity.ERROR,
+                    f"the declared budget ${declared:.2f} exceeds the organisation's ${org_max:.2f}",
+                    "Ceilings compose downward: a repository may tighten the org maximum, never raise it.",
+                )
+
+    turns = os.environ.get("IN_LOCKSTEP_MAX_TURNS", "").strip()
+    if turns.isdigit():
+        resolved = lockstep.policy.resolve()
+        declared_turns = getattr(resolved, "max_turns", None)
+        if declared_turns is None or declared_turns > int(turns):
+            report.add(
+                "DOC163",
+                Severity.ERROR,
+                f"the resolved turn ceiling is {declared_turns or 'unbounded'}; "
+                f"the organisation's maximum is {turns}",
+                "Contribute a policy layer with max_turns at or under the org maximum.",
+            )
+
+
+def _strict_opt_outs(report: Report, lockstep: Any) -> None:
+    """The named opt-outs, as named findings.
+
+    `UnsandboxedEgress` and `UnsandboxedRun` were designed to be greppable lines in a diff; this
+    puts the same names in the check an organisation requires, so the opt-out is visible in the
+    place a fleet actually looks. Warnings, not errors — visibility, not impossibility, per the
+    resolved tension: a repository may have decided this deliberately, and the finding names
+    where that decision lives so a reviewer can read its justification.
+    """
+    from .privileged.egress import EgressPolicy, UnsandboxedEgress
+
+    container = lockstep.container
+    if container.has(EgressPolicy) and isinstance(container.resolve(EgressPolicy), UnsandboxedEgress):
+        report.add(
+            "DOC165",
+            Severity.WARNING,
+            "the egress opt-out is bound (UnsandboxedEgress)",
+            "Every run may reach the open internet. Deliberate on a laptop; on a host that can "
+            "constrain egress, remove the binding and set IN_LOCKSTEP_EGRESS=enforced instead.",
+        )
+
+    for binding in container.resolved():
+        commands = getattr(binding.impl, "commands", None)
+        runner = getattr(commands, "inner", commands)  # a WorktreeRunner wraps its runner
+        if type(runner).__name__ == "UnsandboxedRun":
+            report.add(
+                "DOC166",
+                Severity.WARNING,
+                f"{binding.iface.__name__} runs commands through UnsandboxedRun",
+                "Model-chosen commands execute on this host with its environment and its "
+                "credentials. The named adapter exists so this is a decision a diff shows; "
+                "this finding is the same decision where the fleet looks.",
+            )
+
+
+def _strict_approval_path(report: Report, lockstep: Any) -> None:
+    """An adapter that both spends and writes needs an approval path before the run refuses.
+
+    `Lockstep.context` refuses at run time; a required check should say so before a trigger
+    fires, in the same place the rest of the org floor is asserted.
+    """
+    from .core.middleware import provides_approval
+    from .core.verbs import Capability
+
+    if any(provides_approval(m) for m in lockstep.middleware):
+        return
+    for binding in lockstep.container.resolved():
+        capabilities = getattr(binding.impl, "capabilities", None) or frozenset()
+        if {Capability.SPENDS_BUDGET, Capability.WRITES_FILES} <= set(capabilities):
+            report.add(
+                "DOC164",
+                Severity.ERROR,
+                f"{binding.iface.__name__} spends and writes, and no middleware provides approval",
+                "Add ApprovalGate() to lockstep.middleware. Every run of this adapter will be "
+                "refused at startup without it — this says so before a trigger finds out.",
+            )
+            return
+
+
+def as_json(report: Report) -> str:
+    """The fleet scanner's format: stable codes, machine-readable severities, one exit-deciding
+    boolean. Hints ride along because the hint is the remediation, and a dashboard that can only
+    say DOC162 sends its reader back to the terminal."""
+    import json
+
+    return json.dumps(
+        {
+            "ok": report.ok,
+            "errors": len(report.errors),
+            "checks": [
+                {
+                    "code": c.code,
+                    "severity": c.severity.value,
+                    "message": c.message,
+                    **({"hint": c.hint} if c.hint else {}),
+                }
+                for c in report.checks
+            ],
+        },
+        indent=2,
+        sort_keys=True,
     )
 
 

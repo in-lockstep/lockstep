@@ -18,7 +18,7 @@ from .core.container import Container, Scope, Tier
 from .core.context import Approval, RepoFacts, RepoInfo, RunContext
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
-from .core.spend import Budget, Spend, UndeclaredBudget
+from .core.spend import Budget, DailySpendExceeded, Spend, UndeclaredBudget
 from .core.verbs import NEEDS_APPROVAL, Capability, UngatedAgency, capabilities_of
 
 
@@ -86,6 +86,7 @@ class Lockstep:
     def context(self, run_id: str, *, approval: Approval | None = None) -> RunContext:
         self._refuse_undeclared_budget()
         self._refuse_ungated_agency()
+        self._refuse_exhausted_daily_ceiling()
         return RunContext(
             run_id=run_id,
             repo=self.repo,
@@ -171,6 +172,54 @@ class Lockstep:
             f"lockstep.py:\n\n    lockstep.budget = Budget(usd=2.00, wall_seconds=900)\n\n"
             f"An unbounded agent is the failure this refuses to let you ship. `in-lockstep ls` "
             f"still works without one, so you can see what is bound."
+        )
+
+    def _refuse_exhausted_daily_ceiling(self) -> None:
+        """The rolling per-repository spend window, rebuilt from the ledger (item 18).
+
+        A pre-run refusal like the two above it, and equally out of `--no-middleware`'s reach:
+        `context` is where a run begins, so nothing that runs can precede this check. Opt-in via
+        IN_LOCKSTEP_DAILY_LIMIT — advisory-first was the resolved tension, and an org states the
+        variable in CI the same way it states the doctor baseline.
+
+        Honest about its coverage: the sum is what THIS clone's ledger has seen. On the orphan
+        branch that is every pushed record the checkout carries; on a runner that never fetched
+        it, less. That is deliberately weaker than the substrate's partition and said so in the
+        crosswalk — the durable answer is the provider-side org limit, and the SHARED-store
+        compare-and-set stays the declared upgrade path.
+        """
+        from datetime import UTC, datetime
+
+        raw = os.environ.get("IN_LOCKSTEP_DAILY_LIMIT", "").strip()
+        if not raw:
+            return
+        # Scoped like GATE-BUDGET-1: a run that cannot spend cannot push past a spend ceiling,
+        # and refusing a free selfcheck because yesterday's agent runs were expensive teaches
+        # people the refusal is noise.
+        if not self.spenders():
+            return
+        try:
+            limit = float(raw)
+        except ValueError:
+            # A malformed ceiling must not silently mean "no ceiling" — but refusing every run
+            # over a typo is a different footgun. Loud, then unenforced, is the honest middle.
+            print(f"ledger    IN_LOCKSTEP_DAILY_LIMIT is {raw!r}, not a number; ceiling not enforced")
+            return
+
+        from .platform.ledger import spent_in_window, store_for
+
+        store = store_for(self.container, self.repo.root)
+        reader = getattr(store, "records", None)
+        records = reader() if callable(reader) else []
+        spent = spent_in_window(records, now=datetime.now(UTC))
+        if spent < limit:
+            return
+        raise DailySpendExceeded(
+            f"this repository's recorded runs have spent ${spent:.2f} in the last 24h, at or "
+            f"over the IN_LOCKSTEP_DAILY_LIMIT of ${limit:.2f}; refusing to start another. "
+            f"The window rolls — retry later, raise the limit deliberately, or read "
+            f"`in-lockstep report` to see where it went. This sums the local ledger only; the "
+            f"provider-side organisation limit remains the durable backstop."
         )
 
 

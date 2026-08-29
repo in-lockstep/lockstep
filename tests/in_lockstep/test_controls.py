@@ -553,3 +553,186 @@ def test_a_read_only_ai_verb_does_not_need_approval() -> None:
     lockstep.budget = Budget(usd=1.0)
     lockstep.bind(Review, AiReviewLike())
     assert lockstep.context(run_id="r") is not None
+
+
+# -- doctor --strict: the org baseline (item 19) ---------------------------------------
+
+
+def _baseline_env(monkeypatch) -> None:
+    """No inherited baseline: these tests assert exactly what they set."""
+    _not_in_ci(monkeypatch)
+    for var in ("IN_LOCKSTEP_REQUIRED_POLICIES", "IN_LOCKSTEP_MAX_BUDGET_USD", "IN_LOCKSTEP_MAX_TURNS"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_strict_errors_on_a_missing_required_policy_layer(tmp_path, monkeypatch) -> None:
+    """The KISS answer to the Tier.MANDATE debate: a deleted standard is a visible diff, and the
+    required check the organisation controls is what sees it."""
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    monkeypatch.setenv("IN_LOCKSTEP_REQUIRED_POLICIES", "org-floor, sec-base")
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.policy import Policy\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.contribute(Policy(name='org-floor', source='acme'))\n",
+    )
+    report = doctor.run(tmp_path, strict=True)
+    missing = [c for c in report.errors if c.code == "DOC162"]
+    assert len(missing) == 1, "org-floor is present; only sec-base is missing"
+    assert "sec-base" in missing[0].message
+
+
+def test_strict_without_a_stated_baseline_adds_nothing(tmp_path, monkeypatch) -> None:
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    _write_lifecycle(tmp_path, "from in_lockstep import Lockstep\nlockstep = Lockstep()\n")
+    report = doctor.run(tmp_path, strict=True)
+    assert not any(c.code in ("DOC162", "DOC163") for c in report.checks)
+
+
+def test_strict_errors_when_the_budget_exceeds_the_org_maximum(tmp_path, monkeypatch) -> None:
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    monkeypatch.setenv("IN_LOCKSTEP_MAX_BUDGET_USD", "1.00")
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.budget = Budget(usd=2.00)\n",
+    )
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC163" and "$2.00 exceeds" in c.message for c in report.errors)
+
+
+def test_strict_errors_when_the_org_caps_and_no_budget_is_declared(tmp_path, monkeypatch) -> None:
+    """An absent ceiling is not a compliant ceiling."""
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    monkeypatch.setenv("IN_LOCKSTEP_MAX_BUDGET_USD", "1.00")
+    _write_lifecycle(tmp_path, "from in_lockstep import Lockstep\nlockstep = Lockstep()\n")
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC163" and "declares no budget" in c.message for c in report.errors)
+
+
+def test_strict_accepts_a_budget_at_or_under_the_org_maximum(tmp_path, monkeypatch) -> None:
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    monkeypatch.setenv("IN_LOCKSTEP_MAX_BUDGET_USD", "1.00")
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.budget = Budget(usd=0.25)\n",
+    )
+    report = doctor.run(tmp_path, strict=True)
+    assert not any(c.code == "DOC163" for c in report.checks)
+
+
+def test_strict_errors_when_the_turn_ceiling_is_unbounded_or_over(tmp_path, monkeypatch) -> None:
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    monkeypatch.setenv("IN_LOCKSTEP_MAX_TURNS", "20")
+    _write_lifecycle(tmp_path, "from in_lockstep import Lockstep\nlockstep = Lockstep()\n")
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC163" and "unbounded" in c.message for c in report.errors)
+
+    (tmp_path / ".lockstep" / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.policy import Policy\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.contribute(Policy(name='floor', max_turns=12))\n"
+    )
+    report = doctor.run(tmp_path, strict=True)
+    assert not any(c.code == "DOC163" for c in report.checks), "12 <= 20 complies"
+
+
+def test_strict_names_the_egress_opt_out_where_the_fleet_looks(tmp_path, monkeypatch) -> None:
+    """Visibility, not impossibility: the greppable line in the diff becomes a named finding in
+    the check an organisation requires."""
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n",
+    )
+    assert any(c.code == "DOC165" for c in doctor.run(tmp_path, strict=True).checks)
+    assert not any(c.code == "DOC165" for c in doctor.run(tmp_path).checks), "strict-only"
+
+
+def test_strict_names_unsandboxed_run_even_inside_a_worktree_wrapper(tmp_path, monkeypatch) -> None:
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.adapters.sandbox import UnsandboxedRun\n"
+        "from in_lockstep.adapters.worktree import WorktreeRunner\n"
+        "lockstep = Lockstep()\n"
+        "class Verb: pass\n"
+        "class Adapter:\n"
+        "    def __init__(self):\n"
+        "        self.commands = WorktreeRunner(UnsandboxedRun(), '.')\n"
+        "lockstep.bind(Verb, Adapter())\n",
+    )
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC166" and "Verb" in c.message for c in report.checks)
+
+
+def test_strict_errors_when_a_spending_writing_adapter_has_no_approval_path(tmp_path, monkeypatch) -> None:
+    """`Lockstep.context` refuses this at run time; the required check says so before a trigger
+    finds out."""
+    from in_lockstep import doctor
+
+    _baseline_env(monkeypatch)
+    body = (
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.verbs import Capability\n"
+        "lockstep = Lockstep()\n"
+        "class Verb: pass\n"
+        "class Adapter:\n"
+        "    capabilities = frozenset({Capability.SPENDS_BUDGET, Capability.WRITES_FILES})\n"
+        "lockstep.bind(Verb, Adapter())\n"
+    )
+    _write_lifecycle(tmp_path, body)
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC164" for c in report.errors)
+
+    (tmp_path / ".lockstep" / "lockstep.py").write_text(
+        body + "from in_lockstep.middleware.approval import ApprovalGate\n"
+        "lockstep.middleware += [ApprovalGate()]\n"
+    )
+    report = doctor.run(tmp_path, strict=True)
+    assert not any(c.code == "DOC164" for c in report.checks)
+
+
+def test_doctor_format_json_is_the_fleet_scanners_shape(tmp_path, monkeypatch) -> None:
+    import json as _json
+
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    _baseline_env(monkeypatch)
+    monkeypatch.delenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", raising=False)
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, ["doctor", "--format", "json"])
+    payload = _json.loads(result.output)
+    assert payload["ok"] is False and payload["errors"] >= 1
+    assert any(c["code"] == "DOC101" for c in payload["checks"])
+    assert all({"code", "severity", "message"} <= set(c) for c in payload["checks"])
+    assert result.exit_code != 0, "the exit code is the same contract in both formats"

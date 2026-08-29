@@ -175,13 +175,18 @@ def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
     nothing outward. Translating at this boundary is the same shape as every other refusal here:
     the exception carries the reason, the CLI decides how a person should see it.
     """
-    from .core.spend import UndeclaredBudget
+    from .core.spend import DailySpendExceeded, UndeclaredBudget
     from .core.verbs import UngatedAgency
 
     try:
         return lockstep.context(run_id=run_id, approval=approval)
     except (UndeclaredBudget, UngatedAgency) as e:
         raise click.ClickException(str(e)) from None
+    except DailySpendExceeded as e:
+        # BLOCKED, not failed: a policy refusing is §4.3's own category, and the exit code is how
+        # a trampoline's `if` can tell "over the daily window" from "broken".
+        click.echo(f"blocked   {e.reason}: {e}", err=True)
+        raise SystemExit(EXIT_BLOCKED) from None
 
 
 def _shipped_fixture() -> dict[str, Any] | None:
@@ -325,32 +330,12 @@ def _run_registered(
 
 
 def _ledger(lockstep: Any = None) -> Any:
-    """Where a run record goes. One decision, made once.
+    """Where a run record goes. The decision lives in `platform.ledger.store_for`, shared with
+    the pre-run daily ceiling — two answers to "which ledger" is how a ceiling ends up summing
+    records nothing appends to."""
+    from .platform.ledger import store_for
 
-    Order: a store the repository bound, then the orphan branch, then a file in the working tree.
-
-    The last is a fallback and not a default. `.lockstep/` is gitignored, so a record written
-    there is written and then lost — which is what shipped, and why the ledger held no evidence
-    while the crosswalk cited it as the project's evidence. It stays for directories that are not
-    git repositories at all, where the branch cannot exist.
-    """
-    import subprocess
-
-    from .platform.ledger import GitLedger, InRepoLedger
-
-    if lockstep is not None:
-        from .core.ports import LedgerStore
-
-        if lockstep.container.has(LedgerStore):
-            return lockstep.container.resolve(LedgerStore)
-
-    try:
-        inside = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=10
-        )
-    except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
-        return InRepoLedger()
-    return GitLedger() if inside.stdout.strip() == "true" else InRepoLedger()
+    return store_for(lockstep.container if lockstep is not None else None)
 
 
 def _provenance(lockstep: Any) -> dict[str, Any]:
@@ -968,12 +953,20 @@ def report_cmd(group_by: str, fmt: str) -> None:
 
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
-def doctor_cmd(strict: bool) -> None:
+@click.option(
+    "--format",
+    "fmt",
+    default="table",
+    type=click.Choice(["table", "json"]),
+    show_default=True,
+    help="json is for fleet scanners; codes and severities are stable.",
+)
+def doctor_cmd(strict: bool, fmt: str) -> None:
     """Will the target accept this, and are the controls actually in place?"""
     from . import doctor as doctor_module
 
     report = doctor_module.run(".", strict=strict)
-    click.echo(doctor_module.render(report))
+    click.echo(doctor_module.as_json(report) if fmt == "json" else doctor_module.render(report))
     if not report.ok:
         raise SystemExit(EXIT_FAILED)
 
