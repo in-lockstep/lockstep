@@ -126,11 +126,17 @@ def read_verdict(artifact: str | Path) -> TestVerdict | None:
     raw = data.get("verdict") if isinstance(data, dict) else None
     if not isinstance(raw, dict):
         return None
-    return TestVerdict(
-        status=str(raw.get("status", "")),
-        decided=bool(raw.get("decided", False)),
-        total=int(raw.get("total", 0) or 0),
-        passed=int(raw.get("passed", 0) or 0),
-        failed=int(raw.get("failed", 0) or 0),
-        skipped=int(raw.get("skipped", 0) or 0),
-    )
+    try:
+        return TestVerdict(
+            status=str(raw.get("status", "")),
+            decided=bool(raw.get("decided", False)),
+            total=int(raw.get("total", 0) or 0),
+            passed=int(raw.get("passed", 0) or 0),
+            failed=int(raw.get("failed", 0) or 0),
+            skipped=int(raw.get("skipped", 0) or 0),
+        )
+    except (ValueError, TypeError):
+        # A verdict whose counts are not numbers is not a verdict. Read it as "not tested" rather
+        # than let a non-numeric field crash the propose job — the change still applies; the body
+        # just cannot claim a result over it.
+        return None

@@ -114,3 +114,9 @@ def test_read_verdict_is_tolerant_of_a_missing_or_malformed_artifact(tmp_path: P
     assert read_verdict(tmp_path / "nothing") is None
     (tmp_path / "changeset.json").write_text('{"verdict": "not an object"}')
     assert read_verdict(tmp_path) is None
+
+
+def test_read_verdict_treats_a_non_numeric_count_as_not_tested(tmp_path: Path) -> None:
+    """A count that is not a number must not crash the propose job — it reads as 'not tested'."""
+    (tmp_path / "changeset.json").write_text('{"changes": [], "verdict": {"total": "lots"}}')
+    assert read_verdict(tmp_path) is None
