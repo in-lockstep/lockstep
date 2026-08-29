@@ -1,0 +1,162 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.131769,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 22,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 72,
+        "message": "",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 93,
+        "message": "",
+        "path": "src/in_lockstep/platform/tickets/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1770,
+        "message": "",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "Not a file in this diff directly \u2014 it is emitted by _SCAFFOLD_IMPLEMENT_TRAMPOLINE. The generated YAML correctly separates the provider key (implement job) from write permissions (propose job). The gate job runs first with no credentials. The `issue_comment` trigger correctly reads from the default branch. The `startsWith` guard on `/implement` is correct (not `contains`). No exploit path found in the job-split design.",
+        "path": ".github/workflows/implement.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 39578,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 869,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 40447,
+  "wall_seconds": 25.552
+}
