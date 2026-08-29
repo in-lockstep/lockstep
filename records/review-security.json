@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.023562,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 117,
+        "message": "Error message from `gh pr ready` reflects the PR number from the caller-supplied `ChangeRequest`, but also reflects the raw `err` string from the subprocess, which could contain attacker-influenced content if the GitHub API or gh CLI echoes back a PR title or body. The number itself originates from a prior `open_change` call so is not externally injectable here, but `err.strip()` is passed verbatim into a `RuntimeError` that may be logged or surfaced upstream. This is low severity \u2014 the content \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 146,
+        "message": "The option-confusion guard (`if ref.startswith(\"-\")`) is added only in `_resolve_base_ref` (the `GitLocal` path). The `GitHubScm.open_change` also accepts a `base` parameter and appends it to the `gh pr create` argument list (`args += [\"--base\", base]` on line 84). Because `_gh` is called with a list rather than a shell string, this is not shell injection; however, a `base` value beginning with `--` (e.g. `--upload-pack=attacker`) would be interpreted as an option by the `gh` CLI rather than as \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 5634,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 444,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 6078,
+  "wall_seconds": 12.836
+}
