@@ -56,6 +56,9 @@ build-backend = "hatchling.build"
 # `release-python.yml` proves the data arrives by reading it back out of site-packages.
 [tool.hatch.build.targets.wheel]
 packages = ["src/in_lockstep"]
+# The replay fixture is package data like the prompts and the corpus: a .json and a .diff, so a
+# wheel build that only collected .py files would ship a `--offline` that cannot replay anything.
+artifacts = ["src/in_lockstep/cassettes/*"]
 
 [tool.ruff]
 line-length = 110

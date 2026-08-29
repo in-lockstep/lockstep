@@ -109,6 +109,42 @@ def _context(lockstep: Lockstep, run_id: str) -> Any:
         raise click.ClickException(str(e)) from None
 
 
+def _shipped_fixture() -> dict[str, Any] | None:
+    """The recorded cassette and the diff it was recorded against, from package data.
+
+    Shipped so `--offline` needs nothing recorded first. It is a real recording of a real model
+    reviewing a real merged pull request, not an authored stand-in — which matters, because a
+    hand-written cassette would be a fixture that looks like evidence.
+    """
+    import json as _json
+    from importlib import resources
+
+    try:
+        root = resources.files("in_lockstep.cassettes")
+        cassette, diff, manifest = (
+            root / "review-security.json",
+            root / "example.diff",
+            root / "fixture.json",
+        )
+        if not all(f.is_file() for f in (cassette, diff, manifest)):
+            return None
+        meta = _json.loads(manifest.read_text())
+        with resources.as_file(cassette) as path:
+            # base and head as well as the diff: the composed prompt names the range it is
+            # reviewing, so the cassette key covers all three and a replay has to reproduce them.
+            return {
+                "cassette": path,
+                "diff": diff.read_text(),
+                "base": meta["base"],
+                "head": meta["head"],
+                "aspect": meta["aspect"],
+                "model": meta["model"],
+                "label": meta["label"],
+            }
+    except (ModuleNotFoundError, FileNotFoundError, KeyError):  # pragma: no cover - packaging
+        return None
+
+
 def _load_changeset(artifact: str) -> Any:
     """Read a ChangeSet from a file or an artifact directory."""
     import json
@@ -436,7 +472,11 @@ def apply_cmd(artifact: str, dry_run: bool) -> None:
 @click.option("--model", default="anthropic:claude-sonnet-4-6")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
 @click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
-@click.option("--cassette", default=".in-lockstep/cassettes/review.json", show_default=True)
+@click.option(
+    "--cassette",
+    default="",
+    help="Where to read or write a recording. Defaults to the shipped fixture when replaying.",
+)
 @click.option(
     "--budget",
     type=float,
@@ -489,6 +529,29 @@ def review_cmd(
         lockstep.budget = Budget(usd=budget)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("review", model)
+
+    # `--offline` with nothing else works out of the box, because both halves of a replay ship:
+    # the recording, and the diff it was recorded against. A cassette is keyed on the whole
+    # composed prompt and therefore on the diff inside it, so a fixture without its diff would
+    # replay for nobody — the key would never match anything a user actually has.
+    fixture = _shipped_fixture() if offline else None
+    if fixture is not None:
+        cassette = cassette or str(fixture["cassette"])
+        source = click.get_current_context().get_parameter_source
+        if source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
+            demo_diff = str(fixture["diff"])
+            base, head, aspect = fixture["base"], fixture["head"], fixture["aspect"]
+            # Including the model. A recording is portable across provider implementations —
+            # that is what the LLMInput/LLMOutput seam buys — but not across model ids, because
+            # the id is part of the request being replayed. A repository's own route would
+            # otherwise make the shipped fixture unreplayable for the person who most needs it.
+            model = str(fixture["model"])
+            click.echo(f"replaying the shipped fixture: {fixture['label']}")
+        else:
+            demo_diff = ""
+    else:
+        demo_diff = ""
+    cassette = cassette or ".in-lockstep/cassettes/review.json"
 
     table = default_table()
     auth = Auth()
@@ -548,7 +611,14 @@ def review_cmd(
 
     ctx = _context(lockstep, f"review-{aspect}")
     try:
-        outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
+            outcome = asyncio.run(
+            ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect, diff=demo_diff))
+        )
+    except LookupError as e:
+        raise click.ClickException(
+            f"{e} If this is the shipped fixture, it no longer matches the prompt it was recorded "
+            f"against — a prompt or guardrail changed, and re-recording is a real model call."
+        ) from None
     except (ImportError, MissingCredential) as e:
         # Both are setup steps with one obvious remedy, not bugs. Forty lines of traceback around
         # the one line that helps is how a fixable problem reads as a broken tool.

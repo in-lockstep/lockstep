@@ -695,3 +695,66 @@ def test_the_count_is_the_true_total_even_when_items_are_capped(repo: Path) -> N
     stored = json.loads((repo / "l" / "r.json").read_text())["findings"]
     assert stored["count"] == 120
     assert len(stored["items"]) == 50
+
+
+# -- the shipped replay fixture ----------------------------------------------------------------
+
+
+def test_offline_works_with_nothing_recorded(repo: Path) -> None:
+    """`--offline` is advertised as the free path, and needed a recording the user did not have.
+
+    Both halves ship: the cassette, and the diff it was recorded against. A cassette is keyed on
+    the whole composed prompt — which embeds the diff and the range — so a fixture without them
+    would replay for nobody, because the key could never match anything a user actually holds.
+    """
+    _write(repo)
+    result = CliRunner().invoke(main, ["review", "--offline"])
+    assert result.exit_code == 0, result.output
+    assert "replaying the shipped fixture" in result.output
+    assert "actions/save/action.yml" in result.output
+
+
+def test_the_fixture_is_a_real_recording(repo: Path) -> None:
+    """It records a real model call against a real merged PR, not an authored stand-in.
+
+    That distinction is the whole reason it took a real call to produce: a hand-written cassette
+    is a fixture that looks like evidence, which is the failure this repository keeps finding.
+    """
+    import json
+
+    from in_lockstep.cli import _shipped_fixture
+
+    fixture = _shipped_fixture()
+    assert fixture is not None
+    assert fixture["base"] and fixture["head"]
+
+    cassette = json.loads(Path(fixture["cassette"]).read_text())
+    entry = next(iter(cassette["provider_calls"].values()))
+    usage = entry["usage"]
+    assert usage["input_tokens"] > 1000, "a canned answer would not have real token counts"
+    assert usage["output_tokens"] > 0
+    assert entry["stop_reason"] == "end_turn", "not truncated"
+
+
+def test_the_fixture_carries_no_credential() -> None:
+    """It was written through Redact, and it is committed. Both facts have to hold together."""
+    from in_lockstep.cli import _shipped_fixture
+
+    fixture = _shipped_fixture()
+    assert fixture is not None
+    raw = Path(fixture["cassette"]).read_text()
+    for shape in ("sk-ant-", "ghp_", "Bearer ", "AKIA"):
+        assert shape not in raw, f"the shipped cassette contains something shaped like {shape!r}"
+
+
+def test_a_stale_fixture_says_so_rather_than_raising(repo: Path) -> None:
+    """A prompt edit invalidates the key, and re-recording costs a real model call.
+
+    So the failure has to name the cause. `LookupError: no cassette entry` on its own reads as a
+    bug in replay rather than as "the prompt moved and this recording did not".
+    """
+    _write(repo)
+    result = CliRunner().invoke(main, ["review", "--offline", "--base", "HEAD~1", "--head", "HEAD"])
+    assert result.exit_code != 0
+    assert "no longer matches the prompt" in result.output or "no cassette entry" in result.output
+    assert "Traceback" not in result.output
