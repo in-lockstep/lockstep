@@ -245,6 +245,63 @@ def test_github_transition_refuses_a_raw_state_rather_than_ignoring_it() -> None
         asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.DONE, raw="In Review"))
 
 
+def test_github_open_change_can_open_a_draft(tmp_path: Path) -> None:
+    """A draft PR is how an AI change lands without entering a human's review queue until its tests
+    pass. `--draft` has to reach `gh pr create`, and the request has to report it."""
+    from in_lockstep.platform.scm import GitHubScm
+
+    root = _repo(tmp_path)
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=root, check=True)
+
+    scm = GitHubScm(root)
+    calls: list = []
+    scm._gh = _recording(calls, "https://github.com/o/r/pull/5\n")  # type: ignore[method-assign]
+    cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),), summary="s")
+
+    change = asyncio.run(scm.open_change(cs, title="t", workflow="implement", run_id="r1", draft=True))
+    create = next(c for c in calls if c[:2] == ("pr", "create"))
+    assert "--draft" in create
+    assert change.draft is True
+
+    # Without draft=, no --draft flag and the request says so. A distinct change, so the commit is
+    # not empty on the fresh branch.
+    calls.clear()
+    cs2 = ChangeSet(changes=(FileChange(path="b.py", contents="y = 2\n"),), summary="s2")
+    change2 = asyncio.run(scm.open_change(cs2, title="t2", workflow="implement", run_id="r2"))
+    create2 = next(c for c in calls if c[:2] == ("pr", "create"))
+    assert "--draft" not in create2
+    assert change2.draft is False
+
+
+def test_github_mark_ready_takes_the_pr_out_of_draft() -> None:
+    from in_lockstep.platform.scm import GitHubScm
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    scm = GitHubScm(".")
+    calls: list = []
+    scm._gh = _recording(calls)  # type: ignore[method-assign]
+
+    asyncio.run(scm.mark_ready(ChangeRequest(id="u", url="u", branch="b", title="t", number=5)))
+    assert ("pr", "ready", "5") in calls
+
+    # A request with no number (a local branch, or an open_change that returned only a branch) is
+    # left alone rather than guessed at.
+    calls.clear()
+    asyncio.run(scm.mark_ready(ChangeRequest(id="b", url="", branch="b", title="t")))
+    assert calls == []
+
+
+def test_local_open_change_is_never_draft_and_mark_ready_is_a_noop(tmp_path: Path) -> None:
+    scm = GitLocal(_repo(tmp_path))
+    cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),))
+    change = asyncio.run(scm.open_change(cs, title="t", workflow="implement", run_id="r1", draft=True))
+    assert change.draft is False, "local git has no draft state"
+    # No PR to ready, and no error.
+    asyncio.run(scm.mark_ready(change))
+
+
 def test_the_conformance_kit_names_every_miss_at_once() -> None:
     """One run, every problem — an implementer should not fix-and-rerun six times."""
     from in_lockstep.platform.conformance import Nonconformant, assert_scm, assert_ticket_source
@@ -271,8 +328,11 @@ def test_the_conformance_kit_names_every_miss_at_once() -> None:
 
     with pytest.raises(Nonconformant) as scm_err:
         assert_scm(WrongScm())
-    assert "diff() must be synchronous" in str(scm_err.value)
-    assert "open_change() does not accept base=" in str(scm_err.value)
+    message = str(scm_err.value)
+    assert "diff() must be synchronous" in message
+    assert "open_change() does not accept base=" in message
+    assert "open_change() does not accept draft=" in message
+    assert "missing method mark_ready()" in message
 
 
 def test_a_minimal_ticket_source_refuses_what_it_does_not_implement() -> None:
