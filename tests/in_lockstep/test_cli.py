@@ -131,6 +131,99 @@ def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> 
     assert "gemini-2.5-flash" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
+def _issue_file(root: Path) -> str:
+    import json
+
+    path = root / "issue.json"
+    path.write_text(
+        json.dumps(
+            {
+                "input": {
+                    "key": "#412",
+                    "summary": "Checkout returns 500 for every card payment",
+                    "description": "Since the 14:20 deploy every card payment returns a 500.",
+                    "criteria_source": "none",
+                    "discussion": [{"author": "ops", "body": "Confirmed on prod."}],
+                }
+            }
+        )
+    )
+    return str(path)
+
+
+def test_triage_runs_end_to_end_from_a_file(repo: Path) -> None:
+    """The whole point of the vertical: an issue in, a placed decision out, a ledger line written —
+    with no key and no spend."""
+    result = CliRunner().invoke(
+        main, ["triage", "--ticket-file", _issue_file(repo), "--dry-run", "--budget", "0.10"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "triage    succeeded" in result.output
+    record = (repo / ".lockstep/ledger/triage-412.json").read_text()
+    assert '"kind": "triage"' in record
+
+
+def test_triage_reads_the_corpus_shape_directly(repo: Path) -> None:
+    """A user can point `--ticket-file` at an eval-corpus case, so the offline surface and the
+    graded surface are the same file."""
+    import json
+
+    corpus = Path(__file__).resolve().parents[2] / "src/in_lockstep/corpus/triage/triage-analyst"
+    case = json.loads((corpus / "production-outage.json").read_text())
+    assert "input" in case, "the corpus shape carries the issue under `input`"
+    result = CliRunner().invoke(
+        main,
+        ["triage", "--ticket-file", str(corpus / "production-outage.json"), "--dry-run", "--budget", "0.10"],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_triage_refuses_both_or_neither_ticket_source(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["triage", "--dry-run", "--budget", "0.10"])
+    assert result.exit_code != 0
+    assert "exactly one of --ticket or --ticket-file" in result.output
+
+
+def test_triage_ledger_path_survives_a_slash_bearing_key(repo: Path) -> None:
+    """A GitLab-style `group/project#42` key must not write the record to a nested path the
+    ledger's read glob never finds. The store sanitises the run id, so it lands one file deep."""
+    import json
+
+    path = repo / "issue.json"
+    path.write_text(json.dumps({"key": "group/project#42", "summary": "x", "description": "y"}))
+    result = CliRunner().invoke(main, ["triage", "--ticket-file", str(path), "--dry-run", "--budget", "0.10"])
+    assert result.exit_code == 0, result.output
+    ledger = repo / ".lockstep/ledger"
+    written = list(ledger.glob("*.json"))
+    assert written, "the record must be readable at the top level, not buried in a nested path"
+    assert not (ledger / "triage-group").exists(), "no nested directory from the slash"
+
+
+def test_triage_from_json_derives_criteria_like_a_live_ticket(repo: Path) -> None:
+    """A JSON dump of an issue whose body carries a task list triages the same as the issue read
+    from the tracker — criteria come from the body, and the source is not falsely 'none'."""
+    import json
+
+    from in_lockstep.cli import _triage_spec_from_dict
+
+    data = json.loads('{"key": "#5", "description": "Fix it.\\n\\n- [ ] returns 200\\n- [ ] logs the id"}')
+    spec = _triage_spec_from_dict(data, fallback_key="5")
+    assert spec.acceptance_criteria == ("returns 200", "logs the id")
+    assert spec.criteria_source == "description", "criteria came from the body, so the source is not none"
+
+
+def test_triage_uses_the_declared_route_over_the_cli_default(repo: Path) -> None:
+    """`Models.route('triage', ...)` in the module wins over the command's own default model."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Budget, Lockstep\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.0)\n"
+        "lockstep.models.route('triage', 'anthropic:claude-sonnet-4-6')\n"
+    )
+    CliRunner().invoke(main, ["triage", "--ticket-file", _issue_file(repo), "--dry-run"])
+    assert "claude-sonnet-4-6" in (repo / ".lockstep/ledger/triage-412.json").read_text()
+
+
 def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
     """An override the user actually typed is an override; a default is not."""
     _write(repo, model="google:gemini-2.5-flash")

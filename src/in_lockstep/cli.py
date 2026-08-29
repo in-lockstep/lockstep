@@ -1126,7 +1126,225 @@ def review_cmd(
         raise SystemExit(EXIT_FAILED)
 
 
-def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
+_TRIAGE_DRY_RUN = (
+    '{"kind": "bug", "priority": "normal", "reason": "canned dry-run answer; proves the wiring, '
+    'not the model.", "missing": [], "acceptance_criteria": [], "labels": [], "comment": ""}'
+)
+
+
+@main.command(name="triage")
+@click.option("--ticket", default="", help="An issue key to read from the tracker, e.g. '#42'.")
+@click.option(
+    "--ticket-file",
+    default="",
+    type=click.Path(),
+    help="A ticket read off disk — JSON (the eval-corpus shape) or markdown. No tracker, no network.",
+)
+@click.option("--model", default="anthropic:claude-haiku-4-5", help="Triage is a cheap reading task.")
+@click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
+@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option("--cassette", default="", help="Where to read or write a recording.")
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="Hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
+)
+@click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
+def triage_cmd(
+    ticket: str,
+    ticket_file: str,
+    model: str,
+    offline: bool,
+    record: bool,
+    cassette: str,
+    budget: float | None,
+    dry_run: bool,
+) -> None:
+    """Read one issue and place it: what kind of work, how urgent, what it is missing.
+
+    Read-only and label-only. The analyst reports a decision; acting on it — a comment, a label,
+    a duplicate link — is a separate step the caller takes through `TicketSource`, which is why
+    the `triage` guardrail denies the issue-writing tools.
+    """
+    from .adapters.ai.triage import AiTriage, Triage
+    from .ai.auth import Auth
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+        default_registry,
+        table_for,
+    )
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .core.spend import Budget
+    from .privileged.egress import EgressPolicy
+
+    if bool(ticket) == bool(ticket_file):
+        raise click.ClickException("pass exactly one of --ticket or --ticket-file")
+
+    lockstep, recorder = _default_lockstep()
+
+    source = click.get_current_context().get_parameter_source
+    if budget is not None:
+        lockstep.budget = Budget(usd=budget)
+    if source("model") is ParameterSource.DEFAULT:
+        model = lockstep.models.routes.get("triage", model)
+
+    spec = _triage_spec(ticket, ticket_file, lockstep.repo.root)
+
+    auth = Auth()
+    try:
+        registry = default_registry(auth)
+    except MissingCredential as e:
+        raise click.ClickException(str(e)) from None
+    selected = Model(model)
+    table = table_for(registry, selected, _bound_cost_table(lockstep))
+    tape = Cassette.load(cassette or ".lockstep/cassettes/triage.json")
+
+    def build_invoker(_ctx: Any) -> AiInvoker:
+        provider: LLMProvider
+        if dry_run:
+            provider = DryRunProvider(_TRIAGE_DRY_RUN)
+        elif offline:
+            provider = ReplayProvider(tape)
+        else:
+            creds = credentials_for(auth, selected.provider)
+            provider = registry.provider_for(selected, creds)
+            if record:
+                provider = RecordingProvider(provider, tape, Redact())
+        return AiInvoker(
+            provider,
+            model=selected.name,
+            cost_table=table,
+            spend=_ctx.spend,
+            redact=Redact(),
+            egress=(
+                lockstep.container.resolve(EgressPolicy)
+                if lockstep.container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            ),
+        )
+
+    # Only if the module did not bind one, the same rule `review` follows: a repository that ships
+    # its own Triage adapter has said something more specific, and has chosen its own model too, so
+    # `selected` below is not a fact about that run.
+    triage_model_is_ours = not lockstep.container.has(Triage)
+    if triage_model_is_ours:
+        lockstep.bind(
+            Triage,
+            AiTriage(
+                build_invoker,
+                policy=InvokePolicy.under(
+                    lockstep.policy.resolve(), max_turns=1, max_tokens=2048, deadline_seconds=120
+                ),
+            ),
+        )
+
+    ctx = _context(lockstep, f"triage-{spec.key.lstrip('#') or 'issue'}")
+    try:
+        outcome = asyncio.run(ctx.do(Triage, spec))
+    except LookupError as e:
+        raise click.ClickException(
+            f"{e} If this is a shipped fixture, it no longer matches the prompt it was recorded "
+            f"against — a prompt or guardrail changed, and re-recording is a real model call."
+        ) from None
+    except (ImportError, MissingCredential) as e:
+        raise click.ClickException(str(e)) from None
+
+    click.echo(
+        f"triage    {outcome.status.value}"
+        + (f"  ({outcome.reason})" if outcome.reason else "")
+        + ("" if outcome.decided else "  (decided nothing)")
+    )
+    decision = outcome.value
+    if decision is not None:
+        click.echo(f"  {decision.kind} / {decision.priority}  {decision.reason}")
+        if decision.duplicate_of:
+            click.echo(f"  duplicate of {decision.duplicate_of}")
+        if decision.labels:
+            click.echo(f"  labels: {', '.join(decision.labels)}")
+    for finding in outcome.findings:
+        where = f"{finding.path} " if finding.path else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+
+    cost = outcome.cost
+    click.echo("")
+    click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
+    click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    _echo_telemetry(recorder)
+
+    _write_ledger(ctx, outcome, "", selected.id if triage_model_is_ours else "", kind="triage")
+
+    if outcome.status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if outcome.status is not Status.SUCCEEDED:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _triage_spec(ticket: str, ticket_file: str, root: str) -> Any:
+    """A `TriageSpec` from a tracker key or a file. A JSON file may carry the richer eval-corpus
+    shape (discussion, criteria_source); a markdown file or a real issue goes through the Ticket
+    mapping, so what triage sees offline matches what it sees against a live tracker."""
+    import json
+    from pathlib import Path as _Path
+
+    from .adapters.ai.triage import TriageSpec
+
+    if ticket_file:
+        file = _Path(ticket_file)
+        if not file.exists():
+            raise click.ClickException(f"no ticket file at {ticket_file}")
+        try:
+            data = json.loads(file.read_text())
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            inner = data.get("input")
+            payload = inner if isinstance(inner, dict) else data
+            return _triage_spec_from_dict(payload, fallback_key=file.stem)
+    return TriageSpec.from_ticket(_load_ticket(ticket, ticket_file, root))
+
+
+def _triage_spec_from_dict(data: dict[str, Any], *, fallback_key: str) -> Any:
+    from .adapters.ai.triage import TriageSpec
+    from .platform.tickets import criteria_from
+
+    def _pairs(raw: object) -> tuple[tuple[str, str], ...]:
+        out = []
+        for item in raw if isinstance(raw, list) else []:
+            if isinstance(item, dict):
+                out.append((str(item.get("author", "")), str(item.get("body", ""))))
+            else:
+                out.append(("", str(item)))
+        return tuple(out)
+
+    def _strs(raw: object) -> tuple[str, ...]:
+        return tuple(str(x) for x in raw) if isinstance(raw, list) else ()
+
+    description = str(data.get("description") or data.get("body") or "")
+    # Criteria the same way a real ticket produces them: an explicit list wins, and when there is
+    # none they come from the body's task list — the same `criteria_from` a live `--ticket` goes
+    # through, so a JSON dump of an issue triages identically to the issue read from the tracker.
+    criteria = _strs(data.get("acceptance_criteria")) or criteria_from(description)
+    # An explicit source is honoured (the eval corpus states it); absent, it follows the criteria,
+    # matching `TriageSpec.from_ticket`. A filled criteria list under `criteria_source: none` would
+    # tell the analyst to treat present criteria as missing.
+    criteria_source = str(data.get("criteria_source") or ("description" if criteria else "none"))
+    return TriageSpec(
+        key=str(data.get("key") or data.get("id") or f"#{fallback_key}"),
+        summary=str(data.get("summary") or data.get("title") or ""),
+        description=description,
+        discussion=_pairs(data.get("discussion")),
+        labels=_strs(data.get("labels")),
+        acceptance_criteria=criteria,
+        criteria_source=criteria_source,
+    )
+
+
+def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review") -> None:
     """One writer, through the store that owns the format.
 
     This hand-rolled the record and stamped `"schema": 2` and `"epoch": "in-process"` as literals
@@ -1134,13 +1352,16 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
     one format is not an organisation problem: an epoch bump would have moved one of them, and the
     reader refuses to compare across epochs precisely so that a silent mismatch cannot average a
     credits-era number with a tokens-era one.
+
+    `kind` names the verb; `aspect` is the review lens and is omitted for verbs that have none, so
+    a triage record does not carry an empty lens field that reads as a missing one.
     """
     _record(
         _ledger(),
         ctx.run_id,
         {
-            "kind": "review",
-            "aspect": aspect,
+            "kind": kind,
+            **({"aspect": aspect} if aspect else {}),
             # Omitted when the repository bound its own Review adapter and therefore chose its
             # own model: this command's `--model` was never consulted, and writing it down
             # would put a model that was not called into a permanent record.
@@ -1630,12 +1851,14 @@ def show_prompt_cmd(name: str, projection: bool) -> None:
     The projection it prints is the same one the characterization corpus asserts on, so one
     artifact serves both offline inspection and migration equivalence.
 
-    NAME is a review aspect (`security`) or a strategy id (`implement/oneshot`). Both, because an
-    implementing prompt is the one most worth reading before it is run: it composes a different
-    guardrail and a different skill, and it is attached to a tool set that can write.
+    NAME is a review aspect (`security`), a strategy id (`implement/oneshot`), or a triage prompt
+    (`triage/analyst`). Each, because an agentic prompt is the one most worth reading before it is
+    run: it composes a different guardrail and a different skill, and — for implement — is attached
+    to a tool set that can write.
     """
     from .prompts.implement import PROMPTS, implement_layers
     from .prompts.review import LENSES, review_layers
+    from .prompts.triage import TRIAGE_PROMPTS, triage_layers
 
     if name in PROMPTS:
         prompt: Any = PROMPTS[name]()
@@ -1645,8 +1868,14 @@ def show_prompt_cmd(name: str, projection: bool) -> None:
         prompt = LENSES[name]()
         layers = review_layers()
         label, body_name = f"review/{name}", f"review/{name}-reviewer"
+    elif name in TRIAGE_PROMPTS:
+        prompt = TRIAGE_PROMPTS[name]()
+        layers = triage_layers()
+        label, body_name = name, "triage/triage-analyst"
     else:
-        raise click.ClickException(f"no prompt named {name!r}; have {sorted(LENSES)} and {sorted(PROMPTS)}")
+        raise click.ClickException(
+            f"no prompt named {name!r}; have {sorted(LENSES)}, {sorted(PROMPTS)} and {sorted(TRIAGE_PROMPTS)}"
+        )
 
     if projection:
         for section in layers.projection(body_name):
