@@ -64,8 +64,10 @@ class PytestTest:
             cmd += ["-k", inp.selector]
 
         try:
+            # `inp.root` (a materialized worktree) wins over the bound `cwd` wins over the repo's
+            # root, so a staged change can be tested without rebinding this adapter.
             result = await self.sandbox.run(
-                cmd, cwd=self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+                cmd, cwd=inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
             )
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)

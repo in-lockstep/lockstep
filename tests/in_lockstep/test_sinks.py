@@ -79,6 +79,13 @@ EXEMPT: dict[tuple[str, str, str], str] = {
         "would silently corrupt the file the framework was asked to write. ChangeGuard is the "
         "control on this path, not Redact."
     ),
+    ("adapters/worktree.py", "_apply_change", "write_text"): (
+        "Materialises a staged ChangeSet into a throwaway git worktree so a suite can run against "
+        "it. The content is the change itself — masking it would corrupt the very file being "
+        "tested — and the bytes never leave the process: the worktree is a disposable copy that is "
+        "torn down after the run. ChangeGuard is the control that governed this change at propose "
+        "time, not Redact. Same reasoning as scm/base.py `apply`."
+    ),
 }
 
 
