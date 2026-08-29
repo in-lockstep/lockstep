@@ -1,0 +1,61 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.065883,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 72,
+        "message": "Write failure surfaces the raw OSError message, which on some platforms includes the full filesystem path and may include the filename derived from the run_id. The run_id is caller-supplied; if it contains path separators or shell-sensitive characters, the error message printed to stdout could leak path information. Lower severity since _safe() sanitizes the run_id before use in the path, but the OSError string itself is printed unsanitized.",
+        "path": "src/in_lockstep/ai/transcript.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 388,
+        "message": "ci_actor is read from the GITHUB_ACTOR environment variable (via detect_ci) and written verbatim into the ledger record. An attacker who controls that variable \u2014 e.g. a fork pull request where the actor name is attacker-controlled \u2014 writes arbitrary text into the provenance record with no length or character constraint visible in this diff.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 870,
+        "message": "_explain_run reads a ledger record and formats several fields with str() and f-strings before passing them to click.echo. If a record was written by an attacker (e.g. via a malicious fork that wrote to the GitLedger orphan branch), field values such as 'reason', 'workflow', 'strategy', and finding 'message' reach the terminal without sanitization. ANSI escape sequences in those fields would be interpreted by the terminal.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 393,
+        "message": "config_source is set by the loader in _default_lockstep and written into every ledger record as out['config']. The value is a string from the loader's own code (not user input) in the normal path, but the attribute is public and settable on a Lockstep instance. If any code path between construction and _provenance() overwrites config_source with caller-supplied data, it reaches the record unsanitized. This is a low-severity structural note: the diff introduces a public settable attribute that fe\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e4d344b3c16c0f767b0af0895f2f13841c84ea25",
+  "input_tokens": 16186,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1155,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 17341,
+  "ts": "2026-08-29T20:56:49+00:00",
+  "wall_seconds": 32.047
+}
