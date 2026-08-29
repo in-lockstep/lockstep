@@ -435,3 +435,65 @@ def test_the_scaffolded_module_satisfies_the_check(repo: Path) -> None:
     assert CliRunner().invoke(main, ["init"]).exit_code == 0
     result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
     assert "no budget is declared" not in result.output
+
+
+def test_apply_refuses_a_test_deletion_without_a_ticket(tmp_path: Path) -> None:
+    """GATE-TESTGUARD-1 on the enforcement path that exists."""
+    payload = _artifact(tmp_path, {"path": "tests/test_orders.py", "author": "agent"})
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 3, result.output
+    assert "test-deleted-without-ticket" in result.output
+
+
+def test_apply_allows_a_test_deletion_that_names_a_ticket(tmp_path: Path) -> None:
+    import json
+
+    payload = tmp_path / "changeset.json"
+    payload.write_text(
+        json.dumps(
+            {
+                "changes": [{"path": "tests/test_orders.py", "author": "agent"}],
+                "ticket": "PROJ-12",
+                "summary": "s",
+            }
+        )
+    )
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 0, result.output
+
+
+def test_apply_reads_the_working_tree_to_tell_an_added_skip_from_an_existing_one(
+    repo: Path, tmp_path: Path
+) -> None:
+    """The reader is what makes the rule exact rather than merely safe.
+
+    `apply` runs with the repository checked out, which is the one place the pre-change content
+    is available — so a change that merely edits a file which already had a skip is allowed.
+    """
+    existing = "@pytest.mark.skip\ndef test_x(): ...\n"
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_x.py").write_text(existing)
+
+    payload = _artifact(
+        tmp_path,
+        {
+            "path": "tests/test_x.py",
+            "contents": existing + "\ndef test_y():\n    assert True\n",
+            "author": "agent",
+        },
+    )
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 0, result.output
+
+
+def test_apply_still_refuses_a_newly_added_skip(repo: Path, tmp_path: Path) -> None:
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_x.py").write_text("def test_x():\n    assert True\n")
+
+    payload = _artifact(
+        tmp_path,
+        {"path": "tests/test_x.py", "contents": "@pytest.mark.skip\ndef test_x(): ...\n", "author": "agent"},
+    )
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 3, result.output
+    assert "test-silenced-without-ticket" in result.output

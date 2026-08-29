@@ -365,7 +365,20 @@ def apply_cmd(artifact: str, dry_run: bool) -> None:
         ticket=str(data.get("ticket", "")),
     )
 
-    refusals = ChangeGuard().check(changeset)
+    def _previous(path: str) -> str | None:
+        """The working tree's version, so "added a skip" is told from "already had one".
+
+        `apply` runs in the privileged job with the repository checked out, which is the one place
+        the pre-change content is actually available. Without it the guard fails closed, which is
+        correct but blunter than it needs to be here.
+        """
+        candidate = _Path(path)
+        try:
+            return candidate.read_text() if candidate.is_file() else None
+        except OSError:  # pragma: no cover - unreadable is indistinguishable from absent here
+            return None
+
+    refusals = ChangeGuard().check(changeset, read=_previous)
     if refusals:
         click.echo("refused:")
         for refusal in refusals:

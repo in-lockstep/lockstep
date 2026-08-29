@@ -255,3 +255,91 @@ def test_doctor_checks_every_shipped_prompt_body_exists() -> None:
 
     report = doctor.run(".")
     assert not any(c.code == "DOC140" for c in report.checks), "shipped bodies must resolve"
+
+
+# -- GATE-TESTGUARD-1: R1-QA-1's second half --------------------------------------------------
+#
+# `fix` asked to make CI green has an obvious shortcut, and `fix/*` strategies make it reachable:
+# delete the failing test, or mark it skip. Neither is expressible as a path rule — tests must
+# stay writable, which is why no tier lists them — so this is a rule about the shape of a change.
+
+
+def _agent_change(path: str, contents: str | None = "x = 1") -> ChangeSet:
+    return ChangeSet(changes=(FileChange(path=path, contents=contents, author=ChangeAuthor.AGENT),))
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tests/test_orders.py",
+        "test_orders.py",
+        "src/orders_test.py",
+        "tests/unit/helpers.py",
+        "web/checkout.test.ts",
+        "web/checkout.spec.tsx",
+        "internal/orders_test.go",
+        "src/OrderTest.java",
+        "spec/order_spec.rb",
+    ],
+)
+def test_gate_testguard_1_deleting_a_test_without_a_ticket_is_refused(path: str) -> None:
+    refusals = ChangeGuard().check(_agent_change(path, contents=None))
+    assert [r.rule for r in refusals] == ["test-deleted-without-ticket"], path
+
+
+def test_deleting_a_test_with_a_ticket_is_allowed() -> None:
+    """The rule turns silencing a test into something a person signed, not something forbidden."""
+    changeset = ChangeSet(
+        changes=(FileChange(path="tests/test_x.py", contents=None, author=ChangeAuthor.AGENT),),
+        ticket="PROJ-12",
+    )
+    assert ChangeGuard().check(changeset) == []
+
+
+def test_deleting_ordinary_source_is_not_this_rule() -> None:
+    assert ChangeGuard().check(_agent_change("src/orders.py", contents=None)) == []
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "@pytest.mark.skip\ndef test_x(): ...",
+        "@pytest.mark.xfail\ndef test_x(): ...",
+        "def test_x():\n    pytest.skip('later')",
+        "@unittest.skip('flaky')\ndef test_x(): ...",
+        "it.skip('works', () => {})",
+        "xit('works', () => {})",
+        "func TestX(t *testing.T) { t.Skip() }",
+        "#[ignore]\nfn test_x() {}",
+        "@Disabled\nvoid testX() {}",
+    ],
+)
+def test_silencing_a_test_without_a_ticket_is_refused(marker: str) -> None:
+    refusals = ChangeGuard().check(_agent_change("tests/test_x.py", contents=marker))
+    assert [r.rule for r in refusals] == ["test-silenced-without-ticket"], marker
+
+
+def test_a_skip_that_was_already_there_is_not_an_addition() -> None:
+    """The rule is about what this change did, not about what the file contains."""
+    before = "@pytest.mark.skip\ndef test_x(): ...\n"
+    after = before + "\ndef test_y():\n    assert True\n"
+
+    guard = ChangeGuard()
+    changeset = _agent_change("tests/test_x.py", contents=after)
+
+    assert guard.check(changeset, read=lambda p: before) == []
+    # And without a reader it fails closed, which is the documented fallback.
+    assert [r.rule for r in guard.check(changeset)] == ["test-silenced-without-ticket"]
+
+
+def test_a_human_authored_change_is_not_this_rule() -> None:
+    """The guard runs over agent-authored entries. A person deleting a test is a person's call."""
+    changeset = ChangeSet(
+        changes=(FileChange(path="tests/test_x.py", contents=None, author=ChangeAuthor.FRAMEWORK),)
+    )
+    assert ChangeGuard().check(changeset) == []
+
+
+def test_writing_a_new_test_is_untouched() -> None:
+    """Writing tests is a core feature; a guard that made it harder would be the wrong trade."""
+    assert ChangeGuard().check(_agent_change("tests/test_new.py", "def test_x():\n    assert 1\n")) == []
