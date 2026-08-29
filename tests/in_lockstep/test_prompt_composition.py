@@ -80,3 +80,55 @@ def test_composed_system_prompt_inlines_guardrails_first_verbatim() -> None:
     guardrail_at = system.index("Guardrails are inlined first")
     body_at = system.index(prompt.body_text().strip()[:40])
     assert guardrail_at < body_at, "guardrail position is a security property"
+
+
+# -- repository-injected layers -------------------------------------------------------
+
+
+def test_plus_appends_after_the_shipped_layers_never_replacing_them() -> None:
+    """A house guardrail extends the stack; it cannot quietly drop the baseline underneath.
+    Replacing wholesale stays possible — by constructing a fresh PromptLayers, visibly."""
+    layered = review_layers().plus(guardrails=(("acme/no-vendoring", "Do not vendor dependencies."),))
+    projection = layered.projection("review/security-reviewer")
+    assert projection[0] == "guardrail:baseline"
+    assert "guardrail:acme/no-vendoring" in projection
+    body_at = projection.index("body:review/security-reviewer")
+    assert projection.index("guardrail:acme/no-vendoring") < body_at, (
+        "a house guardrail is still a guardrail: ahead of the body, where position is a security property"
+    )
+
+
+def test_a_house_guardrail_reaches_the_composed_system_prompt_verbatim() -> None:
+    layered = review_layers().plus(guardrails=(("acme/dnx", "Do not use eval() anywhere."),))
+    system = LENSES["security"]().system(layered)
+    assert "Do not use eval() anywhere." in system
+    assert system.index("Do not use eval() anywhere.") < system.index(
+        LENSES["security"]().body_text().strip()[:40]
+    )
+
+
+def test_every_ai_adapter_takes_injected_layers_and_defaults_to_the_shipped_set() -> None:
+    """`layers=` is the same seam `prompts=`/`lenses=` are: the binding site in lockstep.py is
+    where a repository's guardrails enter, visibly. Absent, each adapter composes with the
+    shipped set — the seam must not make the default a different prompt."""
+    from in_lockstep.adapters.ai.fix import AiFix
+    from in_lockstep.adapters.ai.implement import AiImplement
+    from in_lockstep.adapters.ai.review import AiReview
+    from in_lockstep.adapters.ai.triage import AiTriage
+    from in_lockstep.prompts.implement import implement_layers
+    from in_lockstep.strategies import default_registry
+
+    custom = implement_layers().plus(guardrails=(("acme/house", "Do not xxx."),))
+
+    implement = AiImplement(lambda ctx: None, registry=default_registry(), layers=custom)
+    session = implement._session(object(), None)  # registration is not consulted by _session
+    assert session.layers is custom, "the injected stack is the one strategies compose with"
+    assert AiImplement(lambda ctx: None, registry=default_registry())._session(
+        object(), None
+    ).layers.projection("b") == implement_layers().projection("b")
+
+    fix = AiFix(lambda ctx: None, registry=default_registry(), layers=custom)
+    assert fix._session(object(), None).layers is custom
+
+    assert AiReview(lambda ctx: None, layers=custom).layers is custom
+    assert AiTriage(lambda ctx: None, layers=custom).layers is custom

@@ -117,6 +117,34 @@ Bumping `version` matters for a different reason than it looks. Eval identity is
 of the composed prompt, not the declared version — so a measurement is correct whether or not you
 remember to bump it. `version` is the human label that travels alongside.
 
+## House guardrails
+
+Every AI adapter composes its prompt from layers — guardrails first, then the body, then skills —
+and every one takes the stack as `layers=`, the same seam `prompts=`/`lenses=` are. To add your
+own "do not" rules to a verb, extend the shipped stack and hand it to the adapter:
+
+```python
+from pathlib import Path
+
+from in_lockstep.prompts.implement import implement_layers
+
+house = implement_layers().plus(
+    guardrails=(("acme/house", Path("prompts/house-guardrails.md").read_text()),),
+)
+```
+
+```python
+lockstep.bind(Implement, AiImplement(invoker_factory, registry=registry, layers=house))
+```
+
+`plus` *appends*: your guardrail lands after the framework's baseline and ahead of the body, so
+extending the stack cannot quietly drop the shipped constraints, and the position — guardrails
+before everything — stays the security property the composer guarantees. Replacing the stack
+wholesale is constructing a fresh `PromptLayers`, which is the visible, greppable spelling of
+that decision. `emphasis` on a prompt subclass still exists and is the right place for style
+guidance; a guardrail is for constraints, and the difference is where it sits — emphasis rides
+after the body, guardrails before it.
+
 ## Middleware
 
 Cross-cutting behaviour — tracing, budgets, retries, approval — is a middleware chain around every

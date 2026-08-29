@@ -150,6 +150,7 @@ class AiImplement:
         guard: ChangeGuard | None = None,
         workflow_id: str = "",
         prompts: Mapping[str, type[ImplementPrompt]] | None = None,
+        layers: PromptLayers | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
         self.registry = registry
@@ -166,6 +167,11 @@ class AiImplement:
         self.prompts: Mapping[str, type[ImplementPrompt]] = (
             dict(prompts) if prompts is not None else dict(PROMPTS)
         )
+        # The layer stack around every prompt this adapter runs — a repository's own guardrails go
+        # here, usually as `implement_layers().plus(guardrails=...)` so the shipped baseline stays
+        # underneath. Injected like `prompts=`: prompt text is data, and the binding site in
+        # lockstep.py is where data enters, visibly.
+        self.layers = layers
 
     async def invoke(self, ctx: Any, inp: ImplementSpec) -> Outcome[ImplementReport]:
         try:
@@ -208,7 +214,7 @@ class AiImplement:
             tools=tools,
             run_tool=runner,
             policy=self.policy,
-            layers=implement_layers(),
+            layers=self.layers if self.layers is not None else implement_layers(),
             prompts=self.prompts,
             curator=self.curator,
             guard=self.guard,

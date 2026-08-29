@@ -115,8 +115,12 @@ class AiTriage:
         prompt_id: str = "triage/analyst",
         tools: ToolSet | None = None,
         run_tool: ToolRunner | None = None,
+        layers: PromptLayers | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
+        # Injected like `prompts=` — see AiImplement, which carries the reasoning; usually
+        # `triage_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
+        self.layers = layers
         # One turn and no tools by default, the honest default rather than a gap: the analyst is
         # handed the whole issue in the prompt, so a second turn has nothing to do with a tool
         # result and would only cost. A repository that wants the analyst to search for duplicates
@@ -139,7 +143,7 @@ class AiTriage:
             )
 
         prompt: TriagePrompt = lens()
-        layers: PromptLayers = triage_layers()
+        layers: PromptLayers = self.layers if self.layers is not None else triage_layers()
         package = ContextPackage(
             items=(
                 ContextItem(

@@ -125,6 +125,7 @@ class AiFix:
         guard: ChangeGuard | None = None,
         workflow_id: str = "",
         prompts: Mapping[str, type[FixPrompt]] | None = None,
+        layers: PromptLayers | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
         self.registry = registry
@@ -137,6 +138,9 @@ class AiFix:
         self.prompts: Mapping[str, type[FixPrompt]] = (
             dict(prompts) if prompts is not None else dict(FIX_PROMPTS)
         )
+        # Injected like `prompts=` — see AiImplement, which carries the reasoning; usually
+        # `fix_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
+        self.layers = layers
 
     async def invoke(self, ctx: Any, inp: FixSpec) -> Outcome[FixReport]:
         try:
@@ -170,7 +174,7 @@ class AiFix:
             tools=tools,
             run_tool=runner,
             policy=self.policy,
-            layers=fix_layers(),
+            layers=self.layers if self.layers is not None else fix_layers(),
             prompts=self.prompts,
             curator=self.curator,
             guard=self.guard,

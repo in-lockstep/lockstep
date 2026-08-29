@@ -185,6 +185,25 @@ class PromptLayers:
             for name, text in entries
         ]
 
+    def plus(
+        self,
+        *,
+        guardrails: tuple[tuple[str, str], ...] = (),
+        skills: tuple[tuple[str, str], ...] = (),
+        contexts: tuple[tuple[str, str], ...] = (),
+    ) -> PromptLayers:
+        """These layers with more appended — the shape a repository extending a shipped set wants.
+
+        Appended, never replaced: a house guardrail lands after the framework's, so extending the
+        set cannot quietly drop the baseline. Replacing wholesale stays possible by constructing a
+        fresh `PromptLayers`, which is the visible, greppable spelling of that decision.
+        """
+        return PromptLayers(
+            guardrails=self.guardrails + guardrails,
+            skills=self.skills + skills,
+            contexts=self.contexts + contexts,
+        )
+
     def projection(self, body_name: str) -> list[str]:
         """The section-identity list the characterization corpus asserts on.
 
