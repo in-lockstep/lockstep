@@ -610,3 +610,88 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
     record = json.loads((repo / ".in-lockstep/ledger/review-security.json").read_text())
     assert record["status"] == "blocked"
     assert record["reason"] == "cost.budget_exceeded", record
+
+
+# -- the ledger keeps what was found, not only how much ---------------------------------------
+
+
+def _reviewing_repo(repo: Path, *, findings: str) -> None:
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
+    )
+    (repo / "canned.json").write_text(findings)
+
+
+def test_the_ledger_stores_the_findings_themselves(repo: Path) -> None:
+    """Three real findings once existed nowhere but a terminal scrollback.
+
+    A record whose purpose is evidence kept the count and discarded the content, so the ledger
+    could say a run found things without being able to say what they were.
+    """
+    import json
+
+    from in_lockstep.core.outcome import Finding, Severity
+
+    finding = Finding(
+        id="review.security",
+        message="Unquoted variable in `find` allows word-splitting.",
+        severity=Severity.WARNING,
+        path="actions/save/action.yml",
+        line=29,
+    )
+    record = finding.as_record()
+    assert record == {
+        "id": "review.security",
+        "message": "Unquoted variable in `find` allows word-splitting.",
+        "severity": "warning",
+        "blocking": False,
+        "path": "actions/save/action.yml",
+        "line": 29,
+    }
+    assert json.dumps(record), "a record has to survive serialization"
+
+
+def test_an_absent_path_is_omitted_not_written_empty() -> None:
+    """`path: ""` reads as a finding about the repository root. That is a different claim."""
+    from in_lockstep.core.outcome import Finding
+
+    record = Finding(id="cost.budget_exceeded", message="over").as_record()
+    assert "path" not in record
+    assert "line" not in record
+
+
+def test_a_long_message_is_truncated_visibly() -> None:
+    """A finding's message is model output, and a record is meant to stay diffable."""
+    from in_lockstep.core.outcome import Finding
+
+    record = Finding(id="x", message="y" * 5000).as_record()
+    message = record["message"]
+    assert isinstance(message, str)
+    assert len(message) < 700
+    assert message.endswith("…[truncated]")
+
+
+def test_the_count_is_the_true_total_even_when_items_are_capped(repo: Path) -> None:
+    """The mismatch is the signal: `count: 120, items: [50]` says so without a separate flag."""
+    import asyncio as aio
+    import json
+
+    from in_lockstep.core.outcome import Finding
+    from in_lockstep.platform.ledger.store import InRepoLedger
+
+    many = [Finding(id=f"f{i}", message="m") for i in range(120)]
+    ledger = InRepoLedger(root=repo / "l")
+    aio.run(
+        ledger.append(
+            "r",
+            {"findings": {"count": len(many), "items": [f.as_record() for f in many[:50]]}},
+        )
+    )
+    stored = json.loads((repo / "l" / "r.json").read_text())["findings"]
+    assert stored["count"] == 120
+    assert len(stored["items"]) == 50

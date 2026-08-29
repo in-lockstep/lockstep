@@ -8,7 +8,12 @@ from pathlib import Path
 
 from ...privileged import sink
 
-SCHEMA = 2
+# 3: `findings` became {count, items} instead of a bare count. Bumped rather than added beside,
+# because a count stored next to the list it counts is two states that can disagree — and the
+# whole argument for keeping the list is that a record saying "3" and nothing else is not evidence.
+# Nothing read the field, so the migration cost was zero; doing it after adopters exist would not
+# have been.
+SCHEMA = 3
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 

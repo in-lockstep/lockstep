@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 ValueT = TypeVar("ValueT")
 
@@ -62,6 +62,30 @@ class Finding:
     path: str = ""
     line: int | None = None
     blocking: bool = False
+
+    #: A finding's message is frequently model output, and a ledger record is meant to stay
+    #: diffable. Long enough for a real explanation, short enough that one pathological run cannot
+    #: write a page into a permanent record.
+    MAX_RECORDED_MESSAGE: ClassVar[int] = 500
+
+    def as_record(self) -> dict[str, object]:
+        """The durable form. The type owns its serialization, as `injection.Finding` already does."""
+        message = self.message
+        if len(message) > self.MAX_RECORDED_MESSAGE:
+            message = message[: self.MAX_RECORDED_MESSAGE] + "…[truncated]"
+        record: dict[str, object] = {
+            "id": self.id,
+            "message": message,
+            "severity": self.severity.value,
+            "blocking": self.blocking,
+        }
+        # Omitted rather than written empty: a record saying `path: ""` reads as a finding about
+        # the repository root, which is a different claim from one about nothing in particular.
+        if self.path:
+            record["path"] = self.path
+        if self.line is not None:
+            record["line"] = self.line
+        return record
 
 
 @dataclass(frozen=True)

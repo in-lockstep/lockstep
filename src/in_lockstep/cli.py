@@ -88,6 +88,10 @@ _REVIEW_TURNS = 1
 # names that failure when it happens instead of letting it read as malformed JSON.
 _REVIEW_MAX_TOKENS = 4096
 
+# How many findings a record keeps. A ledger record is meant to stay readable and diffable, and a
+# run that produced two hundred findings has a problem the two hundredth will not explain.
+_LEDGER_MAX_FINDINGS = 50
+
 
 def _context(lockstep: Lockstep, run_id: str) -> Any:
     """Start a run, turning a startup refusal into a message rather than a traceback.
@@ -604,7 +608,15 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
                 "input_tokens": outcome.cost.input_tokens,
                 "output_tokens": outcome.cost.output_tokens,
                 "cost_usd": round(outcome.cost.usd, 6),
-                "findings": len(outcome.findings),
+                # The findings themselves, not only how many. A record whose purpose is evidence
+                # kept the count and discarded the content — so three real findings existed
+                # nowhere but a terminal scrollback, and the ledger could say a run found things
+                # without being able to say what. `count` is the true total; `items` is bounded,
+                # so when a run finds more than the cap the mismatch between them says so.
+                "findings": {
+                    "count": len(outcome.findings),
+                    "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
+                },
                 "wall_seconds": round(outcome.cost.wall_seconds, 3),
                 # Absent rather than zero, and absent rather than one. The ledger's own rule is
                 # that a measurement nobody took is not a measurement of nothing.

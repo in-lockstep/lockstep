@@ -106,10 +106,19 @@ def test_diff_reports_the_paths_it_touched(tmp_path: Path) -> None:
 
 
 def test_gate_ledger_1_records_carry_schema_and_epoch(tmp_path: Path) -> None:
+    """The gate is that both are stamped, not that the schema is any particular number.
+
+    It asserted `== 2`, which made a deliberate bump look like a regression. The number's history
+    belongs beside the constant, where the comment says what each version changed; here what
+    matters is that a reader can always tell which shape it is holding.
+    """
+    from in_lockstep.platform.ledger.store import SCHEMA
+
     ledger = InRepoLedger(root=tmp_path / "ledger")
     asyncio.run(ledger.append("r1", {"kind": "review", "tokens": 100}))
     record = json.loads((tmp_path / "ledger" / "r1.json").read_text())
-    assert record["schema"] == 2
+    assert record["schema"] == SCHEMA
+    assert isinstance(record["schema"], int)
     assert record["epoch"] == "in-process"
 
 
