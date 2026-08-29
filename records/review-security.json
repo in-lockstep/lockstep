@@ -1,0 +1,85 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.037389,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 120,
+        "message": "Comment ID from API response used in URL without validation",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 76,
+        "message": "Finding messages from model output reach the PR comment body without a length cap on injections",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 116,
+        "message": "--paginate on the comment-list API call fetches all comments into memory with no size bound",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 131,
+        "message": "Error message from gh stderr echoed to the user without sanitization",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:{kind} -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 8448,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 803,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 9251,
+  "wall_seconds": 23.839
+}
