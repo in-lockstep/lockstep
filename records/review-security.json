@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.037392,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 108,
+        "message": "Symlink target containment check is only lexical for non-existent paths, and can be bypassed with a symlink planted earlier in the same changeset.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 76,
+        "message": "`repo_root` is passed unsanitized as the `-C` argument to `git`; a value starting with `-` would be interpreted as a git option.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 83,
+        "message": "Error messages include `err.decode()` from git stderr, which may echo the `ref` or `repo_root` values into logs or exception chains.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 8824,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 728,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 9552,
+  "wall_seconds": 19.816
+}
