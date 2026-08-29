@@ -12,19 +12,21 @@ green, which four independent agents starting from each other's prose could not 
 The registry is deliberately small at 1.0: registering a strategy nobody has fixtures for is how
 strategy sprawl starts, and ten unmeasured strategies are worse than one measured.
 
-**Two of these are executable and the rest are not, and the difference is visible from here.** A
+**Some of these are executable and the rest are not, and the difference is visible from here.** A
 registration whose factory returns a string is a catalogue entry — a name reserved, a description
-of an approach nobody has written. `implement/oneshot` and `implement/tdd` return a strategy;
-`implement/direct` and the other-verb entries are still catalogue names. `AiImplement` refuses one
-by name rather than failing on a missing attribute, so the distinction is something you are told
-rather than something you deduce from a traceback. That this file used to contain nothing but such
-entries is why the registry looked like a dispatcher for a phase without being one.
+of an approach nobody has written. The four review lenses, `implement/oneshot`, `implement/tdd` and
+`fix/diagnose-then-fix` return a strategy; `implement/direct` and the remaining names are still
+catalogue entries. `AiImplement` and `AiFix` refuse one by name rather than failing on a missing
+attribute, so the distinction is something you are told rather than something you deduce from a
+traceback. That this file used to contain nothing but such entries is why the registry looked like a
+dispatcher for a phase without being one.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
+from .adapters.ai.fix import DiagnoseThenFix
 from .adapters.ai.oneshot import OneshotImplement
 from .adapters.ai.tdd import TddImplement
 from .ai.strategy import StrategyRegistry
@@ -77,8 +79,8 @@ def default_registry() -> StrategyRegistry:
     registry.register(
         "fix/diagnose-then-fix",
         Verb.FIX,
-        factory=lambda: "diagnose",
-        description="Diagnose, write a failing reproducer, fix, confirm the reproducer passes.",
+        factory=DiagnoseThenFix,
+        description="Write a failing reproducer, confirm the bug, fix it, confirm the reproducer passes.",
     )
     registry.default(Verb.FIX, "fix/diagnose-then-fix")
 
