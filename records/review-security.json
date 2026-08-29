@@ -1,0 +1,55 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.020319,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 87,
+        "message": "ACTIONS_ID_TOKEN_REQUEST_URL is fetched from the environment and used as the target of an outbound HTTP request. If an attacker can set that variable before the process starts (e.g., a compromised step in a composite action that runs before this one), they control the URL the resolver fetches the token from \u2014 and therefore control what value is minted and seeded into the redaction registry as a trusted credential. The existing code does not validate that the URL belongs to the expected GitHub Ac\u2026[truncated]",
+        "path": "src/in_lockstep/ai/auth.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6716bfb6e37d52ab6f43e3b77130fe7339715be3",
+  "input_tokens": 4953,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 364,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5317,
+  "ts": "2026-08-29T23:00:25+00:00",
+  "wall_seconds": 10.701
+}
