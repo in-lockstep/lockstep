@@ -303,8 +303,7 @@ def test_the_staged_set_then_crosses_the_guard_again_at_apply(tmp_path: Path, mo
         json.dumps(
             {
                 "changes": [
-                    {"path": c.path, "contents": c.contents, "author": "agent"}
-                    for c in workspace.changes
+                    {"path": c.path, "contents": c.contents, "author": "agent"} for c in workspace.changes
                 ]
             }
         )

@@ -23,7 +23,14 @@ from in_lockstep.platform.ledger import (
 )
 from in_lockstep.platform.scm import DirectPushRefused, GitLocal, branch_for
 from in_lockstep.platform.scm.base import GuardRefused
-from in_lockstep.platform.tickets import TicketState, criteria_from
+from in_lockstep.platform.tickets import (
+    GitHubIssues,
+    TicketDraft,
+    TicketSource,
+    TicketState,
+    TicketType,
+    criteria_from,
+)
 from in_lockstep.platform.tickets.base import Ticket
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +83,216 @@ def test_open_change_lands_on_its_own_branch_with_trailers(tmp_path: Path) -> No
     # Trailers are the most portable traceability layer: greppable forever.
     assert "Ticket: P-1" in log
     assert "In-Lockstep-Run: r1" in log
+
+
+def test_open_change_can_target_a_base_branch(tmp_path: Path) -> None:
+    """Every change request used to grow from HEAD and target the default branch — a shape no
+    backport can accept. `base` was committed to the protocol before third parties implement,
+    because retrofitting a parameter onto a Protocol others implement is a breaking change."""
+    root = _repo(tmp_path)
+    scm = GitLocal(root)
+    release = scm.head()
+    subprocess.run(["git", "branch", "release-1.0"], cwd=root, capture_output=True, check=True)
+    (root / "later.txt").write_text("x\n")
+    subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "later"], cwd=root, capture_output=True, check=True)
+
+    cs = ChangeSet(changes=(FileChange(path="fix.py", contents="y = 2\n"),))
+    asyncio.run(scm.open_change(cs, title="backport", workflow="backport", run_id="r9", base="release-1.0"))
+    parent = scm.git("rev-parse", "HEAD^").strip()
+    assert parent == release, "the branch must grow from base, not from HEAD"
+    assert not (root / "later.txt").exists(), "work landed after the branch point must not be present"
+
+
+def test_open_change_branches_from_a_remote_only_base(tmp_path: Path) -> None:
+    """The CI shape: the release line exists only as origin/<base> (a detached-HEAD checkout with
+    no local branches). `git checkout -b b release-1.0` fails there while origin/release-1.0
+    works — so the git start-point and the gh --base value cannot be the same string."""
+    (tmp_path / "origin").mkdir()
+    origin = _repo(tmp_path / "origin")
+    subprocess.run(["git", "branch", "release-1.0"], cwd=origin, capture_output=True, check=True)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "t@e.test"], cwd=clone, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=clone, capture_output=True, check=True)
+    # A clone has origin/release-1.0 but no local release-1.0 branch — the CI state.
+    scm = GitLocal(clone)
+    assert scm.start_point("release-1.0") == "origin/release-1.0"
+    cs = ChangeSet(changes=(FileChange(path="fix.py", contents="y = 2\n"),))
+    cr = asyncio.run(
+        scm.open_change(cs, title="backport", workflow="backport", run_id="r9", base="release-1.0")
+    )
+    assert cr.branch == "in-lockstep/backport/r9"
+    assert (clone / "fix.py").read_text() == "y = 2\n"
+
+
+def test_commit_trailers_can_be_read_back(tmp_path: Path) -> None:
+    """The framework has written In-Lockstep-Run and Ticket trailers from the start; until
+    `commits_between` existed, nothing could get them back without shelling out by hand."""
+    root = _repo(tmp_path)
+    scm = GitLocal(root)
+    base = scm.head()
+    (root / "a.txt").write_text("a\n")
+    scm.commit("did a thing", trailers={"In-Lockstep-Run": "r42", "Ticket": "#7"})
+
+    commits = scm.commits_between(base)
+    assert [c.subject for c in commits] == ["did a thing"]
+    assert commits[0].trailers == {"In-Lockstep-Run": "r42", "Ticket": "#7"}
+
+
+def test_cherry_pick_records_where_the_commit_came_from(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    scm = GitLocal(root)
+    original = scm.current_branch()
+    base = scm.head()
+    (root / "fix.txt").write_text("fix\n")
+    fix = scm.commit("a fix", trailers={"Ticket": "#7"})
+
+    scm.git("checkout", "-b", "release", base, check=True)
+    picked = scm.cherry_pick(fix)
+    assert picked != fix
+    log = scm.git("log", "-1", "--format=%B")
+    assert "cherry picked from commit" in log, "-x is what makes a backport traceable to its source"
+    assert "Ticket: #7" in log, "trailers must survive the pick"
+    assert scm.merge_base(original, "HEAD") == base
+
+
+def test_the_shipped_adapters_pass_their_own_conformance_kit(tmp_path: Path) -> None:
+    """The kit third parties are told to run must hold what we ship, or it is advice we do not
+    take ourselves."""
+    from in_lockstep.platform.conformance import assert_scm, assert_ticket_source
+    from in_lockstep.platform.scm import GitHubScm
+    from in_lockstep.platform.tickets import GitHubIssues
+
+    root = _repo(tmp_path)
+    assert_ticket_source(GitHubIssues())
+    assert_scm(GitHubScm(root))
+    assert_scm(GitLocal(root))
+
+
+def _recording(calls: list, stdout: str = ""):
+    def fake(*args: str):
+        calls.append(args)
+        return (0, stdout, "")
+
+    return fake
+
+
+def test_github_create_reads_the_ticket_back_from_the_url() -> None:
+    """What returns is what the tracker holds, not a reconstruction of the draft."""
+    issues = GitHubIssues()
+    calls: list = []
+    issues._gh_raw = _recording(calls, "https://github.com/o/r/issues/12\n")  # type: ignore[method-assign]
+    issues._gh_json = lambda *args: {  # type: ignore[method-assign]
+        "number": 12,
+        "title": "t",
+        "body": "",
+        "state": "OPEN",
+        "labels": [],
+        "assignees": [],
+        "comments": [],
+        "url": "https://github.com/o/r/issues/12",
+    }
+    ticket = asyncio.run(issues.create(TicketDraft(title="t", labels=("bug",))))
+    assert ticket.key == "#12"
+    assert "--label" in calls[0] and "bug" in calls[0]
+
+
+def test_github_search_maps_rows_to_tickets() -> None:
+    issues = GitHubIssues()
+    issues._gh_json = lambda *args: [  # type: ignore[method-assign]
+        {"number": 3, "title": "a crash", "state": "OPEN", "labels": [{"name": "bug"}], "url": "u"}
+    ]
+    found = asyncio.run(issues.search("crash", limit=5))
+    assert [t.key for t in found] == ["#3"]
+    assert found[0].type is TicketType.BUG
+    assert found[0].state is TicketState.OPEN
+
+
+def test_github_add_labels_batches_one_edit_and_skips_an_empty_call() -> None:
+    issues = GitHubIssues()
+    calls: list = []
+    issues._gh_raw = _recording(calls)  # type: ignore[method-assign]
+    asyncio.run(issues.add_labels(Ticket(key="#4", title="t"), "triaged", "p2"))
+    assert calls[-1] == ("issue", "edit", "4", "--add-label", "triaged", "--add-label", "p2")
+    asyncio.run(issues.add_labels(Ticket(key="#4", title="t")))
+    assert len(calls) == 1, "labeling nothing must not shell out"
+
+
+def test_github_transition_maps_coarse_and_refuses_what_it_cannot_mean() -> None:
+    """GitHub issues have two states; IN_PROGRESS is a refusal, not a silent close."""
+    from in_lockstep.core.ports import Unsupported as PortsUnsupported
+
+    issues = GitHubIssues()
+    calls: list = []
+    issues._gh_raw = _recording(calls)  # type: ignore[method-assign]
+    asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.DONE))
+    assert calls[-1] == ("issue", "close", "4")
+    asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.OPEN))
+    assert calls[-1] == ("issue", "reopen", "4")
+    with pytest.raises(PortsUnsupported, match="only open and closed"):
+        asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.IN_PROGRESS))
+
+
+def test_github_transition_refuses_a_raw_state_rather_than_ignoring_it() -> None:
+    """A caller naming a tracker-specific state must not have it silently dropped and the issue
+    closed instead — `raw` means something on a Jira adapter, nothing on GitHub."""
+    from in_lockstep.core.ports import Unsupported as PortsUnsupported
+
+    issues = GitHubIssues()
+    issues._gh_raw = _recording([])  # type: ignore[method-assign]
+    with pytest.raises(PortsUnsupported, match="no state named"):
+        asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.DONE, raw="In Review"))
+
+
+def test_the_conformance_kit_names_every_miss_at_once() -> None:
+    """One run, every problem — an implementer should not fix-and-rerun six times."""
+    from in_lockstep.platform.conformance import Nonconformant, assert_scm, assert_ticket_source
+
+    class WrongTickets:
+        def get(self, key: str) -> None:  # sync where the protocol says async
+            return None
+
+        async def comment(self, ticket: object, body: str) -> None:
+            return None
+
+    with pytest.raises(Nonconformant) as tickets_err:
+        assert_ticket_source(WrongTickets())
+    message = str(tickets_err.value)
+    assert "get() must be `async def`" in message
+    assert "missing method create()" in message
+
+    class WrongScm:
+        async def diff(self, base: str, head: str) -> None:  # async where callers do not await
+            return None
+
+        async def open_change(self, cs: object, *, title: str) -> None:  # no base=
+            return None
+
+    with pytest.raises(Nonconformant) as scm_err:
+        assert_scm(WrongScm())
+    assert "diff() must be synchronous" in str(scm_err.value)
+    assert "open_change() does not accept base=" in str(scm_err.value)
+
+
+def test_a_minimal_ticket_source_refuses_what_it_does_not_implement() -> None:
+    """The optional protocol methods default to `Unsupported`, not to AttributeError: a workflow
+    can catch the refusal and degrade honestly, and an adapter never invents a signature."""
+    from in_lockstep.core.ports import Unsupported as PortsUnsupported
+    from in_lockstep.platform.conformance import assert_ticket_source
+
+    class Minimal(TicketSource):
+        async def get(self, key: str) -> Ticket:
+            return Ticket(key=key, title="t")
+
+        async def comment(self, ticket: Ticket, body: str) -> None:
+            return None
+
+    with pytest.raises(PortsUnsupported):
+        asyncio.run(Minimal().create(TicketDraft(title="x")))
+    with pytest.raises(PortsUnsupported):
+        asyncio.run(Minimal().search("anything"))
+    assert_ticket_source(Minimal())
 
 
 def test_a_change_touching_a_protected_path_is_refused(tmp_path: Path) -> None:

@@ -235,19 +235,108 @@ def test_doctor_records_an_attestation_as_an_attestation(monkeypatch) -> None:
 def test_gate_cfg_2_doctor_refuses_a_review_with_no_base_ref(monkeypatch) -> None:
     from in_lockstep import doctor
 
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("GITLAB_CI", raising=False)
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
     monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
     report = doctor.run(".")
     assert any(c.code == "DOC110" for c in report.errors)
 
 
+def test_gate_cfg_2_engages_on_a_gitlab_merge_request_pipeline(monkeypatch) -> None:
+    """The check once read GITHUB_* directly, so a GitLab MR pipeline passed silently —
+    configuration loading from the ref under review, with nothing reporting it."""
+    from in_lockstep import doctor
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("CI_PIPELINE_SOURCE", "merge_request_event")
+    monkeypatch.delenv("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", raising=False)
+    report = doctor.run(".")
+    assert any(c.code == "DOC110" for c in report.errors)
+
+
+def test_gate_cfg_2_stays_quiet_outside_any_ci(monkeypatch) -> None:
+    for var in ("GITHUB_ACTIONS", "GITLAB_CI", "GITHUB_EVENT_NAME"):
+        monkeypatch.delenv(var, raising=False)
+    from in_lockstep import doctor
+
+    report = doctor.run(".")
+    assert not any(c.code == "DOC110" for c in report.checks)
+
+
 def test_doctor_warns_about_pull_request_target(monkeypatch) -> None:
     from in_lockstep import doctor
 
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("GITLAB_CI", raising=False)
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request_target")
     monkeypatch.setenv("GITHUB_BASE_REF", "main")
     report = doctor.run(".")
     assert any(c.code == "DOC111" for c in report.checks)
+
+
+def _write_lifecycle(tmp_path, body: str) -> None:
+    (tmp_path / ".lockstep").mkdir()
+    (tmp_path / ".lockstep" / "lockstep.py").write_text(body)
+
+
+def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path) -> None:
+    from in_lockstep import doctor
+
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.models.route('review', 'nope:some-model')\n",
+    )
+    report = doctor.run(tmp_path)
+    assert any(c.code == "DOC150" for c in report.checks)
+
+
+def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_path) -> None:
+    from in_lockstep import doctor
+
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.models.route('review', 'anthropic:acme-finetune')\n",
+    )
+    report = doctor.run(tmp_path)
+    assert any(c.code == "DOC151" for c in report.checks)
+
+
+def test_doctor_accepts_a_route_to_a_free_local_model(tmp_path) -> None:
+    """The dogfood config routes triage to local:qwen3-8b; doctor must not call that a problem."""
+    from in_lockstep import doctor
+
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.models.route('triage', 'local:qwen3-8b')\n",
+    )
+    report = doctor.run(tmp_path)
+    assert not any(c.code in ("DOC150", "DOC151") for c in report.checks)
+
+
+def test_doctor_strict_reads_the_loader_location_not_the_deprecated_root(tmp_path) -> None:
+    from in_lockstep import doctor
+
+    (tmp_path / ".lockstep").mkdir()
+    (tmp_path / ".lockstep" / "lockstep.py").write_text("lockstep = None\n")
+    report = doctor.run(tmp_path, strict=True)
+    assert not any(c.code in ("DOC160", "DOC161") for c in report.checks)
+
+
+def test_doctor_strict_flags_a_legacy_root_module(tmp_path) -> None:
+    from in_lockstep import doctor
+
+    (tmp_path / "lockstep.py").write_text("lockstep = None\n")
+    report = doctor.run(tmp_path, strict=True)
+    assert any(c.code == "DOC161" for c in report.checks)
+    assert not any(c.code == "DOC160" for c in report.checks)
 
 
 def test_doctor_checks_every_shipped_prompt_body_exists() -> None:

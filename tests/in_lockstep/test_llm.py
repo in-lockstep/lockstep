@@ -296,6 +296,96 @@ def test_unknown_provider_names_what_is_registered() -> None:
         _registry().provider_for(Model("nope:m"))
 
 
+# -- free registrations: the $0 local path -----------------------------------------------------
+
+
+def _local_registry() -> ProviderRegistry:
+    registry = ProviderRegistry()
+    registry.register(
+        "local",
+        _Stub,
+        settings=ProviderSettings(base_url="http://localhost:11434"),
+        data_policy=DataPolicy.INTERNAL,
+        endpoint="http://localhost:11434",
+        free=True,
+    )
+    return registry
+
+
+def test_a_free_registration_prices_its_models_at_exactly_zero() -> None:
+    """`--model local:qwen3-8b` used to be refused as Unpriced even though the ollama provider
+    shipped and the dogfood config routed triage to it. Zero is the one rate the table may be
+    handed without a guess: the operator declared where the bytes go."""
+    from in_lockstep.ai.bootstrap import table_for
+
+    table = table_for(_local_registry(), Model("local:qwen3-8b"))
+    cost = table.price("qwen3-8b", input_tokens=1_000, output_tokens=1_000)
+    assert cost.usd == 0.0
+    assert cost.billed_tokens == 2_000, "free is not unmeasured"
+
+
+def test_a_hosted_model_stays_refused_when_unpriced() -> None:
+    from in_lockstep.ai.bootstrap import table_for
+    from in_lockstep.core.spend import Unpriced
+
+    table = table_for(_registry(), Model("acme:big-model"))
+    with pytest.raises(Unpriced, match="no rate"):
+        table.rate_for("big-model")
+
+
+def test_table_for_copies_rather_than_mutating_a_bound_table() -> None:
+    """A table bound in the container is somebody's declaration; pricing must not grow it as a
+    side effect of routing one verb to a local model."""
+    from in_lockstep.ai.bootstrap import table_for
+    from in_lockstep.ai.pricing import CostTable
+
+    bound = CostTable()
+    extended = table_for(_local_registry(), Model("local:qwen3-8b"), bound)
+    assert extended.knows("qwen3-8b")
+    assert not bound.knows("qwen3-8b")
+
+
+def test_an_unknown_provider_is_not_pricings_error_to_raise() -> None:
+    """A dry run or a replay never constructs the provider, and a live run fails at
+    `provider_for` with the message that names the fix."""
+    from in_lockstep.ai.bootstrap import table_for
+
+    table = table_for(_registry(), Model("nope:m"))
+    assert not table.knows("m")
+
+
+def test_the_shipped_local_registration_is_free() -> None:
+    from in_lockstep.ai.bootstrap import default_registry
+
+    assert default_registry().registration_for(Model("local:qwen3-8b")).free
+
+
+def test_local_is_free_only_when_its_endpoint_is_actually_local(monkeypatch) -> None:
+    """`Registration.free`'s stated invariant: an env var pointing 'local' at a hosted endpoint
+    must not make hosted tokens read as free. The flag follows the address, not the name."""
+    from in_lockstep.ai.bootstrap import default_registry
+
+    monkeypatch.setenv("OLLAMA_URL", "https://ollama.hosted.example.com")
+    assert not default_registry().registration_for(Model("local:qwen3-8b")).free
+
+    monkeypatch.setenv("OLLAMA_URL", "http://127.0.0.1:11434")
+    assert default_registry().registration_for(Model("local:qwen3-8b")).free
+
+
+def test_a_bound_partial_table_extends_the_default_rather_than_replacing_it() -> None:
+    """DOC151's hint invites a repository to bind a CostTable with a rate or two. Replacing the
+    shipped map would unprice every model the team did not list — turning a stock model into an
+    Unpriced refusal the moment one local finetune was priced."""
+    from in_lockstep.ai.bootstrap import table_for
+    from in_lockstep.ai.pricing import CostTable, Rate
+
+    bound = CostTable()
+    bound.add("acme:finetune", Rate(1.0, 2.0))
+    table = table_for(_registry(), Model("acme:big-model"), bound)
+    assert table.knows("acme:finetune"), "the bound rate survives"
+    assert table.knows("claude-opus-4-6"), "a shipped rate is not dropped by binding a partial table"
+
+
 def test_an_anthropic_workspace_id_travels_as_a_header_not_a_credential() -> None:
     """An identity-linked key acts in a workspace, and the API 400s without the id.
 
@@ -341,7 +431,7 @@ def test_no_workspace_id_sends_no_header() -> None:
 
 
 def test_a_workspace_name_is_refused_before_the_call(monkeypatch) -> None:
-    """"Default" is what the Console shows, and the natural thing to paste.
+    """ "Default" is what the Console shows, and the natural thing to paste.
 
     Paying a network round-trip to be told the header is invalid teaches nothing about where the
     right value lives, so the message does the teaching instead.

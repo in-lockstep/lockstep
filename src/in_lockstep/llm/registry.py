@@ -61,6 +61,12 @@ class Registration:
     endpoint: str
     auth_target: str
     caps: ModelCaps = field(default_factory=ModelCaps)
+    #: The operator's declaration that this destination bills nothing — a local runtime,
+    #: typically. Pricing refuses to *guess* what a model costs, and this is not a guess: zero is
+    #: the one rate the operator can state exactly by knowing where the bytes go. It lives on the
+    #: registration for the same reason `data_policy` does — an env var pointing "local" at a
+    #: hosted endpoint must not be able to make hosted tokens read as free.
+    free: bool = False
 
 
 class ProviderRegistry:
@@ -80,6 +86,7 @@ class ProviderRegistry:
         endpoint: str,
         auth_target: str = "",
         caps: ModelCaps | None = None,
+        free: bool = False,
     ) -> None:
         if name in self._registrations:
             raise ProviderRegistrationError(f"provider {name!r} is already registered")
@@ -91,6 +98,7 @@ class ProviderRegistry:
             endpoint=endpoint,
             auth_target=auth_target,
             caps=caps or ModelCaps(),
+            free=free,
         )
 
     def registration_for(self, model: Model) -> Registration:

@@ -11,6 +11,7 @@ service. Direct push exists only by binding an adapter whose name says what it i
 from .base import (
     RUN_BRANCH_PREFIX,
     ChangeRequest,
+    Commit,
     Diff,
     DirectPushRefused,
     GitLocal,
@@ -24,6 +25,7 @@ from .github import GitHubScm
 __all__ = [
     "RUN_BRANCH_PREFIX",
     "ChangeRequest",
+    "Commit",
     "Diff",
     "DirectPushRefused",
     "GitHubScm",

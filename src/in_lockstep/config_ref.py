@@ -86,7 +86,8 @@ def read_config(repo_root: str | Path, path: str, ref: ConfigRef) -> str | None:
             f"the trusted ref {ref.ref!r} does not name a commit in this checkout, so "
             f"configuration cannot be read from it. Nothing was loaded, and continuing would run "
             f"with none of this repository's bindings, policy or egress decisions. In CI, fetch "
-            f"enough history for the base branch — `actions/checkout` with `fetch-depth: 0`."
+            f"enough history for the base branch — `actions/checkout` with `fetch-depth: 0` on "
+            f"GitHub, `GIT_DEPTH: 0` (or `git fetch origin {ref.ref}`) on GitLab."
         )
     return _show(repo_root, f"{resolved}:{path}")
 

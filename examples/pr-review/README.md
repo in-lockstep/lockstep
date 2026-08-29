@@ -1,7 +1,7 @@
 # Reviewing a pull request
 
-One file. `lockstep.py` in this directory is the entire configuration — no spec tree, no
-manifest, nothing generated.
+One file. `.lockstep/lockstep.py` in this directory is the entire configuration — no spec tree,
+no manifest, nothing generated.
 
 ```bash
 in-lockstep review --base origin/main --head HEAD --aspect security

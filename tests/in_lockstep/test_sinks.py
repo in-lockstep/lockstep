@@ -43,8 +43,17 @@ RAW_WRITE_FUNCTIONS = {"open", "fdopen"}
 # and the key should be able to express that.
 EXEMPT: dict[tuple[str, str, str], str] = {
     ("cli.py", "init_cmd", "write_text"): (
-        "`init` writes two scaffold templates that are module-level string constants. There is no "
-        "run, no credential, and nothing in scope that could carry one."
+        "`init` writes the lifecycle scaffold, a module-level string constant. There is no run, "
+        "no credential, and nothing in scope that could carry one."
+    ),
+    ("cli.py", "_write_trampoline", "write_text"): (
+        "Writes a CI trampoline: a module-level string template with the framework version "
+        "substituted in. No run, no credential, nothing in scope that could carry one."
+    ),
+    ("cli.py", "_scaffold_implement", "write_text"): (
+        "`init --implement` writes the merged lifecycle module — a module-level string constant "
+        "appended to the existing scaffold. Same reasoning: no run, no credential, nothing in "
+        "scope that could carry one."
     ),
     ("platform/artifacts.py", "write_changeset", "write_text"): (
         "The ChangeSet artifact. Its `contents` are the change itself and must survive verbatim: "
@@ -104,11 +113,7 @@ def _raw_writes(tree: ast.AST) -> list[tuple[str, str, int]]:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.Call) and (name := _write_name(child)):
                 found.append((scope, name, child.lineno))
-            inner = (
-                child.name
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-                else scope
-            )
+            inner = child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else scope
             walk(child, inner)
 
     walk(tree, "<module>")

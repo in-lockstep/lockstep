@@ -54,13 +54,22 @@ class GitHubScm:
         ticket: str = "",
         workflow: str = "",
         run_id: str = "",
+        base: Ref = "",
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run")
         # Refused at the framework rather than relying on the token's scope, because the token is
         # ambient and can write any branch.
         self.local.assert_run_scoped(branch)
 
-        self.local.git("checkout", "-B", branch)
+        # `base` decides both where the branch grows from and where the pull request points.
+        # Without it every change targeted the default branch, which no backport can accept.
+        # Two spellings, deliberately: the git start-point may need `origin/<base>` (a CI checkout
+        # has the release line only as a remote-tracking ref), while `gh pr create --base` must
+        # get the bare branch name the API knows.
+        if base:
+            self.local.git("checkout", "-B", branch, self.local.start_point(base), check=True)
+        else:
+            self.local.git("checkout", "-B", branch)
         self.local.apply(cs, workflow_id=workflow)
 
         trailers = {"In-Lockstep-Run": run_id}
@@ -70,7 +79,10 @@ class GitHubScm:
         self.local.git("push", "-u", "origin", branch, check=True)
 
         rendered = _body(body, trailers)
-        code, out, err = self._gh("pr", "create", "--title", title, "--body", rendered, "--head", branch)
+        args = ["pr", "create", "--title", title, "--body", rendered, "--head", branch]
+        if base:
+            args += ["--base", base]
+        code, out, err = self._gh(*args)
         if code != 0:
             raise RuntimeError(f"could not open a pull request: {err.strip()}")
         url = out.strip().splitlines()[-1] if out.strip() else ""

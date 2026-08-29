@@ -49,11 +49,8 @@ made it.
 ## The module is the configuration
 
 ```python
-from in_lockstep import Lockstep, Policy
-from in_lockstep.adapters import PytestTest, RuffValidate
-from in_lockstep.adapters.pytest_adapter import Test
-from in_lockstep.adapters.ruff_adapter import Validate
-from in_lockstep.core.spend import Budget
+from in_lockstep import Budget, Lockstep, Policy
+from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
 from in_lockstep.middleware import CostBudget, otel
 
 lockstep = Lockstep.detect()
@@ -128,6 +125,31 @@ in-lockstep review --offline     # replays a cassette; deterministic and free
 
 Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so one recorded against a
 provider replays against a different one, and they capture tool IO as well as model IO.
+
+## Local models
+
+A `local` provider is registered out of the box and points at Ollama —
+`http://localhost:11434`, or wherever `OLLAMA_URL` says. The registration declares itself
+`free`, so a local model needs no entry in the cost table: the run is priced at exactly zero
+rather than refused as unpriced, and the tokens are still counted, because free is not the same
+as unmeasured.
+
+```bash
+in-lockstep review --base origin/main --model local:qwen3-8b
+```
+
+Routing a verb to it in `lockstep.py` is one line — this repository routes its own triage that
+way:
+
+```python
+lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")
+```
+
+Two things to know. The shipped registration declares `structured_output=False`, so lenses
+depending on strict output shapes may want a larger model than the one that fits on a laptop.
+And `in-lockstep doctor` warns (`DOC150`/`DOC151`) when a routed model names an unregistered
+provider or an unpriced model — so a route that a run would refuse at its first call is
+something you see beforehand, where nothing has been spent, rather than after a wait.
 
 ## Before running unattended
 

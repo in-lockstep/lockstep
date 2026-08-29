@@ -60,8 +60,26 @@ class ChangeRequest:
     trailers: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Commit:
+    """One commit, with its trailers read back.
+
+    The framework has always WRITTEN `In-Lockstep-Run` and `Ticket` trailers; this is the shape
+    that lets something read them again — a backport picking commits for a ticket, a report
+    joining a release to the runs that built it.
+    """
+
+    sha: str
+    subject: str
+    trailers: dict[str, str] = field(default_factory=dict)
+
+
 @runtime_checkable
 class Scm(Protocol):
+    """The host-agnostic shape. `base` is committed now, before third parties implement:
+    retrofitting a parameter onto a Protocol others implement is a breaking change, and a change
+    request that can only ever target the default branch cannot serve a backport."""
+
     def diff(self, base: Ref, head: Ref) -> Diff: ...
 
     async def open_change(
@@ -73,6 +91,7 @@ class Scm(Protocol):
         ticket: str = "",
         workflow: str = "",
         run_id: str = "",
+        base: Ref = "",
     ) -> ChangeRequest: ...
 
 
@@ -100,6 +119,63 @@ class GitLocal:
 
     def blame(self, path: str, line: int) -> str:
         return self.git("blame", "-L", f"{line},{line}", "--", path)
+
+    def merge_base(self, a: Ref, b: Ref) -> str:
+        return self.git("merge-base", a, b, check=True).strip()
+
+    def start_point(self, ref: Ref) -> Ref:
+        """A spelling of `ref` that `git checkout` can branch from.
+
+        A CI checkout has the release line only as `origin/release-1.0` — a detached HEAD with no
+        local branches — so `git checkout -b b release-1.0` exits 128 while `origin/release-1.0`
+        works. The host branch name a pull request targets is the bare one, so the two spellings
+        cannot be the same value: this resolves the git start-point, and `open_change` keeps the
+        bare name for the API. Same bare-then-remote fallback the trusted-config ref uses.
+        """
+        if "/" in ref:
+            return ref
+        for candidate in (ref, f"origin/{ref}"):
+            if self.git("rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}").strip():
+                return candidate
+        return ref  # unresolvable: let the checkout fail with git's own message
+
+    def cherry_pick(self, *commits: str) -> str:
+        """Apply commits onto HEAD, `-x` so each records where it came from. Returns new HEAD.
+
+        A conflict raises with git's own message and leaves the tree mid-pick — deliberately.
+        Resolving one is a decision, and `git cherry-pick --abort` is the caller's honest retreat;
+        cleaning up silently here would discard the information a person needs to decide.
+        """
+        self.git(*self.identity(), "cherry-pick", "-x", *commits, check=True)
+        return self.head()
+
+    def tag(self, name: str, *, message: str = "") -> None:
+        if message:
+            self.git(*self.identity(), "tag", "-a", name, "-m", message, check=True)
+        else:
+            self.git("tag", name, check=True)
+
+    def commits_between(self, base: Ref, head: Ref = "HEAD") -> tuple[Commit, ...]:
+        """Oldest first, trailers parsed. The read half of the trailer discipline: `commit`
+        writes `In-Lockstep-Run` and `Ticket`, and until this existed nothing could get them
+        back without shelling out by hand."""
+        out = self.git(
+            "log", "--reverse", f"{base}..{head}", "--format=%H%x00%s%x00%(trailers:only,unfold)%x1e"
+        )
+        commits = []
+        for record in out.split("\x1e"):
+            record = record.strip("\n")
+            if not record.strip():
+                continue
+            sha, _, rest = record.partition("\x00")
+            subject, _, block = rest.partition("\x00")
+            trailers = {}
+            for line in block.splitlines():
+                key, sep, value = line.partition(": ")
+                if sep:
+                    trailers[key.strip()] = value.strip()
+            commits.append(Commit(sha=sha.strip(), subject=subject, trailers=trailers))
+        return tuple(commits)
 
     def assert_run_scoped(self, branch: str) -> None:
         """Refused here rather than relying on a token's scope.
@@ -176,11 +252,19 @@ class GitLocal:
         ticket: str = "",
         workflow: str = "",
         run_id: str = "",
+        base: Ref = "",
     ) -> ChangeRequest:
-        """Local git has no pull requests; it makes the branch and stops there."""
+        """Local git has no pull requests; it makes the branch and stops there.
+
+        `base` starts the branch somewhere other than HEAD — a release line, for a backport.
+        Empty keeps the old behaviour: the branch grows from wherever the tree stands.
+        """
         branch = branch_for(workflow or "change", run_id or "local")
         self.assert_run_scoped(branch)
-        self.git("checkout", "-b", branch)
+        if base:
+            self.git("checkout", "-b", branch, self.start_point(base), check=True)
+        else:
+            self.git("checkout", "-b", branch)
         self.apply(cs, workflow_id=workflow)
         trailers = {"In-Lockstep-Run": run_id}
         if ticket:

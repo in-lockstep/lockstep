@@ -58,6 +58,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _branch_protection(report, path)
     _egress(report)
     _prompt_bodies(report)
+    _model_routes(report, path)
     if strict:
         _strict_policy(report, path)
     return report
@@ -91,20 +92,31 @@ def _spend_ceiling(report: Report) -> None:
 
 
 def _config_provenance(report: Report) -> None:
-    """GATE-CFG-2 — configuration must not come from the change under review."""
-    event = os.environ.get("GITHUB_EVENT_NAME", "")
-    base = os.environ.get("GITHUB_BASE_REF", "")
-    if event in ("pull_request", "pull_request_target") and not base:
+    """GATE-CFG-2 — configuration must not come from the change under review.
+
+    Reads the CI environment through `platform.ci.detect` rather than `GITHUB_*` directly.
+    This check spent its first months hardcoding GitHub's variables while `ci.detect` sat
+    beside it computing the same answer for GitLab too — so on a GitLab merge-request pipeline
+    the check silently passed and configuration loaded from the ref under review, which is the
+    exact failure it exists to refuse.
+    """
+    from .platform.ci import detect
+
+    env = detect()
+    if env is None:
+        return
+    if env.reviewing and not env.base_ref:
         report.add(
             "DOC110",
             Severity.ERROR,
-            "reviewing a pull request with no base ref, so configuration would resolve from the "
-            "ref under review",
-            "Set GITHUB_BASE_REF, or pass --base. Configuration defines the bindings, policy and "
-            "path tiers constraining the run; loading it from the change under review lets that "
-            "change rewrite its own constraints.",
+            "reviewing a change with no base ref, so configuration would resolve from the ref under review",
+            "Set the host's base-ref variable (GITHUB_BASE_REF on GitHub Actions; GitLab sets "
+            "CI_MERGE_REQUEST_TARGET_BRANCH_NAME on merge-request pipelines), or pass --base. "
+            "Configuration defines the bindings, policy and path tiers constraining the run; "
+            "loading it from the change under review lets that change rewrite its own "
+            "constraints.",
         )
-    if event == "pull_request_target":
+    if env.event == "pull_request_target":
         report.add(
             "DOC111",
             Severity.WARNING,
@@ -187,21 +199,109 @@ def _prompt_bodies(
             report.add("DOC140", Severity.ERROR, f"prompt body missing for {aspect}: {e}")
 
 
+def _model_routes(report: Report, root: Path) -> None:
+    """A route that would be refused at run time should say so here, where nothing is spent.
+
+    An unregistered provider and an unpriced model both surface today at the first model call —
+    after a container has resolved, a credential has loaded and a person has waited. Routes are
+    declared in the module, so this walks them against the same registry and table the run would
+    use. Warnings rather than errors, because doctor sees the default registry: a module that
+    registers its own provider through `invoker_factory` is ahead of what this can verify.
+    """
+    from .ai.auth import Auth
+    from .ai.bootstrap import Model, default_registry, table_for
+    from .ai.pricing import CostTable
+    from .core.workflow import restore, snapshot
+    from .loader import NoLifecycle, load, lockstep_from
+    from .platform.ci import detect as detect_ci
+
+    # From the TRUSTED ref, exactly as `_default_lockstep` loads it — loading the working tree
+    # here would execute the change under review, which on a pull-request pipeline runs before the
+    # review with the provider key in the environment. That is the fail-open GATE-CFG-2 exists to
+    # refuse, and a diagnostic must not be the hole. Reading base also means the routes reported
+    # are the ones the run will actually use, not the head's.
+    ci_env = detect_ci()
+    # Loading the module registers its workflows in the process-global registry. Doctor only
+    # reads the routes, so it restores the snapshot: a diagnostic must not leave the process
+    # knowing about workflows nobody asked it to run.
+    state = snapshot()
+    try:
+        module, _ref = load(
+            str(root),
+            base=ci_env.base_ref if ci_env else "",
+            reviewing=ci_env.reviewing if ci_env else False,
+        )
+        lockstep = lockstep_from(module)
+    except NoLifecycle:
+        return
+    except Exception:  # a module that will not load fails other commands loudly, not this one
+        return
+    finally:
+        restore(state)
+    routes = dict(getattr(lockstep.models, "routes", None) or {})
+    if not routes:
+        return
+    try:
+        registry = default_registry(Auth())
+    except Exception:
+        return
+    container = lockstep.container
+    bound = container.resolve(CostTable) if container.has(CostTable) else None
+    for verb, model_id in sorted(routes.items()):
+        selected = Model(model_id)
+        if not selected.provider or selected.provider not in registry.names():
+            report.add(
+                "DOC150",
+                Severity.WARNING,
+                f"route {verb} -> {model_id!r} names a provider that is not registered",
+                f"Registered: {', '.join(registry.names()) or '(none)'}. Model ids are "
+                'qualified: "<provider>:<model>".',
+            )
+            continue
+        # The same table the run builds, so "priced" here means priced there — including the
+        # zero a free registration adds. Re-deriving the rule inline is how the two drift.
+        table = table_for(registry, selected, bound)
+        if not table.knows(selected.name):
+            report.add(
+                "DOC151",
+                Severity.WARNING,
+                f"route {verb} -> {model_id!r} is unpriced, so a run would be refused",
+                "Add a rate to a CostTable and bind it in the module, or register the provider "
+                "free=True where the destination genuinely bills nothing. An unpriced model is "
+                "refused at the first call, after a credential has already been resolved.",
+            )
+
+
 def _strict_policy(report: Report, root: Path) -> None:
     """`--strict` is what an organisation puts in a required check.
 
     It is the honest replacement for a compile-time refusal: the standard is a diff a repository
     can delete, and this is what notices.
     """
-    module = root / "lockstep.py"
-    if not module.exists():
+    from .loader import LEGACY_MODULE_FILE, MODULE_FILE
+
+    if (root / MODULE_FILE).exists():
+        return
+    # The check once looked for `lockstep.py` at the root — the location the loader had already
+    # deprecated — so every migrated repository read as unconfigured to the one check an
+    # organisation is told to require. The paths come from the loader now, so the two cannot
+    # drift apart again.
+    if (root / LEGACY_MODULE_FILE).exists():
         report.add(
-            "DOC160",
+            "DOC161",
             Severity.WARNING,
-            "no lockstep.py; running on detected defaults",
-            "That is supported, but an organisation's policy contributions cannot reach a "
-            "repository that declares none.",
+            f"lifecycle found at the deprecated {LEGACY_MODULE_FILE}, not {MODULE_FILE}",
+            f"Move it to {MODULE_FILE}. The root is on sys.path for anything run from there, so "
+            "a root module is importable by project code that never chose to depend on it.",
         )
+        return
+    report.add(
+        "DOC160",
+        Severity.WARNING,
+        f"no {MODULE_FILE}; running on detected defaults",
+        "That is supported, but an organisation's policy contributions cannot reach a "
+        "repository that declares none.",
+    )
 
 
 def render(report: Report) -> str:
