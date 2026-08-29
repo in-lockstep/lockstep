@@ -113,6 +113,16 @@ def _apply_change(worktree: Path, change: FileChange) -> None:
         if target.is_symlink() or target.exists():
             target.unlink()
         target.symlink_to(change.symlink_target)
+        # The pre-check above is lexical; this is the authoritative one. `resolve()` on the created
+        # link follows it — and any in-tree symlink an earlier change planted — to its real
+        # destination, so a link that reaches outside through another link is caught here even if
+        # the lexical check could not see it. Undo it before refusing; nothing escaping stays.
+        if not _within(worktree, target):
+            target.unlink()
+            raise WorktreeError(
+                f"symlink {change.path!r} -> {change.symlink_target!r} resolves outside the "
+                f"worktree — refusing to plant an escaping link."
+            )
         return
     if change.deleted:
         target.unlink(missing_ok=True)
@@ -135,6 +145,10 @@ async def materialize(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD"
     # command.
     if ref.startswith("-"):
         raise WorktreeError(f"refusing a ref that looks like an option: {ref!r}")
+    # Absolute, so `git -C <repo_root>` cannot read a `-`-leading path as an option, and so a
+    # relative root resolves once here rather than against each subprocess's cwd. Mirrors how
+    # `Sandbox` absolutises its mount source for the same reason.
+    repo_root = os.path.abspath(repo_root)
     parent = Path(tempfile.mkdtemp(prefix="in-lockstep-worktree-"))
     # A child that does not exist yet: `git worktree add` creates the leaf and refuses a path that
     # is already populated, and `mkdtemp` hands back an existing directory.

@@ -175,6 +175,25 @@ def test_materialize_allows_a_symlink_that_stays_inside(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
+def test_materialize_refuses_an_escape_through_an_earlier_symlink(tmp_path: Path) -> None:
+    """First plant an in-tree symlink to the tree root, then aim a second link through it and out.
+    The lexical pre-check could miss it; the post-creation realpath check must not."""
+    root = _repo(tmp_path)
+    changeset = ChangeSet(
+        changes=(
+            FileChange(path="hop", symlink_target="."),  # in-tree: the worktree root itself
+            FileChange(path="escape", symlink_target="hop/../../outside"),  # out via `hop`
+        )
+    )
+
+    async def run() -> None:
+        async with materialize(str(root), changeset):
+            pass
+
+    with pytest.raises(WorktreeError, match="outside the worktree"):
+        asyncio.run(run())
+
+
 def test_materialize_refuses_a_ref_that_looks_like_an_option(tmp_path: Path) -> None:
     root = _repo(tmp_path)
 
