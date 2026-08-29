@@ -669,6 +669,15 @@ def ls_cmd() -> None:
             f" deny_tools={len(resolved.deny_tools)}"
         )
 
+    routes = lockstep.models.routes
+    if routes:
+        click.echo("")
+        click.echo("models  (verb -> model; resolved per verb, overridable at the call)")
+        known = {v.value for v in Verb.known()}
+        for routed_verb, model_id in sorted(routes.items()):
+            flag = "" if routed_verb in known else "  <- no such verb (typo?)"
+            click.echo(f"  {routed_verb:22} {model_id}{flag}")
+
     click.echo("")
     click.echo("workflows")
     for entry in registered():

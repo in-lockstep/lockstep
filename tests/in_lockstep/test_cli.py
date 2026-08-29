@@ -714,6 +714,31 @@ def test_ls_surfaces_a_verb_nothing_serves(repo: Path) -> None:
     assert "reviwe" in result.output
 
 
+def test_ls_prints_the_model_routes(repo: Path) -> None:
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.models.route('triage', 'local:qwen3-8b')\n"
+        "lockstep.models.route('review', 'bedrock:claude-sonnet-4-6')\n"
+    )
+    result = CliRunner().invoke(main, ["ls"])
+    assert "models" in result.output
+    assert "triage" in result.output and "local:qwen3-8b" in result.output
+    assert "bedrock:claude-sonnet-4-6" in result.output
+
+
+def test_ls_flags_a_route_to_a_verb_that_does_not_exist(repo: Path) -> None:
+    """A route keyed on a typo'd verb names a verb nothing serves; ls says so rather than letting
+    it read as configured."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.models.route('reviwe', 'anthropic:claude-sonnet-4-6')\n"
+    )
+    result = CliRunner().invoke(main, ["ls"])
+    assert "no such verb" in result.output
+
+
 def test_ls_stays_quiet_about_unbound_shipped_verbs(repo: Path) -> None:
     """Seven of nine ship unbound in a default install. Printing them buries the signal."""
     _write(repo)

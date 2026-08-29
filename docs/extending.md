@@ -186,6 +186,62 @@ delete the line that contributes your standard, and a middleware chain cannot bo
 never calls `ctx.do`. Enforcement that must survive a hostile repository owner lives in a required
 CI check — `in-lockstep doctor --strict` — and in provider billing limits, not in a library.
 
+## Models and providers
+
+A verb is routed to a model, and the route is one visible line — `in-lockstep ls` prints it:
+
+```python
+lockstep.models.route(Verb.TRIAGE,    "local:qwen3-8b")           # cheap reading, on a laptop
+lockstep.models.route(Verb.IMPLEMENT, "anthropic:claude-opus-4-6")
+lockstep.models.route(Verb.REVIEW,    "anthropic:claude-sonnet-4-6")
+```
+
+A model id is `provider:model`. The shipped providers are `anthropic`, `local` (Ollama),
+`bedrock`, `vertex` (Claude on GCP) and `gemini`. Bedrock, Vertex and Gemini authenticate through
+their cloud's own credential chain — the AWS chain, GCP application-default credentials — so they
+need no `*_API_KEY`; region and project come from the cloud's environment (`AWS_REGION`;
+`GOOGLE_CLOUD_PROJECT` with `GOOGLE_CLOUD_LOCATION`). Their SDK is an optional extra, imported only
+when you route to one (`in-lockstep[bedrock]`, `[google]`), so a repository that routes to none
+pays nothing.
+
+**A cloud provider's model id is the cloud's, not the Anthropic API's**, and the two namespaces do
+not overlap: Bedrock names Claude `us.anthropic.claude-sonnet-4-6-v1:0` (or your site's inference
+profile), Vertex uses an `@version` suffix. Because pricing keys on the id, a route to one is
+unpriced until you say what it costs — and `doctor` refuses an unpriced route *before* the run
+spends anything, which is where you find out:
+
+```python
+from in_lockstep.ai.pricing import CostTable, Rate, default_table
+
+lockstep.models.route(Verb.REVIEW, "bedrock:us.anthropic.claude-sonnet-4-6-v1:0")
+costs = default_table()
+costs.add("us.anthropic.claude-sonnet-4-6-v1:0", Rate(3.0, 15.0))   # per million tokens
+lockstep.bind(CostTable, costs)
+```
+
+To run against your own gateway, or to state a residency policy **in code** rather than infer it
+from an environment variable, build the default registry, register into it, and hand it to the
+factory:
+
+```python
+from in_lockstep.ai.bootstrap import default_registry, invoker_factory
+from in_lockstep.llm.interface import DataPolicy, ProviderSettings
+
+registry = default_registry()
+registry.register(
+    "house",
+    lambda settings, creds: OpenAIProvider(settings, creds),
+    settings=ProviderSettings(base_url="https://llm.internal.acme"),
+    data_policy=DataPolicy.INTERNAL,          # the operator's claim, greppable, not an env var
+    endpoint="https://llm.internal.acme",     # residency keys on where the bytes go
+)
+lockstep.bind(Review, AiReview(invoker_factory("house:acme-7b", registry=registry)))
+```
+
+`in-lockstep doctor` reads the routes and warns before a run spends anything if one names a
+provider nothing registered or a model nothing prices — the failure happens where it costs
+nothing, not at the first call.
+
 ## A strategy
 
 A binding chooses which adapter serves a verb; a strategy chooses how it goes about the work.

@@ -296,6 +296,91 @@ def test_unknown_provider_names_what_is_registered() -> None:
         _registry().provider_for(Model("nope:m"))
 
 
+# -- the registry seam: reach the shipped cloud providers, and register your own ---------------
+
+
+def test_the_default_registry_reaches_bedrock_vertex_and_gemini() -> None:
+    """They shipped as provider classes with no blessed path to register them; a route to
+    `bedrock:…` used to refuse as an unknown provider."""
+    from in_lockstep.ai.bootstrap import default_registry
+
+    assert {"bedrock", "vertex", "gemini"} <= set(default_registry().names())
+
+
+def test_the_cloud_providers_do_not_demand_an_api_key() -> None:
+    """AWS's chain and GCP's application-default credentials, not a `*_API_KEY` the framework
+    hands over — so routing to one with nothing wired does not raise MissingCredential; it falls
+    back to the cloud's ambient chain."""
+    from in_lockstep.ai.auth import Auth
+    from in_lockstep.ai.bootstrap import credentials_for
+
+    for provider in ("bedrock", "vertex", "gemini"):
+        # No exception, and empty (nothing wired) → the SDK's ambient chain is used.
+        assert not credentials_for(Auth(), provider).secret_values(), provider
+
+
+def test_bedrock_requests_aws_keys_so_wired_ones_reach_it_and_seed_redact() -> None:
+    """Bedrock lists AWS keys through Auth, so a repo that wires them gets the explicit-key path
+    (and Redact seeding); the empty result otherwise is the ambient-chain signal, not an error."""
+    from in_lockstep.ai.bootstrap import _CLOUD_KEYS
+
+    assert _CLOUD_KEYS["bedrock"] == ("access_key_id", "secret_access_key", "session_token")
+    assert _CLOUD_KEYS["vertex"] == () and _CLOUD_KEYS["gemini"] == ()
+
+
+def test_gcp_location_env_is_read_for_the_region(monkeypatch) -> None:
+    """google-genai's own documented variable, not just CLOUD_ML_REGION — a user who set the
+    standard one must not silently get an empty region and a malformed endpoint."""
+    from in_lockstep.ai.bootstrap import default_registry
+
+    for var in ("GOOGLE_CLOUD_REGION", "CLOUD_ML_REGION"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east5")
+    settings = default_registry().registration_for(Model("vertex:claude-x")).settings
+    assert settings.region == "us-east5"
+
+
+def test_a_bedrock_route_registers_and_prices() -> None:
+    from in_lockstep.ai.bootstrap import default_registry, table_for
+
+    registry = default_registry()
+    model = Model("bedrock:claude-opus-4-6")
+    assert registry.registration_for(model).name == "bedrock"
+    assert registry.data_policy_for(model) is DataPolicy.EXTERNAL
+    assert table_for(registry, model).knows("claude-opus-4-6"), "the same Claude, priced by name"
+
+
+def test_invoker_factory_uses_a_passed_registry_over_the_default() -> None:
+    """The seam a repository needs to run its own gateway, or state residency in code: a model the
+    default set does not know resolves through the custom registry. If the default were used, the
+    model would be Unpriced and the run would refuse before the call."""
+    import asyncio
+
+    from in_lockstep.ai.bootstrap import invoker_factory
+    from in_lockstep.ai.replay import DryRunProvider
+    from in_lockstep.core.spend import Spend
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    registry = ProviderRegistry()
+    registry.register(
+        "house",
+        _Stub,
+        settings=ProviderSettings(base_url="https://llm.internal.acme"),
+        data_policy=DataPolicy.INTERNAL,
+        endpoint="https://llm.internal.acme",
+        free=True,
+    )
+    build = invoker_factory(
+        "house:acme-7b",
+        registry=registry,
+        provider=DryRunProvider('{"ok": true}'),
+        egress=UnsandboxedEgress(),
+    )
+    ctx = type("Ctx", (), {"spend": Spend(), "container": None})()
+    invocation = asyncio.run(build(ctx).run(system="s", messages=[]))
+    assert invocation.cost.usd == 0.0, "priced through the custom registry, not refused as unpriced"
+
+
 # -- free registrations: the $0 local path -----------------------------------------------------
 
 
