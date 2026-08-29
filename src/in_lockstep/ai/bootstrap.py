@@ -361,6 +361,12 @@ def invoker_factory(
         chosen = provider
         if chosen is None:
             chosen = registry.provider_for(selected, credentials_for(issuer, selected.provider))
+        # A per-turn transcript for every session this run makes. Keyed on the run id, so a
+        # failed session's evidence is findable from its ledger record; absent when the context
+        # has no run id, which is a test's hand-built context rather than a real run.
+        from .transcript import TranscriptWriter
+
+        run_id = str(getattr(ctx, "run_id", "") or "")
         return AiInvoker(
             chosen,
             model=selected.name,
@@ -368,6 +374,7 @@ def invoker_factory(
             spend=ctx.spend,
             redact=redact or Redact(),
             egress=policy,
+            transcript=TranscriptWriter(run_id) if run_id else None,
         )
 
     return build

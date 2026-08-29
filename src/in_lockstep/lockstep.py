@@ -51,6 +51,11 @@ class Lockstep:
         # fails its tests it opens an `ai-generated` bug issue, which an agent may pick up and try
         # again; this bounds that loop. The repo owner raises or lowers it in `lockstep.py`.
         self.max_attempts = 3
+        # Where this configuration came from, in the loader's words — "trusted ref X", "local
+        # working tree", "none (detected defaults)". Set by whoever loaded the module; recorded
+        # into every ledger record, because which lockstep.py constrained a run is part of the
+        # run's evidence.
+        self.config_source = ""
 
     # -- configuration -------------------------------------------------------------
 
