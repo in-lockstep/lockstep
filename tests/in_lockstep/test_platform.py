@@ -293,6 +293,15 @@ def test_github_mark_ready_takes_the_pr_out_of_draft() -> None:
     assert calls == []
 
 
+def test_open_change_refuses_a_base_that_looks_like_an_option(tmp_path: Path) -> None:
+    """A backport's base can come from a ticket target; a `-`-leading ref that git/gh would read as
+    a flag is refused rather than passed through."""
+    scm = GitLocal(_repo(tmp_path))
+    cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),))
+    with pytest.raises(RuntimeError, match="looks like an option"):
+        asyncio.run(scm.open_change(cs, title="t", workflow="backport", run_id="r1", base="--upload-pack=x"))
+
+
 def test_local_open_change_is_never_draft_and_mark_ready_is_a_noop(tmp_path: Path) -> None:
     scm = GitLocal(_repo(tmp_path))
     cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),))

@@ -142,6 +142,12 @@ class GitLocal:
         cannot be the same value: this resolves the git start-point, and `open_change` keeps the
         bare name for the API. Same bare-then-remote fallback the trusted-config ref uses.
         """
+        # Option-confusion guard: `base` becomes a git checkout start-point and a `gh --base` value,
+        # and a backport can take it from a ticket's target — so a `-`-leading ref that git or gh
+        # would read as a flag is refused here, the same way `materialize` guards its ref. Not
+        # injection (no shell), but a ref never legitimately begins with a dash.
+        if ref.startswith("-"):
+            raise RuntimeError(f"refusing a base ref that looks like an option: {ref!r}")
         if "/" in ref:
             return ref
         for candidate in (ref, f"origin/{ref}"):
