@@ -779,3 +779,16 @@ def test_the_scaffold_passes_a_workspace_id_as_a_variable(repo: Path) -> None:
     )
     assert env["ANTHROPIC_WORKSPACE_ID"] == "${{ vars.ANTHROPIC_WORKSPACE_ID }}"
     assert env["ANTHROPIC_API_KEY"] == "${{ secrets.ANTHROPIC_API_KEY }}"
+
+
+def test_the_scaffold_states_a_budget_for_the_adoption_case(repo: Path) -> None:
+    """A repository's first pull request is the one that adds lockstep.py.
+
+    Configuration loads from the trusted ref, so that PR has no config to load and no declared
+    ceiling — and GATE-BUDGET-1 refuses. This repository hit it on its own pivot PR. The workflow
+    file is base-ref content for a `pull_request` event, the same property that makes
+    config-from-base safe, so a ceiling stated there is equally out of the PR's reach.
+    """
+    CliRunner().invoke(main, ["init"])
+    text = (repo / ".github/workflows/lockstep.yml").read_text()
+    assert "--budget" in text, "a repository adopting this cannot review its own adoption PR"

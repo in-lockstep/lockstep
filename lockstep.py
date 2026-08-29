@@ -77,7 +77,16 @@ lockstep.bind(EgressPolicy, UnsandboxedEgress())
 # Per-run only. The per-agent-per-day ceiling the old substrate enforced before a run started has
 # no in-process equivalent — see docs/controls-crosswalk.md, entry 3. The replacement is a
 # provider-side organisation limit, which `doctor` can ask about but cannot verify.
-lockstep.budget = Budget(usd=2.00, wall_seconds=900)
+#
+# $0.25 rather than $2.00, sized against a measurement instead of a guess. A security review of a
+# median diff costs about $0.02 and the pre-flight estimate for one is about $0.07 — the estimate
+# bounds output by `max_tokens` rather than by an expected value, so it is deliberately the larger
+# number. That leaves roughly a threefold margin over the estimate and tenfold over the actual
+# spend, which is what a ceiling wants: far enough above normal that it never fires on a good run,
+# close enough that a loop going wrong is stopped in cents rather than dollars.
+#
+# $2.00 was a hundredfold headroom, which is not a ceiling so much as a formality.
+lockstep.budget = Budget(usd=0.25, wall_seconds=900)
 
 # -- models and strategies ----------------------------------------------------------
 lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
