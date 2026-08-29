@@ -326,6 +326,12 @@ def test_head_state_reads_committed_contents_and_absence(tmp_path: Path) -> None
     assert state["absent.py"] is None
 
 
+def test_head_state_refuses_a_ref_that_looks_like_an_option(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    with pytest.raises(WorktreeError, match="looks like an option"):
+        asyncio.run(head_state(str(root), ["app.py"], ref="--output=/tmp/x"))
+
+
 def test_inverse_read_from_head_round_trips_a_change_back(tmp_path: Path) -> None:
     """A change plus its inverse (pre-image read from HEAD) materialises back to HEAD."""
     root = _repo(tmp_path)
