@@ -22,6 +22,8 @@ rather than averaging.
 them is how a fabricated improvement gets reported as fact.
 """
 
+from pathlib import Path
+
 from .history import DEFAULT_BRANCH, GitLedger, HistoryError
 from .store import (
     InRepoLedger,
@@ -32,8 +34,41 @@ from .store import (
     compare,
     current_epoch,
     read_ledger,
+    spent_in_window,
     summarize,
 )
+
+
+def store_for(container: object = None, root: str = ".") -> object:
+    """Where a run record goes — one decision, made once, shared by writer and reader.
+
+    Order: a store the repository bound, then the orphan branch, then a file in the working tree.
+    The last is a fallback and not a default: `.lockstep/` is gitignored, so a record written
+    there in a git repository is written and then lost — it stays for directories that are not
+    repositories at all, where the branch cannot exist. Lifted out of the CLI so the pre-run
+    spend ceiling reads the same store every run writes; two answers to "which ledger" is how a
+    ceiling ends up summing records nothing appends to.
+    """
+    import subprocess
+
+    if container is not None:
+        from ...core.ports import LedgerStore
+
+        has = getattr(container, "has", None)
+        if callable(has) and has(LedgerStore):
+            return container.resolve(LedgerStore)  # type: ignore[attr-defined]
+    try:
+        inside = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
+        return InRepoLedger()
+    return GitLedger(root=Path(root)) if inside.stdout.strip() == "true" else InRepoLedger()
+
 
 __all__ = [
     "DEFAULT_BRANCH",
@@ -47,5 +82,7 @@ __all__ = [
     "compare",
     "current_epoch",
     "read_ledger",
+    "spent_in_window",
+    "store_for",
     "summarize",
 ]
