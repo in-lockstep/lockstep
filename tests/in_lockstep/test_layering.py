@@ -60,7 +60,11 @@ ALLOWED: dict[str, set[str]] = {
     # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
     # never imports `strategies` back.
     "strategies": {"ai", "core", "adapters", "strategies"},
-    "lockstep": {"core", "lockstep"},
+    # `platform` was added for exactly one edge: the pre-run daily spend ceiling reads the
+    # ledger, and the ledger is platform's. The facade composes what the layers provide, and a
+    # startup refusal that lived anywhere shallower (the CLI) would not cover a programmatic
+    # `lockstep.context(...)`. Acyclic: platform never imports the facade back.
+    "lockstep": {"core", "platform", "lockstep"},
     # The package facade. It re-exports the public surface, so it reaches almost everything by
     # construction — but it was being SKIPPED rather than allowed, which is different: nothing
     # was checking that `in_lockstep/__init__.py` stayed a facade instead of growing logic.

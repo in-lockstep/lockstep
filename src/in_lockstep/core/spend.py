@@ -33,6 +33,20 @@ class UndeclaredBudget(Exception):
     """
 
 
+class DailySpendExceeded(Exception):
+    """This repository's runs have already spent today's ceiling; refused before this one starts.
+
+    The rolling per-repository window the substrate's per-day partition used to provide, rebuilt
+    from the ledger's own records — which item 17's timestamps made possible. Weaker than the
+    original on purpose and honestly: the sum is of what THIS clone's ledger has seen, so a fresh
+    CI runner starts from whatever history the checkout carries and concurrent runs race the
+    read. A SHARED-store compare-and-set is the declared upgrade path when cross-machine truth is
+    actually needed; the provider-side organisation limit (`DOC101`) remains the durable backstop.
+    """
+
+    reason = "cost.daily_exceeded"
+
+
 class Unpriced(Exception):
     """A model with no rate. Refused before the call, never billed at a default rate.
 

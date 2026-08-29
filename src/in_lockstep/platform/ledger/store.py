@@ -145,6 +145,38 @@ def _accumulate(stat: Stat, record: dict[str, object]) -> None:
             setattr(stat, attr, (current or 0) + value)
 
 
+def spent_in_window(
+    records: list[dict[str, object]], *, now: object, window_seconds: float = 86_400.0
+) -> float:
+    """What the recorded runs inside the rolling window cost, in USD.
+
+    Reads the `ts` every schema-4 record carries. A record with no timestamp cannot be placed in
+    a window and does not count — which is the honest reading for pre-provenance records (they
+    predate the field, so they predate today), and follows the ledger's rule that a measurement
+    nobody took is not a measurement of nothing. `now` is passed in rather than read here, so the
+    window is testable and the caller owns the clock.
+    """
+    from datetime import datetime, timedelta
+
+    assert isinstance(now, datetime)
+    floor = now - timedelta(seconds=window_seconds)
+    total = 0.0
+    for record in records:
+        raw = record.get("ts")
+        if not isinstance(raw, str):
+            continue
+        try:
+            ts = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if ts.tzinfo is None or ts < floor:
+            continue
+        cost = record.get("cost_usd")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            total += float(cost)
+    return total
+
+
 def summarize(records: list[dict[str, object]], *, by: str = "kind") -> dict[str, Stat]:
     stats: dict[str, Stat] = {}
     for record in records:
