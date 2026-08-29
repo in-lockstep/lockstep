@@ -1003,3 +1003,58 @@ def test_the_metric_is_omitted_rather_than_defaulted() -> None:
     names = [m.name for m in recorder.metrics]
     assert "in_lockstep.cost.priced_fraction" not in names, "emitted with an empty denominator"
     assert names, "nothing was emitted, so this asserted nothing"
+
+
+# -- the output cap, and the failure lowering it makes more likely ------------------------------
+
+
+def test_under_carries_an_explicit_output_cap() -> None:
+    """A lens sizes its own cap; the transport default is for a lens that has not thought about it."""
+    policy = InvokePolicy.under(_resolved(), max_turns=1, max_tokens=4096)
+    assert policy.max_tokens == 4096
+    assert InvokePolicy.under(_resolved(), max_turns=1).max_tokens == InvokePolicy.max_tokens
+
+
+def test_the_cap_is_what_the_estimate_is_built_from() -> None:
+    """Not an expected value — a turn returning its full allowance must not overshoot a ceiling."""
+    from in_lockstep.ai.pricing import CostTable, Rate
+
+    table = CostTable()
+    table.add("m", Rate(3.0, 15.0))
+    small = table.project("m", input_tokens=3600, max_output_tokens=4096)
+    large = table.project("m", input_tokens=3600, max_output_tokens=16384)
+    assert small.usd < large.usd / 3, "the cap dominates the estimate, which is why it is sized"
+
+
+def test_a_truncated_answer_is_named_rather_than_read_as_bad_json() -> None:
+    """Erring low is the expensive mistake: a truncated answer is paid for and yields nothing.
+
+    Before this, the cap being too small surfaced as `review.unparseable` — which sends someone to
+    look at the prompt when the fix is one number in the policy.
+    """
+    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.core.outcome import Status
+
+    cut_off = LLMOutput(content='{"findings": [{"path": "a.py", "sum', stop_reason="max_tokens")
+    provider = Stub(replies=[cut_off])
+    adapter = AiReview(
+        lambda ctx: invoker(provider),
+        policy=InvokePolicy(max_turns=1, max_tokens=16),
+    )
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff="x")))
+
+    assert outcome.status is Status.ERRORED
+    assert outcome.reason == "review.truncated"
+    assert "16-token output cap" in outcome.findings[0].message
+    assert "budget may need to too" in outcome.findings[0].message
+
+
+def test_a_complete_answer_at_the_cap_is_not_truncation() -> None:
+    """`stop_reason` is the signal, not the length. A model that finished exactly at the cap did."""
+    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(replies=[LLMOutput(content='{"findings": []}', stop_reason="end_turn")])
+    adapter = AiReview(lambda ctx: invoker(provider), policy=InvokePolicy(max_turns=1, max_tokens=16))
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff="x")))
+    assert outcome.status is Status.SUCCEEDED

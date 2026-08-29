@@ -99,6 +99,7 @@ class InvokePolicy:
         resolved: ResolvedPolicy,
         *,
         max_turns: int,
+        max_tokens: int | None = None,
         deadline_seconds: float | None = None,
     ) -> InvokePolicy:
         """An adapter's own needs, tightened by whatever the policy stack contributed.
@@ -114,6 +115,7 @@ class InvokePolicy:
         ceiling = resolved.max_turns
         return cls(
             max_turns=min(max_turns, ceiling) if ceiling is not None else max_turns,
+            max_tokens=max_tokens if max_tokens is not None else cls.max_tokens,
             deadline_seconds=deadline_seconds,
             deny_tools=tuple(resolved.deny_tools),
             scan_input=resolved.scan_input or "warn",
@@ -137,6 +139,10 @@ class Invocation:
     turns: tuple[Turn, ...] = ()
     cost: Cost = field(default_factory=Cost)
     exhausted: bool = False
+    # The provider stopped because it hit `max_tokens`, not because it had finished. Carried
+    # separately from `exhausted` — that is the turn cap — because the remedies differ and the
+    # symptom does not: both produce an answer that looks complete and is not.
+    truncated: bool = False
     findings: tuple[injection.Finding, ...] = ()
 
     @property
@@ -300,6 +306,7 @@ class AiInvoker:
 
             if not output.tool_calls:
                 return Invocation(
+                    truncated=output.stop_reason == "max_tokens",
                     content=output.content,
                     output=output,
                     turns=tuple(turns),

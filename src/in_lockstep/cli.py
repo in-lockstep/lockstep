@@ -72,6 +72,22 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
 # `InvokePolicy.under`, which does the composing for every field rather than just this one.
 _REVIEW_TURNS = 1
 
+# The output cap, sized against what this lens actually returns rather than left at the transport
+# default of 16384. A review answers with a findings list — path, line, summary, detail, severity
+# — at roughly 120 tokens each, so this is headroom for about thirty findings on one diff.
+#
+# It is a cost decision as much as a correctness one, and the asymmetry is worth stating. The
+# pre-flight estimate bounds output by this number and not by an expected value, deliberately, so
+# a turn returning its full allowance cannot overshoot a ceiling checked against an average. At
+# 16384 that made the estimate $0.2566 for a diff whose real cost is nearer $0.02 — so a budget
+# had to be sized about six times larger than the run needed, which teaches people to set loose
+# ceilings. At 4096 the estimate is $0.0722.
+#
+# Erring low is the more expensive mistake, not the cheaper one: a truncated answer is paid for in
+# full and yields nothing, where an over-large cap only inflates an estimate. `review.truncated`
+# names that failure when it happens instead of letting it read as malformed JSON.
+_REVIEW_MAX_TOKENS = 4096
+
 
 def _context(lockstep: Lockstep, run_id: str) -> Any:
     """Start a run, turning a startup refusal into a message rather than a traceback.
@@ -439,7 +455,13 @@ def review_cmd(
 
     from .adapters.ai.review import AiReview, Review, ReviewSpec
     from .ai.auth import Auth
-    from .ai.bootstrap import LLMProvider, Model, credentials_for, default_registry
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+        default_registry,
+    )
     from .ai.invoker import AiInvoker, InvokePolicy
     from .ai.pricing import default_table
     from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
@@ -507,7 +529,10 @@ def review_cmd(
                 build_invoker,
                 repo_root=lockstep.repo.root,
                 policy=InvokePolicy.under(
-                    lockstep.policy.resolve(), max_turns=_REVIEW_TURNS, deadline_seconds=300
+                    lockstep.policy.resolve(),
+                    max_turns=_REVIEW_TURNS,
+                    max_tokens=_REVIEW_MAX_TOKENS,
+                    deadline_seconds=300,
                 ),
             ),
         )
@@ -515,9 +540,9 @@ def review_cmd(
     ctx = _context(lockstep, f"review-{aspect}")
     try:
         outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
-    except ImportError as e:
-        # A provider SDK is an optional extra, and its absence is a setup step rather than a bug.
-        # Forty lines of traceback for "run one command" buries the one line that helps.
+    except (ImportError, MissingCredential) as e:
+        # Both are setup steps with one obvious remedy, not bugs. Forty lines of traceback around
+        # the one line that helps is how a fixable problem reads as a broken tool.
         raise click.ClickException(str(e)) from None
 
     click.echo(

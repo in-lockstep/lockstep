@@ -83,8 +83,30 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     return registry
 
 
+class MissingCredential(Exception):
+    """No credential could be resolved for a provider that needs one.
+
+    Refused here rather than left to the SDK. Anthropic's client raises a `TypeError` reading
+    "Could not resolve authentication method" from inside `messages.create` — accurate, and
+    arriving as a forty-line traceback from a library the user did not call, after the budget
+    check has already passed and the run looks like it is working. This is a setup step with one
+    obvious remedy, and it should read like one.
+    """
+
+
 def credentials_for(auth: Auth, provider: str) -> Credentials:
     keys = ("api_key",)
     if provider == "local":
         return Credentials.none()
-    return auth.credentials_for(AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys))
+    creds = auth.credentials_for(
+        AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys)
+    )
+    if not creds.secret_values():
+        var = f"{provider.upper().replace('-', '_')}_API_KEY"
+        raise MissingCredential(
+            f"no credential for provider {provider!r}. Set {var}, or bind a resolver that can "
+            f"mint one — `Auth.chain` takes an OIDC resolver ahead of the environment, which is "
+            f"the arrangement this framework prefers because a federated token is short-lived. "
+            f"Nothing was sent and nothing was charged."
+        )
+    return creds

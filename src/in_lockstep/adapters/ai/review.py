@@ -160,6 +160,28 @@ class AiReview:
                 findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
             )
 
+        if invocation.truncated:
+            # Diagnosed before parsing, because the parse failure it causes is a misdiagnosis:
+            # the JSON is not malformed, it is unfinished, and "the model returned bad JSON" sends
+            # someone to look at the prompt when the answer is one number in the policy.
+            return Outcome(
+                status=Status.ERRORED,
+                reason="review.truncated",
+                cost=invocation.cost,
+                findings=(
+                    Finding(
+                        id="review.truncated",
+                        message=(
+                            f"the model stopped at the {self.policy.max_tokens}-token output cap "
+                            f"with its answer unfinished. Raise `InvokePolicy.max_tokens` for this "
+                            f"lens; the cost estimate rises with it, so the budget may need to too."
+                        ),
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
+                ),
+            )
+
         try:
             parsed = parse(invocation.content)
         except SchemaError as e:

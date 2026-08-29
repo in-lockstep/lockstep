@@ -556,3 +556,34 @@ def test_this_repository_opts_out_deliberately_and_says_so() -> None:
         return  # the opt-out was removed, which is the other acceptable state
     assert "OPT-OUT" in module, "the binding is here without the paragraph explaining its cost"
     assert "IN_LOCKSTEP_EGRESS=enforced" in module, "it must say CI does not take this path"
+
+
+def test_a_missing_provider_credential_is_a_message_not_a_typeerror(repo: Path) -> None:
+    """The first thing a new adopter hits, and it used to be a library's TypeError.
+
+    Anthropic's client raises "Could not resolve authentication method" from inside
+    `messages.create` — accurate, and arriving as a traceback from a library the user did not
+    call, after the budget check has passed and the run looks like it is working.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
+    )
+    result = CliRunner().invoke(main, ["review", "--base", "HEAD", "--model", "anthropic:claude-haiku-4-5"])
+    assert result.exit_code != 0
+    assert "no credential for provider 'anthropic'" in result.output
+    assert "ANTHROPIC_API_KEY" in result.output
+    assert "nothing was charged" in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_a_local_provider_needs_no_credential(repo: Path) -> None:
+    """Ollama has no key, and demanding one would make the free path the awkward one."""
+    from in_lockstep.ai.auth import Auth
+    from in_lockstep.ai.bootstrap import credentials_for
+
+    assert credentials_for(Auth(), "local").secret_values() == frozenset()
