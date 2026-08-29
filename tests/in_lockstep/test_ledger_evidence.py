@@ -326,3 +326,127 @@ def test_the_explain_view_points_at_the_transcript_when_one_exists(hermetic: Pat
     result = CliRunner().invoke(main, ["history", "--explain", "run-7"])
     assert result.exit_code == 0, result.output
     assert "transcripts/run-7.jsonl" in result.output
+
+
+# -- the rolling daily ceiling (item 18) ----------------------------------------------
+
+
+def test_spent_in_window_sums_only_placeable_recent_records() -> None:
+    """A record with no timestamp cannot be placed in a window and does not count — the honest
+    reading for pre-provenance records, and the ledger's measurement-nobody-took rule."""
+    from datetime import UTC, datetime
+
+    from in_lockstep.platform.ledger import spent_in_window
+
+    now = datetime(2026, 8, 29, 12, 0, 0, tzinfo=UTC)
+    records = [
+        {"ts": "2026-08-29T11:00:00+00:00", "cost_usd": 0.30},  # inside the window
+        {"ts": "2026-08-29T11:30:00+00:00", "cost_usd": 0.20},  # inside
+        {"ts": "2026-08-28T11:00:00+00:00", "cost_usd": 5.00},  # 25h old: outside
+        {"cost_usd": 9.99},  # schema-3: no ts, cannot be placed
+        {"ts": "not-a-time", "cost_usd": 9.99},
+        {"ts": "2026-08-29T11:45:00+00:00"},  # no cost recorded: absent is not zero, and not a sum
+    ]
+    assert spent_in_window(records, now=now) == pytest.approx(0.50)
+
+
+def _spending_lockstep():
+    """A lifecycle the ceiling is in scope for: one bound adapter that declares it spends, and a
+    declared budget so GATE-BUDGET-1 stays satisfied."""
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.core.verbs import Capability
+    from in_lockstep.lockstep import Lockstep
+
+    class _SpendVerb:
+        pass
+
+    class _Spender:
+        capabilities = frozenset({Capability.SPENDS_BUDGET})
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(_SpendVerb, _Spender())
+    lockstep.budget = Budget(usd=2.00)
+    return lockstep
+
+
+def test_the_daily_ceiling_refuses_a_run_pre_start_and_the_window_rolls(hermetic: Path, monkeypatch) -> None:
+    """The partition the crosswalk row said was Lost: per repository, per rolling day, refused
+    before the run starts — from the same store every run writes."""
+    from datetime import UTC, datetime, timedelta
+
+    from in_lockstep.core.spend import DailySpendExceeded
+
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    now = datetime.now(UTC)
+    asyncio.run(ledger.append("r1", {"ts": now.isoformat(timespec="seconds"), "cost_usd": 0.80}))
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "0.75")
+    lockstep = _spending_lockstep()
+    with pytest.raises(DailySpendExceeded, match=r"\$0\.80 in the last 24h"):
+        lockstep.context(run_id="next")
+    assert DailySpendExceeded.reason == "cost.daily_exceeded"
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "1.00")
+    assert lockstep.context(run_id="next") is not None, "under the ceiling, the run starts"
+
+    # The same spend recorded 25 hours ago no longer counts: the window rolls.
+    old = (now - timedelta(hours=25)).isoformat(timespec="seconds")
+    asyncio.run(ledger.append("r1", {"ts": old, "cost_usd": 0.80}))
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "0.75")
+    assert lockstep.context(run_id="next") is not None
+
+
+def test_no_declared_daily_limit_means_no_ledger_read(hermetic: Path, monkeypatch) -> None:
+    """Advisory-first, resolved tension #4: the ceiling is an opt-in an organisation states, not
+    a default that surprises every laptop."""
+    monkeypatch.delenv("IN_LOCKSTEP_DAILY_LIMIT", raising=False)
+    _repo(hermetic)
+    assert _spending_lockstep().context(run_id="r") is not None
+
+
+def test_a_lifecycle_that_cannot_spend_is_not_gated_by_the_spend_ceiling(hermetic: Path, monkeypatch) -> None:
+    """Scoped like GATE-BUDGET-1: refusing a free selfcheck because yesterday's agent runs were
+    expensive teaches people the refusal is noise."""
+    from datetime import UTC, datetime
+
+    from in_lockstep.lockstep import Lockstep
+
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(ledger.append("r1", {"ts": datetime.now(UTC).isoformat(timespec="seconds"), "cost_usd": 9.0}))
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "1.00")
+    assert Lockstep.detect().context(run_id="r") is not None
+
+
+def test_a_malformed_daily_limit_is_loud_not_silently_unenforced(hermetic: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "one dollar")
+    _repo(hermetic)
+    assert _spending_lockstep().context(run_id="r") is not None
+    assert "not a number; ceiling not enforced" in capsys.readouterr().out
+
+
+def test_the_cli_exits_blocked_when_the_ceiling_refuses(hermetic: Path, monkeypatch) -> None:
+    """BLOCKED, not failed: the exit code is how a trampoline's `if` tells 'over the daily
+    window' from 'broken'."""
+    from datetime import UTC, datetime
+
+    _repo(hermetic)
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(
+        ledger.append("r1", {"ts": datetime.now(UTC).isoformat(timespec="seconds"), "cost_usd": 3.00})
+    )
+    module = hermetic / ".lockstep" / "lockstep.py"
+    module.write_text(
+        module.read_text()
+        + "\nfrom in_lockstep.core.verbs import Capability\n"
+        + "class _SpendVerb: pass\n"
+        + "class _Spender:\n"
+        + "    capabilities = frozenset({Capability.SPENDS_BUDGET})\n"
+        + "lockstep.bind(_SpendVerb, _Spender())\n"
+    )
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "1.00")
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(hermetic)])
+    assert result.exit_code == 3, result.output
+    assert "cost.daily_exceeded" in result.output
