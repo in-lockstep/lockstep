@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 
 from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
-from in_lockstep.platform.report import marker, review_comment
+from in_lockstep.core.types import ChangeSet, TestReport, TestVerdict
+from in_lockstep.platform.report import implement_body, marker, review_comment
 
 
 def _outcome(findings=(), *, decided=True, status=Status.SUCCEEDED, usd=0.02, billed=1.0) -> Outcome:
@@ -87,6 +88,45 @@ def test_a_pipe_or_backtick_in_the_path_is_escaped_too() -> None:
     assert "weird\\|name.py" in row, "the path's pipe must be escaped"
     # The only backticks in the row are the two that open/close the location code span.
     assert row.count("`") == 2, "a backtick from the path would open a stray span"
+
+
+# -- the implement PR body ----------------------------------------------------------------------
+
+
+def _cs() -> ChangeSet:
+    return ChangeSet(summary="do the thing")
+
+
+def test_implement_body_always_carries_the_untrusted_warning() -> None:
+    body = implement_body(_cs(), None)
+    assert "untrusted input to a model that held write tools" in body
+    assert marker("implement") in body
+
+
+def test_implement_body_reports_a_green_verdict() -> None:
+    verdict = TestVerdict.of("succeeded", True, TestReport(total=42, passed=42))
+    body = implement_body(_cs(), verdict)
+    assert "✅" in body and "42 passed" in body
+
+
+def test_implement_body_reports_a_red_verdict() -> None:
+    verdict = TestVerdict.of("failed", True, TestReport(total=42, passed=39, failed=3))
+    body = implement_body(_cs(), verdict)
+    assert "🛑" in body and "3 of 42 failed" in body
+
+
+def test_implement_body_calls_an_unbound_test_unverified_not_green() -> None:
+    body = implement_body(_cs(), None)
+    assert "not run" in body and "unverified" in body
+    assert "✅" not in body, "a change nobody tested must not read as passing"
+
+
+def test_implement_body_marks_a_collected_nothing_run_as_undecided() -> None:
+    verdict = TestVerdict.of("succeeded", False, TestReport())
+    assert verdict.green is False
+    body = implement_body(_cs(), verdict)
+    assert "collected nothing" in body
+    assert "✅" not in body
 
 
 # -- the sticky upsert --------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from in_lockstep.adapters.pytest_adapter import PytestTest
-from in_lockstep.adapters.worktree import WorktreeError, materialize
+from in_lockstep.adapters.worktree import WorktreeError, materialize, verdict_over_staged
 from in_lockstep.core.types import ChangeSet, FileChange, TestSpec
 
 
@@ -243,6 +243,53 @@ def test_a_staged_change_becomes_a_red_or_green_verdict(tmp_path: Path) -> None:
     assert asyncio.run(verdict(failing)) == "failed"
     assert asyncio.run(verdict(passing)) == "succeeded"
     assert not (root / "test_staged.py").exists(), "the staged test never touched the real tree"
+
+
+class _Ctx:
+    """A ctx whose Test verb is a real PytestTest, so `verdict_over_staged` is exercised end to end
+    against a materialised worktree rather than a stub."""
+
+    def __init__(self, root: Path, *, test_bound: bool = True) -> None:
+        self.repo = type("R", (), {"root": str(root)})()
+
+        class _Container:
+            def has(self, _verb: object) -> bool:
+                return test_bound
+
+        self.container = _Container()
+
+    async def do(self, _verb: object, spec: TestSpec):  # noqa: ANN202
+        return await PytestTest(args=["-q"]).invoke(self, spec)
+
+
+def test_verdict_over_staged_reports_green_for_a_passing_staged_change(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    changeset = ChangeSet(
+        changes=(FileChange(path="test_staged.py", contents="def test_it():\n    assert True\n"),)
+    )
+    verdict = asyncio.run(verdict_over_staged(_Ctx(root), str(root), changeset))
+    assert verdict is not None
+    assert verdict.green
+    assert not (root / "test_staged.py").exists()
+
+
+def test_verdict_over_staged_reports_red_for_a_failing_staged_change(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    changeset = ChangeSet(
+        changes=(FileChange(path="test_staged.py", contents="def test_it():\n    assert False\n"),)
+    )
+    verdict = asyncio.run(verdict_over_staged(_Ctx(root), str(root), changeset))
+    assert verdict is not None
+    assert not verdict.green
+    assert verdict.failed >= 1
+
+
+def test_verdict_over_staged_is_none_when_no_test_is_bound(tmp_path: Path) -> None:
+    """An honest 'unverified' rather than a silent green."""
+    root = _repo(tmp_path)
+    changeset = ChangeSet(changes=(FileChange(path="x.py", contents="y = 1\n"),))
+    verdict = asyncio.run(verdict_over_staged(_Ctx(root, test_bound=False), str(root), changeset))
+    assert verdict is None
 
 
 class _CwdRecordingSandbox:

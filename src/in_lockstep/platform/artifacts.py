@@ -19,10 +19,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..core.types import ChangeAuthor, ChangeSet, FileChange
+from ..core.types import ChangeAuthor, ChangeSet, FileChange, TestVerdict
 from ..privileged.redact import Redact
 
 FILENAME = "changeset.json"
+
+#: The verdict fields carried in the artifact. Counts and a status — no model prose, no file
+#: contents — so unlike `summary` they need no redaction.
+_VERDICT_FIELDS = ("status", "decided", "total", "passed", "failed", "skipped")
 
 
 class MalformedArtifact(Exception):
@@ -37,30 +41,37 @@ def payload_path(artifact: str | Path) -> Path:
     return path
 
 
-def write_changeset(artifact: str | Path, changeset: ChangeSet, *, redact: Redact | None = None) -> Path:
-    """Serialize, metadata masked, contents verbatim. Returns where it landed."""
+def write_changeset(
+    artifact: str | Path,
+    changeset: ChangeSet,
+    *,
+    redact: Redact | None = None,
+    verdict: TestVerdict | None = None,
+) -> Path:
+    """Serialize, metadata masked, contents verbatim. Returns where it landed.
+
+    `verdict`, when the change was tested before it was staged, rides alongside so the propose job
+    can report it. Omitted when no Test ran, which `read_verdict` reads back as "not tested".
+    """
     mask = redact or Redact()
     path = payload_path(artifact)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
+    document: dict[str, object] = {
+        "summary": mask.text(changeset.summary),
+        "ticket": mask.text(changeset.ticket),
+        "changes": [
             {
-                "summary": mask.text(changeset.summary),
-                "ticket": mask.text(changeset.ticket),
-                "changes": [
-                    {
-                        "path": c.path,
-                        "contents": c.contents,
-                        "author": c.author.value,
-                        **({"symlink_target": c.symlink_target} if c.symlink_target else {}),
-                    }
-                    for c in changeset.changes
-                ],
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+                "path": c.path,
+                "contents": c.contents,
+                "author": c.author.value,
+                **({"symlink_target": c.symlink_target} if c.symlink_target else {}),
+            }
+            for c in changeset.changes
+        ],
+    }
+    if verdict is not None:
+        document["verdict"] = {field: getattr(verdict, field) for field in _VERDICT_FIELDS}
+    path.write_text(json.dumps(document, indent=2) + "\n")
     return path
 
 
@@ -95,3 +106,37 @@ def read_changeset(artifact: str | Path) -> ChangeSet:
         summary=str(data.get("summary", "")),
         ticket=str(data.get("ticket", "")),
     )
+
+
+def read_verdict(artifact: str | Path) -> TestVerdict | None:
+    """The test verdict written alongside the ChangeSet, or None if the change was not tested.
+
+    A sibling of `read_changeset` rather than a change to its return type: `apply` and
+    `apply-inline` read the same artifact and neither wants a verdict foisted on its signature.
+    Tolerant like `read_changeset` — a missing or malformed verdict reads as "not tested" rather
+    than raising, because the change still applies whether or not a suite ran over it.
+    """
+    path = payload_path(artifact)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except ValueError:
+        return None
+    raw = data.get("verdict") if isinstance(data, dict) else None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return TestVerdict(
+            status=str(raw.get("status", "")),
+            decided=bool(raw.get("decided", False)),
+            total=int(raw.get("total", 0) or 0),
+            passed=int(raw.get("passed", 0) or 0),
+            failed=int(raw.get("failed", 0) or 0),
+            skipped=int(raw.get("skipped", 0) or 0),
+        )
+    except (ValueError, TypeError):
+        # A verdict whose counts are not numbers is not a verdict. Read it as "not tested" rather
+        # than let a non-numeric field crash the propose job — the change still applies; the body
+        # just cannot claim a result over it.
+        return None
