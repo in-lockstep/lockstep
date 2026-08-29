@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvokePolicy
+from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
 from ...ai.prompt import PromptLayers
 from ...ai.structured import SchemaError, parse, schema_instruction, validate
 from ...core.outcome import Finding, Outcome, Severity, Status
@@ -112,6 +112,16 @@ class AiReview:
         except InvocationBlocked as e:
             return Outcome.blocked_by(
                 e.reason,
+                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
+            )
+        except InvocationFailed as e:
+            # ERRORED, not BLOCKED: §4.3 reserves BLOCKED for a policy or gate refusing, and a
+            # provider that could not be made to answer is infrastructure. Filing a broken
+            # credential under the same heading as a budget ceiling would make both unreadable in
+            # the ledger. The message arrives already redacted from the invoker.
+            return Outcome(
+                status=Status.ERRORED,
+                reason=e.reason,
                 findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
             )
 

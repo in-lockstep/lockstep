@@ -18,7 +18,7 @@ from in_lockstep.ai.context import (
     Provenance,
 )
 from in_lockstep.ai.injection import scan
-from in_lockstep.ai.invoker import AiInvoker, InvocationBlocked, InvokePolicy
+from in_lockstep.ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.ai.replay import Cassette, RecordingProvider, ReplayProvider
 from in_lockstep.ai.retry import RetryPolicy
@@ -643,7 +643,9 @@ def test_gate_retry_4_the_invoker_supplies_the_remaining_deadline() -> None:
     ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
 
     with mock.patch("asyncio.sleep", no_sleep):
-        with pytest.raises(RateLimitError):
+        # Translated to InvocationFailed rather than escaping raw: an adapter catching only
+        # InvocationBlocked would otherwise turn a rate limit into a traceback.
+        with pytest.raises(InvocationFailed) as exc:
             asyncio.run(
                 ai.run(
                     system="s",
@@ -651,7 +653,7 @@ def test_gate_retry_4_the_invoker_supplies_the_remaining_deadline() -> None:
                     policy=InvokePolicy(max_turns=2, deadline_seconds=60),
                 )
             )
-
+    assert exc.value.reason == "provider.rate_limited"
     assert slept == [], "an hour-long Retry-After was honoured inside a 60s deadline"
     assert len(provider.calls) == 1, "and it should not have retried at all"
 
@@ -720,3 +722,99 @@ def test_an_unbounded_run_still_retries() -> None:
         )
     assert result.content == "ok"
     assert slept, "a run with no deadline must still honour Retry-After"
+
+
+# -- GATE-RETRY-6 -----------------------------------------------------------------------------
+#
+# A provider's error body is where a credential most plausibly appears: a 401 frequently quotes
+# the key it rejected. That text reaches an `Outcome`, a `Finding` anything may render, the ledger
+# committed to a repository, and a checkpoint. Redacting it at the sink is necessary and not
+# sufficient — by then it has been copied into an object the framework hands to user code.
+
+SECRET = "sk-ant-api03-LEAKEDKEYVALUE0123456789"
+
+
+@pytest.fixture
+def seeded_secret():
+    from in_lockstep.privileged.redact import redact_registry
+
+    redact_registry.add(SECRET)
+    yield SECRET
+    redact_registry.clear()
+
+
+def test_gate_retry_6_a_provider_error_carrying_a_key_is_redacted_in_the_outcome(
+    seeded_secret: str,
+) -> None:
+    from in_lockstep.llm.interface import AuthenticationError
+
+    provider = Stub(replies=[AuthenticationError(f"401 invalid api key: {SECRET}", status_code=401)])
+    ai = invoker(provider)
+
+    with pytest.raises(InvocationFailed) as exc:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="go")]))
+
+    assert SECRET not in str(exc.value)
+    assert "***" in str(exc.value)
+    assert exc.value.reason == "provider.authentication"
+
+
+def test_the_redaction_survives_the_traceback_chain(seeded_secret: str) -> None:
+    """`raise ... from None` matters: a chained cause prints the original, unredacted, in a crash."""
+    import traceback
+
+    from in_lockstep.llm.interface import AuthenticationError
+
+    provider = Stub(replies=[AuthenticationError(f"401: {SECRET}", status_code=401)])
+    ai = invoker(provider)
+    try:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="go")]))
+    except InvocationFailed as e:
+        rendered = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        assert SECRET not in rendered, "the original error is still reachable through the chain"
+
+
+def test_an_unseeded_key_shape_is_redacted_too(seeded_secret: str) -> None:
+    """Structural patterns are the backstop when Auth never saw the credential."""
+    from in_lockstep.llm.interface import AuthenticationError
+
+    unseeded = "ghp_bbbbbbbbbbbbbbbbbbbbbbbbbb"
+    provider = Stub(replies=[AuthenticationError(f"401 rejected {unseeded}", status_code=401)])
+    ai = invoker(provider)
+
+    with pytest.raises(InvocationFailed) as exc:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="go")]))
+    assert unseeded not in str(exc.value)
+
+
+def test_a_provider_failure_is_errored_not_blocked(seeded_secret: str, tmp_path) -> None:
+    """§4.3: BLOCKED is a policy refusal. A broken credential is infrastructure."""
+    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.llm.interface import AuthenticationError
+
+    provider = Stub(replies=[AuthenticationError(f"401 invalid: {SECRET}", status_code=401)])
+    adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD")))
+
+    assert outcome.status is Status.ERRORED
+    assert outcome.reason == "provider.authentication"
+    assert SECRET not in str(outcome.findings[0].message)
+
+
+def test_the_ledger_record_for_a_failed_run_carries_no_key(seeded_secret: str, tmp_path) -> None:
+    """The other half of the gate: what lands in a file a repository commits."""
+    import asyncio as aio
+
+    from in_lockstep.platform.ledger.store import InRepoLedger
+
+    ledger = InRepoLedger(root=tmp_path)
+    aio.run(
+        ledger.append(
+            "run-1",
+            {"status": "errored", "reason": "provider.authentication", "detail": f"401: {SECRET}"},
+        )
+    )
+    written = ledger.path_for("run-1").read_text()
+    assert SECRET not in written
+    assert "provider.authentication" in written, "the reason survives; only the credential goes"

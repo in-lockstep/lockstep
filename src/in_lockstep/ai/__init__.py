@@ -2,7 +2,7 @@
 
 from .auth import Auth, AuthRequest, AuthTarget, EnvResolver, StaticResolver
 from .context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
-from .invoker import AiInvoker, Invocation, InvocationBlocked, InvokePolicy
+from .invoker import AiInvoker, Invocation, InvocationBlocked, InvocationFailed, InvokePolicy
 from .pricing import CostTable, Rate, default_table
 from .prompt import Body, Prompt, PromptLayers
 from .replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
@@ -25,6 +25,7 @@ __all__ = [
     "EnvResolver",
     "Invocation",
     "InvocationBlocked",
+    "InvocationFailed",
     "InvokePolicy",
     "Prompt",
     "PromptLayers",

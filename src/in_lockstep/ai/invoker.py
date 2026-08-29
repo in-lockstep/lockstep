@@ -29,7 +29,15 @@ from typing import Protocol
 from ..core.context import killswitch_engaged
 from ..core.outcome import Cost
 from ..core.spend import Spend, Unpriced
-from ..llm.interface import LLMProvider
+from ..llm.interface import (
+    AuthenticationError,
+    ContextLengthError,
+    LLMError,
+    LLMProvider,
+    ModelNotFoundError,
+    RateLimitError,
+    TransientError,
+)
 from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
 from ..privileged.egress import EgressPolicy
 from ..privileged.redact import Redact
@@ -44,6 +52,25 @@ ToolRunner = Callable[[str, str, dict[str, object]], Awaitable[str]]
 
 class InvocationBlocked(Exception):
     """The loop refused to continue. Carries a machine-readable reason."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class InvocationFailed(Exception):
+    """The provider could not be made to answer. Distinct from `InvocationBlocked` on purpose.
+
+    §4.3 separates BLOCKED — "policy or a gate stopped it" — from ERRORED — "infrastructure broke,
+    retryable, alertable". A 401 or an exhausted retry ladder is the second, and routing it through
+    the first would file a broken credential under the same heading as a budget ceiling, in the
+    ledger and in every alert built on it.
+
+    The message is redacted at construction rather than by whatever reads it later. A provider's
+    error body is where a key most plausibly appears — a 401 frequently quotes the key it
+    rejected — and by the time this reaches an `Outcome` it has been copied into a `Finding` that
+    anything may render.
+    """
 
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
@@ -103,6 +130,25 @@ class HeuristicCounter:
             len(m.content) + sum(len(str(tc.input)) for tc in m.tool_calls) for m in messages
         )
         return int(chars / 3.2) + 32 * (len(messages) + 1)
+
+
+# A stable reason per failure class. The ledger and any alerting group on these, so they are
+# named here rather than derived from an exception's class name, which is one refactor away from
+# changing every dashboard built on it.
+_FAILURE_REASONS: tuple[tuple[type[LLMError], str], ...] = (
+    (AuthenticationError, "provider.authentication"),
+    (ContextLengthError, "provider.context_length"),
+    (ModelNotFoundError, "provider.model_not_found"),
+    (RateLimitError, "provider.rate_limited"),
+    (TransientError, "provider.transient"),
+)
+
+
+def _failure_reason(error: LLMError) -> str:
+    for kind, reason in _FAILURE_REASONS:
+        if isinstance(error, kind):
+            return reason
+    return "provider.error"
 
 
 class AiInvoker:
@@ -195,15 +241,7 @@ class AiInvoker:
             async def call_provider(req: LLMInput = request) -> LLMOutput:
                 return await self.provider.generate(req)
 
-            output = await self.retry.run(
-                call_provider,
-                label=f"turn{index}",
-                # What is left of the deadline right now, not at construction. Without this a
-                # provider's `Retry-After: 3600` is honoured in full inside a job whose CI timeout
-                # is twenty minutes, and `_guard_turn` cannot interrupt it because the deadline is
-                # checked between turns and the sleep happens inside one.
-                remaining_wall_seconds=self._remaining(policy, started),
-            )
+            output = await self._call(call_provider, policy=policy, started=started, index=index)
             cost = self._price(output)
             self.spend.charge_turn(cost)
             total = total + cost
@@ -263,6 +301,36 @@ class AiInvoker:
         )
 
     # -- internals -----------------------------------------------------------------
+
+    async def _call(
+        self,
+        provider_call: Callable[[], Awaitable[LLMOutput]],
+        *,
+        policy: InvokePolicy,
+        started: float,
+        index: int,
+    ) -> LLMOutput:
+        """One turn's model call: the retry ladder, and the failure translation around it.
+
+        A provider error used to escape `run` raw, so an adapter catching only `InvocationBlocked`
+        — which is all of them — turned a 401 into a traceback rather than an `Outcome`.
+        Translating here rather than in each adapter means a second AI verb inherits it.
+
+        `from None` is load-bearing: a chained cause keeps the original, unredacted exception
+        reachable, and a crash would print it.
+        """
+        try:
+            return await self.retry.run(
+                provider_call,
+                label=f"turn{index}",
+                # What is left of the deadline right now, not at construction. Without this a
+                # provider's `Retry-After: 3600` is honoured in full inside a job whose CI timeout
+                # is twenty minutes, and `_guard_turn` cannot interrupt it because the deadline is
+                # checked between turns and the sleep happens inside one.
+                remaining_wall_seconds=self._remaining(policy, started),
+            )
+        except LLMError as e:
+            raise InvocationFailed(_failure_reason(e), self.redact.exception(e)) from None
 
     def _remaining(self, policy: InvokePolicy, started: float) -> float | None:
         """Seconds of deadline left, or None when the run is unbounded.
