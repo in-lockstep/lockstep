@@ -38,7 +38,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.11'
-      - run: uv sync
+      # With the provider extra. Model SDKs are optional dependencies so that a bare install stays
+      # small, which means the one job that actually calls a model has to ask for one — and this
+      # file had drifted from the scaffold it ships, which gets this right with
+      # `uvx --from 'in-lockstep[anthropic]'`.
+      - run: uv sync --extra anthropic
       - name: Are the controls in place?
         run: uv run in-lockstep doctor
         continue-on-error: true
