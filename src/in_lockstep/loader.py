@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -55,25 +56,36 @@ def load(
     """Import the lifecycle module, and say which ref it came from."""
     ref = resolve(base=base, reviewing=reviewing)
     source = read_config(root, MODULE_FILE, ref)
+    path = MODULE_FILE
+
     if source is None:
-        # A root `lockstep.py` is the previous layout, and silently ignoring it would run on
-        # detected defaults while a perfectly good configuration sat unread — the worst outcome,
-        # because everything would appear to work with none of the repository's bindings.
-        if read_config(root, LEGACY_MODULE_FILE, ref) is not None:
+        # The previous layout, LOADED rather than refused. Refusing was the first attempt and it
+        # was wrong in both directions: it broke every existing repository on upgrade, and it
+        # cannot be satisfied at all by the pull request that performs the move — configuration
+        # comes from the base branch, so the move only exists on the branch being reviewed, and
+        # the change would fail its own review forever.
+        #
+        # Ignoring it would still be the worst answer: running on detected defaults while a
+        # working configuration sits unread means everything appears fine with none of the
+        # repository's bindings. So it is read, and the ref says loudly where it came from.
+        legacy = read_config(root, LEGACY_MODULE_FILE, ref)
+        if legacy is None:
             raise NoLifecycle(
-                f"found {LEGACY_MODULE_FILE} at the repository root, which is no longer where "
-                f"configuration is read from. Move it:\n\n"
-                f"    mkdir -p .lockstep && git mv {LEGACY_MODULE_FILE} {MODULE_FILE}\n\n"
-                f"The root is on `sys.path`, so a module there is importable by your project — "
-                f"which is how framework types leak into code that never meant to depend on them."
+                f"no {MODULE_FILE} at {ref.reason}. Running on detected defaults; "
+                f"`in-lockstep init` scaffolds one."
             )
-        raise NoLifecycle(
-            f"no {MODULE_FILE} at {ref.reason}. Running on detected defaults; "
-            f"`in-lockstep init` scaffolds one."
+        source, path = legacy, LEGACY_MODULE_FILE
+        ref = replace(
+            ref,
+            reason=(
+                f"{ref.reason} — via {LEGACY_MODULE_FILE} at the repository root, which is "
+                f"DEPRECATED. `mkdir -p .lockstep && git mv {LEGACY_MODULE_FILE} {MODULE_FILE}`. "
+                f"The root is on sys.path, so a module there is importable by your project."
+            ),
         )
 
     if not ref.ref:
-        return _import_from(Path(root) / MODULE_FILE), ref
+        return _import_from(Path(root) / path), ref
 
     # From a git ref: materialise, then import. The file is not in the working tree, and must not
     # be written into it — the working tree belongs to the change under review.

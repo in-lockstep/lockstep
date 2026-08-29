@@ -1468,13 +1468,35 @@ def test_a_directory_that_is_not_a_repository_still_records(repo: Path) -> None:
     assert (repo / ".lockstep" / "ledger").exists()
 
 
-def test_a_root_lockstep_py_is_named_rather_than_ignored(repo: Path) -> None:
-    """Running on detected defaults while a perfectly good configuration sits unread is the worst
-    outcome: everything appears to work, with none of the repository's bindings."""
-    (repo / "lockstep.py").write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+def test_a_root_lockstep_py_is_loaded_and_called_deprecated(repo: Path) -> None:
+    """Read, not refused, and not ignored either — all three were tried and only one is right.
+
+    Ignoring it runs on detected defaults while a working configuration sits unread, which is the
+    worst outcome because everything appears to work with none of the repository's bindings.
+    Refusing breaks every existing repository on upgrade — and cannot be satisfied at all by the
+    pull request that performs the move, since configuration comes from the base branch and the
+    move exists only on the branch under review. That change would fail its own review forever.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+    )
     result = CliRunner().invoke(main, ["ls"])
-    assert "no longer where configuration is read from" in result.output
+    assert result.exit_code == 0, result.output
+    assert "DEPRECATED" in result.output
     assert "git mv lockstep.py .lockstep/lockstep.py" in result.output
+    assert "config    none" not in result.output, "it fell through to detected defaults"
+
+
+def test_the_new_location_wins_when_both_exist(repo: Path) -> None:
+    """A repository mid-migration must not have which file is in effect decided by luck."""
+    (repo / "lockstep.py").write_text("raise AssertionError('the root copy was loaded')\n")
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "DEPRECATED" not in result.output
 
 
 def test_init_refuses_to_scaffold_beside_a_root_module(repo: Path) -> None:
