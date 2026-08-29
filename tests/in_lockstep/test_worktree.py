@@ -146,6 +146,46 @@ def test_materialize_refuses_a_path_that_escapes_the_worktree(tmp_path: Path) ->
     assert not (tmp_path / "escape.py").exists()
 
 
+@pytest.mark.parametrize("escaping", ["/etc/passwd", "../../secret", "../outside.py"])
+def test_materialize_refuses_a_symlink_that_points_outside_the_worktree(
+    tmp_path: Path, escaping: str
+) -> None:
+    """A symlink is a write that lands where it points; one aimed out of the tree is the out-of-root
+    write ChangeGuard exists to stop, and materialisation is a second write point that must too."""
+    root = _repo(tmp_path)
+    changeset = ChangeSet(changes=(FileChange(path="link", symlink_target=escaping),))
+
+    async def run() -> None:
+        async with materialize(str(root), changeset):
+            pass
+
+    with pytest.raises(WorktreeError, match="points outside the worktree"):
+        asyncio.run(run())
+
+
+def test_materialize_allows_a_symlink_that_stays_inside(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    changeset = ChangeSet(changes=(FileChange(path="pkg/link.py", symlink_target="../app.py"),))
+
+    async def run() -> None:
+        async with materialize(str(root), changeset) as tree:
+            link = Path(tree) / "pkg" / "link.py"
+            assert link.is_symlink()
+
+    asyncio.run(run())
+
+
+def test_materialize_refuses_a_ref_that_looks_like_an_option(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+
+    async def run() -> None:
+        async with materialize(str(root), ChangeSet(), ref="--lock"):
+            pass
+
+    with pytest.raises(WorktreeError, match="looks like an option"):
+        asyncio.run(run())
+
+
 def test_a_staged_change_becomes_a_red_or_green_verdict(tmp_path: Path) -> None:
     """The goal-5 loop, end to end: a change the model has not committed is run and judged.
 

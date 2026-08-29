@@ -64,16 +64,29 @@ async def _git(repo_root: str, *args: str) -> str:
     return out.decode(errors="replace")
 
 
+def _within(root: Path, candidate: Path) -> bool:
+    """Whether `candidate` is `root` itself or lives under it, compared on resolved paths.
+
+    `resolve()` collapses `..` and follows any symlink in an existing prefix, so this holds against
+    both a `../` path and a symlink planted earlier in the same tree. A path that does not exist yet
+    still resolves lexically, which is what a change writing a new file needs.
+    """
+    try:
+        candidate.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def _safe_target(worktree: Path, rel_path: str) -> Path:
-    """The absolute path a change writes to, refused if it escapes the worktree.
+    """The path a change writes to, refused if it escapes the worktree.
 
     `ChangeGuard` already refuses an out-of-root path upstream, but materialisation is a second
     write point and a rule enforced at one point is enforced at none — a change that reached here
     with a `..` in it must not land outside the disposable tree.
     """
-    target = (worktree / rel_path).resolve()
-    root = worktree.resolve()
-    if target != root and root not in target.parents:
+    target = worktree / rel_path
+    if not _within(worktree, target):
         raise WorktreeError(
             f"change path {rel_path!r} escapes the worktree — refusing to write outside the "
             f"materialised tree."
@@ -86,6 +99,16 @@ def _apply_change(worktree: Path, change: FileChange) -> None:
     # Symlinks first: a symlink change carries `symlink_target` and no `contents`, so it would read
     # as a deletion under the check below.
     if change.symlink_target is not None:
+        # Guard the *target*, not just the link's own path: a symlink is a write that lands where it
+        # points, and one aimed at `/etc/passwd` or `../../secret` is the "out-of-root write next
+        # turn" ChangeGuard exists to stop. Resolve it from the link's own directory the way the
+        # filesystem will, so a relative target and an absolute one are both checked.
+        destination = target.parent / change.symlink_target
+        if not _within(worktree, destination):
+            raise WorktreeError(
+                f"symlink {change.path!r} -> {change.symlink_target!r} points outside the "
+                f"worktree — refusing to plant an escaping link."
+            )
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.is_symlink() or target.exists():
             target.unlink()
@@ -106,6 +129,12 @@ async def materialize(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD"
 
     Use as `async with materialize(root, changeset) as tree: await ctx.do(Test, TestSpec(root=tree))`.
     """
+    # `ref` is an argv token to `git` (no shell), so this is option-confusion, not injection: a ref
+    # like `--lock` would be read by `git worktree add` as a flag. A commit-ish never begins with a
+    # dash, so refuse one that does rather than let a base ref a caller took from a ticket steer the
+    # command.
+    if ref.startswith("-"):
+        raise WorktreeError(f"refusing a ref that looks like an option: {ref!r}")
     parent = Path(tempfile.mkdtemp(prefix="in-lockstep-worktree-"))
     # A child that does not exist yet: `git worktree add` creates the leaf and refuses a path that
     # is already populated, and `mkdtemp` hands back an existing directory.
