@@ -338,3 +338,32 @@ def test_no_workspace_id_sends_no_header() -> None:
     finally:
         if had is not None:
             os.environ["ANTHROPIC_WORKSPACE_ID"] = had
+
+
+def test_a_workspace_name_is_refused_before_the_call(monkeypatch) -> None:
+    """"Default" is what the Console shows, and the natural thing to paste.
+
+    Paying a network round-trip to be told the header is invalid teaches nothing about where the
+    right value lives, so the message does the teaching instead.
+    """
+    from in_lockstep.ai.bootstrap import MissingCredential, _anthropic_workspace
+
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "Default")
+    with pytest.raises(MissingCredential) as exc:
+        _anthropic_workspace()
+    assert "wrkspc_" in str(exc.value)
+    assert "Console URL" in str(exc.value)
+    assert "nothing was charged" in str(exc.value).lower()
+
+
+@pytest.mark.parametrize("value", ["wrkspc_01ABC", "  wrkspc_01ABC  ", ""])
+def test_a_tagged_id_or_an_absent_one_is_accepted(monkeypatch, value: str) -> None:
+    """Narrow by design: only a value missing the documented prefix is refused.
+
+    Absent is a legitimate state — a key that is not identity-linked needs no workspace and must
+    not be handed an empty header.
+    """
+    from in_lockstep.ai.bootstrap import _anthropic_workspace
+
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", value)
+    assert _anthropic_workspace() == value.strip()

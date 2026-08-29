@@ -488,7 +488,12 @@ def review_cmd(
 
     table = default_table()
     auth = Auth()
-    registry = default_registry(auth)
+    try:
+        registry = default_registry(auth)
+    except MissingCredential as e:
+        # Provider registration reads configuration, so a malformed value is caught here rather
+        # than at the call. Same treatment either way: a setup problem is a message.
+        raise click.ClickException(str(e)) from None
     selected = Model(model)
     tape = Cassette.load(cassette)
 

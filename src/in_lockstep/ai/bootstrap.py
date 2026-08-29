@@ -41,6 +41,32 @@ def _ollama(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
     return OllamaProvider(settings, creds)
 
 
+#: Workspace ids are tagged. The Anthropic SDK's own type says so: "Tagged workspace ID
+#: (`wrkspc_...`)". Checked locally because the natural mistake is to use the workspace *name* —
+#: "Default" is what the Console shows you — and paying a network round-trip to be told the
+#: header is invalid teaches nothing about where the right value lives.
+WORKSPACE_PREFIX = "wrkspc_"
+
+
+def _anthropic_workspace() -> str:
+    """The configured workspace id, refused early if it is plainly a name.
+
+    Narrow on purpose: it rejects only a value that does not carry the documented prefix, so a
+    future format is a one-line change here rather than a mystery. Absent is fine — a key that is
+    not identity-linked needs no workspace and gets no header.
+    """
+    value = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+    if not value or value.startswith(WORKSPACE_PREFIX):
+        return value
+    raise MissingCredential(
+        f"ANTHROPIC_WORKSPACE_ID is {value!r}, which looks like a workspace name rather than its "
+        f"id. The id is tagged {WORKSPACE_PREFIX}… and appears in the Console URL when you open "
+        f"the workspace: Settings -> Workspaces -> (pick one), then take the {WORKSPACE_PREFIX}… "
+        f"segment from the address bar. Unset it entirely if your key is not identity-linked. "
+        f"Nothing was sent and nothing was charged."
+    )
+
+
 def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     """The zero-config set. A repository re-registers any of these in its own module."""
     auth = auth or Auth()
@@ -49,7 +75,7 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     # An identity-linked API key acts in a workspace, and the API requires the id. Read here
     # rather than demanded in `lockstep.py`, because it is per-developer rather than per-project:
     # two people on one repository authenticate into different workspaces.
-    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID", "")
+    workspace = _anthropic_workspace()
     registry.register(
         "anthropic",
         lambda s, c: _anthropic(s, c),
