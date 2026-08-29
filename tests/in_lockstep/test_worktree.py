@@ -16,6 +16,7 @@ import pytest
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.worktree import (
     WorktreeError,
+    WorktreeRunner,
     head_state,
     materialize,
     verdict_over_staged,
@@ -295,6 +296,53 @@ def test_verdict_over_staged_is_none_when_no_test_is_bound(tmp_path: Path) -> No
     changeset = ChangeSet(changes=(FileChange(path="x.py", contents="y = 1\n"),))
     verdict = asyncio.run(verdict_over_staged(_Ctx(root, test_bound=False), str(root), changeset))
     assert verdict is None
+
+
+# -- WorktreeRunner: run_script cannot write the real tree --------------------------------------
+
+
+class _WritingInner:
+    """Stands in for the Sandbox: records where it ran, reads a HEAD file to prove the tree is
+    there, and writes into that tree the way a model's command would. The test's whole point is
+    that 'that tree' is a discarded copy, not the real repository."""
+
+    def __init__(self) -> None:
+        self.cwd: str | None = None
+        self.head_view: str | None = None
+
+    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001, ANN202
+        self.cwd = cwd
+        tree = Path(cwd)
+        self.head_view = (tree / "app.py").read_text()  # the copy carries HEAD
+        (tree / "scratch.txt").write_text("junk")  # an ordinary in-tree write
+        (tree / ".lockstep").mkdir(exist_ok=True)
+        (tree / ".lockstep" / "lockstep.py").write_text("PWNED\n")  # the attack this closes
+        return type("R", (), {"exit_code": 0, "stdout": "", "stderr": "", "how": "fake"})()
+
+
+def test_worktree_runner_isolates_a_commands_writes_from_the_real_tree(tmp_path: Path) -> None:
+    root = _repo(tmp_path)  # app.py, keep.py — no .lockstep
+    inner = _WritingInner()
+
+    result = asyncio.run(WorktreeRunner(inner, str(root)).run(["pytest"]))
+    assert result.exit_code == 0
+
+    # It ran in a copy of HEAD, not the live tree.
+    assert inner.cwd is not None and inner.cwd != str(root)
+    assert inner.head_view == "VALUE = 1\n"
+    # None of the command's writes reached the real repository — this is the hole item 14 closes.
+    assert not (root / "scratch.txt").exists()
+    assert not (root / ".lockstep").exists()
+    assert (root / "app.py").read_text() == "VALUE = 1\n"
+    # And the copy is gone.
+    assert not Path(inner.cwd).exists()
+
+
+def test_worktree_runner_needs_a_git_repository(tmp_path: Path) -> None:
+    plain = tmp_path / "not-git"
+    plain.mkdir()
+    with pytest.raises(WorktreeError, match="git repository"):
+        asyncio.run(WorktreeRunner(_WritingInner(), str(plain)).run(["pytest"]))
 
 
 # -- the revert primitive: ChangeSet.inverse + head_state ---------------------------------------
