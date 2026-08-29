@@ -5,19 +5,20 @@ rather than one with a parameter, and what makes each independently budgetable a
 
 `implement/tdd` is the interesting one, and it is not new: the compiler-era pipeline already ran
 requirements → plan → tests → change as four chained agents. What changes is that the chain is now
-a single strategy driving several invocations, interleaved with deterministic verbs — it can
-actually run the tests it wrote and see them fail before implementing, which four independent
-agents could not do.
+a single strategy driving several invocations interleaved with deterministic verbs — it writes a
+failing test, runs it and confirms it is red before implementing, then runs it again and confirms
+green, which four independent agents starting from each other's prose could not do.
 
 The registry is deliberately small at 1.0: registering a strategy nobody has fixtures for is how
 strategy sprawl starts, and ten unmeasured strategies are worse than one measured.
 
-**One of these is executable and the rest are not, and the difference is visible from here.** A
+**Two of these are executable and the rest are not, and the difference is visible from here.** A
 registration whose factory returns a string is a catalogue entry — a name reserved, a description
-of an approach nobody has written. `AiImplement` refuses one by name rather than failing on a
-missing attribute, so the distinction is something you are told rather than something you deduce
-from a traceback. That this file used to contain nothing but such entries is why the registry
-looked like a dispatcher for a phase without being one.
+of an approach nobody has written. `implement/oneshot` and `implement/tdd` return a strategy;
+`implement/direct` and the other-verb entries are still catalogue names. `AiImplement` refuses one
+by name rather than failing on a missing attribute, so the distinction is something you are told
+rather than something you deduce from a traceback. That this file used to contain nothing but such
+entries is why the registry looked like a dispatcher for a phase without being one.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .adapters.ai.oneshot import OneshotImplement
+from .adapters.ai.tdd import TddImplement
 from .ai.strategy import StrategyRegistry
 from .core.verbs import Verb
 
@@ -56,8 +58,8 @@ def default_registry() -> StrategyRegistry:
     registry.register(
         "implement/tdd",
         Verb.IMPLEMENT,
-        factory=lambda: "tdd",
-        description="Red then green: write failing tests, confirm red, implement, re-test.",
+        factory=TddImplement,
+        description="Red then green: write a failing test, confirm red, implement, confirm green.",
     )
     registry.register(
         "implement/direct",
@@ -65,10 +67,11 @@ def default_registry() -> StrategyRegistry:
         factory=lambda: "direct",
         description="Single shot. Cheapest, and the baseline the others are measured against.",
     )
-    # The default is the one that runs. Defaulting to `implement/tdd` was defensible while nothing
-    # dispatched strategies at all and indefensible the moment something did: `ctx.do(Implement,
-    # ...)` with no explicit choice would have refused, and the registry's own default would have
-    # been the reason. A default naming an approach nobody has written is a plan, not a default.
+    # The default is `implement/oneshot`: the cheap baseline that needs nothing bound but a model.
+    # `implement/tdd` now runs too, but it is not the default — it costs two model phases and needs
+    # a Test verb bound to confirm red and green, so it is a choice a repository makes deliberately
+    # (`default(Verb.IMPLEMENT, "implement/tdd")`, or per call) rather than the one it gets by
+    # saying nothing. A default that refused unless Test happened to be bound would be a trap.
     registry.default(Verb.IMPLEMENT, "implement/oneshot")
 
     registry.register(

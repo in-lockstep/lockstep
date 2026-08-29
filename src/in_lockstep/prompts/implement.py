@@ -87,4 +87,12 @@ class OneshotImplementPrompt(ImplementPrompt):
     body: ClassVar[Body | None] = Body.from_file("implement/oneshot.md", package="in_lockstep.prompts")
 
 
-PROMPTS: dict[str, type[ImplementPrompt]] = {"implement/oneshot": OneshotImplementPrompt}
+class TddImplementPrompt(ImplementPrompt):
+    strategy: ClassVar[str] = "implement/tdd"
+    body: ClassVar[Body | None] = Body.from_file("implement/tdd.md", package="in_lockstep.prompts")
+
+
+PROMPTS: dict[str, type[ImplementPrompt]] = {
+    "implement/oneshot": OneshotImplementPrompt,
+    "implement/tdd": TddImplementPrompt,
+}

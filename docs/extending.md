@@ -259,14 +259,15 @@ If your strategy holds a path grant, register it `privileged=True`. Selection ca
 ticket labels, and anyone can write a ticket label.
 
 A registration whose factory returns something without `execute` is a **catalogue entry** — a name
-reserved for an approach nobody has written yet. `implement/tdd` and `implement/direct` are both
-that today. `AiImplement` refuses one by name rather than failing on a missing attribute, and
-`in-lockstep ls` is where you can see which is which.
+reserved for an approach nobody has written yet. `implement/direct` is that today; `implement/tdd`
+now runs. `AiImplement` refuses a catalogue entry by name rather than failing on a missing
+attribute, and `in-lockstep ls` is where you can see which is which.
 
 ### `implement/oneshot`
 
-The one shipped strategy that actually runs. One session, one model, a tool set that can read,
-search, stage writes and run a command:
+The default shipped strategy: one session, one model, a tool set that can read, search, stage writes
+and run a command. (`implement/tdd` also runs — a test-first loop, below — but oneshot is the cheap
+default.)
 
 ```bash
 in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change
@@ -302,6 +303,22 @@ is, not whether its change works. Verifying a change is what the `apply` half is
 `--max-turns` defaults to 40. That is a runaway backstop, not the budget: every turn re-sends the
 accumulated history, so the thing that actually stops a long session is the per-turn spend check,
 which refuses *before* the call that would cross the ceiling.
+
+### `implement/tdd`
+
+Test-first, enforced by the strategy rather than requested in a prompt. It runs in two model steps
+with a real `Test` run between them: it asks for a failing test, **materialises that test in a
+throwaway worktree and runs the suite to confirm it is red**, then asks for the implementation and
+runs the suite again to confirm green. A test that passes before anything was written stops the run
+with `tdd.not_red`; an implementation that leaves the test failing comes back `tdd.not_green` rather
+than opening a pull request that does not work.
+
+This is where the `run_script` caveat above stops applying: oneshot's `run_script` sees the tree as
+it was, but tdd's verdict comes from `ctx.do(Test, TestSpec(root=…))` against the *materialised*
+change, so it reflects the code as proposed. Because it needs to run the suite, `implement/tdd`
+requires a `Test` verb bound and refuses up front (`tdd.no_test`) if none is — it will not degrade to
+an untested oneshot. Select it per call (`--strategy implement/tdd`) or make it the default
+(`lockstep.strategies.default(Verb.IMPLEMENT, "implement/tdd")`).
 
 ## The path a project takes
 
