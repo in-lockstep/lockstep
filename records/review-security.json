@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.040836,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 101,
+        "message": "Test verdict counts from the artifact are interpolated directly into the PR body markdown without escaping or bounds checking.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 131,
+        "message": "`read_verdict` casts artifact fields to int with no upper-bound check; a maliciously large value is accepted silently.",
+        "path": "src/in_lockstep/platform/artifacts.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 48,
+        "message": "`verdict_over_staged` materialises the changeset into a throwaway worktree and runs the test suite there; test code in the changeset executes in that process.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 9802,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 762,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 10564,
+  "wall_seconds": 22.035
+}
