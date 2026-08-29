@@ -26,20 +26,19 @@ from typing import Any, ClassVar
 
 from ...ai.builtins import CommandRunner, ToolRunnerImpl, Workspace, read_write_execute
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
+from ...ai.invoker import AiInvoker, InvokePolicy
 from ...ai.prompt import PromptLayers
 from ...ai.strategy import Registration, StrategyRefused, StrategyRegistry, UnknownStrategy
-from ...ai.structured import SchemaError, parse
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
 from ...core.verbs import Capability, Verb
-from ...privileged.egress import EgressRefused
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
 from ..pytest_adapter import Test
 from ..worktree import materialize
+from ._strategy import PhaseError, read_reply, reported, run_phase, test_findings
 
 DEFAULT_TURNS = 40
 DEFAULT_MAX_TOKENS = 8192
@@ -205,8 +204,6 @@ class DiagnoseThenFix:
         try:
             # -- Reproduce ----------------------------------------------------------------------
             repro_inv = await self._run(session, "fix/reproducer", params, package)
-            if repro_inv.truncated:
-                return _truncated(session, repro_inv.cost)
             reproducer = session.workspace.changeset(ticket=ticket.key)
             if not reproducer.changes:
                 return Outcome(
@@ -242,7 +239,7 @@ class DiagnoseThenFix:
                             severity=Severity.ERROR,
                             blocking=True,
                         ),
-                        *_test_findings(red),
+                        *test_findings(red),
                     ),
                     decided=red.decided,
                 )
@@ -259,18 +256,10 @@ class DiagnoseThenFix:
                 failure=_fix_specification(reproducer, red),
             )
             fix_inv = await self._run(session, "fix/fix-writer", fix_params, package)
-            if fix_inv.truncated:
-                return _truncated(session, repro_inv.cost + fix_inv.cost)
-        except (InvocationBlocked, EgressRefused) as e:
-            return _blocked(e.reason, str(e), staged=session.workspace.changes)
-        except InvocationFailed as e:
-            return Outcome(
-                status=Status.ERRORED,
-                reason=e.reason,
-                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
-            )
+        except PhaseError as e:
+            return e.outcome
 
-        summary, notes, unfinished, malformed = _read_reply(fix_inv.content)
+        summary, notes, unfinished, malformed = read_reply(fix_inv.content)
         full = session.workspace.changeset(summary=summary, ticket=ticket.key)
         cost = repro_inv.cost + fix_inv.cost
 
@@ -303,7 +292,7 @@ class DiagnoseThenFix:
             strategy=self.id,
             turns=repro_inv.turn_count + fix_inv.turn_count,
         )
-        findings = [*_reported(full, malformed, (repro_inv, fix_inv))]
+        findings = reported(full, malformed=malformed, invocations=(repro_inv, fix_inv), prefix="fix")
 
         async with materialize(session.repo_root, full) as tree:
             green = await ctx.do(Test, _test_spec(tree, "pass"))
@@ -322,7 +311,7 @@ class DiagnoseThenFix:
                         blocking=True,
                     ),
                     *findings,
-                    *_test_findings(green),
+                    *test_findings(green),
                 ),
                 decided=green.decided,
             )
@@ -339,17 +328,12 @@ class DiagnoseThenFix:
     async def _run(
         self, session: FixSession, prompt_id: str, params: FixParams, package: ContextPackage
     ) -> Any:
+        """One phase: compose the prompt's system + schema, render the user message, and run the
+        model loop through `run_phase` — which raises `PhaseError` on a refusal, failure or
+        truncation, caught once around both phases in `execute`."""
         lens = session.prompts[prompt_id]()
         system = lens.system(session.layers) + "\n\n" + _schema_instruction(FIX_SCHEMA)
-        messages = lens.render(params, package)
-        return await session.invoker.run(
-            system=system,
-            messages=messages,
-            context=package,
-            tools=session.tools,
-            run_tool=session.run_tool,
-            policy=session.policy,
-        )
+        return await run_phase(session, system, lens.render(params, package), package, prefix="fix")
 
 
 def _test_spec(tree: str, expect: str) -> Any:
@@ -383,86 +367,6 @@ def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:
     for change in over.changes:
         by_path[change.path] = change
     return ChangeSet(changes=tuple(by_path.values()), summary=over.summary or base.summary)
-
-
-def _test_findings(outcome: Any) -> tuple[Finding, ...]:
-    return tuple(
-        Finding(id=f.id, message=f.message, severity=Severity.NOTE)
-        for f in outcome.findings
-        if getattr(f, "blocking", False)
-    )
-
-
-def _truncated(session: FixSession, cost: Any) -> Outcome[FixReport]:
-    return Outcome(
-        status=Status.ERRORED,
-        reason="fix.truncated",
-        cost=cost,
-        findings=(
-            Finding(
-                id="fix.truncated",
-                message=(
-                    f"the model stopped at the {session.policy.max_tokens}-token output cap "
-                    f"mid-answer. A write cut off there is a truncated file, so nothing staged in "
-                    f"this session is returned. Raise `InvokePolicy.max_tokens` and re-run."
-                ),
-                severity=Severity.ERROR,
-                blocking=True,
-            ),
-        ),
-    )
-
-
-def _read_reply(content: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
-    try:
-        value = parse(content).value
-    except SchemaError:
-        return content.strip()[:1000], (), (), True
-    if not isinstance(value, dict):
-        return content.strip()[:1000], (), (), True
-    return (
-        str(value.get("summary", "")).strip(),
-        _strings(value.get("notes")),
-        _strings(value.get("unfinished")),
-        False,
-    )
-
-
-def _strings(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    return tuple(str(v) for v in value if isinstance(v, (str, int, float)))
-
-
-def _reported(full: ChangeSet, malformed: bool, invocations: tuple[Any, ...]) -> list[Finding]:
-    findings = [
-        Finding(
-            id="fix.staged",
-            message=f"{'deleted' if change.deleted else 'wrote'} {change.path}",
-            severity=Severity.NOTE,
-            path=change.path,
-        )
-        for change in full.changes
-    ]
-    if malformed:
-        findings.append(
-            Finding(
-                id="fix.unstructured",
-                message="the final message was not the JSON the schema asked for; its text was kept "
-                "as the summary. The staged change came through the tool boundary and is unaffected.",
-                severity=Severity.WARNING,
-            )
-        )
-    findings += [
-        Finding(
-            id=f"injection.{f.name}",
-            message=f"{f.severity}: {f.excerpt}",
-            severity=Severity.ERROR if f.severity == "critical" else Severity.WARNING,
-        )
-        for inv in invocations
-        for f in inv.findings
-    ]
-    return findings
 
 
 def _executable(registry: StrategyRegistry) -> list[str]:
