@@ -195,7 +195,15 @@ class AiInvoker:
             async def call_provider(req: LLMInput = request) -> LLMOutput:
                 return await self.provider.generate(req)
 
-            output = await self.retry.run(call_provider, label=f"turn{index}")
+            output = await self.retry.run(
+                call_provider,
+                label=f"turn{index}",
+                # What is left of the deadline right now, not at construction. Without this a
+                # provider's `Retry-After: 3600` is honoured in full inside a job whose CI timeout
+                # is twenty minutes, and `_guard_turn` cannot interrupt it because the deadline is
+                # checked between turns and the sleep happens inside one.
+                remaining_wall_seconds=self._remaining(policy, started),
+            )
             cost = self._price(output)
             self.spend.charge_turn(cost)
             total = total + cost
@@ -255,6 +263,22 @@ class AiInvoker:
         )
 
     # -- internals -----------------------------------------------------------------
+
+    def _remaining(self, policy: InvokePolicy, started: float) -> float | None:
+        """Seconds of deadline left, or None when the run is unbounded.
+
+        Both ceilings count: `InvokePolicy.deadline_seconds` bounds this invocation, and the run's
+        `Spend` may carry a wall-clock budget covering every invocation in the run. The tighter of
+        the two is the one that binds, and a retry must not sleep past either.
+        """
+        elapsed = time.monotonic() - started
+        limits = []
+        if policy.deadline_seconds is not None:
+            limits.append(policy.deadline_seconds - elapsed)
+        run_budget = getattr(self.spend.budget, "wall_seconds", None)
+        if run_budget is not None:
+            limits.append(run_budget - self.spend.charged.wall_seconds - elapsed)
+        return min(limits) if limits else None
 
     def _guard_turn(self, policy: InvokePolicy, started: float, index: int) -> None:
         """Re-checked every turn. A loop is one action call; the boundary only fires once."""

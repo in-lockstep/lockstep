@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -48,6 +49,10 @@ class Stub(LLMProvider):
             reply = self.replies.pop(0)
         else:
             reply = LLMOutput(content="done")
+        # A reply may be an exception, so a scripted sequence can mix failures and successes —
+        # which is what retry behaviour is made of and what this stub could not express before.
+        if isinstance(reply, BaseException):
+            raise reply
         if self.per_message_tokens:
             reply.usage = TokenUsage(
                 input_tokens=self.per_message_tokens * max(1, len(input.messages)),
@@ -618,3 +623,100 @@ def test_an_unknown_aspect_names_the_lenses_this_adapter_has() -> None:
     outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", aspect="security")))
     assert outcome.status is Status.BLOCKED
     assert "'house'" in outcome.findings[0].message
+
+
+# -- the retry budget, at the seam where it was never supplied -------------------------------
+#
+# `GATE-RETRY-4` passed for the whole pivot while this was broken, because its test constructs
+# `RetryPolicy(remaining_wall_seconds=60)` by hand. Nothing on a live path ever set the field, so
+# the gate proved the policy honours a budget it was never given.
+
+
+def test_gate_retry_4_the_invoker_supplies_the_remaining_deadline() -> None:
+    """A `Retry-After: 3600` must not outlive a 20-minute job."""
+    slept: list[float] = []
+
+    async def no_sleep(seconds: float) -> None:  # pragma: no cover - trivial
+        slept.append(seconds)
+
+    provider = Stub(replies=[RateLimitError("slow down", retry_after=3600, status_code=429)] * 3)
+    ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
+
+    with mock.patch("asyncio.sleep", no_sleep):
+        with pytest.raises(RateLimitError):
+            asyncio.run(
+                ai.run(
+                    system="s",
+                    messages=[Message(role="user", content="go")],
+                    policy=InvokePolicy(max_turns=2, deadline_seconds=60),
+                )
+            )
+
+    assert slept == [], "an hour-long Retry-After was honoured inside a 60s deadline"
+    assert len(provider.calls) == 1, "and it should not have retried at all"
+
+
+def test_a_retry_after_that_fits_is_still_slept() -> None:
+    """The bound must not become a blanket refusal to honour Retry-After."""
+    slept: list[float] = []
+
+    async def no_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    provider = Stub(
+        replies=[RateLimitError("slow", retry_after=2, status_code=429), LLMOutput(content="ok")]
+    )
+    ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
+
+    with mock.patch("asyncio.sleep", no_sleep):
+        result = asyncio.run(
+            ai.run(
+                system="s",
+                messages=[Message(role="user", content="go")],
+                policy=InvokePolicy(max_turns=2, deadline_seconds=600),
+            )
+        )
+    assert result.content == "ok"
+    assert slept and 2 <= slept[0] < 2.5, slept
+
+
+def test_successive_sleeps_are_bounded_in_aggregate_not_individually() -> None:
+    """Two 30s sleeps under a 40s budget: each fits alone, the pair does not."""
+    slept: list[float] = []
+
+    async def no_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    err = RateLimitError("slow", retry_after=30, status_code=429)
+
+    async def always_rate_limited() -> LLMOutput:
+        raise err
+
+    with mock.patch("asyncio.sleep", no_sleep):
+        with pytest.raises(RateLimitError):
+            asyncio.run(
+                RetryPolicy(attempts=4, base_delay=0).run(
+                    always_rate_limited, remaining_wall_seconds=40
+                )
+            )
+    assert len(slept) == 1, f"the budget did not carry across attempts: {slept}"
+
+
+def test_an_unbounded_run_still_retries() -> None:
+    """No deadline and no wall budget means no ceiling, not a zero ceiling."""
+    slept: list[float] = []
+
+    async def no_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    provider = Stub(
+        replies=[RateLimitError("slow", retry_after=1, status_code=429), LLMOutput(content="ok")]
+    )
+    ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
+
+    with mock.patch("asyncio.sleep", no_sleep):
+        result = asyncio.run(
+            ai.run(system="s", messages=[Message(role="user", content="go")], policy=InvokePolicy())
+        )
+    assert result.content == "ok"
+    assert slept, "a run with no deadline must still honour Retry-After"

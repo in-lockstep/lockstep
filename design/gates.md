@@ -64,7 +64,7 @@ same one: a mechanism nobody invoked is outstanding, not passed.
 | `GATE-RETRY-1` | P2 | held | A transport stub returning 500 forever is called exactly 3 times for one logical model call. |
 | `GATE-RETRY-2` | P0 | held | `with_retry` is imported nowhere under `in_lockstep/`; every SDK client is constructed with `max_retries=0`. |
 | `GATE-RETRY-3` | P0 | held | A 400 error whose message contains `"generated"` maps to a non-retryable class and is attempted exactly once. (Today `"rate" in msg.lower()` matches "gene**rate**d".) |
-| `GATE-RETRY-4` | P2 | held | `Retry-After: 30` is slept; `Retry-After: 3600` with 60s remaining wall clock returns `ERRORED` without sleeping. |
+| `GATE-RETRY-4` | P2 | held | `Retry-After: 30` is slept; `Retry-After: 3600` with 60s remaining wall clock returns `ERRORED` without sleeping — asserted **through `AiInvoker`**, which supplies the remaining budget, not against a `RetryPolicy` handed one by the test. The original form passed for the whole pivot while nothing on any live path set the field, so the gate proved the policy honours a budget it was never given. Successive sleeps are bounded in aggregate, not individually. |
 | `GATE-RETRY-5` | P1 | held | `Retry` middleware invokes an action declaring `Capability.SPENDS_BUDGET` exactly once and emits a finding explaining the refusal. |
 | `GATE-RETRY-6` | P2 | unmet | A provider error carrying an API-key-shaped string produces an `Outcome` and ledger record matching no `Redact` secret pattern. **Missing:** `GATE-REDACT-2` covers `Redact` directly, but nothing asserts a provider error reaches the ledger redacted. |
 
