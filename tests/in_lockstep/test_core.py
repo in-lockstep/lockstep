@@ -674,3 +674,75 @@ def test_an_empty_budget_object_is_not_a_declaration() -> None:
 
     with pytest.raises(UndeclaredBudget):
         lockstep.context(run_id="r")
+
+
+# -- GATE-LEDGER-5 -----------------------------------------------------------------------------
+#
+# The metric namespace broke at the pivot: `lockstep.*` was the compiler's, `in_lockstep.*` is the
+# framework's, and a dashboard built on the old prefix must not silently keep receiving data under
+# it. The positive half — that the names we expect are emitted — was asserted from Phase 1. The
+# negative clause was not, and it is the half that catches a regression.
+
+METRIC_PREFIXES = ("in_lockstep.", "gen_ai.")
+RETIRED_PREFIX = "lockstep."
+
+
+def _metric_names_in_source() -> list[tuple[str, str]]:
+    """Every literal metric name in the package, from the AST rather than from a run.
+
+    A runtime check only sees metrics some test happened to trigger. A metric added behind a
+    condition nothing exercises is exactly the one that would carry a stale prefix unnoticed.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[2] / "src" / "in_lockstep"
+    found = []
+    for path in src.rglob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "metric"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                found.append((str(path.relative_to(src)), node.args[0].value))
+    return found
+
+
+def test_gate_ledger_5_every_metric_name_in_the_package_is_namespaced() -> None:
+    sites = _metric_names_in_source()
+    assert len(sites) >= 4, f"the scan found {len(sites)} metric call sites; it should find every one"
+    for where, name in sites:
+        assert name.startswith(METRIC_PREFIXES), f"{where} emits {name!r}, outside the namespace"
+
+
+def test_gate_ledger_5_no_metric_carries_the_retired_prefix() -> None:
+    """The negative clause. `in_lockstep.` CONTAINS `lockstep.`, so this is about the prefix.
+
+    Spelled as a `startswith` rather than a substring check, and asserted here so that nobody
+    later "tightens" it into the shape that rejects every legitimate metric in the package.
+    """
+    assert "in_lockstep.action.outcome".startswith(RETIRED_PREFIX) is False
+    assert RETIRED_PREFIX in "in_lockstep.action.outcome", "the trap this test exists to document"
+
+    for where, name in _metric_names_in_source():
+        assert not name.startswith(RETIRED_PREFIX), f"{where} emits the compiler's namespace: {name!r}"
+
+
+def test_gate_ledger_5_holds_for_what_a_run_actually_emits() -> None:
+    """Source and runtime both, because a name can also be built rather than written."""
+    recorder = Recorder()
+    ctx, _ = ctx_with(
+        (Thing, Ok(cost=Cost(usd=0.25, input_tokens=10, output_tokens=5, priced_tokens=15))),
+        middleware=[otel(recorder)],
+    )
+    asyncio.run(ctx.do(Thing, "x"))
+
+    assert recorder.metrics, "nothing was emitted, so this asserted nothing"
+    for metric in recorder.metrics:
+        assert metric.name.startswith(METRIC_PREFIXES), metric.name
+        assert not metric.name.startswith(RETIRED_PREFIX), metric.name
