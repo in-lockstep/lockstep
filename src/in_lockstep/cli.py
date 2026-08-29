@@ -515,28 +515,36 @@ def review_cmd(
 
 
 def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
-    from pathlib import Path as _Path
+    """One writer, through the store that owns the format.
 
-    record = {
-        "schema": 2,
-        "epoch": "in-process",
-        "run_id": ctx.run_id,
-        "kind": "review",
-        "aspect": aspect,
-        "model": model_id,
-        "status": outcome.status.value,
-        "decided": outcome.decided,
-        "tokens": outcome.cost.total_tokens,
-        "input_tokens": outcome.cost.input_tokens,
-        "output_tokens": outcome.cost.output_tokens,
-        "cost_usd": round(outcome.cost.usd, 6),
-        "findings": len(outcome.findings),
-        "wall_seconds": round(outcome.cost.wall_seconds, 3),
-    }
-    path = _Path(".in-lockstep/ledger") / f"{ctx.run_id}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    sink.write_json(path, record)
-    click.echo(f"ledger    {path}")
+    This hand-rolled the record and stamped `"schema": 2` and `"epoch": "in-process"` as literals
+    beside `InRepoLedger`, which owns those constants and exists for exactly this. Two writers of
+    one format is not an organisation problem: an epoch bump would have moved one of them, and the
+    reader refuses to compare across epochs precisely so that a silent mismatch cannot average a
+    credits-era number with a tokens-era one.
+    """
+    from .platform.ledger.store import InRepoLedger
+
+    ledger = InRepoLedger()
+    asyncio.run(
+        ledger.append(
+            ctx.run_id,
+            {
+                "kind": "review",
+                "aspect": aspect,
+                "model": model_id,
+                "status": outcome.status.value,
+                "decided": outcome.decided,
+                "tokens": outcome.cost.total_tokens,
+                "input_tokens": outcome.cost.input_tokens,
+                "output_tokens": outcome.cost.output_tokens,
+                "cost_usd": round(outcome.cost.usd, 6),
+                "findings": len(outcome.findings),
+                "wall_seconds": round(outcome.cost.wall_seconds, 3),
+            },
+        )
+    )
+    click.echo(f"ledger    {ledger.path_for(ctx.run_id)}")
 
 
 @main.command(name="show-prompt")
