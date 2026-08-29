@@ -27,14 +27,12 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from ...ai.invoker import InvocationBlocked, InvocationFailed
-from ...ai.structured import SchemaError, parse
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
 from ...core.verbs import Verb
-from ...privileged.egress import EgressRefused
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
+from ._strategy import PhaseError, read_reply, reported, run_phase
 from .implement import ImplementReport, ImplementSession, ImplementSpec
 
 
@@ -68,58 +66,15 @@ class OneshotImplement:
             package,
         )
 
+        # A refused control (egress is the one most meet, since EXECUTES_CODE makes it mandatory),
+        # an infrastructure failure, or a truncated answer all come back as `PhaseError` carrying
+        # the Outcome to return — the mapping every strategy shared, now in one place.
         try:
-            invocation = await session.invoker.run(
-                system=system,
-                messages=messages,
-                context=package,
-                tools=session.tools,
-                run_tool=session.run_tool,
-                policy=session.policy,
-            )
-        except (InvocationBlocked, EgressRefused) as e:
-            # Both are a control refusing, which is what BLOCKED means. Routed through an Outcome
-            # rather than allowed to escape so the run still leaves a ledger record: a refusal for
-            # a real reason deserves the same trace as a run that was allowed.
-            #
-            # The one most people will meet here is egress. This tool set declares EXECUTES_CODE,
-            # which makes enforcement mandatory — so a laptop with an open network refuses until
-            # the run is under something that constrains egress, or `UnsandboxedEgress` is bound
-            # deliberately. That is the design working, and the message says which.
-            return _blocked(e.reason, str(e), staged=session.workspace.changes)
-        except InvocationFailed as e:
-            # ERRORED, not BLOCKED: infrastructure broke. The message arrives already redacted.
-            return Outcome(
-                status=Status.ERRORED,
-                reason=e.reason,
-                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
-            )
+            invocation = await run_phase(session, system, messages, package, prefix="implement")
+        except PhaseError as e:
+            return e.outcome
 
-        if invocation.truncated:
-            # Diagnosed before parsing, because the parse failure it causes is a misdiagnosis: the
-            # JSON is not malformed, it is unfinished. Worse here than in review — a `write_file`
-            # cut off at the token cap is a truncated *file*, so the staged change is not merely
-            # incomplete, it is corrupt, and it is deliberately not returned.
-            return Outcome(
-                status=Status.ERRORED,
-                reason="implement.truncated",
-                cost=invocation.cost,
-                findings=(
-                    Finding(
-                        id="implement.truncated",
-                        message=(
-                            f"the model stopped at the {session.policy.max_tokens}-token output "
-                            f"cap mid-answer. A write that was cut off is a truncated file, so "
-                            f"nothing staged in this session is returned. Raise "
-                            f"`InvokePolicy.max_tokens` and re-run."
-                        ),
-                        severity=Severity.ERROR,
-                        blocking=True,
-                    ),
-                ),
-            )
-
-        summary, notes, unfinished, malformed = _read_reply(invocation.content)
+        summary, notes, unfinished, malformed = read_reply(invocation.content)
 
         changeset = session.workspace.changeset(summary=summary, ticket=ticket.key)
         # The whole change set, checked as a unit. The per-file check already ran at the tool
@@ -154,7 +109,13 @@ class OneshotImplement:
             turns=invocation.turn_count,
         )
 
-        findings = list(_reported(report, malformed, invocation))
+        findings = reported(
+            report.changeset,
+            unfinished=report.unfinished,
+            malformed=malformed,
+            invocations=(invocation,),
+            prefix="implement",
+        )
 
         if report.empty:
             # The domain answering no. A workflow can branch on it — escalate, re-run with a
@@ -185,71 +146,6 @@ class OneshotImplement:
             decided=not invocation.exhausted,
             reason="exhausted" if invocation.exhausted else None,
         )
-
-
-def _read_reply(content: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
-    """The cover note, leniently. Returns (summary, notes, unfinished, malformed)."""
-    try:
-        parsed = parse(content)
-    except SchemaError:
-        return content.strip()[:1000], (), (), True
-    value = parsed.value
-    if not isinstance(value, dict):
-        return content.strip()[:1000], (), (), True
-    return (
-        str(value.get("summary", "")).strip(),
-        _strings(value.get("notes")),
-        _strings(value.get("unfinished")),
-        False,
-    )
-
-
-def _strings(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    return tuple(str(v) for v in value if isinstance(v, (str, int, float)))
-
-
-def _reported(report: ImplementReport, malformed: bool, invocation: Any) -> list[Finding]:
-    """What travels with the outcome: the gaps, the scanner's hits, and the staged paths."""
-    findings = [
-        Finding(
-            id="implement.staged",
-            message=f"{'deleted' if change.deleted else 'wrote'} {change.path}",
-            severity=Severity.NOTE,
-            path=change.path,
-        )
-        for change in report.changeset.changes
-    ]
-    findings += [
-        # A WARNING rather than a note: an unsatisfied requirement is the thing most likely to be
-        # missed when a change otherwise looks finished.
-        Finding(id="implement.unfinished", message=gap, severity=Severity.WARNING)
-        for gap in report.unfinished
-    ]
-    if malformed:
-        findings.append(
-            Finding(
-                id="implement.unstructured",
-                message=(
-                    "the final message was not the JSON the schema asked for; its text was kept "
-                    "as the summary. The staged change is unaffected — it came through the tool "
-                    "boundary, not through this reply."
-                ),
-                severity=Severity.WARNING,
-            )
-        )
-    # Anything the injection scanner saw in the ticket or in a tool result travels with the
-    # outcome: a ticket that tried to talk to the implementer is a fact about the ticket.
-    findings += [
-        Finding(
-            id=f"injection.{f.name}",
-            message=f"{f.severity}: {f.excerpt}",
-            severity=Severity.ERROR if f.severity == "critical" else Severity.WARNING,
-        )
-        for f in invocation.findings
-    ]
-    return findings
 
 
 def _blocked(reason: str, message: str, *, staged: list[Any] | None = None) -> Outcome[ImplementReport]:

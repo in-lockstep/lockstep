@@ -26,16 +26,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, ClassVar
 
-from ...ai.invoker import InvocationBlocked, InvocationFailed
-from ...ai.structured import SchemaError, parse
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, TestSpec
 from ...core.verbs import Verb
-from ...privileged.egress import EgressRefused
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..pytest_adapter import Test
 from ..worktree import head_state, materialize
+from ._strategy import PhaseError, read_reply, reported, run_phase, test_findings
 from .implement import ImplementReport, ImplementSession, ImplementSpec
 
 _RED_DIRECTIVE = (
@@ -110,16 +108,9 @@ class TddImplement:
 
         try:
             # -- Phase 1: red -------------------------------------------------------------------
-            red_inv = await session.invoker.run(
-                system=system,
-                messages=_with_directive(base, _RED_DIRECTIVE),
-                context=package,
-                tools=session.tools,
-                run_tool=session.run_tool,
-                policy=session.policy,
+            red_inv = await run_phase(
+                session, system, _with_directive(base, _RED_DIRECTIVE), package, prefix="implement"
             )
-            if red_inv.truncated:
-                return _truncated(session, red_inv.cost)
 
             tests = session.workspace.changeset(ticket=ticket.key)
             if not tests.changes:
@@ -158,32 +149,19 @@ class TddImplement:
                             severity=Severity.ERROR,
                             blocking=True,
                         ),
-                        *_test_findings(red),
+                        *test_findings(red),
                     ),
                     decided=red.decided,
                 )
 
             # -- Phase 2: green -----------------------------------------------------------------
-            green_inv = await session.invoker.run(
-                system=system,
-                messages=_with_directive(base, _green_directive(tests)),
-                context=package,
-                tools=session.tools,
-                run_tool=session.run_tool,
-                policy=session.policy,
+            green_inv = await run_phase(
+                session, system, _with_directive(base, _green_directive(tests)), package, prefix="implement"
             )
-            if green_inv.truncated:
-                return _truncated(session, red_inv.cost + green_inv.cost)
-        except (InvocationBlocked, EgressRefused) as e:
-            return _blocked(e.reason, str(e), staged=session.workspace.changes)
-        except InvocationFailed as e:
-            return Outcome(
-                status=Status.ERRORED,
-                reason=e.reason,
-                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
-            )
+        except PhaseError as e:
+            return e.outcome
 
-        summary, notes, unfinished, malformed = _read_reply(green_inv.content)
+        summary, notes, unfinished, malformed = read_reply(green_inv.content)
         full = session.workspace.changeset(summary=summary, ticket=ticket.key)
         cost = red_inv.cost + green_inv.cost
 
@@ -213,7 +191,13 @@ class TddImplement:
             strategy=self.id,
             turns=red_inv.turn_count + green_inv.turn_count,
         )
-        findings = [*_reported(report, malformed, (red_inv, green_inv))]
+        findings = reported(
+            report.changeset,
+            unfinished=report.unfinished,
+            malformed=malformed,
+            invocations=(red_inv, green_inv),
+            prefix="implement",
+        )
 
         async with materialize(session.repo_root, full) as tree:
             green = await ctx.do(Test, TestSpec(root=tree, expect="pass"))
@@ -232,7 +216,7 @@ class TddImplement:
                         blocking=True,
                     ),
                     *findings,
-                    *_test_findings(green),
+                    *test_findings(green),
                 ),
                 decided=green.decided,
             )
@@ -297,93 +281,6 @@ def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:
     for change in over.changes:
         by_path[change.path] = change
     return ChangeSet(changes=tuple(by_path.values()), summary=base.summary, ticket=base.ticket)
-
-
-def _test_findings(outcome: Any) -> tuple[Finding, ...]:
-    """The Test verb's own blocking findings, carried up so a red/green failure explains itself."""
-    return tuple(
-        Finding(id=f.id, message=f.message, severity=Severity.NOTE)
-        for f in outcome.findings
-        if getattr(f, "blocking", False)
-    )
-
-
-def _truncated(session: ImplementSession, cost: Any) -> Outcome[ImplementReport]:
-    return Outcome(
-        status=Status.ERRORED,
-        reason="implement.truncated",
-        cost=cost,
-        findings=(
-            Finding(
-                id="implement.truncated",
-                message=(
-                    f"the model stopped at the {session.policy.max_tokens}-token output cap "
-                    f"mid-answer. A write cut off there is a truncated file, so nothing staged in "
-                    f"this session is returned. Raise `InvokePolicy.max_tokens` and re-run."
-                ),
-                severity=Severity.ERROR,
-                blocking=True,
-            ),
-        ),
-    )
-
-
-def _read_reply(content: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:
-    """The cover note, leniently. Returns (summary, notes, unfinished, malformed)."""
-    try:
-        value = parse(content).value
-    except SchemaError:
-        return content.strip()[:1000], (), (), True
-    if not isinstance(value, dict):
-        return content.strip()[:1000], (), (), True
-    return (
-        str(value.get("summary", "")).strip(),
-        _strings(value.get("notes")),
-        _strings(value.get("unfinished")),
-        False,
-    )
-
-
-def _strings(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    return tuple(str(v) for v in value if isinstance(v, (str, int, float)))
-
-
-def _reported(report: ImplementReport, malformed: bool, invocations: tuple[Any, ...]) -> list[Finding]:
-    """What travels with the outcome: the staged paths, the gaps, and any injection signals."""
-    findings = [
-        Finding(
-            id="implement.staged",
-            message=f"{'deleted' if change.deleted else 'wrote'} {change.path}",
-            severity=Severity.NOTE,
-            path=change.path,
-        )
-        for change in report.changeset.changes
-    ]
-    findings += [
-        Finding(id="implement.unfinished", message=gap, severity=Severity.WARNING)
-        for gap in report.unfinished
-    ]
-    if malformed:
-        findings.append(
-            Finding(
-                id="implement.unstructured",
-                message="the final message was not the JSON the schema asked for; its text was kept "
-                "as the summary. The staged change came through the tool boundary and is unaffected.",
-                severity=Severity.WARNING,
-            )
-        )
-    findings += [
-        Finding(
-            id=f"injection.{f.name}",
-            message=f"{f.severity}: {f.excerpt}",
-            severity=Severity.ERROR if f.severity == "critical" else Severity.WARNING,
-        )
-        for inv in invocations
-        for f in inv.findings
-    ]
-    return findings
 
 
 def _blocked(reason: str, message: str, *, staged: list[Any] | None = None) -> Outcome[ImplementReport]:
