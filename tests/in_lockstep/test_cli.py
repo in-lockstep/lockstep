@@ -252,3 +252,132 @@ def test_ls_stays_quiet_about_unbound_shipped_verbs(repo: Path) -> None:
     assert "verbs defined but unbound" not in result.output
     for shipped in ("triage", "debug", "implement"):
         assert shipped not in result.output
+
+
+# -- apply: the guard over an artifact that crossed a trust boundary --------------------------
+#
+# `tests/in_lockstep/test_controls.py` tests `ChangeGuard` directly. Nothing asserted it runs
+# *here*, which is the one place it defends a boundary rather than a data structure: the artifact
+# was produced by a different job, and a previous job having produced it is not a reason to trust
+# it. This is the one of GATE-GUARD-1's three named paths that exists.
+
+
+def _artifact(tmp_path: Path, *changes: dict) -> Path:
+    import json
+
+    payload = tmp_path / "changeset.json"
+    payload.write_text(json.dumps({"changes": list(changes), "summary": "s"}))
+    return payload
+
+
+@pytest.mark.parametrize(
+    "protected",
+    [
+        "lockstep.py",
+        ".in-lockstep/ledger/x.json",
+        ".github/workflows/ci.yml",
+        ".git/hooks/pre-commit",
+        "pyproject.toml",
+        "conftest.py",
+        "tests/conftest.py",
+        "CODEOWNERS",
+        ".env",
+        "deploy/secrets.pem",
+    ],
+)
+def test_apply_refuses_a_protected_path_from_an_artifact(tmp_path: Path, protected: str) -> None:
+    payload = _artifact(tmp_path, {"path": protected, "contents": "x", "author": "agent"})
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 3, f"{protected} was not refused: {result.output}"
+    assert "refused" in result.output
+    assert protected in result.output
+
+
+def test_apply_allows_an_ordinary_source_path(tmp_path: Path) -> None:
+    """The guard has to permit the thing the framework exists to do."""
+    payload = _artifact(tmp_path, {"path": "src/app/orders.py", "contents": "x", "author": "agent"})
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "1 change(s) pass the guard" in result.output
+
+
+def test_apply_refuses_a_path_escaping_the_repository(tmp_path: Path) -> None:
+    payload = _artifact(tmp_path, {"path": "../outside.py", "contents": "x", "author": "agent"})
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(payload), "--dry-run"])
+    assert result.exit_code == 3, result.output
+
+
+def test_apply_reports_a_missing_artifact_rather_than_traceback(tmp_path: Path) -> None:
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(tmp_path / "nope.json")])
+    assert result.exit_code != 0
+    assert "no changeset at" in result.output
+
+
+def test_apply_accepts_a_directory_as_well_as_a_file(tmp_path: Path) -> None:
+    """The scaffolded job downloads an artifact directory, not a file."""
+    _artifact(tmp_path, {"path": "src/ok.py", "contents": "x", "author": "agent"})
+    result = CliRunner().invoke(main, ["apply", "--from-artifact", str(tmp_path), "--dry-run"])
+    assert result.exit_code == 0, result.output
+
+
+# -- the offline commands, which exist so this is inspectable without a key -------------------
+
+
+def test_show_prompt_renders_with_provenance(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["show-prompt", "security"])
+    assert result.exit_code == 0, result.output
+    assert "guardrail:baseline" in result.output
+
+
+def test_show_prompt_names_the_lenses_it_has(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["show-prompt", "nonsense"])
+    assert result.exit_code != 0
+    assert "security" in result.output
+
+
+def test_eval_report_does_not_call_an_unjudged_rubric_a_pass(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["eval", "report"])
+    assert result.exit_code == 0, result.output
+    assert "outstanding" in result.output
+    assert "n/a — nothing decided" in result.output
+
+
+def test_eval_list_names_every_case(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["eval", "list"])
+    assert result.exit_code == 0, result.output
+    assert "27 case(s)" in result.output
+
+
+def test_eval_reports_a_missing_corpus_rather_than_zero_cases(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["eval", "report", "--corpus", str(repo / "absent")])
+    assert result.exit_code != 0
+    assert "no corpus at" in result.output
+
+
+def test_doctor_runs_and_reports_findings(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["doctor"])
+    assert "finding(s)" in result.output
+
+
+def test_run_selfcheck_dispatches_both_verbs(repo: Path) -> None:
+    """A module is the whole configuration, so it has to bind what it wants run.
+
+    `_write`'s module deliberately binds nothing, which is why this one scaffolds instead: a
+    lockstep.py that declares a budget and no adapters resolves nothing, and that is correct —
+    the fallback to detected defaults applies when there is no module at all, not when there is
+    one that came out empty.
+    """
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    (repo / "sample.py").write_text("x = 1\n")
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert "validate" in result.output
+    assert "test" in result.output
+    assert "spend" in result.output
+
+
+def test_the_killswitch_halts_before_any_adapter(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GATE-ASYNC-3, through the CLI: the flag must beat the chain, not sit inside it."""
+    CliRunner().invoke(main, ["init"])
+    monkeypatch.setenv("IN_LOCKSTEP_DISABLE", "1")
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert result.exit_code == 3, result.output
