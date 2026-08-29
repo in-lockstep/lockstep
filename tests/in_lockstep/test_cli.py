@@ -88,8 +88,13 @@ def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
 
 
 def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
-    """A repository without a lockstep.py is supported, not an error."""
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    """A repository without a lockstep.py is supported, not an error.
+
+    It still has to state a ceiling, because `review` binds something that spends. That is
+    GATE-BUDGET-1 rather than a gap in the fallback: the alternative is the CLI inventing a
+    number, which is the failure the gate exists to prevent.
+    """
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--budget", "1.00"])
     assert result.exit_code == 0, result.output
 
 
@@ -97,8 +102,10 @@ def test_telemetry_says_when_the_cli_cannot_see_the_chain(repo: Path) -> None:
     """`spans 0` for a run that emitted spans elsewhere is a wrong number, not a missing one."""
     (repo / "lockstep.py").write_text(
         "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
         "from in_lockstep.middleware import otel\n"
         "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
         "lockstep.middleware += [otel()]\n"
     )
     result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
@@ -381,3 +388,50 @@ def test_the_killswitch_halts_before_any_adapter(repo: Path, monkeypatch: pytest
     monkeypatch.setenv("IN_LOCKSTEP_DISABLE", "1")
     result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
     assert result.exit_code == 3, result.output
+
+
+def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
+    """GATE-BUDGET-1 through the CLI, which is where a person meets it.
+
+    `--budget` deliberately has no default. A flag that silently supplies a ceiling would make
+    this unsatisfiable in the one place it matters: every run would have a budget nobody chose,
+    and the refusal could never fire.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
+    )
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    assert result.exit_code != 0
+    assert "no budget is declared" in result.output
+    assert "Traceback" not in result.output, "a refusal is a message, not a crash"
+
+
+def test_an_explicit_budget_flag_satisfies_it(repo: Path) -> None:
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
+    )
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_ls_still_works_without_a_budget(repo: Path) -> None:
+    """The diagnostic that tells you what is bound must survive the refusal that mentions it.
+
+    `ls` never opens a run, so it does not trip the startup check — which is what lets someone
+    read the error, run `ls`, and see the adapter it named.
+    """
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
+    )
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "bindings" in result.output
+
+
+def test_the_scaffolded_module_satisfies_the_check(repo: Path) -> None:
+    """`init` must not scaffold something that refuses to run."""
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert "no budget is declared" not in result.output

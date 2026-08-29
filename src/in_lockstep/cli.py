@@ -18,7 +18,6 @@ from .core.types import TestSpec, ValidateSpec
 from .core.verbs import SHIPPED_VERBS, Verb, verb_of
 from .core.workflow import registered, workflow
 from .lockstep import Lockstep
-from .middleware.budget import CostBudget
 from .middleware.otel import Recorder, otel
 from .privileged import sink
 from .privileged.redact import Redact, redact_registry
@@ -50,7 +49,11 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
         if configured.middleware:
             return configured, None
         recorder = Recorder()
-        configured.middleware = [otel(recorder), CostBudget(usd=2.00)]
+        # Telemetry only. The CLI does not invent a ceiling: a `CostBudget` supplied here would be
+        # a budget nobody chose, and it would make GATE-BUDGET-1 unsatisfiable — every run would
+        # arrive bounded by a number the repository never decided on. `init` scaffolds one, and
+        # `--budget` states one; both of those are somebody meaning it.
+        configured.middleware = [otel(recorder)]
         return configured, recorder
     except NoLifecycle:
         pass
@@ -59,7 +62,7 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
     lockstep.bind(Validate, RuffValidate(cwd=lockstep.repo.root))
     lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], cwd=lockstep.repo.root))
     recorder = Recorder()
-    lockstep.middleware = [otel(recorder), CostBudget(usd=2.00)]
+    lockstep.middleware = [otel(recorder)]
     return lockstep, recorder
 
 
@@ -79,6 +82,21 @@ def _review_turns(lockstep: Lockstep) -> int:
     """
     ceiling = lockstep.policy.resolve().max_turns
     return min(_REVIEW_TURNS, ceiling) if ceiling is not None else _REVIEW_TURNS
+
+
+def _context(lockstep: Lockstep, run_id: str) -> Any:
+    """Start a run, turning a startup refusal into a message rather than a traceback.
+
+    `UndeclaredBudget` lives in `core` and cannot inherit from `ClickException` — `core` imports
+    nothing outward. Translating at this boundary is the same shape as every other refusal here:
+    the exception carries the reason, the CLI decides how a person should see it.
+    """
+    from .core.spend import UndeclaredBudget
+
+    try:
+        return lockstep.context(run_id=run_id)
+    except UndeclaredBudget as e:
+        raise click.ClickException(str(e)) from None
 
 
 def _echo_telemetry(recorder: Recorder | None) -> None:
@@ -139,7 +157,7 @@ def run_cmd(
         lockstep.middleware = []
 
     run_id = recover_id or "selfcheck-local"
-    ctx = lockstep.context(run_id=run_id)
+    ctx = _context(lockstep, run_id)
     if checkpoint or recover_id:
         from .platform.state import StateStore
 
@@ -380,7 +398,12 @@ def apply_cmd(artifact: str, dry_run: bool) -> None:
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
 @click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
 @click.option("--cassette", default=".in-lockstep/cassettes/review.json", show_default=True)
-@click.option("--budget", default=1.00, help="Hard ceiling, in USD.")
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="Hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
+)
 @click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
 def review_cmd(
     base: str,
@@ -390,7 +413,7 @@ def review_cmd(
     offline: bool,
     record: bool,
     cassette: str,
-    budget: float,
+    budget: float | None,
     dry_run: bool,
 ) -> None:
     """Review a change with one lens, in-process."""
@@ -413,7 +436,10 @@ def review_cmd(
     # `--budget` and `--model` override the module rather than replacing it, and only when the
     # user actually typed them: a flag left at its default must not outrank a declared ceiling.
     source = click.get_current_context().get_parameter_source
-    if source("budget") is not ParameterSource.DEFAULT or lockstep.budget.usd is None:
+    # No default. A flag that silently supplies a ceiling makes GATE-BUDGET-1 unsatisfiable in
+    # the one place it matters: every run would have a budget nobody chose, and the refusal could
+    # never fire. Declaring it in lockstep.py or typing it are the two ways to mean it.
+    if budget is not None:
         lockstep.budget = Budget(usd=budget)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("review", model)
@@ -455,7 +481,7 @@ def review_cmd(
             ),
         )
 
-    ctx = lockstep.context(run_id=f"review-{aspect}")
+    ctx = _context(lockstep, f"review-{aspect}")
     outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect)))
 
     click.echo(

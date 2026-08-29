@@ -566,3 +566,111 @@ def test_a_custom_verb_labels_its_own_telemetry() -> None:
     assert call.verb is not None
     assert call.verb.value == "benchmark"
     assert "benchmark" in repr(call)
+
+
+# -- GATE-BUDGET-1 ----------------------------------------------------------------------------
+#
+# The substrate this replaced made a missing budget a compile-time ERROR: shipping an agent
+# without a ceiling was structurally impossible. Porting that into an advisory `doctor` check
+# would have been a downgrade wearing the name of a port, so it refuses at startup.
+
+
+def _spender():
+    from in_lockstep.core.verbs import Capability, Verb
+
+    class Spender:
+        verb = Verb.REVIEW
+        capabilities = frozenset({Capability.SPENDS_BUDGET})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never reached
+            raise AssertionError
+
+    return Spender
+
+
+def test_gate_budget_1_a_lifecycle_that_spends_without_a_ceiling_is_refused() -> None:
+    from in_lockstep.core.spend import UndeclaredBudget
+    from in_lockstep.lockstep import Lockstep
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Review, _spender()())
+
+    with pytest.raises(UndeclaredBudget) as exc:
+        lockstep.context(run_id="r")
+    assert "Spender" in str(exc.value), "the message names what spends, not just that something does"
+    assert "lockstep.budget" in str(exc.value), "and shows the fix"
+
+
+def test_a_deterministic_lifecycle_needs_no_budget() -> None:
+    """A repository binding only Test and Validate spends nothing.
+
+    Demanding a ceiling there would teach people to write `Budget(usd=999)` to quiet the
+    framework, which is worse than no check because it looks like a decision.
+    """
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Iface := type("Iface", (), {}), _deterministic()())
+    assert lockstep.context(run_id="r") is not None
+    assert Iface is not None
+
+
+def _deterministic():
+    from in_lockstep.core.verbs import Capability, Verb
+
+    class Cheap:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.READS_REPO, Capability.EXECUTES_CODE})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never reached
+            raise AssertionError
+
+    return Cheap
+
+
+def test_a_ceiling_declared_as_middleware_counts() -> None:
+    """`lockstep.budget` is one way to say it; CostBudget is another, and the scaffold uses that.
+
+    Reading only the first would refuse a run that is perfectly well bounded, and a refusal people
+    learn to route around is worse than none.
+    """
+    from in_lockstep.lockstep import Lockstep
+    from in_lockstep.middleware import CostBudget
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Review, _spender()())
+    lockstep.middleware += [CostBudget(usd=2.00)]
+    assert lockstep.context(run_id="r") is not None
+
+
+@pytest.mark.parametrize("ceiling", [{"usd": 1.0}, {"tokens": 1000}, {"wall_seconds": 60}, {"turns": 4}])
+def test_any_declared_ceiling_satisfies_it(ceiling: dict) -> None:
+    """Four dimensions, any one of which is a decision about how much is too much."""
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.lockstep import Lockstep
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Review, _spender()())
+    lockstep.budget = Budget(**ceiling)
+    assert lockstep.context(run_id="r") is not None
+
+
+def test_an_empty_budget_object_is_not_a_declaration() -> None:
+    """`Budget()` is the default. A default is not a decision."""
+    from in_lockstep.core.spend import Budget, UndeclaredBudget
+    from in_lockstep.lockstep import Lockstep
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Review, _spender()())
+    lockstep.budget = Budget()
+
+    with pytest.raises(UndeclaredBudget):
+        lockstep.context(run_id="r")

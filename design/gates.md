@@ -54,7 +54,7 @@ same one: a mechanism nobody invoked is outstanding, not passed.
 | `GATE-COST-4` | P0 | held | The identifier `DEFAULT_COST_PER_M` appears nowhere under `in_lockstep/`. |
 | `GATE-COST-5` | P3 | held | `in-lockstep doctor` exits non-zero when no provider org spend limit is attested in config. |
 | `GATE-COST-6` | P10 | deferred | A 4-branch `fan_out` under a joint `$1.00` `Spend` charges ≤ `$1.00` in aggregate, not per branch. |
-| `GATE-BUDGET-1` | P1 | unmet | A run with no declared budget is refused at startup. (`checks.py` `DOC006` is `Severity.ERROR` today; porting it to an advisory `doctor` check would downgrade a refusal to a suggestion.) **Missing:** the refusal itself. `Lockstep.__init__` defaults to an all-`None` `Budget` and nothing refuses at startup. |
+| `GATE-BUDGET-1` | P1 | held | A run with no declared budget is refused at startup — `Lockstep.context()` raises `UndeclaredBudget`, surfaced by the CLI as a message rather than a traceback. Scoped to lifecycles that can spend: the trigger is a bound adapter declaring `Capability.SPENDS_BUDGET`, so a repository binding only `Test` and `Validate` needs no ceiling. Any of the four `Budget` dimensions satisfies it, as does a `CostBudget` in the middleware chain, since the scaffold declares it that way. Two defaults were removed to make it satisfiable at all: `--budget` no longer has one, and `_default_lockstep` no longer injects `CostBudget(usd=2.00)` — a ceiling the CLI invents is a budget nobody chose, and every run would have arrived bounded by it. |
 | `GATE-DEADLINE-1` | P2 | held | An `InvokePolicy` deadline expiring mid-loop yields `BLOCKED(reason="deadline")` with no further `generate()` calls; `KillSwitch` set mid-loop does the same. |
 
 ## Retry

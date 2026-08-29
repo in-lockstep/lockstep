@@ -18,6 +18,21 @@ from dataclasses import dataclass, field
 from .outcome import Cost
 
 
+class UndeclaredBudget(Exception):
+    """A lifecycle binds something that spends money and never said how much.
+
+    The substrate this replaced made a missing budget a **compile-time error**: `DOC006` was
+    `Severity.ERROR`, so shipping an agent without a ceiling was structurally impossible. Moving
+    invocation in-process deleted that, and porting it into an advisory `doctor` check would have
+    turned a refusal into a suggestion — which is not a port, it is a downgrade with the same name.
+
+    So it refuses at startup instead, and it refuses for the *right* runs: a lifecycle binding only
+    deterministic verbs spends nothing and needs no ceiling. The trigger is a bound adapter
+    declaring `Capability.SPENDS_BUDGET`, which is the same declaration egress, approval and retry
+    already key on.
+    """
+
+
 class Unpriced(Exception):
     """A model with no rate. Refused before the call, never billed at a default rate.
 
@@ -35,6 +50,11 @@ class Budget:
     tokens: int | None = None
     wall_seconds: float | None = None
     turns: int | None = None
+
+    @property
+    def declared(self) -> bool:
+        """Whether any ceiling was set. All-`None` is the default, and the default is not a budget."""
+        return any(v is not None for v in (self.usd, self.tokens, self.wall_seconds, self.turns))
 
     def merge(self, other: Budget) -> Budget:
         """Two ceilings are two constraints: take the lowest, never the last."""

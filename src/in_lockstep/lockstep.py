@@ -18,7 +18,8 @@ from .core.container import Container, Scope, Tier
 from .core.context import RepoInfo, RunContext
 from .core.middleware import Middleware
 from .core.policy import Policy, PolicyStack
-from .core.spend import Budget, Spend
+from .core.spend import Budget, Spend, UndeclaredBudget
+from .core.verbs import Capability, capabilities_of
 
 
 @dataclass
@@ -74,12 +75,59 @@ class Lockstep:
     # -- running -------------------------------------------------------------------
 
     def context(self, run_id: str) -> RunContext:
+        self._refuse_undeclared_budget()
         return RunContext(
             run_id=run_id,
             repo=self.repo,
             container=self.container,
             spend=Spend(budget=self.budget),
             middleware=list(self.middleware),
+        )
+
+    def declared_ceiling(self) -> Budget:
+        """Every ceiling this lifecycle declares, merged.
+
+        `lockstep.budget` is one way to say it and `CostBudget` middleware is another — the
+        scaffold uses the second — so a check reading only the first would refuse a run that is
+        perfectly well bounded, and teach people that the refusal is noise.
+        """
+        ceiling = self.budget
+        for layer in self.middleware:
+            declared = getattr(layer, "budget", None)
+            if isinstance(declared, Budget):
+                ceiling = ceiling.merge(declared)
+        return ceiling
+
+    def spenders(self) -> list[str]:
+        """Bound adapters that declare they spend money."""
+        return sorted(
+            type(b.impl).__name__ if not isinstance(b.impl, type) else b.impl.__name__
+            for b in self.container.resolved()
+            if Capability.SPENDS_BUDGET in capabilities_of(b.impl)
+        )
+
+    def _refuse_undeclared_budget(self) -> None:
+        """GATE-BUDGET-1. A refusal, not a warning, and not for every run.
+
+        Here rather than in `doctor` because the control it replaces was a compile-time error, and
+        an advisory check is a suggestion wearing its name. Here rather than at the first model
+        call because "refused at startup" is the property: a run that gets halfway and then stops
+        has already spent whatever it spent.
+
+        Scoped to lifecycles that can actually spend. A repository binding only Test and Validate
+        needs no ceiling, and demanding one would teach people to write `Budget(usd=999)` to make
+        the framework be quiet — which is worse than no check, because it looks like a decision.
+        """
+        if self.declared_ceiling().declared:
+            return
+        spenders = self.spenders()
+        if not spenders:
+            return
+        raise UndeclaredBudget(
+            f"{', '.join(spenders)} spends money and no budget is declared. Add a ceiling to "
+            f"lockstep.py:\n\n    lockstep.budget = Budget(usd=2.00, wall_seconds=900)\n\n"
+            f"An unbounded agent is the failure this refuses to let you ship. `in-lockstep ls` "
+            f"still works without one, so you can see what is bound."
         )
 
 
