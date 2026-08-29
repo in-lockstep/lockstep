@@ -71,6 +71,10 @@ class WorktreeRunner:
 
     def __init__(self, inner: Any, repo_root: str) -> None:
         self.inner = inner
+        # The trusted repository root, decided at the binding site (`lockstep.repo.root`), not
+        # anything a model can influence — this is what the throwaway worktree is a copy *of*, so a
+        # value under an attacker's control would defeat the point. A non-git path fails loudly in
+        # `materialize` rather than silently running somewhere else.
         self.repo_root = repo_root
 
     async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
