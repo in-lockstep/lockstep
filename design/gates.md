@@ -42,7 +42,7 @@ same one: a mechanism nobody invoked is outstanding, not passed.
 | `GATE-ASYNC-2` | P0 | held | `asyncio.wait_for(provider.generate(...), 0.1)` against a 5s stub raises `TimeoutError` AND the stub records connection-closed-before-completion. |
 | `GATE-ASYNC-3` | P1 | held | With `IN_LOCKSTEP_DISABLE` set mid-run, a workflow with steps remaining reaches a terminal `Outcome` without executing another adapter. (Arbitration wrote this against `fan_out`, which is post-1.0 by the §17.11 cut line — the branch variant is `GATE-ASYNC-3b`.) |
 | `GATE-ASYNC-3b` | P10 | deferred | With `IN_LOCKSTEP_DISABLE` set mid-run, an in-flight 3-branch `fan_out` reaches a terminal `Outcome` within 2s. |
-| `GATE-ASYNC-4` | P2 | unmet | Three concurrent `generate()` calls against a 1s stub complete in < 2s wall clock (the event loop is not blocked). **Missing:** no concurrency test exists. |
+| `GATE-ASYNC-4` | P2 | held | Three concurrent `generate()` calls complete in under 2x the time one takes, against the **real** provider code rather than a stand-in: `ClaudeTransport.generate` with its SDK client replaced (the shared path for Anthropic, Bedrock and Vertex, with a companion test failing if any of the three grows its own `generate`), and `OllamaProvider` end to end through its own `httpx` path. Paired with a negative control — the same transport with a synchronous wait inside `async def`, which must fail the assertion, or the gate proves only that asyncio exists. |
 
 ## Cost
 
