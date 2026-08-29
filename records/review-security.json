@@ -1,0 +1,162 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.128835,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 22,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 69,
+        "message": "_LOOPBACK_HOSTS includes '0.0.0.0', which is the wildcard-bind address, not a loopback. On most systems, connecting to 0.0.0.0 is not the same as connecting to localhost, and some hosted environments bind a public service on 0.0.0.0. Including it in the 'free' set means OLLAMA_URL=http://0.0.0.0:11434 is treated as local and priced at zero even when the service is externally reachable. The invariant the code states \u2014 'an env var pointing local at a hosted endpoint must not make hosted tokens rea\u2026[truncated]",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 78,
+        "message": "comment() now swallows all non-zero exit codes from 'gh issue comment' silently, including authentication failures, permission errors, and network errors. The prior code raised on failure. The change is deliberate ('best-effort'), but the silent swallow extends to cases where the comment failing is a signal worth surfacing \u2014 e.g., the GH_TOKEN is expired or the issue was locked. An attacker who can cause the comment to fail (by locking the issue or revoking the token) would prevent the '/impleme\u2026[truncated]",
+        "path": "src/in_lockstep/platform/tickets/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1740,
+        "message": "_scaffold_implement checks whether 'lockstep' appears in the module text before appending Python that calls lockstep.bind(...). This is a text search, not a parse. A module containing the string 'lockstep' in a comment or a string literal would pass the check and receive appended code that references a name that may not be bound, causing a NameError at import time. The compile() call that follows would catch a SyntaxError but not a NameError, so the guard and the safety net do not cover the same\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The scaffolded implement.yml gates on 'startsWith(github.event.comment.body, \\'/implement\\')' but the gate job's authorization check runs 'in-lockstep gate --actor $ACTOR --association $ASSOCIATION'. The ASSOCIATION value comes from github.event.comment.author_association, which GitHub sets. The security property depends on the gate command correctly refusing NONE/FIRST_TIME_CONTRIBUTOR associations. This is not a finding about the diff itself but about what the scaffold generates: if the gate c\u2026[truncated]",
+        "path": ".github/workflows/implement.yml (scaffold, cli.py line ~1900)",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 38595,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 870,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 39465,
+  "wall_seconds": 26.325
+}
