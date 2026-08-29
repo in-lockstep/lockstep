@@ -130,7 +130,10 @@ def _apply_change(worktree: Path, change: FileChange) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(change.contents or "")
     if change.mode is not None:
-        os.chmod(target, change.mode)
+        # Permission bits only. A test run needs the execute bit and nothing above it, so mask off
+        # setuid/setgid/sticky: harmless in a user-owned throwaway tree, but a change has no reason
+        # to ask for them and a materialiser has no reason to grant a bit it will never need.
+        os.chmod(target, change.mode & 0o777)
 
 
 @asynccontextmanager

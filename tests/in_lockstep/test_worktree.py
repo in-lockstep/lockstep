@@ -106,6 +106,19 @@ def test_materialize_applies_an_executable_mode(tmp_path: Path) -> None:
     asyncio.run(check())
 
 
+def test_materialize_strips_setuid_and_setgid_bits(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    changeset = ChangeSet(changes=(FileChange(path="run.sh", contents="#!/bin/sh\n", mode=0o6755),))
+
+    async def check() -> None:
+        async with materialize(str(root), changeset) as tree:
+            mode = (Path(tree) / "run.sh").stat().st_mode
+            assert mode & 0o111, "the execute bit a test run needs is kept"
+            assert not mode & 0o6000, "setuid/setgid are masked off"
+
+    asyncio.run(check())
+
+
 def test_materialize_removes_the_worktree_afterwards(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     seen: list[str] = []
