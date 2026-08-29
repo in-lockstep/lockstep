@@ -1651,6 +1651,7 @@ def implement_cmd(
 
     from .adapters.ai.implement import AiImplement, Implement, ImplementSpec
     from .adapters.sandbox import Sandbox
+    from .adapters.worktree import WorktreeRunner
     from .ai.auth import Auth
     from .ai.bootstrap import (
         LLMProvider,
@@ -1753,8 +1754,17 @@ def implement_cmd(
                 # refusal rather than a quiet downgrade to running on the host. Passing
                 # `--sandbox-image ''` is the deliberate way to ask for the host, and it reads
                 # like a decision because it is one.
+                #
+                # Wrapped in `WorktreeRunner` so a model's command runs in a throwaway worktree of
+                # HEAD, not the live tree — its writes cannot reach the real `.git`/`.lockstep`,
+                # which the RW bind mount would otherwise leave open past ChangeGuard.
                 commands=(
-                    Sandbox(image=sandbox_image, require_container=bool(sandbox_image)) if execute else None
+                    WorktreeRunner(
+                        Sandbox(image=sandbox_image, require_container=bool(sandbox_image)),
+                        lockstep.repo.root,
+                    )
+                    if execute
+                    else None
                 ),
                 policy=InvokePolicy.under(
                     lockstep.policy.resolve(),
@@ -2464,7 +2474,7 @@ from typing import Any
 from in_lockstep.adapters.ai.implement import AiImplement, Implement, ImplementSpec
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import verdict_over_staged
+from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
 from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
@@ -2493,13 +2503,22 @@ lockstep.middleware += [ApprovalGate()]
 # environment; the absence of a container runtime is a refusal, never a fall back to this host.
 # The image is named because `require_container=True` with no image refuses every command — it
 # has nothing to run them in — so leaving it blank would make run_script permanently inert.
+#
+# Wrapped in `WorktreeRunner`, so a model's command runs in a throwaway worktree of HEAD rather
+# than the live tree: the container still bind-mounts read-write, but what it mounts is a copy that
+# is discarded, so a command cannot write `.git/hooks` or `.lockstep/lockstep.py` on the real
+# repository past ChangeGuard. It does mean git-dependent commands see a linked worktree's gitlink
+# (see docs/extending.md); pytest, ruff and mypy do not care.
 lockstep.bind(
     Implement,
     AiImplement(
         invoker_factory(lockstep.models.routes.get("implement", "")),
         registry=default_registry(),
         repo_root=lockstep.repo.root,
-        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+        commands=WorktreeRunner(
+            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+            lockstep.repo.root,
+        ),
         policy=InvokePolicy.under(
             lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
         ),

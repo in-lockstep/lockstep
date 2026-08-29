@@ -292,13 +292,25 @@ purpose: `UnsandboxedEgress` is named after what it does, so it greps and it rev
 
 **`run_script` executes; it does not shell.** Commands arrive as an argv array — no pipes, no
 globs, no `&&` — and `argv[0]` must be in an allowlist (`ALLOWED_COMMANDS`). They run through
-whatever `CommandRunner` you supply; `--execute` supplies `Sandbox`, which drops every credential
-from the child environment and prefers a container with no network. `--no-execute` withholds the
-runner while leaving the tool declared, so what policy sees does not change with the flag.
+whatever `CommandRunner` you supply; `--execute` supplies `Sandbox` wrapped in `WorktreeRunner`,
+which drops every credential from the child environment, prefers a container with no network, and
+runs the command in a **throwaway worktree of HEAD** rather than the live tree. `--no-execute`
+withholds the runner while leaving the tool declared, so what policy sees does not change with the
+flag.
+
+The worktree is not just an accident of hygiene; it is the control. `Sandbox` bind-mounts its
+working directory read-write, so without it a command from an allowlisted program — `python`,
+`make`, `node` — could write `.git/hooks` or `.lockstep/lockstep.py` on the real repository, which
+is the write path `ChangeGuard` governs for `write_file` but cannot see once a process is running.
+Running in a discarded copy means those writes land nowhere that a later run will read. (One
+consequence, shared with `implement/tdd`: a linked worktree's `.git` is a gitlink outside a
+container's mount, so a command that needs git will not resolve it inside a container — `pytest`,
+`ruff` and `mypy` do not care.)
 
 One thing to know before reading a session's transcript: the working tree `run_script` runs against
-does **not** contain that session's staged writes. It tells the model what the existing behaviour
-is, not whether its change works. Verifying a change is what the `apply` half is for.
+does **not** contain that session's staged writes — it is HEAD in a copy. It tells the model what
+the existing behaviour is, not whether its change works. Verifying a change is what the `apply` half
+is for, and `implement/tdd` (above) is what runs the suite against the staged change directly.
 
 `--max-turns` defaults to 40. That is a runaway backstop, not the budget: every turn re-sends the
 accumulated history, so the thing that actually stops a long session is the per-turn spend check,

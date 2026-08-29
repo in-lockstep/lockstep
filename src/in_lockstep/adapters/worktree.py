@@ -49,6 +49,37 @@ class WorktreeError(RuntimeError):
     """A worktree could not be created, or the source was not a git repository."""
 
 
+class WorktreeRunner:
+    """A `CommandRunner` that runs each command in a throwaway worktree of the repository.
+
+    `run_script` lets a model run python/make/npm/… against the tree, and `Sandbox` drops the
+    credentials from the child — but it bind-mounts the working tree **read-write**, so the command
+    can still write `.git/hooks` or `.lockstep/lockstep.py` on the real repository, straight past the
+    `Workspace` and `ChangeGuard` that govern the `write_file` tool. That is goal 8's one confirmed
+    non-bypassability hole: what a *later* run executes, written by a command in *this* one.
+
+    This closes it. Each command runs in a disposable worktree of HEAD, so its writes land in a copy
+    that is discarded — the real `.git`, `.lockstep` and CI config are never in reach, and the copy
+    is what the inner runner bind-mounts read-write. The inner runner's credential-drop and
+    no-network still apply inside it; this only changes *where* it runs, not *how*.
+
+    HEAD, not the staged change, on purpose: `run_script`'s documented job is to tell the model what
+    the existing behaviour is, not whether its unstaged change works — `ctx.do(Test)` over a
+    materialised change is for that. Each call gets a fresh copy, so nothing a command writes
+    survives to the next; a step that needs its predecessor's output on disk is not what this is for.
+    """
+
+    def __init__(self, inner: Any, repo_root: str) -> None:
+        self.inner = inner
+        self.repo_root = repo_root
+
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+        # `cwd` (the workspace root) is ignored deliberately: the whole point is to run somewhere
+        # other than the live tree. The worktree is materialised from `repo_root` and thrown away.
+        async with materialize(self.repo_root, ChangeSet()) as tree:
+            return await self.inner.run(command, cwd=tree, timeout=timeout)
+
+
 async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> dict[str, FileChange | None]:
     """The pre-image of each path at `ref`: a `FileChange` reproducing its committed contents, or
     None if it does not exist there. This is what `ChangeSet.inverse` needs to revert a change that
