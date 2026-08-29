@@ -11,6 +11,7 @@ discarded every binding, budget, policy contribution and model route the module 
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -30,6 +31,29 @@ lockstep.budget = Budget(usd={budget})
 lockstep.contribute(Policy(name="repo", source="test", max_turns={turns}))
 lockstep.models.route("review", "{model}")
 """
+
+
+DIFF = """diff --git a/src/app.py b/src/app.py
+index 111..222 100644
+--- a/src/app.py
++++ b/src/app.py
+@@ -1 +1,2 @@
+ x = 1
++y = 2
+"""
+
+
+def _diff(root: Path) -> str:
+    """A real patch on disk.
+
+    These tests are about the composition root — which module loaded, which budget bound, which
+    egress policy resolved — and they used to run `review` against an EMPTY diff, which now
+    refuses. That refusal is the point: a review with nothing to look at was answering anyway, and
+    a canned `{"findings": []}` would have read as a clean review of nothing.
+    """
+    path = root / "change.diff"
+    path.write_text(DIFF)
+    return str(path)
 
 
 def _lifecycle(root: Path) -> Path:
@@ -69,8 +93,15 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     tree as the trusted source, which is the local-development path and the one under test here.
     """
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
-    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
+    # EVERY GitHub variable, not the two that happened to matter when this was written.
+    #
+    # `GITHUB_WORKSPACE` was the one missed, and the consequence was not a wrong assertion: it is
+    # what `Lockstep.detect()` prefers over the working directory, so on a runner these tests
+    # resolved to the REAL checkout. `test_apply_opens_a_change_on_a_run_scoped_branch` created a
+    # branch and tried to commit in it, and a later test saw the repository it had left dirty.
+    # A test that can reach outside its tmp_path is a test that can corrupt the thing it runs in.
+    for name in [k for k in os.environ if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(name, raising=False)
     return tmp_path
 
 
@@ -87,7 +118,7 @@ def _write(
 def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
     """The headline: `lockstep.py` is the configuration, including for the command that spends."""
     _write(repo)
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert result.exit_code == 0, result.output
     # The module routes review at a model the CLI's own default would not have chosen. A route
     # nothing reads is how `Models.route` shipped: written by the config, consumed by nobody.
@@ -96,7 +127,7 @@ def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
 
 def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> None:
     _write(repo, model="google:gemini-2.5-flash")
-    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert "gemini-2.5-flash" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
@@ -104,7 +135,17 @@ def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
     """An override the user actually typed is an override; a default is not."""
     _write(repo, model="google:gemini-2.5-flash")
     CliRunner().invoke(
-        main, ["review", "--dry-run", "--base", "HEAD", "--model", "anthropic:claude-opus-4-6"]
+        main,
+        [
+            "review",
+            "--dry-run",
+            "--base",
+            "HEAD",
+            "--model",
+            "anthropic:claude-opus-4-6",
+            "--diff",
+            _diff(repo),
+        ],
     )
     assert "opus" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
@@ -116,7 +157,9 @@ def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
     GATE-BUDGET-1 rather than a gap in the fallback: the alternative is the CLI inventing a
     number, which is the failure the gate exists to prevent.
     """
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--budget", "1.00"])
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "1.00", "--diff", _diff(repo)]
+    )
     assert result.exit_code == 0, result.output
 
 
@@ -130,7 +173,7 @@ def test_telemetry_says_when_the_cli_cannot_see_the_chain(repo: Path) -> None:
         "lockstep.budget = Budget(usd=1.00)\n"
         "lockstep.middleware += [otel()]\n"
     )
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert "the CLI is not in that chain" in result.output
     assert "spans     0" not in result.output
 
@@ -489,7 +532,7 @@ def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
     and the refusal could never fire.
     """
     _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert result.exit_code != 0
     assert "no budget is declared" in result.output
     assert "Traceback" not in result.output, "a refusal is a message, not a crash"
@@ -497,7 +540,9 @@ def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
 
 def test_an_explicit_budget_flag_satisfies_it(repo: Path) -> None:
     _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50"])
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50", "--diff", _diff(repo)]
+    )
     assert result.exit_code == 0, result.output
 
 
@@ -608,7 +653,7 @@ def test_a_bound_egress_policy_is_the_one_that_runs(repo: Path) -> None:
         "lockstep.budget = Budget(usd=1.00)\n"
         "lockstep.bind(EgressPolicy, AlwaysRefuse())\n"
     )
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert "egress.test_binding" in result.output, result.output
     assert "the bound policy ran" in result.output
 
@@ -654,7 +699,10 @@ def test_a_missing_provider_credential_is_a_message_not_a_typeerror(repo: Path) 
         "lockstep.budget = Budget(usd=1.00)\n"
         "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
     )
-    result = CliRunner().invoke(main, ["review", "--base", "HEAD", "--model", "anthropic:claude-haiku-4-5"])
+    result = CliRunner().invoke(
+        main,
+        ["review", "--base", "HEAD", "--model", "anthropic:claude-haiku-4-5", "--diff", _diff(repo)],
+    )
     assert result.exit_code != 0
     assert "no credential for provider 'anthropic'" in result.output
     assert "ANTHROPIC_API_KEY" in result.output
@@ -687,7 +735,7 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
         "lockstep.budget = Budget(usd=0.0001)\n"
         "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
     )
-    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
     assert record["status"] == "blocked"
     assert record["reason"] == "cost.budget_exceeded", record
@@ -835,7 +883,13 @@ def test_a_stale_fixture_says_so_rather_than_raising(repo: Path) -> None:
     bug in replay rather than as "the prompt moved and this recording did not".
     """
     _write(repo)
-    result = CliRunner().invoke(main, ["review", "--offline", "--base", "HEAD~1", "--head", "HEAD"])
+    result = CliRunner().invoke(
+        main,
+        # A diff, because the refusal for having nothing to review now comes FIRST and this test is
+        # about what happens when a cassette does not match — two different failures that used to
+        # be one, since a review with no content still went to the provider.
+        ["review", "--offline", "--base", "HEAD~1", "--head", "HEAD", "--diff", _diff(repo)],
+    )
     assert result.exit_code != 0
     assert "no longer matches the prompt" in result.output or "no cassette entry" in result.output
     assert "Traceback" not in result.output

@@ -144,8 +144,28 @@ class GitLocal:
         if trailers:
             body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in sorted(trailers.items()))
         self.git("add", "-A", check=True)
-        self.git("commit", "-m", body, check=True)
+        self.git(*self.identity(), "commit", "-m", body, check=True)
         return self.head()
+
+    def identity(self) -> list[str]:
+        """`-c` overrides, only when the repository has no identity of its own.
+
+        `git commit` refuses without one, and a fresh CI runner has none configured — which is the
+        environment `apply` exists for, so without this the privileged half of the trampoline fails
+        on an adopter's first run. Where a person HAS an identity, theirs is used: the commit is a
+        record of a change made on their behalf.
+        """
+        configured = subprocess.run(
+            ["git", "config", "user.email"], cwd=self.root, capture_output=True, text=True
+        )
+        if configured.returncode == 0 and configured.stdout.strip():
+            return []
+        return [
+            "-c",
+            "user.name=in-lockstep",
+            "-c",
+            "user.email=in-lockstep@users.noreply.github.com",
+        ]
 
     async def open_change(
         self,

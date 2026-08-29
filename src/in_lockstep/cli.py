@@ -895,6 +895,13 @@ def _refuse_provider_credential() -> None:
     default=None,
     help="Hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
 )
+@click.option(
+    "--diff",
+    "diff_file",
+    default="",
+    type=click.Path(),
+    help="Review a saved diff instead of asking git for one.",
+)
 @click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
 def review_cmd(
     base: str,
@@ -905,9 +912,15 @@ def review_cmd(
     record: bool,
     cassette: str,
     budget: float | None,
+    diff_file: str,
     dry_run: bool,
 ) -> None:
-    """Review a change with one lens, in-process."""
+    """Review a change with one lens, in-process.
+
+    `--diff` reads a patch from a file rather than asking git for one. That is a real use — a
+    patch that is not a commit yet, a diff produced somewhere else — and it is also what makes
+    this command testable without constructing a repository with a history in it.
+    """
 
     from .adapters.ai.review import AiReview, Review, ReviewSpec
     from .ai.auth import Auth
@@ -946,6 +959,18 @@ def review_cmd(
     # the recording, and the diff it was recorded against. A cassette is keyed on the whole
     # composed prompt and therefore on the diff inside it, so a fixture without its diff would
     # replay for nobody — the key would never match anything a user actually has.
+    supplied = ""
+    if diff_file:
+        from pathlib import Path as _Path
+
+        # `patch`, not `source`: this function already binds `source` to `get_parameter_source`,
+        # and shadowing it would have broken the "did the user actually type --model" check a few
+        # lines above — silently, at runtime, in the command that spends money.
+        patch = _Path(diff_file)
+        if not patch.is_file():
+            raise click.ClickException(f"no diff at {diff_file}")
+        supplied = patch.read_text()
+
     fixture = _shipped_fixture() if offline else None
     if fixture is not None:
         cassette = cassette or str(fixture["cassette"])
@@ -1025,7 +1050,12 @@ def review_cmd(
 
     ctx = _context(lockstep, f"review-{aspect}")
     try:
-        outcome = asyncio.run(ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect, diff=demo_diff)))
+        outcome = asyncio.run(
+            ctx.do(
+                Review,
+                ReviewSpec(base=base, head=head, aspect=aspect, diff=supplied or demo_diff),
+            )
+        )
     except LookupError as e:
         raise click.ClickException(
             f"{e} If this is the shipped fixture, it no longer matches the prompt it was recorded "
