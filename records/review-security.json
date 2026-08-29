@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.027753,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 75,
+        "message": "The `path` component of the `git show {ref}:{path}` argument is not validated before being interpolated into the argv token passed to `git`.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 62,
+        "message": "The `ref` guard checks only `startswith(\"-\")`, not a colon in the ref name or other git object-name characters that could ambiguate `{ref}:{path}`.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 6266,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 597,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 6863,
+  "wall_seconds": 17.883
+}
