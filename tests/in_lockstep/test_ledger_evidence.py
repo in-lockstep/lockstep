@@ -43,11 +43,16 @@ def _repo(path: Path) -> Path:
     return path
 
 
+import os as _os
+
+
 @pytest.fixture()
 def hermetic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """A cwd of its own and no ambient CI: provenance must reflect the run, not this machine's
-    environment."""
-    for var in ("GITHUB_ACTIONS", "GITLAB_CI", "GITHUB_RUN_ID"):
+    environment. EVERY `GITHUB_*` variable goes, the same rule test_cli's repo fixture applies —
+    on a real runner `GITHUB_WORKSPACE` redirects `Lockstep.detect()` to the checkout, and these
+    tests would silently measure the framework's own repository instead of their tmp one."""
+    for var in [v for v in _os.environ if v.startswith("GITHUB_")] + ["GITLAB_CI"]:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.chdir(tmp_path)
     return tmp_path
@@ -84,7 +89,8 @@ def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(monkeypatch, tmp_
     from in_lockstep.cli import _provenance
     from in_lockstep.lockstep import Lockstep
 
-    monkeypatch.delenv("GITLAB_CI", raising=False)
+    for var in [v for v in _os.environ if v.startswith("GITHUB_")] + ["GITLAB_CI"]:
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_BASE_REF", "main")
     monkeypatch.setenv("GITHUB_ACTOR", "octocat")
