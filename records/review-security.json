@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.032202,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 183,
+        "message": "Environment variables are read at module-import time (when `default_registry()` is first called), not at invocation time. A process that sets `AWS_REGION`, `GOOGLE_CLOUD_PROJECT`, or `GOOGLE_CLOUD_LOCATION` after the registry is built will silently use stale or empty values. This is not directly exploitable, but it creates a window where a forked or initialised-early process routes to a different region than the operator intended \u2014 affecting data-residency claims that the docs present as authori\u2026[truncated]",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 299,
+        "message": "When Bedrock credentials are wired through `Auth`, `credentials_for` returns them without raising `MissingCredential` even if the result is empty \u2014 the comment says empty is the ambient-chain signal. This means a misconfigured `Auth` (one that returns empty for the Bedrock keys) silently falls through to ambient AWS credentials rather than failing loudly. An operator who intended to pin credentials gets ambient chain access with no error.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 7994,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 548,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 8542,
+  "wall_seconds": 15.146
+}
