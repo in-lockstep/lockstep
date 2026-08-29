@@ -31,4 +31,17 @@ class AnthropicProvider(ClaudeTransport):
         }
         if settings.base_url:
             kwargs["base_url"] = settings.base_url
+
+        # An identity-linked key is scoped to a workspace, and the API refuses a request that does
+        # not say which — with a 400 naming the header, which is better than most. It is an
+        # identifier rather than a secret, so it travels in `ProviderSettings.extra` and not in
+        # `Credentials`: putting it there would seed `Redact` with a workspace id and mask it out
+        # of the error messages that mention it.
+        headers = {
+            name: value
+            for name, value in settings.extra.items()
+            if name.startswith("anthropic-") and value
+        }
+        if headers:
+            kwargs["default_headers"] = headers
         return anthropic.AsyncAnthropic(**kwargs)

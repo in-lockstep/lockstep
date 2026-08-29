@@ -46,10 +46,18 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     auth = auth or Auth()
     registry = ProviderRegistry()
 
+    # An identity-linked API key acts in a workspace, and the API requires the id. Read here
+    # rather than demanded in `lockstep.py`, because it is per-developer rather than per-project:
+    # two people on one repository authenticate into different workspaces.
+    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID", "")
     registry.register(
         "anthropic",
         lambda s, c: _anthropic(s, c),
-        settings=ProviderSettings(base_url="", timeout_seconds=600.0),
+        settings=ProviderSettings(
+            base_url="",
+            timeout_seconds=600.0,
+            extra={"anthropic-workspace-id": workspace} if workspace else {},
+        ),
         data_policy=DataPolicy.EXTERNAL,
         endpoint=ANTHROPIC_ENDPOINT,
         auth_target=AuthTarget.MODEL_PROVIDER.value,

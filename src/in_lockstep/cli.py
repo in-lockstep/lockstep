@@ -590,6 +590,10 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
                 "aspect": aspect,
                 "model": model_id,
                 "status": outcome.status.value,
+                # The machine-readable refinement, which the terminal printed and the record
+                # dropped. `reason` is what a failure is grouped by — provider.authentication is a
+                # different problem from cost.budget_exceeded, and `status` calls both "errored".
+                "reason": outcome.reason,
                 "decided": outcome.decided,
                 "tokens": outcome.cost.total_tokens,
                 "input_tokens": outcome.cost.input_tokens,

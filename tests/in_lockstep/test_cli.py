@@ -587,3 +587,26 @@ def test_a_local_provider_needs_no_credential(repo: Path) -> None:
     from in_lockstep.ai.bootstrap import credentials_for
 
     assert credentials_for(Auth(), "local").secret_values() == frozenset()
+
+
+def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
+    """`status` says errored; `reason` says which kind, and only one of them was written.
+
+    A run refused by a budget and a run rejected by a provider are both `errored`, and the
+    terminal distinguished them while the durable record did not — so nothing downstream could
+    group failures by the thing that differs.
+    """
+    import json
+
+    (repo / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=0.0001)\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
+    )
+    CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
+    record = json.loads((repo / ".in-lockstep/ledger/review-security.json").read_text())
+    assert record["status"] == "blocked"
+    assert record["reason"] == "cost.budget_exceeded", record

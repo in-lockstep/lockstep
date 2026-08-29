@@ -294,3 +294,47 @@ def test_unqualified_model_id_is_refused() -> None:
 def test_unknown_provider_names_what_is_registered() -> None:
     with pytest.raises(ProviderRegistrationError, match="acme"):
         _registry().provider_for(Model("nope:m"))
+
+
+def test_an_anthropic_workspace_id_travels_as_a_header_not_a_credential() -> None:
+    """An identity-linked key acts in a workspace, and the API 400s without the id.
+
+    It goes in `ProviderSettings.extra` rather than `Credentials` deliberately: `Credentials`
+    seeds `Redact`, so putting an identifier there would mask the workspace id out of the very
+    error messages that name it.
+    """
+    from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
+    from in_lockstep.llm.providers.anthropic import AnthropicProvider
+
+    captured: dict = {}
+
+    class Fake(AnthropicProvider):
+        def _make_client(self, settings, creds):
+            captured["headers"] = {
+                n: v for n, v in settings.extra.items() if n.startswith("anthropic-") and v
+            }
+            captured["secrets"] = creds.secret_values()
+            return object()
+
+    Fake(
+        ProviderSettings(extra={"anthropic-workspace-id": "wrk_123"}),
+        Credentials(values={"api_key": SecretStr("sk-test-value-long-enough")}),
+    )
+    assert captured["headers"] == {"anthropic-workspace-id": "wrk_123"}
+    assert "wrk_123" not in captured["secrets"], "an identifier must not be seeded into Redact"
+
+
+def test_no_workspace_id_sends_no_header() -> None:
+    """A key that is not identity-linked must not be handed an empty header."""
+    import os
+
+    from in_lockstep.ai.bootstrap import default_registry
+    from in_lockstep.llm.registry import Model
+
+    had = os.environ.pop("ANTHROPIC_WORKSPACE_ID", None)
+    try:
+        registration = default_registry().registration_for(Model("anthropic:claude-haiku-4-5"))
+        assert registration.settings.extra == {}
+    finally:
+        if had is not None:
+            os.environ["ANTHROPIC_WORKSPACE_ID"] = had
