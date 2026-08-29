@@ -1,0 +1,55 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.043242,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 107,
+        "message": "Symlink escape via resolved intermediate symlinks may not be fully blocked on all TOCTOU paths",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 121,
+        "message": "Worktree contents passed to `os.chmod` without constraining mode bits \u2014 a change could set setuid/setgid bits",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 60,
+        "message": "Git error output from `_git` is included verbatim in `WorktreeError` messages",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 136,
+        "message": "`ref` option-injection guard is prefix-only; a ref containing shell metacharacters is not relevant here but embedded NUL or newline is not checked",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 9334,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1016,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 10350,
+  "wall_seconds": 24.86
+}
