@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from ..core.context import killswitch_engaged
@@ -411,6 +411,27 @@ class AiInvoker:
                     f"{policy.deadline_seconds:.1f}s deadline",
                 )
 
+    @property
+    def transmits(self) -> bool:
+        """Whether this provider actually reaches a model.
+
+        False for a cassette replay and a canned answer. Already consulted by the egress check;
+        pricing needs the same fact and was not asking for it, so a replayed run recorded the
+        recording's cost as though it had been spent.
+        """
+        return bool(getattr(self.provider, "transmits", True))
+
+    def _unbilled(self, cost: Cost) -> Cost:
+        """The same tokens, none of the money.
+
+        The tokens stay because reproducing them is what a replay is FOR — a cassette that
+        reported no usage would not be a replay of anything. `usd` goes to zero because zero is
+        the true amount that was spent, and `billed_tokens` goes to zero because a bare
+        `cost_usd: 0.0` is ambiguous: its other reading is a model whose price was never known,
+        which is the fabrication `pricing.py` exists to refuse.
+        """
+        return replace(cost, usd=0.0, billed_tokens=0)
+
     def _project(self, system: str, history: list[Message], policy: InvokePolicy) -> Cost:
         """What the next turn would cost, bounded by max_tokens rather than by an average.
 
@@ -418,11 +439,17 @@ class AiInvoker:
         the quadratic the caller is being protected from.
         """
         tokens = self.counter.count(self.model, history, system)
-        return self.cost_table.project(self.model, input_tokens=tokens, max_output_tokens=policy.max_tokens)
+        projected = self.cost_table.project(
+            self.model, input_tokens=tokens, max_output_tokens=policy.max_tokens
+        )
+        # A run that cannot spend must not be stopped by a spending ceiling. `--offline` exists so
+        # this can be exercised with no key and no cent, and a budget blocking it would make the
+        # free path the one that needs a budget argument.
+        return projected if self.transmits else self._unbilled(projected)
 
     def _price(self, output: LLMOutput) -> Cost:
         try:
-            return self.cost_table.price(
+            priced = self.cost_table.price(
                 self.model,
                 input_tokens=output.usage.input_tokens,
                 output_tokens=output.usage.output_tokens,
@@ -431,6 +458,7 @@ class AiInvoker:
             )
         except Unpriced as e:  # pragma: no cover - guarded at entry
             raise InvocationBlocked("cost.unpriced_model", str(e)) from e
+        return priced if self.transmits else self._unbilled(priced)
 
     def _scan_untrusted(self, package: ContextPackage) -> list[injection.Finding]:
         found: list[injection.Finding] = []

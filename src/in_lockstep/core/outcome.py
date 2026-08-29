@@ -112,6 +112,13 @@ class Cost:
     # How many billable tokens were priced from a rate that was actually declared, rather than
     # from a substitution. See `priced_fraction`.
     priced_tokens: int = 0
+    # How many of these tokens were actually paid for. Zero when the answer came from a cassette
+    # or a canned reply: the tokens are real — reproducing them is what a replay is FOR — and the
+    # money is not. See `billed_fraction`.
+    #
+    # A count rather than a boolean, for the same reason `priced_tokens` is one: costs add, and a
+    # run that mixes a live call with a replayed one has a fraction rather than a flag.
+    billed_tokens: int = 0
 
     @property
     def total_tokens(self) -> int:
@@ -125,6 +132,23 @@ class Cost:
         Cache tokens cost money and belong in the denominator of a claim about pricing coverage.
         """
         return self.total_tokens + self.cache_read_tokens + self.cache_write_tokens
+
+    @property
+    def billed_fraction(self) -> float | None:
+        """What share of this actually cost money. `None` when nothing was billable.
+
+        This exists because `usd: 0.0` is ambiguous and one of its readings is the fabrication
+        this module already refuses elsewhere: a comfortable zero standing in for a model whose
+        price was never known. A replayed run has real tokens and no cost, and without a second
+        number saying so it is indistinguishable from a run that was mispriced to nothing.
+
+        It also keeps a ledger honest across many runs. A repository replaying a cassette on every
+        pull request would otherwise accumulate the recording's cost as though it were spent, and
+        any trend built on that reads replays as money.
+        """
+        if self.billable_tokens == 0:
+            return None
+        return self.billed_tokens / self.billable_tokens
 
     @property
     def priced_fraction(self) -> float | None:
@@ -150,6 +174,7 @@ class Cost:
             usd=self.usd + other.usd,
             wall_seconds=self.wall_seconds + other.wall_seconds,
             priced_tokens=self.priced_tokens + other.priced_tokens,
+            billed_tokens=self.billed_tokens + other.billed_tokens,
         )
 
 

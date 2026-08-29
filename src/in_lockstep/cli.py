@@ -405,6 +405,21 @@ def _exit_for(result: Any) -> None:
         raise SystemExit(EXIT_FAILED)
 
 
+def _billing_note(cost: Any) -> str:
+    """Why a run with real tokens shows no cost.
+
+    `$0.0000` beside `5804 tokens` reads as a pricing failure, which is what `pricing.py` spends a
+    module refusing to produce. Saying it on the same line is cheaper than letting somebody go and
+    find out.
+    """
+    fraction = cost.billed_fraction
+    if fraction is None or fraction >= 1.0:
+        return ""
+    if fraction == 0.0:
+        return "  (replayed; nothing was billed)"
+    return f"  ({fraction:.0%} of tokens billed, the rest replayed)"
+
+
 def _echo_telemetry(recorder: Recorder | None) -> None:
     """What the CLI observed — or that it could not observe, which is a different statement."""
     if recorder is None:
@@ -1078,7 +1093,7 @@ def review_cmd(
     cost = outcome.cost
     click.echo("")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
-    click.echo(f"cost      ${cost.usd:.4f}")
+    click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
     _echo_telemetry(recorder)
 
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
@@ -1135,6 +1150,14 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str) -> None:
             **(
                 {"priced_fraction": round(outcome.cost.priced_fraction, 4)}
                 if outcome.cost.priced_fraction is not None
+                else {}
+            ),
+            # What share of this actually cost money. A replay has real tokens and no cost, and
+            # without this the record is indistinguishable from a model that was mispriced to
+            # zero — the exact fabrication `pricing.py` exists to refuse.
+            **(
+                {"billed_fraction": round(outcome.cost.billed_fraction, 4)}
+                if outcome.cost.billed_fraction is not None
                 else {}
             ),
         },
@@ -1446,7 +1469,7 @@ def implement_cmd(
     click.echo("")
     click.echo(f"turns     {report.turns if report is not None else 0}")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
-    click.echo(f"cost      ${cost.usd:.4f}")
+    click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
     _echo_telemetry(recorder)
 
     if out and report is not None and report.changeset.changes:
@@ -1517,6 +1540,11 @@ def _write_implement_ledger(
             "input_tokens": outcome.cost.input_tokens,
             "output_tokens": outcome.cost.output_tokens,
             "cost_usd": round(outcome.cost.usd, 6),
+            **(
+                {"billed_fraction": round(outcome.cost.billed_fraction, 4)}
+                if outcome.cost.billed_fraction is not None
+                else {}
+            ),
             "findings": {
                 "count": len(outcome.findings),
                 "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
