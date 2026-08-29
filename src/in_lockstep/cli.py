@@ -2510,6 +2510,7 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
+from in_lockstep.platform.propose import open_reviewable
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.strategies import default_registry as _fix_strategies
@@ -2584,8 +2585,12 @@ async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Ou
         await tickets.comment(await tickets.get(issue), "`/fix` produced no verified fix.")
         return Outcome(status=Status.FAILED, reason="fix.no_changes")
 
-    change = await scm.open_change(
+    # Ready for review, not draft: a change only reaches here when from-issue confirmed the fix
+    # green (a reproducer red before, passing after), so it is asking for the human sign-off.
+    change = await open_reviewable(
+        scm,
         changeset,
+        ready=True,
         title=changeset.summary or f"Fix {issue}",
         body=(
             "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
@@ -2598,7 +2603,7 @@ async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Ou
     )
     await tickets.comment(
         await tickets.get(issue),
-        f"`/fix` opened {change.url or change.branch}. Nobody has read it yet.",
+        f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
     return Outcome(status=Status.SUCCEEDED, value=change)
@@ -2746,6 +2751,7 @@ from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
+from in_lockstep.platform.propose import open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
@@ -2857,17 +2863,23 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
         await tickets.comment(await tickets.get(issue), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
-    change = await scm.open_change(
+    # Draft unless the change passed its tests: an unverified or red change reaches a human as a
+    # draft, out of the review queue, while a green one is marked ready — asking for the sign-off.
+    ready = verdict is not None and verdict.green
+    change = await open_reviewable(
+        scm,
         changeset,
+        ready=ready,
         title=changeset.summary or f"Implement {issue}",
         body=implement_body(changeset, verdict),
         ticket=issue,
         workflow="implement",
         run_id=ctx.run_id,
     )
+    state = "ready for review" if ready else "a draft — its tests did not pass"
     await tickets.comment(
         await tickets.get(issue),
-        f"`/implement` opened {change.url or change.branch}. Nobody has read it yet.",
+        f"`/implement` opened {change.url or change.branch} as {state}. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
     return Outcome(status=Status.SUCCEEDED, value=change)

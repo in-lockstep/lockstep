@@ -302,6 +302,43 @@ def test_open_change_refuses_a_base_that_looks_like_an_option(tmp_path: Path) ->
         asyncio.run(scm.open_change(cs, title="t", workflow="backport", run_id="r1", base="--upload-pack=x"))
 
 
+class _RecordingScm:
+    """Records how a change was opened, so open_reviewable's draft/ready decision is testable."""
+
+    def __init__(self) -> None:
+        self.opened_draft: bool | None = None
+        self.marked_ready = False
+
+    async def open_change(self, cs: object, *, draft: bool = False, **kwargs: object):  # noqa: ANN202
+        from in_lockstep.platform.scm.base import ChangeRequest
+
+        self.opened_draft = draft
+        return ChangeRequest(id="u", url="u", branch="b", title="t", number=1, draft=draft)
+
+    async def mark_ready(self, change: object) -> None:
+        self.marked_ready = True
+
+
+def test_open_reviewable_marks_a_green_change_ready() -> None:
+    from in_lockstep.platform.propose import open_reviewable
+
+    scm = _RecordingScm()
+    cs = ChangeSet(changes=(FileChange(path="a.py", contents="x\n"),), summary="s")
+    asyncio.run(open_reviewable(scm, cs, ready=True, title="t", workflow="implement", run_id="r"))
+    assert scm.opened_draft is True, "always opened draft first"
+    assert scm.marked_ready is True, "a green change is marked ready"
+
+
+def test_open_reviewable_leaves_an_unverified_change_a_draft() -> None:
+    from in_lockstep.platform.propose import open_reviewable
+
+    scm = _RecordingScm()
+    cs = ChangeSet(changes=(FileChange(path="a.py", contents="x\n"),), summary="s")
+    asyncio.run(open_reviewable(scm, cs, ready=False, title="t", workflow="implement", run_id="r"))
+    assert scm.opened_draft is True
+    assert scm.marked_ready is False, "an unverified change stays a draft"
+
+
 def test_local_open_change_is_never_draft_and_mark_ready_is_a_noop(tmp_path: Path) -> None:
     scm = GitLocal(_repo(tmp_path))
     cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),))
