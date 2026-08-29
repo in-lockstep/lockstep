@@ -567,3 +567,54 @@ def test_an_offline_run_still_refuses_a_tool_that_can_transmit() -> None:
     fetch = Tool(server="web", name="fetch", capabilities=frozenset({Capability.REACHES_NETWORK}))
     with pytest.raises(EgressRefused):
         asyncio.run(ai.run(system="s", messages=[], tools=ToolSet.of(fetch)))
+
+
+# -- installing a house prompt ---------------------------------------------------------------
+
+
+def test_a_house_lens_can_be_bound_rather_than_monkeypatched() -> None:
+    """`docs/extending.md` showed how to write a house prompt and no way to install one.
+
+    There is no `bind_prompt`, and `AiReview.invoke` read a module-global `LENSES`, so the routes
+    were mutating that global from a config file — an import-time side effect, in the file whose
+    whole point is being inspectable — or overriding `invoke` wholesale.
+    """
+    from in_lockstep.adapters.ai import AiReview
+    from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt
+
+    class OurSecurityReview(SecurityReviewPrompt):
+        version = "team-3"
+        emphasis = "SQLAlchemy 2.x session discipline"
+
+    adapter = AiReview(lambda ctx: None, lenses={"security": OurSecurityReview})
+    assert adapter.lenses["security"] is OurSecurityReview
+    assert LENSES["security"] is SecurityReviewPrompt, "the shipped map is untouched"
+    assert "SQLAlchemy" in OurSecurityReview().system(), "emphasis reaches the composed prompt"
+
+
+def test_the_default_lens_map_is_a_copy_not_the_shipped_one() -> None:
+    """A mutation of either must not reach the other, in both directions."""
+    from in_lockstep.adapters.ai import AiReview
+    from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt
+
+    adapter = AiReview(lambda ctx: None)
+    assert adapter.lenses == LENSES
+    assert adapter.lenses is not LENSES
+
+    class Sneaky(SecurityReviewPrompt):
+        pass
+
+    adapter.lenses["security"] = Sneaky  # type: ignore[index]
+    assert LENSES["security"] is SecurityReviewPrompt
+
+
+def test_an_unknown_aspect_names_the_lenses_this_adapter_has() -> None:
+    """Not the shipped ones — the message has to describe the adapter you actually bound."""
+    from in_lockstep.adapters.ai import AiReview, ReviewSpec
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.prompts.review import SecurityReviewPrompt
+
+    adapter = AiReview(lambda ctx: None, lenses={"house": SecurityReviewPrompt})
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", aspect="security")))
+    assert outcome.status is Status.BLOCKED
+    assert "'house'" in outcome.findings[0].message

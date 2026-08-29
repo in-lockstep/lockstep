@@ -45,6 +45,26 @@ class OurReview(ReviewPrompt):
     body = Body.from_file("prompts/our-review.md")
 ```
 
+Writing one is half the job. Installing it goes through `bind`, like every other extension —
+a prompt is not a separate kind of thing with a separate registration mechanism:
+
+```python
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES
+
+lockstep.bind(
+    Review,
+    AiReview(invoker_factory, lenses={**LENSES, "security": OurSecurityReview}),
+)
+```
+
+Spreading `LENSES` keeps the three lenses you did not override. Passing a bare dict replaces the
+map entirely, which is what you want when your team ships its own set of aspects — and an unknown
+aspect then reports the lenses *this adapter* has, not the ones that happen to ship.
+
+The map is copied at construction, in both directions: a later mutation of `LENSES` cannot reach
+an adapter you already bound, and an adapter cannot leak a lens back into the shipped map.
+
 The body stays a `.md` deliberately. The people who write review prompts are frequently not Python
 programmers, and prompt text in a string literal has escaping hazards that prose in a file does
 not. It is also a security property: a prompt change proposed by the improvement loop is data

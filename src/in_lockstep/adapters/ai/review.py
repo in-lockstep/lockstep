@@ -8,7 +8,7 @@ the spend ceiling — belongs to the invoker, so a second AI verb does not re-im
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
@@ -68,21 +68,29 @@ class AiReview:
         repo_root: str = ".",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
+        lenses: Mapping[str, type[ReviewPrompt]] | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=1)
         self.curator = curator or ContextCurator()
+        # `docs/extending.md` shows how to write a house prompt and, until this parameter, no way
+        # to install one: there is no `bind_prompt`, and `invoke` read the module-global `LENSES`.
+        # The only routes were mutating that global from a config file — a side effect on import,
+        # in the file whose whole point is being inspectable — or overriding `invoke` wholesale.
+        # Copied rather than aliased, so a later mutation of the global cannot reach a bound
+        # adapter, and an adapter's lens map cannot leak back into the shipped one.
+        self.lenses: Mapping[str, type[ReviewPrompt]] = dict(lenses) if lenses is not None else dict(LENSES)
 
     async def invoke(self, ctx: Any, inp: ReviewSpec) -> Outcome[ReviewReport]:
-        lens = LENSES.get(inp.aspect)
+        lens = self.lenses.get(inp.aspect)
         if lens is None:
             return Outcome.blocked_by(
                 "review.unknown_aspect",
                 findings=(
                     Finding(
                         id="review.unknown_aspect",
-                        message=f"no lens named {inp.aspect!r}; have {sorted(LENSES)}",
+                        message=f"no lens named {inp.aspect!r}; have {sorted(self.lenses)}",
                         severity=Severity.ERROR,
                         blocking=True,
                     ),
