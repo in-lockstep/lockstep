@@ -968,12 +968,20 @@ def report_cmd(group_by: str, fmt: str) -> None:
 
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
-def doctor_cmd(strict: bool) -> None:
+@click.option(
+    "--format",
+    "fmt",
+    default="table",
+    type=click.Choice(["table", "json"]),
+    show_default=True,
+    help="json is for fleet scanners; codes and severities are stable.",
+)
+def doctor_cmd(strict: bool, fmt: str) -> None:
     """Will the target accept this, and are the controls actually in place?"""
     from . import doctor as doctor_module
 
     report = doctor_module.run(".", strict=strict)
-    click.echo(doctor_module.render(report))
+    click.echo(doctor_module.as_json(report) if fmt == "json" else doctor_module.render(report))
     if not report.ok:
         raise SystemExit(EXIT_FAILED)
 
