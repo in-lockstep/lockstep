@@ -80,9 +80,7 @@ def test_every_gate_declares_a_known_status(gate: str, status: str) -> None:
     assert status in STATUSES, f"{gate} has status {status!r}; expected one of {sorted(STATUSES)}"
 
 
-@pytest.mark.parametrize(
-    "gate", [g for g, s in ROWS if s == "held"], ids=[g for g, s in ROWS if s == "held"]
-)
+@pytest.mark.parametrize("gate", [g for g, s in ROWS if s == "held"], ids=[g for g, s in ROWS if s == "held"])
 def test_a_held_gate_is_discharged_somewhere(gate: str) -> None:
     assert _discharged(gate, CORPUS), (
         f"{gate} is marked `held` in gates.md but nothing under tests/ or the Makefile names it. "

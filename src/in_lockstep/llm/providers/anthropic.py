@@ -38,9 +38,7 @@ class AnthropicProvider(ClaudeTransport):
         # `Credentials`: putting it there would seed `Redact` with a workspace id and mask it out
         # of the error messages that mention it.
         headers = {
-            name: value
-            for name, value in settings.extra.items()
-            if name.startswith("anthropic-") and value
+            name: value for name, value in settings.extra.items() if name.startswith("anthropic-") and value
         }
         if headers:
             kwargs["default_headers"] = headers

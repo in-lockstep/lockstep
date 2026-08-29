@@ -9,9 +9,9 @@ in-lockstep init
 ```
 
 ```python
-# lockstep.py — the whole configuration
-from in_lockstep import Lockstep, workflow
-from in_lockstep.adapters import PytestTest, RuffValidate
+# .lockstep/lockstep.py — the whole configuration
+from in_lockstep import Lockstep
+from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
 from in_lockstep.middleware import CostBudget, otel
 
 lockstep = Lockstep.detect()

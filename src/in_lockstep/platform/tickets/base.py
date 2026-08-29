@@ -1,4 +1,12 @@
-"""The tracker-agnostic shape."""
+"""The tracker-agnostic shape.
+
+The protocol is wider than what 1.0 calls, deliberately. Retrofitting a method onto a Protocol
+that third parties implement is a breaking change — `core/ports` makes the same argument for
+`compare_and_set` — so the shapes the named workflows need (triage acting on its verdict,
+backport targeting a release line, RFE creating the ticket it refined) are committed now, with
+`Unsupported`-raising defaults so a tracker that cannot do one says so instead of growing a
+different-shaped method later.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +16,7 @@ from enum import Enum
 from typing import Protocol, runtime_checkable
 
 from ...ai.context import ContextItem, Provenance
+from ...core.ports import Unsupported
 
 
 class TicketState(Enum):
@@ -53,6 +62,13 @@ class Ticket:
     acceptance_criteria: tuple[str, ...] = ()
     comments: tuple[str, ...] = ()
     raw_state: str = ""
+    # Release traceability — what a backport workflow routes on and a release manager greps for.
+    # Empty on trackers that have no such concept, which GitHub Issues mostly is: `milestone` is
+    # the closest it comes, and the version tuples stay empty there rather than being guessed
+    # from labels.
+    fix_versions: tuple[str, ...] = ()
+    affects_versions: tuple[str, ...] = ()
+    milestone: str = ""
 
     def as_context(self) -> tuple[ContextItem, ...]:
         """Ticket text is untrusted: anyone who can file one can write into a prompt."""
@@ -86,9 +102,34 @@ class TicketDraft:
 
 @runtime_checkable
 class TicketSource(Protocol):
+    """What a workflow may ask a tracker for.
+
+    `get` and `comment` are required — nothing qualifies as a ticket source without them. The
+    rest default to a refusal rather than being absent, so a workflow can catch `Unsupported`
+    and degrade honestly, and an adapter that cannot serve one never invents a signature.
+    """
+
     async def get(self, key: str) -> Ticket: ...
 
     async def comment(self, ticket: Ticket, body: str) -> None: ...
+
+    async def create(self, draft: TicketDraft) -> Ticket:  # pragma: no cover - default refuses
+        raise Unsupported("this TicketSource does not create tickets")
+
+    async def search(
+        self, query: str, *, limit: int = 20
+    ) -> tuple[Ticket, ...]:  # pragma: no cover - default refuses
+        raise Unsupported("this TicketSource does not search")
+
+    async def add_labels(self, ticket: Ticket, *labels: str) -> None:  # pragma: no cover
+        raise Unsupported("this TicketSource does not label")
+
+    async def transition(
+        self, ticket: Ticket, state: TicketState, *, raw: str = ""
+    ) -> None:  # pragma: no cover - default refuses
+        """Move a ticket. `raw` names the tracker's own state where the enum is too coarse —
+        the same escape hatch `Ticket.raw_state` provides in the other direction."""
+        raise Unsupported("this TicketSource does not transition tickets")
 
 
 _HEADING = re.compile(r"(?im)^#{1,6}\s*acceptance criteria\s*$")

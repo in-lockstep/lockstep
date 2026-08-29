@@ -1,7 +1,7 @@
 """in-lockstep — an agentic SDLC framework.
 
-The lifecycle is executable Python, not a rendered manifest: `lockstep.py` at your repository root
-IS the thing that runs. Nothing here emits YAML.
+The lifecycle is executable Python, not a rendered manifest: `.lockstep/lockstep.py` IS the
+thing that runs. Nothing here emits YAML.
 
 See design/in-lockstep-design.md, and design/adr/0001 for why this replaced a compiler.
 """
@@ -28,6 +28,7 @@ from .core import (
     Verb,
     workflow,
 )
+from .core.spend import Budget
 from .lockstep import Lockstep
 
 # Kept in step with `pyproject.toml` by hand, and by a test — the two are separate declarations
@@ -35,6 +36,7 @@ from .lockstep import Lockstep
 __version__ = "1.0.0"
 
 __all__ = [
+    "Budget",
     "Capability",
     "ChangeGuard",
     "ChangeSet",

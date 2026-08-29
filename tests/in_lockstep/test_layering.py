@@ -47,7 +47,12 @@ ALLOWED: dict[str, set[str]] = {
     "adapters": {"core", "ai", "adapters", "prompts", "privileged"},
     "middleware": {"core", "middleware", "privileged"},
     "platform": {"core", "ai", "platform", "privileged"},
-    "doctor": {"ai", "privileged", "prompts", "doctor"},
+    # Doctor asks "are the controls actually in place?", and two of the controls live in other
+    # layers: config provenance reads the CI environment through `platform.ci` (hardcoding
+    # GITHUB_* here is how the check silently skipped GitLab), and the route check loads the
+    # module through `loader` — with `core.workflow`'s snapshot/restore so a diagnostic leaves
+    # no registrations behind. Acyclic: none of those import doctor back; only `cli` does.
+    "doctor": {"ai", "core", "loader", "platform", "privileged", "prompts", "doctor"},
     "evaluation": {"evaluation"},
     # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a

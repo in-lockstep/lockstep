@@ -9,16 +9,27 @@ answers to "may this repository send code there".
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
 from ..llm.registry import Model, ModelCaps, ProviderRegistry
+
+if TYPE_CHECKING:
+    from .pricing import CostTable
 
 # Re-exported deliberately, not incidentally. `ai` is the only layer permitted to reach the
 # transport — a claim `test_layering.py` and this package's docstring both
 # make — and it was false, because `cli` imported `Model` and `LLMProvider` straight from `llm`
 # for a type annotation and a constructor. Naming them here is what makes the claim true.
-__all__ = ["LLMProvider", "Model", "ModelCaps", "ProviderRegistry", "credentials_for", "default_registry"]
+__all__ = [
+    "LLMProvider",
+    "Model",
+    "ModelCaps",
+    "ProviderRegistry",
+    "credentials_for",
+    "default_registry",
+    "table_for",
+]
 from .auth import Auth, AuthRequest, AuthTarget
 
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com"
@@ -47,6 +58,27 @@ def _ollama(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
 #: "Default" is what the Console shows you — and paying a network round-trip to be told the
 #: header is invalid teaches nothing about where the right value lives.
 WORKSPACE_PREFIX = "wrkspc_"
+
+
+def _is_local(url: str) -> bool:
+    """Whether a URL's host is genuinely this machine — what makes a `local` registration `free`.
+
+    The address decides, so an env var cannot launder a hosted endpoint into a zero rate. Loopback
+    is asked of `ipaddress`, not a hand list: `127.0.0.1` is in it and so is the rest of
+    `127.0.0.0/8` and `::1`, while `0.0.0.0` — the wildcard *bind* address, which a hosted service
+    can answer on and is not loopback to reach — is correctly excluded. A hostname that is not an
+    IP is local only when it is `localhost` or ends in `.localhost`.
+    """
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = urlparse(url).hostname or ""
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _anthropic_workspace() -> str:
@@ -100,6 +132,11 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         endpoint=local_url,
         auth_target=AuthTarget.MODEL_PROVIDER.value,
         caps=ModelCaps(tool_use=True, structured_output=False),
+        # Free only when the endpoint is genuinely local. `free` lets `--model local:qwen3-8b`
+        # run without a cost-table entry — but pointing OLLAMA_URL at a hosted endpoint must not
+        # make hosted tokens read as free, which is the exact invariant `Registration.free`
+        # states. So the flag follows the address, not the provider name.
+        free=_is_local(local_url),
     )
 
     gateway = os.environ.get("OPENAI_API_URL", "")
@@ -116,6 +153,42 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         )
 
     return registry
+
+
+def table_for(registry: ProviderRegistry, model: Model, table: CostTable | None = None) -> CostTable:
+    """The cost table for a run: the shipped rates, with any repository-bound rates layered over
+    them, plus a zero rate for a model whose registration declares itself free.
+
+    A bound table EXTENDS the default rather than replacing it. `default_table`'s docstring says a
+    repository overrides rates "like any other binding", and a repository that binds a partial
+    table means to add or change a few rates, not to unprice every shipped model — replacing the
+    map would turn `--model anthropic:claude-opus-4-6` into an Unpriced refusal the moment a team
+    priced one local finetune.
+
+    Zero is the only rate this will ever invent. `CostTable.rate_for` keeps refusing any model
+    nobody priced, because a guessed rate records a fabricated cost — but a `free` registration
+    is not a guess, it is the operator stating where the bytes go. The tokens still land in
+    `billed_tokens`, so a free run reads as free rather than as unmeasured.
+
+    The result is always a fresh table: a table bound in the container is somebody's declaration,
+    and pricing must not mutate it as a side effect of routing one verb to a local model.
+    """
+    from ..llm.registry import ProviderRegistrationError
+    from .pricing import Rate, default_table
+
+    merged = default_table()
+    if table is not None:
+        merged.rates.update(table.rates)  # bound rates win over shipped ones; the rest survive
+    try:
+        registration = registry.registration_for(model)
+    except ProviderRegistrationError:
+        # Not this function's error to raise. A dry run or a replay never constructs the
+        # provider, and a live run fails at `provider_for` with the message that names the fix —
+        # failing here instead would make pricing the thing that refuses an unknown provider.
+        return merged
+    if registration.free and not merged.knows(model.name):
+        merged.add(model.name, Rate(0.0, 0.0, cache_read_per_m=0.0, cache_write_per_m=0.0))
+    return merged
 
 
 class MissingCredential(Exception):
@@ -171,15 +244,27 @@ def invoker_factory(
     from ..privileged.egress import EgressPolicy
     from ..privileged.redact import Redact
     from .invoker import AiInvoker
-    from .pricing import default_table
 
-    table = cost_table if cost_table is not None else default_table()
     issuer = auth or Auth()
     registry = default_registry(issuer)
     selected = Model(model_id)
-    policy = egress if egress is not None else EgressPolicy.detect()
+    table = table_for(registry, selected, cost_table)
 
     def build(ctx: Any) -> AiInvoker:
+        # Egress is resolved at build time, not at construction, so a module can bind
+        # `EgressPolicy` AFTER calling `invoker_factory` and still have the binding reach the
+        # adapter — which is what the scaffold's commented-out `UnsandboxedEgress` opt-out relies
+        # on. An explicit `egress=` still wins (the dogfood passes the object it also binds), and
+        # a run with neither falls back to the environment, refusing when it is unenforced.
+        if egress is not None:
+            policy = egress
+        else:
+            container = getattr(ctx, "container", None)
+            policy = (
+                container.resolve(EgressPolicy)
+                if container is not None and container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            )
         chosen = provider
         if chosen is None:
             chosen = registry.provider_for(selected, credentials_for(issuer, selected.provider))
