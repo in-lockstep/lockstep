@@ -137,3 +137,15 @@ def test_the_release_publishes_one_distribution() -> None:
     text = (ROOT / ".github" / "workflows" / "release-python.yml").read_text()
     assert "uv build --package in-lockstep-exec" not in text
     assert "matrix" not in text, "a one-element matrix is a fan-out over nothing"
+
+
+def test_the_trampoline_installs_the_provider_extra() -> None:
+    """The one job that calls a model has to ask for the SDK that calls it.
+
+    Model SDKs are optional extras so a bare install stays small. This repository's own workflow
+    ran a bare `uv sync` while the scaffold it ships used `in-lockstep[anthropic]` — the shipped
+    thing was right and the self-hosted one had drifted, which is the failure self-hosting exists
+    to catch.
+    """
+    text = (ROOT / ".github" / "workflows" / "lockstep.yml").read_text()
+    assert "--extra anthropic" in text or "in-lockstep[anthropic]" in text
