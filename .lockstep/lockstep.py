@@ -204,7 +204,14 @@ lockstep.bind(
 # this chain, so `--no-middleware` cannot reach them.
 lockstep.middleware += [
     otel(),
-    CostBudget(usd=2.00),
+    # No ceiling of its own, deliberately. `Budget.merge` takes the LOWEST of every declared
+    # ceiling — tighten-only, like the policy stack — so the `usd=2.00` this used to carry kept
+    # capping every run at $2 no matter what `lockstep.budget` or `run --budget` said: three
+    # /implement attempts raised the other two numbers and were refused at 2.0000 anyway. One
+    # number, declared once (`lockstep.budget` above, or the flag), is the fix; a bare CostBudget
+    # still does its real job — the post-action reconciliation that stops a run whose actual
+    # spend drifted past the estimate.
+    CostBudget(),
     # An adapter that both spends money and writes files needs an approval path, or
     # `Lockstep.context` refuses to start the run. No predicate: the grant arrives on the run
     # context from `--approve` or `--approved-by`, which is what lets the SAME command serve a
