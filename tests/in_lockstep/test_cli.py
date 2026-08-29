@@ -131,6 +131,53 @@ def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> 
     assert "gemini-2.5-flash" in (repo / ".lockstep/ledger/review-security.json").read_text()
 
 
+def test_review_comment_upserts_a_sticky_pr_comment(repo: Path, monkeypatch) -> None:
+    """`review --comment --pr N` renders the findings into one sticky PR comment via the SCM."""
+    posted: dict = {}
+
+    async def fake_upsert(self, target, body, marker):  # noqa: ANN001
+        posted["target"], posted["body"], posted["marker"] = target, body, marker
+
+    monkeypatch.setattr("in_lockstep.platform.scm.GitHubScm.upsert_comment", fake_upsert)
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo), "--comment", "--pr", "17"]
+    )
+    assert result.exit_code == 0, result.output
+    assert posted["target"] == 17
+    assert "in-lockstep review" in posted["body"]
+    assert "in-lockstep:review:security" in posted["marker"]
+    assert "posted to PR #17" in result.output
+
+
+def test_a_failed_comment_post_does_not_crash_a_successful_review(repo: Path, monkeypatch) -> None:
+    """Posting is the last, least-essential step: a gh timeout (SubprocessError, not caught by a
+    naive RuntimeError guard) must be reported, not turned into a traceback."""
+    import subprocess
+
+    async def boom(self, target, body, marker):  # noqa: ANN001
+        raise subprocess.TimeoutExpired(cmd="gh", timeout=60)
+
+    monkeypatch.setattr("in_lockstep.platform.scm.GitHubScm.upsert_comment", boom)
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo), "--comment", "--pr", "5"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "could not post" in result.output
+
+
+def test_review_comment_without_a_pr_is_a_note_not_a_failure(repo: Path, monkeypatch) -> None:
+    for var in [k for k in os.environ if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(var, raising=False)
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo), "--comment"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "no PR number" in result.output
+
+
 def _issue_file(root: Path) -> str:
     import json
 

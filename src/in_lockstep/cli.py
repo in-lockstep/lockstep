@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -964,6 +965,10 @@ def _refuse_provider_credential() -> None:
     help="Review a saved diff instead of asking git for one.",
 )
 @click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
+@click.option("--comment", "post_comment", is_flag=True, help="Upsert the findings as one sticky PR comment.")
+@click.option(
+    "--pr", "pr_number", type=int, default=None, help="The PR to comment on (else detected from CI)."
+)
 def review_cmd(
     base: str,
     head: str,
@@ -975,6 +980,8 @@ def review_cmd(
     budget: float | None,
     diff_file: str,
     dry_run: bool,
+    post_comment: bool,
+    pr_number: int | None,
 ) -> None:
     """Review a change with one lens, in-process.
 
@@ -1145,6 +1152,9 @@ def review_cmd(
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
     # money and produced nothing is exactly the run worth having a record of.
     _write_ledger(ctx, outcome, aspect, selected.id if review_model_is_ours else "")
+
+    if post_comment:
+        _post_review_comment(lockstep, aspect, outcome, pr_number)
 
     if outcome.status is Status.BLOCKED:
         raise SystemExit(EXIT_BLOCKED)
@@ -1368,6 +1378,41 @@ def _triage_spec_from_dict(data: dict[str, Any], *, fallback_key: str) -> Any:
         acceptance_criteria=criteria,
         criteria_source=criteria_source,
     )
+
+
+def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_number: int | None) -> None:
+    """Put the findings where a person reads them: one sticky PR comment.
+
+    The PR number comes from `--pr` or from CI detection; without one there is nothing to comment
+    on, and that is a note rather than a failure — a local `review --comment` with no PR is a
+    reasonable thing to type, and refusing it would be surprising. A bound `Scm` that can upsert is
+    used, else the GitHub default.
+    """
+    from .platform.ci import detect as detect_ci
+    from .platform.report import marker, review_comment
+    from .platform.scm import GitHubScm, Scm
+
+    ci_env = detect_ci()
+    number = pr_number if pr_number is not None else (ci_env.pr_number if ci_env else None)
+    if not number:
+        click.echo(
+            "comment   no PR number (pass --pr, or run in a pull-request pipeline); not posted", err=True
+        )
+        return
+
+    scm: Any = lockstep.container.resolve(Scm) if lockstep.container.has(Scm) else None  # type: ignore[type-abstract]
+    if not hasattr(scm, "upsert_comment"):
+        scm = GitHubScm(root=lockstep.repo.root)
+    body = review_comment(aspect, outcome)
+    try:
+        asyncio.run(scm.upsert_comment(int(number), body, marker(f"review:{aspect}")))
+        click.echo(f"comment   posted to PR #{number}")
+    except (RuntimeError, OSError, subprocess.SubprocessError, ValueError) as e:
+        # Posting is the last step and the least essential: the review already ran and its record
+        # is written, so a failed comment is reported, not raised. The catch is broad on purpose —
+        # a `gh` timeout (`SubprocessError`) or a non-JSON response (`ValueError`) must not turn a
+        # review that succeeded into a crash, nor swallow the real exit code of one that blocked.
+        click.echo(f"comment   could not post to PR #{number}: {e}", err=True)
 
 
 def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review") -> None:

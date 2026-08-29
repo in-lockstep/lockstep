@@ -99,6 +99,34 @@ class GitHubScm:
     async def comment(self, target: int, body: str) -> None:
         self._gh("pr", "comment", str(target), "--body", body)
 
+    async def upsert_comment(self, target: int, body: str, marker: str) -> None:
+        """One sticky comment per marker: edit the framework's own prior comment in place rather
+        than adding one per run, so a re-review updates the thread instead of burying it.
+
+        `gh api` substitutes `{owner}`/`{repo}` from the checkout, so this needs no repository
+        argument. The marker rides at the end of the body, invisible in the rendered markdown, and
+        is how the next run finds this comment among the thread's.
+        """
+        marked = f"{body}\n\n{marker}" if marker not in body else body
+        # `--paginate`, because the framework's own comment is the newest one and the endpoint
+        # returns the OLDEST thirty first: on a PR with more than thirty comments, a single page
+        # never contains our marker, so every run would post a fresh duplicate — the exact
+        # thread-burying this exists to prevent. `--paginate` merges every page into one array.
+        existing = self._gh_json("api", "--paginate", f"repos/{{owner}}/{{repo}}/issues/{target}/comments")
+        for comment in existing if isinstance(existing, list) else []:
+            if marker in str(comment.get("body", "")):
+                cid = comment.get("id")
+                self._api_write(
+                    "-X", "PATCH", f"repos/{{owner}}/{{repo}}/issues/comments/{cid}", "-f", f"body={marked}"
+                )
+                return
+        self._api_write(f"repos/{{owner}}/{{repo}}/issues/{target}/comments", "-f", f"body={marked}")
+
+    def _api_write(self, *args: str) -> None:
+        code, _out, err = self._gh("api", *args)
+        if code != 0:
+            raise RuntimeError(f"could not post PR comment: {err.strip()}")
+
 
 def _body(body: str, trailers: dict[str, str]) -> str:
     """The rendered half a human reads, plus a machine-readable block.
