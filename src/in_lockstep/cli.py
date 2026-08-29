@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -65,6 +66,7 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
         # defaults and nothing reported it. A provenance control nobody can see the output of is
         # one nobody notices the absence of.
         click.echo(f"config    {ref.reason}", err=True)
+        configured.config_source = ref.reason
         if configured.middleware:
             return configured, None
         recorder = Recorder()
@@ -81,6 +83,7 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
         click.echo(f"config    none ({e})", err=True)
 
     lockstep = Lockstep.detect()
+    lockstep.config_source = "none (detected defaults)"
     # Bound from what the tree actually is, not from the assumption it is Python. A Node repository
     # used to get pytest bound here regardless, which broke its first run; now it gets `npm test`
     # if that is what detection found, and nothing for a verb detection could not place.
@@ -317,7 +320,7 @@ def _run_registered(
     click.echo("")
     _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
-    _write_workflow_ledger(ctx, entry.id, result, parsed)
+    _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
     _exit_for(result)
 
 
@@ -350,6 +353,43 @@ def _ledger(lockstep: Any = None) -> Any:
     return GitLedger() if inside.stdout.strip() == "true" else InRepoLedger()
 
 
+def _provenance(lockstep: Any) -> dict[str, Any]:
+    """What every record carries about the run's circumstances (schema 4).
+
+    A record used to say what was spent and decided but not when, against which commit, or under
+    which configuration — so joining a run to a release, or asking "was this the trusted config
+    or somebody's working tree", meant archaeology. Absent facts stay absent: no base ref outside
+    CI, no head in a directory that is not a repository. `ts` is wall-clock UTC, which is the one
+    field here that is evidence about the world rather than about git.
+    """
+    from datetime import UTC, datetime
+
+    from .platform.ci import detect as detect_ci
+
+    ci_env = detect_ci()
+    repo = getattr(lockstep, "repo", None)
+    out: dict[str, Any] = {"ts": datetime.now(UTC).isoformat(timespec="seconds")}
+    if repo is not None and repo.head:
+        out["head"] = repo.head
+        if repo.branch:
+            out["branch"] = repo.branch
+        if repo.dirty:
+            # Recorded only when true: a run against uncommitted changes is a run whose `head`
+            # does not describe what the model actually saw, and the record must say so.
+            out["dirty"] = True
+    if ci_env is not None:
+        if ci_env.base_ref:
+            out["base"] = ci_env.base_ref
+        if ci_env.actor:
+            # The host-computed identity, beside whatever `--approved-by` claimed: the two
+            # corroborate each other, and a mismatch is worth seeing in the record.
+            out["ci_actor"] = ci_env.actor
+    source = str(getattr(lockstep, "config_source", "") or "")
+    if source:
+        out["config"] = source
+    return out
+
+
 def _record(ledger: Any, run_id: str, payload: dict[str, Any]) -> None:
     """Write it, and say plainly if it could not be written.
 
@@ -367,7 +407,9 @@ def _record(ledger: Any, run_id: str, payload: dict[str, Any]) -> None:
     click.echo(f"ledger    {ledger.location(run_id)}")
 
 
-def _write_workflow_ledger(ctx: Any, workflow_id: str, result: Any, args: dict[str, str]) -> None:
+def _write_workflow_ledger(
+    lockstep: Any, ctx: Any, workflow_id: str, result: Any, args: dict[str, str]
+) -> None:
     """Every dispatched run leaves a record, not only the ones with a bespoke command.
 
     Without this, moving a process out of `review`/`implement` and into a `@workflow` — which is
@@ -381,11 +423,12 @@ def _write_workflow_ledger(ctx: Any, workflow_id: str, result: Any, args: dict[s
     cost = getattr(result, "cost", None)
     findings = getattr(result, "findings", ()) or ()
     _record(
-        _ledger(),
+        _ledger(lockstep),
         ctx.run_id,
         {
             "kind": "workflow",
             "workflow": workflow_id,
+            **_provenance(lockstep),
             "args": dict(args),
             # Who asked, and whether they watched. Absent when nobody did, which is the
             # ordinary case for a workflow needing no grant.
@@ -599,6 +642,11 @@ def run_cmd(
     _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
 
+    # The rule `_write_workflow_ledger` states — every dispatched run leaves a record — applied
+    # to the one dispatch that predates it. Selfcheck is the first command an adopter runs, and
+    # its record carrying schema-4 provenance is how they see what a record even is.
+    _write_workflow_ledger(lockstep, ctx, "selfcheck", result, {})
+
     if validate is not None and validate.status is Status.BLOCKED:
         raise SystemExit(EXIT_BLOCKED)
     statuses = [o.status for o in (validate, tests) if o is not None]
@@ -739,7 +787,8 @@ def eval_cmd(action: str, corpus: str) -> None:
 )
 @click.option("--from-bundle", default="", type=click.Path(), help="Take in history another job recorded.")
 @click.option("--limit", type=int, default=20, show_default=True)
-def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int) -> None:
+@click.option("--explain", default="", metavar="RUN", help="One run's record, every field, in words.")
+def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int, explain: str) -> None:
     """Run records, on an orphan branch that touches nothing anybody works on.
 
     Records are committed locally as each run finishes. Publishing is a separate act, because
@@ -747,6 +796,10 @@ def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int) -> None:
     in a terminal — so a laptop accumulates history and CI, or a person, pushes it.
     """
     from .platform.ledger import GitLedger, HistoryError
+
+    if explain:
+        _explain_run(explain)
+        return
 
     ledger = GitLedger()
 
@@ -789,6 +842,128 @@ def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int) -> None:
         raise click.ClickException(str(e)) from None
     click.echo("")
     click.echo(f"pushed to {where}")
+
+
+def _explain_run(run_id: str) -> None:
+    """Everything one record says, in the order a person asks: what ran, what happened, what it
+    cost, and under whose authority — plus where the session transcript is, when one exists."""
+    ledger = _ledger()
+    record = asyncio.run(ledger.read(run_id))
+    if record is None:
+        raise click.ClickException(
+            f"no record for {run_id!r} in {getattr(ledger, 'branch', None) or getattr(ledger, 'root', '?')}"
+        )
+
+    def line(label: str, key: str, render: Any = str) -> None:
+        value = record.get(key)
+        if value not in (None, "", [], {}):
+            click.echo(f"{label:<10}{render(value)}")
+
+    line("run", "run_id")
+    what = str(record.get("kind", "run"))
+    for extra in ("workflow", "aspect", "strategy"):
+        if record.get(extra):
+            what += f"  {record[extra]}"
+    click.echo(f"{'what':<10}{what}")
+    status = str(record.get("status", "?"))
+    if record.get("reason"):
+        status += f"  ({record['reason']})"
+    if record.get("decided") is False:
+        status += "  decided nothing"
+    click.echo(f"{'status':<10}{status}")
+    line("when", "ts")
+    line("head", "head")
+    line("branch", "branch")
+    if record.get("dirty"):
+        click.echo(f"{'dirty':<10}yes — head does not describe what the run actually saw")
+    line("base", "base")
+    line("config", "config")
+    line("model", "model")
+    approval = record.get("approval")
+    if isinstance(approval, dict) and approval.get("by"):
+        watched = "attended" if approval.get("attended") else "unattended"
+        click.echo(f"{'approved':<10}{approval['by']}  ({watched})")
+    line("ci actor", "ci_actor")
+    args = record.get("args")
+    if isinstance(args, dict) and args:
+        click.echo(f"{'args':<10}" + "  ".join(f"{k}={v}" for k, v in sorted(args.items())))
+    tokens = record.get("tokens")
+    cost = record.get("cost_usd")
+    if tokens is not None or cost is not None:
+        spent = f"${float(cost):.4f}" if isinstance(cost, (int, float)) else "unmeasured"
+        click.echo(f"{'spend':<10}{spent}  ({tokens} tokens, {record.get('wall_seconds', '?')}s)")
+    findings = record.get("findings")
+    if isinstance(findings, dict) and findings.get("count"):
+        click.echo(f"{'findings':<10}{findings['count']}")
+        for item in findings.get("items") or []:
+            if isinstance(item, dict):
+                where = f"{item.get('path')}:{item.get('line')} " if item.get("path") else ""
+                click.echo(f"          {where}{item.get('id', '')}: {item.get('message', '')}")
+    from .ai.transcript import TranscriptWriter
+
+    transcript = TranscriptWriter(run_id).path()
+    if transcript.exists():
+        click.echo(f"{'session':<10}{transcript}  (per-turn transcript)")
+
+
+@main.command(name="report")
+@click.option(
+    "--by",
+    "group_by",
+    default="kind",
+    type=click.Choice(["kind", "workflow", "model", "strategy", "aspect", "status"]),
+    show_default=True,
+    help="What one row aggregates over.",
+)
+@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]), show_default=True)
+def report_cmd(group_by: str, fmt: str) -> None:
+    """What the ledger adds up to: runs, failures, and spend, grouped.
+
+    Reads whichever store this repository records into — the orphan branch in a git repository,
+    the file store elsewhere, or whatever the module bound. The numbers follow the ledger's own
+    discipline: absent is not zero, so a column nobody measured renders as `-` rather than as a
+    reassuring 0.
+    """
+    from .platform.ledger.store import summarize
+
+    ledger = _ledger()
+    reader = getattr(ledger, "records", None)
+    if reader is None:
+        raise click.ClickException(
+            f"{type(ledger).__name__} cannot list records; report needs a store that can"
+        )
+    records = reader()
+    if not records:
+        click.echo("no records yet; the first run that writes a ledger record creates them")
+        return
+
+    stats = summarize(records, by=group_by)
+    if fmt == "json":
+        payload = {
+            key: {
+                "runs": stat.runs,
+                "failures": stat.failures,
+                "failure_rate": stat.failure_rate,
+                "tokens": stat.tokens,
+                "cost_usd": stat.cost_usd,
+                "mean_cost": stat.mean_cost,
+                "seconds": stat.seconds,
+            }
+            for key, stat in stats.items()
+        }
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    width = max(len(k) for k in stats)
+    click.echo(f"{group_by:<{width}}  runs  failed  tokens      cost      mean")
+    for key in sorted(stats):
+        stat = stats[key]
+        tokens = f"{stat.tokens:>8}" if stat.tokens is not None else f"{'-':>8}"
+        cost = f"${stat.cost_usd:>8.4f}" if stat.cost_usd is not None else f"{'-':>9}"
+        mean = f"${stat.mean_cost:.4f}" if stat.mean_cost is not None else "-"
+        click.echo(f"{key:<{width}}  {stat.runs:>4}  {stat.failures:>6}  {tokens}  {cost}  {mean}")
+    click.echo("")
+    click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
 
 
 @main.command(name="doctor")
@@ -1160,7 +1335,7 @@ def review_cmd(
 
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
     # money and produced nothing is exactly the run worth having a record of.
-    _write_ledger(ctx, outcome, aspect, selected.id if review_model_is_ours else "")
+    _write_ledger(lockstep, ctx, outcome, aspect, selected.id if review_model_is_ours else "")
 
     if post_comment:
         _post_review_comment(lockstep, aspect, outcome, pr_number)
@@ -1321,7 +1496,7 @@ def triage_cmd(
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
     _echo_telemetry(recorder)
 
-    _write_ledger(ctx, outcome, "", selected.id if triage_model_is_ours else "", kind="triage")
+    _write_ledger(lockstep, ctx, outcome, "", selected.id if triage_model_is_ours else "", kind="triage")
 
     if outcome.status is Status.BLOCKED:
         raise SystemExit(EXIT_BLOCKED)
@@ -1428,7 +1603,9 @@ def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_numbe
         click.echo(f"comment   could not post to PR #{number}: {e}", err=True)
 
 
-def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review") -> None:
+def _write_ledger(
+    lockstep: Any, ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review"
+) -> None:
     """One writer, through the store that owns the format.
 
     This hand-rolled the record and stamped `"schema": 2` and `"epoch": "in-process"` as literals
@@ -1441,10 +1618,11 @@ def _write_ledger(ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: s
     a triage record does not carry an empty lens field that reads as a missing one.
     """
     _record(
-        _ledger(),
+        _ledger(lockstep),
         ctx.run_id,
         {
             "kind": kind,
+            **_provenance(lockstep),
             **({"aspect": aspect} if aspect else {}),
             # Omitted when the repository bound its own Review adapter and therefore chose its
             # own model: this command's `--model` was never consulted, and writing it down
@@ -1814,7 +1992,7 @@ def implement_cmd(
         click.echo(f"Nothing was written. Apply it with:  in-lockstep apply-inline --from-artifact {out}")
 
     _write_implement_ledger(
-        ctx, outcome, label, selected.id if cli_chose_the_model else "", approval, ticket=resolved
+        lockstep, ctx, outcome, label, selected.id if cli_chose_the_model else "", approval, ticket=resolved
     )
 
     if outcome.status is Status.BLOCKED:
@@ -1866,15 +2044,22 @@ def _write_artifact(path: str, changeset: Any) -> None:
 
 
 def _write_implement_ledger(
-    ctx: Any, outcome: Any, strategy: str, model_id: str, approval: Any = None, ticket: Any = None
+    lockstep: Any,
+    ctx: Any,
+    outcome: Any,
+    strategy: str,
+    model_id: str,
+    approval: Any = None,
+    ticket: Any = None,
 ) -> None:
     """The same store `review` writes through, with the fields that differ for this verb."""
     report = outcome.value
     _record(
-        _ledger(),
+        _ledger(lockstep),
         ctx.run_id,
         {
             "kind": "implement",
+            **_provenance(lockstep),
             "strategy": strategy,
             # The ticket this run implemented, as structured fields rather than only inside the
             # run id: a record can be joined to its work item without parsing a string, and the

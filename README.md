@@ -38,6 +38,8 @@ in-lockstep review --base ...    # review a change, one lens at a time
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware and policy
 in-lockstep doctor               # are the controls actually in place?
+in-lockstep report --by model    # what the ledger adds up to: runs, failures, spend
+in-lockstep history --explain X  # one run's record, every field, in words
 in-lockstep eval report          # the corpus, offline
 in-lockstep apply --from-artifact # the privileged half of the two-job trampoline
 ```

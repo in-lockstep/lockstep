@@ -114,6 +114,15 @@ def write_json(path: Path, payload: Any, *, redact: Redact | None = None, **dump
     write_text(path, json.dumps(payload, **dumps) + "\n", redact=redact)
 
 
+def append_text(path: Path, text: str, *, redact: Redact | None = None) -> None:
+    """Append to a file, masked. For the sinks that accumulate — a transcript grows one
+    invocation at a time, and rewriting the whole file to add a line would race a concurrent
+    strategy phase writing its own."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        handle.write((redact or Redact()).text(text))
+
+
 def write_text_atomic(path: Path, text: str, *, redact: Redact | None = None) -> None:
     """Same guarantee, for a writer that must not leave a half-written file behind."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +149,7 @@ def attributes(values: Mapping[str, Any], *, redact: Redact | None = None) -> di
 
 __all__ = [
     "RedactingStream",
+    "append_text",
     "attributes",
     "install_streams",
     "redacted_streams",

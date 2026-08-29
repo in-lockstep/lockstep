@@ -24,7 +24,7 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
-from typing import Protocol
+from typing import Any, Protocol
 
 from ..core.context import killswitch_engaged
 from ..core.outcome import Cost
@@ -199,6 +199,7 @@ class AiInvoker:
         retry: RetryPolicy | None = None,
         counter: Counter | None = None,
         egress: EgressPolicy | None = None,
+        transcript: Any = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -207,6 +208,11 @@ class AiInvoker:
         self.redact = redact or Redact()
         self.retry = retry or RetryPolicy()
         self.counter = counter or HeuristicCounter()
+        # A `TranscriptWriter`, or None for no persistence — which is what tests and replays get.
+        # The bootstrap passes one wired to the run id, so every real session leaves its per-turn
+        # record behind; metadata is not a transcript, and a failed run used to leave only
+        # metadata.
+        self.transcript = transcript
         # Privileged, like Redact: constructed here rather than composed as middleware, so
         # `--no-middleware` cannot reach it. `detect()` reads the environment; a repository that
         # means to opt out binds `UnsandboxedEgress`, which is named after what it does.
@@ -290,7 +296,14 @@ class AiInvoker:
             async def call_provider(req: LLMInput = request) -> LLMOutput:
                 return await self.provider.generate(req)
 
-            output = await self._call(call_provider, policy=policy, started=started, index=index)
+            try:
+                output = await self._call(call_provider, policy=policy, started=started, index=index)
+            except InvocationFailed:
+                # The provider broke mid-session. What the session had said up to here is exactly
+                # the evidence a person debugging it needs, and it dies with this raise unless it
+                # is written now.
+                self._persist(system=system, history=history, final=None, ended="provider_error")
+                raise
             cost = self._price(output)
             self.spend.charge_turn(cost)
             total = total + cost
@@ -305,6 +318,7 @@ class AiInvoker:
             )
 
             if not output.tool_calls:
+                self._persist(system=system, history=history, final=output, ended="answered")
                 return Invocation(
                     truncated=output.stop_reason == "max_tokens",
                     content=output.content,
@@ -341,6 +355,7 @@ class AiInvoker:
 
         # The cap is a distinct terminal state. Returning the provider's own stop reason here
         # would make a partial result look finished, and a verb adapter cannot map that honestly.
+        self._persist(system=system, history=history, final=last, ended="exhausted")
         return Invocation(
             content=last.content if last else "",
             output=last,
@@ -349,6 +364,17 @@ class AiInvoker:
             exhausted=True,
             findings=tuple(findings),
         )
+
+    def _persist(self, *, system: str, history: list[Message], final: LLMOutput | None, ended: str) -> None:
+        """One transcript line for this invocation, if a writer is wired. The final assistant
+        answer is appended for the `answered` case, where the loop returned before the history
+        gained it; the exhausted history already carries its last turn."""
+        if self.transcript is None:
+            return
+        messages = list(history)
+        if ended == "answered" and final is not None and final.content:
+            messages.append(Message(role="assistant", content=final.content))
+        self.transcript.append(model=self.model, ended=ended, messages=messages, system_chars=len(system))
 
     # -- internals -----------------------------------------------------------------
 

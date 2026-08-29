@@ -13,7 +13,13 @@ from ...privileged import sink
 # whole argument for keeping the list is that a record saying "3" and nothing else is not evidence.
 # Nothing read the field, so the migration cost was zero; doing it after adopters exist would not
 # have been.
-SCHEMA = 3
+#
+# 4: every record gains provenance — `ts` (wall-clock UTC), `head`/`branch`/`dirty`, `base` and
+# `ci_actor` on CI, and `config` (which lockstep.py constrained the run: trusted ref or working
+# tree). Additive, so a schema-3 reader still parses a schema-4 record; bumped anyway because
+# "since when do records carry timestamps" deserves one answer, not a per-field dig through
+# history. `summarize`/`compare` are unchanged: none of the new fields is a number to aggregate.
+SCHEMA = 4
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 
@@ -68,6 +74,11 @@ class InRepoLedger:
         if not path.exists():
             return None
         return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    def records(self) -> list[dict[str, object]]:
+        """Every record in the store, oldest file name first — the same read `GitLedger.records`
+        provides, so `report` can ask either store the same question."""
+        return read_ledger(self.root)
 
     async def compare_and_set(self, key: str, expected: str | None, new: str) -> bool:
         """Declared from day one; refused by this store, on purpose.
