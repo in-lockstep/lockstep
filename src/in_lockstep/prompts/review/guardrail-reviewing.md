@@ -28,5 +28,6 @@ You will be right more often about a repository whose conventions you know. Thos
 not in this guardrail, because whoever wrote it has never seen your code.
 
 Add them where they belong: a context for facts every lens should share, a guardrail of your own for
-rules that constrain every lens, or the body of one agent for something only that lens needs.
-`docs/layers.md` explains which is which.
+rules that constrain every lens, or the body of one prompt for something only that lens needs.
+`in-lockstep show-prompt <lens>` prints the composed result with each fragment's origin, so you can
+see where a change of yours landed.
