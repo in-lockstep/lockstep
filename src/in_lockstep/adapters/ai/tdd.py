@@ -35,7 +35,7 @@ from ...core.verbs import Verb
 from ...privileged.egress import EgressRefused
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..pytest_adapter import Test
-from ..worktree import materialize
+from ..worktree import head_state, materialize
 from .implement import ImplementReport, ImplementSession, ImplementSpec
 
 _RED_DIRECTIVE = (
@@ -237,6 +237,12 @@ class TddImplement:
                 decided=green.decided,
             )
 
+        # Revert-and-verify: red→green already proved the implementation load-bearing against the
+        # phase-1 test, but nothing yet proves it against the *final* test — a phase-2 edit could
+        # have weakened the test into passing on its own. Undo the implementation (keeping the test)
+        # and confirm the suite returns to red. Advisory, not blocking: the change did pass its test.
+        findings += await _revert_verify(ctx, session, tests, full)
+
         return Outcome(
             status=Status.SUCCEEDED,
             value=report,
@@ -245,6 +251,52 @@ class TddImplement:
             decided=not green_inv.exhausted,
             reason="exhausted" if green_inv.exhausted else None,
         )
+
+
+async def _revert_verify(
+    ctx: Any, session: ImplementSession, tests: ChangeSet, full: ChangeSet
+) -> list[Finding]:
+    """Undo the implementation and confirm the suite goes red again — proof the fix carries its test.
+
+    The implementation is the part of `full` that is not one of the test files staged in phase 1.
+    Its inverse (read from HEAD) applied over `full` leaves HEAD-plus-the-test, which should be red;
+    if it is still green the test does not depend on the change and may have been weakened.
+    """
+    test_paths = set(tests.paths())
+    fix = tuple(c for c in full.changes if c.path not in test_paths)
+    if not fix:
+        return []  # green reached with no implementation change — nothing to revert
+    before = await head_state(session.repo_root, [c.path for c in fix])
+    undo = ChangeSet(changes=fix).inverse(before)
+    reverted = _merge(full, undo)  # full with the implementation undone -> HEAD + the test
+    async with materialize(session.repo_root, reverted) as tree:
+        recheck = await ctx.do(Test, TestSpec(root=tree, expect="fail"))
+    if recheck.status is Status.SUCCEEDED:  # expect="fail" satisfied -> red again
+        return [
+            Finding(
+                id="tdd.fix_verified",
+                message="reverting the implementation returns the suite to red, so the change is "
+                "load-bearing for its test.",
+                severity=Severity.NOTE,
+            )
+        ]
+    return [
+        Finding(
+            id="tdd.fix_not_load_bearing",
+            message="the suite still passed with the implementation reverted, so the staged test "
+            "does not depend on the change — the test may have been weakened. Review the test.",
+            severity=Severity.WARNING,
+        )
+    ]
+
+
+def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:
+    """`base` with `over` layered on top, last-write-wins per path — the same rule the Workspace and
+    `apply` use, so a path appearing in both resolves to `over` rather than to two entries."""
+    by_path = {c.path: c for c in base.changes}
+    for change in over.changes:
+        by_path[change.path] = change
+    return ChangeSet(changes=tuple(by_path.values()), summary=base.summary, ticket=base.ticket)
 
 
 def _test_findings(outcome: Any) -> tuple[Finding, ...]:

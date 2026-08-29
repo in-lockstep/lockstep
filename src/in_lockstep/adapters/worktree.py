@@ -49,6 +49,41 @@ class WorktreeError(RuntimeError):
     """A worktree could not be created, or the source was not a git repository."""
 
 
+async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> dict[str, FileChange | None]:
+    """The pre-image of each path at `ref`: a `FileChange` reproducing its committed contents, or
+    None if it does not exist there. This is what `ChangeSet.inverse` needs to revert a change that
+    was applied over `ref` — the "before" state lives in the tree, not in the change.
+
+    Text-oriented, like the `FileChange.contents` it fills: contents are decoded with
+    `errors="replace"`, the same choice `_git` and `Sandbox` make, because a `ChangeSet` cannot
+    carry bytes in the first place. A repository whose *source* is non-UTF-8 is not something a
+    change staged through the tool boundary could have produced.
+    """
+    # Option-confusion guard, as in `materialize`: `{ref}:{path}` reaches `git show` as one argv
+    # token, so a `-`-leading ref could be read as a flag. Not injection (no shell), but refused.
+    if ref.startswith("-"):
+        raise WorktreeError(f"refusing a ref that looks like an option: {ref!r}")
+    repo_root = os.path.abspath(repo_root)
+    state: dict[str, FileChange | None] = {}
+    for path in paths:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            repo_root,
+            "show",
+            f"{ref}:{path}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, _ = await proc.communicate()
+        # A non-zero exit means the path is absent at `ref` (a file the change created), which
+        # inverts to a deletion — represented as None rather than an empty file.
+        state[path] = (
+            FileChange(path=path, contents=out.decode(errors="replace")) if not proc.returncode else None
+        )
+    return state
+
+
 async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) -> TestVerdict | None:
     """Run the bound suite against HEAD-plus-`changeset`, and report how it came out.
 
