@@ -49,7 +49,12 @@ ALLOWED: dict[str, set[str]] = {
     "platform": {"core", "ai", "platform", "privileged"},
     "doctor": {"ai", "privileged", "prompts", "doctor"},
     "evaluation": {"evaluation"},
-    "strategies": {"ai", "core", "strategies"},
+    # `adapters` was added when the first executable strategy was registered. A registration
+    # names an implementation — that is what distinguishes it from a catalogue entry — so a
+    # composition root that may not import one can only ever register strings, which is what this
+    # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
+    # never imports `strategies` back.
+    "strategies": {"ai", "core", "adapters", "strategies"},
     "lockstep": {"core", "lockstep"},
     # The package facade. It re-exports the public surface, so it reaches almost everything by
     # construction — but it was being SKIPPED rather than allowed, which is different: nothing

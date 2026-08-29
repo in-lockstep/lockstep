@@ -123,6 +123,27 @@ class AiReview:
         layers: PromptLayers = review_layers()
         package = self._gather(inp)
 
+        if not package.items:
+            # Refused rather than asked. A model handed no diff answers anyway, and whether that
+            # answer parses decides between `review.unparseable` — which reads as a model problem
+            # — and `{"findings": []}`, which reads as a clean review. Neither is true, and the
+            # second is the one that would be believed.
+            return Outcome.blocked_by(
+                "review.no_content",
+                findings=(
+                    Finding(
+                        id="review.no_content",
+                        message=(
+                            f"nothing to review between {inp.base} and {inp.head}: "
+                            f"{', '.join(package.dropped) or 'the diff was empty'}. Nothing was "
+                            f"sent and nothing was charged."
+                        ),
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
+                ),
+            )
+
         system = prompt.system(layers) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
         messages = prompt.render(ReviewParams(base=inp.base, head=inp.head, aspect=inp.aspect), package)
 
@@ -230,10 +251,25 @@ class AiReview:
             for f in invocation.findings
         )
 
+        # What the reviewer was NOT shown, reported as a finding rather than left in a field
+        # nobody reads. A review of part of a change is a real review of that part; a review that
+        # does not say which part is one somebody will read as covering all of it — and until the
+        # curator learned to shrink, an oversized diff was dropped whole and this verb asked a
+        # model to review a change it had not been given.
+        omitted = tuple(
+            Finding(
+                id="review.not_reviewed",
+                message=f"not included in this review: {name}",
+                severity=Severity.WARNING,
+                path=name,
+            )
+            for name in package.dropped
+        )
+
         return Outcome(
             status=Status.SUCCEEDED,
             value=report,
-            findings=findings + injection_findings,
+            findings=findings + injection_findings + omitted,
             cost=invocation.cost,
             decided=not invocation.exhausted,
             reason="exhausted" if invocation.exhausted else None,
@@ -241,6 +277,11 @@ class AiReview:
 
     def _gather(self, inp: ReviewSpec) -> ContextPackage:
         diff = inp.diff or _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
+        if not diff.strip():
+            # An empty diff is not a clean review, and running one would produce a confident
+            # answer about nothing. Distinguished here rather than at parse time, where it arrives
+            # as "the model returned bad JSON" and sends somebody to read the prompt.
+            return ContextPackage(items=(), dropped=("diff:(empty)",))
         items = [
             ContextItem(
                 kind="diff",

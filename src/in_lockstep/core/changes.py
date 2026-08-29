@@ -37,7 +37,13 @@ from .types import ChangeAuthor, ChangeSet, FileChange
 
 # Absolute. No grant lifts these.
 DENY_ALWAYS: tuple[str, ...] = (
-    # Executable policy: the file that defines every binding, middleware and tool grant.
+    # Executable policy plus every artefact of a run: the lifecycle module that defines each
+    # binding, middleware and tool grant; the skills that are instructions for every future run;
+    # the checkpoint store that decides what `--recover` replays.
+    ".lockstep/",
+    # The previous layout. Still denied, because a repository mid-migration has one and an agent
+    # that can edit it can rebind anything — and because a rule that stops protecting a path the
+    # day it moves is a rule with a window in it.
     "lockstep.py",
     "lockstep/",
     ".in-lockstep/",
@@ -266,9 +272,7 @@ class ChangeGuard:
             if read is not None:
                 added -= _silencers(read(change.path) or "")
             if added:
-                refusals.append(
-                    Refusal(path=change.path, rule="test-silenced-without-ticket", tier=1)
-                )
+                refusals.append(Refusal(path=change.path, rule="test-silenced-without-ticket", tier=1))
         return refusals
 
     def check(

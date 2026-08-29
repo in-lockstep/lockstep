@@ -9,6 +9,17 @@
 # the ref under review would let a pull request supply the file defining the bindings, the policy
 # and the path tiers that constrain reviewing it.
 #
+# $0.75, sized against a measurement rather than a guess — and RAISED from $0.25 after a real run
+# showed what $0.25 was actually sized for. The old number was measured against a median diff whose
+# context is a few thousand tokens. A large pull request fills the reviewer's 60k-token context
+# budget, and the pre-flight projection bounds output by `max_tokens` rather than by an expected
+# value, so a full context projects $0.2414 before a byte is sent. A ceiling at $0.25 therefore
+# refused the runs most worth reviewing, while looking like it had been chosen for them.
+#
+# $0.75 is roughly three times the worst-case projection and four times the observed cost of a
+# full-context review ($0.189 at ~600 output tokens). Far enough above normal that it never fires
+# on a good run; close enough that a loop going wrong stops in cents.
+#
 # `--budget` is stated here rather than left to lockstep.py, because of the adoption case.
 # Configuration loads from the trusted ref — the base branch — so a repository's very first pull
 # request, the one that ADDS lockstep.py, has no config to load and therefore no declared ceiling,
@@ -52,7 +63,7 @@ jobs:
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
             --aspect security \
-            --budget 0.25
+            --budget 0.75
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # A variable, not a secret: a workspace id is an identifier, and putting one in
@@ -60,11 +71,21 @@ jobs:
           # Empty when unset, which is correct — a key that is not identity-linked needs no
           # workspace and must not be handed an empty header.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
-          IN_LOCKSTEP_EGRESS: enforced
+          # Deliberately NOT IN_LOCKSTEP_EGRESS=enforced. This repository's lockstep.py binds
+          # `UnsandboxedEgress`, and a bound policy is resolved before `detect()` ever reads this
+          # variable — so setting it here did nothing while reading as though a control were in
+          # place. A line that looks like a control and is not is worse than its absence.
           IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      # `review` is read-only and this job has `contents: read`, so it cannot publish its own
+      # record. The bundle carries it out; a person or the implement trampoline pushes it.
+      - run: uv run in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: lockstep-run
-          path: .in-lockstep/
+          path: |
+            history.bundle
+            .lockstep/
           if-no-files-found: ignore

@@ -35,16 +35,37 @@ RAW_WRITE_FUNCTIONS = {"open", "fdopen"}
 
 # Exemptions, each with the reason it is not a redaction sink. A bare path would be an enumerated
 # list again; the reason is what makes an addition reviewable rather than habitual.
-EXEMPT: dict[tuple[str, str], str] = {
-    ("cli.py", "write_text"): (
+#
+# Keyed on the enclosing FUNCTION, not just the module. Keying on `(module, method)` meant one
+# exemption licensed every call site in that file: `init` writing two module-level scaffold
+# constants excused a later `write_text` in the same module that serialized model-authored
+# content, and nothing here would have said so. An exemption is a decision about one call site,
+# and the key should be able to express that.
+EXEMPT: dict[tuple[str, str, str], str] = {
+    ("cli.py", "init_cmd", "write_text"): (
         "`init` writes two scaffold templates that are module-level string constants. There is no "
         "run, no credential, and nothing in scope that could carry one."
     ),
-    ("loader.py", "write"): (
+    ("platform/artifacts.py", "write_changeset", "write_text"): (
+        "The ChangeSet artifact. Its `contents` are the change itself and must survive verbatim: "
+        "masking a source file that happens to match a credential shape would corrupt the file "
+        "the framework was asked to write, and would protect nothing — `apply` writes those same "
+        "bytes to disk at the other end. The metadata around them IS model prose, so the function "
+        "redacts summary and ticket explicitly before serializing. Same reasoning as scm/base.py."
+    ),
+    ("cli.py", "_write_changeset", "write_text"): (
+        "`apply-inline` writing a ChangeSet to the working tree — the local half of what "
+        "scm/base.py `apply` does in CI, for the identical reason: the content is the change, and "
+        "masking it would corrupt the file the framework was asked to write.\n\n"
+        "This call site was already here and already unredacted. It went unnoticed because the "
+        "old `(module, method)` key let `init`'s scaffold exemption license every `write_text` in "
+        "cli.py, which is what the function-level key was introduced to stop."
+    ),
+    ("loader.py", "load", "write"): (
         "Materialises lockstep.py from the TRUSTED ref to a temp file so it can be imported. "
         "Redacting it would corrupt the configuration being loaded — this is an input, not a sink."
     ),
-    ("platform/scm/base.py", "write_text"): (
+    ("platform/scm/base.py", "apply", "write_text"): (
         "Applies a ChangeSet to the working tree. The content is the change itself; masking it "
         "would silently corrupt the file the framework was asked to write. ChangeGuard is the "
         "control on this path, not Redact."
@@ -59,20 +80,38 @@ def _shipped_modules() -> list[Path]:
 MODULES = _shipped_modules()
 
 
-def _raw_writes(tree: ast.AST) -> list[tuple[str, int]]:
-    found: list[tuple[str, int]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if isinstance(func, ast.Attribute) and func.attr in RAW_WRITE_METHODS:
-            found.append((func.attr, node.lineno))
-        elif isinstance(func, ast.Attribute) and func.attr in RAW_WRITE_FUNCTIONS:
-            if _writes(node):
-                found.append((func.attr, node.lineno))
-        elif isinstance(func, ast.Name) and func.id in RAW_WRITE_FUNCTIONS:
-            if _writes(node):
-                found.append((func.id, node.lineno))
+def _write_name(call: ast.Call) -> str | None:
+    """What raw writer this call is, or None."""
+    func = call.func
+    if isinstance(func, ast.Attribute) and func.attr in RAW_WRITE_METHODS:
+        return func.attr
+    if isinstance(func, ast.Attribute) and func.attr in RAW_WRITE_FUNCTIONS and _writes(call):
+        return func.attr
+    if isinstance(func, ast.Name) and func.id in RAW_WRITE_FUNCTIONS and _writes(call):
+        return func.id
+    return None
+
+
+def _raw_writes(tree: ast.AST) -> list[tuple[str, str, int]]:
+    """Every raw write, as (enclosing function, writer, line).
+
+    The scope is carried down rather than looked up afterwards, because `ast` nodes do not know
+    their parents and a second pass to reconstruct them is how this kind of scan grows a bug.
+    """
+    found: list[tuple[str, str, int]] = []
+
+    def walk(node: ast.AST, scope: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.Call) and (name := _write_name(child)):
+                found.append((scope, name, child.lineno))
+            inner = (
+                child.name
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                else scope
+            )
+            walk(child, inner)
+
+    walk(tree, "<module>")
     return found
 
 
@@ -97,20 +136,20 @@ def test_no_module_writes_outside_the_process_unwrapped(path: Path) -> None:
     if relative == SINK_MODULE:
         return
 
-    for name, line in _raw_writes(ast.parse(path.read_text())):
-        assert (relative, name) in EXEMPT, (
-            f"{relative}:{line} calls {name}() directly. Anything leaving this process must go "
-            f"through in_lockstep.privileged.sink, which redacts — or be added to EXEMPT in "
-            f"{Path(__file__).name} with the reason it is not a redaction sink."
+    for scope, name, line in _raw_writes(ast.parse(path.read_text())):
+        assert (relative, scope, name) in EXEMPT, (
+            f"{relative}:{line} calls {name}() directly inside {scope}(). Anything leaving this "
+            f"process must go through in_lockstep.privileged.sink, which redacts — or be added to "
+            f"EXEMPT in {Path(__file__).name} with the reason it is not a redaction sink."
         )
 
 
 def test_every_exemption_still_applies() -> None:
     """An exemption whose call site is gone is a licence nobody revoked."""
     live = {
-        (str(p.relative_to(SRC)), name)
+        (str(p.relative_to(SRC)), scope, name)
         for p in MODULES
-        for name, _ in _raw_writes(ast.parse(p.read_text()))
+        for scope, name, _ in _raw_writes(ast.parse(p.read_text()))
         if str(p.relative_to(SRC)) != SINK_MODULE
     }
     stale = set(EXEMPT) - live

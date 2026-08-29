@@ -30,7 +30,7 @@ from in_lockstep.core.container import Tier
 from in_lockstep.core.context import DISABLE_ENV
 from in_lockstep.core.spend import Budget
 from in_lockstep.core.verbs import Capability, Verb
-from in_lockstep.core.workflow import DuplicateWorkflow, clear, id_of, workflow
+from in_lockstep.core.workflow import DuplicateWorkflow, id_of, restore, snapshot, workflow
 from in_lockstep.middleware.budget import CostBudget
 from in_lockstep.middleware.otel import Recorder, otel
 from in_lockstep.middleware.retry import Retry
@@ -393,7 +393,11 @@ def test_tier_2_grant_is_keyed_on_a_workflow_id() -> None:
 
 
 def test_workflows_register_under_a_stable_id() -> None:
-    clear()
+    # `snapshot`/`restore`, never `clear`. The registry is process-global and the framework's own
+    # `selfcheck` lives in it, so clearing removes it for every later test — which used to be
+    # invisible because the dispatcher special-cased `selfcheck` before consulting the registry,
+    # and became `unknown workflow 'selfcheck'` the moment it stopped.
+    state = snapshot()
     try:
 
         @workflow(id="fix-ci/after-review")
@@ -404,11 +408,11 @@ def test_workflows_register_under_a_stable_id() -> None:
         renamed = after_review  # a later refactor renames the function, not the id
         assert id_of(renamed) == "fix-ci/after-review"
     finally:
-        clear()
+        restore(state)
 
 
 def test_duplicate_workflow_ids_are_refused() -> None:
-    clear()
+    state = snapshot()
     try:
 
         @workflow(id="dup")
@@ -421,7 +425,7 @@ def test_duplicate_workflow_ids_are_refused() -> None:
             async def b(ctx):
                 return None
     finally:
-        clear()
+        restore(state)
 
 
 # -- TestReport.flaky -----------------------------------------------------------------
@@ -746,3 +750,34 @@ def test_gate_ledger_5_holds_for_what_a_run_actually_emits() -> None:
     for metric in recorder.metrics:
         assert metric.name.startswith(METRIC_PREFIXES), metric.name
         assert not metric.name.startswith(RETIRED_PREFIX), metric.name
+
+
+def test_re_importing_a_module_is_not_a_duplicate_workflow() -> None:
+    """Object identity was the test, which made a module conflict with itself on re-import.
+
+    Any host that loads `lockstep.py` twice in one process hits it — a long-lived worker, a test
+    harness, two CLI invocations sharing an interpreter. That turns "configuration is code" into
+    "configuration is code you may import exactly once".
+    """
+    from in_lockstep.core.workflow import DuplicateWorkflow, restore, snapshot, workflow
+
+    state = snapshot()
+    try:
+
+        def make():  # noqa: ANN202 - a stand-in for module execution
+            @workflow(id="demo/reimport")
+            async def run(ctx):  # noqa: ANN001, ANN202
+                return None
+
+            return run
+
+        first, second = make(), make()
+        assert first is not second, "the fixture must produce distinct function objects"
+
+        with pytest.raises(DuplicateWorkflow, match="already registered"):
+
+            @workflow(id="demo/reimport")
+            async def different(ctx):  # noqa: ANN001, ANN202
+                return None
+    finally:
+        restore(state)

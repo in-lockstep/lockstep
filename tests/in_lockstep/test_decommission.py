@@ -24,10 +24,31 @@ def test_gate_ci_1_no_generated_workflows_remain() -> None:
     assert not (workflows / "pipeline-ci.yml").exists()
 
 
+# What the compiler kept in `.lockstep/`. The directory is now the framework's — it holds
+# `lockstep.py` — so "the spec tree is gone" has to be asserted about the contents rather than the
+# path. A reused directory name is exactly the kind of thing that turns a gate into a formality if
+# it is loosened rather than made specific.
+COMPILER_SPEC_TREE = ("pipeline.yaml", "SECRETS.md", "contexts", "profiles", ".pipeline")
+
+
 def test_the_compiler_package_is_gone() -> None:
     assert not (ROOT / "src" / "lockstep").exists()
-    assert not (ROOT / ".lockstep").exists(), "the spec tree went with its compiler"
     assert not (ROOT / "actions").exists()
+    for entry in COMPILER_SPEC_TREE:
+        assert not (ROOT / ".lockstep" / entry).exists(), (
+            f".lockstep/{entry} is compiler input; the directory is the framework's now"
+        )
+
+
+def test_the_framework_owns_the_dot_lockstep_directory() -> None:
+    """The other half of the assertion above: it is not empty, it is REPURPOSED.
+
+    Configuration lives at `.lockstep/lockstep.py` rather than the repository root, because the
+    root is on `sys.path` and a module named `lockstep` sitting there is importable by the project
+    whether or not anybody meant it to be.
+    """
+    assert (ROOT / ".lockstep" / "lockstep.py").is_file()
+    assert not (ROOT / "lockstep.py").exists(), "the root copy is no longer read and must not linger"
 
 
 def test_only_the_framework_console_script_survives() -> None:
@@ -63,7 +84,7 @@ def test_package_data_travels_inside_the_package() -> None:
 
 def test_the_repository_configures_itself_in_python() -> None:
     """It self-hosts on the new thing, which is the point of the exercise."""
-    module = ROOT / "lockstep.py"
+    module = ROOT / ".lockstep" / "lockstep.py"
     assert module.exists()
     text = module.read_text()
     assert "from in_lockstep import Lockstep" in text

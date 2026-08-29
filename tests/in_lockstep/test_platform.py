@@ -317,3 +317,107 @@ def test_the_ledger_has_one_writer() -> None:
     }
     assert not stamped, f"cli.py stamps {sorted(stamped)} of its own again"
     assert "InRepoLedger" in source, "cli.py no longer writes through the store"
+
+
+def test_a_criteria_heading_over_a_task_list_strips_the_checkbox() -> None:
+    """The commonest real issue shape, and the one the parser got wrong.
+
+    A heading *and* checkboxes took the heading branch, which matched bullets without accounting
+    for a checkbox — so every criterion arrived as "[ ] the actual text". The plain-task-list
+    fallback handled it correctly, meaning the better-formatted input was the one that broke.
+    """
+    from in_lockstep.platform.tickets import criteria_from
+
+    body = (
+        "Some prose.\n\n"
+        "## Acceptance criteria\n\n"
+        "- [ ] the command resolves an Scm\n"
+        "- [x] --dry-run still writes nothing\n"
+        "- a plain bullet with no box\n"
+    )
+    assert criteria_from(body) == (
+        "the command resolves an Scm",
+        "--dry-run still writes nothing",
+        "a plain bullet with no box",
+    )
+
+
+# -- who may ask for a run ----------------------------------------------------------------------
+#
+# A chat-ops trigger is an unauthenticated entry point wearing a familiar interface. These are the
+# shapes GitHub actually sends, asserted here rather than trusted to a `grep` inside a YAML `if:`.
+
+from in_lockstep.platform.actors import authorize, parse_codeowners  # noqa: E402
+
+CODEOWNERS = """
+# A comment naming @not-an-owner, which is not an entry.
+*                        @alice
+/src/privileged/         @bob @acme/security
+/docs/                   @carol
+"""
+
+
+def test_codeowners_names_individuals_and_teams_separately() -> None:
+    owners = parse_codeowners(CODEOWNERS)
+    assert owners.handles == {"alice", "bob", "carol"}
+    assert owners.teams == {"acme/security"}
+
+
+def test_a_handle_inside_a_comment_is_not_an_owner() -> None:
+    """The whole line is a comment, so nothing on it grants anything."""
+    assert "not-an-owner" not in parse_codeowners(CODEOWNERS).handles
+
+
+def test_an_org_member_may_ask() -> None:
+    decision = authorize(actor="dana", association="MEMBER", codeowners=CODEOWNERS)
+    assert decision.allowed and "MEMBER" in decision.reason
+
+
+def test_a_code_owner_who_is_not_an_org_member_may_ask() -> None:
+    """The two sources answer different questions, which is why either suffices.
+
+    An outside collaborator can own a directory without being in the organisation at all.
+    """
+    decision = authorize(actor="@Carol", association="CONTRIBUTOR", codeowners=CODEOWNERS)
+    assert decision.allowed and "CODEOWNERS" in decision.reason
+
+
+def test_a_contributor_who_owns_nothing_may_not() -> None:
+    decision = authorize(actor="mallory", association="CONTRIBUTOR", codeowners=CODEOWNERS)
+    assert not decision.allowed
+
+
+def test_a_collaborator_is_not_automatically_an_org_member() -> None:
+    """COLLABORATOR is push access without membership — broader than what was asked for.
+
+    A collaborator who should qualify is exactly the person CODEOWNERS names, and naming them is
+    a decision somebody makes rather than one this default makes for them.
+    """
+    assert not authorize(actor="eve", association="COLLABORATOR", codeowners=CODEOWNERS).allowed
+
+
+def test_a_bot_may_never_ask_however_it_is_associated() -> None:
+    """A trigger a bot can fire is a loop, and this one spends money on every lap."""
+    decision = authorize(actor="github-actions[bot]", association="OWNER", codeowners=CODEOWNERS)
+    assert not decision.allowed and "loop" in decision.reason
+
+
+def test_an_unresolvable_team_is_reported_rather_than_silently_denied() -> None:
+    """Someone refused while sitting in a team that owns the code is half right, and should be told."""
+    decision = authorize(actor="frank", association="CONTRIBUTOR", codeowners=CODEOWNERS)
+    assert not decision.allowed
+    assert "acme/security" in decision.reason
+    assert "cannot be resolved here" in decision.reason
+
+
+def test_an_empty_actor_decides_nothing() -> None:
+    assert not authorize(actor="", association="OWNER", codeowners=CODEOWNERS).allowed
+
+
+def test_this_repositorys_own_codeowners_parses() -> None:
+    """A fixture that drifts from the real file tests the fixture."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    owners = parse_codeowners((root / ".github" / "CODEOWNERS").read_text())
+    assert owners.handles, "the shipped CODEOWNERS names nobody, or the parser stopped matching"

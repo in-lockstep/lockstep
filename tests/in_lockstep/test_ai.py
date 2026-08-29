@@ -545,9 +545,7 @@ def test_gate_egress_3_an_undeclared_tool_capability_triggers_enforcement() -> N
     ai = invoker(provider, egress=EgressPolicy(mode=EgressMode.NONE))
 
     with pytest.raises(EgressRefused):
-        asyncio.run(
-            ai.run(system="s", messages=[], tools=ToolSet.of(Tool(server="mystery", name="do_it")))
-        )
+        asyncio.run(ai.run(system="s", messages=[], tools=ToolSet.of(Tool(server="mystery", name="do_it"))))
     assert provider.calls == []
 
 
@@ -620,7 +618,9 @@ def test_an_unknown_aspect_names_the_lenses_this_adapter_has() -> None:
     from in_lockstep.prompts.review import SecurityReviewPrompt
 
     adapter = AiReview(lambda ctx: None, lenses={"house": SecurityReviewPrompt})
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", aspect="security")))
+    outcome = asyncio.run(
+        adapter.invoke(None, ReviewSpec(base="a", head="b", aspect="security", diff="- a\n+ b\n"))
+    )
     assert outcome.status is Status.BLOCKED
     assert "'house'" in outcome.findings[0].message
 
@@ -665,9 +665,7 @@ def test_a_retry_after_that_fits_is_still_slept() -> None:
     async def no_sleep(seconds: float) -> None:
         slept.append(seconds)
 
-    provider = Stub(
-        replies=[RateLimitError("slow", retry_after=2, status_code=429), LLMOutput(content="ok")]
-    )
+    provider = Stub(replies=[RateLimitError("slow", retry_after=2, status_code=429), LLMOutput(content="ok")])
     ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
 
     with mock.patch("asyncio.sleep", no_sleep):
@@ -697,9 +695,7 @@ def test_successive_sleeps_are_bounded_in_aggregate_not_individually() -> None:
     with mock.patch("asyncio.sleep", no_sleep):
         with pytest.raises(RateLimitError):
             asyncio.run(
-                RetryPolicy(attempts=4, base_delay=0).run(
-                    always_rate_limited, remaining_wall_seconds=40
-                )
+                RetryPolicy(attempts=4, base_delay=0).run(always_rate_limited, remaining_wall_seconds=40)
             )
     assert len(slept) == 1, f"the budget did not carry across attempts: {slept}"
 
@@ -711,9 +707,7 @@ def test_an_unbounded_run_still_retries() -> None:
     async def no_sleep(seconds: float) -> None:
         slept.append(seconds)
 
-    provider = Stub(
-        replies=[RateLimitError("slow", retry_after=1, status_code=429), LLMOutput(content="ok")]
-    )
+    provider = Stub(replies=[RateLimitError("slow", retry_after=1, status_code=429), LLMOutput(content="ok")])
     ai = invoker(provider, retry=RetryPolicy(attempts=3, base_delay=0))
 
     with mock.patch("asyncio.sleep", no_sleep):
@@ -795,7 +789,7 @@ def test_a_provider_failure_is_errored_not_blocked(seeded_secret: str, tmp_path)
 
     provider = Stub(replies=[AuthenticationError(f"401 invalid: {SECRET}", status_code=401)])
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD")))
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD", diff="- a\n+ b\n")))
 
     assert outcome.status is Status.ERRORED
     assert outcome.reason == "provider.authentication"
@@ -1058,3 +1052,78 @@ def test_a_complete_answer_at_the_cap_is_not_truncation() -> None:
     adapter = AiReview(lambda ctx: invoker(provider), policy=InvokePolicy(max_turns=1, max_tokens=16))
     outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff="x")))
     assert outcome.status is Status.SUCCEEDED
+
+
+# -- a review that saw nothing must not read as a review that found nothing ---------------------
+#
+# CI found this the hard way. A 318KB diff estimated at ~79k tokens against a 60k budget, and the
+# curator dropped it WHOLE — so the reviewer was asked about a change it had not been shown. It
+# failed by luck: the model answered in prose and the parse failed with `review.unparseable`, which
+# reads as a model problem. Had it answered `{"findings": []}`, a clean security review of nothing
+# would have been reported, believed, and merged.
+
+
+def test_an_oversized_diff_is_shrunk_rather_than_dropped() -> None:
+    from in_lockstep.ai.context import ContextCurator, ContextItem, ContextNeed
+
+    files = "".join(
+        f"diff --git a/f{i}.py b/f{i}.py\n@@ -1 +1 @@\n-{'x' * 400}\n+{'y' * 400}\n" for i in range(40)
+    )
+    package = ContextCurator().curate(
+        [ContextItem(kind="diff", content=files, path="a..b")], ContextNeed(token_budget=2_000)
+    )
+    assert package.items, "the diff was dropped whole, so the reviewer sees nothing"
+    assert package.dropped, "part of it was left out and nothing said so"
+    assert package.total_tokens() <= 2_000
+
+
+def test_what_was_left_out_is_named_by_file() -> None:
+    """Whole files, because half a hunk is not smaller input — it is malformed input."""
+    from in_lockstep.ai.context import ContextCurator, ContextItem, ContextNeed
+
+    files = "".join(f"diff --git a/keep{i}.py b/keep{i}.py\n@@ -1 +1 @@\n-{'x' * 800}\n" for i in range(10))
+    package = ContextCurator().curate(
+        [ContextItem(kind="diff", content=files, path="a..b")], ContextNeed(token_budget=600)
+    )
+    assert all(name.endswith(".py") for name in package.dropped), package.dropped
+    assert package.items[0].content.count("diff --git") + len(package.dropped) == 10
+
+
+def test_the_model_is_told_its_view_is_partial() -> None:
+    """A model not told its view is partial answers as though it were complete."""
+    from in_lockstep.ai.context import ContextItem, ContextPackage
+
+    rendered = ContextPackage(
+        items=(ContextItem(kind="diff", content="- a\n+ b\n"),), dropped=("src/big.py",)
+    ).render()
+    assert "<omitted>" in rendered
+    assert "src/big.py" in rendered
+
+
+def test_a_review_with_nothing_to_look_at_refuses(tmp_path) -> None:
+    """Refused, not asked. Whether the answer parses decides between two wrong readings."""
+    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(replies=[LLMOutput(content='{"findings": []}')])
+    adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD")))
+
+    assert outcome.status is Status.BLOCKED
+    assert outcome.reason == "review.no_content"
+    assert not provider.calls, "nothing was sent and nothing was charged"
+
+
+def test_a_partial_review_says_which_part_it_did_not_read(tmp_path) -> None:
+    """A review of part of a change is real; one that does not say which part gets read as all."""
+    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.ai.context import ContextCurator
+    from in_lockstep.core.outcome import Status
+
+    files = "".join(f"diff --git a/f{i}.py b/f{i}.py\n@@ -1 +1 @@\n-{'x' * 800}\n" for i in range(10))
+    provider = Stub(replies=[LLMOutput(content='{"findings": [], "verdict": "ok"}')])
+    adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path), curator=ContextCurator())
+    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff=files, token_budget=600)))
+    assert outcome.status is Status.SUCCEEDED
+    omitted = [f for f in outcome.findings if f.id == "review.not_reviewed"]
+    assert omitted, "it reviewed part of the change and reported nothing about the rest"

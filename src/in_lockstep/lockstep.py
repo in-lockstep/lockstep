@@ -15,7 +15,7 @@ from typing import Any
 
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
-from .core.context import RepoInfo, RunContext
+from .core.context import Approval, RepoInfo, RunContext
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, Spend, UndeclaredBudget
@@ -74,7 +74,7 @@ class Lockstep:
 
     # -- running -------------------------------------------------------------------
 
-    def context(self, run_id: str) -> RunContext:
+    def context(self, run_id: str, *, approval: Approval | None = None) -> RunContext:
         self._refuse_undeclared_budget()
         self._refuse_ungated_agency()
         return RunContext(
@@ -83,6 +83,7 @@ class Lockstep:
             container=self.container,
             spend=Spend(budget=self.budget),
             middleware=list(self.middleware),
+            approval=approval or Approval(),
         )
 
     def declared_ceiling(self) -> Budget:

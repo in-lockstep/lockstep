@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.env
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
@@ -9,8 +10,22 @@ build/
 *.egg-info/
 .coverage
 
-# Everything a run writes: ledgers, checkpoints, artifacts, and recordings. All of it belongs to
-# one machine's attempt at one run. The replay fixture that ships is tracked where it ships from,
-# in src/in_lockstep/cassettes/ — tracking a working copy here as well would be two versions of
-# one artifact, drifting apart.
+# `.lockstep/` is the one directory the framework owns, and it holds two kinds of thing.
+#
+# COMMITTED: `lockstep.py` is the lifecycle definition and belongs in review like any other code.
+# So this ignores the scratch subdirectories by name rather than ignoring the directory and
+# negating — a negation is one `!` away from silently un-tracking the configuration, and the
+# failure mode there is a repository that runs on detected defaults without anybody noticing.
+#
+# SCRATCH: everything below belongs to one machine's attempt at one run. The replay fixture that
+# ships is tracked where it ships from, in src/in_lockstep/cassettes/ — tracking a working copy
+# here as well would be two versions of one artifact, drifting apart.
+#
+# The ledger is not here at all: run records go to an orphan branch, so they survive a machine.
+.lockstep/runs/
+.lockstep/cassettes/
+.lockstep/ledger/
+# The loader imports `.lockstep/lockstep.py`, and Python writes bytecode beside what it imports.
+.lockstep/__pycache__/
+# The previous layout, still ignored for a checkout that predates the move.
 .in-lockstep/

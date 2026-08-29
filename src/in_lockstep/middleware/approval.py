@@ -50,6 +50,14 @@ class ApprovalGate:
         if self.granted is not None and self.granted(call):
             return await next()
 
+        # The grant the run was started with. Read from the context rather than from the
+        # environment, so `--approve` at a terminal and `--approved-by` from a verified CI actor
+        # reach this the same way — which is what lets one process serve a project before and
+        # after it moves to hosted triggers.
+        approval = getattr(ctx, "approval", None)
+        if approval is not None and getattr(approval, "granted", False):
+            return await next()
+
         granted = sorted(c.value for c in (capabilities & GATED))
         return Outcome(
             status=Status.BLOCKED,
@@ -59,8 +67,10 @@ class ApprovalGate:
                     id="approval.required",
                     message=(
                         f"{call!r} grants {', '.join(granted) or 'gated capability'} and no "
-                        "approval was granted. Approve in the system of record — a review "
-                        "request or an environment approval — rather than here."
+                        "approval was granted. Locally, `--approve` says you are the human "
+                        "watching this run. Unattended, `--approved-by <who>` records the person "
+                        "a gate verified — and the stronger answer is an approval in your system "
+                        "of record, a review request or a CI environment approval."
                     ),
                     severity=Severity.ERROR,
                     blocking=True,

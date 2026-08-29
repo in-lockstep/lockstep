@@ -172,9 +172,15 @@ def _prompt_bodies(
 ) -> None:
     """A prompt body is a file. A missing one should fail here, not on a first run."""
     from .ai.prompt import BodyNotFound
+    from .prompts.implement import PROMPTS
     from .prompts.review import LENSES
 
-    for aspect, lens in sorted(LENSES.items()):
+    # Both families. Checking only the review lenses meant the check covered whichever prompts
+    # existed when it was written, which is the shape of a check that silently stops covering
+    # things — an implementing prompt with a missing body would have failed on a run that had
+    # already resolved a container and a credential.
+    everything: dict[str, type] = {**LENSES, **PROMPTS}
+    for aspect, lens in sorted(everything.items()):
         try:
             lens().body_text()
         except BodyNotFound as e:

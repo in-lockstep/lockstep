@@ -36,6 +36,44 @@ class ContextItem:
         # from the provider. This orders a curator's priority list, nothing more.
         return self.tokens or max(1, len(self.content) // 4)
 
+    def shrink(self, budget_tokens: int) -> tuple[ContextItem | None, tuple[str, ...]]:
+        """This item cut down to fit, plus what had to be left out.
+
+        Dropping an oversized item WHOLE was the previous behaviour and it is the dangerous one: a
+        review whose diff did not fit ran with an empty context and asked a model to review a
+        change it had not been shown. That failed here by luck — the model answered in prose and
+        the parse failed. Had it answered `{"findings": []}`, a clean security review of nothing
+        would have been reported as a clean security review.
+
+        A diff splits on file boundaries, because half a hunk is not smaller input, it is
+        malformed input. Anything else has no boundary this can know about and is still dropped —
+        reported, never silent.
+        """
+        if self.estimated_tokens() <= budget_tokens:
+            return self, ()
+        if self.kind != "diff":
+            return None, (f"{self.kind}:{self.path or '(inline)'}",)
+
+        # `diff --git` starts each file. Keeping whole files means the model sees complete hunks
+        # for what it does see, and is told the names of what it does not.
+        parts = self.content.split("\ndiff --git ")
+        chunks = [parts[0]] + [f"diff --git {p}" for p in parts[1:]]
+        kept: list[str] = []
+        omitted: list[str] = []
+        used = 0
+        for chunk in chunks:
+            cost = max(1, len(chunk) // 4)
+            if used + cost <= budget_tokens:
+                kept.append(chunk)
+                used += cost
+            else:
+                omitted.append(_path_of(chunk))
+        if not kept:
+            return None, (f"{self.kind}:{self.path or '(inline)'}",)
+        from dataclasses import replace as _replace
+
+        return _replace(self, content="\n".join(kept)), tuple(omitted)
+
 
 @dataclass
 class ContextPackage:
@@ -56,8 +94,19 @@ class ContextPackage:
         return tuple(i for i in self.items if i.kind == kind)
 
     def render(self) -> str:
-        """Untrusted items are labelled and delimited, so the model can tell data from instruction."""
+        """Untrusted items are labelled and delimited, so the model can tell data from instruction.
+
+        What was left out is rendered too. A model that is not told its view is partial answers as
+        though it were complete, and the answer reaches a person who has no way to know.
+        """
         blocks: list[str] = []
+        if self.dropped:
+            blocks.append(
+                "<omitted>\nThis context did not fit and the following were left out. Say so in "
+                "your answer: what you conclude covers only what is below.\n"
+                + "\n".join(f"- {name}" for name in self.dropped)
+                + "\n</omitted>"
+            )
         for item in self.items:
             header = f"{item.kind}: {item.path}" if item.path else item.kind
             if item.provenance is Provenance.UNTRUSTED_EXTERNAL:
@@ -112,8 +161,22 @@ class ContextCurator:
         for item in ordered:
             cost = item.estimated_tokens()
             if used + cost > need.token_budget:
-                dropped.append(f"{item.kind}:{item.path or '(inline)'}")
+                # Shrink before dropping. An item that does not fit whole may fit in part, and the
+                # part is worth far more than nothing for exactly the item a verb exists to read.
+                shrunk, left_out = item.shrink(max(0, need.token_budget - used))
+                dropped.extend(left_out)
+                if shrunk is None:
+                    continue
+                kept.append(shrunk)
+                used += shrunk.estimated_tokens()
                 continue
             kept.append(item)
             used += cost
         return ContextPackage(items=tuple(kept), dropped=tuple(dropped))
+
+
+def _path_of(chunk: str) -> str:
+    """The file a `diff --git a/x b/x` chunk is about, for naming what was left out."""
+    first = chunk.split("\n", 1)[0]
+    parts = first.split()
+    return parts[-1].removeprefix("b/") if len(parts) >= 3 else "(unknown)"

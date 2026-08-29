@@ -27,6 +27,14 @@ from dataclasses import dataclass, field
 # Passed through to a sandboxed child. Everything else — every credential — is dropped.
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "PYTHONPATH", "CI")
 
+# Runtimes that take these flags, in preference order. Podman is here because it is the drop-in on
+# macOS and Fedora and accepts `--cap-drop`, `--security-opt` and `--network` identically — and
+# because a `docker` shell alias pointing at it is invisible from here: `shutil.which` looks for a
+# binary and `create_subprocess_exec` never runs a shell. So a machine with a perfectly good
+# container runtime was silently falling through to the weaker path, which is the failure mode
+# worth avoiding in a security control: not refusing, but quietly doing less.
+CONTAINER_RUNTIMES = ("docker", "podman")
+
 # The floor the compiler applied to every executor job, kept.
 DOCKER_FLAGS = (
     "--cap-drop=ALL",
@@ -52,24 +60,64 @@ class Sandbox:
     allow_network: bool = False
     memory: str = "2g"
     extra_env: dict[str, str] = field(default_factory=dict)
+    #: Refuse rather than fall back to a bare subprocess when no container runtime is available.
+    #:
+    #: The fallback is the right default for the repository's own test suite: that code is already
+    #: trusted enough to be in the repository, and dropping credentials is the whole win. It is
+    #: the wrong default for a command a MODEL chose, on a host whose egress is unconstrained —
+    #: there the fallback quietly removes the only thing standing between an injected ticket and
+    #: an outbound connection. So the caller says which situation it is in, and gets a refusal
+    #: instead of a weaker guarantee it did not ask for.
+    require_container: bool = False
 
     def clean_env(self) -> dict[str, str]:
         env = {k: os.environ[k] for k in SAFE_ENV if k in os.environ}
         env.update(self.extra_env)
         return env
 
+    def runtime(self) -> str | None:
+        """The container runtime available here, or None. Named so `doctor` can ask."""
+        for candidate in CONTAINER_RUNTIMES:
+            found = shutil.which(candidate)
+            if found:
+                return found
+        return None
+
     async def run(
         self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0
     ) -> SandboxResult:
-        if self.image and shutil.which("docker"):
-            return await self._docker(command, cwd=cwd, timeout=timeout)
+        runtime = self.runtime() if self.image else None
+        if runtime:
+            return await self._container(runtime, command, cwd=cwd, timeout=timeout)
+        if self.require_container:
+            why = (
+                "no image was named"
+                if not self.image
+                else f"neither {' nor '.join(CONTAINER_RUNTIMES)} is on PATH"
+            )
+            return SandboxResult(
+                exit_code=126,
+                stdout="",
+                stderr=(
+                    f"refusing to run outside a container: {why}. This runner was constructed to "
+                    f"require one, so it will not fall back to a subprocess on the host."
+                ),
+                sandboxed=False,
+                how="refused:no-container",
+            )
         return await self._subprocess(command, cwd=cwd, timeout=timeout)
 
-    async def _docker(self, command: list[str], *, cwd: str | None, timeout: float) -> SandboxResult:
-        mount = cwd or os.getcwd()
+    async def _container(
+        self, runtime: str, command: list[str], *, cwd: str | None, timeout: float
+    ) -> SandboxResult:
+        # Absolute, because a bind mount source must be. A relative `cwd` reached the runtime as
+        # `-v .:/work`, which mounts something that is not the working tree and produces a
+        # "file not found" for a file that is plainly there — a confusing failure a long way from
+        # its cause.
+        mount = os.path.abspath(cwd or os.getcwd())
         flags = [f for f in DOCKER_FLAGS if not (f == "--network=none" and self.allow_network)]
         argv = [
-            "docker",
+            runtime,
             "run",
             "--rm",
             *flags,
@@ -82,7 +130,10 @@ class Sandbox:
             *command,
         ]
         code, out, err = await _exec(argv, cwd=mount, env=self.clean_env(), timeout=timeout)
-        return SandboxResult(code, out, err, sandboxed=True, how=f"docker:{self.image}")
+        # The runtime is named in `how` rather than hardcoded as "docker": a result that says
+        # which thing ran it is the difference between reading a transcript and guessing at one.
+        name = os.path.basename(runtime)
+        return SandboxResult(code, out, err, sandboxed=True, how=f"{name}:{self.image}")
 
     async def _subprocess(self, command: list[str], *, cwd: str | None, timeout: float) -> SandboxResult:
         code, out, err = await _exec(command, cwd=cwd, env=self.clean_env(), timeout=timeout)

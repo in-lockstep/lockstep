@@ -9,9 +9,42 @@ uv tool install 'in-lockstep[anthropic]'
 in-lockstep init
 ```
 
-That writes two files. `lockstep.py` is your lifecycle. `.github/workflows/lockstep.yml` is a
+That writes two files. `.lockstep/lockstep.py` is your lifecycle. `.github/workflows/lockstep.yml` is a
 trampoline: it invokes the CLI and contains no lifecycle logic, because a CI host requires its own
 YAML and that YAML belongs to the host.
+
+## Where things live
+
+```
+.lockstep/lockstep.py     your lifecycle, committed and reviewed
+.lockstep/runs/           checkpoints         (gitignored)
+.lockstep/cassettes/      recordings          (gitignored)
+lockstep-history          an orphan branch    (run records)
+```
+
+Two decisions worth knowing.
+
+**The lifecycle module is not at the repository root.** The root is on `sys.path` for anything run
+from there, so a `lockstep.py` sitting in it is importable by your project whether or not anyone
+meant it to be — and framework types start appearing in code that never chose to depend on them. A
+dot-directory is not a valid package name, so nothing under `.lockstep/` can be imported by
+accident. The module is also loaded as `in_lockstep._lifecycle` rather than as `lockstep`, so it
+cannot collide with a module of your own by that name.
+
+**Run records go to an orphan branch, not the working tree.** A record is what the run spent, what
+it decided and who approved it. Writing it into the tree makes it either untracked — which loses
+it — or a commit on the branch under review, which puts framework output into a diff a person is
+trying to read. `lockstep-history` shares no commit with any branch you work on.
+
+```bash
+in-lockstep history            # what has been recorded here
+in-lockstep history --push     # publish it; needs push access, never automatic
+```
+
+Local runs append to a local ref and stop. Reaching a remote needs credentials and is a side
+effect nobody asked for by typing a command in a terminal, so publishing is a separate act — which
+in practice is CI, where the job that can push carries the record out as a bundle from the job that
+made it.
 
 ## The module is the configuration
 
@@ -70,8 +103,18 @@ not to produce.
 
 ```bash
 in-lockstep review --base origin/main --aspect security
-in-lockstep show-prompt security     # exactly what the model is told, offline, no key
+in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change
+in-lockstep show-prompt security             # exactly what the model is told, offline, no key
+in-lockstep show-prompt implement/oneshot
 ```
+
+`review` reads and reports. `implement` reads a ticket, explores the repository with tools, and
+**stages** a change into an artifact — it writes nothing itself. `apply-inline --from-artifact`
+is the second half, and it re-runs the path guard on what the first half produced.
+
+Implementing needs an approval path and egress enforcement before it will start, because the
+adapter declares that it writes files and executes code. `docs/extending.md` has the three
+refusals and what each one wants.
 
 `show-prompt` matters more than it looks. Prompts are composed at runtime from guardrails, a body,
 skills and contexts, and "what was the model actually told?" needs an answer that costs no run.

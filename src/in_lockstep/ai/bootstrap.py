@@ -9,6 +9,7 @@ answers to "may this repository send code there".
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from ..llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
 from ..llm.registry import Model, ModelCaps, ProviderRegistry
@@ -132,9 +133,7 @@ def credentials_for(auth: Auth, provider: str) -> Credentials:
     keys = ("api_key",)
     if provider == "local":
         return Credentials.none()
-    creds = auth.credentials_for(
-        AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys)
-    )
+    creds = auth.credentials_for(AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=keys))
     if not creds.secret_values():
         var = f"{provider.upper().replace('-', '_')}_API_KEY"
         raise MissingCredential(
@@ -144,3 +143,53 @@ def credentials_for(auth: Auth, provider: str) -> Credentials:
             f"Nothing was sent and nothing was charged."
         )
     return creds
+
+
+def invoker_factory(
+    model_id: str,
+    *,
+    egress: Any = None,
+    cost_table: Any = None,
+    auth: Auth | None = None,
+    provider: Any = None,
+    redact: Any = None,
+) -> Any:
+    """A `Callable[[ctx], AiInvoker]`, which is what every AI adapter takes.
+
+    This exists because binding an AI verb in `lockstep.py` otherwise meant hand-assembling `Auth`,
+    a `ProviderRegistry`, a `CostTable`, a `Model` and an `AiInvoker` — about thirty lines of
+    construction in the file whose whole purpose is being readable. Configuration that costs thirty
+    lines of boilerplate is configuration people move back into YAML, which is the failure this
+    framework exists on the other side of.
+
+    `provider` overrides the resolved one, which is how `--offline`, `--record` and `--dry-run`
+    swap in a cassette without a second construction path.
+
+    The credential is resolved per call rather than at construction: a factory built at import time
+    in `lockstep.py` must not read a secret while the module is merely being inspected by `ls`.
+    """
+    from ..privileged.egress import EgressPolicy
+    from ..privileged.redact import Redact
+    from .invoker import AiInvoker
+    from .pricing import default_table
+
+    table = cost_table if cost_table is not None else default_table()
+    issuer = auth or Auth()
+    registry = default_registry(issuer)
+    selected = Model(model_id)
+    policy = egress if egress is not None else EgressPolicy.detect()
+
+    def build(ctx: Any) -> AiInvoker:
+        chosen = provider
+        if chosen is None:
+            chosen = registry.provider_for(selected, credentials_for(issuer, selected.provider))
+        return AiInvoker(
+            chosen,
+            model=selected.name,
+            cost_table=table,
+            spend=ctx.spend,
+            redact=redact or Redact(),
+            egress=policy,
+        )
+
+    return build

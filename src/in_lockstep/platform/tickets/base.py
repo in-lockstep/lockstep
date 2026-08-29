@@ -93,7 +93,12 @@ class TicketSource(Protocol):
 
 _HEADING = re.compile(r"(?im)^#{1,6}\s*acceptance criteria\s*$")
 _TASK = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*(.+)$")
-_BULLET = re.compile(r"(?m)^\s*[-*]\s+(.+)$")
+# The checkbox is optional here, and its absence was a bug. An issue with BOTH an "Acceptance
+# criteria" heading and a task list under it — which is how people actually write one — took the
+# heading branch, matched with this pattern, and carried "[ ] " into the text of every criterion.
+# The `_TASK` fallback stripped it correctly, so the defect only appeared on the better-formatted
+# input, which is the wrong way round.
+_BULLET = re.compile(r"(?m)^\s*[-*]\s+(?:\[[ xX]\]\s*)?(.+)$")
 
 
 def criteria_from(body: str) -> tuple[str, ...]:

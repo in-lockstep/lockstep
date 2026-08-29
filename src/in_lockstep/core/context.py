@@ -38,6 +38,32 @@ def current_context() -> RunContext | None:
 
 
 @dataclass(frozen=True)
+class Approval:
+    """Who asked for this run, and whether they were present while it ran.
+
+    On `RunContext` rather than read from the environment by whoever needs it, because this is the
+    seam where a project's maturity shows. Young: a person types the command and watches it. Older:
+    an actor gate in CI verifies a commenter and the run is unattended. Same process, same
+    invocation, different provenance for the grant — and if the two are plumbed differently, the
+    transition means rewriting the process rather than re-triggering it.
+
+    `attended` is a fact about the run, not a level of trust. A person at a terminal approving
+    their own run is weaker than an environment approval and stronger than nothing; recording which
+    it was lets the ledger say so instead of implying they are the same.
+    """
+
+    by: str = ""
+    attended: bool = False
+
+    @property
+    def granted(self) -> bool:
+        return bool(self.by.strip())
+
+    def as_record(self) -> dict[str, object]:
+        return {"by": self.by, "attended": self.attended}
+
+
+@dataclass(frozen=True)
 class RepoInfo:
     root: str
     head: str = ""
@@ -87,6 +113,8 @@ class RunContext:
     # Python function", which is the simplicity the whole design trades on.
     state: StepStore | None = None
     recovering: bool = False
+    #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
+    approval: Approval = field(default_factory=Approval)
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()
