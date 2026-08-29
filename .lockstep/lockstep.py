@@ -21,12 +21,13 @@ from in_lockstep.adapters.ai.implement import AiImplement, Implement, ImplementS
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.adapters.worktree import WorktreeRunner
 from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
-from in_lockstep.ai.pricing import default_table
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
+from in_lockstep.core.verbs import Verb
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
@@ -163,13 +164,12 @@ lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
 lockstep.models.route("implement", "anthropic:claude-opus-4-6")
 lockstep.models.route("triage", "local:qwen3-8b")
 
+# `implement/tdd` rather than the shipped `implement/oneshot` default: red then green, with the
+# Test verb bound above confirming both. It costs two model phases, which is a choice this
+# repository makes deliberately — the registry's comment on the default explains why it is not
+# everyone's.
 strategies = default_registry()
-
-# -- cost ---------------------------------------------------------------------------
-#
-# An unpriced model is refused before the call rather than priced at some default. A defaulted
-# rate is wrong in both directions and produces a number that looks like evidence.
-costs = default_table()
+strategies.default(Verb.IMPLEMENT, "implement/tdd")
 
 # -- the implementing verb ----------------------------------------------------------
 #
@@ -178,14 +178,19 @@ costs = default_table()
 #
 # `run_script` executes in a container with `--network=none` and refuses rather than falling back
 # to this host — which is the per-command egress constraint that makes allowing the tool at all
-# defensible under the `UnsandboxedEgress` binding above.
+# defensible under the `UnsandboxedEgress` binding above. Wrapped in `WorktreeRunner`, so what the
+# container bind-mounts read-write is a throwaway worktree of HEAD, not the live tree: without the
+# wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
 lockstep.bind(
     Implement,
     AiImplement(
         invoker_factory(lockstep.models.routes.get("implement", ""), egress=egress),
         registry=strategies,
         repo_root=lockstep.repo.root,
-        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+        commands=WorktreeRunner(
+            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+            lockstep.repo.root,
+        ),
         policy=InvokePolicy.under(
             lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
         ),
@@ -276,7 +281,7 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
         changeset,
         title=changeset.summary or f"Implement {issue}",
         body=(
-            "Written by `implement/oneshot` and read by nobody. The issue body is untrusted input "
+            "Written by an implement strategy and read by nobody. The issue body is untrusted input "
             "to a model that held write tools, so review this as you would a change from a "
             "stranger who had read your repository — the controls bound where it could write, "
             "not what it thought."
