@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.070842,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 40,
+        "message": "The `label` parameter is passed directly to `gh issue list --label <label>` via `subprocess.run`. If `label` arrives from an untrusted caller (e.g., the workflow arg `label: str = \"wayfinder\"` in `lockstep.py`), a value like `wayfinder --jq .[] --exec some_command` could inject additional `gh` flags or abuse gh's own flag parsing. However, because `subprocess.run` receives a list rather than a shell string, shell metacharacters are not interpreted; the risk is limited to gh's own argument parsin\u2026[truncated]",
+        "path": "examples/wayfinder-implement/github_map.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 40,
+        "message": "Issue body text returned by `gh issue list` is placed directly into `Ticket.description` and then parsed by `blockers_in()` for `Blocked by:` lines. Anyone who can write a GitHub issue body (i.e., any repo collaborator, or an attacker who has filed an issue) controls which ticket keys appear in `blocked_by`, and therefore which tickets the adapter considers blocked or on the frontier. This is a trust-boundary crossing: external, user-controlled text is driving authorization decisions (\"may this \u2026[truncated]",
+        "path": "examples/wayfinder-implement/github_map.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 19,
+        "message": "`sys.path.insert(0, str(Path(__file__).resolve().parent.parent))` prepends the example directory \u2014 a user-controlled location \u2014 to the module search path. Any `.py` file named `wayfinder`, `in_lockstep`, `github_map`, or any other name imported later that is placed in that directory will shadow the intended module. In a shared or CI environment where the working tree can be influenced by a pull request, this is a PATH-hijack for Python imports. The existing codebase uses this pattern deliberatel\u2026[truncated]",
+        "path": "examples/wayfinder-implement/.lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 20259,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 671,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 20930,
+  "wall_seconds": 20.416
+}
