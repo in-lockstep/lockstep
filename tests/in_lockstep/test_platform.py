@@ -157,6 +157,36 @@ def test_cherry_pick_records_where_the_commit_came_from(tmp_path: Path) -> None:
     assert scm.merge_base(original, "HEAD") == base
 
 
+def test_conventional_subject_prefixes_by_workflow_and_keeps_a_declared_type() -> None:
+    from in_lockstep.platform.scm.base import conventional_subject, is_conventional
+
+    assert is_conventional("fix: a thing")
+    assert is_conventional("feat(scm): a thing")
+    assert is_conventional("refactor!: a thing")
+    assert not is_conventional("just a summary")
+
+    # A bare summary gets the workflow's type; a fix workflow maps to `fix`, implement to `feat`.
+    assert conventional_subject("add a greeting", workflow="implement") == "feat: add a greeting"
+    assert conventional_subject("stop the crash", workflow="fix") == "fix: stop the crash"
+    assert conventional_subject("cherry-pick it", workflow="backport") == "fix: cherry-pick it"
+    # An unknown workflow is a chore, not a guessed feature.
+    assert conventional_subject("something", workflow="") == "chore: something"
+    # A summary that already declares a type is taken at its word, not double-prefixed.
+    assert conventional_subject("fix: already done", workflow="implement") == "fix: already done"
+
+
+def test_open_change_commit_subject_is_conventional(tmp_path: Path) -> None:
+    """A commit a workflow creates must be a Conventional Commit, whatever prose the model wrote."""
+    root = _repo(tmp_path)
+    scm = GitLocal(root)
+    cs = ChangeSet(changes=(FileChange(path="g.py", contents="x = 1\n"),), summary="add a greeting")
+    asyncio.run(scm.open_change(cs, title="add a greeting", workflow="implement", run_id="r1"))
+    subject = subprocess.run(
+        ["git", "log", "-1", "--format=%s"], cwd=root, capture_output=True, text=True
+    ).stdout.strip()
+    assert subject == "feat: add a greeting"
+
+
 def test_the_shipped_adapters_pass_their_own_conformance_kit(tmp_path: Path) -> None:
     """The kit third parties are told to run must hold what we ship, or it is advice we do not
     take ourselves."""

@@ -9,7 +9,7 @@ from typing import Any
 
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
-from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for
+from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for, conventional_subject
 
 
 class GitHubScm:
@@ -61,6 +61,10 @@ class GitHubScm:
         # Refused at the framework rather than relying on the token's scope, because the token is
         # ambient and can write any branch.
         self.local.assert_run_scoped(branch)
+
+        # Conventional Commits: this commit and the pull-request title it becomes are created by a
+        # workflow, so both must be one. A summary that already declares a type is kept as is.
+        title = conventional_subject(title, workflow=workflow)
 
         # `base` decides both where the branch grows from and where the pull request points.
         # Without it every change targeted the default branch, which no backport can accept.

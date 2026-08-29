@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,49 @@ Ref = str
 # branch is never a push target, and two concurrent runs cannot collide, because a run id is in
 # the name. That is why there is no lock service anywhere in this design.
 RUN_BRANCH_PREFIX = "in-lockstep"
+
+# Conventional Commits. Every commit a workflow creates has to be one, so squash-merge titles,
+# changelog generation and semver tooling can read it — a model's free-prose summary cannot be
+# trusted to be. Commits that predate a workflow are untouched; this only shapes what the framework
+# writes from here on.
+CONVENTIONAL_TYPES = (
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert",
+)
+_CONVENTIONAL = re.compile(r"^(?:" + "|".join(CONVENTIONAL_TYPES) + r")(?:\([^)]+\))?!?: .")
+# What type a workflow's change is, when its summary does not already declare one. A conservative
+# map: implementing a ticket is a feature, fixing and backporting are fixes, and anything unnamed
+# is a chore rather than a guessed feature.
+_TYPE_FOR_WORKFLOW = {"implement": "feat", "fix": "fix", "backport": "fix", "rfe": "feat"}
+
+
+def is_conventional(subject: str) -> bool:
+    """Whether a commit subject already follows Conventional Commits (`type: description`)."""
+    return bool(_CONVENTIONAL.match(subject.strip()))
+
+
+def conventional_subject(subject: str, *, workflow: str) -> str:
+    """`subject` in Conventional Commits form for a `workflow` commit.
+
+    If the summary already declares a type it is kept — a model that wrote `fix: …` is taken at its
+    word — otherwise the workflow's mapped type is prefixed. Only the first line (the subject) is
+    shaped; a body is carried through unchanged.
+    """
+    subject = subject.strip() or "changes"
+    first, sep, rest = subject.partition("\n")
+    if is_conventional(first):
+        return subject
+    prefixed = f"{_TYPE_FOR_WORKFLOW.get(workflow, 'chore')}: {first}"
+    return f"{prefixed}{sep}{rest}" if sep else prefixed
 
 
 class DirectPushRefused(Exception):
@@ -280,6 +324,8 @@ class GitLocal:
         """
         branch = branch_for(workflow or "change", run_id or "local")
         self.assert_run_scoped(branch)
+        # Conventional Commits: this commit is created by a workflow, so its subject must be one.
+        title = conventional_subject(title, workflow=workflow)
         if base:
             self.git("checkout", "-b", branch, self.start_point(base), check=True)
         else:
