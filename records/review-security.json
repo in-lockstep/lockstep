@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "billed_fraction": 1.0,
+  "cost_usd": 0.038205,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 346,
+        "message": "Error message reflects back the raw env-var value `ceiling` into a user-facing report without sanitisation. If `IN_LOCKSTEP_MAX_BUDGET_USD` contains control characters or very long attacker-controlled content, it is embedded verbatim into `report.add(...)` and then emitted to stdout or JSON output. In a fleet-scanner context where the JSON is consumed by dashboards or log aggregators, this is a log-injection / content-injection vector: an attacker who controls that environment variable (e.g. via\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 330,
+        "message": "The list of required policy names (`IN_LOCKSTEP_REQUIRED_POLICIES`) is split on commas and each stripped name is compared against present layers, then the present-layer set is embedded in the error message: `', '.join(sorted(present))`. The `present` set is derived from `lockstep.policy.layers`, which comes from the repository module loaded via `_load_configured`. If a layer's `name` attribute contains a comma, newline, or other delimiter, `', '.join(sorted(present))` faithfully includes it in t\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 84,
+        "message": "The broad `except Exception: return None` in `_load_configured` silently swallows all load errors, including import errors that may themselves be caused by the repository module attempting side-effects at import time. This is noted in the docstring as intentional (load failures are loud elsewhere). No security finding per se, but worth noting that the silence means a deliberately broken module evades all strict checks \u2014 an attacker-controlled lockstep.py that raises on import would cause `_load_\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "input_tokens": 8890,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 769,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 9659,
+  "wall_seconds": 21.966
+}
