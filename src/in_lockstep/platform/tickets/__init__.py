@@ -11,9 +11,12 @@ a prompt.
 
 from .base import Ticket, TicketDraft, TicketRef, TicketSource, TicketState, TicketType, criteria_from
 from .github import GitHubIssues
+from .jira import JiraSource, JiraTypeRef
 
 __all__ = [
     "GitHubIssues",
+    "JiraSource",
+    "JiraTypeRef",
     "Ticket",
     "TicketDraft",
     "TicketRef",

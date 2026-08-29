@@ -1219,7 +1219,7 @@ def triage_cmd(
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("triage", model)
 
-    spec = _triage_spec(ticket, ticket_file, lockstep.repo.root)
+    spec = _triage_spec(ticket, ticket_file, lockstep.repo.root, source=_bound_ticket_source(lockstep))
 
     auth = Auth()
     try:
@@ -1310,7 +1310,7 @@ def triage_cmd(
         raise SystemExit(EXIT_FAILED)
 
 
-def _triage_spec(ticket: str, ticket_file: str, root: str) -> Any:
+def _triage_spec(ticket: str, ticket_file: str, root: str, source: Any = None) -> Any:
     """A `TriageSpec` from a tracker key or a file. A JSON file may carry the richer eval-corpus
     shape (discussion, criteria_source); a markdown file or a real issue goes through the Ticket
     mapping, so what triage sees offline matches what it sees against a live tracker."""
@@ -1331,7 +1331,7 @@ def _triage_spec(ticket: str, ticket_file: str, root: str) -> Any:
             inner = data.get("input")
             payload = inner if isinstance(inner, dict) else data
             return _triage_spec_from_dict(payload, fallback_key=file.stem)
-    return TriageSpec.from_ticket(_load_ticket(ticket, ticket_file, root))
+    return TriageSpec.from_ticket(_load_ticket(ticket, ticket_file, root, source=source))
 
 
 def _triage_spec_from_dict(data: dict[str, Any], *, fallback_key: str) -> Any:
@@ -1645,7 +1645,7 @@ def implement_cmd(
     if approval.granted and not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
         lockstep.middleware = [*lockstep.middleware, ApprovalGate()]
 
-    resolved = _load_ticket(ticket, ticket_file, lockstep.repo.root)
+    resolved = _load_ticket(ticket, ticket_file, lockstep.repo.root, source=_bound_ticket_source(lockstep))
 
     auth = Auth()
     try:
@@ -1745,7 +1745,9 @@ def implement_cmd(
         click.echo("")
         click.echo(f"Nothing was written. Apply it with:  in-lockstep apply-inline --from-artifact {out}")
 
-    _write_implement_ledger(ctx, outcome, label, selected.id if cli_chose_the_model else "", approval)
+    _write_implement_ledger(
+        ctx, outcome, label, selected.id if cli_chose_the_model else "", approval, ticket=resolved
+    )
 
     if outcome.status is Status.BLOCKED:
         raise SystemExit(EXIT_BLOCKED)
@@ -1756,15 +1758,35 @@ def implement_cmd(
         raise SystemExit(EXIT_FAILED)
 
 
-def _load_ticket(key: str, path: str, root: str) -> Any:
+def _bound_ticket_source(lockstep: Lockstep) -> Any:
+    """The repository's own `TicketSource` if its module bound one, else None — so a repo that
+    binds `JiraSource` reaches Jira and one that binds nothing gets the GitHub default."""
+    from .platform.tickets import TicketSource
+
+    if not lockstep.container.has(TicketSource):
+        return None
+    # Resolving a Protocol from the container is the whole point of the ports — the interface is
+    # abstract by design, and a concrete adapter serves it. mypy's `type-abstract` guard is for
+    # instantiation, which this is not.
+    return lockstep.container.resolve(TicketSource)  # type: ignore[type-abstract]
+
+
+def _load_ticket(key: str, path: str, root: str, source: Any = None) -> Any:
+    """A ticket from a file, a bound `TicketSource`, or the GitHub default.
+
+    A repository that binds `JiraSource` (or any other tracker) in its module has `source` passed
+    in, so `implement --ticket PROJ-123` reaches Jira; with nothing bound, GitHub Issues is the
+    zero-config default, matching what `_default_lockstep` assumes elsewhere.
+    """
     if path:
         return _ticket_from_file(path)
     from pathlib import Path as _Path
 
     from .platform.tickets import GitHubIssues
 
+    tracker = source if source is not None else GitHubIssues(root=_Path(root))
     try:
-        return asyncio.run(GitHubIssues(root=_Path(root)).get(key))
+        return asyncio.run(tracker.get(key))
     except (RuntimeError, OSError) as e:
         raise click.ClickException(f"could not read ticket {key!r}: {e}") from None
 
@@ -1776,7 +1798,7 @@ def _write_artifact(path: str, changeset: Any) -> None:
 
 
 def _write_implement_ledger(
-    ctx: Any, outcome: Any, strategy: str, model_id: str, approval: Any = None
+    ctx: Any, outcome: Any, strategy: str, model_id: str, approval: Any = None, ticket: Any = None
 ) -> None:
     """The same store `review` writes through, with the fields that differ for this verb."""
     report = outcome.value
@@ -1786,6 +1808,11 @@ def _write_implement_ledger(
         {
             "kind": "implement",
             "strategy": strategy,
+            # The ticket this run implemented, as structured fields rather than only inside the
+            # run id: a record can be joined to its work item without parsing a string, and the
+            # tracker URL — which a Jira source computes and the run id cannot carry — is kept.
+            **({"ticket": ticket.key} if ticket is not None and ticket.key else {}),
+            **({"ticket_url": ticket.url} if ticket is not None and ticket.url else {}),
             # Who asked. Absent for an attended local run, where the person reading the output
             # is the person who approved it and a name would be noise. Present for anything
             # unattended, where it is the only trace of a human in the loop.
