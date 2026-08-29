@@ -14,11 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.core.types import ChangeAuthor, ChangeSet, FileChange
+from in_lockstep.core.types import ChangeAuthor, ChangeSet, FileChange, TestVerdict
 from in_lockstep.platform.artifacts import (
     MalformedArtifact,
     payload_path,
     read_changeset,
+    read_verdict,
     write_changeset,
 )
 from in_lockstep.privileged.redact import Redact, SecretRegistry
@@ -92,3 +93,24 @@ def test_an_omitted_author_defaults_to_agent(tmp_path: Path) -> None:
     """Fail-closed: FRAMEWORK entries skip the guard, so an artifact must not claim that by omission."""
     (tmp_path / "changeset.json").write_text('{"changes": [{"path": "a.py", "contents": "x"}]}')
     assert read_changeset(tmp_path).changes[0].author is ChangeAuthor.AGENT
+
+
+def test_a_verdict_rides_the_artifact_and_reads_back(tmp_path: Path) -> None:
+    """The verdict of testing the staged change crosses the job split alongside the ChangeSet."""
+    verdict = TestVerdict(status="succeeded", decided=True, total=42, passed=42)
+    write_changeset(tmp_path / "out", _changeset(), verdict=verdict)
+    assert read_verdict(tmp_path / "out") == verdict
+    # And the ChangeSet itself is unaffected by the extra key.
+    assert read_changeset(tmp_path / "out") == _changeset()
+
+
+def test_no_verdict_reads_back_as_not_tested(tmp_path: Path) -> None:
+    """No Test bound means no verdict written, which reads back as None — never a phantom green."""
+    write_changeset(tmp_path / "out", _changeset())
+    assert read_verdict(tmp_path / "out") is None
+
+
+def test_read_verdict_is_tolerant_of_a_missing_or_malformed_artifact(tmp_path: Path) -> None:
+    assert read_verdict(tmp_path / "nothing") is None
+    (tmp_path / "changeset.json").write_text('{"verdict": "not an object"}')
+    assert read_verdict(tmp_path) is None

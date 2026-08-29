@@ -56,6 +56,46 @@ class TestReport:
 
 
 @dataclass(frozen=True)
+class TestVerdict:
+    """Whether a staged change's suite ran, and how it came out.
+
+    Carried across the trampoline's job split. `implement/from-issue` runs the suite against the
+    materialised change and records this beside the ChangeSet; `implement/propose` — a job that
+    never held the run's Outcome — reads it back and says in the PR body whether the change was
+    tested and passed. Its *absence* (no verdict alongside the ChangeSet) is the honest third state:
+    no Test was bound, so nothing was checked. `decided=False` is the fourth: the suite ran but
+    collected nothing, which is neither red nor green.
+
+    Counts and a status, never file contents — so it serialises on the redacted-metadata side of
+    the artifact without the masking a source file would need.
+    """
+
+    status: str = ""  # the Test Outcome's status, e.g. "succeeded" | "failed"
+    decided: bool = False
+    total: int = 0
+    passed: int = 0
+    failed: int = 0
+    skipped: int = 0
+
+    @property
+    def green(self) -> bool:
+        return self.decided and self.status == "succeeded" and self.failed == 0
+
+    @classmethod
+    def of(cls, status: str, decided: bool, report: TestReport) -> TestVerdict:
+        """From a Test Outcome's status/decided flags and its report. Kept to primitives so `core`
+        need not import `Outcome` — the caller unpacks `outcome.status.value` and `outcome.decided`."""
+        return cls(
+            status=status,
+            decided=decided,
+            total=report.total,
+            passed=report.passed,
+            failed=report.failed,
+            skipped=report.skipped,
+        )
+
+
+@dataclass(frozen=True)
 class ValidateSpec:
     paths: tuple[str, ...] = ()
     rules: tuple[str, ...] = ()

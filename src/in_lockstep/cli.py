@@ -2462,13 +2462,16 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 from typing import Any
 
 from in_lockstep.adapters.ai.implement import AiImplement, Implement, ImplementSpec
+from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.adapters.worktree import verdict_over_staged
 from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
-from in_lockstep.platform.artifacts import read_changeset, write_changeset
+from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
+from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.strategies import default_registry
@@ -2503,6 +2506,15 @@ lockstep.bind(
     ),
 )
 
+# Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
+# its verdict rides the artifact into the PR body, so a reviewer sees whether the change passed
+# before opening it. The default Sandbox runs the suite in a subprocess with credentials dropped,
+# enough that repository (and staged) test code cannot read the provider key out of this job. It
+# does not cut network the way run_script's container does; a host that can enforce egress should
+# pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
+# for run_script. On a non-Python repo, swap `PytestTest()` for `CommandTest(["npm", "test"])`.
+lockstep.bind(Test, PytestTest())
+
 # EGRESS, and read this before shipping the implement verb. The review scaffold above already
 # bound `UnsandboxedEgress`, and that binding is global — so this implementing verb inherits it,
 # and a successful injection in the untrusted issue text has somewhere to send what it read. That
@@ -2523,10 +2535,10 @@ CHANGESET = "changeset"
 
 @workflow(id="implement/from-issue")
 async def implement_from_issue(ctx: Any, issue: str) -> Outcome:
-    """Read the issue, implement it, leave the change staged in an artifact.
+    """Read the issue, implement it, test the staged change, leave it in an artifact.
 
-    Writes nothing. The change set travels to the job that holds a write token, and crosses the
-    guard again when it gets there.
+    Writes nothing to the tree. The change set — and the verdict of running the suite against it —
+    travel to the job that holds a write token, and cross the guard again when they get there.
     """
     tickets: TicketSource = ctx.container.resolve(TicketSource)
     ticket = await tickets.get(issue)
@@ -2534,7 +2546,10 @@ async def implement_from_issue(ctx: Any, issue: str) -> Outcome:
 
     report = outcome.value
     if report is not None and report.changeset.changes:
-        written = write_changeset(CHANGESET, report.changeset)
+        # Run the suite against the staged change (in a throwaway worktree) before it travels, so
+        # the reviewer sees a verdict on the PR rather than opening an untested change.
+        verdict = await verdict_over_staged(ctx, lockstep.repo.root, report.changeset)
+        written = write_changeset(CHANGESET, report.changeset, verdict=verdict)
         print(f"staged    {len(report.changeset.changes)} change(s) -> {written}")
     return outcome
 
@@ -2550,6 +2565,7 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
     tickets: TicketSource = ctx.container.resolve(TicketSource)
     scm: Scm = ctx.container.resolve(Scm)
     changeset = read_changeset(artifact)
+    verdict = read_verdict(artifact)
 
     if not changeset.changes:
         # Still a comment. "It found nothing to change" is an answer, and a trigger that answers
@@ -2560,11 +2576,7 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
     change = await scm.open_change(
         changeset,
         title=changeset.summary or f"Implement {issue}",
-        body=(
-            "The issue body is untrusted input to a model that held write tools, so review this "
-            "as you would a change from a stranger who had read your repository — the controls "
-            "bound where it could write, not what it thought."
-        ),
+        body=implement_body(changeset, verdict),
         ticket=issue,
         workflow="implement",
         run_id=ctx.run_id,

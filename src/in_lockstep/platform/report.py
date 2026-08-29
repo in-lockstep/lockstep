@@ -8,9 +8,10 @@ The marker is what makes a review comment *sticky*: an upsert keys off it to edi
 comment rather than adding one per run, so a re-review updates in place instead of burying the
 thread. It is an HTML comment, invisible in the rendered markdown.
 
-The implement verb's own provenance belongs in its PR body too, but that runs across the
-trampoline's job split — the change is opened in a privileged job that never held the run's
-`Outcome` — so it waits on the changeset artifact carrying that provenance, alongside item 13.
+The implement verb's own provenance travels the same way. Its change is opened in a privileged job
+that never held the run's `Outcome`, so what that job can say about the change has to ride the
+changeset artifact. `implement_body` renders the one piece that now does: the test verdict the
+unprivileged job recorded when it ran the suite against the staged change (item 13).
 """
 
 from __future__ import annotations
@@ -73,6 +74,46 @@ def review_comment(aspect: str, outcome: Any) -> str:
 
     lines.append(marker(f"review:{aspect}"))
     return "\n".join(lines)
+
+
+#: The warning every implement PR body carries. The change came from a model that read untrusted
+#: issue text while holding write tools, and the reviewer has to know that before reading a line.
+_UNTRUSTED_WARNING = (
+    "The issue body is untrusted input to a model that held write tools, so review this as you "
+    "would a change from a stranger who had read your repository — the controls bound where it "
+    "could write, not what it thought."
+)
+
+
+def implement_body(changeset: Any, verdict: Any) -> str:
+    """The PR body for a change an implement run staged: the untrusted-input warning it must always
+    carry, plus what the run's own test said about the change.
+
+    `verdict` is a `TestVerdict` or None. None means no Test verb was bound, so the change arrives
+    unverified and the body says exactly that rather than implying a green it never earned.
+    """
+    lines = [
+        _UNTRUSTED_WARNING,
+        "",
+        f"**Tests:** {_verdict_line(verdict)}",
+        "",
+        marker("implement"),
+    ]
+    return "\n".join(lines)
+
+
+def _verdict_line(verdict: Any) -> str:
+    if verdict is None:
+        return "not run — no test verb is bound, so this change is unverified."
+    if not verdict.decided:
+        return "ran, but collected nothing — neither red nor green."
+    if verdict.green:
+        extra = f", {verdict.skipped} skipped" if verdict.skipped else ""
+        return f"✅ {verdict.passed} passed{extra}, run against the staged change before it was proposed."
+    return (
+        f"🛑 {verdict.failed} of {verdict.total} failed, run against the staged change before it "
+        f"was proposed."
+    )
 
 
 def _icon(finding: Any) -> str:

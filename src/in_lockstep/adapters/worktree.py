@@ -39,12 +39,30 @@ import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
-from ..core.types import ChangeSet, FileChange
+from ..core.types import ChangeSet, FileChange, TestReport, TestSpec, TestVerdict
+from .pytest_adapter import Test
 
 
 class WorktreeError(RuntimeError):
     """A worktree could not be created, or the source was not a git repository."""
+
+
+async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) -> TestVerdict | None:
+    """Run the bound suite against HEAD-plus-`changeset`, and report how it came out.
+
+    None when no Test verb is bound — an honest "unverified", never a silent green. This is what
+    lets an implement run see whether its own change works before proposing it: the change is not on
+    disk, so materialising it into a throwaway worktree is the only way to run a suite over it, and
+    the worktree is discarded so nothing the suite does reaches the real tree.
+    """
+    if not ctx.container.has(Test):
+        return None
+    async with materialize(repo_root, changeset) as tree:
+        outcome = await ctx.do(Test, TestSpec(root=tree))
+    report = outcome.value if outcome.value is not None else TestReport()
+    return TestVerdict.of(outcome.status.value, outcome.decided, report)
 
 
 async def _git(repo_root: str, *args: str) -> str:
