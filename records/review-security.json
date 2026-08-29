@@ -1,0 +1,27 @@
+{
+  "aspect": "security",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "egress.unenforced",
+        "message": "egress control is mandatory here because the context package contains untrusted external content, and none is in effect. Run under a host that constrains egress and set IN_LOCKSTEP_EGRESS=enforced, or bind UnsandboxedEgress deliberately.",
+        "severity": "error"
+      }
+    ]
+  },
+  "input_tokens": 0,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 0,
+  "reason": "egress.unenforced",
+  "run_id": "review-security",
+  "schema": 3,
+  "status": "blocked",
+  "tokens": 0,
+  "wall_seconds": 1.391
+}
