@@ -248,11 +248,15 @@ class DiagnoseThenFix:
                 )
 
             # -- Fix ----------------------------------------------------------------------------
+            # The fix step has to see the reproducer it must make pass: it is staged, not on disk,
+            # so `read_file` cannot reach it — it travels in the prompt, the way tdd hands its test
+            # to the implement step. It is the model's own prior output, tagged untrusted like the
+            # ticket, so echoing it back crosses no new trust boundary.
             fix_params = FixParams(
                 ticket=ticket.key,
                 title=ticket.title,
                 criteria=tuple(ticket.acceptance_criteria),
-                failure=_failure_text(red),
+                failure=_fix_specification(reproducer, red),
             )
             fix_inv = await self._run(session, "fix/fix-writer", fix_params, package)
             if fix_inv.truncated:
@@ -354,12 +358,24 @@ def _test_spec(tree: str, expect: str) -> Any:
     return TestSpec(root=tree, expect=expect)
 
 
+def _fix_specification(reproducer: ChangeSet, red: Any) -> str:
+    """What the fix step is fixing against: the reproducer test that fails, and how it failed.
+
+    The reproducer is the specification now, so the fix step needs to see it in full — it is staged,
+    not on disk. A confirmed-red run satisfies `expect="fail"` and so carries no blocking finding,
+    which is why the failure line falls back to a plain statement rather than pretending to detail.
+    """
+    listing = "\n\n".join(
+        f"`{c.path}`:\n```\n{c.contents}\n```" for c in reproducer.changes if c.contents is not None
+    )
+    return f"The reproducer, which fails against the current code:\n\n{listing}\n\n{_failure_text(red)}"
+
+
 def _failure_text(outcome: Any) -> str:
-    """The reproducer's failure, handed to the fix step as its specification."""
     for finding in outcome.findings:
         if getattr(finding, "blocking", False):
             return str(finding.message)[:1000]
-    return "the reproducer failed."
+    return "It fails as intended; make it pass by fixing the cause, not by editing the test."
 
 
 def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:

@@ -36,11 +36,13 @@ MODEL = "test-model"
 class Scripted(LLMProvider):
     def __init__(self, replies: list[LLMOutput]) -> None:
         self.replies = list(replies)
+        self.calls: list[LLMInput] = []
 
     def name(self) -> str:
         return "scripted"
 
     async def generate(self, input: LLMInput) -> LLMOutput:
+        self.calls.append(input)
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         reply.usage = TokenUsage(input_tokens=100, output_tokens=20)
         return reply
@@ -143,6 +145,31 @@ def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path)
     # And the combined view is what apply would write.
     assert set(report.changeset.paths()) == {"test_calc.py", "calc.py"}
     assert not (repo / "test_calc.py").exists(), "nothing touched the real tree"
+
+
+def test_the_fix_step_is_shown_the_reproducer_it_must_pass(repo: Path) -> None:
+    """The reproducer is staged, not on disk, so read_file cannot reach it — it has to travel in
+    the fix step's prompt, or the model is fixing blind."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_REPRODUCER),
+            _done("reproduced"),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            _done("fixed"),
+        ]
+    )
+    _run(provider, repo)
+    # The fix step is the invocation that carries the fix-writer body; the reproducer's assertion
+    # must appear somewhere in its messages.
+    fix_calls = [c for c in provider.calls if "assert add(2, 3) == 5" in _text_of(c)]
+    assert fix_calls, "the reproducer contents never reached the fix step"
+
+
+def _text_of(inp: LLMInput) -> str:
+    parts = [getattr(inp, "system", "") or ""]
+    for m in getattr(inp, "messages", []) or []:
+        parts.append(str(getattr(m, "content", "")))
+    return "\n".join(parts)
 
 
 def test_fix_refuses_when_no_test_verb_is_bound(repo: Path) -> None:
