@@ -49,11 +49,15 @@ def detect() -> CiEnvironment | None:
             event=os.environ.get("GITHUB_EVENT_NAME", ""),
         )
     if os.environ.get("GITLAB_CI"):
+        # The merge-request iid, so `review --comment` can find its thread without --pr — the
+        # GitHub branch derives the same number from GITHUB_REF_NAME. Absent outside MR pipelines.
+        iid = os.environ.get("CI_MERGE_REQUEST_IID", "")
         return CiEnvironment(
             host="gitlab",
             repo=os.environ.get("CI_PROJECT_PATH", ""),
             ref=os.environ.get("CI_COMMIT_SHA", ""),
             base_ref=os.environ.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", ""),
+            pr_number=int(iid) if iid.isdigit() else None,
             actor=os.environ.get("GITLAB_USER_LOGIN", ""),
             run_id=os.environ.get("CI_PIPELINE_ID", ""),
             oidc_available=bool(os.environ.get("CI_JOB_JWT_V2")),

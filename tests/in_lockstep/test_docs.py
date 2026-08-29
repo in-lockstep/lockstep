@@ -45,6 +45,7 @@ def test_every_documented_snippet_is_at_least_valid_python() -> None:
         ROOT / "README.md",
         ROOT / "docs" / "getting-started.md",
         ROOT / "docs" / "extending.md",
+        ROOT / "docs" / "trampoline.md",
     ):
         for index, block in enumerate(_python_blocks(doc)):
             compile(block, f"{doc.name}[{index}]", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)

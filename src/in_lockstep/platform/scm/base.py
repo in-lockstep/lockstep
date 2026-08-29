@@ -62,6 +62,19 @@ def conventional_subject(subject: str, *, workflow: str) -> str:
     return f"{prefixed}{sep}{rest}" if sep else prefixed
 
 
+def change_body(body: str, trailers: dict[str, str]) -> str:
+    """The rendered half a human reads, plus a machine-readable block.
+
+    Both, deliberately: a reviewer should not have to parse JSON, and a later run should not have
+    to parse prose. Shared by every host adapter, so a change request reads the same on GitHub and
+    GitLab and a tool that parses the block needs one parser.
+    """
+    import json
+
+    block = json.dumps(trailers, indent=2, sort_keys=True)
+    return f"{body}\n\n<details><summary>in-lockstep</summary>\n\n```json\n{block}\n```\n\n</details>"
+
+
 class DirectPushRefused(Exception):
     """A write was attempted outside the run-scoped namespace."""
 

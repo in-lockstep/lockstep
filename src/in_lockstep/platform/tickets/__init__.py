@@ -11,10 +11,12 @@ a prompt.
 
 from .base import Ticket, TicketDraft, TicketRef, TicketSource, TicketState, TicketType, criteria_from
 from .github import GitHubIssues
+from .gitlab import GitLabIssues
 from .jira import JiraSource, JiraTypeRef
 
 __all__ = [
     "GitHubIssues",
+    "GitLabIssues",
     "JiraSource",
     "JiraTypeRef",
     "Ticket",

@@ -369,11 +369,16 @@ namespace. Bind an interface to an adapter, register strategies for it, and `in-
 the result. See *A verb of your own* and *A strategy* above.
 
 **Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`, `TicketSource`
-and `LedgerStore` are protocols in `core/ports/`, and nothing in `core` knows what GitHub is. The
-*implementations* are not: `GitHubScm` and `GitHubIssues` ship, and **`GitLabScm` does not exist**.
-A GitLab project can define and run every process locally today, and would have to write that
-adapter to move to stage two. `in-lockstep gate` takes `--association` as an opaque string for the
-same reason, so it works against whatever a host calls its access levels.
+and `LedgerStore` are protocols in `core/ports/`, and nothing in `core` knows what GitHub is. Both
+hosts now have implementations: `GitHubScm`/`GitHubIssues` and `GitLabScm`/`GitLabIssues` ship, and
+`hosted_scm()`/`hosted_tickets()` in `platform/hosted.py` pick the detected host's pair so a
+scaffold module runs unedited on either. What GitLab still lacks is the *comment* trigger:
+GitLab CI cannot fire a pipeline from an issue comment the way `issue_comment` does on GitHub, so
+the write-capable flow there starts from a run-pipeline-with-variables instead — see
+[`docs/trampoline.md`](trampoline.md). `in-lockstep gate` takes `--association` as an opaque
+string for the same reason it always did: it works against whatever a host calls its access
+levels, and on GitLab — which computes no `author_association` — the gate answers from CODEOWNERS
+alone.
 
 ### Firing it from CI
 

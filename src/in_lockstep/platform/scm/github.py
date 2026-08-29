@@ -9,7 +9,7 @@ from typing import Any
 
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
-from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for, conventional_subject
+from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for, change_body, conventional_subject
 
 
 class GitHubScm:
@@ -83,7 +83,7 @@ class GitHubScm:
         self.local.commit(title, trailers=trailers)
         self.local.git("push", "-u", "origin", branch, check=True)
 
-        rendered = _body(body, trailers)
+        rendered = change_body(body, trailers)
         args = ["pr", "create", "--title", title, "--body", rendered, "--head", branch]
         if base:
             args += ["--base", base]
@@ -146,16 +146,6 @@ class GitHubScm:
         code, _out, err = self._gh("api", *args)
         if code != 0:
             raise RuntimeError(f"could not post PR comment: {err.strip()}")
-
-
-def _body(body: str, trailers: dict[str, str]) -> str:
-    """The rendered half a human reads, plus a machine-readable block.
-
-    Both, deliberately: a reviewer should not have to parse JSON, and a later run should not have
-    to parse prose.
-    """
-    block = json.dumps(trailers, indent=2, sort_keys=True)
-    return f"{body}\n\n<details><summary>in-lockstep</summary>\n\n```json\n{block}\n```\n\n</details>"
 
 
 def _number_from(url: str) -> int | None:
