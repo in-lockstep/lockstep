@@ -84,11 +84,17 @@ class AiReview:
         lenses: Mapping[str, type[ReviewPrompt]] | None = None,
         tools: ToolSet | None = None,
         run_tool: ToolRunner | None = None,
+        layers: PromptLayers | None = None,
     ) -> None:
         self.invoker_factory = invoker_factory
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=1)
         self.curator = curator or ContextCurator()
+        # The layer stack around every lens this adapter runs — a repository's own guardrails go
+        # here, usually as `review_layers().plus(guardrails=...)` so the shipped baseline stays
+        # underneath. Injected like `lenses=`: prompt text is data, and the binding site in
+        # lockstep.py is where data enters, visibly.
+        self.layers = layers
         # No tools by default, and that is the honest default rather than a gap: one turn with the
         # diff in the prompt is what this lens needs, and a tool set would make every review
         # multi-turn and multiply its cost. A repository that wants the reviewer to read files it
@@ -120,7 +126,7 @@ class AiReview:
             )
 
         prompt: ReviewPrompt = lens()
-        layers: PromptLayers = review_layers()
+        layers: PromptLayers = self.layers if self.layers is not None else review_layers()
         package = self._gather(inp)
 
         if not package.items:

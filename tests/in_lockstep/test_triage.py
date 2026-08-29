@@ -242,3 +242,34 @@ def test_untrusted_provenance_is_the_one_the_adapter_uses() -> None:
 def test_actionability_tracks_placement(kind: str, expected: bool) -> None:
     decision = TriageDecision(kind=kind, priority="normal")
     assert decision.actionable is expected
+
+
+def test_injected_layers_reach_the_model_ahead_of_the_body() -> None:
+    """`layers=` is a real seam, not an attribute: the house guardrail must be in the system
+    prompt the provider actually receives, and ahead of the body."""
+    from in_lockstep.ai.pricing import CostTable, Rate
+    from in_lockstep.prompts.triage import TRIAGE_PROMPTS, triage_layers
+
+    provider = _Answer(_GOOD)
+    table = CostTable()
+    table.add("m", Rate(0.0, 0.0))
+
+    def factory(_ctx: object) -> AiInvoker:
+        return AiInvoker(
+            provider,
+            model="m",
+            cost_table=table,
+            spend=Spend(),
+            retry=RetryPolicy(attempts=1, base_delay=0),
+            egress=UnsandboxedEgress(),
+        )
+
+    layered = triage_layers().plus(guardrails=(("acme/house", "Do not close security reports."),))
+    adapter = AiTriage(factory, layers=layered)
+    asyncio.run(adapter.invoke(None, _spec()))
+    system = provider.calls[0].system
+    assert "Do not close security reports." in system
+    body_at = system.index(TRIAGE_PROMPTS["triage/analyst"]().body_text().strip()[:40])
+    assert system.index("Do not close security reports.") < body_at, (
+        "a house guardrail is appended after the shipped ones but still ahead of the body"
+    )
