@@ -186,12 +186,13 @@ def _prompt_bodies(
     from .ai.prompt import BodyNotFound
     from .prompts.implement import PROMPTS
     from .prompts.review import LENSES
+    from .prompts.triage import TRIAGE_PROMPTS
 
-    # Both families. Checking only the review lenses meant the check covered whichever prompts
+    # Every family. Checking only the review lenses meant the check covered whichever prompts
     # existed when it was written, which is the shape of a check that silently stops covering
-    # things — an implementing prompt with a missing body would have failed on a run that had
-    # already resolved a container and a credential.
-    everything: dict[str, type] = {**LENSES, **PROMPTS}
+    # things — an implementing or triaging prompt with a missing body would have failed on a run
+    # that had already resolved a container and a credential.
+    everything: dict[str, type] = {**LENSES, **PROMPTS, **TRIAGE_PROMPTS}
     for aspect, lens in sorted(everything.items()):
         try:
             lens().body_text()

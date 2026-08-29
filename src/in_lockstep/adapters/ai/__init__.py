@@ -3,6 +3,7 @@
 from .implement import AiImplement, Implement, ImplementReport, ImplementSession, ImplementSpec
 from .oneshot import OneshotImplement
 from .review import AiReview, Review, ReviewFinding, ReviewReport, ReviewSpec
+from .triage import AiTriage, Triage, TriageDecision, TriageSpec
 
 # `ReviewSpec` is the verb's INPUT, and it was the one name missing here while both output types
 # were exported — so calling the only AI verb needed a three-level import while reading its result
@@ -10,6 +11,7 @@ from .review import AiReview, Review, ReviewFinding, ReviewReport, ReviewSpec
 __all__ = [
     "AiImplement",
     "AiReview",
+    "AiTriage",
     "Implement",
     "ImplementReport",
     "ImplementSession",
@@ -19,4 +21,7 @@ __all__ = [
     "ReviewFinding",
     "ReviewReport",
     "ReviewSpec",
+    "Triage",
+    "TriageDecision",
+    "TriageSpec",
 ]

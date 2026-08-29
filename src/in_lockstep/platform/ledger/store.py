@@ -46,7 +46,14 @@ class InRepoLedger:
     scope: str = LedgerScope.LOCAL
 
     def path_for(self, run_id: str) -> Path:
-        return self.root / f"{run_id}.json"
+        # Sanitised, because a run id is a path component and run ids are partly caller-supplied —
+        # a triage of GitLab's `group/project#42` or a cross-repo `owner/repo#42` would otherwise
+        # write to a nested `group/project#42.json` that the non-recursive read glob never finds,
+        # so the record would be lost while the write reported success. `GitLedger` already does
+        # this; the two stores must agree, or a record readable from one is invisible from the
+        # other. `run` is the fallback for a name that sanitises to nothing.
+        safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in run_id).strip("-.") or "run"
+        return self.root / f"{safe}.json"
 
     def location(self, run_id: str) -> str:
         """Where a record went, in words a person can act on."""
