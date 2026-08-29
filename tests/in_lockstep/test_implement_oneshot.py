@@ -389,15 +389,17 @@ def test_the_registry_default_is_the_strategy_that_runs() -> None:
 
 
 def test_a_catalogue_entry_is_refused_by_name_not_by_attribute_error(repo: Path) -> None:
+    # `implement/direct` is still a catalogue entry — `implement/tdd` now dispatches, so this uses
+    # one that has not been written to keep exercising the refusal path.
     outcome = asyncio.run(
         _adapter(Scripted([_done()]), repo).invoke(
-            Ctx(), ImplementSpec(ticket=_ticket(), strategy="implement/tdd")
+            Ctx(), ImplementSpec(ticket=_ticket(), strategy="implement/direct")
         )
     )
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "implement.strategy_not_executable"
     message = outcome.findings[0].message
-    assert "implement/tdd" in message
+    assert "implement/direct" in message
     assert "implement/oneshot" in message, "it has to name what does work"
 
 
