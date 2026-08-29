@@ -28,6 +28,22 @@ class UntrustedConfig(Exception):
     """Configuration would resolve from the ref under review."""
 
 
+class UnresolvableConfigRef(Exception):
+    """The trusted ref does not name a commit here.
+
+    Loud, and that is the point. This used to be indistinguishable from "the repository has no
+    configuration": both produced `None`, both fell through to detected defaults, and a review
+    then ran with none of the repository's bindings, policy or egress opt-out. A provenance
+    control that degrades to *no configuration* in the one environment it exists for has failed
+    open — which is worse than never having been wired, because the crosswalk records it as a
+    replacement for gh-aw's workflow-file provenance.
+
+    The case that produced it: `GITHUB_BASE_REF` is `main`, and an `actions/checkout` working
+    directory is a detached HEAD with `origin/main` but no local `main` branch, so
+    `git show main:lockstep.py` fails for a reason that has nothing to do with the file.
+    """
+
+
 @dataclass(frozen=True)
 class ConfigRef:
     """The ref configuration is read from, and why."""
@@ -61,14 +77,48 @@ def read_config(repo_root: str | Path, path: str, ref: ConfigRef) -> str | None:
     if not ref.ref:
         candidate = Path(repo_root) / path
         return candidate.read_text() if candidate.exists() else None
-    try:
-        result = subprocess.run(
-            ["git", "show", f"{ref.ref}:{path}"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=10,
+
+    resolved = _resolve_commit(repo_root, ref.ref)
+    if resolved is None:
+        raise UnresolvableConfigRef(
+            f"the trusted ref {ref.ref!r} does not name a commit in this checkout, so "
+            f"configuration cannot be read from it. Nothing was loaded, and continuing would run "
+            f"with none of this repository's bindings, policy or egress decisions. In CI, fetch "
+            f"enough history for the base branch — `actions/checkout` with `fetch-depth: 0`."
         )
+    return _show(repo_root, f"{resolved}:{path}")
+
+
+def _candidates(ref: str) -> tuple[str, ...]:
+    """The ref as given, then as a remote-tracking ref.
+
+    A developer has a local `main`; a CI checkout usually does not — it is a detached HEAD with
+    `origin/main` and nothing else. Trying only the bare name is what made this control silently
+    inapplicable in CI, which is the only place it does any work.
+    """
+    # A ref that already names a remote, a tag, or a full refs/ path is taken as written:
+    # `origin/origin/main` is not a spelling of anything.
+    if "/" in ref:
+        return (ref,)
+    return (ref, f"origin/{ref}")
+
+
+def _resolve_commit(repo_root: str | Path, ref: str) -> str | None:
+    """The commit a trusted ref names, or None if no spelling of it resolves."""
+    for candidate in _candidates(ref):
+        out = _run(repo_root, ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"])
+        if out is not None and out.strip():
+            return out.strip()
+    return None
+
+
+def _show(repo_root: str | Path, spec: str) -> str | None:
+    return _run(repo_root, ["git", "show", spec])
+
+
+def _run(repo_root: str | Path, argv: list[str]) -> str | None:
+    try:
+        result = subprocess.run(argv, cwd=repo_root, capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
         return None
     return result.stdout if result.returncode == 0 else None

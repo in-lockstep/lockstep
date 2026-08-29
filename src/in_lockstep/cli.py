@@ -46,6 +46,12 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
             reviewing=os.environ.get("GITHUB_EVENT_NAME", "") in ("pull_request", "pull_request_target"),
         )
         configured = lockstep_from(module)
+        # Said out loud. This is the control that replaces gh-aw's workflow-file provenance, and
+        # it spent a CI run silently not applying — a bare `main` does not resolve in an
+        # `actions/checkout` working directory, so configuration fell through to detected
+        # defaults and nothing reported it. A provenance control nobody can see the output of is
+        # one nobody notices the absence of.
+        click.echo(f"config    {ref.reason}", err=True)
         if configured.middleware:
             return configured, None
         recorder = Recorder()
@@ -55,8 +61,11 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
         # `--budget` states one; both of those are somebody meaning it.
         configured.middleware = [otel(recorder)]
         return configured, recorder
-    except NoLifecycle:
-        pass
+    except NoLifecycle as e:
+        # Legitimate: a repository with no lockstep.py runs on detected defaults, and the first
+        # pull request of any adopter is exactly that. Distinct from the ref being unreadable,
+        # which is now a refusal rather than this.
+        click.echo(f"config    none ({e})", err=True)
 
     lockstep = Lockstep.detect()
     lockstep.bind(Validate, RuffValidate(cwd=lockstep.repo.root))
