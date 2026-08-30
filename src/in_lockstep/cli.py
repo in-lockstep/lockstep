@@ -1091,7 +1091,14 @@ def egress_manifest_cmd() -> None:
 @click.option("--body", default="", help="Change description.")
 @click.option("--workflow", "workflow_id", default="implement", help="Names the run-scoped branch.")
 @click.option("--run-id", default="", help="Names the run-scoped branch. Defaults to the CI run id.")
-def apply_cmd(artifact: str, dry_run: bool, title: str, body: str, workflow_id: str, run_id: str) -> None:
+@click.option(
+    "--base",
+    default="",
+    help="Open the change against this branch instead of the default — a release line, for a backport.",
+)
+def apply_cmd(
+    artifact: str, dry_run: bool, title: str, body: str, workflow_id: str, run_id: str, base: str
+) -> None:
     """Apply a ChangeSet produced by an earlier, unprivileged run.
 
     This is the privileged half of the two-job split. It holds a write token and never sees a
@@ -1150,6 +1157,9 @@ def apply_cmd(artifact: str, dry_run: bool, title: str, body: str, workflow_id: 
                 ticket=changeset.ticket,
                 workflow=workflow_id,
                 run_id=run_id or os.environ.get("GITHUB_RUN_ID", "local"),
+                # A backport's changeset is relative to its release line, and applied anywhere
+                # else it is a different change. Empty keeps the old behaviour.
+                base=base,
             )
         )
     except DirectPushRefused as e:
@@ -1707,6 +1717,262 @@ def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_numbe
         # a `gh` timeout (`SubprocessError`) or a non-JSON response (`ValueError`) must not turn a
         # review that succeeded into a crash, nor swallow the real exit code of one that blocked.
         click.echo(f"comment   could not post to PR #{number}: {e}", err=True)
+
+
+_BACKPORT_DRY_RUN = '{"files": [], "summary": "canned dry-run answer; proves the wiring, not the merge."}'
+
+
+@main.command(name="backport")
+@click.option("--target", required=True, help="The release line the change must land on, e.g. 'release-1.2'.")
+@click.option(
+    "--commit",
+    "commits",
+    multiple=True,
+    help="A commit to pick, oldest first. Repeatable. Without it, commits are found by `Ticket:` trailer.",
+)
+@click.option(
+    "--ticket", default="", help="The work item, e.g. '#42'. Finds the commits when none are named."
+)
+@click.option(
+    "--ticket-file",
+    default="",
+    type=click.Path(),
+    help="A ticket read off disk — JSON or markdown. No tracker, no network.",
+)
+@click.option("--source", default="HEAD", show_default=True, help="The line the commits live on.")
+@click.option("--out", default="", type=click.Path(), help="Write the ChangeSet here for `apply --base`.")
+@click.option(
+    "--resolve",
+    is_flag=True,
+    help="Let a model merge a conflicted pick. Off, a conflict stops the run with the manual commands.",
+)
+@click.option("--model", default="anthropic:claude-sonnet-4-6", help="The conflict resolver, on --resolve.")
+@click.option(
+    "--approve",
+    is_flag=True,
+    help="You are the human in the loop for a --resolve run. Attended, local use only.",
+)
+@click.option("--approved-by", default="", help="Who asked. The unattended form of --approve; recorded.")
+@click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
+@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option("--cassette", default="", help="Where to read or write a recording.")
+@click.option("--budget", type=float, default=None, help="Hard ceiling, in USD, for a --resolve run.")
+@click.option("--dry-run", is_flag=True, help="Canned resolver answer; proves the wiring, not the merge.")
+def backport_cmd(
+    target: str,
+    commits: tuple[str, ...],
+    ticket: str,
+    ticket_file: str,
+    source: str,
+    out: str,
+    resolve: bool,
+    model: str,
+    approve: bool,
+    approved_by: str,
+    offline: bool,
+    record: bool,
+    cassette: str,
+    budget: float | None,
+    dry_run: bool,
+) -> None:
+    """Replay merged commits onto a release line. Deterministic first; a model only on conflict.
+
+    The default run is plain `git cherry-pick -x` in a throwaway worktree — no key, no budget, no
+    approval, because no model chooses anything. A conflict stops it with the exact commands a
+    person would run. `--resolve` binds a conflict resolver instead, and because a model can then
+    author file contents, the run needs what every writing spender needs: a budget and an
+    approval (`--approve` or `--approved-by`).
+
+    Nothing touches the working tree. The result is a ChangeSet relative to the TARGET line —
+    `--out` serializes it, and `apply --from-artifact X --base <target>` opens it against the
+    release line through the guard.
+    """
+    from .adapters.ai.backport import AiBackportResolver
+    from .adapters.backport import Backport, BackportSpec, GitBackport
+    from .ai.auth import Auth
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+        default_registry,
+        table_for,
+    )
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .core.spend import Budget
+    from .middleware.approval import ApprovalGate
+    from .privileged.egress import EgressPolicy
+
+    if ticket and ticket_file:
+        raise click.ClickException("pass at most one of --ticket or --ticket-file")
+    if not commits and not (ticket or ticket_file):
+        raise click.ClickException(
+            "name the commits (--commit), or a ticket whose `Ticket:` trailer finds them"
+        )
+
+    lockstep, recorder = _default_lockstep()
+
+    param_source = click.get_current_context().get_parameter_source
+    if budget is not None:
+        lockstep.budget = Budget(usd=budget)
+    if param_source("model") is ParameterSource.DEFAULT:
+        model = lockstep.models.routes.get("backport", model)
+
+    # Approval, exactly as `implement` reasons about it — but only a `--resolve` run needs it,
+    # because only there does an adapter declare that a model can write.
+    approval = _approval(approve, approved_by)
+    if approval.granted and not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
+        lockstep.middleware = [*lockstep.middleware, ApprovalGate()]
+
+    resolved_ticket = (
+        _load_ticket(ticket, ticket_file, lockstep.repo.root, source=_bound_ticket_source(lockstep))
+        if (ticket or ticket_file)
+        else None
+    )
+
+    selected = Model(model)
+    resolver = None
+    if resolve:
+        auth = Auth()
+        try:
+            registry = default_registry(auth)
+        except MissingCredential as e:
+            raise click.ClickException(str(e)) from None
+        table = table_for(registry, selected, _bound_cost_table(lockstep))
+        tape = Cassette.load(cassette or ".lockstep/cassettes/backport.json")
+
+        def build_invoker(_ctx: Any) -> AiInvoker:
+            provider: LLMProvider
+            if dry_run:
+                provider = DryRunProvider(_BACKPORT_DRY_RUN)
+            elif offline:
+                provider = ReplayProvider(tape)
+            else:
+                creds = credentials_for(auth, selected.provider)
+                provider = registry.provider_for(selected, creds)
+                if record:
+                    provider = RecordingProvider(provider, tape, Redact())
+            return AiInvoker(
+                provider,
+                model=selected.name,
+                cost_table=table,
+                spend=_ctx.spend,
+                redact=Redact(),
+                egress=(
+                    lockstep.container.resolve(EgressPolicy)
+                    if lockstep.container.has(EgressPolicy)
+                    else EgressPolicy.detect()
+                ),
+            )
+
+        resolver = AiBackportResolver(
+            build_invoker,
+            policy=InvokePolicy.under(
+                lockstep.policy.resolve(), max_turns=1, max_tokens=16_384, deadline_seconds=300
+            ),
+        )
+
+    # Only if the module did not bind one, the same rule every verb command follows.
+    backport_is_ours = not lockstep.container.has(Backport)
+    if backport_is_ours:
+        lockstep.bind(Backport, GitBackport(lockstep.repo.root, resolver=resolver))
+
+    key = str(getattr(resolved_ticket, "key", "") or "").lstrip("#")
+    ctx = _context(lockstep, _run_id(f"backport-{key or target}"), approval)
+    spec = BackportSpec(target=target, commits=tuple(commits), ticket=resolved_ticket, source=source)
+    try:
+        outcome = asyncio.run(ctx.do(Backport, spec))
+    except LookupError as e:
+        raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
+    except (ImportError, MissingCredential) as e:
+        raise click.ClickException(str(e)) from None
+
+    report = outcome.value
+    click.echo(
+        f"backport  {outcome.status.value}"
+        + (f"  ({outcome.reason})" if outcome.reason else "")
+        + ("" if outcome.decided else "  (decided nothing)")
+    )
+    if report is not None:
+        for pick in report.picked:
+            click.echo(f"  picked  {pick.sha[:12]}  {pick.subject}")
+        if report.conflict is not None:
+            click.echo(f"  stuck   {report.conflict.commit[:12]}  {report.conflict.subject}")
+    for finding in outcome.findings:
+        where = f"{finding.path} " if finding.path else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+
+    cost = outcome.cost
+    click.echo("")
+    if resolve:
+        click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
+        click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    else:
+        click.echo("cost      $0.0000  (deterministic; no model was consulted)")
+    _echo_telemetry(recorder)
+
+    if out and report is not None and report.changeset.changes:
+        _write_artifact(out, report.changeset)
+        click.echo(f"changeset {out}")
+        click.echo("")
+        click.echo(
+            f"Nothing was written. Open it against the release line with:  "
+            f"in-lockstep apply --from-artifact {out} --base {target} --workflow backport"
+        )
+
+    _write_backport_ledger(
+        lockstep,
+        ctx,
+        outcome,
+        target,
+        # The model, only when this command chose it AND it actually answered: a resolver that a
+        # clean pick never consulted is a model that was never called, and recording it would put
+        # a fabricated fact into a permanent record.
+        selected.id if (resolve and backport_is_ours and cost.total_tokens > 0) else "",
+        approval,
+        ticket=resolved_ticket,
+    )
+
+    if outcome.status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if outcome.status is not Status.SUCCEEDED or not outcome.decided:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _write_backport_ledger(
+    lockstep: Any, ctx: Any, outcome: Any, target: str, model_id: str, approval: Any, ticket: Any
+) -> None:
+    """The same store every verb writes through, with the fields that differ for this one:
+    which line, which commits, and which paths a model — rather than git — merged."""
+    report = outcome.value
+    _record(
+        _ledger(lockstep),
+        ctx.run_id,
+        {
+            "kind": "backport",
+            **_provenance(lockstep),
+            "target": target,
+            **({"ticket": ticket.key} if ticket is not None and ticket.key else {}),
+            **({"ticket_url": ticket.url} if ticket is not None and ticket.url else {}),
+            **({"approval": approval.as_record()} if approval and approval.granted else {}),
+            **({"model": model_id} if model_id else {}),
+            "status": outcome.status.value,
+            "reason": outcome.reason,
+            "decided": outcome.decided,
+            # The provenance a squashed apply cannot carry in `-x` lines: which commits this
+            # change replays, and which files hold model-authored merges a reviewer reads first.
+            "picked": [p.sha for p in report.picked] if report is not None else [],
+            "resolved": list(report.resolved) if report is not None else [],
+            "tokens": outcome.cost.total_tokens,
+            "cost_usd": round(outcome.cost.usd, 6),
+            "wall_seconds": round(outcome.cost.wall_seconds, 3),
+            "findings": {
+                "count": len(outcome.findings),
+                "items": [f.as_record() for f in outcome.findings[:_LEDGER_MAX_FINDINGS]],
+            },
+        },
+    )
 
 
 def _write_ledger(

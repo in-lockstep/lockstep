@@ -101,6 +101,7 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Code Review": "review" in SHIPPED_VERBS and "review" in commands,
         "Implement": "implement" in SHIPPED_VERBS and "implement" in commands,
         "Bug Fix": "fix" in SHIPPED_VERBS,
+        "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,
         "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,
         "GitHub": "gate" in commands,
         "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),

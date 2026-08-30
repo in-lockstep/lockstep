@@ -50,6 +50,7 @@ class Verb:
     RUN: ClassVar[Verb]
     IMPLEMENT: ClassVar[Verb]
     FIX: ClassVar[Verb]
+    BACKPORT: ClassVar[Verb]
     REVIEW: ClassVar[Verb]
     TRIAGE: ClassVar[Verb]
     DEBUG: ClassVar[Verb]
@@ -102,7 +103,18 @@ class Verb:
 #: The verbs the framework ships. Named as a set because `Verb.known()` is open by design and
 #: callers sometimes need to ask the narrower question — `ls` prints user-defined verbs that
 #: nothing serves, and an unbound *shipped* verb is ordinary rather than a mistake.
-SHIPPED_VERBS = ("build", "test", "validate", "run", "implement", "fix", "review", "triage", "debug")
+SHIPPED_VERBS = (
+    "build",
+    "test",
+    "validate",
+    "run",
+    "implement",
+    "fix",
+    "backport",
+    "review",
+    "triage",
+    "debug",
+)
 
 for _shipped in SHIPPED_VERBS:
     setattr(Verb, _shipped.upper(), Verb(_shipped))

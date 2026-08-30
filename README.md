@@ -33,7 +33,7 @@ still advertises.
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
-| Backport | planned | roadmap item 25 — deterministic cherry-pick first, model only on conflict |
+| Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | planned | roadmap item 25 — rides the triage vertical |
 | Flaky-test adapter | planned | roadmap item 26 |
 | GitHub | runs | SCM, issues, chat-ops gate, trampolines |
@@ -60,6 +60,7 @@ for: it prints what will actually run.
 in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
 in-lockstep review --base ...    # review a change, one lens at a time
 in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing itself
+in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
 in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local model
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
