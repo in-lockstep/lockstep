@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.032241,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 189,
+        "message": "The `verify()` method passes user-controlled data directly into a `git log` shell command via `self.ref` without visible sanitization.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 222,
+        "message": "Test helper `_tamper` passes a string literal as `stdin` to `self._git('hash-object', ..., stdin=...)` \u2014 if `_git` passes `stdin` to a subprocess via shell, a crafted run id in the path could escape; low risk in test code but the pattern shows the ledger's `_git` wrapper accepts arbitrary stdin values.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "dee9461546948b63b5b6aeef0e2876a3ceb848f4",
+  "input_tokens": 8227,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 504,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 8731,
+  "ts": "2026-08-30T01:02:51+00:00",
+  "wall_seconds": 15.658
+}
