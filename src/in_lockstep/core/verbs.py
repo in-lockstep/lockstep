@@ -53,6 +53,7 @@ class Verb:
     BACKPORT: ClassVar[Verb]
     REVIEW: ClassVar[Verb]
     TRIAGE: ClassVar[Verb]
+    RFE: ClassVar[Verb]
     DEBUG: ClassVar[Verb]
 
     def __new__(cls, value: str) -> Verb:
@@ -113,6 +114,7 @@ SHIPPED_VERBS = (
     "backport",
     "review",
     "triage",
+    "rfe",
     "debug",
 )
 

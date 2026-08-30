@@ -26,7 +26,7 @@ CORPUS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "corpus"
 
 def test_every_shipped_family_has_prompts() -> None:
     families = {p.name for p in PROMPTS.iterdir() if p.is_dir() and p.name not in ("skills", "__pycache__")}
-    assert families == {"review", "implement", "fix", "backport", "triage", "retro"}
+    assert families == {"review", "implement", "fix", "backport", "triage", "rfe", "retro"}
 
 
 def test_the_eval_corpus_came_across_intact() -> None:
