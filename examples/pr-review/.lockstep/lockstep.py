@@ -9,8 +9,8 @@ budgetable, independently measurable, and independently something a team can ove
 touching the others.
 """
 
-from in_lockstep import Lockstep, Policy, workflow
-from in_lockstep.adapters.ai.review import AiReview, Review, ReviewSpec
+from in_lockstep import Lockstep, Policy, RunContext, workflow
+from in_lockstep.adapters.ai.review import Review
 from in_lockstep.core.spend import Budget
 
 lockstep = Lockstep.detect()
@@ -37,7 +37,7 @@ ASPECTS = ("security", "intent", "performance", "tests")
 
 
 @workflow(id="pr-review/all-aspects")
-async def review_all(ctx, base: str, head: str):
+async def review_all(ctx: RunContext, base: str, head: str):
     """Every lens over one change.
 
     Sequential here. When fan-out lands these become declared branches over the same joint budget,
@@ -46,7 +46,7 @@ async def review_all(ctx, base: str, head: str):
     """
     reports = {}
     for aspect in ASPECTS:
-        outcome = await ctx.do(Review, ReviewSpec(base=base, head=head, aspect=aspect))
+        outcome = await ctx.do(Review(base=base, head=head, aspect=aspect))
         reports[aspect] = outcome
         # A blocked lens stops the run: it means a ceiling was hit or a control refused, and the
         # remaining lenses would hit the same one.

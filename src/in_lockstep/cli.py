@@ -13,13 +13,11 @@ import click
 from click.core import ParameterSource
 
 from . import __version__
-from .adapters.pytest_adapter import Test
-from .adapters.ruff_adapter import Validate
-from .core.context import DISABLE_ENV
+from .core.context import DISABLE_ENV, RunContext
 from .core.outcome import Status
-from .core.types import TestSpec, ValidateSpec
+from .core.types import Test, Validate
 from .core.verbs import SHIPPED_VERBS, Verb, verb_of
-from .core.workflow import registered, workflow
+from .core.workflow import inject_ports, injectable_parameters, registered, workflow
 from .lockstep import Lockstep
 from .middleware.otel import Recorder, otel
 from .privileged import sink
@@ -318,13 +316,13 @@ def _run_registered(
     base = entry.id.replace("/", "-") + (f"-{ci_run}" if ci_run else "")
     ctx = _context(lockstep, _run_id(base), approval)
     try:
-        result = asyncio.run(entry.fn(ctx, **parsed))
+        result = asyncio.run(entry.fn(ctx, **inject_ports(entry.fn, ctx, parsed)))
     except TypeError as e:
         # A signature mismatch is the common mistake here, and the traceback for it points at
         # asyncio rather than at the workflow the user named.
         raise click.ClickException(
             f"{entry.id} did not accept those arguments: {e}. It takes "
-            f"{', '.join(_parameters(entry.fn)) or '(no parameters)'}."
+            f"{', '.join(_parameters(entry.fn, ctx)) or '(no parameters)'}."
         ) from None
     except _SETUP_ERRORS as e:
         # The same translation `review` and `implement` already do. Without it the path this
@@ -462,10 +460,12 @@ def _setup_errors() -> tuple[type[BaseException], ...]:
 _SETUP_ERRORS = _setup_errors()
 
 
-def _parameters(fn: Any) -> list[str]:
+def _parameters(fn: Any, ctx: Any = None) -> list[str]:
+    """The arguments a caller supplies: everything but `ctx` and the container-injected ports."""
     import inspect
 
-    return [p for p in inspect.signature(fn).parameters if p != "ctx"]
+    injected = injectable_parameters(fn, ctx) if ctx is not None else set()
+    return [p for p in inspect.signature(fn).parameters if p != "ctx" and p not in injected]
 
 
 def _describe(result: Any) -> str:
@@ -513,7 +513,7 @@ def _echo_telemetry(recorder: Recorder | None) -> None:
 
 
 @workflow(id="selfcheck")
-async def selfcheck(ctx: Any, paths: tuple[str, ...]) -> dict[str, Any]:
+async def selfcheck(ctx: RunContext, paths: tuple[str, ...]) -> dict[str, Any]:
     """Validate, then test. The smallest thing that proves the core actually dispatches.
 
     Skips a verb nothing is bound to rather than raising: detection binds only what it found, so a
@@ -521,10 +521,10 @@ async def selfcheck(ctx: Any, paths: tuple[str, ...]) -> dict[str, Any]:
     traceback there would read as a broken tool rather than an unconfigured one.
     """
     bound = ctx.container.has
-    validate = await ctx.do(Validate, ValidateSpec(paths=paths)) if bound(Validate) else None
+    validate = await ctx.do(Validate(paths=paths)) if bound(Validate) else None
     if validate is not None and validate.status is Status.BLOCKED:
         return {"validate": validate, "tests": None}
-    tests = await ctx.do(Test, TestSpec(paths=paths)) if bound(Test) else None
+    tests = await ctx.do(Test(paths=paths)) if bound(Test) else None
     return {"validate": validate, "tests": tests}
 
 
@@ -699,8 +699,13 @@ def ls_cmd() -> None:
         name = f" [{binding.name}]" if binding.name else ""
         impl = binding.impl if isinstance(binding.impl, type) else type(binding.impl)
         label = f"{binding.iface.__name__}{name}"
+        # An adapter that dispatches a strategy says which one right here, so "what will an
+        # Implement run actually do" is answered by `ls` instead of by reading three files.
+        strategy = str(getattr(binding.impl, "strategy", "") or "")
+        suffix = f"  strategy={strategy}" if strategy else ""
         click.echo(
             f"  {label:<22} -> {impl.__name__:<16}({binding.scope.value}, {binding.tier.name.lower()})"
+            f"{suffix}"
         )
 
     click.echo("")
@@ -1290,7 +1295,7 @@ def review_cmd(
     this command testable without constructing a repository with a history in it.
     """
 
-    from .adapters.ai.review import AiReview, Review, ReviewSpec
+    from .adapters.ai.review import AiReview, Review
     from .ai.auth import Auth
     from .ai.bootstrap import (
         LLMProvider,
@@ -1419,10 +1424,7 @@ def review_cmd(
     ctx = _context(lockstep, _run_id(f"review-{aspect}"))
     try:
         outcome = asyncio.run(
-            ctx.do(
-                Review,
-                ReviewSpec(base=base, head=head, aspect=aspect, diff=supplied or demo_diff),
-            )
+            ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff))
         )
     except LookupError as e:
         raise click.ClickException(
@@ -1469,7 +1471,7 @@ _TRIAGE_DRY_RUN = (
 
 
 @main.command(name="triage")
-@click.option("--ticket", default="", help="An issue key to read from the tracker, e.g. '#42'.")
+@click.option("--ticket", default="", help="A ticket key to read from the tracker, e.g. '#42'.")
 @click.option(
     "--ticket-file",
     default="",
@@ -1581,7 +1583,7 @@ def triage_cmd(
 
     ctx = _context(lockstep, _run_id(f"triage-{spec.key.lstrip('#') or 'issue'}"))
     try:
-        outcome = asyncio.run(ctx.do(Triage, spec))
+        outcome = asyncio.run(ctx.do(spec))
     except LookupError as e:
         raise click.ClickException(
             f"{e} If this is a shipped fixture, it no longer matches the prompt it was recorded "
@@ -1621,13 +1623,13 @@ def triage_cmd(
 
 
 def _triage_spec(ticket: str, ticket_file: str, root: str, source: Any = None) -> Any:
-    """A `TriageSpec` from a tracker key or a file. A JSON file may carry the richer eval-corpus
+    """A `Triage` request from a tracker key or a file. A JSON file may carry the richer eval-corpus
     shape (discussion, criteria_source); a markdown file or a real issue goes through the Ticket
     mapping, so what triage sees offline matches what it sees against a live tracker."""
     import json
     from pathlib import Path as _Path
 
-    from .adapters.ai.triage import TriageSpec
+    from .adapters.ai.triage import Triage
 
     if ticket_file:
         file = _Path(ticket_file)
@@ -1641,11 +1643,11 @@ def _triage_spec(ticket: str, ticket_file: str, root: str, source: Any = None) -
             inner = data.get("input")
             payload = inner if isinstance(inner, dict) else data
             return _triage_spec_from_dict(payload, fallback_key=file.stem)
-    return TriageSpec.from_ticket(_load_ticket(ticket, ticket_file, root, source=source))
+    return Triage.from_ticket(_load_ticket(ticket, ticket_file, root, source=source))
 
 
 def _triage_spec_from_dict(data: dict[str, Any], *, fallback_key: str) -> Any:
-    from .adapters.ai.triage import TriageSpec
+    from .adapters.ai.triage import Triage
     from .platform.tickets import criteria_from
 
     def _pairs(raw: object) -> tuple[tuple[str, str], ...]:
@@ -1666,10 +1668,10 @@ def _triage_spec_from_dict(data: dict[str, Any], *, fallback_key: str) -> Any:
     # through, so a JSON dump of an issue triages identically to the issue read from the tracker.
     criteria = _strs(data.get("acceptance_criteria")) or criteria_from(description)
     # An explicit source is honoured (the eval corpus states it); absent, it follows the criteria,
-    # matching `TriageSpec.from_ticket`. A filled criteria list under `criteria_source: none` would
+    # matching `Triage.from_ticket`. A filled criteria list under `criteria_source: none` would
     # tell the analyst to treat present criteria as missing.
     criteria_source = str(data.get("criteria_source") or ("description" if criteria else "none"))
-    return TriageSpec(
+    return Triage(
         key=str(data.get("key") or data.get("id") or f"#{fallback_key}"),
         summary=str(data.get("summary") or data.get("title") or ""),
         description=description,
@@ -1788,7 +1790,7 @@ def backport_cmd(
     release line through the guard.
     """
     from .adapters.ai.backport import AiBackportResolver
-    from .adapters.backport import Backport, BackportSpec, GitBackport
+    from .adapters.backport import Backport, GitBackport
     from .ai.auth import Auth
     from .ai.bootstrap import (
         LLMProvider,
@@ -1880,9 +1882,9 @@ def backport_cmd(
 
     key = str(getattr(resolved_ticket, "key", "") or "").lstrip("#")
     ctx = _context(lockstep, _run_id(f"backport-{key or target}"), approval)
-    spec = BackportSpec(target=target, commits=tuple(commits), ticket=resolved_ticket, source=source)
+    spec = Backport(target=target, commits=tuple(commits), ticket=resolved_ticket, source=source)
     try:
-        outcome = asyncio.run(ctx.do(Backport, spec))
+        outcome = asyncio.run(ctx.do(spec))
     except LookupError as e:
         raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
     except (ImportError, MissingCredential) as e:
@@ -2146,7 +2148,7 @@ def _ticket_from_file(path: str) -> Any:
 
 
 @main.command(name="implement")
-@click.option("--ticket", default="", help="Issue key to fetch, e.g. '#42'.")
+@click.option("--ticket", default="", help="Ticket key to fetch, e.g. '#42'.")
 @click.option("--ticket-file", default="", type=click.Path(), help="Read the ticket from a file instead.")
 @click.option("--strategy", default="", help="Which approach. Defaults to the registry's.")
 @click.option("--model", default="anthropic:claude-sonnet-4-6")
@@ -2203,7 +2205,7 @@ def implement_cmd(
     ticket written by anybody is not the thing that should also hold the ability to write.
     """
 
-    from .adapters.ai.implement import AiImplement, Implement, ImplementSpec
+    from .adapters.ai.implement import AiImplement, Implement
     from .adapters.sandbox import Sandbox
     from .adapters.worktree import WorktreeRunner
     from .ai.auth import Auth
@@ -2331,7 +2333,7 @@ def implement_cmd(
 
     ctx = _context(lockstep, _run_id(f"implement-{resolved.key.lstrip('#')}"), approval)
     try:
-        outcome = asyncio.run(ctx.do(Implement, ImplementSpec(ticket=resolved, strategy=strategy)))
+        outcome = asyncio.run(ctx.do(Implement(ticket=resolved, strategy=strategy)))
     except LookupError as e:
         raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
     except (ImportError, MissingCredential) as e:
@@ -2692,8 +2694,10 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         _write_trampoline(Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE)
 
     text = module.read_text() if module.exists() else ""
-    if "implement/from-issue" in text:
-        click.echo(f"{module} already defines implement/from-issue — left alone")
+    # The old id is checked too: a module scaffolded before the `from-ticket` rename already has
+    # the block, and appending a second copy would register duplicate workflows.
+    if "implement/from-ticket" in text or "implement/from-issue" in text:
+        click.echo(f"{module} already defines implement/from-ticket — left alone")
     elif not _binds_lockstep(text):
         # The block appends `lockstep.bind(...)` calls, so a module that does not assign a
         # top-level `lockstep` would take a NameError on its next load. This is an AST check, not
@@ -2714,7 +2718,7 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
             click.echo(f"{module} would not parse after adding the implement block ({e}); left alone.")
         else:
             module.write_text(merged)
-            click.echo(f"extended {module} with implement/from-issue and implement/propose")
+            click.echo(f"extended {module} with implement/from-ticket and implement/propose")
 
     click.echo("")
     click.echo("Three things make it real:")
@@ -2729,7 +2733,7 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
 def _scaffold_fix(module: Path, *, host: str = "") -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
-    `fix/from-issue` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
+    `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
     fires on an issue labeled `ai-generated` and runs the same workflow, closing the loop where a
     failed fix opens the next issue. The appended block guards each shared binding, so it composes
     with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
@@ -2742,8 +2746,9 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
 
     text = module.read_text() if module.exists() else ""
-    if "fix/from-issue" in text:
-        click.echo(f"{module} already defines fix/from-issue — left alone")
+    # The old id is checked too — see `_scaffold_implement`.
+    if "fix/from-ticket" in text or "fix/from-issue" in text:
+        click.echo(f"{module} already defines fix/from-ticket — left alone")
     elif not _binds_lockstep(text):
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
@@ -2755,7 +2760,7 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
             click.echo(f"{module} would not parse after adding the fix block ({e}); left alone.")
         else:
             module.write_text(merged)
-            click.echo(f"extended {module} with fix/from-issue and fix/propose")
+            click.echo(f"extended {module} with fix/from-ticket and fix/propose")
 
 
 def _scaffold_module(facts: Any) -> str:
@@ -2995,7 +3000,7 @@ review:
 # the credentials — GitLab's default variable scope is every environment, and an unscoped
 # variable quietly puts both credentials in both jobs, which unmakes the split without any
 # visible failure. Scope ANTHROPIC_API_KEY and a read-only project access token (read_api, as
-# GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-issue can fetch the
+# GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-ticket can fetch the
 # issue on a private project) to lockstep-work; scope a write-capable project access token
 # (api, as GITLAB_TOKEN) to lockstep-propose; mark lockstep-propose protected with required
 # approvers — the same approval-in-the-system-of-record the GitHub scaffold's `environment:
@@ -3030,7 +3035,7 @@ review:
 #    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
 #    - in-lockstep doctor || true
 #    - |
-#      in-lockstep run implement/from-issue --arg issue="#${LOCKSTEP_ISSUE}" \\
+#      in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
 #        --approved-by "${GITLAB_USER_LOGIN}" --budget 2.00
 #    - in-lockstep history --bundle history.bundle || true
 #  artifacts:
@@ -3053,7 +3058,7 @@ review:
 #    # The runner's default token cannot push; the propose token can, and it is the only
 #    # credential this job holds.
 #    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-#    - in-lockstep run implement/propose --arg issue="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
+#    - in-lockstep run implement/propose --arg ticket="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
 #    - in-lockstep history --from-bundle /tmp/history.bundle --push || true
 """
 
@@ -3062,7 +3067,7 @@ _SCAFFOLD_IMPLEMENT_TRAMPOLINE = """\
 #
 # THIS FILE CONTAINS NO LIFECYCLE LOGIC. What `/implement` actually does — read the issue, run
 # the strategy, stage a change, open a pull request, reply on the thread — is
-# `implement/from-issue` and `implement/propose` in .lockstep/lockstep.py, where it is Python
+# `implement/from-ticket` and `implement/propose` in .lockstep/lockstep.py, where it is Python
 # that can be read, tested and run on a laptop. What is here is what only the CI system can
 # express: the trigger, the job split, and which credential each job holds. Keeping the provider
 # key out of the job that can write is the reason there are three jobs rather than one.
@@ -3139,8 +3144,8 @@ jobs:
       # `--approve`. The process does not change when it moves from a terminal to a trigger —
       # only who the human is and how they were verified.
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run implement/from-issue \\
-            --arg issue="#${ISSUE}" \\
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run implement/from-ticket \\
+            --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
             --budget 2.00
         env:
@@ -3192,7 +3197,7 @@ jobs:
           path: ${{ runner.temp }}/implement
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run implement/propose \\
-            --arg issue="#${ISSUE}" \\
+            --arg ticket="#${ISSUE}" \\
             --arg artifact="${RUNNER_TEMP}/implement/changeset"
         env:
           ISSUE: ${{ github.event.issue.number }}
@@ -3214,9 +3219,9 @@ _SCAFFOLD_FIX_MODULE = '''
 # The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
 # comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
-from typing import Any
+from in_lockstep import RunContext
 
-from in_lockstep.adapters.ai.fix import AiFix, Fix, FixSpec
+from in_lockstep.adapters.ai.fix import AiFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import WorktreeRunner
@@ -3254,6 +3259,8 @@ lockstep.bind(
     AiFix(
         invoker_factory(lockstep.models.routes.get("fix", "")),
         registry=_fix_strategies(),
+        # Named on the binding so `in-lockstep ls` prints how fixing happens.
+        strategy="fix/diagnose-then-fix",
         repo_root=lockstep.repo.root,
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
@@ -3269,16 +3276,16 @@ lockstep.bind(
 FIX_CHANGESET = "fix-changeset"
 
 
-@workflow(id="fix/from-issue")
-async def fix_from_issue(ctx: Any, issue: str) -> Outcome:
+@workflow(id="fix/from-ticket")
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
     """Read the bug, reproduce it, fix it, and leave the change staged for the privileged half.
 
-    Writes nothing to the tree. A fix that did not go green stages nothing — a broken fix must not
-    travel — and the propose half says so on the issue rather than opening a pull request.
+    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
+    dispatcher fills it. Writes nothing to the tree. A fix that did not go green stages nothing —
+    a broken fix must not travel — and the propose half says so on the ticket rather than opening
+    a pull request.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    ticket = await tickets.get(issue)
-    outcome = await ctx.do(Fix, FixSpec(ticket=ticket))
+    outcome = await ctx.do(Fix(ticket=await tickets.get(ticket)))
 
     report = outcome.value
     if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
@@ -3288,15 +3295,15 @@ async def fix_from_issue(ctx: Any, issue: str) -> Outcome:
 
 
 @workflow(id="fix/propose")
-async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Outcome:
-    """Open the verified fix from the staged artifact, and say on the issue what happened.
+async def fix_propose(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
+) -> Outcome:
+    """Open the verified fix from the staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. What it reads came from
     another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the set before
     it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    scm: Scm = ctx.container.resolve(Scm)
     changeset = read_changeset(artifact)
 
     if not changeset.changes:
@@ -3304,31 +3311,31 @@ async def fix_propose(ctx: Any, issue: str, artifact: str = FIX_CHANGESET) -> Ou
         # means the automated fix failed. Open the next `ai-generated` issue for an agent to retry,
         # bounded by `lockstep.max_attempts`, rather than leaving the bug with nothing said.
         failure = "The automated fix did not reproduce the bug and turn it green."
-        source = await tickets.get(issue)
+        source = await tickets.get(ticket)
         opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
         reason = "fix.not_fixed" if opened is not None else "fix.attempts_exhausted"
         if opened is not None:
             print(f"escalated {opened.key}")
         return Outcome(status=Status.FAILED, reason=reason, value=opened)
 
-    # Ready for review, not draft: a change only reaches here when from-issue confirmed the fix
+    # Ready for review, not draft: a change only reaches here when from-ticket confirmed the fix
     # green (a reproducer red before, passing after), so it is asking for the human sign-off.
     change = await open_reviewable(
         scm,
         changeset,
         ready=True,
-        title=changeset.summary or f"Fix {issue}",
+        title=changeset.summary or f"Fix {ticket}",
         body=(
             "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
-            "The issue text is untrusted input to a model that held write tools, so review this as "
+            "The ticket text is untrusted input to a model that held write tools, so review this as "
             "you would a change from a stranger who had read your repository."
         ),
-        ticket=issue,
+        ticket=ticket,
         workflow="fix",
         run_id=ctx.run_id,
     )
     await tickets.comment(
-        await tickets.get(issue),
+        await tickets.get(ticket),
         f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
@@ -3398,8 +3405,8 @@ jobs:
       - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
         continue-on-error: true
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-issue \\
-            --arg issue="#${ISSUE}" \\
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
+            --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
             --budget 3.00
         env:
@@ -3440,7 +3447,7 @@ jobs:
           path: ${{ runner.temp }}/fix
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
-            --arg issue="#${ISSUE}" \\
+            --arg ticket="#${ISSUE}" \\
             --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
         env:
           ISSUE: ${{ github.event.issue.number }}
@@ -3499,8 +3506,8 @@ jobs:
       # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when the
       # framework opened the follow-up. The grant is the write-gated label, not a comment.
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-issue \\
-            --arg issue="#${ISSUE}" \\
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
+            --arg ticket="#${ISSUE}" \\
             --approved-by "labeled:${LABELER}" \\
             --budget 3.00
         env:
@@ -3541,7 +3548,7 @@ jobs:
           path: ${{ runner.temp }}/fix
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
-            --arg issue="#${ISSUE}" \\
+            --arg ticket="#${ISSUE}" \\
             --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
         env:
           ISSUE: ${{ github.event.issue.number }}
@@ -3558,17 +3565,17 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 
 # -- /implement: the chat-ops implementing verb -------------------------------------------------
 #
-# Two workflows rather than one, because they must not be one process. `implement/from-issue`
+# Two workflows rather than one, because they must not be one process. `implement/from-ticket`
 # runs unprivileged with the provider key and stages a change into an artifact;
 # `implement/propose` runs privileged with a write token and no provider key. The trampoline in
 # .github/workflows/implement.yml holds the trigger, the job split and the credentials — and
 # nothing else. Run the first half locally with:
 #
-#     in-lockstep run implement/from-issue --arg issue='#42' --approve --budget 2.00
+#     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
 
-from typing import Any
+from in_lockstep import RunContext
 
-from in_lockstep.adapters.ai.implement import AiImplement, Implement, ImplementSpec
+from in_lockstep.adapters.ai.implement import AiImplement, Implement
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
@@ -3614,6 +3621,9 @@ lockstep.bind(
     AiImplement(
         invoker_factory(lockstep.models.routes.get("implement", "")),
         registry=default_registry(),
+        # The registry's default for implement; named on the binding so `in-lockstep ls` prints
+        # how implementing happens. Swap for "implement/tdd" to require red-then-green.
+        strategy="implement/oneshot",
         repo_root=lockstep.repo.root,
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
@@ -3652,16 +3662,16 @@ lockstep.bind(Test, PytestTest())
 CHANGESET = "changeset"
 
 
-@workflow(id="implement/from-issue")
-async def implement_from_issue(ctx: Any, issue: str) -> Outcome:
-    """Read the issue, implement it, test the staged change, leave it in an artifact.
+@workflow(id="implement/from-ticket")
+async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
+    """Read the ticket, implement it, test the staged change, leave it in an artifact.
 
-    Writes nothing to the tree. The change set — and the verdict of running the suite against it —
-    travel to the job that holds a write token, and cross the guard again when they get there.
+    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
+    dispatcher fills it. Writes nothing to the tree. The change set — and the verdict of running
+    the suite against it — travel to the job that holds a write token, and cross the guard again
+    when they get there.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    ticket = await tickets.get(issue)
-    outcome = await ctx.do(Implement, ImplementSpec(ticket=ticket))
+    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)))
 
     report = outcome.value
     if report is not None and report.changeset.changes:
@@ -3674,22 +3684,22 @@ async def implement_from_issue(ctx: Any, issue: str) -> Outcome:
 
 
 @workflow(id="implement/propose")
-async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> Outcome:
-    """Open a change from a staged artifact, and say on the issue what happened.
+async def implement_propose(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
+) -> Outcome:
+    """Open a change from a staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. Everything it reads
     came from another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the
     set before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    scm: Scm = ctx.container.resolve(Scm)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 
     if not changeset.changes:
         # Still a comment. "It found nothing to change" is an answer, and a trigger that answers
         # only on success leaves somebody watching a thread that never replies.
-        await tickets.comment(await tickets.get(issue), "`/implement` staged no change.")
+        await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
     # Tests that ran and failed do not open a pull request: they open an `ai-generated` bug issue an
@@ -3697,7 +3707,7 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
     # not a failure — it opens a draft for a human, since its tests never ran.
     if verdict is not None and verdict.decided and not verdict.green:
         failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
-        source = await tickets.get(issue)
+        source = await tickets.get(ticket)
         opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
         reason = "implement.tests_failed" if opened is not None else "implement.attempts_exhausted"
         if opened is not None:
@@ -3711,15 +3721,15 @@ async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> 
         scm,
         changeset,
         ready=ready,
-        title=changeset.summary or f"Implement {issue}",
+        title=changeset.summary or f"Implement {ticket}",
         body=implement_body(changeset, verdict),
-        ticket=issue,
+        ticket=ticket,
         workflow="implement",
         run_id=ctx.run_id,
     )
     state = "ready for review" if ready else "a draft — its tests have not passed"
     await tickets.comment(
-        await tickets.get(issue),
+        await tickets.get(ticket),
         f"`/implement` opened {change.url or change.branch} as {state}. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")

@@ -1,12 +1,12 @@
 """An `Implement` strategy that charts before it builds.
 
 The framework ships no `Implement` adapter, so this file is what extending a verb actually looks
-like: a marker class for the interface, a spec, and something that satisfies `Action`. Nothing
-here is privileged — it is the same shape `PytestTest` has.
+like: a request dataclass and something that satisfies `Action`. Nothing here is privileged — it
+is the same shape `PytestTest` has.
 
 What makes it a *strategy* rather than just an adapter is that it changes how the verb proceeds
-without changing what a workflow asks for. A workflow says `ctx.do(Implement, spec)`; whether that
-means "write the code" or "chart the map and stop" is a binding decision.
+without changing what a workflow asks for. A workflow says `ctx.do(Implement(...))`; whether that
+means "write the code" or something else entirely is a binding decision.
 """
 
 from __future__ import annotations
@@ -15,9 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from in_lockstep import Capability, Finding, Outcome, Severity, Status, Verb
+from in_lockstep import Capability, Finding, Outcome, Severity, Status, Ticket, TicketState, Verb
 from in_lockstep.ai.context import ContextPackage
-from in_lockstep.platform.tickets.base import Ticket, TicketState
 
 #: Declared, not borrowed. Before `Verb` was opened this had to reuse a shipped member, and a
 #: charting run would have reported itself as `implement` in every span and metric even when it
@@ -25,22 +24,9 @@ from in_lockstep.platform.tickets.base import Ticket, TicketState
 CHART = Verb("chart")
 
 
-class Implement:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
-
-
-class Chart:
-    """A verb of its own, because charting is not implementing.
-
-    It writes nothing, spends differently, and succeeds by producing decisions. Sharing the
-    `implement` label would have put both under one heading in every span, metric and step id, and
-    the two runs a wayfinder map produces are exactly the two you want to tell apart.
-    """
-
-
 @dataclass(frozen=True)
-class ImplementSpec:
-    """One ticket, and the map it sits on.
+class MapRequest:
+    """One ticket, and the map it sits on — the shared shape of both wayfinder requests.
 
     `tickets` is the whole map rather than just the target, because the frontier is a property of
     the map: whether a ticket may be claimed depends on what blocks it.
@@ -49,10 +35,8 @@ class ImplementSpec:
     target: str
     tickets: tuple[Ticket, ...] = ()
     blocked_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    #: Charting produces decisions; working produces a change. Wayfinder's two sessions.
-    mode: str = "work"
 
-    # The queries below are about the map, not about whoever is reading it — both adapters ask
+    # The queries below are about the map, not about whoever is reading it — both requests ask
     # the same questions, and duplicating them across two classes is how two adapters end up
     # disagreeing about what the frontier is.
 
@@ -77,6 +61,22 @@ class ImplementSpec:
 
     def claimed(self) -> tuple[Ticket, ...]:
         return tuple(t for t in self.tickets if t.state is TicketState.IN_PROGRESS)
+
+
+@dataclass(frozen=True)
+class Chart(MapRequest):
+    """The Chart request: name the destination, map the frontier, and stop.
+
+    A request of its own, because charting is not implementing. It writes nothing, spends
+    differently, and succeeds by producing decisions. Sharing the `Implement` type would have put
+    both under one heading in every span, metric and step id, and the two runs a wayfinder map
+    produces are exactly the two you want to tell apart.
+    """
+
+
+@dataclass(frozen=True)
+class Implement(MapRequest):
+    """The Implement request: claim one unblocked ticket, resolve it, and nothing else."""
 
 
 @dataclass(frozen=True)
@@ -113,7 +113,7 @@ class WayfinderImplement:
         # prose. Here it is a number an adapter refuses to exceed.
         self.max_tickets_per_session = max_tickets_per_session
 
-    async def invoke(self, ctx: Any, inp: ImplementSpec) -> Outcome[Map]:
+    async def invoke(self, ctx: Any, inp: Implement) -> Outcome[Map]:
         target = inp.find(inp.target)
         if target is None:
             return _blocked(
@@ -145,12 +145,12 @@ class WayfinderImplement:
 
     # -- working --------------------------------------------------------------------
 
-    async def _work(self, ctx: Any, inp: ImplementSpec, target: Ticket) -> Outcome[Map]:
+    async def _work(self, ctx: Any, inp: Implement, target: Ticket) -> Outcome[Map]:
         if self.invoker_factory is None:
             return _blocked(
                 "wayfinder.no_invoker",
-                "working a ticket needs a model; bind an invoker factory, or run with mode='chart' "
-                "to plan without one.",
+                "working a ticket needs a model; bind an invoker factory, or ask for a Chart to "
+                "plan without one.",
             )
 
         package = ContextPackage(items=list(target.as_context()))
@@ -184,13 +184,13 @@ class WayfinderChart:
     verb: ClassVar[Verb] = CHART
     capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
 
-    async def invoke(self, ctx: Any, inp: ImplementSpec) -> Outcome[Map]:
+    async def invoke(self, ctx: Any, inp: Chart) -> Outcome[Map]:
         # No frontier check, deliberately. The destination of a map is blocked by definition —
         # that is what makes the work foggy and worth charting — so requiring it to be claimable
         # would make the first session of any effort impossible. Running the example caught that.
         return self._chart(inp)
 
-    def _chart(self, inp: ImplementSpec) -> Outcome[Map]:
+    def _chart(self, inp: Chart) -> Outcome[Map]:
         """Plan, do not deliver.
 
         `decided=True` and no `ChangeSet`, which is exactly the combination `Outcome` was built to
@@ -265,7 +265,7 @@ __all__ = [
     "CHART",
     "Chart",
     "Implement",
-    "ImplementSpec",
+    "MapRequest",
     "Map",
     "WayfinderChart",
     "WayfinderImplement",

@@ -179,24 +179,17 @@ class RunContext:
 
     def call(
         self,
-        iface: type[Any],
-        inp: object,
+        request: object,
         *,
-        using: str | None = None,
         step: str | None = None,
-        strategy: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> ActionCall:
-        """Declare an invocation without starting it."""
-        return ActionCall(
-            verb=None,
-            iface=iface,
-            input=inp,
-            using=using,
-            step=step,
-            strategy=strategy,
-            middleware=middleware,
-        )
+        """Declare a request without running it.
+
+        The request object is the whole ask: its type is what the container resolves an adapter
+        for, and its fields are the payload — `ctx.call(Review(base=..., head=...))`.
+        """
+        return ActionCall(request, step=step, middleware=middleware)
 
     async def run_call(self, call: ActionCall) -> Outcome[Any]:
         """Resolve the bound adapter, wrap it in the chain, and record the step."""
@@ -209,7 +202,7 @@ class RunContext:
                 reason="killswitch",
             )
 
-        action: Any = self.container.resolve(call.iface, call.using)
+        action: Any = self.container.resolve(call.iface)
         call.verb = verb_of(action)
         step_id = self._step_id(call)
         capabilities = capabilities_of(action)
@@ -247,18 +240,16 @@ class RunContext:
 
     async def do(
         self,
-        iface: type[Any],
-        inp: object,
+        request: object,
         *,
-        using: str | None = None,
         step: str | None = None,
-        strategy: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> Outcome[Any]:
-        """Declare and run. The composition of `call` and `run_call`, and nothing more."""
-        return await self.run_call(
-            self.call(iface, inp, using=using, step=step, strategy=strategy, middleware=middleware)
-        )
+        """Declare and run — `await ctx.do(Review(base=..., head=...))`.
+
+        The composition of `call` and `run_call`, and nothing more.
+        """
+        return await self.run_call(self.call(request, step=step, middleware=middleware))
 
     # -- step identity -------------------------------------------------------------
 

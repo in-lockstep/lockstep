@@ -8,19 +8,22 @@ DSL, because the container is already the registration mechanism.
 A verb is an interface; anything satisfying it can serve it.
 
 ```python
-from in_lockstep import Capability, Outcome, Verb
-from in_lockstep.core.types import TestReport, TestSpec
-from in_lockstep.adapters.pytest_adapter import Test   # the interface, not the implementation
+from in_lockstep import Capability, Outcome, Test, Verb
+from in_lockstep.core.types import TestReport
 
 class ToxTest:
     verb = Verb.TEST
     capabilities = frozenset({Capability.EXECUTES_CODE, Capability.READS_REPO})
 
-    async def invoke(self, ctx, spec: TestSpec) -> Outcome[TestReport]:
+    async def invoke(self, ctx, request: Test) -> Outcome[TestReport]:
         ...
 
 lockstep.bind(Test, ToxTest())
 ```
+
+`Test` is the request type: workflows do `ctx.do(Test(...))`, and the request's type is what the
+binding serves — so the same `Test` names both what a workflow asks for and what your adapter
+receives.
 
 `capabilities` is the part people skip and should not. Policy keys off it without knowing anything
 about your adapter: whether egress enforcement is mandatory, whether an approval gate applies,
@@ -33,25 +36,29 @@ transmission — a fetch tool mutates nothing and is still an egress channel.
 ## A verb of your own
 
 The shipped verbs are not a closed set. A verb is a name — a routing key and a telemetry label —
-so declaring one is constructing it, and the interface it serves is an ordinary marker class:
+so declaring one is constructing it, and the request it serves is an ordinary frozen dataclass:
 
 ```python
+from dataclasses import dataclass
+
 from in_lockstep import Capability, Outcome, Status, Verb
 
 BENCHMARK = Verb("benchmark")
 
+@dataclass(frozen=True)
 class Benchmark:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
+    """The Benchmark request. Workflows do `ctx.do(Benchmark(...))`; a binding decides what runs it."""
+    iterations: int = 100
 
 class PyperfBenchmark:
     verb = BENCHMARK
     capabilities = frozenset({Capability.EXECUTES_CODE})
 
-    async def invoke(self, ctx, spec) -> Outcome[dict]:
+    async def invoke(self, ctx, request) -> Outcome[dict]:
         ...
 
 lockstep.bind(Benchmark, PyperfBenchmark())
-outcome = await ctx.do(Benchmark, BenchSpec(iterations=1000))
+outcome = await ctx.do(Benchmark(iterations=1000))
 ```
 
 `Verb` used to be a closed enum, which made binding a new interface possible and *mislabelled*:
@@ -363,11 +370,12 @@ with `tdd.not_red`; an implementation that leaves the test failing comes back `t
 than opening a pull request that does not work.
 
 This is where the `run_script` caveat above stops applying: oneshot's `run_script` sees the tree as
-it was, but tdd's verdict comes from `ctx.do(Test, TestSpec(root=…))` against the *materialised*
+it was, but tdd's verdict comes from `ctx.do(Test(root=…))` against the *materialised*
 change, so it reflects the code as proposed. Because it needs to run the suite, `implement/tdd`
 requires a `Test` verb bound and refuses up front (`tdd.no_test`) if none is — it will not degrade to
-an untested oneshot. Select it per call (`--strategy implement/tdd`) or make it the default
-(`lockstep.strategies.default(Verb.IMPLEMENT, "implement/tdd")`).
+an untested oneshot. Select it per call (`--strategy implement/tdd`) or make it the binding's default
+(`AiImplement(..., strategy="implement/tdd")`) — which `in-lockstep ls` then prints beside the
+binding, so how implementing happens is visible without reading the adapter.
 
 ## The path a project takes
 
@@ -378,7 +386,7 @@ replace it.
 in `.lockstep/lockstep.py` and you run them by hand:
 
 ```bash
-in-lockstep run implement/from-issue --arg issue='#59' --approve --budget 2.00
+in-lockstep run implement/from-ticket --arg ticket='#59' --approve --budget 2.00
 ```
 
 `--approve` says you are the human watching. That is a real grant and a weak one, and the ledger
@@ -388,7 +396,7 @@ records it as `attended` so it is never confused with a stronger one.
 process changes: an event fires, and CI runs **the same command**.
 
 ```yaml
-- run: in-lockstep run implement/from-issue --arg issue="#${ISSUE}" --approved-by "${ACTOR}"
+- run: in-lockstep run implement/from-ticket --arg ticket="#${ISSUE}" --approved-by "${ACTOR}"
 ```
 
 `--approved-by` replaces `--approve` because nobody is watching, so the name *is* the grant and has
@@ -405,8 +413,9 @@ there.
 namespace. Bind an interface to an adapter, register strategies for it, and `in-lockstep ls` prints
 the result. See *A verb of your own* and *A strategy* above.
 
-**Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`, `TicketSource`
-and `LedgerStore` are protocols in `core/ports/`, and nothing in `core` knows what GitHub is. Both
+**Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`
+(`platform/scm`), `TicketSource` (`platform/tickets`) and `LedgerStore` (`core/ports/`) are
+protocols, and nothing in `core` knows what GitHub is. Both
 hosts now have implementations: `GitHubScm`/`GitHubIssues` and `GitLabScm`/`GitLabIssues` ship, and
 `hosted_scm()`/`hosted_tickets()` in `platform/hosted.py` pick the detected host's pair so a
 scaffold module runs unedited on either. What GitLab still lacks is the *comment* trigger:
@@ -422,15 +431,18 @@ alone.
 The rule is one line long: **process goes in `.lockstep/lockstep.py`, CI invokes it.**
 
 ```python
-@workflow(id="implement/from-issue")
-async def implement_from_issue(ctx, issue: str) -> Outcome:
-    ticket = await ctx.container.resolve(TicketSource).get(issue)
-    return await ctx.do(Implement, ImplementSpec(ticket=ticket))
+@workflow(id="implement/from-ticket")
+async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
+    return await ctx.do(Implement(ticket=await tickets.get(ticket)))
 ```
 
 ```bash
-in-lockstep run implement/from-issue --arg issue='#59' --budget 2.00
+in-lockstep run implement/from-ticket --arg ticket='#59' --budget 2.00
 ```
+
+The signature is the contract: `ticket` arrives from `--arg ticket=...`, and `tickets` is filled
+from the container because its annotation names a bound port — the dispatcher resolves
+`TicketSource` so the body never touches `ctx.container`.
 
 `--arg name=value` is repeatable and values arrive as strings, which usefully bounds what a
 CLI-runnable workflow can take: one needing a list of tickets takes a label or a path, not the

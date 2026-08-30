@@ -38,13 +38,10 @@ from .worktree import WorktreeError, materialize
 MAX_PATCH_CHARS = 20_000
 
 
-class Backport:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
-
-
 @dataclass(frozen=True)
-class BackportSpec:
-    """Which commits onto which line. Frozen: it is hashed for step identity.
+class Backport:
+    """The Backport request: which commits onto which line. Workflows do `ctx.do(Backport(...))`;
+    a binding decides what runs it. Frozen: it is hashed for step identity.
 
     `commits` empty means "discover": every commit on `source` since it diverged from `target`
     whose `Ticket:` trailer names `ticket.key`. Explicit SHAs win outright and need no ticket.
@@ -127,7 +124,7 @@ class GitBackport:
             else frozenset({Capability.READS_REPO, Capability.SPENDS_BUDGET, Capability.WRITES_FILES})
         )
 
-    async def invoke(self, ctx: Any, inp: BackportSpec) -> Outcome[BackportReport]:
+    async def invoke(self, ctx: Any, inp: Backport) -> Outcome[BackportReport]:
         # Option-confusion guards, as everywhere a ref becomes an argv token: none of these values
         # may steer git as a flag. `materialize` refuses the ref again — a rule enforced at one
         # point is enforced at none.
@@ -176,7 +173,7 @@ class GitBackport:
     async def _pick(
         self,
         ctx: Any,
-        inp: BackportSpec,
+        inp: Backport,
         start: str,
         shas: tuple[str, ...],
         picked: list[PickedCommit],
@@ -308,7 +305,7 @@ class GitBackport:
         )
 
     def _discover(
-        self, repo: GitLocal, inp: BackportSpec, start: str
+        self, repo: GitLocal, inp: Backport, start: str
     ) -> tuple[str, ...] | Outcome[BackportReport]:
         """Commits on `source` since it diverged from the target, filtered by `Ticket:` trailer."""
         key = str(getattr(inp.ticket, "key", "") or "")
@@ -374,7 +371,7 @@ def _write_resolutions(tree: str, conflict: Conflict, files: tuple[FileChange, .
     return None
 
 
-def _changeset_between(work: GitLocal, base: str, inp: BackportSpec) -> ChangeSet:
+def _changeset_between(work: GitLocal, base: str, inp: Backport) -> ChangeSet:
     """The picks as one ChangeSet relative to the target line.
 
     `--no-renames` on purpose: a rename becomes a delete and an add, which are the two operations
@@ -400,7 +397,7 @@ def _changeset_between(work: GitLocal, base: str, inp: BackportSpec) -> ChangeSe
 
 
 def _conflict_outcome(
-    inp: BackportSpec, conflict: Conflict, picked: list[PickedCommit], cost: Cost
+    inp: Backport, conflict: Conflict, picked: list[PickedCommit], cost: Cost
 ) -> Outcome[BackportReport]:
     """The honest stop: which pick, which files, and the exact commands a person runs.
 

@@ -30,27 +30,25 @@ class ActionCall:
     eager-only entry point would re-plumb the whole chain. So `ctx.do` is defined as
     `ctx.call` followed by `ctx.run_call`, and the declared form exists from the start even though
     nothing fans out at 1.0.
+
+    The request object carries both the payload and the dispatch key: `iface` is its type, and the
+    container resolves an adapter for that type. `verb` starts empty and is stamped after
+    resolution, from whatever adapter the binding chose.
     """
 
-    __slots__ = ("verb", "iface", "input", "using", "step", "strategy", "middleware")
+    __slots__ = ("verb", "iface", "input", "step", "middleware")
 
     def __init__(
         self,
-        verb: Verb | None,
-        iface: type[object],
-        input: object,
+        request: object,
         *,
-        using: str | None = None,
         step: str | None = None,
-        strategy: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> None:
-        self.verb = verb
-        self.iface = iface
-        self.input = input
-        self.using = using
+        self.verb: Verb | None = None
+        self.iface: type[object] = type(request)
+        self.input = request
         self.step = step
-        self.strategy = strategy
         self.middleware = tuple(middleware or ())
 
     def __repr__(self) -> str:
@@ -93,15 +91,16 @@ def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
     """What the action serving this call can do, or an empty set if nothing is bound.
 
     Every capability-aware middleware needs this and none of them can get it from the `ActionCall`:
-    a call names an *interface*, and capabilities belong to whatever is bound to serve it, which is
-    the whole point of binding. `Retry` and `ApprovalGate` each open-coded the same four lines, and
-    the obvious guess — `capabilities_of(call)` — silently returns an empty set, which fails *open*
-    for both of them. A helper that fails closed by construction is worth more than the four lines.
+    a call names a *request type*, and capabilities belong to whatever is bound to serve it, which
+    is the whole point of binding. `Retry` and `ApprovalGate` each open-coded the same four lines,
+    and the obvious guess — `capabilities_of(call)` — silently returns an empty set, which fails
+    *open* for both of them. A helper that fails closed by construction is worth more than the four
+    lines.
     """
     container = getattr(ctx, "container", None)
-    if container is None or not container.has(call.iface, call.using):
+    if container is None or not container.has(call.iface):
         return frozenset()
-    return capabilities_of(container.resolve(call.iface, call.using))
+    return capabilities_of(container.resolve(call.iface))
 
 
 class RefusesBudgetedActions:

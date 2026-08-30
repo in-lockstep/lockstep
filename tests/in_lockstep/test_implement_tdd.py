@@ -19,13 +19,13 @@ from typing import Any
 
 import pytest
 
-from in_lockstep.adapters.ai.implement import AiImplement, ImplementSpec
+from in_lockstep.adapters.ai.implement import AiImplement, Implement
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Status
 from in_lockstep.core.spend import Budget, Spend
-from in_lockstep.core.types import TestSpec
+from in_lockstep.core.types import Test
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
@@ -90,8 +90,8 @@ class Ctx:
 
         self.container = _Container()
 
-    async def do(self, _verb: object, spec: TestSpec):  # noqa: ANN202
-        return await PytestTest(args=["-q"]).invoke(self, spec)
+    async def do(self, request: Test):  # noqa: ANN202
+        return await PytestTest(args=["-q"]).invoke(self, request)
 
 
 def _ticket() -> Ticket:
@@ -130,7 +130,7 @@ _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3)
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), ImplementSpec(ticket=_ticket(), strategy="implement/tdd")
+            Ctx(test_bound=test_bound), Implement(ticket=_ticket(), strategy="implement/tdd")
         )
     )
 

@@ -43,17 +43,28 @@ Anthropic Console, add the identifiers, watch one green run, then delete the sec
 
 ## 3. TDD implement, triggered by a comment
 
-`/implement` on an issue runs `implement/from-issue` on the default branch. Making it
-test-driven is one strategy line; the shipped default is `implement/oneshot`, and the registry's
-comment explains why red-then-green costs a second model phase.
+`/implement` on an issue runs `implement/from-ticket` on the default branch. Making it
+test-driven is one argument on the binding; the shipped default is `implement/oneshot`, and the
+registry's comment explains why red-then-green costs a second model phase.
 
 ```python
-from in_lockstep.core.verbs import Verb
+from in_lockstep.adapters.ai.implement import AiImplement, Implement
+from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.strategies import default_registry
 
-strategies = default_registry()
-strategies.default(Verb.IMPLEMENT, "implement/tdd")
+lockstep.bind(
+    Implement,
+    AiImplement(
+        invoker_factory(lockstep.models.routes.get("implement", "")),
+        registry=default_registry(),
+        strategy="implement/tdd",
+    ),
+)
 ```
+
+Declared on the binding, `in-lockstep ls` prints it — `Implement -> AiImplement ...
+strategy=implement/tdd` — and a single request can still override it with
+`Implement(ticket=..., strategy=...)`.
 
 This repository's own [.lockstep/lockstep.py](../.lockstep/lockstep.py) is the full worked
 version — including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the

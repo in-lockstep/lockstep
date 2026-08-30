@@ -23,10 +23,6 @@ from ...privileged.egress import EgressRefused
 from ...prompts.review import LENSES, REVIEW_SCHEMA, ReviewParams, ReviewPrompt, review_layers
 
 
-class Review:
-    """The verb interface."""
-
-
 @dataclass(frozen=True)
 class ReviewFinding:
     path: str
@@ -49,11 +45,11 @@ class ReviewReport:
 
 
 @dataclass(frozen=True)
-class ReviewSpec:
-    """What to review. Frozen like every other spec in `core.types`.
+class Review:
+    """The Review request. Workflows do `ctx.do(Review(...))`; a binding decides what runs it.
 
-    It was the one mutable one, while also being hashed for step identity and serialized into
-    checkpoints — so a mutation after dispatch would have changed a key that had already been
+    Frozen like every request type: it is hashed for step identity and serialized into
+    checkpoints, so a mutation after dispatch would change a key that had already been
     written down.
     """
 
@@ -110,7 +106,7 @@ class AiReview:
         # adapter, and an adapter's lens map cannot leak back into the shipped one.
         self.lenses: Mapping[str, type[ReviewPrompt]] = dict(lenses) if lenses is not None else dict(LENSES)
 
-    async def invoke(self, ctx: Any, inp: ReviewSpec) -> Outcome[ReviewReport]:
+    async def invoke(self, ctx: Any, inp: Review) -> Outcome[ReviewReport]:
         lens = self.lenses.get(inp.aspect)
         if lens is None:
             return Outcome.blocked_by(
@@ -281,7 +277,7 @@ class AiReview:
             reason="exhausted" if invocation.exhausted else None,
         )
 
-    def _gather(self, inp: ReviewSpec) -> ContextPackage:
+    def _gather(self, inp: Review) -> ContextPackage:
         diff = inp.diff or _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
         if not diff.strip():
             # An empty diff is not a clean review, and running one would produce a confident

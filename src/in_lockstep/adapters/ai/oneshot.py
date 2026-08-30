@@ -33,7 +33,7 @@ from ...core.types import ChangeSet
 from ...core.verbs import Verb
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ._strategy import PhaseError, read_reply, reported, run_phase
-from .implement import ImplementReport, ImplementSession, ImplementSpec
+from .implement import Implement, ImplementReport, ImplementSession
 
 
 class OneshotImplement:
@@ -43,7 +43,7 @@ class OneshotImplement:
     verb: ClassVar[Verb] = Verb.IMPLEMENT
 
     async def execute(
-        self, ctx: Any, session: ImplementSession, inp: ImplementSpec
+        self, ctx: Any, session: ImplementSession, inp: Implement
     ) -> Outcome[ImplementReport]:
         lens = session.prompts.get(self.id)
         if lens is None:

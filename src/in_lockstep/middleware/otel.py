@@ -73,9 +73,9 @@ class OtelMiddleware:
         dimensions = {
             "verb": verb,
             "adapter": type(
-                ctx.container.resolve(call.iface, call.using)  # type: ignore[attr-defined]
+                ctx.container.resolve(call.iface)  # type: ignore[attr-defined]
             ).__name__
-            if getattr(ctx, "container", None) is not None and ctx.container.has(call.iface, call.using)  # type: ignore[attr-defined]
+            if getattr(ctx, "container", None) is not None and ctx.container.has(call.iface)  # type: ignore[attr-defined]
             else "unknown",
             "status": outcome.status.value,
             "decided": str(outcome.decided).lower(),

@@ -1,13 +1,12 @@
 """AI-backed verb adapters. Thin: they resolve a strategy and delegate to the invoker."""
 
-from .implement import AiImplement, Implement, ImplementReport, ImplementSession, ImplementSpec
+from .implement import AiImplement, Implement, ImplementReport, ImplementSession
 from .oneshot import OneshotImplement
-from .review import AiReview, Review, ReviewFinding, ReviewReport, ReviewSpec
-from .triage import AiTriage, Triage, TriageDecision, TriageSpec
+from .review import AiReview, Review, ReviewFinding, ReviewReport
+from .triage import AiTriage, Triage, TriageDecision
 
-# `ReviewSpec` is the verb's INPUT, and it was the one name missing here while both output types
-# were exported — so calling the only AI verb needed a three-level import while reading its result
-# did not. An input type is the harder half of a signature to discover, not the easier one.
+# The request type (`Review`, `Implement`, ...) is the verb's INPUT and its dispatch key, so it is
+# the first name a caller needs — exported beside the report types it produces.
 __all__ = [
     "AiImplement",
     "AiReview",
@@ -15,13 +14,10 @@ __all__ = [
     "Implement",
     "ImplementReport",
     "ImplementSession",
-    "ImplementSpec",
     "OneshotImplement",
     "Review",
     "ReviewFinding",
     "ReviewReport",
-    "ReviewSpec",
     "Triage",
     "TriageDecision",
-    "TriageSpec",
 ]

@@ -21,7 +21,7 @@ from in_lockstep.adapters.worktree import (
     materialize,
     verdict_over_staged,
 )
-from in_lockstep.core.types import ChangeSet, FileChange, TestSpec
+from in_lockstep.core.types import ChangeSet, FileChange, Test
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -243,7 +243,7 @@ def test_a_staged_change_becomes_a_red_or_green_verdict(tmp_path: Path) -> None:
 
     async def verdict(changeset: ChangeSet) -> str:
         async with materialize(str(root), changeset) as tree:
-            outcome = await adapter.invoke(ctx, TestSpec(root=tree))
+            outcome = await adapter.invoke(ctx, Test(root=tree))
             return outcome.status.value
 
     assert asyncio.run(verdict(failing)) == "failed"
@@ -264,8 +264,8 @@ class _Ctx:
 
         self.container = _Container()
 
-    async def do(self, _verb: object, spec: TestSpec):  # noqa: ANN202
-        return await PytestTest(args=["-q"]).invoke(self, spec)
+    async def do(self, request: Test):  # noqa: ANN202
+        return await PytestTest(args=["-q"]).invoke(self, request)
 
 
 def test_verdict_over_staged_reports_green_for_a_passing_staged_change(tmp_path: Path) -> None:
@@ -411,13 +411,13 @@ class _CwdRecordingSandbox:
 
 
 def test_test_spec_root_points_the_suite_at_the_worktree(tmp_path: Path) -> None:
-    """`TestSpec.root` wins over the adapter's bound cwd, which wins over the repo root."""
+    """`Test.root` wins over the adapter's bound cwd, which wins over the repo root."""
     sandbox = _CwdRecordingSandbox()
     adapter = PytestTest(cwd="/bound", sandbox=sandbox)
     ctx = type("C", (), {"repo": type("R", (), {"root": "/repo"})})()
 
-    asyncio.run(adapter.invoke(ctx, TestSpec(root="/materialized")))
+    asyncio.run(adapter.invoke(ctx, Test(root="/materialized")))
     assert sandbox.cwd == "/materialized"
 
-    asyncio.run(adapter.invoke(ctx, TestSpec()))
+    asyncio.run(adapter.invoke(ctx, Test()))
     assert sandbox.cwd == "/bound", "with no root, the bound cwd stands"

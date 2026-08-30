@@ -64,6 +64,60 @@ def workflow(fn: F | None = None, *, id: str | None = None) -> F | Callable[[F],
     return register
 
 
+def inject_ports(fn: Workflow, ctx: Any, provided: dict[str, Any]) -> dict[str, Any]:
+    """Resolve container-bound ports into a workflow's typed parameters.
+
+    A workflow signature is allowed to name what it needs — `tickets: TicketSource` — and the
+    dispatcher fills it from `ctx.container`, so the body starts with the port instead of with
+    `ctx.container.resolve(TicketSource)`. Only a parameter whose annotation is a class the
+    container has a binding for is filled; everything else (CLI strings, defaults) is left alone,
+    and a parameter the caller already supplied is never overridden. A workflow stays a plain
+    function: a test that passes its ports explicitly bypasses this entirely.
+    """
+    container = getattr(ctx, "container", None)
+    if container is None:
+        return dict(provided)
+
+    import inspect
+    import typing
+
+    try:
+        hints = typing.get_type_hints(fn)
+    except Exception:  # noqa: BLE001 - an unresolvable annotation is a signature problem, and the
+        # TypeError the call itself raises names the workflow; guessing here would not.
+        return dict(provided)
+
+    out = dict(provided)
+    for name in inspect.signature(fn).parameters:
+        if name == "ctx" or name in out:
+            continue
+        hint = hints.get(name)
+        if isinstance(hint, type) and container.has(hint):
+            out[name] = container.resolve(hint)
+    return out
+
+
+def injectable_parameters(fn: Workflow, ctx: Any) -> set[str]:
+    """Which of a workflow's parameters `inject_ports` would fill — for error messages that list
+    only the arguments a caller actually supplies."""
+    container = getattr(ctx, "container", None)
+    if container is None:
+        return set()
+
+    import inspect
+    import typing
+
+    try:
+        hints = typing.get_type_hints(fn)
+    except Exception:  # noqa: BLE001 - same contract as inject_ports
+        return set()
+    return {
+        name
+        for name in inspect.signature(fn).parameters
+        if name != "ctx" and isinstance(hints.get(name), type) and container.has(hints[name])
+    }
+
+
 def _same_declaration(existing: Workflow, incoming: Workflow) -> bool:
     """Whether these are the same `def`, not merely the same object.
 

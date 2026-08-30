@@ -535,7 +535,7 @@ def test_init_on_gitlab_writes_no_github_workflow_files(tmp_path: Path, monkeypa
     assert not (tmp_path / ".github").exists(), "GitHub YAML on a GitLab host is dead weight"
     assert "gitlab" in result.output and "docs/trampoline.md" in result.output
     module = (tmp_path / ".lockstep" / "lockstep.py").read_text()
-    assert "implement/from-issue" in module and "fix/from-issue" in module
+    assert "implement/from-ticket" in module and "fix/from-ticket" in module
 
 
 def test_init_leaves_an_existing_gitlab_ci_file_alone(tmp_path: Path, monkeypatch) -> None:

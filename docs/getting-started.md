@@ -126,15 +126,18 @@ ref rather than your working tree.
 A workflow asks for a verb; a binding decides what serves it.
 
 ```python
-from in_lockstep import workflow
+from in_lockstep import RunContext, Test, Validate, workflow
 
 @workflow(id="ci/check")
-async def check(ctx, paths):
-    validate = await ctx.do(Validate, ValidateSpec(paths=paths))
+async def check(ctx: RunContext, paths):
+    validate = await ctx.do(Validate(paths=paths))
     if validate.blocked:
         return validate
-    return await ctx.do(Test, TestSpec(paths=paths))
+    return await ctx.do(Test(paths=paths))
 ```
+
+The request is one object — `Test(paths=...)` — and its type is what the binding serves, so the
+call reads as what it does: do this Test.
 
 `ctx.do` returns an `Outcome`, and a red test suite is a `FAILED` outcome rather than an
 exception. Failure is data: workflows branch on it, and only programmer error unwinds the stack.

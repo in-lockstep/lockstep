@@ -17,7 +17,7 @@ So the loop here is two model steps with a real, deterministic `Test` run standi
    did not satisfy the test, and the change comes back `FAILED` with the verdict rather than opening
    a pull request that does not work.
 
-`ctx.do(Test, …)` needs a Test verb bound; without one there is no red and no green, so the strategy
+`ctx.do(Test(...))` needs a Test verb bound; without one there is no red and no green, so the strategy
 refuses up front rather than degrade to an untested oneshot in disguise.
 """
 
@@ -28,13 +28,12 @@ from typing import Any, ClassVar
 
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
-from ...core.types import ChangeSet, TestSpec
+from ...core.types import ChangeSet, Test
 from ...core.verbs import Verb
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
-from ..pytest_adapter import Test
 from ..worktree import head_state, materialize
 from ._strategy import PhaseError, read_reply, reported, run_phase, test_findings
-from .implement import ImplementReport, ImplementSession, ImplementSpec
+from .implement import Implement, ImplementReport, ImplementSession
 
 _RED_DIRECTIVE = (
     "Step 1 of 2 — the failing test.\n\n"
@@ -76,7 +75,7 @@ class TddImplement:
     verb: ClassVar[Verb] = Verb.IMPLEMENT
 
     async def execute(
-        self, ctx: Any, session: ImplementSession, inp: ImplementSpec
+        self, ctx: Any, session: ImplementSession, inp: Implement
     ) -> Outcome[ImplementReport]:
         container = getattr(ctx, "container", None)
         if container is None or not container.has(Test):
@@ -131,7 +130,7 @@ class TddImplement:
                 )
 
             async with materialize(session.repo_root, tests) as tree:
-                red = await ctx.do(Test, TestSpec(root=tree, expect="fail"))
+                red = await ctx.do(Test(root=tree, expect="fail"))
             if red.status is not Status.SUCCEEDED:
                 # The test did not fail: it passed against the current code, collected nothing, or
                 # errored on collection. Any of those means it captures nothing to implement.
@@ -200,7 +199,7 @@ class TddImplement:
         )
 
         async with materialize(session.repo_root, full) as tree:
-            green = await ctx.do(Test, TestSpec(root=tree, expect="pass"))
+            green = await ctx.do(Test(root=tree, expect="pass"))
         if green.status is not Status.SUCCEEDED:
             return Outcome(
                 status=Status.FAILED,
@@ -254,7 +253,7 @@ async def _revert_verify(
     undo = ChangeSet(changes=fix).inverse(before)
     reverted = _merge(full, undo)  # full with the implementation undone -> HEAD + the test
     async with materialize(session.repo_root, reverted) as tree:
-        recheck = await ctx.do(Test, TestSpec(root=tree, expect="fail"))
+        recheck = await ctx.do(Test(root=tree, expect="fail"))
     if recheck.status is Status.SUCCEEDED:  # expect="fail" satisfied -> red again
         return [
             Finding(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
@@ -36,8 +37,11 @@ from in_lockstep.middleware.otel import Recorder, otel
 from in_lockstep.middleware.retry import Retry
 
 
+@dataclass(frozen=True)
 class Thing:
-    """A verb interface."""
+    """A verb request."""
+
+    payload: str = ""
 
 
 class Ok:
@@ -173,7 +177,7 @@ def test_killswitch_halts_before_any_adapter_runs(monkeypatch) -> None:
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter))
     monkeypatch.setenv(DISABLE_ENV, "1")
-    outcome = asyncio.run(ctx.do(Thing, "x"))
+    outcome = asyncio.run(ctx.do(Thing("x")))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "killswitch"
     assert adapter.calls == 0, "the adapter must not have executed"
@@ -184,7 +188,7 @@ def test_killswitch_is_not_middleware(monkeypatch) -> None:
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter), middleware=[])
     monkeypatch.setenv(DISABLE_ENV, "1")
-    assert asyncio.run(ctx.do(Thing, "x")).reason == "killswitch"
+    assert asyncio.run(ctx.do(Thing("x"))).reason == "killswitch"
     assert adapter.calls == 0
 
 
@@ -195,19 +199,19 @@ def test_do_is_call_then_run_call() -> None:
     """Branches must be describable before they run; an eager-only entry point forecloses that."""
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter))
-    call = ctx.call(Thing, "payload")
+    call = ctx.call(Thing("payload"))
     assert adapter.calls == 0, "declaring must not start it"
     outcome = asyncio.run(ctx.run_call(call))
-    assert outcome.value == "payload"
+    assert outcome.value == Thing("payload")
     assert adapter.calls == 1
 
 
 def test_step_ids_are_scoped_and_stable() -> None:
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter))
-    asyncio.run(ctx.do(Thing, "a"))
+    asyncio.run(ctx.do(Thing("a")))
     first = ctx.last_step
-    asyncio.run(ctx.do(Thing, "a"))
+    asyncio.run(ctx.do(Thing("a")))
     second = ctx.last_step
     assert first is not None and second is not None
     assert first.scope_path == "", "flat at 1.0, structured so branches can key their own space"
@@ -242,7 +246,7 @@ def test_unbound_interface_says_so() -> None:
 def test_middleware_wraps_and_records() -> None:
     recorder = Recorder()
     ctx, _ = ctx_with((Thing, Ok(cost=Cost(usd=0.25))), middleware=[otel(recorder)])
-    asyncio.run(ctx.do(Thing, "x"))
+    asyncio.run(ctx.do(Thing("x")))
     assert len(recorder.spans) == 1
     names = {m.name for m in recorder.metrics}
     assert "in_lockstep.action.outcome" in names
@@ -253,7 +257,7 @@ def test_decided_is_a_metric_dimension() -> None:
     """Without it, an eval suite that judged nothing reads green on every dashboard."""
     recorder = Recorder()
     ctx, _ = ctx_with((Thing, Ok()), middleware=[otel(recorder)])
-    asyncio.run(ctx.do(Thing, "x"))
+    asyncio.run(ctx.do(Thing("x")))
     outcome_metric = next(m for m in recorder.metrics if m.name == "in_lockstep.action.outcome")
     assert "decided" in outcome_metric.dimensions
 
@@ -262,7 +266,7 @@ def test_metrics_carry_no_run_id() -> None:
     """run_id on a metric is unbounded cardinality. It belongs on spans."""
     recorder = Recorder()
     ctx, _ = ctx_with((Thing, Ok()), middleware=[otel(recorder)])
-    asyncio.run(ctx.do(Thing, "x"))
+    asyncio.run(ctx.do(Thing("x")))
     for metric in recorder.metrics:
         assert "run_id" not in metric.dimensions
     assert any("in_lockstep.run_id" in s.attributes for s in recorder.spans)
@@ -271,7 +275,7 @@ def test_metrics_carry_no_run_id() -> None:
 def test_retry_targets_errored_only() -> None:
     adapter = Flaky(fail_times=2)
     ctx, _ = ctx_with((Thing, adapter), middleware=[Retry(attempts=3, base_delay=0)])
-    outcome = asyncio.run(ctx.do(Thing, "x"))
+    outcome = asyncio.run(ctx.do(Thing("x")))
     assert outcome.succeeded
     assert adapter.calls == 3
 
@@ -280,17 +284,17 @@ def test_gate_retry_5_refuses_to_retry_a_budgeted_action() -> None:
     """Re-invoking a loop re-pays every turn already spent."""
     adapter = Spender()
     ctx, _ = ctx_with((Thing, adapter), middleware=[Retry(attempts=3, base_delay=0)])
-    outcome = asyncio.run(ctx.do(Thing, "x"))
+    outcome = asyncio.run(ctx.do(Thing("x")))
     assert adapter.calls == 1, "must be invoked exactly once"
     assert any(f.id == "retry.refused_budgeted_action" for f in outcome.findings)
 
 
 def test_budget_blocks_when_the_ceiling_is_already_crossed() -> None:
     ctx, _ = ctx_with((Thing, Ok(cost=Cost(usd=5.0))), middleware=[CostBudget(usd=1.0)])
-    first = asyncio.run(ctx.do(Thing, "x"))
+    first = asyncio.run(ctx.do(Thing("x")))
     assert first.status is Status.BLOCKED, "reconciliation catches the overrun"
     assert first.reason and first.reason.startswith("budget:")
-    second = asyncio.run(ctx.do(Thing, "y"))
+    second = asyncio.run(ctx.do(Thing("y")))
     assert second.status is Status.BLOCKED, "and the next call is refused up front"
 
 
@@ -447,12 +451,11 @@ def test_no_tests_collected_is_undecided_not_a_pass() -> None:
     import asyncio
 
     from in_lockstep.adapters.pytest_adapter import PytestTest
-    from in_lockstep.adapters.pytest_adapter import Test as TestVerb
-    from in_lockstep.core.types import TestSpec
+    from in_lockstep.core.types import Test
 
     ctx, container = ctx_with()
-    container.bind(TestVerb, PytestTest(args=["-q", "--no-header"], cwd="."))
-    outcome = asyncio.run(ctx.do(TestVerb, TestSpec(paths=("src/in_lockstep/core",))))
+    container.bind(Test, PytestTest(args=["-q", "--no-header"], cwd="."))
+    outcome = asyncio.run(ctx.do(Test(paths=("src/in_lockstep/core",))))
 
     assert outcome.status is Status.SUCCEEDED, "collecting nothing is not a red suite"
     assert not outcome.decided, "and it is not a green one either"
@@ -482,7 +485,7 @@ def test_capabilities_for_reads_the_binding_not_the_call() -> None:
     lockstep = Lockstep.detect()
     lockstep.bind(Iface, Dangerous())
     ctx = lockstep.context(run_id="caps")
-    call = ActionCall(verb=None, iface=Iface, input=None)
+    call = ActionCall(Iface())
 
     assert capabilities_for(ctx, call) == frozenset({Capability.WRITES_FILES})
     # The trap, asserted so it cannot be mistaken for equivalent.
@@ -496,7 +499,7 @@ def test_capabilities_for_is_empty_when_nothing_is_bound() -> None:
     class Unbound: ...
 
     ctx = Lockstep.detect().context(run_id="caps")
-    assert capabilities_for(ctx, ActionCall(verb=None, iface=Unbound, input=None)) == frozenset()
+    assert capabilities_for(ctx, ActionCall(Unbound())) == frozenset()
 
 
 # -- Verb: open to extension, identical for the verbs that shipped ---------------------------
@@ -566,7 +569,8 @@ def test_a_custom_verb_labels_its_own_telemetry() -> None:
 
     class Benchmark: ...
 
-    call = ActionCall(verb=Verb("benchmark"), iface=Benchmark, input=None)
+    call = ActionCall(Benchmark())
+    call.verb = Verb("benchmark")
     assert call.verb is not None
     assert call.verb.value == "benchmark"
     assert "benchmark" in repr(call)
@@ -744,7 +748,7 @@ def test_gate_ledger_5_holds_for_what_a_run_actually_emits() -> None:
         (Thing, Ok(cost=Cost(usd=0.25, input_tokens=10, output_tokens=5, priced_tokens=15))),
         middleware=[otel(recorder)],
     )
-    asyncio.run(ctx.do(Thing, "x"))
+    asyncio.run(ctx.do(Thing("x")))
 
     assert recorder.metrics, "nothing was emitted, so this asserted nothing"
     for metric in recorder.metrics:

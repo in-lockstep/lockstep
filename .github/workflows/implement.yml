@@ -2,7 +2,7 @@
 #
 # THIS FILE CONTAINS NO LIFECYCLE LOGIC. What `/implement` actually does — read the issue, run the
 # strategy, stage a change, open a pull request, say what happened on the thread — is
-# `implement/from-issue` and `implement/propose` in `lockstep.py`, where it is Python that can be
+# `implement/from-ticket` and `implement/propose` in `lockstep.py`, where it is Python that can be
 # read, tested and run on a laptop. `in-lockstep ls` prints both.
 #
 # What is here is what belongs to the CI system and cannot be expressed anywhere else: the trigger,
@@ -111,8 +111,8 @@ jobs:
       # turn 4-5 with ~$2.1-2.3 projected. Cumulative per run, not per turn: the check is
       # spent-so-far plus a worst-case next turn, before each call.
       - run: |
-          uv run in-lockstep run implement/from-issue \
-            --arg issue="#${ISSUE}" \
+          uv run in-lockstep run implement/from-ticket \
+            --arg ticket="#${ISSUE}" \
             --approved-by "${ACTOR}" \
             --budget 25.00
         env:
@@ -182,7 +182,7 @@ jobs:
           path: ${{ runner.temp }}/implement
       - run: |
           uv run in-lockstep run implement/propose \
-            --arg issue="#${ISSUE}" \
+            --arg ticket="#${ISSUE}" \
             --arg artifact="${RUNNER_TEMP}/implement/changeset"
         env:
           ISSUE: ${{ github.event.issue.number }}

@@ -57,16 +57,13 @@ DEFAULT_TURNS = 40
 DEFAULT_MAX_TOKENS = 8192
 
 
-class Implement:
-    """The verb interface."""
-
-
 @dataclass(frozen=True)
-class ImplementSpec:
-    """What to implement, and how it was chosen.
+class Implement:
+    """The Implement request: what to implement, and how it was chosen. Workflows do
+    `ctx.do(Implement(...))`; a binding decides what runs it.
 
     Frozen because it is hashed for step identity and serialized into checkpoints, like every
-    other spec — a mutation after dispatch would change a key already written down.
+    other request type — a mutation after dispatch would change a key already written down.
     """
 
     #: The ticket, whose text is untrusted by construction: anyone who can file one can write
@@ -121,7 +118,7 @@ class ImplementSession:
     guard: ChangeGuard
     repo_root: str = "."
 
-    def context(self, spec: ImplementSpec) -> ContextPackage:
+    def context(self, spec: Implement) -> ContextPackage:
         """The ticket, curated. Provenance comes from `Ticket.as_context`, not from here."""
         items: list[ContextItem] = list(spec.ticket.as_context())
         return self.curator.curate(items, ContextNeed(token_budget=spec.token_budget))
@@ -143,6 +140,7 @@ class AiImplement:
         invoker_factory: Callable[[Any], AiInvoker],
         *,
         registry: StrategyRegistry,
+        strategy: str = "",
         repo_root: str = ".",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
@@ -154,6 +152,11 @@ class AiImplement:
     ) -> None:
         self.invoker_factory = invoker_factory
         self.registry = registry
+        # The binding's default strategy, so `lockstep.bind(Implement, AiImplement(...,
+        # strategy="implement/tdd"))` says at the binding how implementing happens, and
+        # `in-lockstep ls` can print it. A request that names its own strategy still wins;
+        # empty falls through to the registry's default for the verb.
+        self.strategy = strategy
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
         self.curator = curator or ContextCurator()
@@ -173,11 +176,13 @@ class AiImplement:
         # lockstep.py is where data enters, visibly.
         self.layers = layers
 
-    async def invoke(self, ctx: Any, inp: ImplementSpec) -> Outcome[ImplementReport]:
+    async def invoke(self, ctx: Any, inp: Implement) -> Outcome[ImplementReport]:
         try:
+            # Precedence: the request's own strategy, then the binding's, then the registry's
+            # default for the verb. The untrusted-selection gate applies to whichever won.
             registration = self.registry.select(
                 Verb.IMPLEMENT,
-                explicit=inp.strategy or None,
+                explicit=inp.strategy or self.strategy or None,
                 from_untrusted_input=inp.untrusted_selection,
             )
         except StrategyRefused as e:

@@ -6,13 +6,11 @@ import json
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import ValidateSpec, ValidationFinding, ValidationReport
+from ..core.types import Validate, ValidationFinding, ValidationReport
 from ..core.verbs import Capability, Verb
 from .sandbox import Sandbox
 
-
-class Validate:
-    """The verb interface."""
+__all__ = ["RuffValidate", "Validate"]
 
 
 class RuffValidate:
@@ -30,7 +28,7 @@ class RuffValidate:
         # ruff loads repository configuration, so this runs out of process too.
         self.sandbox = sandbox or Sandbox()
 
-    async def invoke(self, ctx: object, inp: ValidateSpec) -> Outcome[ValidationReport]:
+    async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
         cmd = ["ruff", "check", "--output-format", "json", *(inp.paths or ("."))]
         rules = [*self.select, *inp.rules]
         if rules:

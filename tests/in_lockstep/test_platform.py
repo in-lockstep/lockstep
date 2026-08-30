@@ -682,7 +682,7 @@ def test_gate_ledger_6_no_emitted_metric_carries_it() -> None:
     lockstep = Lockstep.detect()
     lockstep.bind(_Iface := type("Iface", (), {}), _Emitting())
     lockstep.middleware += [otel(recorder)]
-    aio.run(lockstep.context(run_id="m").do(_Iface, None))
+    aio.run(lockstep.context(run_id="m").do(_Iface()))
 
     assert recorder.metrics, "nothing was emitted, so this asserted nothing"
     for metric in recorder.metrics:

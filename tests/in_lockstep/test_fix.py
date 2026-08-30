@@ -17,13 +17,13 @@ from typing import Any
 
 import pytest
 
-from in_lockstep.adapters.ai.fix import AiFix, FixSpec
+from in_lockstep.adapters.ai.fix import AiFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Status
 from in_lockstep.core.spend import Budget, Spend
-from in_lockstep.core.types import TestSpec
+from in_lockstep.core.types import Test
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
@@ -82,8 +82,8 @@ class Ctx:
 
         self.container = _Container()
 
-    async def do(self, _verb: object, spec: TestSpec):  # noqa: ANN202
-        return await PytestTest(args=["-q"]).invoke(self, spec)
+    async def do(self, request: Test):  # noqa: ANN202
+        return await PytestTest(args=["-q"]).invoke(self, request)
 
 
 def _ticket() -> Ticket:
@@ -122,7 +122,7 @@ def repo(tmp_path: Path) -> Path:
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), FixSpec(ticket=_ticket(), strategy="fix/diagnose-then-fix")
+            Ctx(test_bound=test_bound), Fix(ticket=_ticket(), strategy="fix/diagnose-then-fix")
         )
     )
 

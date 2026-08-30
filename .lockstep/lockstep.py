@@ -13,11 +13,9 @@ first entry in the protected-path deny list, and why it is loaded from a trusted
 from whichever branch is under review.
 """
 
-from typing import Any
-
-from in_lockstep import Lockstep
+from in_lockstep import Lockstep, RunContext
 from in_lockstep.adapters import PytestTest, RuffValidate
-from in_lockstep.adapters.ai.implement import AiImplement, Implement, ImplementSpec
+from in_lockstep.adapters.ai.implement import AiImplement, Implement
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
@@ -27,7 +25,6 @@ from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
-from in_lockstep.core.verbs import Verb
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
@@ -152,10 +149,12 @@ lockstep.bind(EgressPolicy, egress)
 # $2.00 was a hundredfold headroom, which is not a ceiling so much as a formality.
 lockstep.budget = Budget(usd=25.00, wall_seconds=900)
 
-# -- the ports those workflows resolve ----------------------------------------------
+# -- the ports those workflows receive ----------------------------------------------
 #
-# Bound here rather than constructed inside the workflows, so `in-lockstep ls` can print what will
-# actually run and a test can substitute either one without touching the process.
+# Bound here rather than constructed inside the workflows: a workflow names what it needs in its
+# signature (`tickets: TicketSource`) and the dispatcher fills it from these bindings — so
+# `in-lockstep ls` can print what will actually run, and a test can substitute either one by
+# passing its own or rebinding, without touching the process.
 lockstep.bind(TicketSource, GitHubIssues())
 lockstep.bind(Scm, GitHubScm())
 
@@ -164,12 +163,7 @@ lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
 lockstep.models.route("implement", "anthropic:claude-opus-4-6")
 lockstep.models.route("triage", "local:qwen3-8b")
 
-# `implement/tdd` rather than the shipped `implement/oneshot` default: red then green, with the
-# Test verb bound above confirming both. It costs two model phases, which is a choice this
-# repository makes deliberately — the registry's comment on the default explains why it is not
-# everyone's.
 strategies = default_registry()
-strategies.default(Verb.IMPLEMENT, "implement/tdd")
 
 # -- the implementing verb ----------------------------------------------------------
 #
@@ -186,6 +180,12 @@ lockstep.bind(
     AiImplement(
         invoker_factory(lockstep.models.routes.get("implement", ""), egress=egress),
         registry=strategies,
+        # `implement/tdd` rather than the shipped `implement/oneshot` default: red then green,
+        # with the Test verb bound above confirming both. It costs two model phases, which is a
+        # choice this repository makes deliberately — the registry's comment on the default
+        # explains why it is not everyone's. Declared on the binding so `in-lockstep ls` prints
+        # it next to the adapter; a request's own `Implement(strategy=...)` still wins.
+        strategy="implement/tdd",
         repo_root=lockstep.repo.root,
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
@@ -236,7 +236,7 @@ lockstep.middleware += [
 # different token scopes, and keeping an API key out of the job that can write is the reason there
 # are two jobs at all.
 #
-# Two workflows rather than one, for that same reason. `implement/from-issue` runs unprivileged
+# Two workflows rather than one, for that same reason. `implement/from-ticket` runs unprivileged
 # with the provider key and emits an artifact; `implement/propose` runs privileged with a write
 # token and no provider key. They cannot be one function, because they must not be one process.
 
@@ -244,20 +244,20 @@ lockstep.middleware += [
 CHANGESET = "changeset"
 
 
-@workflow(id="implement/from-issue")
-async def implement_from_issue(ctx: Any, issue: str, actor: str = "") -> Outcome:
-    """Read the issue, implement it, leave the change staged in an artifact.
+@workflow(id="implement/from-ticket")
+async def implement_from_ticket(
+    ctx: RunContext, ticket: str, tickets: TicketSource, actor: str = ""
+) -> Outcome:
+    """Read the ticket, implement it, leave the change staged in an artifact.
 
-    Writes nothing. The change set travels to the job that holds a write token, and crosses the
-    guard again when it gets there.
+    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
+    dispatcher fills it. Writes nothing. The change set travels to the job that holds a write
+    token, and crosses the guard again when it gets there.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    ticket = await tickets.get(issue)
-
     # `--approved-by` in CLI terms: a named human asked for this specific run, and the actor gate
     # verified them before this job started. Recorded, because a grant nobody can be traced to is
     # not much of a grant.
-    outcome = await ctx.do(Implement, ImplementSpec(ticket=ticket))
+    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)))
 
     report = outcome.value
     if report is not None and report.changeset.changes:
@@ -267,38 +267,38 @@ async def implement_from_issue(ctx: Any, issue: str, actor: str = "") -> Outcome
 
 
 @workflow(id="implement/propose")
-async def implement_propose(ctx: Any, issue: str, artifact: str = CHANGESET) -> Outcome:
-    """Open a change from a staged artifact, and say on the issue what happened.
+async def implement_propose(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
+) -> Outcome:
+    """Open a change from a staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. Everything it reads came
     from another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set
     before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
-    tickets: TicketSource = ctx.container.resolve(TicketSource)
-    scm: Scm = ctx.container.resolve(Scm)
     changeset = read_changeset(artifact)
 
     if not changeset.changes:
         # Still a comment. A trigger that answers only on success leaves somebody watching a
         # thread that never got a reply, and "it found nothing to change" is an answer.
-        await tickets.comment(await tickets.get(issue), "`/implement` staged no change.")
+        await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
     change = await scm.open_change(
         changeset,
-        title=changeset.summary or f"Implement {issue}",
+        title=changeset.summary or f"Implement {ticket}",
         body=(
-            "Written by an implement strategy and read by nobody. The issue body is untrusted input "
+            "Written by an implement strategy and read by nobody. The ticket body is untrusted input "
             "to a model that held write tools, so review this as you would a change from a "
             "stranger who had read your repository — the controls bound where it could write, "
             "not what it thought."
         ),
-        ticket=issue,
+        ticket=ticket,
         workflow="implement",
         run_id=ctx.run_id,
     )
     await tickets.comment(
-        await tickets.get(issue),
+        await tickets.get(ticket),
         f"`/implement` opened {change.url or change.branch}. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")

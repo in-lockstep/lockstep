@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
@@ -27,11 +28,12 @@ class Counting:
         self.calls += 1
         if self.fail_on is not None and self.calls == self.fail_on:
             raise RuntimeError("the runner was killed here")
-        return Outcome(status=Status.SUCCEEDED, value=f"{inp}-{self.calls}", cost=Cost(usd=0.01))
+        return Outcome(status=Status.SUCCEEDED, value=f"{inp.payload}-{self.calls}", cost=Cost(usd=0.01))
 
 
+@dataclass(frozen=True)
 class Thing:
-    pass
+    payload: str = ""
 
 
 def ctx(tmp_path: Path, adapter, *, recovering: bool = False, run_id: str = "r1") -> RunContext:
@@ -49,11 +51,11 @@ def ctx(tmp_path: Path, adapter, *, recovering: bool = False, run_id: str = "r1"
 def test_a_completed_step_is_replayed_not_rerun(tmp_path: Path) -> None:
     adapter = Counting()
     first = ctx(tmp_path, adapter)
-    original = asyncio.run(first.do(Thing, "payload", step="one"))
+    original = asyncio.run(first.do(Thing("payload"), step="one"))
     assert adapter.calls == 1
 
     resumed = ctx(tmp_path, adapter, recovering=True)
-    replayed = asyncio.run(resumed.do(Thing, "payload", step="one"))
+    replayed = asyncio.run(resumed.do(Thing("payload"), step="one"))
     assert adapter.calls == 1, "the step must not run twice"
     assert replayed.value == original.value
     assert any(f.id == "recover.replayed" for f in replayed.findings)
@@ -63,14 +65,14 @@ def test_recovery_continues_past_the_step_that_died(tmp_path: Path) -> None:
     """The scenario: a CI timeout in the middle of a multi-step run."""
     adapter = Counting(fail_on=2)
     first = ctx(tmp_path, adapter)
-    asyncio.run(first.do(Thing, "a", step="one"))
+    asyncio.run(first.do(Thing("a"), step="one"))
     with pytest.raises(RuntimeError, match="killed"):
-        asyncio.run(first.do(Thing, "b", step="two"))
+        asyncio.run(first.do(Thing("b"), step="two"))
 
     healthy = Counting()
     resumed = ctx(tmp_path, healthy, recovering=True)
-    replayed = asyncio.run(resumed.do(Thing, "a", step="one"))
-    fresh = asyncio.run(resumed.do(Thing, "b", step="two"))
+    replayed = asyncio.run(resumed.do(Thing("a"), step="one"))
+    fresh = asyncio.run(resumed.do(Thing("b"), step="two"))
 
     assert healthy.calls == 1, "step one replayed, step two ran"
     assert "recover.replayed" in {f.id for f in replayed.findings}
@@ -83,8 +85,8 @@ def test_without_a_store_it_is_just_a_python_function(tmp_path: Path) -> None:
     container = Container()
     container.bind(Thing, adapter)
     plain = RunContext(run_id="r", repo=RepoInfo(root="."), container=container)
-    asyncio.run(plain.do(Thing, "x"))
-    asyncio.run(plain.do(Thing, "x"))
+    asyncio.run(plain.do(Thing("x")))
+    asyncio.run(plain.do(Thing("x")))
     assert adapter.calls == 2
     assert not (tmp_path / "r").exists()
 

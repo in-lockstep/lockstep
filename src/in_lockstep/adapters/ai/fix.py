@@ -44,13 +44,10 @@ DEFAULT_TURNS = 40
 DEFAULT_MAX_TOKENS = 8192
 
 
-class Fix:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
-
-
 @dataclass(frozen=True)
-class FixSpec:
-    """Which bug to fix, and how the strategy was chosen. Frozen: it is hashed for step identity."""
+class Fix:
+    """The Fix request: which bug to fix, and how the strategy was chosen. Workflows do
+    `ctx.do(Fix(...))`; a binding decides what runs it. Frozen: it is hashed for step identity."""
 
     #: The bug report, untrusted by construction — anyone who can file one writes into this prompt.
     ticket: Any
@@ -97,7 +94,7 @@ class FixSession:
     guard: ChangeGuard
     repo_root: str = "."
 
-    def context(self, spec: FixSpec) -> ContextPackage:
+    def context(self, spec: Fix) -> ContextPackage:
         items: list[ContextItem] = list(spec.ticket.as_context())
         return self.curator.curate(items, ContextNeed(token_budget=spec.token_budget))
 
@@ -118,6 +115,7 @@ class AiFix:
         invoker_factory: Callable[[Any], AiInvoker],
         *,
         registry: StrategyRegistry,
+        strategy: str = "",
         repo_root: str = ".",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
@@ -129,6 +127,9 @@ class AiFix:
     ) -> None:
         self.invoker_factory = invoker_factory
         self.registry = registry
+        # The binding's default strategy — see AiImplement, which carries the reasoning. A request
+        # that names its own still wins; empty falls through to the registry's default.
+        self.strategy = strategy
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
         self.curator = curator or ContextCurator()
@@ -142,11 +143,11 @@ class AiFix:
         # `fix_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
         self.layers = layers
 
-    async def invoke(self, ctx: Any, inp: FixSpec) -> Outcome[FixReport]:
+    async def invoke(self, ctx: Any, inp: Fix) -> Outcome[FixReport]:
         try:
             registration = self.registry.select(
                 Verb.FIX,
-                explicit=inp.strategy or None,
+                explicit=inp.strategy or self.strategy or None,
                 from_untrusted_input=inp.untrusted_selection,
             )
         except StrategyRefused as e:
@@ -188,7 +189,7 @@ class DiagnoseThenFix:
     id: ClassVar[str] = "fix/diagnose-then-fix"
     verb: ClassVar[Verb] = Verb.FIX
 
-    async def execute(self, ctx: Any, session: FixSession, inp: FixSpec) -> Outcome[FixReport]:
+    async def execute(self, ctx: Any, session: FixSession, inp: Fix) -> Outcome[FixReport]:
         container = getattr(ctx, "container", None)
         if container is None or not container.has(Test):
             return _blocked(
@@ -227,7 +228,7 @@ class DiagnoseThenFix:
                 )
 
             async with materialize(session.repo_root, reproducer) as tree:
-                red = await ctx.do(Test, _test_spec(tree, "fail"))
+                red = await ctx.do(_test_spec(tree, "fail"))
             if red.status is not Status.SUCCEEDED:
                 return Outcome(
                     status=Status.FAILED,
@@ -299,7 +300,7 @@ class DiagnoseThenFix:
         findings = reported(full, malformed=malformed, invocations=(repro_inv, fix_inv), prefix="fix")
 
         async with materialize(session.repo_root, full) as tree:
-            green = await ctx.do(Test, _test_spec(tree, "pass"))
+            green = await ctx.do(_test_spec(tree, "pass"))
         if green.status is not Status.SUCCEEDED:
             return Outcome(
                 status=Status.FAILED,
@@ -341,9 +342,9 @@ class DiagnoseThenFix:
 
 
 def _test_spec(tree: str, expect: str) -> Any:
-    from ...core.types import TestSpec
+    from ...core.types import Test
 
-    return TestSpec(root=tree, expect=expect)
+    return Test(root=tree, expect=expect)
 
 
 def _fix_specification(reproducer: ChangeSet, red: Any) -> str:

@@ -14,7 +14,6 @@ from in_lockstep.adapters import CommandTest, CommandValidate, detected_bindings
 from in_lockstep.adapters.command import Test, Validate
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.ruff_adapter import RuffValidate
-from in_lockstep.core.types import TestSpec, ValidateSpec
 from in_lockstep.lockstep import _detect_facts
 
 
@@ -133,13 +132,13 @@ class _FakeSandbox:
 
 def test_command_test_maps_a_clean_exit_to_success() -> None:
     adapter = CommandTest(["npm", "test"], sandbox=_FakeSandbox(0))
-    outcome = asyncio.run(adapter.invoke(None, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(None, Test()))
     assert outcome.status.value == "succeeded"
 
 
 def test_command_test_maps_a_nonzero_exit_to_failure() -> None:
     adapter = CommandTest(["npm", "test"], sandbox=_FakeSandbox(1, stdout="1 failed"))
-    outcome = asyncio.run(adapter.invoke(None, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(None, Test()))
     assert outcome.status.value == "failed"
     assert any(f.id == "test.expectation_unmet" for f in outcome.findings)
 
@@ -156,7 +155,7 @@ def test_command_test_reads_a_junit_report_for_per_test_cases(tmp_path: Path) ->
     )
     adapter = CommandTest(["pytest"], sandbox=_FakeSandbox(1), junit="report.xml")
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
-    outcome = asyncio.run(adapter.invoke(ctx, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(ctx, Test()))
     report = outcome.value
     assert report.total == 3 and report.failed == 1 and report.skipped == 1
     assert {c.id for c in report.cases} == {"a::ok", "a::bad", "a::skip"}
@@ -167,7 +166,7 @@ def test_command_test_with_a_junit_report_that_collected_nothing_decides_nothing
     (tmp_path / "report.xml").write_text("<testsuite></testsuite>")
     adapter = CommandTest(["pytest"], sandbox=_FakeSandbox(0), junit="report.xml")
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
-    outcome = asyncio.run(adapter.invoke(ctx, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(ctx, Test()))
     assert not outcome.decided, "a runner that collected nothing decided nothing"
     assert any(f.id == "test.no_tests_collected" for f in outcome.findings)
 
@@ -177,7 +176,7 @@ def test_a_red_run_is_decided_even_when_the_junit_report_is_missing(tmp_path: Pa
     red run into 'decided nothing' — a nonzero exit is a verdict."""
     adapter = CommandTest(["npm", "test"], sandbox=_FakeSandbox(1), junit="nowhere.xml")
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
-    outcome = asyncio.run(adapter.invoke(ctx, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(ctx, Test()))
     assert outcome.status.value == "failed"
     assert outcome.decided, "a red run is decided regardless of the report"
 
@@ -186,16 +185,16 @@ def test_a_clean_exit_with_a_junit_report_that_ran_nothing_decides_nothing(tmp_p
     (tmp_path / "r.xml").write_text("<testsuite></testsuite>")
     adapter = CommandTest(["x"], sandbox=_FakeSandbox(0), junit="r.xml")
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
-    outcome = asyncio.run(adapter.invoke(ctx, TestSpec()))
+    outcome = asyncio.run(adapter.invoke(ctx, Test()))
     assert outcome.status.value == "succeeded" and not outcome.decided
 
 
 def test_the_selector_is_passed_when_the_runner_knows_how(tmp_path: Path) -> None:
-    """`TestSpec.selector` narrows to one test only if the adapter is told the runner's flag; the
+    """`Test.selector` narrows to one test only if the adapter is told the runner's flag; the
     seam is real so a reproducer is not silently widened to the whole suite."""
     sandbox = _FakeSandbox(0)
     adapter = CommandTest(["jest"], sandbox=sandbox, selector_arg=("--testNamePattern",))
-    asyncio.run(adapter.invoke(None, TestSpec(selector="login")))
+    asyncio.run(adapter.invoke(None, Test(selector="login")))
     assert sandbox.commands[0] == ["jest", "--testNamePattern", "login"]
 
 
@@ -210,16 +209,16 @@ def test_a_junit_error_keeps_its_error_outcome(tmp_path: Path) -> None:
 def test_command_test_expect_fail_inverts_the_verdict() -> None:
     """A reproducer that does not fail proves nothing."""
     green = CommandTest(["x"], sandbox=_FakeSandbox(0))
-    assert asyncio.run(green.invoke(None, TestSpec(expect="fail"))).status.value == "failed"
+    assert asyncio.run(green.invoke(None, Test(expect="fail"))).status.value == "failed"
     red = CommandTest(["x"], sandbox=_FakeSandbox(1))
-    assert asyncio.run(red.invoke(None, TestSpec(expect="fail"))).status.value == "succeeded"
+    assert asyncio.run(red.invoke(None, Test(expect="fail"))).status.value == "succeeded"
 
 
 def test_command_validate_maps_exit_code_and_surfaces_output() -> None:
     clean = CommandValidate(["eslint"], sandbox=_FakeSandbox(0))
-    assert asyncio.run(clean.invoke(None, ValidateSpec())).status.value == "succeeded"
+    assert asyncio.run(clean.invoke(None, Validate())).status.value == "succeeded"
     dirty = CommandValidate(["eslint"], sandbox=_FakeSandbox(2, stdout="3 problems"))
-    outcome = asyncio.run(dirty.invoke(None, ValidateSpec()))
+    outcome = asyncio.run(dirty.invoke(None, Validate()))
     assert outcome.status.value == "failed"
     assert "3 problems" in outcome.findings[0].message
 

@@ -533,7 +533,7 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch)
 
     CliRunner().invoke(main, ["init", "--implement"])
     text = (repo / ".lockstep/lockstep.py").read_text()
-    assert "implement/from-issue" in text and "implement/propose" in text
+    assert "implement/from-ticket" in text and "implement/propose" in text
 
     state = snapshot()
     try:
@@ -541,9 +541,9 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch)
         lockstep = lockstep_from(module)
         assert lockstep.container.has(Scm)
         assert lockstep.container.has(TicketSource)
-        # Test is bound now too, so from-issue can run the suite against the staged change.
+        # Test is bound now too, so from-ticket can run the suite against the staged change.
         assert lockstep.container.has(Test)
-        assert get("implement/from-issue") is not None
+        assert get("implement/from-ticket") is not None
         assert get("implement/propose") is not None
     finally:
         restore(state)
@@ -561,7 +561,7 @@ def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
 
     CliRunner().invoke(main, ["init", "--fix"])
     text = (repo / ".lockstep/lockstep.py").read_text()
-    assert "fix/from-issue" in text and "fix/propose" in text
+    assert "fix/from-ticket" in text and "fix/propose" in text
 
     state = snapshot()
     try:
@@ -571,7 +571,7 @@ def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
         assert lockstep.container.has(Scm)
         assert lockstep.container.has(TicketSource)
         assert lockstep.container.has(Test)
-        assert get("fix/from-issue") is not None
+        assert get("fix/from-ticket") is not None
         assert get("fix/propose") is not None
     finally:
         restore(state)
@@ -619,8 +619,8 @@ def test_init_implement_and_fix_compose_without_binding_twice(repo: Path) -> Non
         lockstep = lockstep_from(module)
         assert lockstep.container.has(Implement)
         assert lockstep.container.has(Fix)
-        assert get("implement/from-issue") is not None
-        assert get("fix/from-issue") is not None
+        assert get("implement/from-ticket") is not None
+        assert get("fix/from-ticket") is not None
         # One approval gate, not two: the fix block guards adding its own.
         gates = [m for m in lockstep.middleware if getattr(m, "provides_approval", False)]
         assert len(gates) == 1
@@ -636,7 +636,7 @@ def test_init_implement_will_not_clobber_an_unrecognised_module(repo: Path) -> N
     result = CliRunner().invoke(main, ["init", "--implement"])
     assert result.exit_code == 0
     text = (repo / ".lockstep/lockstep.py").read_text()
-    assert "implement/from-issue" not in text, "must not append binds to a module it cannot verify"
+    assert "implement/from-ticket" not in text, "must not append binds to a module it cannot verify"
     assert "not a recognisable lockstep module" in result.output
 
 
@@ -647,7 +647,7 @@ def test_init_implement_guard_is_a_parse_not_a_substring(repo: Path) -> None:
     (repo / ".lockstep" / "lockstep.py").write_text("# lockstep config, hand-written\nls = None\n")
     result = CliRunner().invoke(main, ["init", "--implement"])
     text = (repo / ".lockstep/lockstep.py").read_text()
-    assert "implement/from-issue" not in text
+    assert "implement/from-ticket" not in text
     assert "not a recognisable lockstep module" in result.output
 
 
@@ -1748,6 +1748,48 @@ def test_a_signature_mismatch_names_the_parameters(repo: Path) -> None:
     assert "Traceback" not in result.output
 
 
+def test_a_typed_port_parameter_is_injected_from_the_container(repo: Path) -> None:
+    """The signature names the port, the dispatcher fills it.
+
+    A workflow parameter annotated with a container-bound class arrives resolved — the body never
+    touches `ctx.container` — and the error message for a missing CLI argument lists only the
+    arguments a caller actually supplies, not the injected ports.
+    """
+    _workflow_repo(
+        repo,
+        "class Port:\n"
+        "    def greeting(self):\n"
+        "        return 'hello from the port'\n"
+        "lockstep.bind(Port, Port())\n"
+        "@workflow(id='demo/ports')\n"
+        "async def demo(ctx, who: str, port: Port):\n"
+        "    return Outcome(status=Status.SUCCEEDED, findings=(\n"
+        "        __import__('in_lockstep').Finding(id='hi', message=f'{port.greeting()} {who}'),))\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/ports", "--arg", "who=world"])
+    assert "hello from the port world" in result.output, result.output
+
+    mismatch = CliRunner().invoke(main, ["run", "demo/ports"])
+    assert mismatch.exit_code != 0
+    assert "It takes who" in mismatch.output, mismatch.output
+    assert "port" not in mismatch.output.split("It takes")[1].splitlines()[0], (
+        "the injected port is not an argument the caller supplies"
+    )
+
+
+def test_a_supplied_argument_is_never_overridden_by_injection(repo: Path) -> None:
+    """`--arg` wins: injection fills only what the caller left empty."""
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/override')\n"
+        "async def demo(ctx, who: str = 'default'):\n"
+        "    return Outcome(status=Status.SUCCEEDED, findings=(\n"
+        "        __import__('in_lockstep').Finding(id='hi', message=f'got {who}'),))\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/override", "--arg", "who=explicit"])
+    assert "got explicit" in result.output, result.output
+
+
 def test_a_malformed_arg_is_refused(repo: Path) -> None:
     _workflow_repo(
         repo,
@@ -1888,7 +1930,7 @@ def test_a_workflow_needing_a_human_refuses_when_nobody_asked(repo: Path) -> Non
 
     async def go(approval: Approval) -> object:
         ctx.approval = approval
-        call = ActionCall(verb=None, iface=Implement, input=None)
+        call = ActionCall(Implement(ticket=None))
 
         async def nxt() -> object:
             from in_lockstep.core.outcome import Outcome

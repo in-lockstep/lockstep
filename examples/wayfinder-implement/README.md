@@ -65,7 +65,7 @@ class Implement:
     """Workflows ask for this; a binding decides what serves it."""
 ```
 
-That is the entire mechanism. `ctx.do(Implement, spec)` resolves whatever is bound, so *which
+That is the entire mechanism. `ctx.do(Implement(...))` resolves whatever is bound, so *which
 strategy runs* is a binding decision and a workflow never has to know.
 
 ### Charting gets a verb of its own

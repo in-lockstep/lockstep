@@ -77,9 +77,9 @@ def review_comment(aspect: str, outcome: Any) -> str:
 
 
 #: The warning every implement PR body carries. The change came from a model that read untrusted
-#: issue text while holding write tools, and the reviewer has to know that before reading a line.
+#: ticket text while holding write tools, and the reviewer has to know that before reading a line.
 _UNTRUSTED_WARNING = (
-    "The issue body is untrusted input to a model that held write tools, so review this as you "
+    "The ticket body is untrusted input to a model that held write tools, so review this as you "
     "would a change from a stranger who had read your repository — the controls bound where it "
     "could write, not what it thought."
 )
