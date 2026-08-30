@@ -77,7 +77,7 @@ jobs:
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          #ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Workload identity federation. Identifiers, not secrets — see implement.yml. The
           # framework mints the GitHub JWT itself; no fetch step belongs in this file.
           ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu

@@ -123,7 +123,7 @@ jobs:
           # Optional once federation is configured: a static key set here still wins (an
           # explicitly set key is somebody meaning it), and its absence is what routes the
           # framework to the federation path below.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          #ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Workload identity federation. These four are identifiers, not secrets — putting one
           # in `secrets` would seed Redact with it and mask it out of the errors that name it.
           # The framework mints the GitHub JWT itself (with the audience the federation rule
