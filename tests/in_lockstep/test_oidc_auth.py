@@ -271,7 +271,7 @@ def test_the_refusal_now_names_the_federation_path(monkeypatch) -> None:
 
 
 def _client_kwargs(monkeypatch, creds, settings=None) -> dict:
-    import anthropic
+    anthropic = pytest.importorskip("anthropic", reason="client tests need the provider extra")
 
     from in_lockstep.llm.interface import ProviderSettings
     from in_lockstep.llm.providers.anthropic import AnthropicProvider
@@ -291,7 +291,8 @@ def _client_kwargs(monkeypatch, creds, settings=None) -> dict:
 def test_the_client_gets_the_federation_credentials_object(monkeypatch) -> None:
     """The identifiers arrive through settings — the provider reads no environment
     (GATE-AUTH-1) — and parameterise the SDK's own token exchange."""
-    from anthropic.lib.credentials import WorkloadIdentityCredentials
+    credentials_lib = pytest.importorskip("anthropic.lib.credentials")
+    WorkloadIdentityCredentials = credentials_lib.WorkloadIdentityCredentials
 
     from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
 
@@ -324,3 +325,17 @@ def test_a_static_key_reaches_the_client_as_before(monkeypatch) -> None:
     kwargs = _client_kwargs(monkeypatch, Credentials(values={"api_key": SecretStr("sk-ant-x-12345678")}))
     assert kwargs["api_key"] == "sk-ant-x-12345678"
     assert "credentials" not in kwargs
+
+
+def test_a_service_account_name_is_refused_before_any_exchange(monkeypatch) -> None:
+    """The name-vs-id trap, caught locally: the Console shows the NAME, the exchange wants the
+    svac_-tagged id, and this run's own HTTP 400 is the round-trip this guard replaces."""
+    from in_lockstep.ai.bootstrap import MissingCredential, default_registry
+
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
+    monkeypatch.setenv("ANTHROPIC_SERVICE_ACCOUNT_ID", "in-lockstep-gh-sa")
+    with pytest.raises(MissingCredential, match="svac_"):
+        default_registry(Auth())
+
+    monkeypatch.setenv("ANTHROPIC_SERVICE_ACCOUNT_ID", "svac_0123abc")
+    default_registry(Auth())

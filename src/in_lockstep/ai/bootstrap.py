@@ -118,6 +118,26 @@ def _anthropic_workspace() -> str:
     )
 
 
+#: Service-account ids are tagged, like workspace ids. Checked locally for the same reason:
+#: the natural mistake is the account's NAME — which is what the Console displays — and the
+#: token exchange refuses it with an HTTP 400 after a network round-trip that teaches nothing
+#: about where the right value lives. This run proved it: `in-lockstep-gh-sa` went to the
+#: exchange and came back `service_account_id: does not have prefix 'svac_'`.
+SERVICE_ACCOUNT_PREFIX = "svac_"
+
+
+def _anthropic_service_account() -> str:
+    value = os.environ.get("ANTHROPIC_SERVICE_ACCOUNT_ID", "").strip()
+    if not value or value.startswith(SERVICE_ACCOUNT_PREFIX):
+        return value
+    raise MissingCredential(
+        f"ANTHROPIC_SERVICE_ACCOUNT_ID is {value!r}, which looks like a service-account name "
+        f"rather than its id. The id is tagged {SERVICE_ACCOUNT_PREFIX}… and appears in the "
+        f"Console when you open the service account. Unset it to let the federation rule "
+        f"decide, or set the tagged id. Nothing was sent and nothing was charged."
+    )
+
+
 def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     """The zero-config set. A repository re-registers any of these in its own module."""
     auth = auth or Auth()
@@ -137,7 +157,7 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         for key, value in (
             ("federation-rule-id", os.environ.get("ANTHROPIC_FEDERATION_RULE_ID", "")),
             ("federation-organization-id", os.environ.get("ANTHROPIC_ORGANIZATION_ID", "")),
-            ("federation-service-account-id", os.environ.get("ANTHROPIC_SERVICE_ACCOUNT_ID", "")),
+            ("federation-service-account-id", _anthropic_service_account()),
         )
         if value
     }
