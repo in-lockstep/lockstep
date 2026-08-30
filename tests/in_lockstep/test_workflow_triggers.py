@@ -83,9 +83,15 @@ def test_every_expression_function_exists(path: Path) -> None:
         for expression in re.findall(r"\$\{\{(.*?)\}\}", text, re.DOTALL)
         for name in _CALL.findall(expression)
     }
-    # `if:` bodies are expressions without the braces.
-    for block in re.findall(r"^\s*if:\s*(>-|\|)?\s*\n?((?:.*\n)*?)(?=^\s*\w+:)", text, re.MULTILINE):
-        used |= set(_CALL.findall(block[1]))
+    # `if:` bodies are expressions without the braces. The lookahead ends the body at the next YAML
+    # key, and that key is frequently hyphenated — `runs-on:`, `timeout-minutes:`. `\w+` does not
+    # match a hyphen, so the body used to run on past those and swallow whatever followed, which
+    # made any later prose containing `word (` read as a call to a function GitHub does not have.
+    # Comments are dropped for the same reason: a `#` line inside the captured region is not an
+    # expression, and treating it as one produces a failure about a trigger from a sentence.
+    for block in re.findall(r"^\s*if:\s*(>-|\|)?\s*\n?((?:.*\n)*?)(?=^\s*[\w-]+:)", text, re.MULTILINE):
+        body = "\n".join(line for line in block[1].splitlines() if not line.lstrip().startswith("#"))
+        used |= set(_CALL.findall(body))
     unknown = used - EXPRESSION_FUNCTIONS
     assert not unknown, f"{path.name} calls {sorted(unknown)}, which GitHub does not provide"
 

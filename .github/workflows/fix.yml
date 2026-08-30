@@ -62,7 +62,11 @@ jobs:
   fix:
     needs: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Longer than the session deadline the module declares (`deadline_seconds=1800`, 30 minutes).
+    # A job timeout skips the remaining steps, so if GitHub wins that race the history bundle and
+    # the artifact upload below never run, and the run that most needs a record is the one that
+    # loses it. The framework has to be the thing that stops first.
+    timeout-minutes: 35
     permissions:
       contents: read
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the bug report.

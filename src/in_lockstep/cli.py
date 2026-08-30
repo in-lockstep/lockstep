@@ -3343,7 +3343,13 @@ jobs:
   implement:
     needs: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Longer than the session deadline the module declares (`deadline_seconds=1800`, 30 minutes),
+    # and deliberately so. A job timeout does not run the remaining steps, so if the host wins that
+    # race the history bundle and the artifact upload below never happen — the run that most needs
+    # a record is exactly the one that loses it. The framework has to be the thing that stops
+    # first. The margin covers what this step still does after the session ends: running the suite
+    # against the staged change, and serializing the change set.
+    timeout-minutes: 40
     permissions:
       contents: read
       # Read-only, and needed: the workflow resolves TicketSource to fetch the issue.
@@ -3603,7 +3609,11 @@ jobs:
   fix:
     needs: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Longer than the session deadline the module declares (`deadline_seconds=1800`, 30 minutes).
+    # A job timeout skips the remaining steps, so if the host wins that race the history bundle and
+    # the artifact upload below never run, and the run that most needs a record is the one that
+    # loses it. The framework has to be the thing that stops first.
+    timeout-minutes: 35
     permissions:
       contents: read
       issues: read
@@ -3702,7 +3712,11 @@ jobs:
       github.event.label.name == 'ai-generated' ||
       contains(github.event.issue.labels.*.name, 'ai-generated')
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Longer than the session deadline the module declares (`deadline_seconds=1800`, 30 minutes).
+    # A job timeout skips the remaining steps, so if the host wins that race the history bundle and
+    # the artifact upload below never run, and the run that most needs a record is the one that
+    # loses it. The framework has to be the thing that stops first.
+    timeout-minutes: 35
     permissions:
       contents: read
       issues: read
