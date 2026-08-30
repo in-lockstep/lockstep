@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.adapters.ai.rfe import AiRfe, RfeDraft, RfeSpec
+from in_lockstep.adapters.ai.rfe import AiRfe, Rfe, RfeDraft
 from in_lockstep.ai.context import Provenance
 from in_lockstep.ai.invoker import AiInvoker
 from in_lockstep.ai.retry import RetryPolicy
@@ -70,8 +70,8 @@ _GOOD = json.dumps(
 )
 
 
-def _spec() -> RfeSpec:
-    return RfeSpec(idea="it would be nice if report could produce csv for spreadsheets", key="idea")
+def _spec() -> Rfe:
+    return Rfe(idea="it would be nice if report could produce csv for spreadsheets", key="idea")
 
 
 def test_an_idea_becomes_a_draft() -> None:
@@ -109,7 +109,7 @@ def test_the_idea_is_sent_as_untrusted_context() -> None:
 
 def test_an_empty_idea_is_refused_before_a_token_is_spent() -> None:
     adapter, provider = _adapter(_GOOD)
-    outcome = asyncio.run(adapter.invoke(None, RfeSpec(idea="   ")))
+    outcome = asyncio.run(adapter.invoke(None, Rfe(idea="   ")))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "rfe.no_idea"
     assert provider.calls == []
@@ -129,7 +129,7 @@ def test_from_ticket_carries_title_body_and_discussion() -> None:
         description = "for spreadsheets"
         comments = ("also tsv would help",)
 
-    spec = RfeSpec.from_ticket(_Ticket())
+    spec = Rfe.from_ticket(_Ticket())
     assert spec.key == "#7"
     for fragment in ("csv export", "for spreadsheets", "also tsv would help"):
         assert fragment in spec.idea

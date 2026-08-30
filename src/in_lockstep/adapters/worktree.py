@@ -6,7 +6,7 @@ working tree measures the code as it was, not as it would be. Goal 5's own exemp
 whether a change works.
 
 This builds the tree the change proposes — HEAD (or a named ref) plus the change — in a throwaway
-git worktree, hands back its path, and tears it down. `ctx.do(Test, TestSpec(root=that))` then runs
+git worktree, hands back its path, and tears it down. `ctx.do(Test(root=that))` then runs
 the suite against the change without the change ever touching the real working tree.
 
 A throwaway worktree, not an in-place apply, on purpose:
@@ -25,7 +25,7 @@ pointing at `<repo>/.git/worktrees/<id>`, a path outside the tree itself. `Sandb
 path bind-mounts only the run cwd, so inside a container that gitlink dangles: a normal suite runs
 (pytest does not read `.git`), but git-dependent tooling in the suite — `setuptools_scm`, a
 coverage git integration — cannot resolve the repository. The subprocess path is unaffected. When
-`implement/from-issue` runs Test in a container (slice 2, alongside item 14's sandbox work), the
+`implement/from-ticket` runs Test in a container (slice 2, alongside item 14's sandbox work), the
 mount has to reach the gitlink or the tree has to be self-contained; until then this is a worktree
 run against a container, not a claim that git works inside one.
 """
@@ -41,8 +41,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from ..core.types import ChangeSet, FileChange, TestReport, TestSpec, TestVerdict
-from .pytest_adapter import Test
+from ..core.types import ChangeSet, FileChange, Test, TestReport, TestVerdict
 
 
 class WorktreeError(RuntimeError):
@@ -130,7 +129,7 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
     if not ctx.container.has(Test):
         return None
     async with materialize(repo_root, changeset) as tree:
-        outcome = await ctx.do(Test, TestSpec(root=tree))
+        outcome = await ctx.do(Test(root=tree))
     report = outcome.value if outcome.value is not None else TestReport()
     return TestVerdict.of(outcome.status.value, outcome.decided, report)
 
@@ -228,7 +227,7 @@ def _apply_change(worktree: Path, change: FileChange) -> None:
 async def materialize(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD") -> AsyncIterator[str]:
     """`ref` (default HEAD) plus `changeset`, in a throwaway worktree. Yields its path; removes it.
 
-    Use as `async with materialize(root, changeset) as tree: await ctx.do(Test, TestSpec(root=tree))`.
+    Use as `async with materialize(root, changeset) as tree: await ctx.do(Test(root=tree))`.
     """
     # `ref` is an argv token to `git` (no shell), so this is option-confusion, not injection: a ref
     # like `--lock` would be read by `git worktree add` as a flag. A commit-ish never begins with a

@@ -22,9 +22,9 @@ import re
 import subprocess
 from pathlib import Path
 
-from wayfinder import ImplementSpec
+from wayfinder import Chart, Implement
 
-from in_lockstep.platform.tickets.base import Ticket, TicketState
+from in_lockstep import Ticket, TicketState
 
 #: `Blocked by: #12, #13` — case-insensitive, comma or space separated.
 BLOCKED_BY = re.compile(r"blocked\s*by\s*:?\s*((?:#\d+[,\s]*)+)", re.IGNORECASE)
@@ -50,9 +50,9 @@ def load_map(
     label: str = "wayfinder",
     destination: str = "",
     root: Path | str = ".",
-    mode: str = "chart",
+    request: type[Chart] | type[Implement] = Chart,
     limit: int = 50,
-) -> ImplementSpec:
+) -> Chart | Implement:
     """Every issue carrying `label`, as a map.
 
     A label rather than a milestone or a project, because a label is the cheapest thing to add to
@@ -94,11 +94,12 @@ def load_map(
         for i in issues
     )
     blocked_by = {t.key: blockers_in(t.description) for t in tickets}
-    return ImplementSpec(
+    # `request` is which session this map is for — the Chart or Implement type itself, since the
+    # request's type is what `ctx.do` dispatches on.
+    return request(
         target=destination or (tickets[0].key if tickets else ""),
         tickets=tickets,
         blocked_by={k: v for k, v in blocked_by.items() if v},
-        mode=mode,
     )
 
 

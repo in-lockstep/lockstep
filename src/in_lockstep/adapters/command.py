@@ -14,10 +14,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import TestCase, TestReport, TestSpec, ValidateSpec, ValidationReport
+from ..core.types import Test, TestCase, TestReport, Validate, ValidationReport
 from ..core.verbs import Capability, Verb
-from .pytest_adapter import Test
-from .ruff_adapter import Validate
 from .sandbox import Sandbox
 
 __all__ = ["CommandTest", "CommandValidate", "Test", "Validate", "parse_junit"]
@@ -51,13 +49,13 @@ class CommandTest:
         # `jest --reporters=jest-junit` or `pytest --junitxml=`. Read after the run so
         # `TestReport.cases` is populated; absent, the report carries counts from the exit code.
         self.junit = junit
-        # How this runner narrows to one test, so `TestSpec.selector` is honoured rather than
+        # How this runner narrows to one test, so `Test.selector` is honoured rather than
         # silently dropped — pytest's `-k`, jest's `--testNamePattern`, go's `-run`. Empty means
         # the runner is not told, and a selector then widens to the whole suite; a reproducer that
         # needs one test isolated must supply this, or the narrowing is lost.
         self.selector_arg = tuple(selector_arg)
 
-    async def invoke(self, ctx: object, inp: TestSpec) -> Outcome[TestReport]:
+    async def invoke(self, ctx: object, inp: Test) -> Outcome[TestReport]:
         # A per-call `root` (a materialized worktree) wins over the bound `cwd` wins over the
         # repo's root: the spec is how a workflow points one bound adapter at a staged change
         # without rebinding it.
@@ -138,7 +136,7 @@ class CommandValidate:
         self.cwd = cwd
         self.sandbox = sandbox or Sandbox()
 
-    async def invoke(self, ctx: object, inp: ValidateSpec) -> Outcome[ValidationReport]:
+    async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
         result = await self.sandbox.run([*self.command, *(inp.paths or ())], cwd=cwd)
         clean = result.exit_code == 0

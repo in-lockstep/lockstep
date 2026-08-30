@@ -1,32 +1,34 @@
-"""AI-backed verb adapters. Thin: they resolve a strategy and delegate to the invoker."""
+"""AI-backed verb adapters. The strategies ARE the adapters: `lockstep.bind(Implement, TDD(...))`."""
 
-from .implement import AiImplement, Implement, ImplementReport, ImplementSession, ImplementSpec
-from .oneshot import OneshotImplement
-from .review import AiReview, Review, ReviewFinding, ReviewReport, ReviewSpec
-from .rfe import AiRfe, Rfe, RfeDraft, RfeSpec
-from .triage import AiTriage, Triage, TriageDecision, TriageSpec
+from .fix import DiagnoseThenFix, Fix, FixReport, FixSession
+from .implement import Implement, ImplementReport, ImplementSession
+from .oneshot import Oneshot
+from .review import AiReview, Review, ReviewFinding, ReviewReport
+from .rfe import AiRfe, Rfe, RfeDraft
+from .tdd import TDD
+from .triage import AiTriage, Triage, TriageDecision
 
-# `ReviewSpec` is the verb's INPUT, and it was the one name missing here while both output types
-# were exported — so calling the only AI verb needed a three-level import while reading its result
-# did not. An input type is the harder half of a signature to discover, not the easier one.
+# The request type (`Review`, `Implement`, ...) is the verb's INPUT and its dispatch key, and the
+# strategy classes are what a binding names — both halves of `bind(Implement, TDD(...))` are
+# exported here so a lockstep.py needs no deep imports.
 __all__ = [
-    "AiImplement",
     "AiReview",
     "AiRfe",
     "AiTriage",
+    "DiagnoseThenFix",
+    "Fix",
+    "FixReport",
+    "FixSession",
     "Implement",
     "ImplementReport",
     "ImplementSession",
-    "ImplementSpec",
-    "OneshotImplement",
+    "Oneshot",
     "Review",
     "ReviewFinding",
     "ReviewReport",
-    "ReviewSpec",
     "Rfe",
     "RfeDraft",
-    "RfeSpec",
+    "TDD",
     "Triage",
     "TriageDecision",
-    "TriageSpec",
 ]

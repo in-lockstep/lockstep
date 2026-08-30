@@ -43,13 +43,16 @@ class AiBackportResolver:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[BackportPrompt]] | None = None,
         prompt_id: str = "backport/conflict-resolver",
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
         # One turn: the resolver is handed everything it may see, so a second turn has no tool
         # result to react to. `max_tokens` is the large number here, not the turn count — the
@@ -77,7 +80,10 @@ class AiBackportResolver:
         system = prompt.system(layers) + "\n\n" + schema_instruction(BACKPORT_SCHEMA)
         params = BackportParams(commit=conflict.commit, subject=conflict.subject, paths=conflict.paths)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        invoker: AiInvoker = factory(ctx)
         try:
             invocation = await invoker.run(
                 system=system,

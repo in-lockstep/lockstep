@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-#: The label that marks a bug issue as free for an agent to work at any time.
+#: The label that marks a bug ticket as free for an agent to work at any time.
 AI_GENERATED = "ai-generated"
-#: The prefix of the label that counts how many automated attempts an issue has already had.
+#: The prefix of the label that counts how many automated attempts a ticket has already had.
 ATTEMPT_PREFIX = "ai-attempt-"
 
 
@@ -32,8 +32,8 @@ async def open_reviewable(scm: Any, changeset: Any, *, ready: bool, **kwargs: An
 
 
 def attempt_of(labels: Any) -> int:
-    """How many automated attempts an issue's labels record. A human-filed issue has none (0); an
-    `ai-generated` issue this loop opened carries `ai-attempt-N`. The highest N wins, so a stray
+    """How many automated attempts a ticket's labels record. A human-filed ticket has none (0); an
+    `ai-generated` ticket this loop opened carries `ai-attempt-N`. The highest N wins, so a stray
     duplicate label cannot lower the count."""
     counts = [
         int(rest)
@@ -46,10 +46,10 @@ def attempt_of(labels: Any) -> int:
 
 
 async def escalate(tickets: Any, source: Any, failure: str, *, max_attempts: int) -> Any:
-    """A run failed its tests: open the next `ai-generated` bug issue, or stop at the cap.
+    """A run failed its tests: open the next `ai-generated` bug ticket, or stop at the cap.
 
-    The attempt count rides on the source issue's labels, so the loop is bounded without any store:
-    each new issue is `ai-attempt-(n+1)`, and once that would exceed `max_attempts` no issue is
+    The attempt count rides on the source ticket's labels, so the loop is bounded without any store:
+    each new ticket is `ai-attempt-(n+1)`, and once that would exceed `max_attempts` no ticket is
     opened — a comment says a human is needed, and because nothing new gets the `ai-generated`
     label, the loop stops on its own. Returns the new ticket, or None when capped.
     """
@@ -60,14 +60,14 @@ async def escalate(tickets: Any, source: Any, failure: str, *, max_attempts: int
         await tickets.comment(
             source,
             f"Automated fix attempts are exhausted ({attempt}/{max_attempts}). A human is needed — "
-            f"no further `{AI_GENERATED}` issue will be opened for this bug.",
+            f"no further `{AI_GENERATED}` ticket will be opened for this bug.",
         )
         return None
     draft = TicketDraft(
         title=f"Automated fix failed for {source.key} (attempt {attempt + 1})",
         description=(
             f"An automated attempt to fix {source.key} did not produce a change that passes its "
-            f"tests:\n\n{failure}\n\nThis issue is free for an agent to pick up. It is attempt "
+            f"tests:\n\n{failure}\n\nThis ticket is free for an agent to pick up. It is attempt "
             f"{attempt + 1} of at most {max_attempts}."
         ),
         type=TicketType.BUG,

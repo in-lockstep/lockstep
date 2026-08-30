@@ -1,4 +1,4 @@
-"""`implement/tdd` — the strategy that enforces red→green instead of asking for it.
+"""`TDD` — the strategy that enforces red→green instead of asking for it.
 
 The loop is driven with a scripted model (no cassette — the LLM seam is the only thing worth
 faking) but a real git repo and a real pytest run, because the whole point of the strategy is the
@@ -19,18 +19,18 @@ from typing import Any
 
 import pytest
 
-from in_lockstep.adapters.ai.implement import AiImplement, ImplementSpec
+from in_lockstep.adapters.ai.implement import Implement
+from in_lockstep.adapters.ai.tdd import TDD
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Status
 from in_lockstep.core.spend import Budget, Spend
-from in_lockstep.core.types import TestSpec
+from in_lockstep.core.types import Test
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
 from in_lockstep.privileged.egress import UnsandboxedEgress
-from in_lockstep.strategies import default_registry
 
 MODEL = "test-model"
 
@@ -68,10 +68,9 @@ def _invoker(provider: LLMProvider, *, spend: Spend | None = None) -> AiInvoker:
     )
 
 
-def _adapter(provider: LLMProvider, root: Path) -> AiImplement:
-    return AiImplement(
+def _adapter(provider: LLMProvider, root: Path) -> TDD:
+    return TDD(
         lambda ctx: _invoker(provider, spend=getattr(ctx, "spend", None)),
-        registry=default_registry(),
         repo_root=str(root),
         policy=InvokePolicy(max_turns=8, max_tokens=1024),
     )
@@ -90,8 +89,8 @@ class Ctx:
 
         self.container = _Container()
 
-    async def do(self, _verb: object, spec: TestSpec):  # noqa: ANN202
-        return await PytestTest(args=["-q"]).invoke(self, spec)
+    async def do(self, request: Test):  # noqa: ANN202
+        return await PytestTest(args=["-q"]).invoke(self, request)
 
 
 def _ticket() -> Ticket:
@@ -130,7 +129,7 @@ _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3)
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), ImplementSpec(ticket=_ticket(), strategy="implement/tdd")
+            Ctx(test_bound=test_bound), Implement(ticket=_ticket())
         )
     )
 

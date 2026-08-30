@@ -73,7 +73,11 @@ ALLOWED: dict[str, set[str]] = {
     # The package facade. It re-exports the public surface, so it reaches almost everything by
     # construction — but it was being SKIPPED rather than allowed, which is different: nothing
     # was checking that `in_lockstep/__init__.py` stayed a facade instead of growing logic.
-    "__init__": {"core", "ai", "adapters", "lockstep", "prompts", "evaluation", "__init__"},
+    # `platform` was added for one edge: the ticket vocabulary (`Ticket`, `TicketSource`, ...) is
+    # part of the authoring surface a `lockstep.py` types its workflow parameters with, and a
+    # facade that cannot re-export it forces every user file into a deep import. Acyclic:
+    # `platform` never imports the facade back.
+    "__init__": {"core", "ai", "adapters", "lockstep", "platform", "prompts", "evaluation", "__init__"},
     "cli": {
         "core",
         "ai",

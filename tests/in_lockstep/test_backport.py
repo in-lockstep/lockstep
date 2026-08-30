@@ -20,7 +20,7 @@ import pytest
 from click.testing import CliRunner
 
 from in_lockstep.adapters.backport import (
-    BackportSpec,
+    Backport,
     Conflict,
     GitBackport,
 )
@@ -70,7 +70,7 @@ def repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return _repo(tmp_path)
 
 
-def _run(adapter: GitBackport, spec: BackportSpec) -> Outcome:
+def _run(adapter: GitBackport, spec: Backport) -> Outcome:
     return asyncio.run(adapter.invoke(None, spec))
 
 
@@ -84,7 +84,7 @@ def test_discovers_commits_by_ticket_trailer_and_stages_the_pick(repo: Path) -> 
     sha = _commit_fix(repo)
     _commit_unrelated(repo)
 
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", ticket=_Ticket("#7")))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", ticket=_Ticket("#7")))
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
     assert [p.sha for p in report.picked] == [sha]
@@ -105,7 +105,7 @@ def _commit_unrelated(path: Path) -> str:
 
 def test_explicit_commits_need_no_ticket(repo: Path) -> None:
     sha = _commit_fix(repo)
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", commits=(sha,)))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED
     assert outcome.value.picked[0].sha == sha
 
@@ -117,7 +117,7 @@ def test_a_deletion_travels_as_a_deletion(repo: Path) -> None:
     _git(repo, "commit", "-q", "-m", "chore: drop the readme", "-m", "Ticket: #8")
     sha = _git(repo, "rev-parse", "HEAD")
 
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", commits=(sha,)))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED
     (change,) = outcome.value.changeset.changes
     assert change.path == "README.md"
@@ -128,14 +128,14 @@ def test_a_pick_already_on_the_target_succeeds_with_nothing_staged(repo: Path) -
     """Idempotence: re-running a done backport reports `already_present` rather than stopping at
     git's empty-pick prompt or proposing an empty pull request."""
     sha = _commit_fix(repo)
-    first = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", commits=(sha,)))
+    first = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert first.status is Status.SUCCEEDED
 
     _git(repo, "checkout", "-q", "release-1.0")
     _git(repo, "cherry-pick", "-x", sha)
     _git(repo, "checkout", "-q", "main")
 
-    again = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", commits=(sha,)))
+    again = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert again.status is Status.SUCCEEDED
     assert again.value.empty
     assert any(f.id == "backport.already_present" for f in again.findings)
@@ -146,26 +146,26 @@ def test_a_pick_already_on_the_target_succeeds_with_nothing_staged(repo: Path) -
 
 def test_nothing_to_pick_is_blocked(repo: Path) -> None:
     _commit_fix(repo, ticket="#7")
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", ticket=_Ticket("#404")))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", ticket=_Ticket("#404")))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "backport.nothing_to_pick"
 
 
 def test_no_commits_and_no_ticket_is_blocked(repo: Path) -> None:
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0"))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0"))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "backport.no_commits"
 
 
 def test_a_ref_that_looks_like_an_option_is_refused(repo: Path) -> None:
     """Option confusion, not injection: a ref never legitimately begins with a dash."""
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="--force", commits=("abc",)))
+    outcome = _run(GitBackport(str(repo)), Backport(target="--force", commits=("abc",)))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "backport.option_confusion"
 
 
 def test_a_directory_that_is_not_a_repository_is_a_message_not_a_traceback(tmp_path: Path) -> None:
-    outcome = _run(GitBackport(str(tmp_path / "empty")), BackportSpec(target="release-1.0", commits=("abc",)))
+    outcome = _run(GitBackport(str(tmp_path / "empty")), Backport(target="release-1.0", commits=("abc",)))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason in ("backport.no_worktree", "backport.no_merge_base")
 
@@ -189,7 +189,7 @@ def test_conflict_without_resolver_stops_with_the_manual_commands(repo: Path) ->
     person the exact retreat, because a stopped run that says only 'conflict' is a run they have
     to re-derive."""
     sha = _diverge(repo)
-    outcome = _run(GitBackport(str(repo)), BackportSpec(target="release-1.0", commits=(sha,)))
+    outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.conflict"
     report = outcome.value
@@ -220,7 +220,7 @@ def test_conflict_with_resolver_merges_and_marks_the_model_authored_paths(repo: 
     resolver = _StubResolver((FileChange(path="app.py", contents=merged),))
 
     outcome = _run(
-        GitBackport(str(repo), resolver=resolver), BackportSpec(target="release-1.0", commits=(sha,))
+        GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,))
     )
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
@@ -245,7 +245,7 @@ def test_a_resolution_may_only_touch_conflicted_paths(repo: Path) -> None:
         )
     )
     outcome = _run(
-        GitBackport(str(repo), resolver=resolver), BackportSpec(target="release-1.0", commits=(sha,))
+        GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,))
     )
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.resolution_out_of_scope"
@@ -258,7 +258,7 @@ def test_a_refused_resolution_reports_the_conflict_it_could_not_clear(repo: Path
 
     sha = _diverge(repo)
     outcome = _run(
-        GitBackport(str(repo), resolver=_Refusing()), BackportSpec(target="release-1.0", commits=(sha,))
+        GitBackport(str(repo), resolver=_Refusing()), Backport(target="release-1.0", commits=(sha,))
     )
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.empty_resolution"

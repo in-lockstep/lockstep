@@ -28,10 +28,6 @@ from ...privileged.egress import EgressRefused
 from ...prompts.triage import TRIAGE_PROMPTS, TRIAGE_SCHEMA, TriageParams, TriagePrompt, triage_layers
 
 
-class Triage:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
-
-
 @dataclass(frozen=True)
 class TriageDecision:
     kind: str
@@ -50,8 +46,9 @@ class TriageDecision:
 
 
 @dataclass(frozen=True)
-class TriageSpec:
-    """One issue to place. Frozen like every other verb spec: it is hashed for step identity and
+class Triage:
+    """The Triage request: one ticket to place. Workflows do `ctx.do(Triage(...))`; a binding
+    decides what runs it. Frozen like every request type: it is hashed for step identity and
     serialized into checkpoints, so a mutation after dispatch would rewrite a key already written.
 
     The fields mirror what the analyst prompt reads and what the eval corpus supplies. `criteria`
@@ -67,7 +64,7 @@ class TriageSpec:
     criteria_source: str = "none"
 
     @classmethod
-    def from_ticket(cls, ticket: Any) -> TriageSpec:
+    def from_ticket(cls, ticket: Any) -> Triage:
         """Build a spec from a `platform.tickets.Ticket`. The tracker's comments become the
         discussion; the criteria source is what `criteria_from` could tell, which for a plain
         GitHub body is the reporter's prose rather than a field somebody filled in."""
@@ -108,7 +105,7 @@ class AiTriage:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[TriagePrompt]] | None = None,
@@ -117,6 +114,9 @@ class AiTriage:
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
         # Injected like `prompts=` — see AiImplement, which carries the reasoning; usually
         # `triage_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
@@ -134,7 +134,7 @@ class AiTriage:
         self.tools = tools
         self.run_tool = run_tool
 
-    async def invoke(self, ctx: Any, inp: TriageSpec) -> Outcome[TriageDecision]:
+    async def invoke(self, ctx: Any, inp: Triage) -> Outcome[TriageDecision]:
         lens = self.prompts.get(self.prompt_id)
         if lens is None:
             return _blocked(
@@ -158,7 +158,10 @@ class AiTriage:
         system = prompt.system(layers) + "\n\n" + schema_instruction(TRIAGE_SCHEMA)
         messages = prompt.render(TriageParams(key=inp.key), package)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        invoker: AiInvoker = factory(ctx)
         try:
             invocation = await invoker.run(
                 system=system,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
@@ -43,8 +44,9 @@ class Reader:
         return Outcome(status=Status.SUCCEEDED, value=inp)
 
 
+@dataclass(frozen=True)
 class Thing:
-    pass
+    payload: str = ""
 
 
 # -- GATE-EGRESS ---------------------------------------------------------------------
@@ -153,7 +155,19 @@ def test_approval_gate_blocks_a_writing_action_without_a_grant() -> None:
     container = Container()
     container.bind(Thing, adapter)
     ctx = RunContext(run_id="t", repo=RepoInfo(root="."), container=container, middleware=[ApprovalGate()])
-    outcome = asyncio.run(ctx.do(Thing, "x"))
+    outcome = asyncio.run(ctx.do(Thing("x")))
+    assert outcome.status is Status.BLOCKED
+    assert outcome.reason == "approval.required"
+    assert adapter.calls == 0
+
+
+def test_approval_gate_blocks_a_via_supplied_writer_without_a_grant() -> None:
+    """A call-scoped adapter is gated exactly like a bound one: `via=` names what serves the
+    call, and the gate reads the capability declaration off that."""
+    adapter = Writer()
+    container = Container()
+    ctx = RunContext(run_id="t", repo=RepoInfo(root="."), container=container, middleware=[ApprovalGate()])
+    outcome = asyncio.run(ctx.do(Thing("x"), via=adapter))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "approval.required"
     assert adapter.calls == 0
@@ -169,7 +183,7 @@ def test_approval_gate_admits_a_granted_action() -> None:
         container=container,
         middleware=[ApprovalGate(granted=lambda call: True)],
     )
-    assert asyncio.run(ctx.do(Thing, "x")).succeeded
+    assert asyncio.run(ctx.do(Thing("x"))).succeeded
     assert adapter.calls == 1
 
 

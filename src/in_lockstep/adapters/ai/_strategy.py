@@ -1,20 +1,120 @@
 """Shared machinery for the model-backed strategies — oneshot, tdd, fix.
 
-Each repeats the same plumbing: run a model turn-loop and turn its failure modes into an Outcome,
-parse the JSON cover note leniently, and render the staged-and-injection findings. It lives here so
-the strategy files hold their *idea* — one session, or red→green — rather than the boilerplate
-around it. What stays in each strategy is what actually differs: how many phases, what deterministic
-verb runs between them, and the shape of the report.
+A strategy IS the bound adapter: `lockstep.bind(Implement, TDD(...))`. The `AiStrategy` base here
+holds the plumbing they all share — the invoker seam, the workspace and tool assembly, the policy
+defaults — and each subclass holds its *idea*: one session, or red→green, or reproduce-then-fix.
+Alongside it live the helpers every strategy body repeats: run a model turn-loop and turn its
+failure modes into an Outcome, parse the JSON cover note leniently, and render the
+staged-and-injection findings.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any, ClassVar
 
-from ...ai.invoker import InvocationBlocked, InvocationFailed
+from ...ai.builtins import CommandRunner, Workspace, read_write_execute
+from ...ai.context import ContextCurator
+from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy
+from ...ai.prompt import PromptLayers
 from ...ai.structured import SchemaError, parse
+from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
+from ...core.verbs import Capability, Verb
 from ...privileged.egress import EgressRefused
+
+#: Enough turns to look before writing, which is the whole premise of an implementing session. The
+#: ceiling is not free and the cost is not linear: every turn re-sends the accumulated history, so
+#: turn N pays for everything read in turns 1..N-1. Forty is chosen against that curve — and it is
+#: the backstop, not the budget: `Spend.would_exceed` is what actually stops a run, checked before
+#: each turn against the projected cost of making it.
+DEFAULT_TURNS = 40
+
+#: Big enough to write a whole file in one tool call, since `write_file` replaces a path's entire
+#: contents and a truncated write is a corrupted file rather than a short answer. It is also the
+#: number the per-turn spend projection bounds output by, so raising it raises the headroom every
+#: turn must be able to afford.
+DEFAULT_MAX_TOKENS = 8192
+
+
+class AiStrategy:
+    """The constructor and per-run assembly shared by the bindable strategies.
+
+    Subclasses declare `id` (the label their reports carry), `verb`, `capabilities` — the
+    load-bearing declaration every gate reads off the bound object — plus their session type and
+    prompt/layer defaults, and implement `invoke(ctx, request)` starting from `self._session(ctx)`.
+
+    No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`, resolved per
+    run off the context. Passing `invoker_factory=` is the seam for a custom `ProviderRegistry`,
+    gateway, or cassette provider.
+    """
+
+    id: ClassVar[str] = ""
+    verb: ClassVar[Verb]
+    capabilities: ClassVar[frozenset[Capability]] = frozenset()
+
+    #: Subclass hooks: the session dataclass, the shipped prompt map, the default layer stack.
+    _session_cls: ClassVar[Any]
+    _shipped_prompts: ClassVar[Mapping[str, Any]]
+    _layers_factory: ClassVar[Any]
+
+    def __init__(
+        self,
+        invoker_factory: Callable[[Any], Any] | None = None,
+        *,
+        repo_root: str = "",
+        policy: InvokePolicy | None = None,
+        curator: ContextCurator | None = None,
+        commands: CommandRunner | None = None,
+        guard: ChangeGuard | None = None,
+        workflow_id: str = "",
+        prompts: Mapping[str, Any] | None = None,
+        layers: PromptLayers | None = None,
+    ) -> None:
+        self.invoker_factory = invoker_factory
+        #: Empty defaults to the run's own repository (`ctx.repo.root`) at session time.
+        self.repo_root = repo_root
+        self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
+        self.curator = curator or ContextCurator()
+        # No runner by default, so `run_script` refuses until a caller supplies one. The tool is
+        # still declared and the capability is still visible to policy — see `read_write_execute`.
+        self.commands = commands
+        self.guard = guard or ChangeGuard()
+        # Keyed on the workflow id, never the strategy id: a Tier-2 grant reachable through
+        # strategy selection is a grant a ticket label can steer.
+        self.workflow_id = workflow_id
+        # Copied rather than aliased, so a later mutation of the shipped map cannot reach a bound
+        # adapter, and an adapter's prompt map cannot leak back into the shipped one.
+        self.prompts: Mapping[str, Any] = (
+            dict(prompts) if prompts is not None else dict(type(self)._shipped_prompts)
+        )
+        # The layer stack around every prompt this adapter runs — a repository's own guardrails go
+        # here, usually as `<verb>_layers().plus(guardrails=...)` so the shipped baseline stays
+        # underneath.
+        self.layers = layers
+
+    def _session(self, ctx: Any) -> Any:
+        """The per-run bundle. Built fresh each invoke: the workspace accumulates staged writes,
+        and the invoker's credential is resolved per call rather than at bind time."""
+        from ...ai.bootstrap import routed_invoker
+
+        root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
+        workspace = Workspace(root=Path(root), guard=self.guard, workflow_id=self.workflow_id)
+        tools, runner = read_write_execute(workspace, commands=self.commands)
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        return type(self)._session_cls(
+            invoker=factory(ctx),
+            workspace=workspace,
+            tools=tools,
+            run_tool=runner,
+            policy=self.policy,
+            layers=self.layers if self.layers is not None else type(self)._layers_factory(),
+            prompts=self.prompts,
+            curator=self.curator,
+            guard=self.guard,
+            repo_root=root,
+        )
 
 
 class PhaseError(Exception):

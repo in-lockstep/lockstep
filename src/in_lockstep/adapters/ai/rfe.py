@@ -30,10 +30,6 @@ from ...privileged.egress import EgressRefused
 from ...prompts.rfe import RFE_PROMPTS, RFE_SCHEMA, RfeParams, RfePrompt, rfe_layers
 
 
-class Rfe:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
-
-
 @dataclass(frozen=True)
 class RfeDraft:
     title: str
@@ -61,8 +57,9 @@ class RfeDraft:
 
 
 @dataclass(frozen=True)
-class RfeSpec:
-    """One idea to draft from. Frozen like every other verb spec: hashed for step identity and
+class Rfe:
+    """The RFE request: one idea to draft from. Workflows do `ctx.do(Rfe(...))`; a binding
+    decides what runs it. Frozen like every request type: hashed for step identity and
     serialized into checkpoints.
 
     `idea` is the rough request — a sentence from a terminal, a file, or the body of an existing
@@ -73,7 +70,7 @@ class RfeSpec:
     key: str = ""
 
     @classmethod
-    def from_ticket(cls, ticket: Any) -> RfeSpec:
+    def from_ticket(cls, ticket: Any) -> Rfe:
         """Elaborate an existing rough issue: its title, body and discussion become the idea."""
         parts = [str(getattr(ticket, "title", "")), "", str(getattr(ticket, "description", ""))]
         comments = getattr(ticket, "comments", ()) or ()
@@ -91,7 +88,7 @@ class AiRfe:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[RfePrompt]] | None = None,
@@ -100,6 +97,9 @@ class AiRfe:
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
         # Injected like `prompts=` — usually `rfe_layers().plus(guardrails=...)` so the shipped
         # baseline stays underneath.
@@ -115,7 +115,7 @@ class AiRfe:
         self.tools = tools
         self.run_tool = run_tool
 
-    async def invoke(self, ctx: Any, inp: RfeSpec) -> Outcome[RfeDraft]:
+    async def invoke(self, ctx: Any, inp: Rfe) -> Outcome[RfeDraft]:
         lens = self.prompts.get(self.prompt_id)
         if lens is None:
             return _blocked(
@@ -143,7 +143,10 @@ class AiRfe:
         system = prompt.system(layers) + "\n\n" + schema_instruction(RFE_SCHEMA)
         messages = prompt.render(RfeParams(key=inp.key), package)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        invoker: AiInvoker = factory(ctx)
         try:
             invocation = await invoker.run(
                 system=system,

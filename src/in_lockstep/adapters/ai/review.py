@@ -23,10 +23,6 @@ from ...privileged.egress import EgressRefused
 from ...prompts.review import LENSES, REVIEW_SCHEMA, ReviewParams, ReviewPrompt, review_layers
 
 
-class Review:
-    """The verb interface."""
-
-
 @dataclass(frozen=True)
 class ReviewFinding:
     path: str
@@ -49,11 +45,11 @@ class ReviewReport:
 
 
 @dataclass(frozen=True)
-class ReviewSpec:
-    """What to review. Frozen like every other spec in `core.types`.
+class Review:
+    """The Review request. Workflows do `ctx.do(Review(...))`; a binding decides what runs it.
 
-    It was the one mutable one, while also being hashed for step identity and serialized into
-    checkpoints — so a mutation after dispatch would have changed a key that had already been
+    Frozen like every request type: it is hashed for step identity and serialized into
+    checkpoints, so a mutation after dispatch would change a key that had already been
     written down.
     """
 
@@ -76,9 +72,9 @@ class AiReview:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
-        repo_root: str = ".",
+        repo_root: str = "",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
         lenses: Mapping[str, type[ReviewPrompt]] | None = None,
@@ -86,7 +82,11 @@ class AiReview:
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
+        #: Empty defaults to the run's own repository (`ctx.repo.root`) at invoke time.
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=1)
         self.curator = curator or ContextCurator()
@@ -110,7 +110,7 @@ class AiReview:
         # adapter, and an adapter's lens map cannot leak back into the shipped one.
         self.lenses: Mapping[str, type[ReviewPrompt]] = dict(lenses) if lenses is not None else dict(LENSES)
 
-    async def invoke(self, ctx: Any, inp: ReviewSpec) -> Outcome[ReviewReport]:
+    async def invoke(self, ctx: Any, inp: Review) -> Outcome[ReviewReport]:
         lens = self.lenses.get(inp.aspect)
         if lens is None:
             return Outcome.blocked_by(
@@ -127,7 +127,8 @@ class AiReview:
 
         prompt: ReviewPrompt = lens()
         layers: PromptLayers = self.layers if self.layers is not None else review_layers()
-        package = self._gather(inp)
+        root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
+        package = self._gather(inp, root)
 
         if not package.items:
             # Refused rather than asked. A model handed no diff answers anyway, and whether that
@@ -153,7 +154,7 @@ class AiReview:
         system = prompt.system(layers) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
         messages = prompt.render(ReviewParams(base=inp.base, head=inp.head, aspect=inp.aspect), package)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        invoker: AiInvoker = self._invoker(ctx)
         try:
             invocation = await invoker.run(
                 system=system,
@@ -281,8 +282,14 @@ class AiReview:
             reason="exhausted" if invocation.exhausted else None,
         )
 
-    def _gather(self, inp: ReviewSpec) -> ContextPackage:
-        diff = inp.diff or _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
+    def _invoker(self, ctx: Any) -> AiInvoker:
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        return factory(ctx)
+
+    def _gather(self, inp: Review, root: str) -> ContextPackage:
+        diff = inp.diff or _git_diff(root, inp.base, inp.head, inp.paths)
         if not diff.strip():
             # An empty diff is not a clean review, and running one would produce a confident
             # answer about nothing. Distinguished here rather than at parse time, where it arrives

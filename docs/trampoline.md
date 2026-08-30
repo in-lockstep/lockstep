@@ -35,7 +35,7 @@ should say so in a comment at the top of its trampoline rather than quietly weak
    than separate steps.
 4. **What crosses between jobs is an artifact, and it is untrusted.** The unprivileged half
    stages a `ChangeSet`; the privileged half re-runs ChangeGuard over it before writing a byte,
-   refuses any branch outside `in-lockstep/<workflow>/<run-id>`, and keeps the artifact outside
+   refuses any branch outside `in-lockstep/<workflow>/[<ticket>/]<run-id>`, and keeps the artifact outside
    the tree it commits from — or the artifact itself gets swept into the change.
 5. **Everything that runs next to a credential is pinned.** The framework by version
    (`in-lockstep==X.Y.Z`, written by `init` as the version that wrote the scaffold), and any
@@ -55,7 +55,7 @@ write-capable verb (implement, fix) needs **three**:
 | Job | Credential | Access | Does |
 |---|---|---|---|
 | gate | none | read | `in-lockstep gate` — may this person ask? |
-| work | provider key (+ tracker read) | read | `in-lockstep run <verb>/from-issue` — stages an artifact |
+| work | provider key (+ tracker read) | read | `in-lockstep run <verb>/from-ticket` — stages an artifact |
 | propose | write token | write | `in-lockstep run <verb>/propose` — opens the change request |
 
 Backport sits between the two shapes. Its default is deterministic — `git cherry-pick` stages the
@@ -63,7 +63,7 @@ artifact, no model — so its work job needs **no provider key at all**, and the
 the artifact against the release line with `apply --base <target>`. Only `--resolve`, which lets a
 model merge conflicts, makes it a spender with the full three-job shape.
 
-The work job needs to *read* the tracker — `from-issue` fetches the issue — which on GitHub is
+The work job needs to *read* the tracker — `from-ticket` fetches the ticket — which on GitHub is
 the workflow token with `issues: read` and on GitLab is a read-only (`read_api`) project access
 token scoped to the work environment. A read credential beside the provider key is inside the
 contract; a *write* credential beside it is what clause 3 exists to prevent.
@@ -99,7 +99,7 @@ its environments and credentials are provisioned.
 
 Jenkins, Tekton, Buildkite — anything that can run a shell command and pass a file between two
 isolated executions can carry this contract. The port is: one credential-less execution running
-`in-lockstep gate`, one holding only the provider key running `<verb>/from-issue`, one holding
+`in-lockstep gate`, one holding only the provider key running `<verb>/from-ticket`, one holding
 only a write token running `<verb>/propose`, an artifact handed between them that stays out of
 the working tree, a pinned install, a timeout, and a graceful skip when the key is absent. The
 same CLI commands, in the same order, with the same arguments — the trampoline is the only part

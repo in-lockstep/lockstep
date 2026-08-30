@@ -17,16 +17,14 @@ from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import TestReport, TestSpec
+from ..core.types import Test, TestReport
 from ..core.verbs import Capability, Verb
 from .sandbox import Sandbox
 
+__all__ = ["PytestTest", "Test"]
+
 # pytest's exit code for "no tests ran".
 NO_TESTS_COLLECTED = 5
-
-
-class Test:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
 
 
 class PytestTest:
@@ -47,7 +45,7 @@ class PytestTest:
         # in-process run hands repository-authored Python the credentials this process holds.
         self.sandbox = sandbox or Sandbox()
 
-    async def invoke(self, ctx: object, inp: TestSpec) -> Outcome[TestReport]:
+    async def invoke(self, ctx: object, inp: Test) -> Outcome[TestReport]:
         if shutil.which("python") is None:  # pragma: no cover - defensive
             return Outcome.errored("no python interpreter on PATH")
 

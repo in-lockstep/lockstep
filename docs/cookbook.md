@@ -43,17 +43,21 @@ Anthropic Console, add the identifiers, watch one green run, then delete the sec
 
 ## 3. TDD implement, triggered by a comment
 
-`/implement` on an issue runs `implement/from-issue` on the default branch. Making it
-test-driven is one strategy line; the shipped default is `implement/oneshot`, and the registry's
-comment explains why red-then-green costs a second model phase.
+`/implement` on an issue runs `implement/from-ticket` on the default branch. The strategy IS the
+adapter, so making it test-driven is naming a different class in the binding — the scaffold binds
+`Oneshot`, and red-then-green costs a second model phase, which is why it is a choice and not the
+default.
 
 ```python
-from in_lockstep.core.verbs import Verb
-from in_lockstep.strategies import default_registry
+from in_lockstep.adapters.ai import TDD, Implement
 
-strategies = default_registry()
-strategies.default(Verb.IMPLEMENT, "implement/tdd")
+lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
+lockstep.bind(Implement, TDD())
 ```
+
+`in-lockstep ls` prints the whole story as one line — `Implement -> TDD` — and the model comes
+from the route above: an adapter bound with no explicit invoker resolves it per run, and egress
+from the bound `EgressPolicy`.
 
 This repository's own [.lockstep/lockstep.py](../.lockstep/lockstep.py) is the full worked
 version — including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the
@@ -80,13 +84,12 @@ shipped baseline, so extending cannot quietly drop it.
 
 ```python
 from in_lockstep.adapters.ai import AiReview, Review
-from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.prompts.review import review_layers
 
+lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
 lockstep.bind(
     Review,
     AiReview(
-        invoker_factory("anthropic:claude-sonnet-4-6"),
         layers=review_layers().plus(
             guardrails=(("house", "Do NOT propose new dependencies; flag them instead."),),
         ),
@@ -156,7 +159,6 @@ trusted ref, never an import-time side effect.
 
 ```python
 from in_lockstep.adapters.ai import AiReview, Review
-from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.prompts.review import LENSES, ReviewPrompt
 
 class LicenseLens(ReviewPrompt):
@@ -165,10 +167,7 @@ class LicenseLens(ReviewPrompt):
 
 lockstep.bind(
     Review,
-    AiReview(
-        invoker_factory("anthropic:claude-sonnet-4-6"),
-        lenses={**LENSES, "license": LicenseLens},
-    ),
+    AiReview(lenses={**LENSES, "license": LicenseLens}),
 )
 ```
 

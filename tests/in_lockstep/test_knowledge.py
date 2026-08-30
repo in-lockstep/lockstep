@@ -6,16 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.ai.strategy import (
-    StrategyRefused,
-    StrategyRegistry,
-    UnknownStrategy,
-)
 from in_lockstep.core.outcome import Outcome, Status
-from in_lockstep.core.verbs import Verb
 from in_lockstep.evaluation import load_cases, subject_for, summarize
 from in_lockstep.evaluation.cases import Case, CaseError, grade
-from in_lockstep.strategies import default_registry
 
 PROMPTS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "prompts"
 CORPUS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "corpus"
@@ -132,41 +125,8 @@ def test_the_declared_version_is_carried_for_display_not_identity() -> None:
 
 
 # -- strategies -----------------------------------------------------------------------
-
-
-def test_the_shipped_strategies_register_with_defaults() -> None:
-    registry = default_registry()
-    assert registry.select(Verb.REVIEW).id == "review/security"
-    # The default is the executable one. `implement/tdd` and `implement/direct` are catalogue
-    # entries whose factories return a string, and defaulting to one would make `ctx.do(Implement,
-    # ...)` with no explicit choice refuse — with the registry's own default as the reason.
-    assert registry.select(Verb.IMPLEMENT).id == "implement/oneshot"
-    assert len(registry.for_verb(Verb.REVIEW)) == 4, "an aspect is an agent, not a data row"
-
-
-def test_an_explicit_choice_wins_over_the_default() -> None:
-    registry = default_registry()
-    assert registry.select(Verb.REVIEW, explicit="review/intent").id == "review/intent"
-
-
-def test_gate_guard_3_a_privileged_strategy_is_unreachable_from_untrusted_input() -> None:
-    """Ticket labels can steer selection, and the improver holds a grant on prompts/."""
-    registry = default_registry()
-    with pytest.raises(StrategyRefused, match="attacker-influenceable"):
-        registry.select(Verb.IMPLEMENT, explicit="improve/propose", from_untrusted_input=True)
-
-
-def test_a_privileged_strategy_is_reachable_from_an_explicit_selection() -> None:
-    registry = default_registry()
-    assert registry.select(Verb.IMPLEMENT, explicit="improve/propose").id == "improve/propose"
-
-
-def test_an_unregistered_strategy_names_what_exists() -> None:
-    registry = StrategyRegistry()
-    with pytest.raises(UnknownStrategy, match="no strategy"):
-        registry.select(Verb.REVIEW, explicit="review/nope")
-
-
-def test_defaulting_to_an_unregistered_strategy_is_refused() -> None:
-    with pytest.raises(UnknownStrategy):
-        StrategyRegistry().default(Verb.REVIEW, "nothing")
+#
+# The StrategyRegistry and its GATE-GUARD-3 check (a privileged strategy unreachable from
+# untrusted input) were deleted when strategies became directly bindable adapters: which strategy
+# runs is a bind-time code decision in lockstep.py, so there is no selection an attacker-
+# influenceable input could steer. The gate is structural now rather than a registry refusal.

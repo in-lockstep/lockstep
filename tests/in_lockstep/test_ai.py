@@ -685,13 +685,13 @@ def test_the_default_lens_map_is_a_copy_not_the_shipped_one() -> None:
 
 def test_an_unknown_aspect_names_the_lenses_this_adapter_has() -> None:
     """Not the shipped ones — the message has to describe the adapter you actually bound."""
-    from in_lockstep.adapters.ai import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai import AiReview, Review
     from in_lockstep.core.outcome import Status
     from in_lockstep.prompts.review import SecurityReviewPrompt
 
     adapter = AiReview(lambda ctx: None, lenses={"house": SecurityReviewPrompt})
     outcome = asyncio.run(
-        adapter.invoke(None, ReviewSpec(base="a", head="b", aspect="security", diff="- a\n+ b\n"))
+        adapter.invoke(None, Review(base="a", head="b", aspect="security", diff="- a\n+ b\n"))
     )
     assert outcome.status is Status.BLOCKED
     assert "'house'" in outcome.findings[0].message
@@ -855,13 +855,13 @@ def test_an_unseeded_key_shape_is_redacted_too(seeded_secret: str) -> None:
 
 def test_a_provider_failure_is_errored_not_blocked(seeded_secret: str, tmp_path) -> None:
     """§4.3: BLOCKED is a policy refusal. A broken credential is infrastructure."""
-    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
     from in_lockstep.llm.interface import AuthenticationError
 
     provider = Stub(replies=[AuthenticationError(f"401 invalid: {SECRET}", status_code=401)])
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD", diff="- a\n+ b\n")))
+    outcome = asyncio.run(adapter.invoke(None, Review(base="HEAD", head="HEAD", diff="- a\n+ b\n")))
 
     assert outcome.status is Status.ERRORED
     assert outcome.reason == "provider.authentication"
@@ -1064,7 +1064,7 @@ def test_the_metric_is_omitted_rather_than_defaulted() -> None:
     lockstep = Lockstep.detect()
     lockstep.bind(Iface, Free())
     lockstep.middleware += [otel(recorder)]
-    aio.run(lockstep.context(run_id="p").do(Iface, None))
+    aio.run(lockstep.context(run_id="p").do(Iface()))
 
     names = [m.name for m in recorder.metrics]
     assert "in_lockstep.cost.priced_fraction" not in names, "emitted with an empty denominator"
@@ -1098,7 +1098,7 @@ def test_a_truncated_answer_is_named_rather_than_read_as_bad_json() -> None:
     Before this, the cap being too small surfaced as `review.unparseable` — which sends someone to
     look at the prompt when the fix is one number in the policy.
     """
-    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
 
     cut_off = LLMOutput(content='{"findings": [{"path": "a.py", "sum', stop_reason="max_tokens")
@@ -1107,7 +1107,7 @@ def test_a_truncated_answer_is_named_rather_than_read_as_bad_json() -> None:
         lambda ctx: invoker(provider),
         policy=InvokePolicy(max_turns=1, max_tokens=16),
     )
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff="x")))
+    outcome = asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff="x")))
 
     assert outcome.status is Status.ERRORED
     assert outcome.reason == "review.truncated"
@@ -1117,12 +1117,12 @@ def test_a_truncated_answer_is_named_rather_than_read_as_bad_json() -> None:
 
 def test_a_complete_answer_at_the_cap_is_not_truncation() -> None:
     """`stop_reason` is the signal, not the length. A model that finished exactly at the cap did."""
-    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
 
     provider = Stub(replies=[LLMOutput(content='{"findings": []}', stop_reason="end_turn")])
     adapter = AiReview(lambda ctx: invoker(provider), policy=InvokePolicy(max_turns=1, max_tokens=16))
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff="x")))
+    outcome = asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff="x")))
     assert outcome.status is Status.SUCCEEDED
 
 
@@ -1174,12 +1174,12 @@ def test_the_model_is_told_its_view_is_partial() -> None:
 
 def test_a_review_with_nothing_to_look_at_refuses(tmp_path) -> None:
     """Refused, not asked. Whether the answer parses decides between two wrong readings."""
-    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
 
     provider = Stub(replies=[LLMOutput(content='{"findings": []}')])
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="HEAD", head="HEAD")))
+    outcome = asyncio.run(adapter.invoke(None, Review(base="HEAD", head="HEAD")))
 
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "review.no_content"
@@ -1188,14 +1188,14 @@ def test_a_review_with_nothing_to_look_at_refuses(tmp_path) -> None:
 
 def test_a_partial_review_says_which_part_it_did_not_read(tmp_path) -> None:
     """A review of part of a change is real; one that does not say which part gets read as all."""
-    from in_lockstep.adapters.ai.review import AiReview, ReviewSpec
+    from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.ai.context import ContextCurator
     from in_lockstep.core.outcome import Status
 
     files = "".join(f"diff --git a/f{i}.py b/f{i}.py\n@@ -1 +1 @@\n-{'x' * 800}\n" for i in range(10))
     provider = Stub(replies=[LLMOutput(content='{"findings": [], "verdict": "ok"}')])
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path), curator=ContextCurator())
-    outcome = asyncio.run(adapter.invoke(None, ReviewSpec(base="a", head="b", diff=files, token_budget=600)))
+    outcome = asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff=files, token_budget=600)))
     assert outcome.status is Status.SUCCEEDED
     omitted = [f for f in outcome.findings if f.id == "review.not_reviewed"]
     assert omitted, "it reviewed part of the change and reported nothing about the rest"

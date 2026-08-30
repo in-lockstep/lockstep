@@ -1,11 +1,12 @@
-"""`implement/oneshot` — one session, tools, and whatever the model can work out from the repo.
+"""`Oneshot` — one session, tools, and whatever the model can work out from the repo.
+
+Bound as the Implement adapter: `lockstep.bind(Implement, Oneshot(...))`.
 
 The premise is that most tickets do not need a pipeline. Read the ticket, look at the code, write
 the change. The compiler-era arrangement ran that as four chained agents — requirements, plan,
 tests, change — each starting from nothing but the previous one's prose, which is a lot of
-machinery for "add the missing null check". This is the other end of that scale, and the one the
-others should have to beat: `implement/direct` is described in the registry as "the baseline the
-others are measured against", and until now no such baseline existed to measure against.
+machinery for "add the missing null check". This is the other end of that scale, and the baseline
+the others should have to beat.
 
 What makes it a *strategy* rather than a prompt is what it does with the answer. Three decisions:
 
@@ -30,21 +31,34 @@ from typing import Any, ClassVar
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
-from ...core.verbs import Verb
-from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
-from ._strategy import PhaseError, read_reply, reported, run_phase
-from .implement import ImplementReport, ImplementSession, ImplementSpec
+from ...core.verbs import Capability, Verb
+from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
+from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase
+from .implement import Implement, ImplementReport, ImplementSession
 
 
-class OneshotImplement:
-    """Registered as `implement/oneshot`. Holds no run state; everything arrives in the session."""
+class Oneshot(AiStrategy):
+    """One session with read, search, write and run tools. Explores the repository, stages the
+    change, reports what it could not do."""
 
     id: ClassVar[str] = "implement/oneshot"
     verb: ClassVar[Verb] = Verb.IMPLEMENT
+    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
+    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.READS_REPO,
+            Capability.SPENDS_BUDGET,
+            Capability.WRITES_FILES,
+            Capability.EXECUTES_CODE,
+        }
+    )
+    _session_cls = ImplementSession
+    _shipped_prompts = PROMPTS
+    _layers_factory = staticmethod(implement_layers)
 
-    async def execute(
-        self, ctx: Any, session: ImplementSession, inp: ImplementSpec
-    ) -> Outcome[ImplementReport]:
+    async def invoke(self, ctx: Any, inp: Implement) -> Outcome[ImplementReport]:
+        session = self._session(ctx)
         lens = session.prompts.get(self.id)
         if lens is None:
             return _blocked(

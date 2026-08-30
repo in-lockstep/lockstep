@@ -2,8 +2,8 @@
 
 An `Implement` strategy modelled on [Matt Pocock's wayfinder skill](https://github.com/mattpocock/skills/tree/main/skills/engineering/wayfinder).
 
-> **The framework has since grown its own implement verb** — `AiImplement` and the
-> `implement/oneshot` strategy, which reads a ticket and stages a change. This example is a
+> **The framework has since grown its own implement strategies** — `Oneshot` and `TDD`,
+> bindable directly, which read a ticket and stage a change. This example is a
 > *different* answer to the same verb, and the contrast is the point: `oneshot` is handed a ticket
 > and builds it, while wayfinder refuses to build anything until the map says the ticket is
 > claimable. Both bind `Implement`; neither knows the other exists. That is what a verb interface
@@ -65,7 +65,7 @@ class Implement:
     """Workflows ask for this; a binding decides what serves it."""
 ```
 
-That is the entire mechanism. `ctx.do(Implement, spec)` resolves whatever is bound, so *which
+That is the entire mechanism. `ctx.do(Implement(...))` resolves whatever is bound, so *which
 strategy runs* is a binding decision and a workflow never has to know.
 
 ### Charting gets a verb of its own
@@ -221,13 +221,11 @@ in-lockstep history --push     # publish it; needs push access, never automatic
 A charting session is exactly the kind of run worth keeping: it produced decisions and no change,
 so the record IS the output.
 
-## One thing this example does not do
+## Where the strategy id goes
 
-It names a strategy id, `implement/wayfinder`, but does **not** rely on `StrategyRegistry` to
-select it. That registry is a catalogue at 1.0, not a dispatcher — nothing selects from it yet —
-so the `bind()` calls are what actually decide behaviour.
-
-Said here rather than left for you to discover after registering into it.
+It names a strategy id, `implement/wayfinder`, and the `bind()` calls are what decide behaviour —
+the strategy IS the adapter. The id exists so reports, ledger records and eval subjects can key on
+the approach that ran.
 
 ## Credit
 

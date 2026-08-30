@@ -107,6 +107,7 @@ class Lockstep:
             spend=Spend(budget=self.budget),
             middleware=list(self.middleware),
             approval=approval or Approval(),
+            models=dict(self.models.routes),
         )
 
     def declared_ceiling(self) -> Budget:

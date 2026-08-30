@@ -56,12 +56,11 @@ def _map() -> tuple[Ticket, ...]:
     )
 
 
-def _spec(target: str, mode: str = "work", **kw):
-    from wayfinder import ImplementSpec
+def _spec(target: str, request=None, **kw):
+    from wayfinder import Implement
 
-    return ImplementSpec(
-        target=target, tickets=_map(), blocked_by={"MAP-1": ("MAP-2", "MAP-3")}, mode=mode, **kw
-    )
+    request = request or Implement
+    return request(target=target, tickets=_map(), blocked_by={"MAP-1": ("MAP-2", "MAP-3")}, **kw)
 
 
 def test_charting_succeeds_and_delivers_nothing() -> None:
@@ -70,9 +69,9 @@ def test_charting_succeeds_and_delivers_nothing() -> None:
     That combination is why `decided` is separate from `status`: without it, a charting session
     has to be reported as either a failure or a no-op, and it is neither.
     """
-    from wayfinder import WayfinderChart
+    from wayfinder import Chart, WayfinderChart
 
-    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", "chart")))
+    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", request=Chart)))
     assert outcome.status is Status.SUCCEEDED
     assert outcome.decided is True
     assert outcome.cost.usd == 0.0, "charting is deterministic here and must not spend"
@@ -81,17 +80,17 @@ def test_charting_succeeds_and_delivers_nothing() -> None:
 
 def test_charting_does_not_require_the_destination_to_be_reachable() -> None:
     """The destination of a map is blocked by definition; that is what makes it worth charting."""
-    from wayfinder import WayfinderChart
+    from wayfinder import Chart, WayfinderChart
 
-    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", "chart")))
+    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", request=Chart)))
     assert outcome.status is Status.SUCCEEDED
 
 
 def test_fog_is_read_off_the_ticket_not_guessed() -> None:
     """A ticket with no description and no acceptance criteria has not been specified."""
-    from wayfinder import WayfinderChart
+    from wayfinder import Chart, WayfinderChart
 
-    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", "chart")))
+    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", request=Chart)))
     assert outcome.value.fog == ("MAP-3",)
     fog = [f for f in outcome.findings if f.id == "wayfinder.fog"]
     assert [f.message for f in fog] == ["MAP-3 is not sharp enough to phrase precisely yet; left as fog."]
@@ -103,9 +102,9 @@ def test_charting_reports_the_frontier_as_findings() -> None:
     Findings are the framework's channel for what a run noticed: they print, and they reach the
     ledger, which stores findings rather than a count of them.
     """
-    from wayfinder import WayfinderChart
+    from wayfinder import Chart, WayfinderChart
 
-    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", "chart")))
+    outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", request=Chart)))
     by_id = {f.id: f.message for f in outcome.findings}
     assert "MAP-2" in by_id["wayfinder.frontier"]
     assert "blocked by" in by_id["wayfinder.destination"]
@@ -123,23 +122,23 @@ def test_a_ticket_behind_the_frontier_is_refused() -> None:
 
 def test_a_closed_blocker_no_longer_blocks() -> None:
     """Otherwise the frontier never advances and the map is a list."""
-    from wayfinder import ImplementSpec, WayfinderImplement
+    from wayfinder import Implement, WayfinderImplement
 
     tickets = tuple(
         t if t.key != "MAP-2" else Ticket(key="MAP-2", title="done", state=TicketState.CLOSED) for t in _map()
     )
-    spec = ImplementSpec(target="MAP-1", tickets=tickets, blocked_by={"MAP-1": ("MAP-2",)})
+    spec = Implement(target="MAP-1", tickets=tickets, blocked_by={"MAP-1": ("MAP-2",)})
     outcome = asyncio.run(WayfinderImplement().invoke(None, spec))
     assert outcome.reason != "wayfinder.not_on_frontier"
 
 
 def test_one_ticket_per_session_is_a_number_not_a_rule_of_thumb() -> None:
-    from wayfinder import ImplementSpec, WayfinderImplement
+    from wayfinder import Implement, WayfinderImplement
 
     busy = tuple(
         Ticket(key=k, title=k, description="d", state=TicketState.IN_PROGRESS) for k in ("MAP-2", "MAP-3")
     )
-    spec = ImplementSpec(target="MAP-2", tickets=busy)
+    spec = Implement(target="MAP-2", tickets=busy)
     outcome = asyncio.run(WayfinderImplement(max_tickets_per_session=1).invoke(None, spec))
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "wayfinder.session_scope"

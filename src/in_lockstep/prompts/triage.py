@@ -3,7 +3,7 @@
 One today, and the module is shaped for more the same way `review.py` and `implement.py` are: a
 base class carrying the params and the user text, subclasses carrying a body and an id. The
 shipped bodies, guardrail and format skill already existed under `prompts/triage/` and
-`prompts/skills/` — this is what composes and serves them, so `ctx.do(Triage, ...)` has something
+`prompts/skills/` — this is what composes and serves them, so `ctx.do(Triage(...))` has something
 to run rather than a catalogue entry that names an approach nobody wrote.
 """
 

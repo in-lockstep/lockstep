@@ -1,8 +1,11 @@
 """The data types between verbs.
 
-These are the contract that makes workflows composable: Diagnosis -> FixSpec -> ChangeSet ->
-TestSpec -> TestReport. All frozen; all serialize losslessly, because they are checkpointed and
+These are the contract that makes workflows composable: Diagnosis -> Fix -> ChangeSet ->
+Test -> TestReport. All frozen; all serialize losslessly, because they are checkpointed and
 written to the ledger.
+
+A verb request (`Test`, `Validate`, ...) is both the payload and the dispatch key: workflows do
+`ctx.do(Test(...))`, and the request's type is what the container resolves an adapter for.
 """
 
 from __future__ import annotations
@@ -13,7 +16,9 @@ from enum import Enum
 
 
 @dataclass(frozen=True)
-class TestSpec:
+class Test:
+    """The Test request. Workflows do `ctx.do(Test(...))`; a binding decides what runs it."""
+
     paths: tuple[str, ...] = ()
     selector: str = ""
     args: tuple[str, ...] = ()
@@ -23,7 +28,7 @@ class TestSpec:
     # Where to run, when it is not the live working tree. A staged `ChangeSet` cannot be tested in
     # place — the change is not on disk yet, and running the suite over the unchanged tree would
     # measure the wrong thing. `materialize` writes HEAD plus the change into a throwaway worktree
-    # and names it here, so `ctx.do(Test, TestSpec(root=that))` runs the suite against the change
+    # and names it here, so `ctx.do(Test(root=that))` runs the suite against the change
     # without touching the real tree. Empty keeps the adapter's own default (`ctx.repo.root`).
     root: str = ""
 
@@ -60,7 +65,7 @@ class TestReport:
 class TestVerdict:
     """Whether a staged change's suite ran, and how it came out.
 
-    Carried across the trampoline's job split. `implement/from-issue` runs the suite against the
+    Carried across the trampoline's job split. `implement/from-ticket` runs the suite against the
     materialised change and records this beside the ChangeSet; `implement/propose` — a job that
     never held the run's Outcome — reads it back and says in the PR body whether the change was
     tested and passed. Its *absence* (no verdict alongside the ChangeSet) is the honest third state:
@@ -97,7 +102,9 @@ class TestVerdict:
 
 
 @dataclass(frozen=True)
-class ValidateSpec:
+class Validate:
+    """The Validate request. Workflows do `ctx.do(Validate(...))`; a binding decides what runs it."""
+
     paths: tuple[str, ...] = ()
     rules: tuple[str, ...] = ()
     fix: bool = False
@@ -186,7 +193,9 @@ class ChangeSet:
 
 
 @dataclass(frozen=True)
-class BuildSpec:
+class Build:
+    """The Build request. No shipped adapter serves it yet; the type reserves the shape."""
+
     target: str = ""
     args: tuple[str, ...] = ()
 
@@ -198,7 +207,9 @@ class BuildResult:
 
 
 @dataclass(frozen=True)
-class RunSpec:
+class Run:
+    """The Run request. No shipped adapter serves it yet; the type reserves the shape."""
+
     command: tuple[str, ...] = ()
     cwd: str = ""
     env: tuple[tuple[str, str], ...] = ()

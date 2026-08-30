@@ -1,12 +1,12 @@
 """Implement, charted before it is built.
 
 The whole configuration. `Implement` is served by a strategy that refuses to claim a ticket behind
-the frontier, refuses more than one ticket a session, and — in charting mode — produces decisions
-and no change at all.
+the frontier and refuses more than one ticket a session; `Chart` produces decisions and no change
+at all.
 
-Nothing here is special-cased by the framework. A verb interface is a marker class, a strategy is
-whatever is bound to serve it, and the constraints are checks in an adapter rather than sentences
-in a prompt.
+Nothing here is special-cased by the framework. A verb request is a plain dataclass, a strategy is
+whatever is bound to serve its type, and the constraints are checks in an adapter rather than
+sentences in a prompt.
 """
 
 import json
@@ -20,18 +20,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from wayfinder import (  # noqa: E402
     Chart,
     Implement,
-    ImplementSpec,
     WayfinderChart,
     WayfinderImplement,
 )
 
-from in_lockstep import Lockstep, Policy, workflow  # noqa: E402
+from in_lockstep import (  # noqa: E402
+    Lockstep,
+    Policy,
+    RunContext,
+    Ticket,
+    TicketState,
+    workflow,
+)
 from in_lockstep.core.spend import Budget  # noqa: E402
 from in_lockstep.middleware import CostBudget, otel  # noqa: E402
-from in_lockstep.platform.tickets.base import Ticket, TicketState  # noqa: E402
 
 
-def load_map(path: str, target: str = "", *, mode: str) -> ImplementSpec:
+def load_map(path: str, target: str = "", *, request: type[Chart] | type[Implement]) -> Chart | Implement:
     """Read a map from JSON. Tickets are data; the tracker is where they live in earnest.
 
     A real deployment would read these from `TicketSource` instead — the shape is the same, and
@@ -49,11 +54,10 @@ def load_map(path: str, target: str = "", *, mode: str) -> ImplementSpec:
         )
         for t in raw.get("tickets", [])
     )
-    return ImplementSpec(
+    return request(
         target=target or raw.get("destination", ""),
         tickets=tickets,
         blocked_by={k: tuple(v) for k, v in raw.get("blocked_by", {}).items()},
-        mode=mode,
     )
 
 
@@ -83,7 +87,7 @@ lockstep.bind(Implement, WayfinderImplement(max_tickets_per_session=1))
 
 
 @workflow(id="wayfinder/chart-github")
-async def chart_github(ctx, label: str = "wayfinder", target: str = ""):
+async def chart_github(ctx: RunContext, label: str = "wayfinder", target: str = ""):
     """Chart a map made of GitHub issues carrying a label.
 
     Needs `gh` authenticated and nothing else — no key, no spend, because charting is
@@ -92,19 +96,19 @@ async def chart_github(ctx, label: str = "wayfinder", target: str = ""):
     """
     from github_map import load_map as load_github_map
 
-    return await ctx.do(Chart, load_github_map(label=label, destination=target, mode="chart"))
+    return await ctx.do(load_github_map(label=label, destination=target, request=Chart))
 
 
 @workflow(id="wayfinder/work-github")
-async def work_github(ctx, label: str = "wayfinder", target: str = ""):
+async def work_github(ctx: RunContext, label: str = "wayfinder", target: str = ""):
     """Claim one unblocked issue from the labelled map."""
     from github_map import load_map as load_github_map
 
-    return await ctx.do(Implement, load_github_map(label=label, destination=target, mode="work"))
+    return await ctx.do(load_github_map(label=label, destination=target, request=Implement))
 
 
 @workflow(id="wayfinder/chart")
-async def chart(ctx, map: str = "map.json", target: str = ""):
+async def chart(ctx: RunContext, map: str = "map.json", target: str = ""):
     """The first session: name the destination, map the frontier, stop.
 
     Takes a path rather than tickets, because `--arg` values arrive from the command line as
@@ -115,17 +119,16 @@ async def chart(ctx, map: str = "map.json", target: str = ""):
     and the reason `decided` is separate from `status` — a framework without that distinction has
     to call this either a failure or a no-op.
     """
-    return await ctx.do(Chart, load_map(map, target, mode="chart"))
+    return await ctx.do(load_map(map, target, request=Chart))
 
 
 @workflow(id="wayfinder/work")
-async def work(ctx, map: str = "map.json", target: str = ""):
+async def work(ctx: RunContext, map: str = "map.json", target: str = ""):
     """A later session: claim one unblocked ticket, resolve it, and nothing else."""
-    return await ctx.do(Implement, load_map(map, target, mode="work"))
+    return await ctx.do(load_map(map, target, request=Implement))
 
 
-# A name for the strategy, so an eval subject can key on it and `ls` can print it. In-lockstep's
-# `StrategyRegistry` is a catalogue at 1.0 rather than a dispatcher — nothing selects from it yet —
-# so the bindings above are what actually decide behaviour. Said here rather than left for someone
-# to discover after registering into it.
+# A name for the strategy, so an eval subject can key on it. The bindings above are what decide
+# behaviour — the strategy IS the adapter — and this id is what its reports and ledger records
+# carry.
 STRATEGY_ID = "implement/wayfinder"

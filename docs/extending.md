@@ -8,19 +8,22 @@ DSL, because the container is already the registration mechanism.
 A verb is an interface; anything satisfying it can serve it.
 
 ```python
-from in_lockstep import Capability, Outcome, Verb
-from in_lockstep.core.types import TestReport, TestSpec
-from in_lockstep.adapters.pytest_adapter import Test   # the interface, not the implementation
+from in_lockstep import Capability, Outcome, Test, Verb
+from in_lockstep.core.types import TestReport
 
 class ToxTest:
     verb = Verb.TEST
     capabilities = frozenset({Capability.EXECUTES_CODE, Capability.READS_REPO})
 
-    async def invoke(self, ctx, spec: TestSpec) -> Outcome[TestReport]:
+    async def invoke(self, ctx, request: Test) -> Outcome[TestReport]:
         ...
 
 lockstep.bind(Test, ToxTest())
 ```
+
+`Test` is the request type: workflows do `ctx.do(Test(...))`, and the request's type is what the
+binding serves — so the same `Test` names both what a workflow asks for and what your adapter
+receives.
 
 `capabilities` is the part people skip and should not. Policy keys off it without knowing anything
 about your adapter: whether egress enforcement is mandatory, whether an approval gate applies,
@@ -33,25 +36,29 @@ transmission — a fetch tool mutates nothing and is still an egress channel.
 ## A verb of your own
 
 The shipped verbs are not a closed set. A verb is a name — a routing key and a telemetry label —
-so declaring one is constructing it, and the interface it serves is an ordinary marker class:
+so declaring one is constructing it, and the request it serves is an ordinary frozen dataclass:
 
 ```python
+from dataclasses import dataclass
+
 from in_lockstep import Capability, Outcome, Status, Verb
 
 BENCHMARK = Verb("benchmark")
 
+@dataclass(frozen=True)
 class Benchmark:
-    """The verb interface. Workflows ask for this; a binding decides what serves it."""
+    """The Benchmark request. Workflows do `ctx.do(Benchmark(...))`; a binding decides what runs it."""
+    iterations: int = 100
 
 class PyperfBenchmark:
     verb = BENCHMARK
     capabilities = frozenset({Capability.EXECUTES_CODE})
 
-    async def invoke(self, ctx, spec) -> Outcome[dict]:
+    async def invoke(self, ctx, request) -> Outcome[dict]:
         ...
 
 lockstep.bind(Benchmark, PyperfBenchmark())
-outcome = await ctx.do(Benchmark, BenchSpec(iterations=1000))
+outcome = await ctx.do(Benchmark(iterations=1000))
 ```
 
 `Verb` used to be a closed enum, which made binding a new interface possible and *mislabelled*:
@@ -97,7 +104,7 @@ from in_lockstep.prompts.review import LENSES
 
 lockstep.bind(
     Review,
-    AiReview(invoker_factory, lenses={**LENSES, "security": OurSecurityReview}),
+    AiReview(lenses={**LENSES, "security": OurSecurityReview}),
 )
 ```
 
@@ -134,7 +141,7 @@ house = implement_layers().plus(
 ```
 
 ```python
-lockstep.bind(Implement, AiImplement(invoker_factory, registry=registry, layers=house))
+lockstep.bind(Implement, Oneshot(layers=house))
 ```
 
 `plus` *appends*: your guardrail lands after the framework's baseline and ahead of the body, so
@@ -281,29 +288,41 @@ nothing, not at the first call.
 
 ## A strategy
 
-A binding chooses which adapter serves a verb; a strategy chooses how it goes about the work.
+The strategy IS the adapter. A binding does not choose a dispatcher configured by a string — it
+names the approach itself:
 
 ```python
-strategies.register("review/ours", Verb.REVIEW, factory=OurReviewStrategy)
-strategies.default(Verb.REVIEW, "review/ours")
+lockstep.bind(Implement, TDD())     # or Oneshot(), or your own class
 ```
 
-`strategy_id` is part of the eval subject key, so strategies are measured against each other on
-the same ground truth. Ship fixtures with a new strategy: ten unmeasured strategies are worse than
-one measured.
+Writing one is subclassing `AiStrategy` (which carries the constructor and the per-run session
+assembly) and implementing `invoke(ctx, request)`. Declare `verb`, `capabilities` — the
+load-bearing frozenset every gate reads off the bound object — and `id`, which lands on the
+report so an eval subject and a ledger record can key on the approach that ran. Ship fixtures
+with a new strategy: ten unmeasured strategies are worse than one measured.
 
-If your strategy holds a path grant, register it `privileged=True`. Selection can be driven by
-ticket labels, and anyone can write a ticket label.
+Which strategy runs is a bind-time code decision in `lockstep.py`, reviewed like any other line.
+There is no request-time selection and no registry id, so nothing a ticket carries — a label, a
+comment, a body — can steer a run toward an approach that holds a path grant. What used to be a
+registry refusal (a privileged strategy unreachable from untrusted input) is now structural.
 
-A registration whose factory returns something without `execute` is a **catalogue entry** — a name
-reserved for an approach nobody has written yet. `implement/direct` is that today; `implement/tdd`
-now runs. `AiImplement` refuses a catalogue entry by name rather than failing on a missing
-attribute, and `in-lockstep ls` is where you can see which is which.
+Binding can also happen at the call, when the workflow should say what serves a request right at
+the execution site:
 
-### `implement/oneshot`
+```python
+outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
+```
 
-The default shipped strategy: one session, one model, a tool set that can read, search, stage writes
-and run a command. (`implement/tdd` also runs — a test-first loop, below — but oneshot is the cheap
+`via=` is call-scoped: it never touches the container, so nothing leaks into later calls, and the
+same capability-keyed middleware gates the supplied adapter exactly as it would a bound one. It is
+still code choosing — `lockstep.py` loads from a trusted ref — and it is an *override* for a verb
+the module binds, not a replacement: the startup refusals (`UngatedAgency`, the budget checks)
+scan bound adapters, so keep the binding and pass the same instance.
+
+### `Oneshot`
+
+The scaffold's default: one session, one model, a tool set that can read, search, stage writes
+and run a command. (`TDD` also ships — a test-first loop, below — but oneshot is the cheap
 default.)
 
 ```bash
@@ -340,20 +359,20 @@ working directory read-write, so without it a command from an allowlisted progra
 `make`, `node` — could write `.git/hooks` or `.lockstep/lockstep.py` on the real repository, which
 is the write path `ChangeGuard` governs for `write_file` but cannot see once a process is running.
 Running in a discarded copy means those writes land nowhere that a later run will read. (One
-consequence, shared with `implement/tdd`: a linked worktree's `.git` is a gitlink outside a
+consequence, shared with `TDD`: a linked worktree's `.git` is a gitlink outside a
 container's mount, so a command that needs git will not resolve it inside a container — `pytest`,
 `ruff` and `mypy` do not care.)
 
 One thing to know before reading a session's transcript: the working tree `run_script` runs against
 does **not** contain that session's staged writes — it is HEAD in a copy. It tells the model what
 the existing behaviour is, not whether its change works. Verifying a change is what the `apply` half
-is for, and `implement/tdd` (above) is what runs the suite against the staged change directly.
+is for, and `TDD` (above) is what runs the suite against the staged change directly.
 
 `--max-turns` defaults to 40. That is a runaway backstop, not the budget: every turn re-sends the
 accumulated history, so the thing that actually stops a long session is the per-turn spend check,
 which refuses *before* the call that would cross the ceiling.
 
-### `implement/tdd`
+### `TDD`
 
 Test-first, enforced by the strategy rather than requested in a prompt. It runs in two model steps
 with a real `Test` run between them: it asks for a failing test, **materialises that test in a
@@ -363,11 +382,12 @@ with `tdd.not_red`; an implementation that leaves the test failing comes back `t
 than opening a pull request that does not work.
 
 This is where the `run_script` caveat above stops applying: oneshot's `run_script` sees the tree as
-it was, but tdd's verdict comes from `ctx.do(Test, TestSpec(root=…))` against the *materialised*
-change, so it reflects the code as proposed. Because it needs to run the suite, `implement/tdd`
+it was, but tdd's verdict comes from `ctx.do(Test(root=…))` against the *materialised*
+change, so it reflects the code as proposed. Because it needs to run the suite, `TDD`
 requires a `Test` verb bound and refuses up front (`tdd.no_test`) if none is — it will not degrade to
-an untested oneshot. Select it per call (`--strategy implement/tdd`) or make it the default
-(`lockstep.strategies.default(Verb.IMPLEMENT, "implement/tdd")`).
+an untested oneshot. Bind it — `lockstep.bind(Implement, TDD(...))` — and `in-lockstep ls` prints
+`Implement -> TDD`, so how implementing happens is one visible line. The CLI's `--strategy tdd`
+does the same for a repository that has bound nothing.
 
 ## The path a project takes
 
@@ -378,7 +398,7 @@ replace it.
 in `.lockstep/lockstep.py` and you run them by hand:
 
 ```bash
-in-lockstep run implement/from-issue --arg issue='#59' --approve --budget 2.00
+in-lockstep run implement/from-ticket --arg ticket='#59' --approve --budget 2.00
 ```
 
 `--approve` says you are the human watching. That is a real grant and a weak one, and the ledger
@@ -388,7 +408,7 @@ records it as `attended` so it is never confused with a stronger one.
 process changes: an event fires, and CI runs **the same command**.
 
 ```yaml
-- run: in-lockstep run implement/from-issue --arg issue="#${ISSUE}" --approved-by "${ACTOR}"
+- run: in-lockstep run implement/from-ticket --arg ticket="#${ISSUE}" --approved-by "${ACTOR}"
 ```
 
 `--approved-by` replaces `--approve` because nobody is watching, so the name *is* the grant and has
@@ -405,8 +425,9 @@ there.
 namespace. Bind an interface to an adapter, register strategies for it, and `in-lockstep ls` prints
 the result. See *A verb of your own* and *A strategy* above.
 
-**Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`, `TicketSource`
-and `LedgerStore` are protocols in `core/ports/`, and nothing in `core` knows what GitHub is. Both
+**Where this is honest about its limits.** The *shapes* are host-agnostic — `Scm`
+(`platform/scm`), `TicketSource` (`platform/tickets`) and `LedgerStore` (`core/ports/`) are
+protocols, and nothing in `core` knows what GitHub is. Both
 hosts now have implementations: `GitHubScm`/`GitHubIssues` and `GitLabScm`/`GitLabIssues` ship, and
 `hosted_scm()`/`hosted_tickets()` in `platform/hosted.py` pick the detected host's pair so a
 scaffold module runs unedited on either. What GitLab still lacks is the *comment* trigger:
@@ -422,15 +443,18 @@ alone.
 The rule is one line long: **process goes in `.lockstep/lockstep.py`, CI invokes it.**
 
 ```python
-@workflow(id="implement/from-issue")
-async def implement_from_issue(ctx, issue: str) -> Outcome:
-    ticket = await ctx.container.resolve(TicketSource).get(issue)
-    return await ctx.do(Implement, ImplementSpec(ticket=ticket))
+@workflow(id="implement/from-ticket")
+async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
+    return await ctx.do(Implement(ticket=await tickets.get(ticket)))
 ```
 
 ```bash
-in-lockstep run implement/from-issue --arg issue='#59' --budget 2.00
+in-lockstep run implement/from-ticket --arg ticket='#59' --budget 2.00
 ```
+
+The signature is the contract: `ticket` arrives from `--arg ticket=...`, and `tickets` is filled
+from the container because its annotation names a bound port — the dispatcher resolves
+`TicketSource` so the body never touches `ctx.container`.
 
 `--arg name=value` is repeatable and values arrive as strings, which usefully bounds what a
 CLI-runnable workflow can take: one needing a list of tickets takes a label or a path, not the

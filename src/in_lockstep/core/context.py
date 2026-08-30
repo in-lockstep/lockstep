@@ -171,6 +171,11 @@ class RunContext:
     recovering: bool = False
     #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
     approval: Approval = field(default_factory=Approval)
+    #: The per-verb model routes, snapshotted from `lockstep.models.routes` at `context()` time.
+    #: This is how an AI adapter bound with no explicit invoker finds its model: the snapshot
+    #: happens after the whole module executed, so a `models.route(...)` line may appear before
+    #: or after the bind that relies on it.
+    models: dict[str, str] = field(default_factory=dict)
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()
@@ -179,24 +184,19 @@ class RunContext:
 
     def call(
         self,
-        iface: type[Any],
-        inp: object,
+        request: object,
         *,
-        using: str | None = None,
+        via: object | None = None,
         step: str | None = None,
-        strategy: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> ActionCall:
-        """Declare an invocation without starting it."""
-        return ActionCall(
-            verb=None,
-            iface=iface,
-            input=inp,
-            using=using,
-            step=step,
-            strategy=strategy,
-            middleware=middleware,
-        )
+        """Declare a request without running it.
+
+        The request object is the whole ask: its type is what the container resolves an adapter
+        for, and its fields are the payload — `ctx.call(Review(base=..., head=...))`. `via=`
+        names the adapter for this call instead — see `do`.
+        """
+        return ActionCall(request, via=via, step=step, middleware=middleware)
 
     async def run_call(self, call: ActionCall) -> Outcome[Any]:
         """Resolve the bound adapter, wrap it in the chain, and record the step."""
@@ -209,7 +209,10 @@ class RunContext:
                 reason="killswitch",
             )
 
-        action: Any = self.container.resolve(call.iface, call.using)
+        # A call-scoped adapter wins over the container binding — the call site said `via=`, and
+        # code in the lifecycle module is exactly who may decide that. The container is never
+        # touched, so the choice cannot leak into later calls.
+        action: Any = call.via if call.via is not None else self.container.resolve(call.iface)
         call.verb = verb_of(action)
         step_id = self._step_id(call)
         capabilities = capabilities_of(action)
@@ -247,18 +250,24 @@ class RunContext:
 
     async def do(
         self,
-        iface: type[Any],
-        inp: object,
+        request: object,
         *,
-        using: str | None = None,
+        via: object | None = None,
         step: str | None = None,
-        strategy: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> Outcome[Any]:
-        """Declare and run. The composition of `call` and `run_call`, and nothing more."""
-        return await self.run_call(
-            self.call(iface, inp, using=using, step=step, strategy=strategy, middleware=middleware)
-        )
+        """Declare and run — `await ctx.do(Review(base=..., head=...))`.
+
+        `via=` binds at the call, for this call only: `ctx.do(Implement(...), via=TDD())` says
+        right at the execution site what serves the request, without consulting or mutating the
+        container. The same capability-keyed middleware gates it either way. The startup
+        refusals (`UngatedAgency`, the budget checks) scan *bound* adapters, so `via=` is an
+        override for a verb the module binds, not a way to run a spender the module never
+        declared.
+
+        The composition of `call` and `run_call`, and nothing more.
+        """
+        return await self.run_call(self.call(request, via=via, step=step, middleware=middleware))
 
     # -- step identity -------------------------------------------------------------
 

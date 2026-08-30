@@ -389,6 +389,34 @@ def credentials_for(auth: Auth, provider: str) -> Credentials:
     return creds
 
 
+class MissingModelRoute(LookupError):
+    """An AI adapter ran with no explicit invoker and no model routed for its verb."""
+
+
+def routed_invoker(verb: Any) -> Any:
+    """A `Callable[[ctx], AiInvoker]` that reads the model route off the run context.
+
+    The default every AI adapter falls back to when no `invoker_factory=` was passed: the model
+    comes from `lockstep.models.route(<verb>, ...)` — snapshotted onto `RunContext.models` at
+    `context()` time, so route lines may appear before or after the bind — and egress from the
+    bound `EgressPolicy`, via `invoker_factory`'s own lazy resolution. An explicit
+    `invoker_factory=` remains the seam for a custom `ProviderRegistry` or provider.
+    """
+    key = getattr(verb, "value", str(verb))
+
+    def build(ctx: Any) -> Any:
+        model_id = str((getattr(ctx, "models", None) or {}).get(key, "") or "")
+        if not model_id:
+            raise MissingModelRoute(
+                f"no model routed for {key!r}: add `lockstep.models.route(\"{key}\", ...)` to "
+                f"lockstep.py, or pass `invoker_factory=` to the adapter. Nothing was sent and "
+                f"nothing was charged."
+            )
+        return invoker_factory(model_id)(ctx)
+
+    return build
+
+
 def invoker_factory(
     model_id: str,
     *,
