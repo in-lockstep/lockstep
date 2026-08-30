@@ -20,6 +20,30 @@ lockstep.bind(Validate, RuffValidate())
 lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
+## What ships today
+
+Six core workflows are the goal. This table is what actually runs, kept honest by a test that
+reads it: a row claiming **runs** must name a verb that ships, and a **planned** row must not —
+so implementing one without flipping its row fails CI, and so does deleting a feature the table
+still advertises.
+
+| Capability | Status | What that means |
+|---|---|---|
+| Code Review | runs | `review --aspect security`, per-lens prompts, cassette-replayable offline |
+| Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
+| Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
+| Triage | runs | `triage` from a ticket, `$0` on a local model |
+| Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
+| RFE | planned | roadmap item 25 — rides the triage vertical |
+| Flaky-test adapter | planned | roadmap item 26 |
+| GitHub | runs | SCM, issues, chat-ops gate, trampolines |
+| GitLab | partial | `GitLabScm`/`GitLabIssues` and host-aware `init` ship; no live dogfooded pipeline yet |
+| Keyless CI (federation) | runs | GitHub OIDC exchanged at Anthropic; no `ANTHROPIC_API_KEY` in secrets |
+| Org standards as a package | runs | `in_lockstep.standards` entry points at `Tier.PLUGIN`; worked example in `examples/acme-standards` |
+| Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
+| Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
+| Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
+
 ## Why code rather than configuration
 
 A change to your review policy becomes a diff in a pull request, with blame, history and rollback.
@@ -35,12 +59,16 @@ for: it prints what will actually run.
 ```bash
 in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
 in-lockstep review --base ...    # review a change, one lens at a time
+in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing itself
 in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
+in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local model
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
-in-lockstep ls                   # the resolved container, middleware and policy
+in-lockstep ls                   # the resolved container, middleware, standards and policy
 in-lockstep doctor               # are the controls actually in place?
-in-lockstep report --by model    # what the ledger adds up to: runs, failures, spend
+in-lockstep report --by model    # what the ledger adds up to — and whether it was rewritten
 in-lockstep history --explain X  # one run's record, every field, in words
+in-lockstep egress-manifest      # the hosts a run may dial, for the proxy that enforces it
+in-lockstep gate --actor ...     # is this person allowed to fire a chat-ops trigger
 in-lockstep eval report          # the corpus, offline
 in-lockstep apply --from-artifact # the privileged half of the two-job trampoline
 ```
@@ -68,12 +96,25 @@ the constraints that apply to reviewing it — so it comes from the base ref ins
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md)
-- [Extending](docs/extending.md) — adapters, prompts, organisation standards, strategies
-- [Trampoline contract](docs/trampoline.md) — what a CI file owes the framework, on any host
-- [Controls crosswalk](docs/controls-crosswalk.md) — what in-process invocation costs, honestly
-- [Design](design/in-lockstep-design.md) and [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md)
-- [Exit gates](design/gates.md)
+**Evaluating?** The matrix above says what runs; [getting started](docs/getting-started.md)
+shows every command with the output it actually prints, and costs nothing to follow —
+`--offline` and `--dry-run` need no key.
+
+**Adopting?** The [cookbook](docs/cookbook.md) is ten recipes of twenty lines or fewer — keyless
+CI, org standards as a package, the daily ceiling, chat-ops TDD. Then
+[extending](docs/extending.md) for adapters, prompts and strategies, and the
+[trampoline contract](docs/trampoline.md) for what a CI file owes the framework on any host.
+
+**Auditing?** The [controls crosswalk](docs/controls-crosswalk.md) is the honest accounting of
+what in-process invocation costs — what replaced each substrate control, what is weaker, what
+was lost — and [exit gates](design/gates.md) tracks every claimed control against the test that
+holds it, including the ones that are `unit only` or `unmet`.
+
+**Why is it like this?** The essays: [design](design/in-lockstep-design.md) and
+[ADR 0001](design/adr/0001-pivot-to-runnable-framework.md). Long, and deliberately below the
+fold rather than deleted — they are where the decisions above stop being assertions.
+
+Contributions: [CONTRIBUTING.md](CONTRIBUTING.md) ends with a wanted list.
 
 ## Installing
 

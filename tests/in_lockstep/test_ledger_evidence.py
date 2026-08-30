@@ -69,8 +69,11 @@ def test_a_run_record_says_when_against_what_and_under_which_config(hermetic: Pa
     result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(hermetic)])
     assert "spend" in result.output, result.output
 
-    record = asyncio.run(GitLedger(root=hermetic).read("selfcheck-local"))
-    assert record is not None
+    records = [
+        r for r in GitLedger(root=hermetic).records() if str(r.get("run_id", "")).startswith("selfcheck-")
+    ]
+    assert records, "the run must have left a selfcheck record"
+    record = records[-1]
     assert record["schema"] == SCHEMA
     assert str(record["ts"]).endswith("+00:00"), "wall-clock UTC, unambiguous forever"
     head = subprocess.run(
@@ -210,6 +213,43 @@ def test_history_explain_renders_one_record_whole(hermetic: Path) -> None:
     assert "trusted ref origin/main" in result.output
     assert "octocat  (unattended)" in result.output
     assert "fix.red: reproducer stayed red" in result.output
+
+
+def test_history_explain_finds_the_latest_run_by_prefix(hermetic: Path) -> None:
+    """Run ids carry a per-invocation stamp, so the name a person remembers is a prefix. An
+    exact id still resolves; a prefix resolves to the newest matching record and says so."""
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    for n, ts in ((1, "2026-08-28T10:00:00+00:00"), (2, "2026-08-29T10:00:00+00:00")):
+        asyncio.run(
+            ledger.append(
+                f"review-security-2026082{7 + n}T100000Z-{n:04x}",
+                {"kind": "review", "aspect": "security", "status": "succeeded", "ts": ts},
+            )
+        )
+    result = CliRunner().invoke(main, ["history", "--explain", "review-security"])
+    assert result.exit_code == 0, result.output
+    assert "review-security-20260829T100000Z-0002" in result.output
+    assert "latest of 2" in result.output
+
+
+def test_a_rerun_appends_a_second_record_instead_of_rewriting_the_first(hermetic: Path) -> None:
+    """The failure behind per-invocation run ids: a fixed id made a routine local re-run
+    overwrite its own record — `verify()` flagged it as tampering (teaching people to ignore the
+    alarm), and the replaced record's cost vanished from the daily spend window."""
+    _repo(hermetic)
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    (hermetic / "sample.py").write_text("x = 1\n")
+    for _ in range(2):
+        result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(hermetic)])
+        assert "spend" in result.output, result.output
+
+    ledger = GitLedger(root=hermetic)
+    ids = [
+        str(r.get("run_id")) for r in ledger.records() if str(r.get("run_id", "")).startswith("selfcheck-")
+    ]
+    assert len(ids) == 2 and len(set(ids)) == 2, ids
+    assert ledger.verify() == [], "an ordinary re-run must not read as tampering"
 
 
 def test_history_explain_refuses_an_unknown_run_by_name(hermetic: Path) -> None:
