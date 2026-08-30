@@ -116,15 +116,21 @@ def test_the_actor_gate_runs_before_anything_holding_a_credential() -> None:
 
 
 def test_no_job_holds_a_provider_key_and_write_access() -> None:
-    """The split the whole two-job design exists for, asserted rather than reviewed."""
+    """The split the whole two-job design exists for, asserted rather than reviewed.
+
+    `id-token: write` is exempt, deliberately: it is not repository write access — it lets the
+    job mint the runner's own identity token, which is HOW the provider credential comes to
+    exist under workload identity federation. That grant belongs in exactly the job that calls
+    the model; what must never sit beside a provider credential is the ability to write the
+    repository, and that is what this asserts.
+    """
     for path in ALL_WORKFLOWS:
         for name, job in (_load(path.name).get("jobs") or {}).items():
             body = yaml.dump(job)
             spends = "ANTHROPIC_API_KEY" in body
             permissions = job.get("permissions") or {}
-            writes = any(v == "write" for v in permissions.values())
-            granted = sorted(k for k, v in permissions.items() if v == "write")
-            assert not (spends and writes), (
+            granted = sorted(k for k, v in permissions.items() if v == "write" and k != "id-token")
+            assert not (spends and granted), (
                 f"{path.name}:{name} holds a provider credential and {granted} write access in one process"
             )
 

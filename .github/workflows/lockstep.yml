@@ -33,6 +33,12 @@ on:
 
 permissions:
   contents: read
+  # Workload identity federation: the review job may mint a short-lived GitHub OIDC token, which
+  # the framework exchanges at Anthropic for the run's credential — no long-lived provider key
+  # in repository secrets. On a pull request from a FORK this permission is not granted by
+  # GitHub regardless of what is written here, which is why the review step below runs for a
+  # fork only when a static key exists.
+  id-token: write
 
 concurrency:
   group: lockstep-${{ github.ref }}
@@ -58,6 +64,10 @@ jobs:
         run: uv run in-lockstep doctor
         continue-on-error: true
       - name: Review
+        # A fork's pull request gets neither secrets nor an id-token, so there the review is
+        # skipped rather than failed — a red check the contributor cannot fix teaches everyone
+        # to ignore red. Same-repo pull requests always run: federation needs no secret.
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           uv run in-lockstep review \
             --base "origin/${GITHUB_BASE_REF}" \
@@ -65,7 +75,14 @@ jobs:
             --aspect security \
             --budget 0.75
         env:
+          # Optional once federation is configured: a static key set here still wins, and its
+          # absence routes the framework to federation.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Workload identity federation. Identifiers, not secrets — see implement.yml. The
+          # framework mints the GitHub JWT itself; no fetch step belongs in this file.
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
           # A variable, not a secret: a workspace id is an identifier, and putting one in
           # `secrets` would seed Redact with it and mask it out of the errors that name it.
           # Empty when unset, which is correct — a key that is not identity-linked needs no

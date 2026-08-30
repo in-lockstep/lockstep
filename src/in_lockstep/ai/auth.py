@@ -74,11 +74,18 @@ class OidcResolver:
 
     Note the interaction with redaction: a federated token never appears in the environment, so an
     env-scraping redactor could not see it. It is redactable only because Auth mints it.
+
+    GitHub Actions only for now. GitLab CI JWT support is a separate step.
     """
 
     audience: str = "in-lockstep"
 
     def resolve(self, request: AuthRequest) -> dict[str, str]:
+        # Only answer requests that ask for an id_token. A provider wanting api_key must fall
+        # through to the next resolver in the chain, even when CI OIDC variables are present.
+        if "id_token" not in request.keys:
+            return {}
+
         request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
         request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
         if not (request_url and request_token):
@@ -120,7 +127,7 @@ class Auth:
         *,
         registry: SecretRegistry | None = None,
     ) -> None:
-        self.resolvers = resolvers or [EnvResolver()]
+        self.resolvers = resolvers or [OidcResolver(), EnvResolver()]
         self.registry = registry or redact_registry
 
     @classmethod

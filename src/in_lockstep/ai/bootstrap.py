@@ -30,7 +30,7 @@ __all__ = [
     "default_registry",
     "table_for",
 ]
-from .auth import Auth, AuthRequest, AuthTarget
+from .auth import Auth, AuthRequest, AuthTarget, OidcResolver
 
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com"
 
@@ -118,6 +118,26 @@ def _anthropic_workspace() -> str:
     )
 
 
+#: Service-account ids are tagged, like workspace ids. Checked locally for the same reason:
+#: the natural mistake is the account's NAME — which is what the Console displays — and the
+#: token exchange refuses it with an HTTP 400 after a network round-trip that teaches nothing
+#: about where the right value lives. This run proved it: `in-lockstep-gh-sa` went to the
+#: exchange and came back `service_account_id: does not have prefix 'svac_'`.
+SERVICE_ACCOUNT_PREFIX = "svac_"
+
+
+def _anthropic_service_account() -> str:
+    value = os.environ.get("ANTHROPIC_SERVICE_ACCOUNT_ID", "").strip()
+    if not value or value.startswith(SERVICE_ACCOUNT_PREFIX):
+        return value
+    raise MissingCredential(
+        f"ANTHROPIC_SERVICE_ACCOUNT_ID is {value!r}, which looks like a service-account name "
+        f"rather than its id. The id is tagged {SERVICE_ACCOUNT_PREFIX}… and appears in the "
+        f"Console when you open the service account. Unset it to let the federation rule "
+        f"decide, or set the tagged id. Nothing was sent and nothing was charged."
+    )
+
+
 def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     """The zero-config set. A repository re-registers any of these in its own module."""
     auth = auth or Auth()
@@ -127,13 +147,30 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     # rather than demanded in `lockstep.py`, because it is per-developer rather than per-project:
     # two people on one repository authenticate into different workspaces.
     workspace = _anthropic_workspace()
+    # Workload identity federation identifiers travel the same way — in settings, read HERE,
+    # because a provider never reads the environment (GATE-AUTH-1: credentials arrive through
+    # the constructor, or Redact cannot be seeded; identifiers follow the same road so the rule
+    # has no exceptions to remember). The `federation-` prefix keeps them out of the
+    # `anthropic-*` header filter: they parameterise the token exchange, they are not headers.
+    federation = {
+        key: value
+        for key, value in (
+            ("federation-rule-id", os.environ.get("ANTHROPIC_FEDERATION_RULE_ID", "")),
+            ("federation-organization-id", os.environ.get("ANTHROPIC_ORGANIZATION_ID", "")),
+            ("federation-service-account-id", _anthropic_service_account()),
+        )
+        if value
+    }
     registry.register(
         "anthropic",
         lambda s, c: _anthropic(s, c),
         settings=ProviderSettings(
             base_url="",
             timeout_seconds=600.0,
-            extra={"anthropic-workspace-id": workspace} if workspace else {},
+            extra={
+                **({"anthropic-workspace-id": workspace} if workspace else {}),
+                **federation,
+            },
         ),
         data_policy=DataPolicy.EXTERNAL,
         endpoint=ANTHROPIC_ENDPOINT,
@@ -283,6 +320,44 @@ _CLOUD_KEYS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: The audience the GitHub JWT is minted for when it will be exchanged at Anthropic's token
+#: endpoint. Has to match what the federation rule in the Console expects; overridable for a
+#: deployment whose rule was configured against a different value.
+ANTHROPIC_FEDERATION_AUDIENCE = "https://api.anthropic.com"
+
+
+def _anthropic_federation_configured() -> bool:
+    """Whether workload identity federation is set up for the Anthropic provider.
+
+    The rule id and organisation id are the SDK's required pair (its credential chain returns
+    None without both), and they are identifiers rather than secrets — which is why they live in
+    plain CI env, and why checking them here leaks nothing.
+    """
+    return bool(
+        os.environ.get("ANTHROPIC_FEDERATION_RULE_ID") and os.environ.get("ANTHROPIC_ORGANIZATION_ID")
+    )
+
+
+def _federation_credentials(auth: Auth, provider: str) -> Credentials:
+    """A short-lived GitHub OIDC token for the SDK to exchange, or the signal to let the SDK's
+    own chain do everything.
+
+    An operator who already supplies `ANTHROPIC_IDENTITY_TOKEN[_FILE]` gets `Credentials.none()`
+    — the same empty-is-ambient signal the cloud providers use — and the SDK reads, exchanges
+    and caches on its own. Otherwise the token is minted here, through the same `OidcResolver`
+    the default chain carries, but with the audience the federation rule expects rather than the
+    chain default: an audience is part of what the rule validates, and a token minted for the
+    wrong one is refused at the exchange. Minted through `Auth`, not around it, so the JWT is
+    seeded into redaction before anything can render it.
+    """
+    if os.environ.get("ANTHROPIC_IDENTITY_TOKEN") or os.environ.get("ANTHROPIC_IDENTITY_TOKEN_FILE"):
+        return Credentials.none()
+    minting = Auth.chain(OidcResolver(audience=ANTHROPIC_FEDERATION_AUDIENCE), registry=auth.registry)
+    return minting.credentials_for(
+        AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=("id_token",))
+    )
+
+
 def credentials_for(auth: Auth, provider: str) -> Credentials:
     if provider in _CLOUD_KEYS:
         keys = _CLOUD_KEYS[provider]
@@ -294,12 +369,21 @@ def credentials_for(auth: Auth, provider: str) -> Credentials:
     creds = auth.credentials_for(
         AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=("api_key",))
     )
+    if not creds.secret_values() and provider == "anthropic" and _anthropic_federation_configured():
+        # No long-lived key, but federation is configured: a short-lived token minted per run is
+        # the arrangement this framework prefers, so its absence-of-a-key path runs BEFORE the
+        # refusal. A static ANTHROPIC_API_KEY still wins when both are present — same precedence
+        # the SDK documents — because an explicitly set key is somebody meaning it.
+        return _federation_credentials(auth, provider)
     if not creds.secret_values():
         var = f"{provider.upper().replace('-', '_')}_API_KEY"
         raise MissingCredential(
             f"no credential for provider {provider!r}. Set {var}, or bind a resolver that can "
             f"mint one — `Auth.chain` takes an OIDC resolver ahead of the environment, which is "
             f"the arrangement this framework prefers because a federated token is short-lived. "
+            f"For Anthropic, workload identity federation also works: set "
+            f"ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID (plus id-token: write "
+            f"on GitHub Actions) and no key is needed at all. "
             f"Nothing was sent and nothing was charged."
         )
     return creds

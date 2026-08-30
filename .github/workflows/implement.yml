@@ -73,6 +73,7 @@ jobs:
           ACTOR: ${{ github.event.comment.user.login }}
           ASSOCIATION: ${{ github.event.comment.author_association }}
 
+
   implement:
     needs: gate
     runs-on: ubuntu-24.04
@@ -82,6 +83,12 @@ jobs:
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the issue. The split
       # this file is built around is about WRITE access.
       issues: read
+      # Workload identity federation: this job may mint a short-lived GitHub OIDC token, which
+      # the framework exchanges at Anthropic for the run's credential — no long-lived provider
+      # key in repository secrets. Granted to THIS job only: gate and propose call no model, and
+      # an identity token in the job holding the write token would put both credentials in one
+      # process, which is the co-residency the three-job split exists to prevent.
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
@@ -113,10 +120,19 @@ jobs:
           # A name GitHub computed and the gate above verified, not one the comment claimed.
           ACTOR: ${{ needs.gate.outputs.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional once federation is configured: a static key set here still wins (an
+          # explicitly set key is somebody meaning it), and its absence is what routes the
+          # framework to the federation path below.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # A variable, not a secret: a workspace id identifies, it does not authenticate, and
-          # putting one in `secrets` would seed Redact with it and mask it out of the errors that
-          # name it.
+          # Workload identity federation. These four are identifiers, not secrets — putting one
+          # in `secrets` would seed Redact with it and mask it out of the errors that name it.
+          # The framework mints the GitHub JWT itself (with the audience the federation rule
+          # expects) and hands it to the SDK's token exchange; no fetch step belongs in this
+          # file, which contains no logic.
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
+          # A variable, not a secret: a workspace id identifies, it does not authenticate.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
           IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       # The record this run made lives in THIS runner's `.git` and dies with it — the job that
