@@ -11,7 +11,7 @@ import asyncio
 
 from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
 from in_lockstep.core.types import ChangeSet, TestReport, TestVerdict
-from in_lockstep.platform.report import implement_body, marker, review_comment
+from in_lockstep.platform.report import fix_body, implement_body, marker, review_comment
 
 
 def _outcome(findings=(), *, decided=True, status=Status.SUCCEEDED, usd=0.02, billed=1.0) -> Outcome:
@@ -212,3 +212,25 @@ def test_implement_body_does_not_call_an_errored_run_a_failure() -> None:
     assert "⚠️" in body and "could not be run" in body
     assert "🛑" not in body, "a suite that never started must not read as a failing one"
     assert "✅" not in body
+
+
+def test_fix_body_keeps_the_reproducer_and_the_suite_apart() -> None:
+    """Two claims, and a change can honestly have the first while failing the second.
+
+    The reproducer passing is a fact about the bug; the verdict is a fact about the rest of the
+    repository. The first fix this loop ever produced had the one and not the other, and was
+    proposed as ready for review on the strength of the half that passed.
+    """
+    verdict = TestVerdict.of("failed", True, TestReport(total=31, passed=30, failed=1))
+    body = fix_body(_cs(), verdict)
+    assert "confirmed red, and this change makes it pass" in body
+    assert "🛑" in body and "1 of 31 failed" in body
+    assert marker("fix") in body
+    assert marker("implement") not in body
+
+
+def test_fix_body_says_unverified_rather_than_implying_a_green() -> None:
+    body = fix_body(_cs(), None)
+    assert "not run" in body and "unverified" in body
+    assert "✅" not in body
+    assert "untrusted input to a model that held write tools" in body

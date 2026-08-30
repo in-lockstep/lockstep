@@ -102,6 +102,28 @@ def implement_body(changeset: Any, verdict: Any) -> str:
     return "\n".join(lines)
 
 
+def fix_body(changeset: Any, verdict: Any) -> str:
+    """The PR body for a change a fix run staged: what it did, and what the suite said about it.
+
+    Two sentences of provenance rather than `implement_body`'s one, because a fix arrives having
+    already proved something — its reproducer was confirmed red and then green — and a reviewer who
+    is not told that will go looking for the evidence. What matters is that the two claims stay
+    distinct: the reproducer passing is a fact about the bug, and the verdict is a fact about the
+    rest of the repository. A change can honestly have the first and fail the second, which is
+    exactly the run this function was written after.
+    """
+    lines = [
+        "A reproducer for this bug was written, confirmed red, and this change makes it pass.",
+        "",
+        _UNTRUSTED_WARNING,
+        "",
+        f"**Tests:** {_verdict_line(verdict)}",
+        "",
+        marker("fix"),
+    ]
+    return "\n".join(lines)
+
+
 def _verdict_line(verdict: Any) -> str:
     if verdict is None:
         return "not run — no test verb is bound, so this change is unverified."
