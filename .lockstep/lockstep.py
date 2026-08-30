@@ -29,7 +29,7 @@ from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
 from in_lockstep.platform.propose import escalate, open_reviewable
-from in_lockstep.platform.report import implement_body
+from in_lockstep.platform.report import fix_body, implement_body
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -385,7 +385,14 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -
     if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
         # `report.changeset` is the reproducer and the fix merged. They are kept apart inside the
         # report so a reader can see which is which; what gets applied is both.
-        written = write_changeset(FIX_CHANGESET, report.changeset)
+        #
+        # Then the whole suite, against a throwaway worktree of HEAD plus that change. The
+        # strategy has already proved the reproducer goes red and then green — but that is a fact
+        # about the bug, not about the rest of the repository, and the two can disagree. The first
+        # fix this loop ever produced passed its own reproducer and broke a test elsewhere; it was
+        # proposed as ready for review on the strength of the half that passed.
+        verdict = await verdict_over_staged(ctx, lockstep.repo.root, report.changeset)
+        written = write_changeset(FIX_CHANGESET, report.changeset, verdict=verdict)
         print(f"staged    reproducer + fix -> {written}")
     return outcome
 
@@ -401,6 +408,7 @@ async def fix_propose(
     it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
     changeset = read_changeset(artifact)
+    verdict = read_verdict(artifact)
 
     if not changeset.changes:
         # An empty artifact means the fix failed: `fix/from-ticket` stages only when its reproducer
@@ -415,25 +423,42 @@ async def fix_propose(
             print(f"escalated {opened.key}")
         return Outcome(status=Status.FAILED, reason=reason, value=opened)
 
-    # Ready for review, not draft. Unlike implement, a fix reaches this point only when its own
-    # reproducer confirmed the bug and then passed, so the change is already asking for sign-off.
+    if verdict is not None and verdict.red:
+        # A fix that made its own reproducer pass and broke something else is still a failure, and
+        # it used to be the one failure this verb could not see: it opened ready for review on the
+        # strength of the reproducer alone. Same escalation implement makes, for the same reason —
+        # the suite ran and disagreed, so another attempt is the honest next move.
+        failure = (
+            f"The fix passed its reproducer but the suite went red: "
+            f"{verdict.failed} of {verdict.total} failed."
+        )
+        opened = await escalate(
+            tickets, await tickets.get(ticket), failure, max_attempts=lockstep.max_attempts
+        )
+        reason = "fix.suite_red" if opened is not None else "fix.attempts_exhausted"
+        if opened is not None:
+            print(f"escalated {opened.key}")
+        return Outcome(status=Status.FAILED, reason=reason, value=opened)
+
+    # Ready only when the whole suite agrees with the reproducer. Without a verdict — no Test verb
+    # bound, or a runner that never started — this opens a draft: the reproducer passing is a fact
+    # about the bug, and nobody has checked the rest of the repository.
+    ready = verdict is not None and verdict.green
     change = await open_reviewable(
         scm,
         changeset,
-        ready=True,
+        ready=ready,
         title=changeset.summary or f"Fix {ticket}",
-        body=(
-            "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
-            "The ticket text is untrusted input to a model that held write tools, so review this as "
-            "you would a change from a stranger who had read your repository."
-        ),
+        body=fix_body(changeset, verdict),
         ticket=ticket,
         workflow="fix",
         run_id=ctx.run_id,
     )
     await tickets.comment(
         await tickets.get(ticket),
-        f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
+        f"`/fix` opened {change.url or change.branch} as "
+        f"{'ready for review' if ready else 'a draft — the suite has not confirmed it'}. "
+        "Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
     return Outcome(status=Status.SUCCEEDED, value=change)
