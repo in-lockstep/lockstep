@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.020634,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 882,
+        "message": "Test reads arbitrary files from the repository root and passes their contents through `yaml.safe_load` and regex; no path traversal risk, but the test imports and parses `.lockstep/lockstep.py` as plain text using `re.findall` on `deadline_seconds=(\\d+)`, meaning a comment or string literal containing that pattern would silently inflate `deadlines` and could cause the assertion to pass with a wrong value. This is a test-integrity issue rather than an exploitable vulnerability, but worth noting s\u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 878,
+        "message": "The test reads workflow YAML files from `.github/workflows/*.yml` on disk at test time. If a workflow file is malformed YAML, `yaml.safe_load` raises and the test aborts without checking the remaining files. More relevant to security: the glob is rooted at `Path(__file__).resolve().parents[2]`, which is the repository root \u2014 this is correct and bounded, so no path traversal concern here.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0d0ff956fe6484752d00f79ed6c1a9111fb86c55",
+  "input_tokens": 4963,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 383,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T210306Z-3f26",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5346,
+  "ts": "2026-08-30T21:03:18+00:00",
+  "wall_seconds": 11.892
+}
