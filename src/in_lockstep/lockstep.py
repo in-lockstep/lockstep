@@ -56,6 +56,9 @@ class Lockstep:
         # into every ledger record, because which lockstep.py constrained a run is part of the
         # run's evidence.
         self.config_source = ""
+        # What `load_standards` applied, for `ls`. Empty on a bare constructor: plugins load in
+        # `detect()`, so a hand-built instance in a test carries no ambient contributions.
+        self.standards: list[str] = []
 
     # -- configuration -------------------------------------------------------------
 
@@ -77,9 +80,19 @@ class Lockstep:
 
     @classmethod
     def detect(cls, root: str | Path | None = None) -> Lockstep:
-        """Sniff the repository and CI environment. A default, not magic — always overridable."""
-        path = Path(root or os.environ.get("GITHUB_WORKSPACE") or Path.cwd())
-        return cls(repo=_detect_repo(path))
+        """Sniff the repository and CI environment. A default, not magic — always overridable.
+
+        Installed `in_lockstep.standards` entry points apply here, BEFORE this call returns —
+        `detect()` is the first line of a `lockstep.py`, so every explicit line in that file
+        runs after the organisation's package and `Tier.EXPLICIT` beats `Tier.PLUGIN` besides.
+        That is the whole inheritance story: org standards arrive by being installed, and the
+        repository overrides one line of them by writing one line.
+        """
+        from .core.standards import load_standards
+
+        instance = cls(repo=_detect_repo(Path(root or os.environ.get("GITHUB_WORKSPACE") or Path.cwd())))
+        load_standards(instance)
+        return instance
 
     # -- running -------------------------------------------------------------------
 
