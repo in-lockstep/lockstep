@@ -1,0 +1,172 @@
+# `/fix` on an issue. Hand-written and permanent; nothing generates or checks it.
+#
+# THIS FILE CONTAINS NO LIFECYCLE LOGIC. What `/fix` actually does — read the bug, write a
+# reproducer, watch it fail, fix it, watch it pass, open a pull request, reply on the thread — is
+# `fix/from-ticket` and `fix/propose` in .lockstep/lockstep.py, where it is Python that can be
+# read, tested and run on a laptop. What is here is what only the CI system can express: the
+# trigger, the job split, and which credential each job holds.
+#
+# Same three-job shape as implement.yml, for the same reason: the fixing verb writes files and
+# executes code, so the job that runs a model must not also hold a token that can write to this
+# repository. The `ai-generated` label routes to the same two workflows through
+# ai-generated.yml — a bug this loop filed itself, arriving without a gate job, because a label
+# needs write access and a comment does not.
+#
+# Actions are pinned by SHA, as everywhere: an unpinned action runs whatever the tag points at
+# next, in the job that can mint a provider credential.
+name: fix
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  # Per issue, and NOT cancel-in-progress: cancelling a run that has already called a model throws
+  # away something that was paid for.
+  group: fix-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # `startsWith` rather than `contains`: `contains` would fire on every comment that merely
+    # MENTIONS `/fix`, which includes every comment explaining why not to run it.
+    if: >-
+      !github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/fix')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      actor: ${{ steps.check.outputs.actor }}
+    steps:
+      # CODEOWNERS comes from this checkout — the default branch — never from anywhere a
+      # contributor can write.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # No provider extra and no credential of any kind: the gate decides who may ask, and calls
+      # no model to do it.
+      - run: uv sync
+      - id: check
+        run: |
+          uv run in-lockstep gate --actor "$ACTOR" --association "$ASSOCIATION"
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+        env:
+          ACTOR: ${{ github.event.comment.user.login }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+
+  fix:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Read-only, and needed: the workflow resolves `TicketSource` to fetch the bug report.
+      issues: read
+      # Workload identity federation, granted to THIS job only — the same reasoning as
+      # implement.yml. An identity token in the job holding the write token would put both
+      # credentials in one process, which is the co-residency the three-job split exists to
+      # prevent.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # With the provider extra: model SDKs are optional dependencies, so the job that calls a
+      # model has to ask for one.
+      - run: uv sync --extra anthropic
+      - run: uv run in-lockstep doctor
+        continue-on-error: true
+      # The same command a developer runs, with `--approved-by` where they would type `--approve`.
+      # $10.00 rather than implement's $25.00: DiagnoseThenFix is two phases on sonnet against one
+      # reported bug, not an exploring opus session against a feature request, and this is the verb
+      # the loop retries — a ceiling that binds each attempt is what keeps three of them bounded.
+      - run: |
+          uv run in-lockstep run fix/from-ticket \
+            --arg ticket="#${ISSUE}" \
+            --approved-by "${ACTOR}" \
+            --budget 10.00
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          # A name GitHub computed and the gate above verified, not one the comment claimed.
+          ACTOR: ${{ needs.gate.outputs.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional once federation is configured: a static key set here still wins (an
+          # explicitly set key is somebody meaning it), and its absence is what routes the
+          # framework to the federation path below.
+          #ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Workload identity federation. These are identifiers, not secrets — putting one in
+          # `secrets` would seed Redact with it and mask it out of the errors that name it.
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
+          # A variable, not a secret: a workspace id identifies, it does not authenticate.
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      # The record this run made lives in THIS runner's `.git` and dies with it. It travels as a
+      # bundle: the unprivileged job produces, the privileged one publishes.
+      - run: uv run in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      # `fix-changeset/` is absent when the fix did not go green — `fix/from-ticket` stages nothing
+      # in that case, deliberately — so `if-no-files-found: ignore` is load-bearing, not defensive.
+      # The propose job below reads that absence as "escalate", which is the loop's whole hinge.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: |
+            fix-changeset/
+            history.bundle
+          if-no-files-found: ignore
+
+  propose:
+    needs: [gate, fix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # An environment, so this is where a human gate belongs if you want one before anything is
+    # pushed. With no protection rules it passes straight through, and the pull request is the
+    # review.
+    environment: fix
+    permissions:
+      contents: write
+      pull-requests: write
+      # Write, and used: an escalation files the next `ai-generated` issue from here.
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # NOT `--extra anthropic`. This job holds a write token and must be unable to reach a model
+      # at all; not installing the SDK makes that a fact about the environment rather than a
+      # property of the code path taken.
+      - run: uv sync
+      # Outside the workspace, deliberately: downloaded into it, `fix-changeset/` would be swept
+      # into the commit `open_change` makes.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/fix
+      - run: |
+          uv run in-lockstep run fix/propose \
+            --arg ticket="#${ISSUE}" \
+            --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Where the run record becomes durable. This job holds `contents: write` and no provider
+      # credential, which is exactly the right half to publish evidence from.
+      - run: |
+          uv run in-lockstep history \
+            --from-bundle "${RUNNER_TEMP}/fix/history.bundle" \
+            --push
+        if: always()
+        continue-on-error: true

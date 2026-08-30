@@ -1,0 +1,119 @@
+# The self-feeding half of the loop: an issue labeled `ai-generated` — by a maintainer, or by this
+# framework when an earlier run failed its tests — routes straight to the fixing verb.
+#
+# THIS FILE CONTAINS NO LIFECYCLE LOGIC. It runs `fix/from-ticket` and `fix/propose` from
+# .lockstep/lockstep.py, the same two workflows `/fix` runs, and holds only the trigger, the job
+# split and the credentials.
+#
+# There is no gate job here, and that is deliberate: adding a label needs write access, so the
+# label IS the authorization that the `/fix` comment path needs a gate to establish. Anyone who can
+# see this repository can comment; not anyone can label.
+#
+# WHAT BOUNDS THE LOOP. `lockstep.max_attempts` (3): each escalation carries an `ai-attempt-N`
+# label, `escalate` reads the highest N off the source issue, and at the cap it comments asking for
+# a human instead of filing anything — nothing new gets the `ai-generated` label, so this trigger
+# stops firing on its own. Beside that: `--budget` per run, the per-issue concurrency group, and
+# the fact that every exit from the loop is a pull request a person still has to merge.
+name: ai-generated
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions: {}
+
+concurrency:
+  group: ai-generated-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    # `labeled` carries the one label just added; `opened` carries the whole set, because an issue
+    # created with the label fires `opened` and not always a separate `labeled`. Check both.
+    if: >-
+      github.event.label.name == 'ai-generated' ||
+      contains(github.event.issue.labels.*.name, 'ai-generated')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+      # Workload identity federation, granted to THIS job only — see implement.yml.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync --extra anthropic
+      - run: uv run in-lockstep doctor
+        continue-on-error: true
+      # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when this
+      # framework opened the follow-up itself. The grant is the write-gated label, not a comment,
+      # and recording which it was is the point of the flag.
+      - run: |
+          uv run in-lockstep run fix/from-ticket \
+            --arg ticket="#${ISSUE}" \
+            --approved-by "labeled:${LABELER}" \
+            --budget 10.00
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          LABELER: ${{ github.event.sender.login }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      - run: uv run in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      # Absent when the fix did not go green, which is what the propose job reads as "escalate".
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: |
+            fix-changeset/
+            history.bundle
+          if-no-files-found: ignore
+
+  propose:
+    needs: fix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: fix
+    permissions:
+      contents: write
+      pull-requests: write
+      # Write, and used: this is where the next `ai-generated` issue gets filed when the fix
+      # failed, which is the edge that closes the loop.
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # NOT `--extra anthropic`: this job holds the write token and must be unable to reach a
+      # model at all.
+      - run: uv sync
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/fix
+      - run: |
+          uv run in-lockstep run fix/propose \
+            --arg ticket="#${ISSUE}" \
+            --arg artifact="${RUNNER_TEMP}/fix/fix-changeset"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          uv run in-lockstep history \
+            --from-bundle "${RUNNER_TEMP}/fix/history.bundle" \
+            --push
+        if: always()
+        continue-on-error: true

@@ -15,11 +15,11 @@ from whichever branch is under review.
 
 from in_lockstep import Lockstep, RunContext
 from in_lockstep.adapters import PytestTest, RuffValidate
-from in_lockstep.adapters.ai import TDD, Implement
+from in_lockstep.adapters.ai import TDD, DiagnoseThenFix, Fix, Implement
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import WorktreeRunner
+from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
@@ -27,7 +27,9 @@ from in_lockstep.core.spend import Budget
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
-from in_lockstep.platform.artifacts import read_changeset, write_changeset
+from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
+from in_lockstep.platform.propose import escalate, open_reviewable
+from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -163,6 +165,10 @@ lockstep.bind(Scm, GitHubScm())
 lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
 lockstep.models.route("implement", "anthropic:claude-opus-4-6")
 lockstep.models.route("triage", "local:qwen3-8b")
+# Sonnet, not the Opus that implements. A fix is a bounded task — reproduce one reported bug, make
+# the reproducer pass — and it is the verb the loop retries, so the cheaper model is the one that
+# should be running three times rather than once.
+lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 
 # -- the implementing verb ----------------------------------------------------------
 #
@@ -189,6 +195,28 @@ tdd = TDD(
     ),
 )
 lockstep.bind(Implement, tdd)
+
+
+# -- the fixing verb ----------------------------------------------------------------
+#
+# `Fix -> DiagnoseThenFix` in `in-lockstep ls`. Same sandbox and the same policy as the
+# implementing verb, because it holds the same tools: it writes a reproducer, runs it to watch it
+# fail, writes the fix, and runs it again to watch it pass. Two phases rather than one, and both
+# inside a throwaway worktree in a `--network=none` container.
+#
+# What it does NOT share with implement is the model — see the `fix` route above — and what it
+# does not share with either is a way to reach the repository: like every writing verb here it
+# stages into a ChangeSet, and the privileged half opens the change.
+fix = DiagnoseThenFix(
+    commands=WorktreeRunner(
+        Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+        lockstep.repo.root,
+    ),
+    policy=InvokePolicy.under(
+        lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
+    ),
+)
+lockstep.bind(Fix, fix)
 
 
 # -- middleware ---------------------------------------------------------------------
@@ -258,7 +286,12 @@ async def implement_from_ticket(
 
     report = outcome.value
     if report is not None and report.changeset.changes:
-        written = write_changeset(CHANGESET, report.changeset)
+        # The suite, run against a throwaway worktree of HEAD plus the staged change, before any
+        # of it travels. The verdict rides the artifact so the privileged half can decide what to
+        # open — a reviewer should learn whether the change passed from the pull request, not by
+        # waiting for CI on a branch a model wrote.
+        verdict = await verdict_over_staged(ctx, lockstep.repo.root, report.changeset)
+        written = write_changeset(CHANGESET, report.changeset, verdict=verdict)
         print(f"staged    {len(report.changeset.changes)} change(s) -> {written}")
     return outcome
 
@@ -274,6 +307,7 @@ async def implement_propose(
     before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
     changeset = read_changeset(artifact)
+    verdict = read_verdict(artifact)
 
     if not changeset.changes:
         # Still a comment. A trigger that answers only on success leaves somebody watching a
@@ -281,22 +315,122 @@ async def implement_propose(
         await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
-    change = await scm.open_change(
+    if verdict is not None and verdict.decided and not verdict.green:
+        # A change whose tests ran and failed does not become a pull request. It becomes the next
+        # `ai-generated` ticket, which the label trigger routes to the fixing verb — and because
+        # `escalate` counts attempts off the source ticket's labels, the loop stops at
+        # `lockstep.max_attempts` without any store to keep count in.
+        failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
+        opened = await escalate(
+            tickets, await tickets.get(ticket), failure, max_attempts=lockstep.max_attempts
+        )
+        reason = "implement.tests_failed" if opened is not None else "implement.attempts_exhausted"
+        if opened is not None:
+            print(f"escalated {opened.key}")
+        return Outcome(status=Status.FAILED, reason=reason, value=opened)
+
+    # Draft unless the suite went green. An unverified change — no verdict at all, because nothing
+    # was staged to run against or the Test verb refused — is not a failure, but it has not earned
+    # a place in somebody's review queue either.
+    ready = verdict is not None and verdict.green
+    change = await open_reviewable(
+        scm,
         changeset,
+        ready=ready,
         title=changeset.summary or f"Implement {ticket}",
-        body=(
-            "Written by an implement strategy and read by nobody. The ticket body is untrusted input "
-            "to a model that held write tools, so review this as you would a change from a "
-            "stranger who had read your repository — the controls bound where it could write, "
-            "not what it thought."
-        ),
+        body=implement_body(changeset, verdict),
         ticket=ticket,
         workflow="implement",
         run_id=ctx.run_id,
     )
     await tickets.comment(
         await tickets.get(ticket),
-        f"`/implement` opened {change.url or change.branch}. Nobody has read it yet.",
+        f"`/implement` opened {change.url or change.branch} as "
+        f"{'ready for review' if ready else 'a draft — its tests have not passed'}. "
+        "Nobody has read it yet.",
+    )
+    print(f"change    {change.url or change.branch}")
+    return Outcome(status=Status.SUCCEEDED, value=change)
+
+
+# -- what a `/fix` comment, or an `ai-generated` label, actually does ----------------------------
+#
+# The same two-half shape as implement, and the same reason for it: the half that reads a bug
+# report and runs a model holds the provider key, the half that opens a change holds the write
+# token, and they are separate processes because a credential split cannot be expressed inside one.
+#
+# What is different is where the work comes from. `/fix` is a person asking. The `ai-generated`
+# label is this loop asking itself: `implement/propose` above files such a ticket when a staged
+# change fails its tests, and `.github/workflows/ai-generated.yml` routes it straight back here.
+# The label is write-gated, so it is the authorization — which is why that trampoline has no gate
+# job and the `/fix` comment one does.
+
+#: Where the unprivileged half leaves the fix for the privileged half to open.
+FIX_CHANGESET = "fix-changeset"
+
+
+@workflow(id="fix/from-ticket")
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
+    """Read the bug, reproduce it, fix it, and leave the change staged for the privileged half.
+
+    Writes nothing to the tree. A fix that did not go green stages nothing — a broken fix must not
+    travel — and the propose half says so on the ticket rather than opening a pull request.
+    """
+    outcome = await ctx.do(Fix(ticket=await tickets.get(ticket)), via=fix)
+
+    report = outcome.value
+    if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
+        # `report.changeset` is the reproducer and the fix merged. They are kept apart inside the
+        # report so a reader can see which is which; what gets applied is both.
+        written = write_changeset(FIX_CHANGESET, report.changeset)
+        print(f"staged    reproducer + fix -> {written}")
+    return outcome
+
+
+@workflow(id="fix/propose")
+async def fix_propose(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
+) -> Outcome:
+    """Open the verified fix from the staged artifact, and say on the ticket what happened.
+
+    Runs in the job that holds a write token and no provider credential. What it reads came from
+    another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set before
+    it writes a byte, and refuses any branch outside the run-scoped prefix.
+    """
+    changeset = read_changeset(artifact)
+
+    if not changeset.changes:
+        # An empty artifact means the fix failed: `fix/from-ticket` stages only when its reproducer
+        # went red and then green. Open the next `ai-generated` ticket for another attempt rather
+        # than leaving the bug with nothing said — bounded by the same cap implement escalates on.
+        failure = "The automated fix did not reproduce the bug and turn it green."
+        opened = await escalate(
+            tickets, await tickets.get(ticket), failure, max_attempts=lockstep.max_attempts
+        )
+        reason = "fix.not_fixed" if opened is not None else "fix.attempts_exhausted"
+        if opened is not None:
+            print(f"escalated {opened.key}")
+        return Outcome(status=Status.FAILED, reason=reason, value=opened)
+
+    # Ready for review, not draft. Unlike implement, a fix reaches this point only when its own
+    # reproducer confirmed the bug and then passed, so the change is already asking for sign-off.
+    change = await open_reviewable(
+        scm,
+        changeset,
+        ready=True,
+        title=changeset.summary or f"Fix {ticket}",
+        body=(
+            "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
+            "The ticket text is untrusted input to a model that held write tools, so review this as "
+            "you would a change from a stranger who had read your repository."
+        ),
+        ticket=ticket,
+        workflow="fix",
+        run_id=ctx.run_id,
+    )
+    await tickets.comment(
+        await tickets.get(ticket),
+        f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
     return Outcome(status=Status.SUCCEEDED, value=change)
