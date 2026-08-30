@@ -161,6 +161,18 @@ def test_approval_gate_blocks_a_writing_action_without_a_grant() -> None:
     assert adapter.calls == 0
 
 
+def test_approval_gate_blocks_a_via_supplied_writer_without_a_grant() -> None:
+    """A call-scoped adapter is gated exactly like a bound one: `via=` names what serves the
+    call, and the gate reads the capability declaration off that."""
+    adapter = Writer()
+    container = Container()
+    ctx = RunContext(run_id="t", repo=RepoInfo(root="."), container=container, middleware=[ApprovalGate()])
+    outcome = asyncio.run(ctx.do(Thing("x"), via=adapter))
+    assert outcome.status is Status.BLOCKED
+    assert outcome.reason == "approval.required"
+    assert adapter.calls == 0
+
+
 def test_approval_gate_admits_a_granted_action() -> None:
     adapter = Writer()
     container = Container()

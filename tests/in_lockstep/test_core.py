@@ -206,6 +206,46 @@ def test_do_is_call_then_run_call() -> None:
     assert adapter.calls == 1
 
 
+def test_via_binds_at_the_call_and_only_at_the_call() -> None:
+    """`ctx.do(request, via=adapter)` serves this call with the named adapter.
+
+    The container is not consulted and not mutated: a call may name its adapter with nothing
+    bound at all, and a later call without `via=` still resolves the binding."""
+    bound = Ok()
+    supplied = Ok()
+    ctx, _ = ctx_with((Thing, bound))
+
+    outcome = asyncio.run(ctx.do(Thing("x"), via=supplied))
+    assert outcome.succeeded
+    assert supplied.calls == 1 and bound.calls == 0, "the call site's choice served the call"
+
+    asyncio.run(ctx.do(Thing("x")))
+    assert bound.calls == 1, "the next call still resolves the container binding"
+
+    unbound_ctx, _ = ctx_with()
+    lone = Ok()
+    assert asyncio.run(unbound_ctx.do(Thing("x"), via=lone)).succeeded
+    assert lone.calls == 1, "via needs no binding to exist"
+
+
+def test_capabilities_follow_the_via_adapter() -> None:
+    """Capability-keyed middleware gates what actually serves the call, bound or supplied."""
+    from in_lockstep.core.middleware import ActionCall, capabilities_for
+
+    class Dangerous:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.WRITES_FILES})
+
+        async def invoke(self, ctx, inp):  # pragma: no cover - never invoked here
+            raise AssertionError
+
+    ctx, _ = ctx_with((Thing, Ok()))
+    call = ActionCall(Thing("x"), via=Dangerous())
+    assert capabilities_for(ctx, call) == frozenset({Capability.WRITES_FILES}), (
+        "the declaration travels with the adapter the call names, not the binding"
+    )
+
+
 def test_step_ids_are_scoped_and_stable() -> None:
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter))

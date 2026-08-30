@@ -306,6 +306,19 @@ There is no request-time selection and no registry id, so nothing a ticket carri
 comment, a body — can steer a run toward an approach that holds a path grant. What used to be a
 registry refusal (a privileged strategy unreachable from untrusted input) is now structural.
 
+Binding can also happen at the call, when the workflow should say what serves a request right at
+the execution site:
+
+```python
+outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
+```
+
+`via=` is call-scoped: it never touches the container, so nothing leaks into later calls, and the
+same capability-keyed middleware gates the supplied adapter exactly as it would a bound one. It is
+still code choosing — `lockstep.py` loads from a trusted ref — and it is an *override* for a verb
+the module binds, not a replacement: the startup refusals (`UngatedAgency`, the budget checks)
+scan bound adapters, so keep the binding and pass the same instance.
+
 ### `Oneshot`
 
 The scaffold's default: one session, one model, a tool set that can read, search, stage writes

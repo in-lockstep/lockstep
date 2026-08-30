@@ -70,13 +70,17 @@ class OtelMiddleware:
         if outcome.reason:
             span.attributes["in_lockstep.reason"] = outcome.reason
 
+        # A call-scoped adapter (`via=`) is the one that actually served, so it is the one the
+        # metric names; only a container-resolved call falls back to the binding.
+        if call.via is not None:
+            adapter = type(call.via).__name__
+        elif getattr(ctx, "container", None) is not None and ctx.container.has(call.iface):  # type: ignore[attr-defined]
+            adapter = type(ctx.container.resolve(call.iface)).__name__  # type: ignore[attr-defined]
+        else:
+            adapter = "unknown"
         dimensions = {
             "verb": verb,
-            "adapter": type(
-                ctx.container.resolve(call.iface)  # type: ignore[attr-defined]
-            ).__name__
-            if getattr(ctx, "container", None) is not None and ctx.container.has(call.iface)  # type: ignore[attr-defined]
-            else "unknown",
+            "adapter": adapter,
             "status": outcome.status.value,
             "decided": str(outcome.decided).lower(),
         }

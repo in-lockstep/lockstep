@@ -179,18 +179,16 @@ lockstep.models.route("triage", "local:qwen3-8b")
 # defensible under the `UnsandboxedEgress` binding above. Wrapped in `WorktreeRunner`, so what the
 # container bind-mounts read-write is a throwaway worktree of HEAD, not the live tree: without the
 # wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
-lockstep.bind(
-    Implement,
-    TDD(
-        commands=WorktreeRunner(
-            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
-            lockstep.repo.root,
-        ),
-        policy=InvokePolicy.under(
-            lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
-        ),
+tdd = TDD(
+    commands=WorktreeRunner(
+        Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+        lockstep.repo.root,
+    ),
+    policy=InvokePolicy.under(
+        lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
     ),
 )
+lockstep.bind(Implement, tdd)
 
 
 # -- middleware ---------------------------------------------------------------------
@@ -252,7 +250,11 @@ async def implement_from_ticket(
     # `--approved-by` in CLI terms: a named human asked for this specific run, and the actor gate
     # verified them before this job started. Recorded, because a grant nobody can be traced to is
     # not much of a grant.
-    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)))
+    #
+    # `via=tdd` says at the execution site what serves this request — the same adapter the module
+    # binds above, named here so the reader of this line knows Implement means red-then-green
+    # without scrolling to the binding.
+    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
 
     report = outcome.value
     if report is not None and report.changeset.changes:

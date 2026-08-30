@@ -33,21 +33,28 @@ class ActionCall:
 
     The request object carries both the payload and the dispatch key: `iface` is its type, and the
     container resolves an adapter for that type. `verb` starts empty and is stamped after
-    resolution, from whatever adapter the binding chose.
+    resolution, from whatever adapter served the call.
+
+    `via` is a call-scoped binding: the adapter that serves THIS call, named at the call site —
+    `ctx.do(Implement(...), via=TDD())` — instead of resolved from the container. It never touches
+    the container, so nothing leaks into later calls; capability-keyed middleware reads the same
+    declaration off it that it would read off a bound adapter.
     """
 
-    __slots__ = ("verb", "iface", "input", "step", "middleware")
+    __slots__ = ("verb", "iface", "input", "via", "step", "middleware")
 
     def __init__(
         self,
         request: object,
         *,
+        via: object | None = None,
         step: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> None:
         self.verb: Verb | None = None
         self.iface: type[object] = type(request)
         self.input = request
+        self.via = via
         self.step = step
         self.middleware = tuple(middleware or ())
 
@@ -96,7 +103,12 @@ def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
     and the obvious guess — `capabilities_of(call)` — silently returns an empty set, which fails
     *open* for both of them. A helper that fails closed by construction is worth more than the four
     lines.
+
+    A call-scoped adapter (`via=`) is read directly: the declaration travels with whatever will
+    actually serve the call, bound or supplied.
     """
+    if call.via is not None:
+        return capabilities_of(call.via)
     container = getattr(ctx, "container", None)
     if container is None or not container.has(call.iface):
         return frozenset()

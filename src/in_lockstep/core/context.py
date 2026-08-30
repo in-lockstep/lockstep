@@ -186,15 +186,17 @@ class RunContext:
         self,
         request: object,
         *,
+        via: object | None = None,
         step: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> ActionCall:
         """Declare a request without running it.
 
         The request object is the whole ask: its type is what the container resolves an adapter
-        for, and its fields are the payload — `ctx.call(Review(base=..., head=...))`.
+        for, and its fields are the payload — `ctx.call(Review(base=..., head=...))`. `via=`
+        names the adapter for this call instead — see `do`.
         """
-        return ActionCall(request, step=step, middleware=middleware)
+        return ActionCall(request, via=via, step=step, middleware=middleware)
 
     async def run_call(self, call: ActionCall) -> Outcome[Any]:
         """Resolve the bound adapter, wrap it in the chain, and record the step."""
@@ -207,7 +209,10 @@ class RunContext:
                 reason="killswitch",
             )
 
-        action: Any = self.container.resolve(call.iface)
+        # A call-scoped adapter wins over the container binding — the call site said `via=`, and
+        # code in the lifecycle module is exactly who may decide that. The container is never
+        # touched, so the choice cannot leak into later calls.
+        action: Any = call.via if call.via is not None else self.container.resolve(call.iface)
         call.verb = verb_of(action)
         step_id = self._step_id(call)
         capabilities = capabilities_of(action)
@@ -247,14 +252,22 @@ class RunContext:
         self,
         request: object,
         *,
+        via: object | None = None,
         step: str | None = None,
         middleware: Sequence[Middleware] | None = None,
     ) -> Outcome[Any]:
         """Declare and run — `await ctx.do(Review(base=..., head=...))`.
 
+        `via=` binds at the call, for this call only: `ctx.do(Implement(...), via=TDD())` says
+        right at the execution site what serves the request, without consulting or mutating the
+        container. The same capability-keyed middleware gates it either way. The startup
+        refusals (`UngatedAgency`, the budget checks) scan *bound* adapters, so `via=` is an
+        override for a verb the module binds, not a way to run a spender the module never
+        declared.
+
         The composition of `call` and `run_call`, and nothing more.
         """
-        return await self.run_call(self.call(request, step=step, middleware=middleware))
+        return await self.run_call(self.call(request, via=via, step=step, middleware=middleware))
 
     # -- step identity -------------------------------------------------------------
 
