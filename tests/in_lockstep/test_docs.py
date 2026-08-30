@@ -49,3 +49,133 @@ def test_every_documented_snippet_is_at_least_valid_python() -> None:
     ):
         for index, block in enumerate(_python_blocks(doc)):
             compile(block, f"{doc.name}[{index}]", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+
+
+def test_the_cookbook_snippets_execute_not_merely_parse(tmp_path, monkeypatch) -> None:
+    """The cookbook promises its `lockstep.py` snippets are executed by the suite. This is that.
+
+    One shared namespace, in order: recipe 1 defines `lockstep` and later recipes bind into it,
+    the way a reader pasting them into one file would. The chdir keeps `Lockstep.detect()` off
+    this repository."""
+    monkeypatch.chdir(tmp_path)
+    blocks = _python_blocks(ROOT / "docs" / "cookbook.md")
+    assert len(blocks) >= 5, "the cookbook lost its snippets"
+    namespace: dict = {}
+    for index, block in enumerate(blocks):
+        exec(compile(block, f"cookbook.md[{index}]", "exec"), namespace)
+
+
+# -- the README matrix, checked in both directions ------------------------------------------
+#
+# The matrix says what runs. gates.md already argued why a claim nobody re-checks decays: the
+# safe-looking drift is a `planned` row whose feature quietly shipped, and the dangerous one is
+# a `runs` row whose feature quietly broke. Both directions fail here.
+
+_MATRIX_ROW = re.compile(r"^\| ([^|]+) \| (runs|partial|planned) \|")
+
+
+def _matrix_rows() -> dict[str, str]:
+    rows = {}
+    for line in (ROOT / "README.md").read_text().splitlines():
+        m = _MATRIX_ROW.match(line)
+        if m:
+            rows[m.group(1).strip()] = m.group(2)
+    return rows
+
+
+def test_the_matrix_exists_and_uses_only_the_three_statuses() -> None:
+    rows = _matrix_rows()
+    assert len(rows) >= 10, f"parsed only {len(rows)} matrix rows from the README"
+    assert set(rows.values()) <= {"runs", "partial", "planned"}
+
+
+def test_a_runs_row_names_something_that_ships() -> None:
+    """Each `runs` claim is pinned to a symbol or command that exists right now."""
+    from in_lockstep.cli import main
+    from in_lockstep.core.verbs import SHIPPED_VERBS
+
+    rows = _matrix_rows()
+    commands = set(main.commands)
+    # Row -> the fact that must hold for the claim to be true.
+    proof = {
+        "Code Review": "review" in SHIPPED_VERBS and "review" in commands,
+        "Implement": "implement" in SHIPPED_VERBS and "implement" in commands,
+        "Bug Fix": "fix" in SHIPPED_VERBS,
+        "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,
+        "GitHub": "gate" in commands,
+        "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),
+        "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),
+        "Spend controls": _importable("in_lockstep.core.spend", "DailySpendExceeded"),
+        "Ledger + tamper-evidence": _importable("in_lockstep.platform.ledger", "GitLedger"),
+    }
+    for row, status in rows.items():
+        if status == "runs" and row in proof:
+            assert proof[row], f"the matrix says {row!r} runs, but its proof no longer holds"
+    missing = [r for r in proof if r not in rows]
+    assert not missing, f"matrix rows renamed or removed: {missing}"
+
+
+def test_a_planned_row_has_not_quietly_shipped() -> None:
+    """The safe-looking drift: someone implements item 25 and the matrix still says planned."""
+    from in_lockstep.core.verbs import SHIPPED_VERBS
+
+    rows = _matrix_rows()
+    planned_verbs = {"Backport": "backport", "RFE": "rfe"}
+    for row, verb in planned_verbs.items():
+        if rows.get(row) == "planned":
+            assert verb not in SHIPPED_VERBS, (
+                f"the matrix says {row!r} is planned, but verb {verb!r} ships — flip the row"
+            )
+
+
+def _importable(module: str, attr: str) -> bool:
+    import importlib
+
+    try:
+        return hasattr(importlib.import_module(module), attr)
+    except ImportError:
+        return False
+
+
+def test_the_quickstart_outputs_match_the_tool_that_ships(tmp_path, monkeypatch) -> None:
+    """getting-started shows literal command output. The stable lines of those captures are
+    asserted against the real commands, so the page cannot describe a previous version.
+
+    Subset matching, deliberately: hashes, paths and timings differ per machine; section
+    headers, command vocabulary and fixed sentences do not."""
+    import subprocess
+    import sys
+
+    doc = (ROOT / "docs" / "getting-started.md").read_text()
+    monkeypatch.chdir(tmp_path)
+    for var in [k for k in list(__import__("os").environ) if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(var, raising=False)
+
+    def cli(*args: str) -> str:
+        result = subprocess.run(
+            [sys.executable, "-m", "in_lockstep.cli", *args],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            timeout=120,
+        )
+        return result.stdout + result.stderr
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    init_out = cli("init")
+    ls_out = cli("ls")
+    doctor_out = cli("doctor")
+    for stable in (
+        "wrote .lockstep/lockstep.py",
+        "wrote .github/workflows/lockstep.yml",
+    ):
+        assert stable in init_out and stable in doc
+    for stable in (
+        "bindings",
+        "middleware  (privileged tier runs outside this chain and is not listed)",
+        "standards  (in_lockstep.standards entry points; applied before this module's own lines)",
+        "policy",
+    ):
+        assert stable in ls_out and stable in doc, f"ls line drifted: {stable!r}"
+    for stable in ("DOC101", "DOC121", "DOC130"):
+        assert stable in doctor_out and stable in doc, f"doctor code drifted: {stable!r}"

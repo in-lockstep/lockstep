@@ -4,9 +4,23 @@
 pipeline — the Python module you write is the thing that runs. There is no compilation step, no
 YAML output, and no intermediate configuration layer.
 
+Every command below shows the output it actually prints, captured from a real run in a small
+Python repository. Your paths, hashes and timings will differ; the shape will not — and a test
+holds the stable lines of these captures against the real commands, so this page cannot quietly
+describe a previous version of the tool.
+
 ```bash
 uv tool install 'in-lockstep[anthropic]'
 in-lockstep init
+```
+
+```text
+wrote .lockstep/lockstep.py
+  detected stack: python; tests: pytest; lint: ruff
+wrote .github/workflows/lockstep.yml
+
+One job, because reviewing is read-only. Add the privileged `apply` job the
+day a verb of yours produces a change to write; the file says where.
 ```
 
 That writes two files. `.lockstep/lockstep.py` is your lifecycle. `.github/workflows/lockstep.yml` is a
@@ -48,17 +62,23 @@ made it.
 
 ## The module is the configuration
 
+`init` detected pytest and ruff above, so the scaffold it wrote already binds them:
+
 ```python
-from in_lockstep import Budget, Lockstep, Policy
+from in_lockstep import Lockstep
 from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
 from in_lockstep.middleware import CostBudget, otel
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
 lockstep = Lockstep.detect()
 
 lockstep.bind(Test, PytestTest(args=["-q"]))
 lockstep.bind(Validate, RuffValidate())
 
-lockstep.budget = Budget(usd=2.00, wall_seconds=900)
+# The scaffold's one opt-out, with a long comment in the real file saying exactly why it is
+# defensible for read-only review and must be re-decided before any verb that writes.
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
+
 lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
@@ -69,9 +89,37 @@ history and rollback. And because it is code, you can read what it resolves to:
 in-lockstep ls
 ```
 
-That prints the resolved container, the middleware chain and the policy stack. It exists because
-config-as-code has one genuine disadvantage over a manifest — you can read a YAML file, but you
-cannot read a container — and this is the answer to it.
+```text
+config    local working tree
+repo      /home/dev/code/demo
+head      8b822684ed7a  branch main
+detected  stack: python; tests: pytest; lint: ruff; ci: github
+
+bindings
+  EgressPolicy           -> UnsandboxedEgress(singleton, explicit)
+  Test                   -> PytestTest      (singleton, explicit)
+  Validate               -> RuffValidate    (singleton, explicit)
+
+middleware  (privileged tier runs outside this chain and is not listed)
+  OtelMiddleware
+  CostBudget
+
+standards  (in_lockstep.standards entry points; applied before this module's own lines)
+  (none installed)
+
+policy
+  (nothing contributed)
+
+workflows
+  selfcheck  (in_lockstep.cli)
+```
+
+This exists because config-as-code has one genuine disadvantage over a manifest — you can read a
+YAML file, but you cannot read a container — and `ls` is the answer to it. The `standards` line
+is where an organisation's installed policy package would appear
+([cookbook recipe 6](cookbook.md#6-ship-your-organisations-standards-as-a-package)); the `config`
+line says which `lockstep.py` constrained this invocation, which matters the day it is a trusted
+ref rather than your working tree.
 
 ## Verbs and outcomes
 
@@ -96,13 +144,50 @@ did it end" and "did it produce evidence". A test run that collected nothing suc
 nothing, and reporting it as a clean pass would be the reassuring number this framework tries hard
 not to produce.
 
-## Running a model
+## The first model-shaped run costs nothing
+
+A cassette ships in the package, recorded from a real model call against a real merged pull
+request. Replaying it needs no key, no network and no spend:
+
+```bash
+in-lockstep review --offline
+```
+
+```text
+config    local working tree
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+review/security  succeeded
+  actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters
+  actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment
+
+tokens    5361 in, 443 out
+cost      $0.0000  (replayed; nothing was billed)
+spans     (lockstep.py declares its own middleware; the CLI is not in that chain)
+ledger    lockstep-history:records/review-security.json  (local; `in-lockstep history --push` to publish)
+```
+
+Those findings are what the model actually said about that pull request; the replay is
+deterministic and free. Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so
+one recorded against a provider replays against a different one, and they capture tool IO as well
+as model IO. `--dry-run` is the cheaper cousin — a canned answer that proves the wiring:
+
+```bash
+in-lockstep review --dry-run --base HEAD~1
+```
+
+```text
+config    local working tree
+review/security  succeeded
+
+tokens    10 in, 5 out
+cost      $0.0000  (replayed; nothing was billed)
+```
+
+## Running a model for real
 
 ```bash
 in-lockstep review --base origin/main --aspect security
 in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change
-in-lockstep show-prompt security             # exactly what the model is told, offline, no key
-in-lockstep show-prompt implement/oneshot
 ```
 
 `review` reads and reports. `implement` reads a ticket, explores the repository with tools, and
@@ -113,18 +198,62 @@ Implementing needs an approval path and egress enforcement before it will start,
 adapter declares that it writes files and executes code. `docs/extending.md` has the three
 refusals and what each one wants.
 
-`show-prompt` matters more than it looks. Prompts are composed at runtime from guardrails, a body,
-skills and contexts, and "what was the model actually told?" needs an answer that costs no run.
-
-## Developing without keys or spend
+Before any of that, see exactly what the model would be told — composed at runtime from
+guardrails, a body, skills and contexts, answerable offline because "what was the model actually
+told?" must not cost a run:
 
 ```bash
-in-lockstep review --dry-run     # canned answer; proves the wiring
-in-lockstep review --offline     # replays a cassette; deterministic and free
+in-lockstep show-prompt security
 ```
 
-Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so one recorded against a
-provider replays against a different one, and they capture tool IO as well as model IO.
+```text
+# composed prompt: review/security  (version 1)
+#
+#   guardrail:baseline
+#   guardrail:review/reviewing
+#   body:review/security-reviewer
+#   skill:review/review-format
+#   skill:review/review-revision
+
+<!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge order. -->
+...
+```
+
+## What the ledger says afterwards
+
+Every run leaves a record on the `lockstep-history` orphan branch. `report` aggregates them —
+and says whether the history it is summing has been rewritten:
+
+```bash
+in-lockstep report
+```
+
+```text
+kind    runs  failed  tokens      cost      mean
+review     1       0        15  $  0.0000  $0.0000
+
+1 record(s); `in-lockstep history --explain <run>` for any one of them
+history   append-only across the retained chain
+```
+
+Absent is not zero here: a column nobody measured renders `-` rather than a reassuring 0. One
+run's record, every field, in words:
+
+```bash
+in-lockstep history --explain review-security
+```
+
+```text
+run       review-security
+what      review  security
+status    succeeded
+when      2026-08-30T02:47:19+00:00
+head      309a05d0553d6ea7258317bb674e17eb2f2ac537
+branch    main
+config    local working tree
+model     anthropic:claude-sonnet-4-6
+spend     $0.0000  (15 tokens, 0.038s)
+```
 
 ## Local models
 
@@ -157,7 +286,25 @@ something you see beforehand, where nothing has been spent, rather than after a 
 in-lockstep doctor
 ```
 
-Moving model invocation in-process removed an execution substrate that was also an egress
-firewall, an out-of-process spend ceiling and a privilege split. `doctor` checks what replaced
-each, and `docs/controls-crosswalk.md` is the honest accounting — including the one control that
-was lost rather than replaced.
+```text
+ERROR   DOC101  no provider-side organisation spend limit is attested
+                 Set a hard monthly cap in the provider console and record it as
+                 IN_LOCKSTEP_ORG_SPEND_LIMIT=<amount>. A per-run budget cannot bound a runaway trigger,
+                 and the per-day ceiling the substrate enforced no longer exists.
+ERROR   DOC121  the default branch has no protection rule, or it could not be read
+                 The apply job holds an ambient repository token that can write any branch, so branch
+                 protection is what keeps protected branches unreachable. Without it, 'writes go through
+                 a pull request' is a convention rather than a guarantee.
+WARNING DOC130  no egress enforcement is declared
+                 Set IN_LOCKSTEP_EGRESS=enforced where the host constrains egress. Runs that hold write
+                 or execute tools, or that read untrusted content, are refused without it.
+
+3 finding(s), 2 error(s)
+```
+
+That is a fresh repository being told the truth, not a broken install: nothing is attested yet,
+so `doctor` fails. Moving model invocation in-process removed an execution substrate that was
+also an egress firewall, an out-of-process spend ceiling and a privilege split; `doctor` checks
+what replaced each, and `docs/controls-crosswalk.md` is the honest accounting — including what
+was lost rather than replaced. The [cookbook](cookbook.md) has the recipes that turn each
+finding green.
