@@ -143,3 +143,7 @@ class ProviderRegistry:
 
     def names(self) -> list[str]:
         return sorted(self._registrations)
+
+    def endpoints(self) -> tuple[str, ...]:
+        """Every registered destination, for the egress manifest when no routes narrow it."""
+        return tuple(sorted({r.endpoint for r in self._registrations.values() if r.endpoint}))

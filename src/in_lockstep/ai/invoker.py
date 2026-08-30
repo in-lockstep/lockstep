@@ -33,6 +33,7 @@ from ..core.spend import Spend, Unpriced
 from ..llm.interface import (
     AuthenticationError,
     ContextLengthError,
+    DataPolicy,
     LLMError,
     LLMProvider,
     ModelNotFoundError,
@@ -200,6 +201,7 @@ class AiInvoker:
         counter: Counter | None = None,
         egress: EgressPolicy | None = None,
         transcript: Any = None,
+        data_policy: DataPolicy | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -217,6 +219,10 @@ class AiInvoker:
         # `--no-middleware` cannot reach it. `detect()` reads the environment; a repository that
         # means to opt out binds `UnsandboxedEgress`, which is named after what it does.
         self.egress = egress if egress is not None else EgressPolicy.detect()
+        # Where the model's bytes go, from the provider registration. `None` — an invoker built
+        # by hand rather than through `invoker_factory` — is treated as UNKNOWN on a restricted
+        # repository, because residency is the one control where "nobody said" must fail closed.
+        self.data_policy = data_policy
 
     async def run(
         self,
@@ -237,11 +243,28 @@ class AiInvoker:
         # gap that made GATE-EGRESS-1 `unit only`: the policy was built, tested and never called,
         # so `docs/controls-crosswalk.md` claimed a firewall had been replaced by a class that
         # nothing invoked.
+        transmits = getattr(self.provider, "transmits", True)
         self.egress.check(
             capabilities=tools.capabilities(),
             untrusted_context=context.untrusted if context is not None else False,
-            transmits=getattr(self.provider, "transmits", True),
+            transmits=transmits,
         )
+
+        # GATE-RESIDENCY-1. On a restricted repository the question is not whether the network
+        # is constrained but where the bytes land, so the model's registered data policy must
+        # say INTERNAL. Checked here rather than inside `EgressPolicy` because the policy lives
+        # on the provider registration, and deliberately NOT lifted by `UnsandboxedEgress` — the
+        # egress opt-out says "my network is my business", not "this repository is unrestricted".
+        # A cassette or dry-run provider transmits nothing, so it is exempt for the same reason
+        # `--offline` needs no firewall.
+        if self.egress.restricted_repo and transmits and self.data_policy is not DataPolicy.INTERNAL:
+            stated = self.data_policy.name if self.data_policy is not None else "undeclared"
+            raise InvocationBlocked(
+                "residency.external_model",
+                f"this repository is classified restricted and model {self.model!r} is "
+                f"registered {stated}, not INTERNAL; route to a provider whose registration "
+                f"says the bytes stay, or lift the classification deliberately",
+            )
 
         # An unpriced model is refused here, before any call. Pricing it at a default rate would
         # record a fabricated cost and budget against a number nobody chose.

@@ -572,6 +572,78 @@ def test_an_offline_run_still_refuses_a_tool_that_can_transmit() -> None:
         asyncio.run(ai.run(system="s", messages=[], tools=ToolSet.of(fetch)))
 
 
+# -- GATE-RESIDENCY-1 -----------------------------------------------------------------------
+#
+# `UnsandboxedEgress(restricted_repo=True)` below is not a contradiction, it is the isolation:
+# a restricted repository also makes egress enforcement mandatory, so a plain policy would raise
+# `EgressRefused` first and these tests would prove the wrong control. Using the egress opt-out
+# proves both halves at once — the residency check fires on the attribute, not through `check()`,
+# so opting out of the firewall does not opt out of the classification.
+
+
+def _restricted_invoker(provider, *, data_policy=None):
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    return AiInvoker(
+        provider,
+        model="m",
+        cost_table=table(),
+        spend=Spend(),
+        egress=UnsandboxedEgress(restricted_repo=True),
+        data_policy=data_policy,
+    )
+
+
+def test_gate_residency_1_restricted_repo_refuses_an_external_model() -> None:
+    from in_lockstep.llm.interface import DataPolicy
+
+    provider = Stub(replies=[LLMOutput(content="never reached")])
+    ai = _restricted_invoker(provider, data_policy=DataPolicy.EXTERNAL)
+    with pytest.raises(InvocationBlocked) as exc:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="hi")]))
+    assert exc.value.reason == "residency.external_model"
+    assert provider.calls == [], "refused before the first model call, not after it"
+
+
+def test_gate_residency_1_an_undeclared_policy_fails_closed() -> None:
+    """A hand-built invoker that never said where the bytes go is not thereby exempt."""
+    provider = Stub()
+    ai = _restricted_invoker(provider, data_policy=None)
+    with pytest.raises(InvocationBlocked) as exc:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="hi")]))
+    assert "undeclared" in str(exc.value)
+    assert provider.calls == []
+
+
+def test_an_internal_model_serves_a_restricted_repo() -> None:
+    from in_lockstep.llm.interface import DataPolicy
+
+    provider = Stub(replies=[LLMOutput(content="served locally")])
+    ai = _restricted_invoker(provider, data_policy=DataPolicy.INTERNAL)
+    result = asyncio.run(ai.run(system="s", messages=[Message(role="user", content="hi")]))
+    assert result.turns, "an INTERNAL registration is exactly what the classification asks for"
+
+
+def test_a_cassette_is_exempt_from_residency_like_it_is_from_egress() -> None:
+    """A replay sends no bytes anywhere, and residency is about where bytes land."""
+    from in_lockstep.ai.replay import DryRunProvider
+
+    ai = _restricted_invoker(DryRunProvider(), data_policy=None)
+    assert asyncio.run(ai.run(system="s", messages=[])) is not None
+
+
+def test_the_factory_passes_the_registrations_data_policy() -> None:
+    """The wiring that gave `registry.data_policy_for` its first caller outside a test."""
+    from types import SimpleNamespace
+
+    from in_lockstep.ai.bootstrap import invoker_factory
+    from in_lockstep.llm.interface import DataPolicy
+
+    build = invoker_factory("local:qwen3-8b", provider=Stub())
+    ctx = SimpleNamespace(spend=Spend(), container=None, run_id="")
+    assert build(ctx).data_policy is DataPolicy.INTERNAL
+
+
 # -- installing a house prompt ---------------------------------------------------------------
 
 

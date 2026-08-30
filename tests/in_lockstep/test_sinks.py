@@ -265,3 +265,37 @@ def test_an_unseeded_credential_shape_is_still_masked(tmp_path: Path) -> None:
     target = tmp_path / "r.json"
     sink.write_json(target, {"h": "Authorization: Bearer ghp_aaaaaaaaaaaaaaaaaaaaaaaa"})
     assert "ghp_aaaaaaaaaaaaaaaaaaaaaaaa" not in target.read_text()
+
+
+@pytest.mark.parametrize(
+    "shape,credential",
+    [
+        # The hosts this framework actually speaks and the sinks it actually notifies —
+        # a structural list that stops at OpenAI-and-GitHub protects someone else's logs.
+        ("github-fine-grained", "github_pat_11ABCDEFG0_abcdefghijklmnopqrstuvwx"),
+        ("gitlab-pat", "glpat-AAAAAAAAAAAAAAAAAAAA"),
+        # Assembled, not literal: GitHub's push protection reads a convincing fixture as a leak,
+        # which is a compliment to the shape but a blocked push all the same.
+        ("slack-bot", "xoxb-" + "1234567890-abcdefghijklmnop"),
+        # The shape federation mints: seeded by Auth when minted here, but a token an operator
+        # exported or a provider echoed back never went through Auth.
+        ("jwt", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJyZXBvOmluLWxvY2tzdGVwIn0.c2lnbmF0dXJlLWJ5dGVz"),
+    ],
+)
+def test_new_structural_shapes_are_masked_unseeded(shape: str, credential: str) -> None:
+    from in_lockstep.privileged.redact import Redact
+
+    out = Redact().text(f"provider rejected {credential} at {shape}")
+    assert credential not in out
+    assert "***" in out
+
+
+def test_pem_key_material_is_masked_but_the_armour_says_a_key_was_there() -> None:
+    """Same rule as `api_key=`: mask the credential, keep the framing."""
+    from in_lockstep.privileged.redact import Redact
+
+    body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7\nVvNo8y2v"
+    pem = f"-----BEGIN RSA PRIVATE KEY-----\n{body}\n-----END RSA PRIVATE KEY-----"
+    out = Redact().text(f"config dump:\n{pem}")
+    assert body.splitlines()[0] not in out
+    assert "BEGIN RSA PRIVATE KEY" in out, "a log should still say what kind of thing was there"

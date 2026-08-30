@@ -33,6 +33,21 @@ _STRUCTURAL: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bsk-[A-Za-z0-9\-_]{16,}"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    # A fine-grained GitHub token has its own prefix; the classic `gh?_` line above misses it.
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}"),
+    # GitLab personal/project/CI tokens — this framework speaks GitLab, so its logs will too.
+    re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,}"),
+    # Slack bot/app/user/refresh tokens, the usual notification-sink credential.
+    re.compile(r"\bxox[abeprs]-[A-Za-z0-9\-]{10,}"),
+    # A signed JWT: three base64url segments, the first always encoding '{"'. This is the shape
+    # of the OIDC identity token federation mints — seeded by Auth when minted here, but a token
+    # an operator exported or a provider echoed back never went through Auth.
+    re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{8,}"),
+    # PEM private-key material. The body is masked and the armour kept, so a log still says a
+    # key was there — the same rule `_mask_match` applies to `api_key=`.
+    re.compile(
+        r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----([A-Za-z0-9+/=\s]+?)-----END [A-Z0-9 ]*PRIVATE KEY-----"
+    ),
 )
 
 _ENV_SUFFIXES = ("PASSWORD", "TOKEN", "SECRET", "API_KEY", "CREDENTIALS", "PRIVATE_KEY")

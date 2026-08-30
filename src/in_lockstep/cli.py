@@ -971,6 +971,46 @@ def doctor_cmd(strict: bool, fmt: str) -> None:
         raise SystemExit(EXIT_FAILED)
 
 
+@main.command(name="egress-manifest")
+def egress_manifest_cmd() -> None:
+    """Print the hosts a run may dial, one per line, for the proxy `ENFORCED_*` verifies.
+
+    The framework never enforces destinations itself — the firewall is the host's, probe-verified
+    — so this is the bridge between them: the operator feeds this list to the proxy, and
+    `IN_LOCKSTEP_EGRESS=enforced` attests that proxy is in front. Computed from the endpoints of
+    the providers the module routes to (every registered provider when no routes narrow it), plus
+    whatever a bound `EgressPolicy(allow=...)` declares beyond them — an SCM host, a package
+    registry someone decided on before an `EXECUTES_CODE` step needed it. A provider registered
+    through a custom registry inside `invoker_factory` is not visible here, the same limit
+    `doctor`'s route checks state.
+    """
+    from .ai.auth import Auth
+    from .ai.bootstrap import Model, default_registry
+    from .privileged.egress import EgressPolicy
+
+    lockstep, _ = _default_lockstep()
+    try:
+        registry = default_registry(Auth())
+    except Exception as e:
+        raise click.ClickException(str(e)) from None
+    policy = (
+        lockstep.container.resolve(EgressPolicy)
+        if lockstep.container.has(EgressPolicy)
+        else EgressPolicy.detect()
+    )
+    routes = dict(getattr(lockstep.models, "routes", None) or {})
+    if routes:
+        endpoints = [
+            registry.registration_for(selected).endpoint
+            for selected in (Model(model_id) for model_id in routes.values())
+            if selected.provider in registry.names()
+        ]
+    else:
+        endpoints = list(registry.endpoints())
+    for host in policy.manifest(endpoints):
+        click.echo(host)
+
+
 @main.command(name="apply")
 @click.option("--from-artifact", "artifact", required=True, type=click.Path())
 @click.option("--dry-run", is_flag=True, help="Check the changeset against the guard; write nothing.")
