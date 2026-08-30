@@ -34,7 +34,7 @@ still advertises.
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
-| RFE | planned | roadmap item 25 — rides the triage vertical |
+| RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
 | Flaky-test adapter | planned | roadmap item 26 |
 | GitHub | runs | SCM, issues, chat-ops gate, trampolines |
 | GitLab | partial | `GitLabScm`/`GitLabIssues` and host-aware `init` ship; no live dogfooded pipeline yet |
@@ -62,6 +62,7 @@ in-lockstep review --base ...    # review a change, one lens at a time
 in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing itself
 in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
 in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local model
+in-lockstep rfe --idea "..."     # draft a ticket from a rough idea; --create files it
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
 in-lockstep doctor               # are the controls actually in place?

@@ -102,6 +102,7 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Implement": "implement" in SHIPPED_VERBS and "implement" in commands,
         "Bug Fix": "fix" in SHIPPED_VERBS,
         "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,
+        "RFE": "rfe" in SHIPPED_VERBS and "rfe" in commands,
         "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,
         "GitHub": "gate" in commands,
         "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),
@@ -117,16 +118,25 @@ def test_a_runs_row_names_something_that_ships() -> None:
 
 
 def test_a_planned_row_has_not_quietly_shipped() -> None:
-    """The safe-looking drift: someone implements item 25 and the matrix still says planned."""
-    from in_lockstep.core.verbs import SHIPPED_VERBS
+    """The safe-looking drift: the feature lands and the matrix still says planned.
 
+    Backport and RFE lived here as verb checks until they shipped; what remains is pinned to
+    the most concrete fact available for each — best-effort by nature, since a feature can
+    always land somewhere a guess did not name, but a tripwire on the likely path beats none."""
     rows = _matrix_rows()
-    planned_verbs = {"Backport": "backport", "RFE": "rfe"}
-    for row, verb in planned_verbs.items():
-        if rows.get(row) == "planned":
-            assert verb not in SHIPPED_VERBS, (
-                f"the matrix says {row!r} is planned, but verb {verb!r} ships — flip the row"
-            )
+    if rows.get("Flaky-test adapter") == "planned":
+        from in_lockstep.core.verbs import SHIPPED_VERBS
+
+        assert not _importable("in_lockstep.adapters.flaky", "FlakyTest"), (
+            "a flaky-test adapter ships — flip the matrix row"
+        )
+        assert "flaky" not in SHIPPED_VERBS
+    if rows.get("Shared ledger store") == "planned":
+        from in_lockstep.platform.ledger import GitLedger, InRepoLedger
+
+        assert InRepoLedger().scope == "local" and GitLedger().scope == "local", (
+            "a SHARED-scope store ships — flip the matrix row"
+        )
 
 
 def _importable(module: str, attr: str) -> bool:
