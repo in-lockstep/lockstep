@@ -1,0 +1,147 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "labeled:tpouyer"
+  },
+  "args": {
+    "ticket": "#109"
+  },
+  "branch": "main",
+  "ci_actor": "tpouyer",
+  "config": "local working tree",
+  "cost_usd": 9.62445,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 19,
+    "items": [
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote src/in_lockstep/ai/builtins.py",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote tests/in_lockstep/test_sandbox_fixtures_use_sys_executable.py",
+        "path": "tests/in_lockstep/test_sandbox_fixtures_use_sys_executable.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e07f657dc8ba3fee8a4a7ce17dc19352b3f1fd70",
+  "kind": "workflow",
+  "outcome_cost_usd": 4.812225,
+  "reason": null,
+  "run_id": "fix-from-ticket-33334652697-20260830T204819Z-2902",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 3013462,
+  "ts": "2026-08-30T20:57:48+00:00",
+  "wall_seconds": 608.324,
+  "workflow": "fix/from-ticket"
+}
