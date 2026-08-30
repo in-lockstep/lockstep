@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import ClassVar
 
 import pytest
@@ -854,3 +856,51 @@ def test_doctor_says_nothing_to_a_repository_that_never_wired_the_loop(tmp_path,
 
     report = doctor.run(str(tmp_path))
     assert not any(c.code in ("DOC122", "DOC123", "DOC124") for c in report.checks)
+
+
+# -- the framework has to lose no race it needs evidence from ------------------------------------
+
+
+def test_every_model_job_outlives_the_session_deadline_it_runs() -> None:
+    """A job timeout skips the steps after it, so the framework must be what stops first.
+
+    Both numbers were 30 minutes: `deadline_seconds=1800` on the bindings in
+    `.lockstep/lockstep.py` and `timeout-minutes: 30` on the jobs that run them. A session that
+    actually reached its deadline raced the host to end the job, and when the host won,
+    `history --bundle` and the artifact upload never ran — so the run that most needed a record was
+    exactly the one that lost it.
+
+    Scoped to jobs that dispatch a WORKFLOW (`in-lockstep run ...`) while holding the provider
+    extra, because those are precisely the sessions whose deadline this module declares. The
+    review job in lockstep.yml is a different mechanism — `review` builds its own policy in the
+    CLI, with a much shorter deadline — and asserting it here would need a second source of truth
+    to be honest about. Its own headroom is 20 minutes against 5.
+    """
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    module = (root / ".lockstep" / "lockstep.py").read_text()
+    deadlines = {int(m) for m in re.findall(r"deadline_seconds=(\d+)", module)}
+    assert deadlines, "no session deadline declared; this test has nothing to compare against"
+    longest_session_minutes = max(deadlines) / 60
+
+    checked = []
+    for path in sorted((root / ".github" / "workflows").glob("*.yml")):
+        jobs = (yaml.safe_load(path.read_text()) or {}).get("jobs") or {}
+        for name, job in jobs.items():
+            runs = [str(step.get("run", "")) for step in (job.get("steps") or [])]
+            # The provider extra marks the half that can reach a model; `run <id>` marks a session
+            # this module's bindings govern. Both, or the job is somebody else's problem.
+            if not any("--extra anthropic" in r for r in runs):
+                continue
+            if not any("in-lockstep run " in r for r in runs):
+                continue
+            checked.append(f"{path.name}:{name}")
+            timeout = job.get("timeout-minutes")
+            assert timeout is not None, f"{path.name}:{name} has no timeout-minutes"
+            assert timeout > longest_session_minutes, (
+                f"{path.name}:{name} allows {timeout} minutes, and a session may run for "
+                f"{longest_session_minutes}. The host would end the job before the framework "
+                f"could write its record."
+            )
+    assert len(checked) >= 3, f"expected every model-dispatching job to be checked, saw {checked}"
