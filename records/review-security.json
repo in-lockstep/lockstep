@@ -1,0 +1,59 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.087897,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 273,
+        "message": "Path traversal via model-controlled file paths in `_write_resolutions`",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 232,
+        "message": "Commit patch from `git show` is passed unsanitised as model context with TRUSTED_REPO provenance",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1808,
+        "message": "The `--base` parameter in `apply_cmd` is used without visible sanitisation before being forwarded",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7db8fd09cd43193af7133e0bda0f11d2f70844e7",
+  "input_tokens": 24584,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 943,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 25527,
+  "ts": "2026-08-30T04:06:17+00:00",
+  "wall_seconds": 28.023
+}
