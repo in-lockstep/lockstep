@@ -4,6 +4,7 @@ from .fix import DiagnoseThenFix, Fix, FixReport, FixSession
 from .implement import Implement, ImplementReport, ImplementSession
 from .oneshot import Oneshot
 from .review import AiReview, Review, ReviewFinding, ReviewReport
+from .rfe import AiRfe, Rfe, RfeDraft
 from .tdd import TDD
 from .triage import AiTriage, Triage, TriageDecision
 
@@ -12,6 +13,7 @@ from .triage import AiTriage, Triage, TriageDecision
 # exported here so a lockstep.py needs no deep imports.
 __all__ = [
     "AiReview",
+    "AiRfe",
     "AiTriage",
     "DiagnoseThenFix",
     "Fix",
@@ -24,6 +26,8 @@ __all__ = [
     "Review",
     "ReviewFinding",
     "ReviewReport",
+    "Rfe",
+    "RfeDraft",
     "TDD",
     "Triage",
     "TriageDecision",
