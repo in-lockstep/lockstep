@@ -1981,3 +1981,40 @@ def test_init_scaffolds_into_the_lockstep_directory(repo: Path) -> None:
     assert CliRunner().invoke(main, ["init"]).exit_code == 0
     assert (repo / ".lockstep" / "lockstep.py").is_file()
     assert not (repo / "lockstep.py").exists(), "the root is on sys.path; nothing goes there"
+
+
+# -- egress-manifest --------------------------------------------------------------------------
+
+
+def test_egress_manifest_narrows_to_the_routed_providers(repo: Path) -> None:
+    """With routes declared, the list is what this repository dials, not the whole default set."""
+    _write(repo, model="anthropic:claude-haiku-4-5")
+    result = CliRunner().invoke(main, ["egress-manifest"])
+    assert result.exit_code == 0, result.output
+    assert "api.anthropic.com" in result.output
+    assert "generativelanguage.googleapis.com" not in result.output
+
+
+def test_egress_manifest_includes_the_bound_policys_extras(repo: Path) -> None:
+    """`allow` finally consulted: the operator's declared additions appear beside the endpoints."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        'lockstep.bind(EgressPolicy, EgressPolicy(allow=("proxy-extra.example",)))\n'
+        'lockstep.models.route("review", "anthropic:claude-haiku-4-5")\n'
+    )
+    result = CliRunner().invoke(main, ["egress-manifest"])
+    assert result.exit_code == 0, result.output
+    assert "proxy-extra.example" in result.output
+    assert "api.anthropic.com" in result.output
+
+
+def test_egress_manifest_without_routes_prints_every_registered_endpoint(repo: Path) -> None:
+    """No routes means no narrowing, and an honest superset beats a silent empty list."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["egress-manifest"])
+    assert result.exit_code == 0, result.output
+    assert "api.anthropic.com" in result.output

@@ -79,6 +79,30 @@ def test_restricted_repo_makes_enforcement_mandatory() -> None:
         policy.check(capabilities=frozenset(), untrusted_context=False)
 
 
+def test_the_restricted_classification_is_read_from_the_environment(monkeypatch) -> None:
+    """`restricted_repo` was a parameter nothing set — a trigger with no finger on it."""
+    monkeypatch.setenv("IN_LOCKSTEP_RESTRICTED", "1")
+    assert EgressPolicy.detect().restricted_repo is True
+    monkeypatch.setenv("IN_LOCKSTEP_RESTRICTED", "no")
+    assert EgressPolicy.detect().restricted_repo is False
+    monkeypatch.delenv("IN_LOCKSTEP_RESTRICTED")
+    assert EgressPolicy.detect(restricted_repo=True).restricted_repo is True, (
+        "a binding that says restricted must not be un-said by an absent variable"
+    )
+
+
+def test_the_manifest_is_endpoints_plus_declared_extras() -> None:
+    """What `allow` is for: the operator's additions to the computed proxy list."""
+    policy = EgressPolicy(allow=("pypi.org", "api.github.com"))
+    hosts = policy.manifest(["https://api.anthropic.com/v1", "http://localhost:11434"])
+    assert hosts == ("api.anthropic.com", "api.github.com", "localhost", "pypi.org")
+
+
+def test_the_manifest_deduplicates_and_survives_a_bare_host() -> None:
+    policy = EgressPolicy(allow=("api.anthropic.com",))
+    assert policy.manifest(["https://api.anthropic.com", "api.anthropic.com"]) == ("api.anthropic.com",)
+
+
 def test_gate_egress_2_an_asserted_mode_a_probe_disproves_is_refused() -> None:
     """Fail-closed that can be satisfied by a lie is not fail-closed."""
     policy = EgressPolicy(mode=EgressMode.ENFORCED_EXTERNAL)

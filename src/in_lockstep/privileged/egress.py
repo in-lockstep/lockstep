@@ -24,12 +24,19 @@ from __future__ import annotations
 
 import os
 import socket
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
+from urllib.parse import urlparse
 
 from ..core.verbs import Capability
 
 ENV_MODE = "IN_LOCKSTEP_EGRESS"
+# The classification, not a control by itself. Setting it makes egress enforcement mandatory
+# for every invocation (see `required`), and makes GATE-RESIDENCY-1 refuse a model whose
+# registration says the bytes leave (`AiInvoker` performs that check, because the data policy
+# lives on the provider registration, which this module cannot see without inverting the layers).
+ENV_RESTRICTED = "IN_LOCKSTEP_RESTRICTED"
 # A host that must not resolve or connect if egress is genuinely constrained.
 PROBE_HOST = "example.com"
 PROBE_PORT = 443
@@ -65,7 +72,8 @@ class EgressPolicy:
             "container": EgressMode.ENFORCED_CONTAINER,
             "enforced_container": EgressMode.ENFORCED_CONTAINER,
         }.get(raw, EgressMode.NONE)
-        return cls(mode=mode, allow=allow, restricted_repo=restricted_repo)
+        restricted = restricted_repo or _truthy(os.environ.get(ENV_RESTRICTED))
+        return cls(mode=mode, allow=allow, restricted_repo=restricted)
 
     def required(
         self,
@@ -135,6 +143,22 @@ class EgressPolicy:
         self._verified = not _can_connect(PROBE_HOST, PROBE_PORT)
         return self._verified
 
+    def manifest(self, endpoints: Iterable[str]) -> tuple[str, ...]:
+        """The hosts a run may dial, for the operator configuring the proxy this class verifies.
+
+        `ENFORCED_EXTERNAL` means the host provides the firewall; this is the list to feed it.
+        The framework never enforces destinations itself — an in-process allowlist would be a
+        checkbox, the same lie `verify()` exists to catch — so the manifest is where `allow`
+        earns its keep: `endpoints` are the resolved provider registrations, `allow` is what the
+        operator declared beyond them (an SCM host, a package registry decided on deliberately).
+        """
+        hosts = set(self.allow)
+        for endpoint in endpoints:
+            parsed = urlparse(endpoint if "//" in endpoint else f"//{endpoint}")
+            if parsed.hostname:
+                hosts.add(parsed.hostname)
+        return tuple(sorted(hosts))
+
 
 class UnsandboxedEgress(EgressPolicy):
     """The explicit opt-out. Named after what it does, so it is greppable and reviewable."""
@@ -150,6 +174,10 @@ class UnsandboxedEgress(EgressPolicy):
 
     def verify(self) -> bool:
         return True
+
+
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes")
 
 
 def _can_connect(host: str, port: int) -> bool:

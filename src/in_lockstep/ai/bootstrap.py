@@ -459,6 +459,10 @@ def invoker_factory(
             redact=redact or Redact(),
             egress=policy,
             transcript=TranscriptWriter(run_id) if run_id else None,
+            # From the registration, which is where residency keys on where the bytes go
+            # (GATE-RESIDENCY-1). Resolved per model, so a local Ollama route stays INTERNAL
+            # while a hosted route through the same lockstep.py is EXTERNAL.
+            data_policy=registry.data_policy_for(selected),
         )
 
     return build
