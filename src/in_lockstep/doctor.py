@@ -59,6 +59,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _config_provenance(report)
     _branch_protection(report, path)
     _escalation_labels(report, path, lockstep)
+    _actions_may_open_changes(report, path)
     _history_integrity(report, path)
     _egress(report)
     _prompt_bodies(report)
@@ -269,6 +270,84 @@ def _escalation_labels(report: Report, root: Path, lockstep: Any = None) -> None
             f"unknown label instead of refusing the create leaves every follow-up reading attempt "
             f"0 — max_attempts={cap} stops bounding anything. Create them: "
             f"`{'; '.join(f'gh label create {name}' for name in missing)}`.",
+        )
+
+
+def _actions_may_open_changes(report: Report, root: Path) -> None:
+    """A propose job that cannot open a pull request fails at the last call it makes.
+
+    The whole design routes writes through a change request a human reads, so the privileged half
+    of every trampoline ends in `Scm.open_change`. There is a repository setting that forbids
+    exactly that — "Allow GitHub Actions to create and approve pull requests", off by default — and
+    when it is off, nothing is wrong with the configuration, the credentials or the change. The run
+    does all of its work, pays for its model call, pushes its branch, and dies on the last API call
+    with `GitHub Actions is not permitted to create or approve pull requests`.
+
+    That is the worst place to discover a setting. Reporting the branch as recoverable is little
+    comfort when the run that produced it cost real money, and an unattended trigger has nobody
+    watching to notice.
+
+    Keyed off `pull-requests: write`, because a job asking for that permission is a job that
+    intends to open one. A repository whose trampolines only review says nothing here.
+    """
+    if not (root / ".git").exists():
+        return
+    proposers = [
+        path.name
+        for path in sorted((root / ".github" / "workflows").glob("*.yml"))
+        if "pull-requests: write" in _read(path)
+    ]
+    if not proposers:
+        return
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", "repos/{owner}/{repo}/actions/permissions/workflow"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        report.add(
+            "DOC125", Severity.NOTE, "could not check whether Actions may open a change (gh unavailable)"
+        )
+        return
+    if result.returncode != 0:
+        report.add(
+            "DOC125",
+            Severity.NOTE,
+            "could not read this repository's Actions permissions; whether a propose job can open "
+            "a change was not checked",
+        )
+        return
+
+    import json
+
+    try:
+        settings = json.loads(result.stdout or "{}")
+    except ValueError:  # pragma: no cover - a shape change is a note, not a crash
+        report.add("DOC125", Severity.NOTE, "could not parse this repository's Actions permissions")
+        return
+
+    # Absent rather than false is the honest unknown: an older host, or a shape that moved.
+    allowed = settings.get("can_approve_pull_request_reviews")
+    if allowed is None:
+        report.add(
+            "DOC125",
+            Severity.NOTE,
+            "this host does not report whether Actions may open a change; it was not checked",
+        )
+        return
+    if not allowed:
+        report.add(
+            "DOC126",
+            Severity.ERROR,
+            f"{', '.join(proposers)} opens a pull request, which Actions is not permitted to do here",
+            "Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to "
+            "create and approve pull requests'. Without it the privileged job does all of its "
+            "work and fails on its last call with `GitHub Actions is not permitted to create or "
+            "approve pull requests`, after the unprivileged half has already paid for a model.",
         )
 
 
