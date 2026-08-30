@@ -110,6 +110,14 @@ def _verdict_line(verdict: Any) -> str:
     if verdict.green:
         extra = f", {verdict.skipped} skipped" if verdict.skipped else ""
         return f"✅ {verdict.passed} passed{extra}, run against the staged change before it was proposed."
+    if not verdict.red:
+        # ERRORED, and it must not render as the red branch below. That branch reads "0 of 0
+        # failed", which is a sentence about the change; what happened is a sentence about the
+        # runner, and a reviewer told the wrong one goes looking in the wrong place.
+        return (
+            f"⚠️ could not be run ({verdict.status}) — the runner did not start, so nothing here "
+            f"is evidence about this change."
+        )
     return (
         f"🛑 {verdict.failed} of {verdict.total} failed, run against the staged change before it "
         f"was proposed."

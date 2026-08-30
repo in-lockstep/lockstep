@@ -87,6 +87,22 @@ class TestVerdict:
     def green(self) -> bool:
         return self.decided and self.status == "succeeded" and self.failed == 0
 
+    @property
+    def red(self) -> bool:
+        """The suite ran, and the change made it fail.
+
+        Deliberately NOT `not green`, and the difference is what a caller does about it. An
+        ERRORED run — no interpreter resolved, a container refused, the runner never started —
+        carries `decided=True` and is green in no sense, but it learned nothing about the change.
+        A propose step that escalates on `not green` turns a broken runner into a bug report filed
+        against code that may be perfectly fine, and then spends the loop's attempts on it.
+
+        Three states, and each wants a different answer: red escalates, green is ready for review,
+        and everything else (errored, nothing collected, no verb bound) is a draft for a human,
+        because what happened is that nobody knows yet.
+        """
+        return self.decided and self.status == "failed"
+
     @classmethod
     def of(cls, status: str, decided: bool, report: TestReport) -> TestVerdict:
         """From a Test Outcome's status/decided flags and its report. Kept to primitives so `core`

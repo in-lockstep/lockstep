@@ -315,11 +315,14 @@ async def implement_propose(
         await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
-    if verdict is not None and verdict.decided and not verdict.green:
-        # A change whose tests ran and failed does not become a pull request. It becomes the next
-        # `ai-generated` ticket, which the label trigger routes to the fixing verb — and because
-        # `escalate` counts attempts off the source ticket's labels, the loop stops at
-        # `lockstep.max_attempts` without any store to keep count in.
+    if verdict is not None and verdict.red:
+        # `red`, not `not green`: an errored suite — the runner never started — is not evidence
+        # that this change is broken, and escalating on it files a bug report about code nobody
+        # tested and then spends the loop's attempts on it. A change whose tests actually RAN and
+        # failed does not become a pull request; it becomes the next `ai-generated` ticket, which
+        # the label trigger routes to the fixing verb — and because `escalate` counts attempts off
+        # the source ticket's labels, the loop stops at `lockstep.max_attempts` without any store
+        # to keep count in.
         failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
         opened = await escalate(
             tickets, await tickets.get(ticket), failure, max_attempts=lockstep.max_attempts

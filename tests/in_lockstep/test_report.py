@@ -196,3 +196,19 @@ def test_upsert_paginates_the_comment_list() -> None:
     scm = _scm(fake)
     asyncio.run(scm.upsert_comment(42, "body", marker("review:security")))
     assert any("--paginate" in call for call in fake.list_calls), "the list must page through all comments"
+
+
+def test_implement_body_does_not_call_an_errored_run_a_failure() -> None:
+    """The regression this file exists to hold: ERRORED rendered as the red branch.
+
+    `TestVerdict.of("errored", True, TestReport())` has decided=True and green=False, so the old
+    `if verdict.green: ... else: red` split printed "🛑 0 of 0 failed" — a sentence about the
+    change, when what happened was a sentence about the runner.
+    """
+    verdict = TestVerdict.of("errored", True, TestReport())
+    assert verdict.green is False
+    assert verdict.red is False, "errored is not red; nothing was learned about the change"
+    body = implement_body(_cs(), verdict)
+    assert "⚠️" in body and "could not be run" in body
+    assert "🛑" not in body, "a suite that never started must not read as a failing one"
+    assert "✅" not in body
