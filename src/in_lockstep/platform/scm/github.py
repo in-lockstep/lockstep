@@ -57,7 +57,7 @@ class GitHubScm:
         base: Ref = "",
         draft: bool = False,
     ) -> ChangeRequest:
-        branch = branch_for(workflow or "change", run_id or "run")
+        branch = branch_for(workflow or "change", run_id or "run", ticket=ticket)
         # Refused at the framework rather than relying on the token's scope, because the token is
         # ambient and can write any branch.
         self.local.assert_run_scoped(branch)

@@ -35,7 +35,7 @@ should say so in a comment at the top of its trampoline rather than quietly weak
    than separate steps.
 4. **What crosses between jobs is an artifact, and it is untrusted.** The unprivileged half
    stages a `ChangeSet`; the privileged half re-runs ChangeGuard over it before writing a byte,
-   refuses any branch outside `in-lockstep/<workflow>/<run-id>`, and keeps the artifact outside
+   refuses any branch outside `in-lockstep/<workflow>/[<ticket>/]<run-id>`, and keeps the artifact outside
    the tree it commits from — or the artifact itself gets swept into the change.
 5. **Everything that runs next to a credential is pinned.** The framework by version
    (`in-lockstep==X.Y.Z`, written by `init` as the version that wrote the scaffold), and any

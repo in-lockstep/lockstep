@@ -61,6 +61,18 @@ def test_writes_go_to_a_run_scoped_branch(tmp_path: Path) -> None:
     assert "abc123" in branch_for("fix-ci", "abc123")
 
 
+def test_the_ticket_is_a_branch_segment_of_its_own() -> None:
+    """`in-lockstep/<workflow>/<ticket>/<run-id>`: scannable in a branch list and globbable per
+    ticket, with the run id still carrying uniqueness — the ticket joins the name, never replaces
+    the collision guarantee."""
+    assert branch_for("implement", "run-1", ticket="#59") == "in-lockstep/implement/59/run-1"
+    assert branch_for("fix", "run-2", ticket="PROJ-123") == "in-lockstep/fix/PROJ-123/run-2"
+    # No ticket, no segment — an `apply` of a local changeset keeps the old shape.
+    assert branch_for("change", "local") == "in-lockstep/change/local"
+    # Sanitized: a leading '#' is shell noise, and ref-hostile characters become dashes.
+    assert branch_for("implement", "r", ticket="a b?c") == "in-lockstep/implement/a-b-c/r"
+
+
 def test_pushing_outside_the_namespace_is_refused(tmp_path: Path) -> None:
     """Refused by the framework, not merely by a token scope — the token is ambient."""
     scm = GitLocal(_repo(tmp_path))
@@ -77,7 +89,7 @@ def test_open_change_lands_on_its_own_branch_with_trailers(tmp_path: Path) -> No
     cr = asyncio.run(
         scm.open_change(cs, title="add a thing", workflow="implement", run_id="r1", ticket="P-1")
     )
-    assert cr.branch == "in-lockstep/implement/r1"
+    assert cr.branch == "in-lockstep/implement/P-1/r1", "verb, then ticket, then the run id"
     assert (root / "src" / "new.py").read_text() == "x = 1\n"
     log = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=root, capture_output=True, text=True).stdout
     # Trailers are the most portable traceability layer: greppable forever.
@@ -122,7 +134,7 @@ def test_open_change_branches_from_a_remote_only_base(tmp_path: Path) -> None:
     cr = asyncio.run(
         scm.open_change(cs, title="backport", workflow="backport", run_id="r9", base="release-1.0")
     )
-    assert cr.branch == "in-lockstep/backport/r9"
+    assert cr.branch == "in-lockstep/backport/r9", "no ticket, no segment"
     assert (clone / "fix.py").read_text() == "y = 2\n"
 
 

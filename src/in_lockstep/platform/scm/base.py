@@ -87,9 +87,19 @@ class GuardRefused(Exception):
         self.refusals = refusals
 
 
-def branch_for(workflow: str, run_id: str) -> str:
+def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
+    """`in-lockstep/<workflow>/<ticket>/<run-id>`, the ticket segment omitted when there is none.
+
+    The run id is what keeps two concurrent runs on the same ticket from colliding — that
+    uniqueness is the design's whole concurrency story — so the ticket joins the name for the
+    humans scanning a branch list (`git branch --list 'in-lockstep/*/59/*'`) and never replaces
+    it. The ticket is a hierarchy segment of its own so that glob works; a leading `#` is
+    stripped because shells treat it as a comment even though git would accept it.
+    """
     safe = "".join(c if c.isalnum() or c in "-_/" else "-" for c in workflow)
-    return f"{RUN_BRANCH_PREFIX}/{safe}/{run_id}"
+    key = "".join(c if c.isalnum() or c in "-_" else "-" for c in ticket.lstrip("#")).strip("-")
+    middle = f"{safe}/{key}" if key else safe
+    return f"{RUN_BRANCH_PREFIX}/{middle}/{run_id}"
 
 
 @dataclass(frozen=True)
@@ -260,7 +270,7 @@ class GitLocal:
         if not branch.startswith(f"{RUN_BRANCH_PREFIX}/"):
             raise DirectPushRefused(
                 f"refusing to write to {branch!r}: framework writes go to "
-                f"{RUN_BRANCH_PREFIX}/<workflow>/<run-id> only. Binding DirectPushScm is the "
+                f"{RUN_BRANCH_PREFIX}/<workflow>/[<ticket>/]<run-id> only. Binding DirectPushScm is the "
                 "deliberate, greppable way to do otherwise."
             )
 
@@ -335,7 +345,7 @@ class GitLocal:
         no meaning without a host, so the returned request reports `draft=False`: a local branch is
         as ready as it gets.
         """
-        branch = branch_for(workflow or "change", run_id or "local")
+        branch = branch_for(workflow or "change", run_id or "local", ticket=ticket)
         self.assert_run_scoped(branch)
         # Conventional Commits: this commit is created by a workflow, so its subject must be one.
         title = conventional_subject(title, workflow=workflow)

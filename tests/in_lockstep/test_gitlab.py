@@ -121,12 +121,12 @@ def test_open_change_pushes_the_run_branch_and_opens_a_draft_mr(tmp_path: Path) 
         scm.open_change(cs, title="add a thing", workflow="implement", run_id="r1", ticket="#5", draft=True)
     )
 
-    assert change.branch == "in-lockstep/implement/r1"
+    assert change.branch == "in-lockstep/implement/5/r1"
     assert change.number == 7 and change.draft is True
     assert change.url.endswith("/merge_requests/7")
     assert change.title == "feat: add a thing", "ChangeRequest.title never carries the Draft: prefix"
 
-    assert posted["source_branch"] == "in-lockstep/implement/r1"
+    assert posted["source_branch"] == "in-lockstep/implement/5/r1"
     assert posted["title"] == "Draft: feat: add a thing", "draft is a title prefix on GitLab"
     assert "In-Lockstep-Run" in posted["description"], "the machine-readable block rides the MR body"
 
@@ -134,7 +134,7 @@ def test_open_change_pushes_the_run_branch_and_opens_a_draft_mr(tmp_path: Path) 
     on_origin = subprocess.run(
         ["git", "branch", "-a"], cwd=tmp_path / "origin.git", capture_output=True, text=True
     ).stdout
-    assert "in-lockstep/implement/r1" in on_origin
+    assert "in-lockstep/implement/5/r1" in on_origin
 
     log = subprocess.run(["git", "log", "-1", "--format=%B"], cwd=root, capture_output=True, text=True).stdout
     assert "feat: add a thing" in log and "Ticket: #5" in log and "In-Lockstep-Run: r1" in log

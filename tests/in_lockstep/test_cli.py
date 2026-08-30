@@ -749,7 +749,7 @@ def test_apply_opens_a_change_on_a_run_scoped_branch(repo: Path, monkeypatch: py
     branch = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, capture_output=True, text=True
     ).stdout.strip()
-    assert branch == f"{RUN_BRANCH_PREFIX}/implement/42"
+    assert branch == f"{RUN_BRANCH_PREFIX}/implement/1/42", "the staged ticket (#1) is a segment"
     assert (repo / "src" / "x.py").read_text() == "x = 1\n"
 
     message = subprocess.run(
