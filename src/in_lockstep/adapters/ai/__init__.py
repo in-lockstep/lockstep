@@ -12,6 +12,7 @@ from .triage import AiTriage, Triage, TriageDecision
 # exported here so a lockstep.py needs no deep imports.
 __all__ = [
     "AiReview",
+    "AiRfe",
     "AiTriage",
     "DiagnoseThenFix",
     "Fix",

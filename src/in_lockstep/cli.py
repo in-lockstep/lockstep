@@ -1719,6 +1719,218 @@ def _post_review_comment(lockstep: Lockstep, aspect: str, outcome: Any, pr_numbe
         click.echo(f"comment   could not post to PR #{number}: {e}", err=True)
 
 
+_RFE_DRY_RUN = (
+    '{"title": "Canned dry-run draft", "problem": "canned dry-run answer; proves the wiring, '
+    'not the model.", "proposal": "nothing", "acceptance_criteria": [], "open_questions": [], '
+    '"labels": []}'
+)
+
+
+@main.command(name="rfe")
+@click.option("--idea", default="", help="The rough request, in a sentence or three.")
+@click.option(
+    "--idea-file",
+    default="",
+    type=click.Path(),
+    help="The rough request read off disk, as plain text or markdown.",
+)
+@click.option("--ticket", default="", help="An existing feature-kind issue to elaborate, e.g. '#42'.")
+@click.option(
+    "--create",
+    is_flag=True,
+    help="File the draft through the bound TicketSource. Off by default: a human reads first.",
+)
+@click.option("--model", default="anthropic:claude-haiku-4-5", help="Drafting is a cheap reading task.")
+@click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
+@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option("--cassette", default="", help="Where to read or write a recording.")
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="Hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
+)
+@click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
+def rfe_cmd(
+    idea: str,
+    idea_file: str,
+    ticket: str,
+    create: bool,
+    model: str,
+    offline: bool,
+    record: bool,
+    cassette: str,
+    budget: float | None,
+    dry_run: bool,
+) -> None:
+    """Turn a rough feature idea into a ticket a team could pick up.
+
+    The draft is printed, never filed by the model: an idea is untrusted input and a ticket in
+    the tracker is an instruction to future agents, so the `rfe` guardrail denies the
+    issue-writing tools and `--create` is the human step that takes the printed draft to
+    `TicketSource.create`. Without `--create` this reads, drafts and stops.
+    """
+    from pathlib import Path as _Path
+
+    from .adapters.ai.rfe import AiRfe, Rfe, RfeSpec
+    from .ai.auth import Auth
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+        default_registry,
+        table_for,
+    )
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .platform.tickets import TicketDraft, TicketSource, TicketType
+    from .privileged.egress import EgressPolicy
+
+    lockstep, recorder = _default_lockstep()
+    source = click.get_current_context().get_parameter_source
+    if budget is not None:
+        from .core.spend import Budget
+
+        lockstep.budget = Budget(usd=budget)
+    if source("model") is ParameterSource.DEFAULT:
+        model = lockstep.models.routes.get("rfe", model)
+
+    if sum(1 for x in (idea, idea_file, ticket) if x) != 1:
+        raise click.ClickException("pass exactly one of --idea, --idea-file or --ticket")
+    if idea_file:
+        file = _Path(idea_file)
+        if not file.exists():
+            raise click.ClickException(f"no idea file at {idea_file}")
+        spec = RfeSpec(idea=file.read_text(), key=file.stem)
+    elif ticket:
+        loaded = _load_ticket(ticket, "", lockstep.repo.root, source=_bound_ticket_source(lockstep))
+        spec = RfeSpec.from_ticket(loaded)
+    else:
+        spec = RfeSpec(idea=idea)
+
+    auth = Auth()
+    try:
+        registry = default_registry(auth)
+    except MissingCredential as e:
+        raise click.ClickException(str(e)) from None
+    selected = Model(model)
+    table = table_for(registry, selected, _bound_cost_table(lockstep))
+    tape = Cassette.load(cassette or ".lockstep/cassettes/rfe.json")
+
+    def build_invoker(_ctx: Any) -> AiInvoker:
+        provider: LLMProvider
+        if dry_run:
+            provider = DryRunProvider(_RFE_DRY_RUN)
+        elif offline:
+            provider = ReplayProvider(tape)
+        else:
+            creds = credentials_for(auth, selected.provider)
+            provider = registry.provider_for(selected, creds)
+            if record:
+                provider = RecordingProvider(provider, tape, Redact())
+        return AiInvoker(
+            provider,
+            model=selected.name,
+            cost_table=table,
+            spend=_ctx.spend,
+            redact=Redact(),
+            egress=(
+                lockstep.container.resolve(EgressPolicy)
+                if lockstep.container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            ),
+        )
+
+    # Only if the module did not bind one — the same rule `review` and `triage` follow.
+    rfe_model_is_ours = not lockstep.container.has(Rfe)
+    if rfe_model_is_ours:
+        lockstep.bind(
+            Rfe,
+            AiRfe(
+                build_invoker,
+                policy=InvokePolicy.under(
+                    lockstep.policy.resolve(), max_turns=1, max_tokens=2048, deadline_seconds=120
+                ),
+            ),
+        )
+
+    ctx = _context(lockstep, _run_id(f"rfe-{spec.key.lstrip('#') or 'idea'}"))
+    try:
+        outcome = asyncio.run(ctx.do(Rfe, spec))
+    except LookupError as e:
+        raise click.ClickException(
+            f"{e} If this is a shipped fixture, it no longer matches the prompt it was recorded "
+            f"against — a prompt or guardrail changed, and re-recording is a real model call."
+        ) from None
+    except (ImportError, MissingCredential) as e:
+        raise click.ClickException(str(e)) from None
+
+    click.echo(
+        f"rfe       {outcome.status.value}"
+        + (f"  ({outcome.reason})" if outcome.reason else "")
+        + ("" if outcome.decided else "  (decided nothing)")
+    )
+    draft = outcome.value
+    if draft is not None:
+        click.echo("")
+        click.echo(f"# {draft.title}")
+        click.echo("")
+        click.echo(draft.render())
+        if draft.labels:
+            click.echo("")
+            click.echo(f"labels: {', '.join(draft.labels)}")
+    for finding in outcome.findings:
+        where = f"{finding.path} " if finding.path else ""
+        click.echo(f"  {where}{finding.id}: {finding.message}")
+
+    cost = outcome.cost
+    click.echo("")
+    click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
+    click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    _echo_telemetry(recorder)
+
+    _write_ledger(lockstep, ctx, outcome, "", selected.id if rfe_model_is_ours else "", kind="rfe")
+
+    if outcome.status is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if outcome.status is not Status.SUCCEEDED:
+        raise SystemExit(EXIT_FAILED)
+
+    if not create:
+        if draft is not None:
+            click.echo("")
+            click.echo(
+                "not filed. Read it, then re-run with --create to file it — or edit and file it yourself."
+            )
+        return
+    if draft is None:
+        raise click.ClickException("nothing to file: the run produced no draft")
+    tickets: Any = (
+        lockstep.container.resolve(TicketSource)  # type: ignore[type-abstract]
+        if lockstep.container.has(TicketSource)
+        else None
+    )
+    if tickets is None:
+        raise click.ClickException(
+            "no TicketSource is bound, so there is nowhere to file the draft. Bind one in "
+            "lockstep.py — e.g. lockstep.bind(TicketSource, GitHubIssues())."
+        )
+    labels = tuple(dict.fromkeys((*draft.labels, "rfe")))
+    filed = asyncio.run(
+        tickets.create(
+            TicketDraft(
+                title=draft.title,
+                description=draft.render(),
+                type=TicketType.STORY,
+                labels=labels,
+            )
+        )
+    )
+    click.echo("")
+    click.echo(f"filed     {getattr(filed, 'key', '') or draft.title}")
+
+
 _BACKPORT_DRY_RUN = '{"files": [], "summary": "canned dry-run answer; proves the wiring, not the merge."}'
 
 
