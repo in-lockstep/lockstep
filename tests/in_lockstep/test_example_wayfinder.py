@@ -205,7 +205,16 @@ def test_every_example_keeps_its_configuration_where_the_loader_looks() -> None:
     from in_lockstep.loader import LEGACY_MODULE_FILE, MODULE_FILE
 
     root = Path(__file__).resolve().parents[2] / "examples"
-    examples = [d for d in root.iterdir() if d.is_dir() and not d.name.startswith("__")]
+    examples = [
+        d
+        for d in root.iterdir()
+        if d.is_dir()
+        and not d.name.startswith("__")
+        # An installable package (acme-standards) is not a repository: it is applied by being
+        # a dependency, so it has an entry point where a repository has a lockstep.py, and
+        # demanding the latter would teach the wrong thing in the other direction.
+        and not (d / "pyproject.toml").exists()
+    ]
     assert examples, "no examples found, so this test asserts nothing"
     for example in examples:
         assert (example / MODULE_FILE).is_file(), f"{example.name} has no {MODULE_FILE}"

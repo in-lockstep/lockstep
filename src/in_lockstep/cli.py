@@ -688,6 +688,11 @@ def ls_cmd() -> None:
         click.echo(f"  {type(mw).__name__}")
 
     click.echo("")
+    click.echo("standards  (in_lockstep.standards entry points; applied before this module's own lines)")
+    for label in getattr(lockstep, "standards", None) or ["(none installed)"]:
+        click.echo(f"  {label}")
+
+    click.echo("")
     click.echo("policy")
     layers = lockstep.policy.layers
     if not layers:

@@ -1,0 +1,21 @@
+# The whole distribution mechanism is this file plus one function.
+#
+# Publishing this package to your organisation's index and adding it to a repository's
+# dependencies IS applying the standards — there is no import to remember, which is the point:
+# at two hundred repositories, a hand-imported convention is drift by another name.
+[project]
+name = "acme-lockstep"
+version = "1.0.0"
+description = "Acme's engineering standards for every in-lockstep repository"
+requires-python = ">=3.11"
+dependencies = ["in-lockstep"]
+
+# The group in-lockstep discovers. The NAME ("acme") orders application when several standards
+# packages are installed — org before team is "00-acme" before "10-payments-team", stated in the
+# name where everyone can read it, rather than left to resolver order nobody can.
+[project.entry-points."in_lockstep.standards"]
+acme = "acme_lockstep:apply"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

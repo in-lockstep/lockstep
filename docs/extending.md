@@ -209,6 +209,15 @@ Contributions append and only tighten. `deny-all` egress is an irreversible floo
 the lowest of several rather than the last read; tool denies union; the strictest scan wins. There
 is no removal API.
 
+At one repository, that line lives in `lockstep.py`. At two hundred, a line every repository has
+to remember is drift by another name — so standards also travel as an **installable package**: an
+`in_lockstep.standards` entry point whose function receives a facade that can `contribute` layers
+(stamped with the plugin's source) and `bind` at `Tier.PLUGIN` (the repository's own binds still
+win). `Lockstep.detect()` applies every installed one, in entry-point-name order, before your
+module's own lines run, and `in-lockstep ls` prints what applied. The worked example is
+[`examples/acme-standards/`](../examples/acme-standards/) — a `pyproject.toml` and one function
+is the entire org layer.
+
 Be clear about what that buys: **visibility of removal, not impossibility.** A repository can
 delete the line that contributes your standard, and a middleware chain cannot bound code that
 never calls `ctx.do`. Enforcement that must survive a hostile repository owner lives in a required
