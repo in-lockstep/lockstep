@@ -104,7 +104,7 @@ from in_lockstep.prompts.review import LENSES
 
 lockstep.bind(
     Review,
-    AiReview(invoker_factory, lenses={**LENSES, "security": OurSecurityReview}),
+    AiReview(lenses={**LENSES, "security": OurSecurityReview}),
 )
 ```
 
@@ -141,7 +141,7 @@ house = implement_layers().plus(
 ```
 
 ```python
-lockstep.bind(Implement, AiImplement(invoker_factory, registry=registry, layers=house))
+lockstep.bind(Implement, Oneshot(layers=house))
 ```
 
 `plus` *appends*: your guardrail lands after the framework's baseline and ahead of the body, so
@@ -288,29 +288,28 @@ nothing, not at the first call.
 
 ## A strategy
 
-A binding chooses which adapter serves a verb; a strategy chooses how it goes about the work.
+The strategy IS the adapter. A binding does not choose a dispatcher configured by a string — it
+names the approach itself:
 
 ```python
-strategies.register("review/ours", Verb.REVIEW, factory=OurReviewStrategy)
-strategies.default(Verb.REVIEW, "review/ours")
+lockstep.bind(Implement, TDD())     # or Oneshot(), or your own class
 ```
 
-`strategy_id` is part of the eval subject key, so strategies are measured against each other on
-the same ground truth. Ship fixtures with a new strategy: ten unmeasured strategies are worse than
-one measured.
+Writing one is subclassing `AiStrategy` (which carries the constructor and the per-run session
+assembly) and implementing `invoke(ctx, request)`. Declare `verb`, `capabilities` — the
+load-bearing frozenset every gate reads off the bound object — and `id`, which lands on the
+report so an eval subject and a ledger record can key on the approach that ran. Ship fixtures
+with a new strategy: ten unmeasured strategies are worse than one measured.
 
-If your strategy holds a path grant, register it `privileged=True`. Selection can be driven by
-ticket labels, and anyone can write a ticket label.
+Which strategy runs is a bind-time code decision in `lockstep.py`, reviewed like any other line.
+There is no request-time selection and no registry id, so nothing a ticket carries — a label, a
+comment, a body — can steer a run toward an approach that holds a path grant. What used to be a
+registry refusal (a privileged strategy unreachable from untrusted input) is now structural.
 
-A registration whose factory returns something without `execute` is a **catalogue entry** — a name
-reserved for an approach nobody has written yet. `implement/direct` is that today; `implement/tdd`
-now runs. `AiImplement` refuses a catalogue entry by name rather than failing on a missing
-attribute, and `in-lockstep ls` is where you can see which is which.
+### `Oneshot`
 
-### `implement/oneshot`
-
-The default shipped strategy: one session, one model, a tool set that can read, search, stage writes
-and run a command. (`implement/tdd` also runs — a test-first loop, below — but oneshot is the cheap
+The scaffold's default: one session, one model, a tool set that can read, search, stage writes
+and run a command. (`TDD` also ships — a test-first loop, below — but oneshot is the cheap
 default.)
 
 ```bash
@@ -347,20 +346,20 @@ working directory read-write, so without it a command from an allowlisted progra
 `make`, `node` — could write `.git/hooks` or `.lockstep/lockstep.py` on the real repository, which
 is the write path `ChangeGuard` governs for `write_file` but cannot see once a process is running.
 Running in a discarded copy means those writes land nowhere that a later run will read. (One
-consequence, shared with `implement/tdd`: a linked worktree's `.git` is a gitlink outside a
+consequence, shared with `TDD`: a linked worktree's `.git` is a gitlink outside a
 container's mount, so a command that needs git will not resolve it inside a container — `pytest`,
 `ruff` and `mypy` do not care.)
 
 One thing to know before reading a session's transcript: the working tree `run_script` runs against
 does **not** contain that session's staged writes — it is HEAD in a copy. It tells the model what
 the existing behaviour is, not whether its change works. Verifying a change is what the `apply` half
-is for, and `implement/tdd` (above) is what runs the suite against the staged change directly.
+is for, and `TDD` (above) is what runs the suite against the staged change directly.
 
 `--max-turns` defaults to 40. That is a runaway backstop, not the budget: every turn re-sends the
 accumulated history, so the thing that actually stops a long session is the per-turn spend check,
 which refuses *before* the call that would cross the ceiling.
 
-### `implement/tdd`
+### `TDD`
 
 Test-first, enforced by the strategy rather than requested in a prompt. It runs in two model steps
 with a real `Test` run between them: it asks for a failing test, **materialises that test in a
@@ -371,11 +370,11 @@ than opening a pull request that does not work.
 
 This is where the `run_script` caveat above stops applying: oneshot's `run_script` sees the tree as
 it was, but tdd's verdict comes from `ctx.do(Test(root=…))` against the *materialised*
-change, so it reflects the code as proposed. Because it needs to run the suite, `implement/tdd`
+change, so it reflects the code as proposed. Because it needs to run the suite, `TDD`
 requires a `Test` verb bound and refuses up front (`tdd.no_test`) if none is — it will not degrade to
-an untested oneshot. Select it per call (`--strategy implement/tdd`) or make it the binding's default
-(`AiImplement(..., strategy="implement/tdd")`) — which `in-lockstep ls` then prints beside the
-binding, so how implementing happens is visible without reading the adapter.
+an untested oneshot. Bind it — `lockstep.bind(Implement, TDD(...))` — and `in-lockstep ls` prints
+`Implement -> TDD`, so how implementing happens is one visible line. The CLI's `--strategy tdd`
+does the same for a repository that has bound nothing.
 
 ## The path a project takes
 

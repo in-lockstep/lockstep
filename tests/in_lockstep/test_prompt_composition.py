@@ -111,24 +111,24 @@ def test_every_ai_adapter_takes_injected_layers_and_defaults_to_the_shipped_set(
     """`layers=` is the same seam `prompts=`/`lenses=` are: the binding site in lockstep.py is
     where a repository's guardrails enter, visibly. Absent, each adapter composes with the
     shipped set — the seam must not make the default a different prompt."""
-    from in_lockstep.adapters.ai.fix import AiFix
-    from in_lockstep.adapters.ai.implement import AiImplement
+    from in_lockstep.adapters.ai.fix import DiagnoseThenFix
+    from in_lockstep.adapters.ai.oneshot import Oneshot
     from in_lockstep.adapters.ai.review import AiReview
     from in_lockstep.adapters.ai.triage import AiTriage
     from in_lockstep.prompts.implement import implement_layers
-    from in_lockstep.strategies import default_registry
 
     custom = implement_layers().plus(guardrails=(("acme/house", "Do not xxx."),))
 
-    implement = AiImplement(lambda ctx: None, registry=default_registry(), layers=custom)
-    session = implement._session(object(), None)  # registration is not consulted by _session
+    implement = Oneshot(lambda ctx: None, layers=custom)
+    session = implement._session(object())
     assert session.layers is custom, "the injected stack is the one strategies compose with"
-    assert AiImplement(lambda ctx: None, registry=default_registry())._session(
-        object(), None
-    ).layers.projection("b") == implement_layers().projection("b")
+    assert (
+        Oneshot(lambda ctx: None)._session(object()).layers.projection("b")
+        == implement_layers().projection("b")
+    )
 
-    fix = AiFix(lambda ctx: None, registry=default_registry(), layers=custom)
-    assert fix._session(object(), None).layers is custom
+    fix = DiagnoseThenFix(lambda ctx: None, layers=custom)
+    assert fix._session(object()).layers is custom
 
     assert AiReview(lambda ctx: None, layers=custom).layers is custom
     assert AiTriage(lambda ctx: None, layers=custom).layers is custom

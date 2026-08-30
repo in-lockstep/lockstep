@@ -1529,7 +1529,7 @@ OWN_ADAPTER = """
 import json
 
 from in_lockstep import Lockstep
-from in_lockstep.adapters.ai.implement import AiImplement, Implement
+from in_lockstep.adapters.ai import Implement, Oneshot
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.spend import Budget
@@ -1537,7 +1537,6 @@ from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMOutput, TokenUsage, ToolCall
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
-from in_lockstep.strategies import default_registry
 
 lockstep = Lockstep.detect()
 lockstep.budget = Budget(usd=2.00)
@@ -1566,12 +1565,11 @@ table.add("house-model", Rate(input_per_m=1.0, output_per_m=2.0))
 
 lockstep.bind(
     Implement,
-    AiImplement(
+    Oneshot(
         lambda ctx: AiInvoker(
             Scripted(), model="house-model", cost_table=table, spend=ctx.spend,
             egress=UnsandboxedEgress(),
         ),
-        registry=default_registry(),
         repo_root=lockstep.repo.root,
         policy=InvokePolicy(max_turns=4, max_tokens=1024),
     ),

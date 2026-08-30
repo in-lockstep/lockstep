@@ -699,13 +699,10 @@ def ls_cmd() -> None:
         name = f" [{binding.name}]" if binding.name else ""
         impl = binding.impl if isinstance(binding.impl, type) else type(binding.impl)
         label = f"{binding.iface.__name__}{name}"
-        # An adapter that dispatches a strategy says which one right here, so "what will an
-        # Implement run actually do" is answered by `ls` instead of by reading three files.
-        strategy = str(getattr(binding.impl, "strategy", "") or "")
-        suffix = f"  strategy={strategy}" if strategy else ""
+        # The strategy IS the adapter, so "what will an Implement run actually do" is the impl
+        # column itself: `Implement -> TDD` needs no further annotation.
         click.echo(
             f"  {label:<22} -> {impl.__name__:<16}({binding.scope.value}, {binding.tier.name.lower()})"
-            f"{suffix}"
         )
 
     click.echo("")
@@ -1058,9 +1055,10 @@ def egress_manifest_cmd() -> None:
     `IN_LOCKSTEP_EGRESS=enforced` attests that proxy is in front. Computed from the endpoints of
     the providers the module routes to (every registered provider when no routes narrow it), plus
     whatever a bound `EgressPolicy(allow=...)` declares beyond them — an SCM host, a package
-    registry someone decided on before an `EXECUTES_CODE` step needed it. A provider registered
-    through a custom registry inside `invoker_factory` is not visible here, the same limit
-    `doctor`'s route checks state.
+    registry someone decided on before an `EXECUTES_CODE` step needed it. Adapters bound with no
+    explicit invoker resolve their model from these same routes, so the common case is fully
+    visible; only a custom `ProviderRegistry` passed through an explicit `invoker_factory=` is
+    not, the same limit `doctor`'s route checks state.
     """
     from .ai.auth import Auth
     from .ai.bootstrap import Model, default_registry
@@ -2150,7 +2148,13 @@ def _ticket_from_file(path: str) -> Any:
 @main.command(name="implement")
 @click.option("--ticket", default="", help="Ticket key to fetch, e.g. '#42'.")
 @click.option("--ticket-file", default="", type=click.Path(), help="Read the ticket from a file instead.")
-@click.option("--strategy", default="", help="Which approach. Defaults to the registry's.")
+@click.option(
+    "--strategy",
+    type=click.Choice(["oneshot", "tdd"]),
+    default="oneshot",
+    show_default=True,
+    help="Which strategy class to bind: one exploring session, or red-then-green.",
+)
 @click.option("--model", default="anthropic:claude-sonnet-4-6")
 @click.option("--out", default="", type=click.Path(), help="Write the ChangeSet here for `apply`.")
 @click.option("--max-turns", type=int, default=_IMPLEMENT_TURNS, show_default=True)
@@ -2205,7 +2209,7 @@ def implement_cmd(
     ticket written by anybody is not the thing that should also hold the ability to write.
     """
 
-    from .adapters.ai.implement import AiImplement, Implement
+    from .adapters.ai import TDD, Implement, Oneshot
     from .adapters.sandbox import Sandbox
     from .adapters.worktree import WorktreeRunner
     from .ai.auth import Auth
@@ -2224,7 +2228,6 @@ def implement_cmd(
     from .core.spend import Budget
     from .middleware.approval import ApprovalGate
     from .privileged.egress import EgressPolicy
-    from .strategies import default_registry as default_strategies
 
     if bool(ticket) == bool(ticket_file):
         raise click.ClickException("pass exactly one of --ticket or --ticket-file")
@@ -2296,11 +2299,13 @@ def implement_cmd(
     # recording it would be a fabricated field in a permanent record.
     cli_chose_the_model = not lockstep.container.has(Implement)
     if cli_chose_the_model:
+        # `--strategy` names the class directly: the strategy IS the adapter, so which one runs
+        # is decided here, in code, and nothing a ticket can carry re-decides it.
+        chosen = {"oneshot": Oneshot, "tdd": TDD}[strategy or "oneshot"]
         lockstep.bind(
             Implement,
-            AiImplement(
+            chosen(
                 build_invoker,
-                registry=default_strategies(),
                 repo_root=lockstep.repo.root,
                 # A sandbox, or nothing. `--no-execute` withholds the runner rather than the
                 # tool, so the capability the tool set declares — and therefore what egress and
@@ -2333,14 +2338,14 @@ def implement_cmd(
 
     ctx = _context(lockstep, _run_id(f"implement-{resolved.key.lstrip('#')}"), approval)
     try:
-        outcome = asyncio.run(ctx.do(Implement(ticket=resolved, strategy=strategy)))
+        outcome = asyncio.run(ctx.do(Implement(ticket=resolved)))
     except LookupError as e:
         raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
     except (ImportError, MissingCredential) as e:
         raise click.ClickException(str(e)) from None
 
     report = outcome.value
-    label = report.strategy if report is not None and report.strategy else (strategy or "implement")
+    label = report.strategy if report is not None and report.strategy else "implement"
     click.echo(
         f"{label}  {outcome.status.value}"
         + (f"  ({outcome.reason})" if outcome.reason else "")
@@ -3221,11 +3226,10 @@ _SCAFFOLD_FIX_MODULE = '''
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
 from in_lockstep import RunContext
 
-from in_lockstep.adapters.ai.fix import AiFix, Fix
+from in_lockstep.adapters.ai import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import WorktreeRunner
-from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
@@ -3235,7 +3239,6 @@ from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
-from in_lockstep.strategies import default_registry as _fix_strategies
 
 # Each binding is guarded, so this block works on its own and also composes with the implement
 # scaffold without binding TicketSource, Scm, Test or the approval gate a second time. `hosted_*`
@@ -3254,14 +3257,11 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # Fix writes and executes, like implement: a reproducer and a fix, each run in a throwaway worktree
 # inside a no-network container, so a model's command reaches neither the network nor the real
 # .git/.lockstep past ChangeGuard.
+# The strategy IS the adapter: `ls` prints `Fix -> DiagnoseThenFix`. The model comes from the
+# `models.route("fix", ...)` line above; the invoker is assembled per run.
 lockstep.bind(
     Fix,
-    AiFix(
-        invoker_factory(lockstep.models.routes.get("fix", "")),
-        registry=_fix_strategies(),
-        # Named on the binding so `in-lockstep ls` prints how fixing happens.
-        strategy="fix/diagnose-then-fix",
-        repo_root=lockstep.repo.root,
+    DiagnoseThenFix(
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
             lockstep.repo.root,
@@ -3575,11 +3575,10 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 
 from in_lockstep import RunContext
 
-from in_lockstep.adapters.ai.implement import AiImplement, Implement
+from in_lockstep.adapters.ai import Implement, Oneshot
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
-from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
@@ -3590,7 +3589,6 @@ from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
-from in_lockstep.strategies import default_registry
 
 # Bound here rather than constructed inside the workflows, so `in-lockstep ls` can print what
 # will actually run and a test can substitute either one. `hosted_*` bind the detected host's
@@ -3616,15 +3614,13 @@ lockstep.middleware += [ApprovalGate()]
 # is discarded, so a command cannot write `.git/hooks` or `.lockstep/lockstep.py` on the real
 # repository past ChangeGuard. It does mean git-dependent commands see a linked worktree's gitlink
 # (see docs/extending.md); pytest, ruff and mypy do not care.
+# The strategy IS the adapter: `ls` prints `Implement -> Oneshot`, and that line is the whole
+# answer to "how does implementing happen here". Swap `Oneshot` for `TDD` to require
+# red-then-green. The model comes from the `models.route("implement", ...)` line above; the
+# invoker is assembled per run, so no factory is threaded here.
 lockstep.bind(
     Implement,
-    AiImplement(
-        invoker_factory(lockstep.models.routes.get("implement", "")),
-        registry=default_registry(),
-        # The registry's default for implement; named on the binding so `in-lockstep ls` prints
-        # how implementing happens. Swap for "implement/tdd" to require red-then-green.
-        strategy="implement/oneshot",
-        repo_root=lockstep.repo.root,
+    Oneshot(
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
             lockstep.repo.root,

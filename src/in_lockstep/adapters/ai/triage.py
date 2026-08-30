@@ -105,7 +105,7 @@ class AiTriage:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[TriagePrompt]] | None = None,
@@ -114,6 +114,9 @@ class AiTriage:
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
         # Injected like `prompts=` — see AiImplement, which carries the reasoning; usually
         # `triage_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
@@ -155,7 +158,10 @@ class AiTriage:
         system = prompt.system(layers) + "\n\n" + schema_instruction(TRIAGE_SCHEMA)
         messages = prompt.render(TriageParams(key=inp.key), package)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        invoker: AiInvoker = factory(ctx)
         try:
             invocation = await invoker.run(
                 system=system,

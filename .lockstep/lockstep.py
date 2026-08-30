@@ -15,12 +15,11 @@ from whichever branch is under review.
 
 from in_lockstep import Lockstep, RunContext
 from in_lockstep.adapters import PytestTest, RuffValidate
-from in_lockstep.adapters.ai.implement import AiImplement, Implement
+from in_lockstep.adapters.ai import TDD, Implement
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import WorktreeRunner
-from in_lockstep.ai.bootstrap import invoker_factory
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
@@ -32,7 +31,6 @@ from in_lockstep.platform.artifacts import read_changeset, write_changeset
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
-from in_lockstep.strategies import default_registry
 
 lockstep = Lockstep.detect()
 
@@ -158,17 +156,23 @@ lockstep.budget = Budget(usd=25.00, wall_seconds=900)
 lockstep.bind(TicketSource, GitHubIssues())
 lockstep.bind(Scm, GitHubScm())
 
-# -- models and strategies ----------------------------------------------------------
+# -- models -------------------------------------------------------------------------
+#
+# Routes are all an AI adapter needs: an adapter bound with no explicit invoker resolves its
+# model from these lines (snapshotted onto the run context), and egress from the binding above.
 lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
 lockstep.models.route("implement", "anthropic:claude-opus-4-6")
 lockstep.models.route("triage", "local:qwen3-8b")
 
-strategies = default_registry()
-
 # -- the implementing verb ----------------------------------------------------------
 #
 # Bound here, not by the CLI. `in-lockstep implement` binds a default when a repository has said
-# nothing; this repository has said something, and what it says is visible in `in-lockstep ls`.
+# nothing; this repository has said something, and what it says is one line of `in-lockstep ls`:
+# `Implement -> TDD`. The strategy IS the adapter — `TDD` rather than the cheaper `Oneshot`
+# because red then green, with the Test verb bound above confirming both, is a choice this
+# repository makes deliberately at the cost of a second model phase. The model comes from the
+# `models.route("implement", ...)` line above and egress from the bound `EgressPolicy`, so no
+# invoker is threaded here.
 #
 # `run_script` executes in a container with `--network=none` and refuses rather than falling back
 # to this host — which is the per-command egress constraint that makes allowing the tool at all
@@ -177,16 +181,7 @@ strategies = default_registry()
 # wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
 lockstep.bind(
     Implement,
-    AiImplement(
-        invoker_factory(lockstep.models.routes.get("implement", ""), egress=egress),
-        registry=strategies,
-        # `implement/tdd` rather than the shipped `implement/oneshot` default: red then green,
-        # with the Test verb bound above confirming both. It costs two model phases, which is a
-        # choice this repository makes deliberately — the registry's comment on the default
-        # explains why it is not everyone's. Declared on the binding so `in-lockstep ls` prints
-        # it next to the adapter; a request's own `Implement(strategy=...)` still wins.
-        strategy="implement/tdd",
-        repo_root=lockstep.repo.root,
+    TDD(
         commands=WorktreeRunner(
             Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
             lockstep.repo.root,

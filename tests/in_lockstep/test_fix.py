@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from in_lockstep.adapters.ai.fix import AiFix, Fix
+from in_lockstep.adapters.ai.fix import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
@@ -28,7 +28,6 @@ from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
 from in_lockstep.privileged.egress import UnsandboxedEgress
-from in_lockstep.strategies import default_registry
 
 MODEL = "test-model"
 
@@ -60,10 +59,9 @@ def _invoker(provider: LLMProvider, *, spend: Spend | None = None) -> AiInvoker:
     )
 
 
-def _adapter(provider: LLMProvider, root: Path) -> AiFix:
-    return AiFix(
+def _adapter(provider: LLMProvider, root: Path) -> DiagnoseThenFix:
+    return DiagnoseThenFix(
         lambda ctx: _invoker(provider, spend=getattr(ctx, "spend", None)),
-        registry=default_registry(),
         repo_root=str(root),
         policy=InvokePolicy(max_turns=8, max_tokens=1024),
     )
@@ -122,7 +120,7 @@ def repo(tmp_path: Path) -> Path:
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), Fix(ticket=_ticket(), strategy="fix/diagnose-then-fix")
+            Ctx(test_bound=test_bound), Fix(ticket=_ticket())
         )
     )
 

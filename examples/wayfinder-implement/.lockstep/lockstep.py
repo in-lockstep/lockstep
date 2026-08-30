@@ -128,8 +128,7 @@ async def work(ctx: RunContext, map: str = "map.json", target: str = ""):
     return await ctx.do(load_map(map, target, request=Implement))
 
 
-# A name for the strategy, so an eval subject can key on it and `ls` can print it. In-lockstep's
-# `StrategyRegistry` is a catalogue at 1.0 rather than a dispatcher — nothing selects from it yet —
-# so the bindings above are what actually decide behaviour. Said here rather than left for someone
-# to discover after registering into it.
+# A name for the strategy, so an eval subject can key on it. The bindings above are what decide
+# behaviour — the strategy IS the adapter — and this id is what its reports and ledger records
+# carry.
 STRATEGY_ID = "implement/wayfinder"

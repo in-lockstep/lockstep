@@ -171,6 +171,11 @@ class RunContext:
     recovering: bool = False
     #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
     approval: Approval = field(default_factory=Approval)
+    #: The per-verb model routes, snapshotted from `lockstep.models.routes` at `context()` time.
+    #: This is how an AI adapter bound with no explicit invoker finds its model: the snapshot
+    #: happens after the whole module executed, so a `models.route(...)` line may appear before
+    #: or after the bind that relies on it.
+    models: dict[str, str] = field(default_factory=dict)
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()

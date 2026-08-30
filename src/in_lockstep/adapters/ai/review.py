@@ -72,9 +72,9 @@ class AiReview:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker],
+        invoker_factory: Callable[[Any], AiInvoker] | None = None,
         *,
-        repo_root: str = ".",
+        repo_root: str = "",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
         lenses: Mapping[str, type[ReviewPrompt]] | None = None,
@@ -82,7 +82,11 @@ class AiReview:
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
     ) -> None:
+        # No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`,
+        # resolved per run off the context. Passing one is the seam for a custom registry,
+        # gateway, or cassette provider.
         self.invoker_factory = invoker_factory
+        #: Empty defaults to the run's own repository (`ctx.repo.root`) at invoke time.
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=1)
         self.curator = curator or ContextCurator()
@@ -123,7 +127,8 @@ class AiReview:
 
         prompt: ReviewPrompt = lens()
         layers: PromptLayers = self.layers if self.layers is not None else review_layers()
-        package = self._gather(inp)
+        root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
+        package = self._gather(inp, root)
 
         if not package.items:
             # Refused rather than asked. A model handed no diff answers anyway, and whether that
@@ -149,7 +154,7 @@ class AiReview:
         system = prompt.system(layers) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
         messages = prompt.render(ReviewParams(base=inp.base, head=inp.head, aspect=inp.aspect), package)
 
-        invoker: AiInvoker = self.invoker_factory(ctx)
+        invoker: AiInvoker = self._invoker(ctx)
         try:
             invocation = await invoker.run(
                 system=system,
@@ -277,8 +282,14 @@ class AiReview:
             reason="exhausted" if invocation.exhausted else None,
         )
 
-    def _gather(self, inp: Review) -> ContextPackage:
-        diff = inp.diff or _git_diff(self.repo_root, inp.base, inp.head, inp.paths)
+    def _invoker(self, ctx: Any) -> AiInvoker:
+        from ...ai.bootstrap import routed_invoker
+
+        factory = self.invoker_factory or routed_invoker(type(self).verb)
+        return factory(ctx)
+
+    def _gather(self, inp: Review, root: str) -> ContextPackage:
+        diff = inp.diff or _git_diff(root, inp.base, inp.head, inp.paths)
         if not diff.strip():
             # An empty diff is not a clean review, and running one would produce a confident
             # answer about nothing. Distinguished here rather than at parse time, where it arrives

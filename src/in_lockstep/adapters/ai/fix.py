@@ -2,7 +2,7 @@
 
 The shape Bug Fix has that Implement does not is that the *bug* has to be captured before the fix
 is, and captured as something that fails. So this is two model steps with a real Test run between
-them, the same spine `implement/tdd` uses, but the halves mean different things and are reported
+them, the same spine `TDD` uses, but the halves mean different things and are reported
 apart:
 
 1. **Reproduce.** Ask (with the reproducer-writer prompt) for a test that fails *because of the
@@ -19,40 +19,32 @@ them as two things: here is the bug, made executable; here is the line that matt
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, ClassVar
 
-from ...ai.builtins import CommandRunner, ToolRunnerImpl, Workspace, read_write_execute
+from ...ai.builtins import ToolRunnerImpl, Workspace
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage
 from ...ai.invoker import AiInvoker, InvokePolicy
 from ...ai.prompt import PromptLayers
-from ...ai.strategy import Registration, StrategyRefused, StrategyRegistry, UnknownStrategy
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
-from ...core.types import ChangeSet
+from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
-from ..pytest_adapter import Test
 from ..worktree import materialize
-from ._strategy import PhaseError, read_reply, reported, run_phase, test_findings
-
-DEFAULT_TURNS = 40
-DEFAULT_MAX_TOKENS = 8192
+from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 
 
 @dataclass(frozen=True)
 class Fix:
-    """The Fix request: which bug to fix, and how the strategy was chosen. Workflows do
-    `ctx.do(Fix(...))`; a binding decides what runs it. Frozen: it is hashed for step identity."""
+    """The Fix request: which bug to fix. Workflows do `ctx.do(Fix(...))`; the binding decides
+    which strategy runs it. Frozen: it is hashed for step identity."""
 
     #: The bug report, untrusted by construction — anyone who can file one writes into this prompt.
     ticket: Any
-    strategy: str = ""
-    untrusted_selection: bool = False
     token_budget: int = 60_000
 
 
@@ -80,8 +72,9 @@ class FixReport:
 
 @dataclass
 class FixSession:
-    """Everything a fix strategy needs, assembled once by the adapter. Mirrors `ImplementSession`;
-    a fix strategy writes files, so it carries a workspace and the write/execute tools."""
+    """Everything one run needs, assembled per invoke by `AiStrategy._session`. Mirrors
+    `ImplementSession`; a fix strategy writes files, so it carries a workspace and the
+    write/execute tools."""
 
     invoker: AiInvoker
     workspace: Workspace
@@ -99,8 +92,14 @@ class FixSession:
         return self.curator.curate(items, ContextNeed(token_budget=spec.token_budget))
 
 
-class AiFix:
+class DiagnoseThenFix(AiStrategy):
+    """Bound as the Fix adapter: `lockstep.bind(Fix, DiagnoseThenFix(...))`. Reproduce the bug as
+    a failing test, then fix it, and prove both."""
+
+    id: ClassVar[str] = "fix/diagnose-then-fix"
     verb: ClassVar[Verb] = Verb.FIX
+    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
+    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
     capabilities: ClassVar[frozenset[Capability]] = frozenset(
         {
             Capability.READS_REPO,
@@ -109,95 +108,20 @@ class AiFix:
             Capability.EXECUTES_CODE,
         }
     )
-
-    def __init__(
-        self,
-        invoker_factory: Callable[[Any], AiInvoker],
-        *,
-        registry: StrategyRegistry,
-        strategy: str = "",
-        repo_root: str = ".",
-        policy: InvokePolicy | None = None,
-        curator: ContextCurator | None = None,
-        commands: CommandRunner | None = None,
-        guard: ChangeGuard | None = None,
-        workflow_id: str = "",
-        prompts: Mapping[str, type[FixPrompt]] | None = None,
-        layers: PromptLayers | None = None,
-    ) -> None:
-        self.invoker_factory = invoker_factory
-        self.registry = registry
-        # The binding's default strategy — see AiImplement, which carries the reasoning. A request
-        # that names its own still wins; empty falls through to the registry's default.
-        self.strategy = strategy
-        self.repo_root = repo_root
-        self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
-        self.curator = curator or ContextCurator()
-        self.commands = commands
-        self.guard = guard or ChangeGuard()
-        self.workflow_id = workflow_id
-        self.prompts: Mapping[str, type[FixPrompt]] = (
-            dict(prompts) if prompts is not None else dict(FIX_PROMPTS)
-        )
-        # Injected like `prompts=` — see AiImplement, which carries the reasoning; usually
-        # `fix_layers().plus(guardrails=...)` so the shipped baseline stays underneath.
-        self.layers = layers
+    _session_cls = FixSession
+    _shipped_prompts = FIX_PROMPTS
+    _layers_factory = staticmethod(fix_layers)
 
     async def invoke(self, ctx: Any, inp: Fix) -> Outcome[FixReport]:
-        try:
-            registration = self.registry.select(
-                Verb.FIX,
-                explicit=inp.strategy or self.strategy or None,
-                from_untrusted_input=inp.untrusted_selection,
-            )
-        except StrategyRefused as e:
-            return _blocked("fix.strategy_refused", str(e))
-        except UnknownStrategy as e:
-            return _blocked("fix.unknown_strategy", str(e))
-
-        strategy = registration.factory()
-        if not hasattr(strategy, "execute"):
-            return _blocked(
-                "fix.strategy_not_executable",
-                f"{registration.id!r} is registered as a catalogue entry, not an executable "
-                f"strategy: its factory returned {type(strategy).__name__}, which has no `execute`. "
-                f"Executable today: {', '.join(_executable(self.registry))}.",
-            )
-        outcome: Outcome[FixReport] = await strategy.execute(ctx, self._session(ctx, registration), inp)
-        return outcome
-
-    def _session(self, ctx: Any, registration: Registration) -> FixSession:
-        workspace = Workspace(root=Path(self.repo_root), guard=self.guard, workflow_id=self.workflow_id)
-        tools, runner = read_write_execute(workspace, commands=self.commands)
-        return FixSession(
-            invoker=self.invoker_factory(ctx),
-            workspace=workspace,
-            tools=tools,
-            run_tool=runner,
-            policy=self.policy,
-            layers=self.layers if self.layers is not None else fix_layers(),
-            prompts=self.prompts,
-            curator=self.curator,
-            guard=self.guard,
-            repo_root=self.repo_root,
-        )
-
-
-class DiagnoseThenFix:
-    """Registered as `fix/diagnose-then-fix`. Reproduce the bug as a failing test, then fix it."""
-
-    id: ClassVar[str] = "fix/diagnose-then-fix"
-    verb: ClassVar[Verb] = Verb.FIX
-
-    async def execute(self, ctx: Any, session: FixSession, inp: Fix) -> Outcome[FixReport]:
         container = getattr(ctx, "container", None)
         if container is None or not container.has(Test):
             return _blocked(
                 "fix.no_test",
-                "fix/diagnose-then-fix writes a reproducer and runs it to confirm the bug before "
+                "DiagnoseThenFix writes a reproducer and runs it to confirm the bug before "
                 "fixing, so it needs a Test verb bound. Bind Test (e.g. PytestTest).",
             )
 
+        session = self._session(ctx)
         ticket = inp.ticket
         params = FixParams(
             ticket=ticket.key,
@@ -341,9 +265,7 @@ class DiagnoseThenFix:
         return await run_phase(session, system, lens.render(params, package), package, prefix="fix")
 
 
-def _test_spec(tree: str, expect: str) -> Any:
-    from ...core.types import Test
-
+def _test_spec(tree: str, expect: str) -> Test:
     return Test(root=tree, expect=expect)
 
 
@@ -372,17 +294,6 @@ def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:
     for change in over.changes:
         by_path[change.path] = change
     return ChangeSet(changes=tuple(by_path.values()), summary=over.summary or base.summary)
-
-
-def _executable(registry: StrategyRegistry) -> list[str]:
-    names = []
-    for registration in registry.for_verb(Verb.FIX):
-        try:
-            if hasattr(registration.factory(), "execute"):
-                names.append(registration.id)
-        except Exception:  # noqa: BLE001
-            continue
-    return names or ["(none)"]
 
 
 def _blocked(reason: str, message: str, *, staged: list[Any] | None = None) -> Outcome[FixReport]:

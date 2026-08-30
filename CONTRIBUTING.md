@@ -43,7 +43,7 @@ Sized and genuinely wanted — each is a roadmap item or a recorded gap:
   (`GATE-TESTGUARD-1` refuses silencing without one), report.
 - **A SHARED-scope ledger store**: `LedgerStore.compare_and_set` is declared and deliberately
   refused at `LOCAL` scope; park/fan-out barriers need a store more than one machine can see.
-- **A hosted OpenAI-compatible provider recipe**: the seam (`invoker_factory(registry=...)`)
+- **A hosted OpenAI-compatible provider recipe**: the seam (an explicit `invoker_factory(registry=...)` passed to the adapter)
   exists and is documented; a worked gateway example is not.
 - **GitLab live hardening**: the protocols and host-aware `init` ship; nobody has dogfooded a
   real MR pipeline end to end. First person to run one will find the honest gaps.

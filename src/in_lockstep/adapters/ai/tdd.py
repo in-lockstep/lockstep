@@ -1,4 +1,6 @@
-"""`implement/tdd` — write a failing test, watch it fail, then make it pass.
+"""`TDD` — write a failing test, watch it fail, then make it pass.
+
+Bound as the Implement adapter: `lockstep.bind(Implement, TDD(...))`.
 
 Not a prompt that asks a model to "do TDD"; a strategy that enforces it. The difference is the
 whole argument of this framework: a rule stated only in prose is a request, and a model under
@@ -29,10 +31,10 @@ from typing import Any, ClassVar
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
-from ...core.verbs import Verb
-from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
+from ...core.verbs import Capability, Verb
+from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
 from ..worktree import head_state, materialize
-from ._strategy import PhaseError, read_reply, reported, run_phase, test_findings
+from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 from .implement import Implement, ImplementReport, ImplementSession
 
 _RED_DIRECTIVE = (
@@ -68,24 +70,36 @@ def _green_directive(tests: ChangeSet) -> str:
     )
 
 
-class TddImplement:
-    """Registered as `implement/tdd`. Holds no run state; everything arrives in the session."""
+class TDD(AiStrategy):
+    """Red then green: write a failing test, confirm red, implement, confirm green."""
 
     id: ClassVar[str] = "implement/tdd"
     verb: ClassVar[Verb] = Verb.IMPLEMENT
+    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
+    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.READS_REPO,
+            Capability.SPENDS_BUDGET,
+            Capability.WRITES_FILES,
+            Capability.EXECUTES_CODE,
+        }
+    )
+    _session_cls = ImplementSession
+    _shipped_prompts = PROMPTS
+    _layers_factory = staticmethod(implement_layers)
 
-    async def execute(
-        self, ctx: Any, session: ImplementSession, inp: Implement
-    ) -> Outcome[ImplementReport]:
+    async def invoke(self, ctx: Any, inp: Implement) -> Outcome[ImplementReport]:
         container = getattr(ctx, "container", None)
         if container is None or not container.has(Test):
             return _blocked(
                 "tdd.no_test",
-                "implement/tdd writes a failing test and runs it to confirm red before implementing, "
-                "so it needs a Test verb bound. Bind Test (e.g. PytestTest), or select "
-                "implement/oneshot, which does not require one.",
+                "TDD writes a failing test and runs it to confirm red before implementing, "
+                "so it needs a Test verb bound. Bind Test (e.g. PytestTest), or bind "
+                "Oneshot, which does not require one.",
             )
 
+        session = self._session(ctx)
         lens = session.prompts.get(self.id)
         if lens is None:
             return _blocked(
