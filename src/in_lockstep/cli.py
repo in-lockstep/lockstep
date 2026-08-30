@@ -922,6 +922,14 @@ def report_cmd(group_by: str, fmt: str) -> None:
         click.echo("no records yet; the first run that writes a ledger record creates them")
         return
 
+    # Tamper-evidence at report time: the moment someone reads these numbers is the moment to
+    # say whether the history they come from is still append-only. On stderr, so `--format json`
+    # keeps a parseable stdout while a human running it still sees the alarm.
+    verify = getattr(ledger, "verify", None)
+    tampered = verify() if callable(verify) else []
+    for problem in tampered:
+        click.echo(f"TAMPERED  {problem}", err=True)
+
     stats = summarize(records, by=group_by)
     if fmt == "json":
         payload = {
@@ -949,6 +957,17 @@ def report_cmd(group_by: str, fmt: str) -> None:
         click.echo(f"{key:<{width}}  {stat.runs:>4}  {stat.failures:>6}  {tokens}  {cost}  {mean}")
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
+    if callable(verify):
+        if tampered:
+            click.echo(f"history   NOT APPEND-ONLY: {len(tampered)} record(s) rewritten (see above)")
+        else:
+            click.echo("history   append-only across the retained chain")
+    else:
+        # The file store keeps no history, so there is nothing to verify — and saying nothing
+        # would read as verified. Absent is not zero, for evidence as much as for numbers.
+        click.echo(
+            "history   unverifiable (file store keeps no history; tamper-evidence needs the git ledger)"
+        )
 
 
 @main.command(name="doctor")

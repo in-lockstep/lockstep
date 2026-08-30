@@ -160,6 +160,47 @@ class GitLedger:
                 out.append(json.loads(raw))
         return out
 
+    # -- tamper-evidence -------------------------------------------------------------
+
+    def verify(self) -> list[str]:
+        """The ways the retained history contradicts append-only, one line per contradiction.
+
+        A record is appended once and never touched again, so any commit on this branch that
+        MODIFIES or DELETES a record file is evidence the past was rewritten — git allowed the
+        edit but kept the contradiction, and this is what reads it. The auditor's first question
+        after "when did this run" is "how do I know this record wasn't rewritten", and the
+        answer must be a check, not a shrug.
+
+        What this cannot see, stated rather than implied: a rewrite that REPLACED the chain — a
+        force-push of freshly fabricated commits — discards the contradiction along with the
+        commits that held it. That detection is the remote's: protect `lockstep-history` against
+        force-push and deletion, which `docs/controls-crosswalk.md` lists among what must be
+        true before an unattended run. Local truth plus remote protection is the whole control;
+        this method is only the local half.
+
+        A legitimate `_reconcile` or `absorb` never modifies an existing record — same run id
+        with the same content produces the same blob, which git records as no change at all. A
+        modification flagged here therefore means either tampering or two different runs that
+        shared a run id, and the second is worth an alarm too: one of those records silently
+        replaced the other.
+        """
+        head = self.head()
+        if head is None:
+            return []
+        raw = self._git("log", "--format=%H", "--name-status", "--diff-filter=MD", self.ref)
+        problems: list[str] = []
+        commit = ""
+        for line in raw.splitlines():
+            if not line.strip():
+                continue
+            if "\t" not in line:
+                commit = line.strip()
+                continue
+            status, path = line.split("\t", 1)
+            verb = "modified" if status.startswith("M") else "deleted"
+            problems.append(f"{path} was {verb} after being appended (commit {commit[:12]})")
+        return problems
+
     # -- publishing ----------------------------------------------------------------
 
     def push(self) -> str:

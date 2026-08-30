@@ -58,6 +58,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _spend_ceiling(report)
     _config_provenance(report)
     _branch_protection(report, path)
+    _history_integrity(report, path)
     _egress(report)
     _prompt_bodies(report)
     if lockstep is not None:
@@ -193,6 +194,36 @@ def _branch_protection(report: Report, root: Path) -> None:
             "The apply job holds an ambient repository token that can write any branch, so "
             "branch protection is what keeps protected branches unreachable. Without it, "
             "'writes go through a pull request' is a convention rather than a guarantee.",
+        )
+
+
+def _history_integrity(report: Report, root: Path) -> None:
+    """A ledger that was rewritten must fail the same check the controls do.
+
+    `report` says it at read time; this says it where an organisation puts a required check, so
+    tampering with the evidence breaks CI rather than waiting for an auditor to run `report`.
+    Quiet when the branch does not exist — a repository that has never recorded has nothing to
+    verify, and inventing a warning for it would teach people to ignore this code.
+    """
+    if not (root / ".git").exists():
+        return
+    from .platform.ledger import GitLedger, HistoryError
+
+    ledger = GitLedger(root=root)
+    try:
+        problems = ledger.verify()
+    except HistoryError:
+        return
+    if problems:
+        shown = "; ".join(problems[:3]) + ("; …" if len(problems) > 3 else "")
+        report.add(
+            "DOC167",
+            Severity.ERROR,
+            f"{ledger.branch} is not append-only: {len(problems)} record(s) rewritten",
+            f"{shown}. A run record modified or deleted after append is exactly what the ledger "
+            "exists to make visible. Note the check reads the retained chain only: a force-push "
+            "that replaced the chain discards the contradiction, so protect the history branch "
+            "against force-push and deletion on the remote.",
         )
 
 
