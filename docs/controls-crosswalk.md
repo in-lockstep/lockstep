@@ -47,6 +47,25 @@ before citing any row here as evidence.
   necessarily reachable, so a tool that can post to it can carry data out.
 - **`doctor` verifies attestations, not the things attested.** It cannot read a provider console.
 
+## Tamper-evidence for the ledger itself
+
+The evidence store deserves the same scrutiny as the things it evidences — the auditor's first
+question after "when did this run" is "how do I know this wasn't rewritten". The answer has two
+halves, and each is honest about what it cannot do:
+
+- **The retained chain is checked.** `GitLedger.verify()` walks `lockstep-history` for any commit
+  that modified or deleted a record after its append — git allowed the edit but kept the
+  contradiction. `report` prints the contradictions at read time and `doctor` fails on them
+  (`DOC167`), so a rewritten ledger breaks a required check rather than waiting to be noticed
+  (`GATE-LEDGER-8`). A legitimate reconcile or absorb never trips it: re-adding the same content
+  is the same blob, which git records as no change.
+- **A replaced chain is the remote's to refuse.** A force-push of freshly fabricated commits
+  discards the contradiction along with the commits that held it, and no local walk can see what
+  is no longer there. Protect `lockstep-history` against force-push and deletion (a ruleset with
+  "block force pushes" and "restrict deletions" is enough; it needs no reviews — appends are
+  fast-forwards and still flow). Without that protection, `verify()` is evidence against a clumsy
+  tamperer and a shrug against a careful one, which is worth knowing rather than assuming.
+
 ## What must be true before an unattended run
 
 1. `IN_LOCKSTEP_ORG_SPEND_LIMIT` attested (`DOC101`).
@@ -54,3 +73,5 @@ before citing any row here as evidence.
 3. `IN_LOCKSTEP_EGRESS=enforced` where the host constrains egress (`DOC130`), and the probe agrees.
 4. A base ref, so configuration does not resolve from the change under review (`DOC110`).
 5. The two-job trampoline, so the provider credential and the write token are never co-resident.
+6. Force-push and deletion protection on `lockstep-history`, so the ledger's append-only claim is
+   enforced where a rewrite would otherwise be invisible (see above).

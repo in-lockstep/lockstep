@@ -205,3 +205,126 @@ def test_a_rejected_push_is_reconciled_rather_than_reported(tmp_path: Path) -> N
         capture_output=True,
     )
     assert sorted(r["run_id"] for r in GitLedger(root=landed).records()) == ["run-a", "run-b"]
+
+
+# -- GATE-LEDGER-8: tamper-evidence ----------------------------------------------------------
+#
+# The auditor's first question after "when did this run" is "how do I know this wasn't
+# rewritten". `verify()` answers for the retained chain; the force-push case is the remote's
+# (docs/controls-crosswalk.md), and the docstring says so rather than implying more.
+
+
+def _tamper(ledger: GitLedger, run_id: str, *, delete: bool = False) -> None:
+    """Rewrite the past the way a cover-up would: a new commit that edits an old record."""
+    import tempfile
+
+    head = ledger.head()
+    with tempfile.TemporaryDirectory() as tmp:
+        index = Path(tmp) / "index"
+        ledger._git("read-tree", str(head), index=index)
+        if delete:
+            ledger._git("update-index", "--force-remove", ledger.path_for(run_id), index=index)
+        else:
+            blob = ledger._git("hash-object", "-w", "--stdin", stdin='{"cost_usd": 0.0001}\n')
+            ledger._git(
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{blob},{ledger.path_for(run_id)}",
+                index=index,
+            )
+        tree = ledger._git("write-tree", index=index)
+    commit = ledger._git(
+        *ledger._identity(), "commit-tree", tree, "-p", str(head), "-m", "routine maintenance"
+    )
+    ledger._git("update-ref", ledger.ref, commit, str(head))
+
+
+def test_gate_ledger_8_an_honest_history_verifies_clean(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    for i in range(3):
+        asyncio.run(ledger.append(f"run-{i}", {"kind": "review", "cost_usd": 0.01 * i}))
+    assert ledger.verify() == []
+
+
+def test_gate_ledger_8_a_rewritten_record_is_flagged_with_its_commit(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 26.32}))
+    asyncio.run(ledger.append("run-2", {"kind": "review", "cost_usd": 0.02}))
+
+    _tamper(ledger, "run-1")
+
+    problems = ledger.verify()
+    assert len(problems) == 1
+    assert "records/run-1.json" in problems[0] and "modified" in problems[0]
+    assert ledger.records(), "the tampered store still reads; verify is evidence, not a lock"
+
+
+def test_gate_ledger_8_a_deleted_record_is_flagged_too(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 1.00}))
+    asyncio.run(ledger.append("run-2", {"kind": "review", "cost_usd": 0.02}))
+
+    _tamper(ledger, "run-1", delete=True)
+
+    problems = ledger.verify()
+    assert len(problems) == 1
+    assert "deleted" in problems[0]
+
+
+def test_a_run_id_collision_reads_as_a_rewrite_because_it_is_one(tmp_path: Path) -> None:
+    """Two runs sharing an id means one record silently replaced the other — worth the alarm."""
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 0.01}))
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 0.99}))
+    assert any("modified" in p for p in ledger.verify())
+
+
+def test_absorbing_a_bundle_does_not_read_as_tampering(tmp_path: Path) -> None:
+    """The legitimate multi-machine flow must verify clean, or people learn to ignore the flag."""
+    a = _repo(tmp_path / "a")
+    b = _repo(tmp_path / "b")
+    ledger_a, ledger_b = GitLedger(root=a), GitLedger(root=b)
+    asyncio.run(ledger_a.append("run-a", {"kind": "review"}))
+    asyncio.run(ledger_b.append("run-b", {"kind": "implement"}))
+
+    bundle = ledger_b.bundle(tmp_path / "b.bundle")
+    ledger_a.absorb(bundle)
+
+    assert ledger_a.verify() == []
+    assert [r["run_id"] for r in ledger_a.records()] == ["run-a", "run-b"]
+
+
+def test_an_empty_history_has_nothing_to_verify(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    assert GitLedger(root=root).verify() == []
+
+
+def test_doctor_fails_on_a_rewritten_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """DOC167: tampering with the evidence breaks the same required check the controls use."""
+    from in_lockstep import doctor as doctor_module
+
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 26.32}))
+    _tamper(ledger, "run-1")
+
+    monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "100")
+    report = doctor_module.run(root)
+    codes = [c.code for c in report.checks]
+    assert "DOC167" in codes
+    tampered = next(c for c in report.checks if c.code == "DOC167")
+    assert tampered.severity is doctor_module.Severity.ERROR
+    assert "force-push" in tampered.hint, "the check's blind spot is stated where it fires"
+
+
+def test_doctor_says_nothing_about_a_repo_that_never_recorded(tmp_path: Path, monkeypatch) -> None:
+    from in_lockstep import doctor as doctor_module
+
+    monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "100")
+    report = doctor_module.run(_repo(tmp_path))
+    assert "DOC167" not in [c.code for c in report.checks]

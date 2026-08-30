@@ -146,6 +146,40 @@ def test_report_with_no_records_says_so(hermetic: Path) -> None:
     assert "no records yet" in result.output
 
 
+def test_report_on_the_file_store_says_history_is_unverifiable(hermetic: Path) -> None:
+    """Absent is not zero, for evidence too: no history is not the same as a verified one."""
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
+    result = CliRunner().invoke(main, ["report"])
+    assert result.exit_code == 0, result.output
+    assert "unverifiable" in result.output
+
+
+def test_gate_ledger_8_report_raises_the_alarm_at_read_time(hermetic: Path) -> None:
+    """The moment someone reads the numbers is the moment to say the history was rewritten."""
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.01}))
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.99}))  # the rewrite
+
+    result = CliRunner().invoke(main, ["report"])
+    assert result.exit_code == 0, result.output
+    assert "NOT APPEND-ONLY" in result.output
+    assert "TAMPERED" in result.stderr and "records/r1.json" in result.stderr
+
+
+def test_the_alarm_stays_off_json_stdout(hermetic: Path) -> None:
+    """A fleet scanner parses stdout; the tamper flag must reach the human without breaking it."""
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.01}))
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.99}))
+
+    result = CliRunner().invoke(main, ["report", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    json.loads(result.stdout)  # .output interleaves stderr; the scanner reads the real stream
+    assert "TAMPERED" in result.stderr
+
+
 # -- history --explain ----------------------------------------------------------------
 
 
