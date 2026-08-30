@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,8 @@ from in_lockstep.adapters.worktree import (
     materialize,
     verdict_over_staged,
 )
-from in_lockstep.core.types import ChangeSet, FileChange, Test
+from in_lockstep.core.outcome import Status
+from in_lockstep.core.types import ChangeSet, FileChange, Test, TestReport, TestVerdict
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -421,3 +423,86 @@ def test_test_spec_root_points_the_suite_at_the_worktree(tmp_path: Path) -> None
 
     asyncio.run(adapter.invoke(ctx, Test()))
     assert sandbox.cwd == "/bound", "with no root, the bound cwd stands"
+
+
+class _CommandRecordingSandbox(_CwdRecordingSandbox):
+    """Records argv as well as cwd, so a test can assert which interpreter was invoked."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.command: list[str] = []
+
+    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+        self.command = list(command)
+        return await super().run(command, cwd=cwd, timeout=timeout)
+
+
+def test_the_suite_runs_on_the_interpreter_that_is_running_us(monkeypatch) -> None:  # noqa: ANN001
+    """Not the first `python3` on PATH, which is frequently the wrong environment.
+
+    The adapter asked `shutil.which("python")` and returned ERRORED when it came back None — and a
+    propose step read that as a red suite, because a verdict could only answer `green`. Resolving
+    the name instead is not enough either: on a Mac the first `python3` on PATH is the system
+    interpreter, which has no pytest, so the suite exits 1 having collected nothing and the change
+    is blamed for the environment. The interpreter running this process is the one whose
+    environment was set up to run this repository's tooling.
+    """
+    import in_lockstep.adapters.pytest_adapter as adapter_mod
+
+    monkeypatch.setattr(
+        adapter_mod.shutil, "which", lambda name: "/opt/homebrew/bin/python3" if name == "python3" else None
+    )
+    sandbox = _CommandRecordingSandbox()
+
+    outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
+
+    assert outcome.status is not Status.ERRORED
+    assert sandbox.command[0] == sys.executable
+
+
+def test_a_name_on_path_is_the_fallback_when_there_is_no_sys_executable(monkeypatch) -> None:  # noqa: ANN001
+    """An embedding with no `sys.executable` still has whatever PATH offers."""
+    import in_lockstep.adapters.pytest_adapter as adapter_mod
+
+    monkeypatch.setattr(adapter_mod.sys, "executable", "")
+    monkeypatch.setattr(
+        adapter_mod.shutil, "which", lambda name: "/usr/bin/python3" if name == "python3" else None
+    )
+    sandbox = _CommandRecordingSandbox()
+
+    asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
+
+    assert sandbox.command[0] == "/usr/bin/python3"
+
+
+def test_a_containerized_run_does_not_probe_this_host(monkeypatch) -> None:  # noqa: ANN001
+    """The image resolves the name, so what is or is not on THIS host says nothing about it."""
+    import in_lockstep.adapters.pytest_adapter as adapter_mod
+
+    monkeypatch.setattr(adapter_mod.shutil, "which", lambda name: None)
+    sandbox = _CommandRecordingSandbox()
+    sandbox.image = "docker.io/library/python:3.12-slim"
+    sandbox.runtime = lambda: "/usr/bin/docker"
+
+    asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
+
+    assert sandbox.command[0] == "python", "the plain name travels into the container"
+
+
+def test_an_errored_suite_is_neither_green_nor_red() -> None:
+    """The distinction the propose step turns on.
+
+    Escalation asks `verdict.red`, not `not verdict.green`, because those differ exactly here: an
+    errored run is decided in the sense that it produced a status and green in no sense, but it
+    learned nothing about the change. Treating it as red files an `ai-generated` bug against code
+    that was never tested, and then spends the loop's attempts on it.
+    """
+    errored = TestVerdict.of("errored", True, TestReport())
+    assert errored.green is False
+    assert errored.red is False
+
+    really_red = TestVerdict.of("failed", True, TestReport(total=9, passed=7, failed=2))
+    assert really_red.red is True
+
+    undecided = TestVerdict.of("succeeded", False, TestReport())
+    assert undecided.red is False and undecided.green is False

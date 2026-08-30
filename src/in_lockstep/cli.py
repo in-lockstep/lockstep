@@ -3912,8 +3912,10 @@ async def implement_propose(
 
     # Tests that ran and failed do not open a pull request: they open an `ai-generated` bug issue an
     # agent may pick up, bounded by `lockstep.max_attempts`. An unverified change (no verdict) is
-    # not a failure — it opens a draft for a human, since its tests never ran.
-    if verdict is not None and verdict.decided and not verdict.green:
+    # not a failure — it opens a draft for a human, since its tests never ran. `verdict.red` rather
+    # than `not verdict.green` for that same reason: an errored suite learned nothing about the
+    # change, and escalating on it files a bug against code that was never tested.
+    if verdict is not None and verdict.red:
         failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
         source = await tickets.get(ticket)
         opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
