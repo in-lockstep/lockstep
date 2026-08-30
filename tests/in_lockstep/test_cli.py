@@ -56,6 +56,18 @@ def _diff(root: Path) -> str:
     return str(path)
 
 
+def _ledger_record(repo: Path, prefix: str) -> Path:
+    """The newest ledger record for a run id prefix.
+
+    Run ids carry a per-invocation stamp — a re-run must append a second record rather than
+    silently replace the first — so tests find records the way `history --explain` does: by the
+    prefix a person would type.
+    """
+    matches = sorted((repo / ".lockstep/ledger").glob(f"{prefix}-*.json"), key=lambda p: p.stat().st_mtime_ns)
+    assert matches, f"no ledger record starting {prefix!r}"
+    return matches[-1]
+
+
 def _lifecycle(root: Path) -> Path:
     """Where the lifecycle module lives: `.lockstep/lockstep.py`, never the repository root.
 
@@ -122,13 +134,13 @@ def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
     assert result.exit_code == 0, result.output
     # The module routes review at a model the CLI's own default would not have chosen. A route
     # nothing reads is how `Models.route` shipped: written by the config, consumed by nobody.
-    assert "haiku" in (repo / ".lockstep/ledger/review-security.json").read_text()
+    assert "haiku" in _ledger_record(repo, "review-security").read_text()
 
 
 def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> None:
     _write(repo, model="google:gemini-2.5-flash")
     CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
-    assert "gemini-2.5-flash" in (repo / ".lockstep/ledger/review-security.json").read_text()
+    assert "gemini-2.5-flash" in _ledger_record(repo, "review-security").read_text()
 
 
 def test_review_comment_upserts_a_sticky_pr_comment(repo: Path, monkeypatch) -> None:
@@ -206,7 +218,7 @@ def test_triage_runs_end_to_end_from_a_file(repo: Path) -> None:
     )
     assert result.exit_code == 0, result.output
     assert "triage    succeeded" in result.output
-    record = (repo / ".lockstep/ledger/triage-412.json").read_text()
+    record = _ledger_record(repo, "triage-412").read_text()
     assert '"kind": "triage"' in record
 
 
@@ -268,7 +280,7 @@ def test_triage_uses_the_declared_route_over_the_cli_default(repo: Path) -> None
         "lockstep.models.route('triage', 'anthropic:claude-sonnet-4-6')\n"
     )
     CliRunner().invoke(main, ["triage", "--ticket-file", _issue_file(repo), "--dry-run"])
-    assert "claude-sonnet-4-6" in (repo / ".lockstep/ledger/triage-412.json").read_text()
+    assert "claude-sonnet-4-6" in _ledger_record(repo, "triage-412").read_text()
 
 
 def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
@@ -287,7 +299,7 @@ def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
             _diff(repo),
         ],
     )
-    assert "opus" in (repo / ".lockstep/ledger/review-security.json").read_text()
+    assert "opus" in _ledger_record(repo, "review-security").read_text()
 
 
 def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
@@ -1178,7 +1190,7 @@ def test_the_ledger_records_why_not_only_that(repo: Path) -> None:
     # with no key. It used to use a budget refusal, which a dry run can no longer produce: a run
     # that cannot spend is no longer stopped by a spending ceiling. See the test below.
     CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD"])
-    record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
+    record = json.loads(_ledger_record(repo, "review-security").read_text())
     assert record["status"] == "blocked"
     assert record["reason"] == "review.no_content", record
 
@@ -1203,7 +1215,7 @@ def test_a_run_that_cannot_spend_is_not_stopped_by_a_spending_ceiling(repo: Path
     assert result.exit_code == 0, result.output
     assert "replayed; nothing was billed" in result.output
 
-    record = json.loads((repo / ".lockstep/ledger/review-security.json").read_text())
+    record = json.loads(_ledger_record(repo, "review-security").read_text())
     assert record["cost_usd"] == 0.0
     # The number that stops this reading as a model whose price was never known.
     assert record["billed_fraction"] == 0.0
@@ -1593,7 +1605,7 @@ def test_the_ledger_does_not_name_a_model_the_cli_did_not_choose(repo: Path) -> 
         main,
         ["implement", "--ticket-file", _ticket_file(repo), "--model", "anthropic:claude-opus-4-6"],
     )
-    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    record = json.loads(_ledger_record(repo, "implement-TICKET").read_text())
     assert "model" not in record
     assert record["strategy"] == "implement/oneshot"
 
@@ -1640,7 +1652,7 @@ def test_who_approved_an_unattended_run_reaches_the_ledger(repo: Path) -> None:
         main,
         ["implement", "--dry-run", "--approved-by", "@tpouyer", "--ticket-file", _ticket_file(repo)],
     )
-    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    record = json.loads(_ledger_record(repo, "implement-TICKET").read_text())
     assert record["approval"] == {"by": "@tpouyer", "attended": False}
 
 
@@ -1649,7 +1661,7 @@ def test_an_attended_run_records_who_and_that_they_watched(repo: Path) -> None:
 
     _lifecycle(repo).write_text(IMPLEMENT_MODULE)
     CliRunner().invoke(main, ["implement", "--dry-run", "--approve", "--ticket-file", _ticket_file(repo)])
-    record = json.loads((repo / ".lockstep/ledger/implement-TICKET.json").read_text())
+    record = json.loads(_ledger_record(repo, "implement-TICKET").read_text())
     # Still recorded, and recorded as ATTENDED — which is the point. A person at a terminal and a
     # gated CI actor are both grants and are not the same grant.
     assert record["approval"]["attended"] is True
@@ -1846,12 +1858,12 @@ def test_the_same_workflow_command_serves_a_terminal_and_a_trigger(repo: Path) -
 
     attended = CliRunner().invoke(main, ["run", "demo/needs-a-human", "--approve"])
     assert attended.exit_code == 0, attended.output
-    record = json.loads(next((repo / ".lockstep/ledger").glob("demo-needs-a-human-*.json")).read_text())
+    record = json.loads(_ledger_record(repo, "demo-needs-a-human").read_text())
     assert record["approval"]["attended"] is True
 
     unattended = CliRunner().invoke(main, ["run", "demo/needs-a-human", "--approved-by", "octocat"])
     assert unattended.exit_code == 0, unattended.output
-    record = json.loads(next((repo / ".lockstep/ledger").glob("demo-needs-a-human-*.json")).read_text())
+    record = json.loads(_ledger_record(repo, "demo-needs-a-human").read_text())
     assert record["approval"] == {"by": "octocat", "attended": False}
 
 

@@ -189,6 +189,22 @@ def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
         raise SystemExit(EXIT_BLOCKED) from None
 
 
+def _run_id(base: str) -> str:
+    """One id per invocation: the base names what ran, the suffix stamps this particular run.
+
+    These ids used to be fixed — `review-security`, `selfcheck-local` — so a routine re-run wrote
+    to the SAME ledger path. On the orphan branch that read as tampering (`GitLedger.verify` is
+    right to flag it: the second run silently replaced the first), and the replaced record's cost
+    vanished from the daily spend window, so repeated runs under-counted. The stamp is wall-clock
+    UTC to the second plus two random bytes for runs inside the same second; `history --explain`
+    matches on prefix, so the base a person remembers still finds the record.
+    """
+    import secrets
+    from datetime import UTC, datetime
+
+    return f"{base}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{secrets.token_hex(2)}"
+
+
 def _shipped_fixture() -> dict[str, Any] | None:
     """The recorded cassette and the diff it was recorded against, from package data.
 
@@ -295,11 +311,12 @@ def _run_registered(
             raise click.ClickException(f"--arg expects NAME=VALUE, got {item!r}")
         parsed[name] = value
 
-    ctx = _context(
-        lockstep,
-        f"{entry.id.replace('/', '-')}-{os.environ.get('GITHUB_RUN_ID', 'local')}",
-        approval,
-    )
+    # `GITHUB_RUN_ID` stays in the base when CI provides one — it joins the record to the
+    # workflow run — but it is not sufficient: a re-run attempt reuses it, and locally it was
+    # a constant. `_run_id` is what makes the id unique.
+    ci_run = os.environ.get("GITHUB_RUN_ID", "")
+    base = entry.id.replace("/", "-") + (f"-{ci_run}" if ci_run else "")
+    ctx = _context(lockstep, _run_id(base), approval)
     try:
         result = asyncio.run(entry.fn(ctx, **parsed))
     except TypeError as e:
@@ -594,7 +611,7 @@ def run_cmd(
         # redaction, egress and residency are privileged rather than middleware.
         lockstep.middleware = []
 
-    run_id = recover_id or "selfcheck-local"
+    run_id = recover_id or _run_id("selfcheck")
     ctx = _context(lockstep, run_id)
     if checkpoint or recover_id:
         from .platform.state import StateStore
@@ -604,6 +621,10 @@ def run_cmd(
         if recover_id:
             done = ctx.state.completed(recover_id)
             click.echo(f"recovering {recover_id}: {len(done)} completed step(s)")
+        else:
+            # The id carries a per-invocation stamp and is no longer guessable, so a run that
+            # checkpoints has to say what `--recover` should be given.
+            click.echo(f"run       {run_id}  (resume an interrupted run with --recover {run_id})")
     result = asyncio.run(selfcheck(ctx, paths or (lockstep.repo.root,)))
 
     validate = result["validate"]
@@ -777,7 +798,12 @@ def eval_cmd(action: str, corpus: str) -> None:
 )
 @click.option("--from-bundle", default="", type=click.Path(), help="Take in history another job recorded.")
 @click.option("--limit", type=int, default=20, show_default=True)
-@click.option("--explain", default="", metavar="RUN", help="One run's record, every field, in words.")
+@click.option(
+    "--explain",
+    default="",
+    metavar="RUN",
+    help="One run's record, every field, in words. A prefix finds the latest matching run.",
+)
 def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int, explain: str) -> None:
     """Run records, on an orphan branch that touches nothing anybody works on.
 
@@ -834,15 +860,38 @@ def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int, explain: 
     click.echo(f"pushed to {where}")
 
 
+def _latest_matching(ledger: Any, prefix: str) -> dict[str, Any] | None:
+    """The newest record whose run id starts with `prefix`.
+
+    Run ids carry a per-invocation stamp, so `--explain review-security` — the name a person
+    actually remembers — should find the latest such run rather than demanding the stamp be typed
+    back. An exact id still wins outright; this is the fallback when the exact read found nothing.
+    """
+    matches: list[dict[str, Any]] = [
+        r for r in ledger.records() if str(r.get("run_id", "")).startswith(prefix)
+    ]
+    if not matches:
+        return None
+    matches.sort(key=lambda r: (str(r.get("ts", "")), str(r.get("run_id", ""))))
+    chosen = matches[-1]
+    if len(matches) > 1:
+        click.echo(f"matched   {chosen.get('run_id')}  (latest of {len(matches)} starting {prefix!r})")
+    return chosen
+
+
 def _explain_run(run_id: str) -> None:
     """Everything one record says, in the order a person asks: what ran, what happened, what it
     cost, and under whose authority — plus where the session transcript is, when one exists."""
     ledger = _ledger()
     record = asyncio.run(ledger.read(run_id))
     if record is None:
+        record = _latest_matching(ledger, run_id)
+    if record is None:
         raise click.ClickException(
             f"no record for {run_id!r} in {getattr(ledger, 'branch', None) or getattr(ledger, 'root', '?')}"
         )
+    # The full id, whichever way the record was found: the transcript lookup below is keyed by it.
+    run_id = str(record.get("run_id", run_id))
 
     def line(label: str, key: str, render: Any = str) -> None:
         value = record.get(key)
@@ -1357,7 +1406,7 @@ def review_cmd(
             ),
         )
 
-    ctx = _context(lockstep, f"review-{aspect}")
+    ctx = _context(lockstep, _run_id(f"review-{aspect}"))
     try:
         outcome = asyncio.run(
             ctx.do(
@@ -1520,7 +1569,7 @@ def triage_cmd(
             ),
         )
 
-    ctx = _context(lockstep, f"triage-{spec.key.lstrip('#') or 'issue'}")
+    ctx = _context(lockstep, _run_id(f"triage-{spec.key.lstrip('#') or 'issue'}"))
     try:
         outcome = asyncio.run(ctx.do(Triage, spec))
     except LookupError as e:
@@ -2014,7 +2063,7 @@ def implement_cmd(
             ),
         )
 
-    ctx = _context(lockstep, f"implement-{resolved.key.lstrip('#')}", approval)
+    ctx = _context(lockstep, _run_id(f"implement-{resolved.key.lstrip('#')}"), approval)
     try:
         outcome = asyncio.run(ctx.do(Implement, ImplementSpec(ticket=resolved, strategy=strategy)))
     except LookupError as e:
