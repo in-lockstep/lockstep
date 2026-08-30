@@ -75,3 +75,10 @@ halves, and each is honest about what it cannot do:
 5. The two-job trampoline, so the provider credential and the write token are never co-resident.
 6. Force-push and deletion protection on `lockstep-history`, so the ledger's append-only claim is
    enforced where a rewrite would otherwise be invisible (see above).
+7. Where the self-feeding loop is wired, the labels it routes and counts on must exist
+   (`DOC123`, `DOC124`). `ai-generated` is both the trigger the `issues: labeled` trampoline
+   matches and — because applying a label needs write access where commenting does not — the
+   authorization that trampoline has instead of a gate job. `ai-attempt-N` is where the attempt
+   count lives: `attempt_of` reads the highest N off the source ticket, so a host that drops an
+   unknown label rather than refusing the create leaves every follow-up reading attempt 0, and
+   `max_attempts` silently stops bounding anything.

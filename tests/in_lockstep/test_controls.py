@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -774,3 +775,82 @@ def test_doctor_format_json_is_the_fleet_scanners_shape(tmp_path, monkeypatch) -
     assert any(c["code"] == "DOC101" for c in payload["checks"])
     assert all({"code", "severity", "message"} <= set(c) for c in payload["checks"])
     assert result.exit_code != 0, "the exit code is the same contract in both formats"
+
+
+# -- doctor: the escalation labels are a control -------------------------------------------------
+
+
+def _repo_with_the_loop_wired(tmp_path, *, labels: tuple[str, ...]):  # noqa: ANN001, ANN202
+    """A repository whose trampoline routes on `ai-generated`, plus a `gh` that lists `labels`."""
+    (tmp_path / ".git").mkdir()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ai-generated.yml").write_text(
+        "on:\n  issues:\n    types: [opened, labeled]\njobs:\n  fix:\n"
+        "    if: github.event.label.name == 'ai-generated'\n"
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    listing = "\n".join(labels)
+    gh.write_text(
+        f"#!/bin/sh\ncase \"$*\" in\n  *labels*) printf '%s\\n' '{listing}' ;;\n  *) exit 1 ;;\nesac\n"
+    )
+    gh.chmod(0o755)
+    return bin_dir
+
+
+def test_doctor_reports_a_missing_ai_generated_label(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """The label is the trigger AND the authorization, so its absence is not cosmetic.
+
+    Without it a failed run pays for a model call and then cannot file the follow-up, and nothing
+    would route to the fixing verb even if it could.
+    """
+    from in_lockstep import doctor
+
+    bin_dir = _repo_with_the_loop_wired(tmp_path, labels=("bug", "enhancement"))
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    finding = next(c for c in report.errors if c.code == "DOC123")
+    assert "ai-generated.yml" in finding.message
+    assert "gh label create ai-generated" in finding.hint
+
+
+def test_doctor_reports_missing_attempt_labels_by_name(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """One per attempt the cap allows, because `escalate` names the label after the number."""
+    from in_lockstep import doctor
+
+    bin_dir = _repo_with_the_loop_wired(tmp_path, labels=("ai-generated", "ai-attempt-1"))
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code == "DOC123" for c in report.checks), "the routing label is present"
+    finding = next(c for c in report.errors if c.code == "DOC124")
+    assert "ai-attempt-2" in finding.message and "ai-attempt-3" in finding.message
+    assert "ai-attempt-1" not in finding.message
+    assert "stops bounding anything" in finding.hint
+
+
+def test_doctor_is_quiet_when_every_escalation_label_exists(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    from in_lockstep import doctor
+
+    bin_dir = _repo_with_the_loop_wired(
+        tmp_path, labels=("ai-generated", "ai-attempt-1", "ai-attempt-2", "ai-attempt-3")
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code in ("DOC123", "DOC124") for c in report.checks)
+
+
+def test_doctor_says_nothing_to_a_repository_that_never_wired_the_loop(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """A finding invented for a hook nobody asked for is how a code teaches people to ignore it."""
+    from in_lockstep import doctor
+
+    bin_dir = _repo_with_the_loop_wired(tmp_path, labels=("bug",))
+    (tmp_path / ".github" / "workflows" / "ai-generated.yml").unlink()
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code in ("DOC122", "DOC123", "DOC124") for c in report.checks)

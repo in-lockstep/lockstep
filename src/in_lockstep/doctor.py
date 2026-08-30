@@ -58,6 +58,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _spend_ceiling(report)
     _config_provenance(report)
     _branch_protection(report, path)
+    _escalation_labels(report, path, lockstep)
     _history_integrity(report, path)
     _egress(report)
     _prompt_bodies(report)
@@ -195,6 +196,87 @@ def _branch_protection(report: Report, root: Path) -> None:
             "branch protection is what keeps protected branches unreachable. Without it, "
             "'writes go through a pull request' is a convention rather than a guarantee.",
         )
+
+
+def _escalation_labels(report: Report, root: Path, lockstep: Any = None) -> None:
+    """The self-feeding loop routes on labels, so the labels are a control, not decoration.
+
+    `escalate` files each follow-up ticket with `ai-generated` and `ai-attempt-N`, and both carry
+    weight. `ai-generated` is what the trigger matches AND — because applying a label needs write
+    access and commenting does not — it is the authorization that trampoline has instead of a gate
+    job. `ai-attempt-N` is where the attempt count lives: `attempt_of` reads the highest N off the
+    source ticket, which is how the loop is bounded without a store to count in.
+
+    So a missing label is not cosmetic in either case. Missing `ai-generated` and nothing routes,
+    after the run that failed has already been paid for. Missing `ai-attempt-N` and, if the host
+    drops the label rather than refusing the create, every follow-up reads attempt 0 and files
+    attempt 1 — the cap silently stops existing, which is the one failure mode this loop must not
+    have.
+
+    Scoped to repositories that have actually wired the loop: a workflow file has to name the
+    label before this says anything. Inventing a finding for a repository that never asked for the
+    hook is how a code teaches people to ignore it.
+    """
+    if not (root / ".git").exists():
+        return
+    from .platform.propose import AI_GENERATED, ATTEMPT_PREFIX
+
+    workflows = sorted((root / ".github" / "workflows").glob("*.yml"))
+    wired = [w.name for w in workflows if AI_GENERATED in _read(w)]
+    if not wired:
+        return
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", "repos/{owner}/{repo}/labels", "--paginate", "--jq", ".[].name"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        report.add("DOC122", Severity.NOTE, "could not check the escalation labels (gh unavailable)")
+        return
+    if result.returncode != 0:
+        report.add(
+            "DOC122",
+            Severity.NOTE,
+            "could not read this repository's labels; the escalation labels were not checked",
+        )
+        return
+
+    present = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    where = ", ".join(wired)
+    if AI_GENERATED not in present:
+        report.add(
+            "DOC123",
+            Severity.ERROR,
+            f"{where} routes on the `{AI_GENERATED}` label, which this repository does not have",
+            f"Create it: `gh label create {AI_GENERATED}`. Until it exists, a failed run pays for "
+            f"a model call and then cannot file the follow-up ticket, and nothing would route to "
+            f"the fixing verb even if it could.",
+        )
+
+    # One per attempt the cap allows, because `escalate` names the label after the number.
+    cap = int(getattr(lockstep, "max_attempts", 3) or 3)
+    missing = [f"{ATTEMPT_PREFIX}{n}" for n in range(1, cap + 1) if f"{ATTEMPT_PREFIX}{n}" not in present]
+    if missing:
+        report.add(
+            "DOC124",
+            Severity.ERROR,
+            f"{len(missing)} of {cap} attempt label(s) are missing: {', '.join(missing)}",
+            f"`attempt_of` reads the loop's attempt count off these, so a host that drops an "
+            f"unknown label instead of refusing the create leaves every follow-up reading attempt "
+            f"0 — max_attempts={cap} stops bounding anything. Create them: "
+            f"`{'; '.join(f'gh label create {name}' for name in missing)}`.",
+        )
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:  # pragma: no cover - unreadable file is the same as not mentioning it
+        return ""
 
 
 def _history_integrity(report: Report, root: Path) -> None:
