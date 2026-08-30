@@ -800,13 +800,13 @@ lockstep.middleware += [
           <tr><td class="cap">Backport</td><td><span class="stamp runs">runs</span></td>
             <td class="what">deterministic <code>cherry-pick -x</code> staged for <code>apply --base</code>; <code>--resolve</code> lets a model merge conflicts, budget- and approval-gated</td></tr>
           <tr><td class="cap">RFE</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>rfe --idea</code> drafts the ticket; a human reads it, and <code>--create</code> files it</td></tr>
+            <td class="what"><code>rfe --idea</code> drafts the ticket; a human reads it, and <code>--create</code> files it through <code>TicketSource</code></td></tr>
           <tr><td class="cap">GitHub</td><td><span class="stamp runs">runs</span></td>
             <td class="what">SCM, issues, chat-ops gate, trampolines</td></tr>
           <tr><td class="cap">Keyless CI (federation)</td><td><span class="stamp runs">runs</span></td>
             <td class="what">GitHub OIDC exchanged at Anthropic; no <code>ANTHROPIC_API_KEY</code> in secrets</td></tr>
           <tr><td class="cap">Org standards as a package</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">entry points at <code>Tier.PLUGIN</code>; worked example in <code>examples/acme-standards</code></td></tr>
+            <td class="what"><code>in_lockstep.standards</code> entry points at <code>Tier.PLUGIN</code>; worked example in <code>examples/acme-standards</code></td></tr>
           <tr><td class="cap">Spend controls</td><td><span class="stamp runs">runs</span></td>
             <td class="what">per-run predictive budget, rolling daily ceiling, org-limit attestation</td></tr>
           <tr><td class="cap">Ledger + tamper-evidence</td><td><span class="stamp runs">runs</span></td>
