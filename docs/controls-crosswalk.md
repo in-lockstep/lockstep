@@ -82,3 +82,9 @@ halves, and each is honest about what it cannot do:
    count lives: `attempt_of` reads the highest N off the source ticket, so a host that drops an
    unknown label rather than refusing the create leaves every follow-up reading attempt 0, and
    `max_attempts` silently stops bounding anything.
+8. Where a trampoline proposes, Actions must be permitted to open a pull request (`DOC126`).
+   "Allow GitHub Actions to create and approve pull requests" is off by default, and the whole
+   design routes writes through a change request a human reads — so the privileged half ends in
+   `open_change` and, without that setting, ends there badly: the run does its work, pays for its
+   model call, pushes its branch, and fails on the last API call it makes. A recoverable branch is
+   little comfort when nobody was watching an unattended trigger.

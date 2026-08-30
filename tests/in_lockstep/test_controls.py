@@ -904,3 +904,84 @@ def test_every_model_job_outlives_the_session_deadline_it_runs() -> None:
                 f"could write its record."
             )
     assert len(checked) >= 3, f"expected every model-dispatching job to be checked, saw {checked}"
+
+
+# -- doctor: a propose job that cannot propose ---------------------------------------------------
+
+
+def _repo_that_opens_changes(tmp_path, *, payload: str):  # noqa: ANN001, ANN202
+    """A repository with a propose job, and a `gh` that answers with `payload`."""
+    (tmp_path / ".git").mkdir()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "implement.yml").write_text(
+        "jobs:\n  propose:\n    permissions:\n      contents: write\n"
+        "      pull-requests: write\n      issues: write\n"
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        f"  *permissions/workflow*) printf '%s' '{payload}' ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n"
+    )
+    gh.chmod(0o755)
+    return bin_dir
+
+
+def test_doctor_reports_that_actions_may_not_open_a_change(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """The setting that let a paid run do all its work and die on its last call.
+
+    `fix/propose` pushed its branch, then failed with `GitHub Actions is not permitted to create or
+    approve pull requests` — after the unprivileged half had already spent $9.62 on a model. The
+    configuration, the credentials and the change were all fine.
+    """
+    from in_lockstep import doctor
+
+    bin_dir = _repo_that_opens_changes(tmp_path, payload='{"can_approve_pull_request_reviews": false}')
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    finding = next(c for c in report.errors if c.code == "DOC126")
+    assert "implement.yml" in finding.message
+    assert "Allow GitHub Actions to create and approve pull requests" in finding.hint
+
+
+def test_doctor_is_quiet_when_actions_may_open_a_change(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    from in_lockstep import doctor
+
+    bin_dir = _repo_that_opens_changes(tmp_path, payload='{"can_approve_pull_request_reviews": true}')
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code in ("DOC125", "DOC126") for c in report.checks)
+
+
+def test_doctor_does_not_read_a_missing_field_as_a_refusal(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """Absent is unknown, not false. A host that stops reporting this must not manufacture an
+    error about a setting nobody can see."""
+    from in_lockstep import doctor
+
+    bin_dir = _repo_that_opens_changes(tmp_path, payload='{"default_workflow_permissions": "write"}')
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code == "DOC126" for c in report.checks)
+    assert any(c.code == "DOC125" and c.severity is doctor.Severity.NOTE for c in report.checks)
+
+
+def test_doctor_says_nothing_to_a_repository_that_opens_no_changes(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """A repository whose trampolines only review never reaches `open_change`."""
+    from in_lockstep import doctor
+
+    bin_dir = _repo_that_opens_changes(tmp_path, payload='{"can_approve_pull_request_reviews": false}')
+    (tmp_path / ".github" / "workflows" / "implement.yml").write_text(
+        "jobs:\n  review:\n    permissions:\n      contents: read\n"
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    report = doctor.run(str(tmp_path))
+    assert not any(c.code in ("DOC125", "DOC126") for c in report.checks)
