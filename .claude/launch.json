@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pages-site-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8321", "--directory", "/private/tmp/claude-501/-Users-tpouyer-Projects-lockstep/a41a1c38-03db-4950-b5b3-447c2fb90cd8/scratchpad/site"],
+      "port": 8321
+    }
+  ]
+}
