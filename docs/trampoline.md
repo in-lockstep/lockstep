@@ -58,6 +58,11 @@ write-capable verb (implement, fix) needs **three**:
 | work | provider key (+ tracker read) | read | `in-lockstep run <verb>/from-issue` — stages an artifact |
 | propose | write token | write | `in-lockstep run <verb>/propose` — opens the change request |
 
+Backport sits between the two shapes. Its default is deterministic — `git cherry-pick` stages the
+artifact, no model — so its work job needs **no provider key at all**, and the propose job opens
+the artifact against the release line with `apply --base <target>`. Only `--resolve`, which lets a
+model merge conflicts, makes it a spender with the full three-job shape.
+
 The work job needs to *read* the tracker — `from-issue` fetches the issue — which on GitHub is
 the workflow token with `issues: read` and on GitLab is a read-only (`read_api`) project access
 token scoped to the work environment. A read credential beside the provider key is inside the

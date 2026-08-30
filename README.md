@@ -35,6 +35,7 @@ for: it prints what will actually run.
 ```bash
 in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
 in-lockstep review --base ...    # review a change, one lens at a time
+in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware and policy
 in-lockstep doctor               # are the controls actually in place?
