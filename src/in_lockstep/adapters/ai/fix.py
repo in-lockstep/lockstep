@@ -35,7 +35,7 @@ from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
 from ..worktree import materialize
-from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
+from .strategy import AGENCY, AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 
 
 @dataclass(frozen=True)
@@ -92,25 +92,25 @@ class FixSession:
         return self.curator.curate(items, ContextNeed(token_budget=spec.token_budget))
 
 
-class DiagnoseThenFix(AiStrategy):
+class FixStrategy(AiStrategy):
+    """The base for anything serving `Fix`. Subclass this, not `AiStrategy`.
+
+    `ImplementStrategy`'s reasoning, for the fixing verb: the verb, the capability set, the session
+    type, the prompt map and the layers, declared once where a subclass cannot narrow them.
+    """
+
+    verb: ClassVar[Verb] = Verb.FIX
+    capabilities: ClassVar[frozenset[Capability]] = AGENCY
+    _session_cls = FixSession
+    _shipped_prompts = FIX_PROMPTS
+    _layers_factory = staticmethod(fix_layers)
+
+
+class DiagnoseThenFix(FixStrategy):
     """Bound as the Fix adapter: `lockstep.bind(Fix, DiagnoseThenFix(...))`. Reproduce the bug as
     a failing test, then fix it, and prove both."""
 
     id: ClassVar[str] = "fix/diagnose-then-fix"
-    verb: ClassVar[Verb] = Verb.FIX
-    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
-    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
-    capabilities: ClassVar[frozenset[Capability]] = frozenset(
-        {
-            Capability.READS_REPO,
-            Capability.SPENDS_BUDGET,
-            Capability.WRITES_FILES,
-            Capability.EXECUTES_CODE,
-        }
-    )
-    _session_cls = FixSession
-    _shipped_prompts = FIX_PROMPTS
-    _layers_factory = staticmethod(fix_layers)
 
     async def invoke(self, ctx: Any, inp: Fix) -> Outcome[FixReport]:
         container = getattr(ctx, "container", None)
