@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -194,10 +195,21 @@ def test_approval_gate_admits_a_granted_action() -> None:
 
 
 def test_gate_sandbox_1_a_child_cannot_read_the_parents_credentials(monkeypatch) -> None:
-    """pytest executes repository conftest.py; in-process it would reach live Credentials."""
+    """pytest executes repository conftest.py; in-process it would reach live Credentials.
+
+    `sys.executable` rather than the bare name `python`, here and below, for the reason #112
+    recorded about the oneshot fixtures and then missed in this file: these commands are EXECUTED,
+    and macOS, Debian, Ubuntu and most slim images install the interpreter as `python3` with no
+    alias. The bare name exits 127 there — and because `make check` runs under `uv run`, which
+    prepends a virtualenv holding a `python` shim, this file passed on the one path anybody
+    measures and failed on every other. A security assertion that only runs under one invocation
+    of the test runner is worse than a red one, because nothing says so.
+    """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-must-not-leak")
     result = asyncio.run(
-        Sandbox().run(["python", "-c", "import os; print(os.environ.get('ANTHROPIC_API_KEY', 'ABSENT'))"])
+        Sandbox().run(
+            [sys.executable, "-c", "import os; print(os.environ.get('ANTHROPIC_API_KEY', 'ABSENT'))"]
+        )
     )
     assert "sk-must-not-leak" not in result.stdout
     assert "ABSENT" in result.stdout
@@ -207,7 +219,7 @@ def test_the_named_opt_out_does_leak_which_is_why_it_is_named(monkeypatch) -> No
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-leaks-here")
     result = asyncio.run(
         UnsandboxedRun().run(
-            ["python", "-c", "import os; print(os.environ.get('ANTHROPIC_API_KEY', 'ABSENT'))"]
+            [sys.executable, "-c", "import os; print(os.environ.get('ANTHROPIC_API_KEY', 'ABSENT'))"]
         )
     )
     assert "sk-leaks-here" in result.stdout
@@ -215,13 +227,13 @@ def test_the_named_opt_out_does_leak_which_is_why_it_is_named(monkeypatch) -> No
 
 
 def test_the_fallback_says_it_is_not_a_kernel_sandbox() -> None:
-    result = asyncio.run(Sandbox().run(["python", "-c", "print(1)"]))
+    result = asyncio.run(Sandbox().run([sys.executable, "-c", "print(1)"]))
     assert result.how == "subprocess:no-credentials"
     assert result.sandboxed is False, "honest about what it is"
 
 
 def test_a_sandboxed_command_that_hangs_is_killed() -> None:
-    result = asyncio.run(Sandbox().run(["python", "-c", "import time; time.sleep(30)"], timeout=0.5))
+    result = asyncio.run(Sandbox().run([sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.5))
     assert result.exit_code == 124
 
 
@@ -990,3 +1002,28 @@ def test_doctor_says_nothing_to_a_repository_that_opens_no_changes(tmp_path, mon
 
     report = doctor.run(str(tmp_path))
     assert not any(c.code in ("DOC125", "DOC126") for c in report.checks)
+
+
+def test_gate_guard_1_tightening_the_path_policy_cannot_weaken_it() -> None:
+    """Discipline #2, at the most security-relevant point in the codebase.
+
+    `PathPolicy` is a dataclass whose `deny_always` field invites exactly this — an organisation
+    adding its own protected prefix to the shipped set. The tier-1 basename and suffix rules used
+    to be gated on `prefixes is DENY_ALWAYS`, an identity test, so building a new tuple silently
+    stopped protecting `conftest.py`, `*.pem` and `.env*`: adding a rule removed four. No test
+    covered a customised policy, which is why it survived.
+    """
+    from in_lockstep.core.changes import DENY_ALWAYS, PathPolicy
+
+    shipped = ChangeGuard(PathPolicy())
+    tightened = ChangeGuard(PathPolicy(deny_always=DENY_ALWAYS + ("infra/",)))
+
+    for path in ("tests/conftest.py", "keys/server.pem", ".env.production", "pkg/sitecustomize.py"):
+        assert shipped.check_path(path) is not None, f"the shipped policy stopped protecting {path}"
+        assert tightened.check_path(path) is not None, (
+            f"adding a prefix to deny_always stopped protecting {path} — tightening must not weaken"
+        )
+
+    assert tightened.check_path("infra/main.tf") is not None, "the added prefix does apply"
+    assert shipped.check_path("infra/main.tf") is None, "and it is genuinely an addition"
+    assert tightened.check_path("src/app.py") is None, "an ordinary path is still writable"

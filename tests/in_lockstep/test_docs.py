@@ -58,11 +58,41 @@ def test_the_cookbook_snippets_execute_not_merely_parse(tmp_path, monkeypatch) -
     the way a reader pasting them into one file would. The chdir keeps `Lockstep.detect()` off
     this repository."""
     monkeypatch.chdir(tmp_path)
+    # Recipe 9's lens points at a body file, because a prompt body is a file. A reader following
+    # the cookbook writes it; so does this test, which is the difference between asserting the
+    # snippet parses and asserting the thing it builds can be rendered.
+    body = tmp_path / ".lockstep" / "prompts" / "license.md"
+    body.parent.mkdir(parents=True)
+    body.write_text("Review this diff ONLY for license and copyright problems.\n")
+
     blocks = _python_blocks(ROOT / "docs" / "cookbook.md")
     assert len(blocks) >= 5, "the cookbook lost its snippets"
     namespace: dict = {}
     for index, block in enumerate(blocks):
         exec(compile(block, f"cookbook.md[{index}]", "exec"), namespace)
+
+    # Executing a snippet proves the class DEFINES. It does not prove the thing it defined works,
+    # and that gap shipped: recipe 9 set `body` to a string literal for months, which every prompt
+    # accepts at definition and none can render — `body_text` calls `body.resolve()`, so the reader
+    # got `AttributeError: 'str' object has no attribute 'resolve'` from inside the composer the
+    # first time they ran `show-prompt`. A persona review hit it; this test did not, because it
+    # stopped one step early. So it now renders every prompt the cookbook defines.
+    from in_lockstep.ai.prompt import Prompt
+    from in_lockstep.prompts.review import review_layers
+
+    rendered = 0
+    for name, value in namespace.items():
+        # Only what the snippets DEFINED. A recipe importing `ReviewPrompt` puts the shipped
+        # abstract base in this namespace too, and that one legitimately has no body.
+        if (
+            isinstance(value, type)
+            and issubclass(value, Prompt)
+            and not value.__module__.startswith("in_lockstep")
+        ):
+            composed = value().system(review_layers())
+            assert composed.strip(), f"cookbook prompt {name} composed to nothing"
+            rendered += 1
+    assert rendered, "no cookbook snippet defines a prompt — has recipe 9 gone?"
 
 
 # -- the README matrix, checked in both directions ------------------------------------------
@@ -109,6 +139,14 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),
         "Spend controls": _importable("in_lockstep.core.spend", "DailySpendExceeded"),
         "Ledger + tamper-evidence": _importable("in_lockstep.platform.ledger", "GitLedger"),
+        # A pack is offered by an entry point and put in force by `add` printing lines somebody
+        # pastes, so the claim is pinned to both halves: the discovery module and the commands.
+        "Extension packs": (
+            _importable("in_lockstep.packs", "installed")
+            and _importable("in_lockstep.trial", "run")
+            and {"pack", "add"} <= commands
+        ),
+        "Pack catalog": _importable("in_lockstep.market", "read_catalog") and "search" in commands,
     }
     for row, status in rows.items():
         if status == "runs" and row in proof:

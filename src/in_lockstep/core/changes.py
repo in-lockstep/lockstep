@@ -180,7 +180,19 @@ def escapes_root(path: str) -> bool:
     return posixpath.normpath(raw).startswith("..")
 
 
-def _matches(path: str, prefixes: tuple[str, ...]) -> str | None:
+def _matches(path: str, prefixes: tuple[str, ...], *, always: bool = False) -> str | None:
+    """Whether a path is caught by a prefix list, plus the tier-1 basename and suffix rules.
+
+    `always` says which tier is being checked, and it is a parameter because it used to be
+    `prefixes is DENY_ALWAYS` — an IDENTITY test against the shipped tuple. A repository doing the
+    thing the dataclass invites, `PathPolicy(deny_always=DENY_ALWAYS + ("infra/",))`, built a new
+    tuple, failed that identity test, and silently stopped protecting `conftest.py`, `CODEOWNERS`,
+    `sitecustomize.py`, `*.pem` and `.env*`. Tightening the guard weakened it, which is discipline
+    #2 inverted at the most security-relevant point in the codebase.
+
+    An explicit flag cannot be defeated by constructing an equal-but-not-identical tuple, and the
+    caller that means "tier 1" is the only one that passes it.
+    """
     normalized = _normalize(path)
     base = posixpath.basename(normalized)
     for prefix in prefixes:
@@ -189,10 +201,12 @@ def _matches(path: str, prefixes: tuple[str, ...]) -> str | None:
                 return prefix
         elif normalized == prefix:
             return prefix
-    if base in DENY_ALWAYS_BASENAMES and prefixes is DENY_ALWAYS:
+    if not always:
+        return None
+    if base in DENY_ALWAYS_BASENAMES:
         return base
     for suffix in DENY_ALWAYS_SUFFIXES:
-        if prefixes is DENY_ALWAYS and (normalized.endswith(suffix) or base.startswith(".env")):
+        if normalized.endswith(suffix) or base.startswith(".env"):
             return suffix
     return None
 
@@ -207,7 +221,7 @@ class ChangeGuard:
         if escapes_root(path):
             return Refusal(path=path, rule="outside-repo-root", tier=1)
 
-        hit = _matches(path, self.policy.deny_always)
+        hit = _matches(path, self.policy.deny_always, always=True)
         if hit:
             return Refusal(path=path, rule=hit, tier=1)
 
