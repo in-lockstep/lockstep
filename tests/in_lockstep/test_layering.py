@@ -59,6 +59,17 @@ ALLOWED: dict[str, set[str]] = {
     # no registrations behind. Acyclic: none of those import doctor back; only `cli` does.
     "doctor": {"ai", "core", "loader", "platform", "privileged", "prompts", "doctor"},
     "evaluation": {"evaluation"},
+    # `receipt` derives what a configuration does, so it reads across the layers that hold the
+    # declarations: capabilities off `core`, the composed projection off `ai`, prices and egress
+    # hosts off `ai`/`privileged`, cases off `evaluation`. Almost `doctor`'s allowance, and beside
+    # it on purpose — doctor asks whether the controls are in place, this asks what is configured,
+    # and merging them would make one module answer two questions.
+    #
+    # `lockstep` is the one edge doctor does not take: this takes it because the subject of a
+    # receipt IS a configured `Lockstep`, and typing that parameter `Any` to dodge a line in this
+    # dict would buy nothing and cost the check mypy makes. Acyclic: the facade cannot import
+    # `receipt` — its own allowance below forbids it — and nothing in `lockstep` needs to.
+    "receipt": {"ai", "core", "evaluation", "lockstep", "privileged", "receipt"},
     # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
@@ -92,6 +103,7 @@ ALLOWED: dict[str, set[str]] = {
         "doctor",
         "evaluation",
         "strategies",
+        "receipt",
         "cli",
     },
 }
