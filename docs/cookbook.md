@@ -157,19 +157,26 @@ changed guardrail means re-recording, and it says so rather than billing you qui
 A lens is a prompt class; binding it is how it becomes real — visible in `ls`, loaded from the
 trusted ref, never an import-time side effect.
 
+The body is a **file**, not a string literal — prompt text is data a non-programmer edits and a
+diff reviews, which is why it lives outside the module. A string is refused at class creation
+rather than at render time.
+
 ```python
 from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.ai.prompt import Body
 from in_lockstep.prompts.review import LENSES, ReviewPrompt
 
 class LicenseLens(ReviewPrompt):
     aspect = "license"
-    body = "Review this diff ONLY for license and copyright problems."
+    body = Body.from_path(".lockstep/prompts/license.md")
 
 lockstep.bind(
     Review,
     AiReview(lenses={**LENSES, "license": LicenseLens}),
 )
 ```
+
+`in-lockstep show-prompt license` renders it offline, and `ls` stars it as not-the-shipped-prompt.
 
 ## 10. Make the ledger auditable
 

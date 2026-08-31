@@ -130,6 +130,30 @@ class Prompt(Generic[P, S]):
     #: invent a convention.
     body_name: ClassVar[str] = ""
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Refuse a body that is a string rather than a `Body`.
+
+        `body_text` calls `self.body.resolve(...)`, so a plain string produces
+        `AttributeError: 'str' object has no attribute 'resolve'` — at render time, from inside the
+        composer, naming neither the prompt nor the fix. `docs/cookbook.md` recipe 9 shipped
+        exactly that mistake and the docs test did not catch it, because executing a snippet proves
+        the class defines, not that the prompt it defines can render.
+
+        A string body is also the reasonable guess: every other field on this class takes one. So
+        this is a refusal at class creation naming the two constructors, rather than an
+        AttributeError three layers down at the moment somebody is trying to review a change.
+        """
+        super().__init_subclass__(**kwargs)
+        if isinstance(cls.body, str):
+            raise TypeError(
+                f"{cls.__name__}.body is a string. A prompt body is a file, not a literal — "
+                f"prompt text is data a non-programmer edits and a diff can review, which is the "
+                f"reason it lives outside the module. Use:\n\n"
+                f"    body = Body.from_path('.lockstep/prompts/{cls.__name__.lower()}.md')\n\n"
+                f"or, for a body shipped inside a package:\n\n"
+                f"    body = Body.from_file('review/security.md', package='your_pack')\n"
+            )
+
     def package(self) -> str:
         return type(self).__module__.rsplit(".", 1)[0]
 
