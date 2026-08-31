@@ -35,7 +35,7 @@ from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
 from ..worktree import materialize
-from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
+from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 
 
 @dataclass(frozen=True)

@@ -40,6 +40,7 @@ from in_lockstep.lockstep import Lockstep
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.tickets import Ticket
 from in_lockstep.privileged.egress import EgressMode, EgressPolicy, UnsandboxedEgress
+from in_lockstep.prompts.implement import implement_layers
 
 MODEL = "test-model"
 
@@ -560,3 +561,61 @@ def test_the_credential_check_survives_a_host_without_a_python_alias(repo: Path,
     assert "exit 127" not in result, "the fixture resolved a name this host does not have"
     assert "sk-should-not-be-visible" not in result
     assert "None" in result
+
+
+def test_a_strategy_may_not_declare_less_agency_than_it_holds() -> None:
+    """The fail-open this refusal exists for, as a test.
+
+    `AiStrategy.capabilities` defaulted to the empty set while `_session` handed every subclass
+    `write_file`, `delete_file` and `run_script` plus a paid model call. `ApprovalGate`,
+    `UndeclaredBudget` and `Retry`'s re-invocation refusal all read that frozenset off the bound
+    object — so a strategy that merely omitted the line got an adapter none of the three applied
+    to, silently, and the population most likely to omit it is somebody writing their first
+    strategy from the docs.
+    """
+    from in_lockstep.adapters.ai import AGENCY, AiStrategy, UndeclaredAgency
+    from in_lockstep.adapters.ai.implement import ImplementSession
+    from in_lockstep.prompts.implement import PROMPTS
+
+    with pytest.raises(UndeclaredAgency) as caught:
+
+        class Forgetful(AiStrategy):
+            id = "implement/forgetful"
+            verb = Verb.IMPLEMENT
+            _session_cls = ImplementSession
+            _shipped_prompts = PROMPTS
+            _layers_factory = staticmethod(implement_layers)
+
+    message = str(caught.value)
+    assert "writes_files" in message and "executes_code" in message and "spends_budget" in message
+    assert "ApprovalGate" in message, "the message has to say what stops applying, not just what is missing"
+    assert "ImplementStrategy" in message, "and it has to name the shorter correct spelling"
+
+    # Declaring the set it actually holds is accepted, and so is declaring MORE — a set that could
+    # execute on some other configuration must not read as harmless on this one.
+    class Honest(AiStrategy):
+        id = "implement/honest"
+        verb = Verb.IMPLEMENT
+        capabilities = AGENCY
+        _session_cls = ImplementSession
+        _shipped_prompts = PROMPTS
+        _layers_factory = staticmethod(implement_layers)
+
+    class Generous(AiStrategy):
+        id = "implement/generous"
+        verb = Verb.IMPLEMENT
+        capabilities = AGENCY | frozenset({Capability.REACHES_NETWORK})
+        _session_cls = ImplementSession
+        _shipped_prompts = PROMPTS
+        _layers_factory = staticmethod(implement_layers)
+
+    assert Honest.capabilities == AGENCY
+    assert Capability.REACHES_NETWORK in Generous.capabilities
+
+
+def test_every_shipped_strategy_passes_its_own_refusal() -> None:
+    """The three that ship declared this correctly by hand; the check must agree with them."""
+    from in_lockstep.adapters.ai import AGENCY, TDD, DiagnoseThenFix, Oneshot
+
+    for strategy in (Oneshot, TDD, DiagnoseThenFix):
+        assert strategy.capabilities >= AGENCY, strategy.__name__

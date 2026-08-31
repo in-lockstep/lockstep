@@ -34,8 +34,8 @@ from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
 from ..worktree import head_state, materialize
-from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 from .implement import Implement, ImplementReport, ImplementSession
+from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
 
 _RED_DIRECTIVE = (
     "Step 1 of 2 — the failing test.\n\n"
