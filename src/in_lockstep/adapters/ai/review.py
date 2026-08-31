@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
-from ...ai.prompt import PromptLayers
+from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse, schema_instruction, validate
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
@@ -109,6 +109,22 @@ class AiReview:
         # Copied rather than aliased, so a later mutation of the global cannot reach a bound
         # adapter, and an adapter's lens map cannot leak back into the shipped one.
         self.lenses: Mapping[str, type[ReviewPrompt]] = dict(lenses) if lenses is not None else dict(LENSES)
+
+    def compositions(self) -> dict[str, Composition]:
+        """What `show-prompt` and `ls` read: this adapter's lenses, under their qualified labels.
+
+        Declared here rather than discovered by the CLI, which would have to know that this
+        adapter keeps its map in `lenses` and every other keeps one in `prompts`. Attribute
+        sniffing across six classes is inference, and the failure mode is silence: a renamed
+        attribute would make an override invisible again, which is the defect this method exists
+        to close.
+        """
+        return compositions(
+            self.lenses,
+            self.layers if self.layers is not None else review_layers(),
+            verb=str(type(self).verb),
+            source=type(self).__name__,
+        )
 
     async def invoke(self, ctx: Any, inp: Review) -> Outcome[ReviewReport]:
         lens = self.lenses.get(inp.aspect)

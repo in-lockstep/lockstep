@@ -21,7 +21,7 @@ from typing import Any, ClassVar
 
 from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
-from ...ai.prompt import PromptLayers
+from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse, schema_instruction, validate
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
@@ -114,6 +114,15 @@ class AiRfe:
         self.prompt_id = prompt_id
         self.tools = tools
         self.run_tool = run_tool
+
+    def compositions(self) -> dict[str, Composition]:
+        """This adapter's prompts, for `show-prompt` and `ls`. See `AiReview.compositions`."""
+        return compositions(
+            self.prompts,
+            self.layers if self.layers is not None else rfe_layers(),
+            verb=str(type(self).verb),
+            source=type(self).__name__,
+        )
 
     async def invoke(self, ctx: Any, inp: Rfe) -> Outcome[RfeDraft]:
         lens = self.prompts.get(self.prompt_id)

@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 
 from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
-from ...ai.prompt import PromptLayers
+from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse, schema_instruction, validate
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import FileChange
@@ -65,6 +65,15 @@ class AiBackportResolver:
         # Injected like every other adapter's — usually `backport_layers().plus(guardrails=...)`
         # so the shipped baseline stays underneath.
         self.layers = layers
+
+    def compositions(self) -> dict[str, Composition]:
+        """This adapter's prompts, for `show-prompt` and `ls`. See `AiReview.compositions`."""
+        return compositions(
+            self.prompts,
+            self.layers if self.layers is not None else backport_layers(),
+            verb=str(type(self).verb),
+            source=type(self).__name__,
+        )
 
     async def resolve(self, ctx: Any, conflict: Conflict) -> Outcome[tuple[FileChange, ...]]:
         lens = self.prompts.get(self.prompt_id)

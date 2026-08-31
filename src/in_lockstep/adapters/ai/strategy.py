@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 from ...ai.builtins import CommandRunner, Workspace, read_write_execute
 from ...ai.context import ContextCurator
 from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy
-from ...ai.prompt import PromptLayers
+from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse
 from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
@@ -194,6 +194,20 @@ class AiStrategy:
         if not self.repo_root:
             self.repo_root = lockstep.repo.root
         return type(self).request
+
+    def compositions(self) -> dict[str, Composition]:
+        """This strategy's prompts, for `show-prompt` and `ls`. See `AiReview.compositions`.
+
+        On the base rather than on `Oneshot`, `TDD` and `DiagnoseThenFix` separately: the three
+        session hooks a per-verb base sets are exactly what this needs, so a strategy somebody
+        writes tomorrow is inspectable without being told to implement anything.
+        """
+        return compositions(
+            self.prompts,
+            self.layers if self.layers is not None else type(self)._layers_factory(),
+            verb=str(type(self).verb),
+            source=type(self).__name__,
+        )
 
     def _session(self, ctx: Any) -> Any:
         """The per-run bundle. Built fresh each invoke: the workspace accumulates staged writes,

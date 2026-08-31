@@ -115,6 +115,18 @@ aspect then reports the lenses *this adapter* has, not the ones that happen to s
 The map is copied at construction, in both directions: a later mutation of `LENSES` cannot reach
 an adapter you already bound, and an adapter cannot leak a lens back into the shipped map.
 
+Read what you bound, before it runs:
+
+```bash
+in-lockstep show-prompt security          # what a run would send, from the bound adapter
+in-lockstep show-prompt security --diff   # what you changed, against the shipped body
+in-lockstep show-prompt security --shipped
+```
+
+`ls` prints the same thing in summary — every prompt each AI binding composes, starred where it is
+not the shipped one, with the guardrail chain underneath so a stack that does not open with the
+framework's baseline is visible without a second command.
+
 The body stays a `.md` deliberately. The people who write review prompts are frequently not Python
 programmers, and prompt text in a string literal has escaping hazards that prose in a file does
 not. It is also a security property: a prompt change proposed by the improvement loop is data

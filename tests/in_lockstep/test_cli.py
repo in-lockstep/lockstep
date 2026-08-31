@@ -923,6 +923,113 @@ def test_show_prompt_names_the_lenses_it_has(repo: Path) -> None:
     assert "security" in result.output
 
 
+HOUSE_LENS = """
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt, review_layers
+
+class OurSecurity(SecurityReviewPrompt):
+    version = "team-3"
+    emphasis = "SQLAlchemy 2.x session discipline; no bare excepts"
+
+lockstep = Lockstep.detect()
+lockstep.bind(
+    Review,
+    AiReview(
+        lenses={**LENSES, "security": OurSecurity},
+        layers=review_layers().plus(guardrails=(("acme/house", "Never touch migrations."),)),
+    ),
+)
+"""
+
+
+def test_show_prompt_renders_what_is_bound_not_what_ships(repo: Path) -> None:
+    """The defect this command existed to have: an override was invisible to it.
+
+    A team follows `docs/extending.md`, subclasses a lens, binds it — and until the prompt map was
+    read off the bound adapter, `show-prompt security` rendered the prompt they had replaced.
+    """
+    _lifecycle(repo).write_text(HOUSE_LENS)
+    result = CliRunner().invoke(main, ["show-prompt", "security"])
+    assert result.exit_code == 0, result.output
+    assert "source: AiReview" in result.output
+    assert "(version team-3)" in result.output
+    assert "SQLAlchemy" in result.output, "the house emphasis is what a run would send"
+    assert "Never touch migrations." in result.output, "and so is the house guardrail"
+
+
+def test_show_prompt_keeps_the_baseline_ahead_of_a_house_guardrail(repo: Path) -> None:
+    """`plus` appends, so extending the stack cannot quietly drop the shipped constraints."""
+    _lifecycle(repo).write_text(HOUSE_LENS)
+    result = CliRunner().invoke(main, ["show-prompt", "security", "--projection"])
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if line.startswith("guardrail:")]
+    assert lines[0] == "guardrail:baseline"
+    assert lines[-1] == "guardrail:acme/house"
+
+
+def test_show_prompt_shipped_renders_the_framework_version(repo: Path) -> None:
+    """The comparison half: what the framework would have said, with the binding ignored."""
+    _lifecycle(repo).write_text(HOUSE_LENS)
+    result = CliRunner().invoke(main, ["show-prompt", "security", "--shipped"])
+    assert result.exit_code == 0, result.output
+    assert "source: shipped" in result.output
+    assert "SQLAlchemy" not in result.output
+
+
+def test_show_prompt_diff_is_the_review_question(repo: Path) -> None:
+    """What did this repository change — answerable without reading two renderings side by side."""
+    _lifecycle(repo).write_text(HOUSE_LENS)
+    result = CliRunner().invoke(main, ["show-prompt", "security", "--diff"])
+    assert result.exit_code == 0, result.output
+    assert "--- shipped/review/security" in result.output
+    assert "+++ AiReview/review/security" in result.output
+    assert any(line.startswith("+") and "SQLAlchemy" in line for line in result.output.splitlines())
+
+
+def test_show_prompt_diff_says_so_when_nothing_was_changed(repo: Path) -> None:
+    """Absent is not zero: an empty diff is stated, not printed as silence."""
+    result = CliRunner().invoke(main, ["show-prompt", "security", "--diff"])
+    assert result.exit_code == 0, result.output
+    assert "unmodified" in result.output
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "review/security",
+        "implement/tdd",
+        "fix/reproducer",
+        "triage/analyst",
+        "rfe/drafter",
+        "backport/conflict-resolver",
+    ],
+)
+def test_show_prompt_reaches_every_shipped_verb(repo: Path, name: str) -> None:
+    """Three of these six shipped and were unreachable: `fix`, `rfe` and `backport` bodies could
+    not be rendered by the command that renders prompts, which made them the ones least likely to
+    be read before they ran."""
+    result = CliRunner().invoke(main, ["show-prompt", name, "--projection"])
+    assert result.exit_code == 0, result.output
+    sections = [
+        line
+        for line in result.output.splitlines()
+        if line.startswith(("guardrail:", "body:", "skill:", "context:"))
+    ]
+    assert sections[0] == "guardrail:baseline"
+    assert sum(1 for s in sections if s.startswith("body:")) == 1
+
+
+def test_ls_marks_a_prompt_the_repository_replaced(repo: Path) -> None:
+    """`bindings` says which adapter serves review; this says what it will tell the model."""
+    _lifecycle(repo).write_text(HOUSE_LENS)
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "review/security*" in result.output, "an overridden lens is starred"
+    assert "review/intent " in result.output + " ", "an untouched lens is not"
+    assert "guardrails: baseline, review/reviewing, acme/house" in result.output
+
+
 def test_eval_report_does_not_call_an_unjudged_rubric_a_pass(repo: Path) -> None:
     result = CliRunner().invoke(main, ["eval", "report"])
     assert result.exit_code == 0, result.output

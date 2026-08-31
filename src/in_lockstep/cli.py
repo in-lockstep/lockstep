@@ -13,6 +13,7 @@ import click
 from click.core import ParameterSource
 
 from . import __version__
+from .ai.prompt import Composition, Inspectable
 from .core.context import DISABLE_ENV, RunContext
 from .core.outcome import Status
 from .core.types import Test, Validate
@@ -704,6 +705,37 @@ def ls_cmd() -> None:
         click.echo(
             f"  {label:<22} -> {impl.__name__:<16}({binding.scope.value}, {binding.tier.name.lower()})"
         )
+
+    # What each AI binding would actually compose. `bindings` above says which adapter serves a
+    # verb; this says what that adapter will tell the model, which is the other half of the same
+    # question and was answerable only by reading the module. The guardrail chain is printed
+    # rather than the whole projection because that is the line worth checking at a glance: a
+    # stack that does not open with the shipped baseline is a decision, and it should not take a
+    # second command to notice it.
+    composers = [
+        b
+        for b in lockstep.container.resolved()
+        if not isinstance(b.impl, type) and isinstance(b.impl, Inspectable)
+    ]
+    if composers:
+        # Reading the shipped bodies is file IO, so it happens here rather than above: a
+        # repository that binds no AI adapter should pay nothing for a block it will not print.
+        shipped = _shipped_compositions()
+        click.echo("")
+        click.echo("prompts  (what each AI binding composes; * = not the shipped prompt)")
+        for binding in composers:
+            composed = binding.impl.compositions()
+            if not composed:
+                continue
+            names = " ".join(
+                label + ("" if _is_shipped(shipped, label, composed[label]) else "*")
+                for label in sorted(composed)
+            )
+            click.echo(f"  {type(binding.impl).__name__:<18} {names}")
+            guardrails = next(iter(composed.values())).layers.guardrails
+            chain = ", ".join(name for name, _ in guardrails) or "(none)"
+            drift = "" if guardrails and guardrails[0][0] == "baseline" else "   <- baseline does not lead"
+            click.echo(f"  {'':<18} guardrails: {chain}{drift}")
 
     click.echo("")
     click.echo("middleware  (privileged tier runs outside this chain and is not listed)")
@@ -1421,9 +1453,7 @@ def review_cmd(
 
     ctx = _context(lockstep, _run_id(f"review-{aspect}"))
     try:
-        outcome = asyncio.run(
-            ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff))
-        )
+        outcome = asyncio.run(ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff)))
     except LookupError as e:
         raise click.ClickException(
             f"{e} If this is the shipped fixture, it no longer matches the prompt it was recorded "
@@ -2735,56 +2765,147 @@ def _write_changeset(changeset: Any) -> list[str]:
     return touched
 
 
+def _shipped_compositions() -> dict[str, Composition]:
+    """Every prompt the framework ships, whether or not anything is bound to run it.
+
+    All six verbs, where this used to name three: `fix`, `rfe` and `backport` prompts shipped and
+    were unreachable from the one command that renders a prompt, which made them the prompts least
+    likely to be read before they ran.
+    """
+    from .ai.prompt import compositions
+    from .prompts.backport import BACKPORT_PROMPTS, backport_layers
+    from .prompts.fix import FIX_PROMPTS, fix_layers
+    from .prompts.implement import PROMPTS, implement_layers
+    from .prompts.review import LENSES, review_layers
+    from .prompts.rfe import RFE_PROMPTS, rfe_layers
+    from .prompts.triage import TRIAGE_PROMPTS, triage_layers
+
+    index: dict[str, Composition] = {}
+    for prompts, layers, verb in (
+        (LENSES, review_layers(), "review"),
+        (PROMPTS, implement_layers(), "implement"),
+        (FIX_PROMPTS, fix_layers(), "fix"),
+        (TRIAGE_PROMPTS, triage_layers(), "triage"),
+        (RFE_PROMPTS, rfe_layers(), "rfe"),
+        (BACKPORT_PROMPTS, backport_layers(), "backport"),
+    ):
+        index.update(compositions(prompts, layers, verb=verb, source="shipped"))
+    return index
+
+
+def _bound_compositions(lockstep: Lockstep) -> dict[str, Composition]:
+    """What this repository's own bindings compose, which is what a run would actually use."""
+    from .ai.prompt import Inspectable
+
+    index: dict[str, Composition] = {}
+    for binding in lockstep.container.resolved():
+        if isinstance(binding.impl, type):
+            continue
+        if isinstance(binding.impl, Inspectable):
+            index.update(binding.impl.compositions())
+    return index
+
+
+def _is_shipped(shipped: dict[str, Composition], label: str, composed: Composition) -> bool:
+    """Whether a bound composition is the framework's own, class for class.
+
+    Class identity, not label presence: a subclass of `SecurityReviewPrompt` that only adds
+    `emphasis` is still an override, and it is exactly the override a reader would want flagged.
+    """
+    origin = shipped.get(label)
+    return origin is not None and type(origin.prompt) is type(composed.prompt)
+
+
+def _resolve_prompt(index: dict[str, Composition], name: str) -> str:
+    """A qualified label (`review/security`), or a bare one where it is unambiguous.
+
+    Bare names stay supported because `--aspect security` is how a review is asked for, and a
+    reader who wants to see that lens should not have to learn a second spelling. Where two verbs
+    ship a prompt of the same short name, the bare form resolves to neither and says so — guessing
+    would show somebody a prompt other than the one they are about to run.
+    """
+    if name in index:
+        return name
+    tails: dict[str, list[str]] = {}
+    for label in index:
+        tails.setdefault(label.split("/", 1)[-1], []).append(label)
+    matches = tails.get(name, [])
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise click.ClickException(f"{name!r} is ambiguous: {', '.join(sorted(matches))}. Name the verb too.")
+    raise click.ClickException(f"no prompt named {name!r}; have {', '.join(sorted(index))}")
+
+
 @main.command(name="show-prompt")
 @click.argument("name", default="security")
 @click.option("--projection", is_flag=True, help="Print the section-identity list only.")
-def show_prompt_cmd(name: str, projection: bool) -> None:
+@click.option("--diff", "diff_shipped", is_flag=True, help="Diff this repository's against the shipped one.")
+@click.option("--shipped", "shipped_only", is_flag=True, help="Ignore what this repository binds.")
+def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_only: bool) -> None:
     """Render a composed prompt offline, with per-fragment provenance.
 
     The successor to a committed flattened prompt tree. "What was the model actually told?" needs
     an answer that costs no run and no key — a cassette requires having already paid, and `ls`
     prints the container rather than the prompt.
 
+    It reads the prompt off the **bound adapter**, so what it renders is what a run would use.
+    Until it did, this command imported the shipped maps directly: a team that followed
+    `docs/extending.md`, subclassed a lens and bound it through `AiReview(lenses=...)` was shown
+    the prompt they had replaced, by the one command whose entire job is saying otherwise. A
+    prompt you cannot render is a prompt nobody reviews.
+
     The projection it prints is the same one the characterization corpus asserts on, so one
     artifact serves both offline inspection and migration equivalence.
 
-    NAME is a review aspect (`security`), a strategy id (`implement/oneshot`), or a triage prompt
-    (`triage/analyst`). Each, because an agentic prompt is the one most worth reading before it is
-    run: it composes a different guardrail and a different skill, and — for implement — is attached
-    to a tool set that can write.
+    NAME is a review aspect (`security`), a strategy prompt (`implement/oneshot`), or any other
+    shipped or house prompt. `--shipped` renders the framework's version of it and `--diff` shows
+    what a repository changed, which is the review question rather than the rendering one.
     """
-    from .prompts.implement import PROMPTS, implement_layers
-    from .prompts.review import LENSES, review_layers
-    from .prompts.triage import TRIAGE_PROMPTS, triage_layers
+    import difflib
 
-    if name in PROMPTS:
-        prompt: Any = PROMPTS[name]()
-        layers = implement_layers()
-        label, body_name = name, "implement/oneshot-implementer"
-    elif name in LENSES:
-        prompt = LENSES[name]()
-        layers = review_layers()
-        label, body_name = f"review/{name}", f"review/{name}-reviewer"
-    elif name in TRIAGE_PROMPTS:
-        prompt = TRIAGE_PROMPTS[name]()
-        layers = triage_layers()
-        label, body_name = name, "triage/triage-analyst"
-    else:
-        raise click.ClickException(
-            f"no prompt named {name!r}; have {sorted(LENSES)}, {sorted(PROMPTS)} and {sorted(TRIAGE_PROMPTS)}"
-        )
+    shipped = _shipped_compositions()
+    index = dict(shipped)
+    if not shipped_only:
+        lockstep, _ = _default_lockstep()
+        index.update(_bound_compositions(lockstep))
+
+    label = _resolve_prompt(index, name)
+    composed = shipped[label] if shipped_only else index[label]
 
     if projection:
-        for section in layers.projection(body_name):
+        for section in composed.projection():
             click.echo(section)
         return
 
-    click.echo(f"# composed prompt: {label}  (version {prompt.version})")
+    if diff_shipped:
+        origin = shipped.get(label)
+        if origin is None:
+            click.echo(f"# {label} is not a shipped prompt; there is nothing to diff against.")
+            return
+        delta = list(
+            difflib.unified_diff(
+                origin.text().splitlines(),
+                composed.text().splitlines(),
+                fromfile=f"shipped/{label}",
+                tofile=f"{composed.source}/{label}",
+                lineterm="",
+            )
+        )
+        if not delta:
+            click.echo(f"# {label} is the shipped prompt, unmodified.")
+            return
+        for line in delta:
+            click.echo(line)
+        return
+
+    click.echo(f"# composed prompt: {label}  (version {composed.prompt.version})")
+    click.echo(f"# source: {composed.source}")
     click.echo("#")
-    for section in layers.projection(body_name):
+    for section in composed.projection():
         click.echo(f"#   {section}")
     click.echo("")
-    click.echo(prompt.system(layers))
+    click.echo(composed.text())
 
 
 @main.command(name="init")
