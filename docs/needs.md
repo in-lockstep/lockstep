@@ -24,7 +24,7 @@ adoption did not care which architecture served it.
 | **N10** | A controls crosswalk | security | **done** — [`controls-crosswalk.md`](controls-crosswalk.md), and it says which control was lost rather than replaced. |
 | **N11** | An inner loop for prompt iteration | author | **done** — `show-prompt` renders the composition offline with no key, and `--offline` replays a cassette. |
 | **N12** | A quick reference for the layer taxonomy | author | **partly moot.** The compiler's three prompt layers are now guardrails, body, skills and contexts, composed in `Prompt.system` and frozen in the characterization corpus. |
-| **N13** | An entry surface that routes by persona | everyone | **done** — the site at https://in-lockstep.github.io/lockstep/ is built from five independent persona reviews of the source: six aspects ranked by how many reviewers raised each, one detail page per aspect with their quotes, and the objection all five shared on the front page. Terminal output on it is captured verbatim, not mocked. |
+| **N13** | An entry surface that routes by persona | everyone | **done** — the site at https://in-lockstep.github.io/lockstep/ routes by accountability rather than by feature: five roles, each with what the framework changed for them, plus a walkthrough that adopts the framework into a sample library and moves one change through the whole lifecycle. Terminal output on it is captured verbatim; quotes are attributed by role. |
 | **N14** | Publish the Python distributions | everyone | **done** for 0.1.x. 1.0 reuses the name for a different product, which ADR 0001 records as a deliberate and slightly uncomfortable decision. |
 
 ## The one that matters most
