@@ -276,10 +276,18 @@ project's. A name that appears in two sources is a conflict the CLI reports rath
 The project's own index is neither curated nor a bare tap. It states criteria, and all of them are
 machine-checked off the receipt rather than read off a README:
 
-1. the layer projection retains `guardrail:baseline`;
+1. a receipt at all, derived by `pack describe`;
 2. a pack listed as `kind = "prompt"` reports `imports: none`;
-3. the pack ships a corpus and at least one cassette, so it can be measured offline before anyone
-   spends anything.
+3. a corpus, so the pack can be measured;
+4. at least one cassette, so measuring it costs nothing.
+
+A criterion this document first proposed — *the layer projection retains `guardrail:baseline`* —
+is **not** among them, because it cannot be answered from a pack's receipt. A prompt body has no
+projection until something composes it, and which guardrails end up around it is a property of the
+repository that binds it rather than of the pack. `DOC171` is where that question is answerable,
+and it is asked there against the bound adapters. Criteria 3 and 4 are two entries rather than one
+because they are two things: a corpus says what to measure, a cassette says measuring costs
+nothing, and a pack with cases and no recording can only be measured by somebody who pays.
 
 The wording is load-bearing. Meeting these says the pack keeps the framework's guardrails and can be
 measured before it is trusted; it says nothing whatever about whether the code is good, and the

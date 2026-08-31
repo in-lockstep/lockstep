@@ -1,0 +1,25 @@
+# A catalog: a static file in a git repository. There is no service behind this, no accounts, and
+# no ranking to defend — the index answers "what exists and what does it hold", and every question
+# that has to be TRUSTED is answered by re-deriving locally when a pack is accepted.
+#
+# Publish this by committing it somewhere with a raw https URL, then:
+#     in-lockstep market add acme https://raw.githubusercontent.com/acme/index/main/index.toml
+
+[index]
+# This catalog states entry criteria, and `in-lockstep market lint index.toml` is what makes that
+# a claim somebody can fail rather than a sentence in a README. A tap that omits this line states
+# none, which is a legitimate thing for an internal catalog to be: a pack published inside your
+# company is trusted by that fact, not by passing a check.
+criteria = true
+
+[[pack]]
+name         = "acme-review-prompts"
+distribution = "acme-review-prompts"
+index        = "https://pypi.org/simple"
+kind         = "prompt"
+summary      = "A security lens that knows about our ORM, and a guardrail about migrations"
+source       = "https://github.com/acme/review-prompts"
+# Derived by `in-lockstep pack describe acme-review-prompts --json`, committed beside this file.
+# It is what the author's CODE did, not what the author said — which is what makes a listing
+# falsifiable: `add` re-derives it locally and refuses a pack that holds more than this published.
+receipt      = "receipts/acme-review-prompts-1.0.0.json"

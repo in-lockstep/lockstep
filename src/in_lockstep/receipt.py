@@ -661,12 +661,31 @@ def compare(recorded: dict[str, Any] | None, derived: dict[str, Any]) -> Drift:
     changes += [f"offers {name}, which it did not before" for name in sorted(after - before)]
     changes += [f"no longer offers {name}" for name in sorted(before - after)]
 
-    if recorded.get("digest") != derived.get("digest") and not changes and not widened:
+    if material(recorded) != material(derived) and not changes and not widened:
         # Something moved that none of the named comparisons cover — a corpus case, a summary, a
         # prompt body's label. Said plainly rather than left out: "the digest changed and I will
         # not tell you where" is worse than a vague sentence.
         changes.append("something changed that no named comparison covers; read the two receipts")
     return Drift(accepted=True, widened=tuple(widened), changes=tuple(changes))
+
+
+def material(receipt: dict[str, Any]) -> dict[str, Any]:
+    """The part of a receipt that describes the pack rather than the machine that derived it.
+
+    The full digest covers `requires` and `imported`, which is right for "is this the same
+    document" and wrong for "is this the same pack". A receipt published by an author running one
+    framework version, compared against one derived here on another, differs in `requires` and in
+    nothing that matters — and a comparison that reported that as drift would cry wolf on every
+    upgrade until people stopped reading it.
+
+    `imported` is excluded for the same reason: it records what the deriving run chose to do
+    (`--no-load` declines), not anything about the pack.
+    """
+    return {
+        key: value
+        for key, value in receipt.items()
+        if key not in {"digest", "requires", "imported", "problems"}
+    }
 
 
 def _capabilities(receipt: dict[str, Any]) -> set[str]:
