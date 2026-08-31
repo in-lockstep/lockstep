@@ -84,10 +84,13 @@ ALLOWED: dict[str, set[str]] = {
     # sources file through the redacting sink, and nothing else of ours: a catalog is data about
     # packs, so a layer that could import `packs` or `adapters` could start resolving a listing
     # into something bindable — which is the auto-binding this whole design refuses.
-    "market": {
-        "market",
-        "privileged",
-    },  # `adapters` was added when the first executable strategy was registered. A registration
+    "market": {"market", "privileged"},
+    # `trial` runs a verb against a cassette, so it names an implementation — the same edge
+    # `strategies` takes, for the same reason: a measurement that could only reference strings
+    # would not be a measurement of anything. It reaches `evaluation` for the corpus contract and
+    # `packs` for where a pack keeps its cases. Acyclic: none of those import `trial`.
+    "trial": {"adapters", "ai", "core", "evaluation", "packs", "privileged", "trial"},
+    # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
     # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
@@ -123,6 +126,7 @@ ALLOWED: dict[str, set[str]] = {
         "receipt",
         "packs",
         "market",
+        "trial",
         "cli",
     },
 }

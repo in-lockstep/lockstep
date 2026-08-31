@@ -3143,6 +3143,138 @@ def _handle(name: str) -> str:
     return handle if handle and not handle[0].isdigit() else f"pack_{handle}"
 
 
+@pack_group.command(name="try")
+@click.argument("name")
+@click.option("--corpus", "extra", default="", help="Your own cases, measured alongside the pack's.")
+@click.option("--model", default="anthropic:claude-sonnet-4-6", help="Only read when recording.")
+@click.option("--record", is_flag=True, help="Call the provider and write the pack's cassette.")
+@click.option("--json", "as_json_out", is_flag=True, help="The states and counts, for a script.")
+def pack_try_cmd(name: str, extra: str, model: str, record: bool, as_json_out: bool) -> None:
+    """Measure a pack before trusting it — replaying its cassettes, for nothing.
+
+    This is what makes a catalog worth anything. Everything else about a pack can be checked but
+    none of it says whether the pack is any GOOD, and the honest answer to that is a measurement
+    made on your own cases rather than a number its author published. `--corpus` is where yours go,
+    and they are counted separately for exactly that reason.
+
+    Read the states, not only the rate. A case with no recorded exchange is `unrecorded` and never
+    a failure — a cassette holds what its author recorded, and an absence of evidence is not
+    evidence of absence. A rubric is `outstanding` until a judge answers it. A corpus family this
+    cannot drive yet is counted as unexercised rather than quietly dropped, because a pass rate
+    over cases nobody ran is the reassuring number this project keeps refusing to print.
+
+    `--record` is the other direction, and the only one that spends: it calls the provider and
+    writes the cassette a pack needs before anyone else can measure it for free.
+    """
+    from .ai.auth import Auth
+    from .ai.bootstrap import (
+        LLMProvider,
+        MissingCredential,
+        Model,
+        credentials_for,
+        default_registry,
+        table_for,
+    )
+    from .ai.invoker import AiInvoker
+    from .ai.replay import Cassette, RecordingProvider, ReplayProvider
+    from .packs import PackNotFound, pack
+    from .privileged.egress import EgressPolicy
+    from .privileged.redact import Redact
+    from .trial import DRIVEN as _DRIVEN
+    from .trial import as_json, render, run
+
+    lockstep, _ = _default_lockstep()
+    try:
+        subject = pack(name)
+    except PackNotFound as e:
+        raise click.ClickException(str(e)) from None
+
+    tapes = [subject.file(f"cassettes/{stem}.json") for stem in subject.cassettes()]
+    if not tapes and not record:
+        click.echo(f"{name} ships no cassette, so there is nothing to replay and nothing to measure.")
+        click.echo("")
+        click.echo("That is a fact about the pack rather than a fault in it: somebody has to spend")
+        click.echo("real money once, recording what a model actually said, before everyone after")
+        click.echo(f"them can measure it for nothing.  `in-lockstep pack try {name} --record`")
+        raise SystemExit(EXIT_FAILED)
+
+    target = tapes[0] if tapes else subject.file("cassettes/trial.json")
+    if target is None:
+        raise click.ClickException(f"{name} could not be resolved to files on disk")
+    tape = Cassette.load(target)
+
+    auth = Auth()
+    try:
+        registry = default_registry(auth)
+    except MissingCredential as e:
+        raise click.ClickException(str(e)) from None
+    selected = Model(model)
+    table = table_for(registry, selected, _bound_cost_table(lockstep))
+
+    def build_invoker(ctx: Any) -> AiInvoker:
+        provider: LLMProvider = ReplayProvider(tape)
+        if record:
+            creds = credentials_for(auth, selected.provider)
+            provider = RecordingProvider(registry.provider_for(selected, creds), tape, Redact())
+        return AiInvoker(
+            provider,
+            model=selected.name,
+            cost_table=table,
+            spend=ctx.spend,
+            redact=Redact(),
+            egress=(
+                lockstep.container.resolve(EgressPolicy)
+                if lockstep.container.has(EgressPolicy)
+                else EgressPolicy.detect()
+            ),
+        )
+
+    lenses = _trial_lenses(subject)
+    trial = run(subject, extra=Path(extra) if extra else None, invoker_factory=build_invoker, lenses=lenses)
+    if record:
+        tape.save()
+
+    if as_json_out:
+        click.echo(as_json(trial))
+        if trial.summary()["pass_rate"] is None:
+            raise SystemExit(EXIT_FAILED)
+        return
+
+    for line in render(trial, pack=name, recording=record):
+        click.echo(line)
+
+    undriven = sorted({r.family for r in trial.results if r.state == "not exercised"})
+    if undriven:
+        click.echo("")
+        click.echo(
+            f"families a trial cannot drive yet: {', '.join(undriven)}  (it drives {', '.join(_DRIVEN)})"
+        )
+    if trial.summary()["pass_rate"] is None:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _trial_lenses(subject: Any) -> dict[str, Any]:
+    """The lens map a trial composes: shipped lenses, with the pack's own bodies substituted.
+
+    Substituted by convention — `prompts/<aspect>.md` pairs with `corpus/review/<aspect>-reviewer/`
+    — and composed inside the SHIPPED layer stack rather than a repository's. Measuring a pack
+    through your own guardrails would measure your configuration, and two repositories would then
+    get different numbers for the same pack and have no way to tell why.
+    """
+    from .prompts.review import LENSES
+
+    lenses = dict(LENSES)
+    for aspect, shipped in LENSES.items():
+        if subject.read(f"prompts/{aspect}.md") is None:
+            continue
+        lenses[aspect] = type(
+            f"Pack{aspect.title()}Prompt",
+            (shipped,),
+            {"version": f"{subject.name}", "body": subject.body(f"prompts/{aspect}.md")},
+        )
+    return lenses
+
+
 @pack_group.command(name="describe")
 @click.argument("name", default="")
 @click.option("--json", "as_json", is_flag=True, help="The canonical form, which is what a digest is over.")

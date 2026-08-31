@@ -68,6 +68,7 @@ in-lockstep ls                   # the resolved container, middleware, standards
 in-lockstep pack ls              # installed extension packs — offered, not yet in force
 in-lockstep search <query>       # packs across the catalogs this repository reads
 in-lockstep add <pack>           # accept one: re-derive, record, print the lines to paste
+in-lockstep pack try <pack>      # measure it on your cases, replaying a cassette, for $0
 in-lockstep pack describe        # the receipt: what is bound, what it may do, what proves it
 in-lockstep doctor               # are the controls actually in place?
 in-lockstep report --by model    # what the ledger adds up to — and whether it was rewritten

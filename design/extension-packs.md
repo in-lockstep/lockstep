@@ -304,22 +304,53 @@ results by source so the difference is visible at the point of reading.
 
 ## 6. Measurement is the install ritual, not a badge
 
-Cassettes sit at the `LLMInput`/`LLMOutput` seam and replay deterministically for free; `eval
---corpus` already takes a path. Together they make a $0 trial the natural first step:
+The strategy docs already say the thing a marketplace usually gets wrong: *ten unmeasured
+strategies are worse than one measured*. Cassettes replay deterministically at the
+`LLMInput`/`LLMOutput` seam for free, and a corpus states what a good answer looks like. A trial
+runs the second against the first.
 
 ```
-$ in-lockstep pack try acme/tdd-pro --corpus ./our-cases
+$ in-lockstep pack try acme-review-prompts --corpus ./our-cases
 
-  replaying 3 cassettes, 14 pack cases + 22 of yours    # no key, no spend
-  decided      31        outstanding  5  (need a judge)
-  pass rate    0.87      on your cases: 0.79
+  trial         acme-review-prompts  (replaying — no key, no spend)
+  cassettes     1  (review)
+
+  its own cases  (14)
+    decided     9     pass rate 0.89
+    outstanding 5   — need a judge, so not passes
+
+  your cases  (22)
+    decided     17    pass rate 0.76
+    unrecorded  5   — no recorded exchange; not failures
 ```
 
-This is the answer to the marketplace's hardest social problem. The ranking that matters is computed
-by the person deciding, on their own cases, rather than by whoever wrote the listing — and it
-inherits the eval module's honesty about what a rubric nobody judged is worth.
+The ranking is computed by the person deciding, on their own cases, rather than by whoever wrote
+the listing. That is the answer to the marketplace's hardest social problem, and the states are
+what keep it honest:
 
----
+- **`unrecorded` is not a failure.** A cassette holds what its author recorded. A case they did not
+  record is one the trial could not run — an absence of evidence, and counting it against the pack
+  would penalise an incomplete recording rather than the code.
+- **`outstanding` is not a pass.** `evaluation/`'s contract, unchanged: a rubric nobody judged is
+  outstanding.
+- **`unexercised` is counted.** Only `review` is driven today. Silently dropping the rest would
+  report a pass rate over a corpus the trial never saw.
+- **No pass rate when nothing was decided**, and the output says which absence produced that rather
+  than printing a zero.
+
+### The honest limit, stated where it bites
+
+A $0 trial ranks on **deterministic cases only**. Rubrics need a judge and a judge costs money, so
+the caveat this document opened with (§11) is not resolved by this step — it is made visible by it.
+A pack whose corpus is mostly rubrics will show a small `decided` count beside a large
+`outstanding` one, which is the true shape of its evidence, and a catalog listing such a pack is
+listing something that has barely been measured. The counts say so on every run rather than in a
+footnote.
+
+**Somebody has to pay once.** `pack try --record` is the other direction: it calls the provider and
+writes the cassette everyone after can replay for nothing. Recording transmits and is subject to
+the same egress rules as any real call; replaying transmits nothing, and `AiInvoker.transmits`
+already knew the difference.
 
 ## 7. Three refusals
 
@@ -421,7 +452,8 @@ the bind lines rather than writing them.
   alternate configuration surface, is unresolved. `ai/prompt.py` is explicit that frontmatter is
   "advisory input to a Python-declared binding, never an alternate configuration surface", which
   argues for no.
-- **`pack try` and rubric cases.** A pack's rubric cases need a judge, and a judge costs money, which
-  cuts against "measure before you spend". The honest position is that `try` reports them as
-  outstanding — but a marketplace where most evidence is outstanding is a marketplace ranking on
-  deterministic cases only, and that should be said out loud in the catalog.
+- ~~**`pack try` and rubric cases.**~~ **Landed as stated, and said out loud.** `try` reports
+  rubrics as outstanding and prints the count beside the decided one on every run, so a pack whose
+  evidence is mostly unjudged looks like one. What remains open is whether the catalog should
+  *rank* on `decided` count as well as pass rate — a pack with one decided case and a perfect rate
+  currently reads better than one with forty and a good rate.
