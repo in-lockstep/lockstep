@@ -431,8 +431,10 @@ following the idiom §17 established — an "amends §X" delta rather than an ed
 designed and what shipped are both readable.
 
 - **§18.1 *(amends §5.7)*** — the strategy protocol, the registry of named approaches, and
-  selection by string. The `StrategySelector` over ticket labels is withdrawn rather than deferred:
-  a strategy chosen from ticket text is one an untrusted author can steer.
+  selection by string. The registry is withdrawn permanently: resolving a strategy by name at
+  request time lets untrusted input *name* one. The `StrategySelector` is deferred rather than
+  withdrawn, behind an invariant that makes it a quality decision instead of a privilege one —
+  [`design/strategy-selection.md`](strategy-selection.md).
 - **§18.2 *(amends §12)*** — the three entry-point groups that were never built, and the one that
   was. `in_lockstep.adapters`, `in_lockstep.workflows` and `in_lockstep.evaluators` should be struck
   rather than built, for the reason in §3.1.
