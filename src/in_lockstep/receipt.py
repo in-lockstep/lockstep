@@ -6,17 +6,19 @@ load-bearing frozenset checked at class creation, `PromptLayers.projection()` sa
 survived and in what order, the policy stack knows what it merged, and a corpus is files on disk.
 Nothing here asks anybody what their code does. It reads what the objects already declare.
 
-The subject today is **a repository** — `in-lockstep pack describe`, run against your own module,
-where it answers "what did we actually configure" without reading a container by eye. That is
-useful on its own and it is deliberately the same shape a pack's receipt will have
-(`design/extension-packs.md` §3.2), so the format is exercised by the person who wrote the
-configuration long before it is trusted about somebody else's.
+Two subjects, one shape. `receipt_for` describes **a repository** — what your own module bound,
+what it may do, what evidence exists — and `receipt_for_pack` describes **an installed pack**. The
+repository came first deliberately: a format nobody has run against their own configuration is a
+format nobody has checked, and it is exercised by the person who wrote the configuration long
+before it is trusted about somebody else's (`design/extension-packs.md` §3.2).
 
-Two properties matter for what comes later, and both are cheap to hold now:
+Two properties are why a receipt is worth deriving at all:
 
 **It is canonical.** A receipt exists to be compared — published against re-derived, before against
 after — so the JSON is sorted and the digest is over exactly what is printed. A format that
-serialises differently on two machines cannot be a comparison.
+serialises differently on two machines cannot be a comparison. `compare` narrows further to a
+`material` subset, because `requires` describes the machine that derived a receipt rather than the
+pack it describes.
 
 **It reports absence as absence.** A repository with no corpus gets `null`, never the framework's
 own case count. Borrowing the shipped evidence into a repository's receipt would be the reassuring
