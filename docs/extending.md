@@ -271,6 +271,34 @@ A pack's guardrail is labelled `<pack>/<name>` in the projection, because a proj
 answer "whose rule is this" and two packs contributing `house` would otherwise be
 indistinguishable in the one artifact meant to tell them apart.
 
+### Finding one: catalogs
+
+A catalog is a static `index.toml` in a git repository — no service, no accounts, no ranking.
+
+```bash
+in-lockstep market add acme https://raw.githubusercontent.com/acme/index/main/index.toml
+in-lockstep search tdd
+```
+
+`search` groups by source, because the difference matters: the project's catalog states entry
+criteria and an organisation's internal tap states none — a pack published inside your company is
+trusted by that fact, which is a different question and a better answer. A name two catalogs claim
+is reported rather than resolved.
+
+Registering a source writes `.lockstep/market.toml`, committed, because a catalog decides where
+this repository looks for code. https only: a catalog says what to install, so it is fetched over a
+channel that cannot be rewritten in transit.
+
+An entry points at a receipt derived by `pack describe` and committed beside the index, so it
+records what the author's *code* did rather than what the author wrote. `add` re-derives the same
+receipt locally and refuses a pack that holds more than the catalog published — not behind
+`--accept`, because that is not a decision to weigh, it is a listing that does not describe the
+code you installed.
+
+Publishing one is committing the file. `in-lockstep market lint index.toml` checks each entry
+against the criteria the catalog claims to apply, which is what keeps a criterion from being a
+sentence in a README — see [`examples/lockstep-index/`](../examples/lockstep-index/).
+
 ### What `pack describe` tells you before you install
 
 Every field is read off something that already declares it, so a listing is a computation rather

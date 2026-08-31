@@ -1,0 +1,33 @@
+{
+  "cassettes": [],
+  "corpus": {
+    "cases": 2,
+    "deterministic": 2,
+    "families": {
+      "review": 2
+    },
+    "path": "corpus",
+    "rubric": 2
+  },
+  "declares": {
+    "kind": "prompt",
+    "summary": "A security lens that knows about our ORM, and a guardrail about migrations"
+  },
+  "digest": "sha256:03208834909cadc0bbdde0dcebfb4fb7eac04d0bcbd3a0f4e19c4725c67dfb45",
+  "imported": false,
+  "imports": "none",
+  "kind_matches": true,
+  "offers": [],
+  "problems": [],
+  "receipt": 1,
+  "requires": {
+    "in-lockstep": "1.0.0"
+  },
+  "subject": {
+    "distribution": "acme-review-prompts",
+    "kind": "pack",
+    "module": "acme_review_prompts",
+    "name": "acme-review-prompts",
+    "version": "1.0.0"
+  }
+}

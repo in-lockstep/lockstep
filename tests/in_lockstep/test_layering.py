@@ -80,7 +80,14 @@ ALLOWED: dict[str, set[str]] = {
     # it cannot bind into.
     "packs": {"ai", "packs"},
     "receipt": {"ai", "core", "evaluation", "lockstep", "packs", "privileged", "receipt"},
-    # `adapters` was added when the first executable strategy was registered. A registration
+    # `market` reads catalogs and the receipts they point at. It reaches `privileged` to write the
+    # sources file through the redacting sink, and nothing else of ours: a catalog is data about
+    # packs, so a layer that could import `packs` or `adapters` could start resolving a listing
+    # into something bindable — which is the auto-binding this whole design refuses.
+    "market": {
+        "market",
+        "privileged",
+    },  # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
     # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
@@ -115,6 +122,7 @@ ALLOWED: dict[str, set[str]] = {
         "strategies",
         "receipt",
         "packs",
+        "market",
         "cli",
     },
 }

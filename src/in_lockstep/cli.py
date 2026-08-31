@@ -2811,6 +2811,164 @@ def pack_ls_cmd() -> None:
         )
 
 
+@main.group(name="market")
+def market_group() -> None:
+    """The catalogs this repository reads for extension packs.
+
+    A catalog is a static `index.toml` in a git repository — no service, no accounts, no ranking to
+    defend. It is read when you search and when you accept a pack, and never during a run: a run of
+    a repository that installed a pack is identical to one that vendored the same class by hand,
+    which is what keeps a strategy from ever being selected by a name.
+    """
+
+
+@market_group.command(name="add")
+@click.argument("name")
+@click.argument("url")
+def market_add_cmd(name: str, url: str) -> None:
+    """Register a catalog at URL under NAME.
+
+    Written to `.lockstep/market.toml` and committed, because a source decides where this
+    repository looks for code and that belongs in review — the same argument the standards layer
+    makes about a dependency being a reviewable diff. https only: a catalog says what to install,
+    so it is fetched over a channel that cannot be rewritten in transit.
+    """
+    from .market import MarketError, add_source
+
+    lockstep, _ = _default_lockstep()
+    root = Path(lockstep.repo.root)
+    try:
+        path = add_source(root, name, url)
+    except MarketError as e:
+        raise click.ClickException(str(e)) from None
+    click.echo(f"registered  {name}  {url}")
+    click.echo(f"wrote       {_relative(path, root)}  — commit it")
+
+
+@market_group.command(name="ls")
+def market_ls_cmd() -> None:
+    """The catalogs this repository reads."""
+    from .market import sources
+
+    lockstep, _ = _default_lockstep()
+    registered = sources(Path(lockstep.repo.root))
+    if not registered:
+        click.echo("no catalogs registered")
+        click.echo("")
+        click.echo("A catalog is a static index.toml in a git repository:")
+        click.echo("  in-lockstep market add acme https://raw.example/acme/index.toml")
+        return
+    for source in registered:
+        click.echo(f"  {source.name:<20} {source.url}")
+
+
+@market_group.command(name="lint")
+@click.argument("path", type=click.Path(exists=True))
+def market_lint_cmd(path: str) -> None:
+    """Check a catalog's own entries against the criteria it claims to apply.
+
+    For whoever publishes one, in their CI. A criterion nobody re-checks is a sentence in a README,
+    which is the failure this whole design is arranged against — so the catalog that states
+    criteria is the catalog that can be failed for not meeting them.
+    """
+    from .market import MarketError, Source, criteria_failures, parse_index, receipt_at
+
+    index = Path(path)
+    try:
+        catalog = parse_index(index.read_text(), Source(name=index.stem, url=str(index)))
+    except MarketError as e:
+        raise click.ClickException(str(e)) from None
+
+    if not catalog.entries:
+        click.echo("the catalog lists nothing")
+        return
+
+    failed = 0
+    for entry in catalog.entries:
+        try:
+            receipt = receipt_at(index.parent, entry.receipt)
+        except MarketError as e:
+            raise click.ClickException(str(e)) from None
+        problems = criteria_failures(entry, receipt) if catalog.criteria else []
+        state = "ok" if not problems else "FAILS"
+        click.echo(f"  {entry.name:<28} {entry.kind or '?':<9} {state}")
+        for problem in problems:
+            click.echo(f"  {'':<28} missing: {problem}")
+        failed += bool(problems)
+
+    click.echo("")
+    if not catalog.criteria:
+        click.echo(
+            f"{len(catalog.entries)} entr(y/ies). This catalog claims no criteria, so nothing was "
+            f"checked —\nwhich is a legitimate thing for a tap to be: an internal pack is trusted "
+            f"by having been\npublished inside the company, not by passing a check."
+        )
+        return
+    click.echo(f"{len(catalog.entries)} entr(y/ies), {failed} failing the criteria this catalog states")
+    if failed:
+        raise SystemExit(EXIT_FAILED)
+
+
+@main.command(name="search")
+@click.argument("query", default="")
+def search_cmd(query: str) -> None:
+    """Find packs across the registered catalogs.
+
+    Grouped by source, because the difference matters: the project's catalog states entry criteria
+    and an organisation's internal tap states none — an internal pack is trusted by the fact that
+    somebody inside the company published it, which is a different question and a better answer.
+
+    A name listed by two catalogs is reported rather than resolved. Guessing which one somebody
+    meant is how the wrong code gets installed under the right name.
+    """
+    from .market import MarketError, criteria_failures, read_catalog, receipt_at, sources
+
+    lockstep, _ = _default_lockstep()
+    root = Path(lockstep.repo.root)
+    registered = sources(root)
+    if not registered:
+        raise click.ClickException(
+            "no catalogs registered. `in-lockstep market add <name> <https://.../index.toml>`"
+        )
+
+    seen: dict[str, list[str]] = {}
+    for source in registered:
+        try:
+            catalog = read_catalog(source, root=root)
+        except MarketError as e:
+            click.echo(f"{source.name}: {e}", err=True)
+            continue
+
+        matches = [
+            entry
+            for entry in catalog.entries
+            if not query or query.lower() in f"{entry.name} {entry.summary} {entry.kind}".lower()
+        ]
+        criteria = "states entry criteria" if catalog.criteria else "no criteria — a tap"
+        click.echo(f"{source.name}  ({criteria})")
+        if not matches:
+            click.echo("  (nothing matches)")
+        for entry in matches:
+            seen.setdefault(entry.name, []).append(source.name)
+            try:
+                receipt = receipt_at(root, entry.receipt)
+            except MarketError as e:
+                click.echo(f"  {entry.name}: {e}", err=True)
+                receipt = None
+            problems = criteria_failures(entry, receipt) if catalog.criteria else []
+            flag = "" if not problems else f"   <- {len(problems)} criterion/criteria unmet"
+            click.echo(f"  {entry.name:<26} {entry.kind or '?':<9} {entry.summary}{flag}")
+        click.echo("")
+
+    for name, found in sorted(seen.items()):
+        if len(found) > 1:
+            click.echo(
+                f"{name} is listed by {', '.join(found)}. Name the distribution you mean when you "
+                f"install it; nothing here picks for you.",
+                err=True,
+            )
+
+
 @main.command(name="add")
 @click.argument("name")
 @click.option("--accept", is_flag=True, help="Accept capabilities this pack did not previously hold.")
@@ -2854,6 +3012,25 @@ def add_cmd(name: str, accept: bool) -> None:
         click.echo(line)
     click.echo("")
 
+    # A catalog's receipt is what its author's code did, not what its author said, so comparing it
+    # against what this machine derives is the check that makes a listing falsifiable. It refuses
+    # outright rather than behind `--accept`: a pack that holds more than the catalog published is
+    # not a decision to weigh, it is a listing that does not describe the code.
+    published = _published_receipt(root, name)
+    if published is not None:
+        against_catalog = compare(published, derived)
+        if against_catalog.widened:
+            raise click.ClickException(
+                f"refused: the installed {name} may do more than the catalog published "
+                f"(+{', +'.join(against_catalog.widened)}). The listing does not describe this "
+                f"code — check the distribution and the index before going further."
+            )
+        for change in against_catalog.changes:
+            click.echo(f"catalog  differs: {change}")
+        if not against_catalog.changes:
+            click.echo("catalog  the installed code matches the published receipt")
+        click.echo("")
+
     if drift.widened:
         click.echo("capabilities this pack did not hold when you accepted it")
         for capability in drift.widened:
@@ -2892,6 +3069,26 @@ def add_cmd(name: str, accept: bool) -> None:
         click.echo(f"    {line}")
     click.echo("")
     click.echo(f"until you do, nothing changes: `in-lockstep ls` will not mention {name}.")
+
+
+def _published_receipt(root: Path, name: str) -> dict[str, Any] | None:
+    """The receipt a registered catalog published for this pack, if one is registered at all.
+
+    Best effort on purpose. A repository with no catalogs, or one whose catalog is unreachable
+    right now, still accepts packs — the local derivation is the thing that decides what a pack may
+    do, and the published receipt is a cross-check that is worth having and not worth blocking on.
+    """
+    from .market import MarketError, read_catalog, receipt_at, sources
+
+    for source in sources(root):
+        try:
+            catalog = read_catalog(source, root=root)
+            for entry in catalog.entries:
+                if entry.name == name and entry.receipt:
+                    return receipt_at(root, entry.receipt)
+        except MarketError:
+            continue
+    return None
 
 
 def _relative(path: Path, root: Path) -> str:

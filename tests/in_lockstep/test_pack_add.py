@@ -204,10 +204,10 @@ def test_a_change_that_grants_nothing_new_is_recorded_without_a_flag(
 
 
 def test_compare_reports_a_change_it_cannot_name() -> None:
-    """A digest that moved with every named comparison agreeing is still a change, and saying so
-    vaguely beats saying nothing — the alternative is a receipt that quietly differs."""
-    before = {"subject": {"version": "1"}, "imports": "none", "offers": [], "digest": "sha256:a"}
-    after = {"subject": {"version": "1"}, "imports": "none", "offers": [], "digest": "sha256:b"}
+    """A material field that moved with every named comparison agreeing is still a change, and
+    saying so vaguely beats saying nothing — the alternative is a receipt that quietly differs."""
+    before = {"subject": {"version": "1"}, "imports": "none", "offers": [], "cassettes": []}
+    after = {"subject": {"version": "1"}, "imports": "none", "offers": [], "cassettes": ["review"]}
     drift = compare(before, after)
     assert drift.widened == ()
     assert any("no named comparison covers" in change for change in drift.changes)
@@ -339,3 +339,86 @@ def test_the_recorded_receipt_is_what_doctor_re_derives_against(
     derived = receipt_for_pack(Pack(name="acme-tdd-pro", module="acme_tdd_pro", root=entry.root))
     assert recorded is not None
     assert compare(recorded, derived).widened == ()
+
+
+def test_compare_ignores_the_machine_that_derived_the_receipt() -> None:
+    """A receipt published by an author on one framework version, compared against one derived
+    here on another, differs in `requires` and in nothing that matters. A comparison that called
+    that drift would cry wolf on every upgrade until people stopped reading it."""
+    from in_lockstep.receipt import material
+
+    published = {
+        "subject": {"version": "2.1.0"},
+        "imports": "modules",
+        "offers": [{"name": "AcmeTDD", "capabilities": ["reads_repo"]}],
+        "requires": {"in-lockstep": "0.9.0"},
+        "imported": False,
+        "problems": ["could not import on the publishing machine"],
+    }
+    derived = {**published, "requires": {"in-lockstep": "1.0.0"}, "imported": True, "problems": []}
+
+    assert material(published) == material(derived)
+    assert compare(published, derived).clean
+
+
+def _published(entry: FakeEntry) -> dict:
+    """The receipt an author would publish: derived from the same `Pack` an install resolves to.
+
+    Built through `installed()` rather than by hand, because a `Pack` constructed without the
+    version and distribution the entry carries produces a receipt that differs from the installed
+    one in exactly those fields — which `compare` would then report as drift, correctly, about a
+    difference the test invented.
+    """
+    from in_lockstep.packs import installed
+
+    return receipt_for_pack(installed(entries=[entry])[0])
+
+
+def _catalogued(repo: Path, receipt: dict) -> None:
+    """A catalog registered in this repository, publishing `receipt` for the pack."""
+    (repo / "receipts").mkdir(exist_ok=True)
+    (repo / "receipts" / "acme.json").write_text(json.dumps(receipt))
+    (repo / "index.toml").write_text(
+        '[[pack]]\nname = "acme-tdd-pro"\ndistribution = "acme-tdd-pro"\nreceipt = "receipts/acme.json"\n'
+    )
+    lockstep = repo / ".lockstep"
+    lockstep.mkdir(exist_ok=True)
+    (lockstep / "market.toml").write_text('[source."acme"]\nurl = "index.toml"\n')
+
+
+def test_add_refuses_a_pack_that_holds_more_than_the_catalog_published(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check that makes a listing falsifiable. A published receipt is what the author's code
+    did, so code that holds more than it is not a decision to weigh behind `--accept` — it is a
+    listing that does not describe what you installed."""
+    _catalogued(repo, _published(_strategy_pack(monkeypatch, repo)))
+
+    _install(monkeypatch, _strategy_pack(monkeypatch, repo, extra=" | {Capability.REACHES_NETWORK}"))
+    result = CliRunner().invoke(main, ["add", "acme-tdd-pro"])
+    assert result.exit_code != 0
+    assert "the catalog published" in result.output
+    assert "+reaches_network" in result.output
+    assert read_record(repo, "acme-tdd-pro") is None, "a refused pack is not recorded"
+
+
+def test_add_says_when_the_installed_code_matches_the_catalog(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A check that only ever speaks up when something is wrong is a check nobody knows ran."""
+    entry = _strategy_pack(monkeypatch, repo)
+    _catalogued(repo, _published(entry))
+    _install(monkeypatch, entry)
+
+    result = CliRunner().invoke(main, ["add", "acme-tdd-pro"])
+    assert result.exit_code == 0, result.output
+    assert "matches the published receipt" in result.output
+
+
+def test_add_works_with_no_catalog_at_all(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The local derivation decides what a pack may do; the published receipt is a cross-check
+    worth having and not worth blocking on. A repository with no catalogs still accepts packs."""
+    _install(monkeypatch, _strategy_pack(monkeypatch, repo))
+    result = CliRunner().invoke(main, ["add", "acme-tdd-pro"])
+    assert result.exit_code == 0, result.output
+    assert "catalog" not in result.output

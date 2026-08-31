@@ -66,6 +66,7 @@ in-lockstep rfe --idea "..."     # draft a ticket from a rough idea; --create fi
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
 in-lockstep pack ls              # installed extension packs — offered, not yet in force
+in-lockstep search <query>       # packs across the catalogs this repository reads
 in-lockstep add <pack>           # accept one: re-derive, record, print the lines to paste
 in-lockstep pack describe        # the receipt: what is bound, what it may do, what proves it
 in-lockstep doctor               # are the controls actually in place?
