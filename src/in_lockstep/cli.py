@@ -2767,12 +2767,15 @@ def _write_changeset(changeset: Any) -> list[str]:
 
 @main.group(name="pack")
 def pack_group() -> None:
-    """Inspect what a configuration does, in the form a shared extension will be published in.
+    """Inspect what a configuration does, and what an installed extension pack would do to it.
 
-    Today the only subject is this repository. That is the useful order rather than a limitation:
-    a receipt format nobody has run against their own module is a format nobody has checked, and
-    the questions it answers — what is bound, what it may do, which guardrails survived, what
-    evidence exists — are the ones an adopter asks about their own repository first.
+    `describe` reads either subject — this repository with no argument, an installed pack with a
+    name — and they are deliberately the same shape. The repository came first: a receipt format
+    nobody has run against their own module is a format nobody has checked, and the questions it
+    answers are the ones an adopter asks about their own repository before anyone else's.
+
+    `ls` names what is installed, `try` measures one against your cases for nothing, and `add`
+    (top level, because accepting is not inspecting) records what you accepted.
     """
 
 

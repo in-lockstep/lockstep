@@ -353,7 +353,7 @@ class AiInvoker:
 
 `InvokePolicy` bounds the agentic loop: `max_turns`, token/USD budget, wall-clock limit, allowed providers. The invoker emits OTel GenAI spans per model call, validates structured output against `S` (bounded repair-reprompt on schema failure), and appends an eval event to the ledger for every invocation. AI-backed verb adapters (`AiImplement`, `AiFix`, `AiReview`, `AiTriage`, `AiDebug`) are thinner still in v0.4: they resolve the selected `Strategy` (§5.7) and delegate. The strategy maps verb input → prompts, context, tools, and skills (§5.8), drives one or more invoker calls — possibly interleaved with deterministic verbs — and maps structured output back to the verb's type.
 
-### 5.7 Strategies — pluggable behavior for AI verbs *(added in v0.4)*
+### 5.7 Strategies — pluggable behavior for AI verbs *(added in v0.4; superseded — see §18.1)*
 
 Binding chooses *which adapter* serves a verb; a strategy chooses *how the AI adapter approaches the work*. A `Strategy` names a complete approach — prompt(s), context recipe, tools, skills, invoke policy, and possibly a multi-phase internal plan:
 
@@ -547,7 +547,7 @@ jobs:
 
 A GitLab CI component with the same shape ships alongside, as does a container image (`ghcr.io/in-lockstep/runner`) for cold-start-sensitive pipelines (R1-DEVOPS-3). Kill switch: `IN_LOCKSTEP_DISABLE=1` at org/repo level halts all runs before any middleware executes.
 
-## 12. Packaging, extension, and stability
+## 12. Packaging, extension, and stability *(amended — see §18.2, §18.3)*
 
 Import-time purity: `lockstep.py` may construct objects and bind, but must not perform IO at import; `in-lockstep doctor` lints this by importing the module under a recording shim (R1-STAFF-4). Extension is via ordinary subclassing plus entry points (`in_lockstep.adapters`, `in_lockstep.workflows`, `in_lockstep.evaluators`). API stability: `in_lockstep.*` root namespace is semver-stable; incubating pieces live under `in_lockstep.x.*` until promoted. Sync facade: every async API has a `.sync` mirror (`lockstep.sync.do(...)`) for scripts and REPL use; the core is async because model calls, SCM APIs, and subprocesses are all IO-bound and workflows fan out (R1-STAFF-1).
 
@@ -1021,3 +1021,69 @@ are not on `RunContext` at 1.0.
 
 **Termination:** all seven personas signed off in Round 7, with accepted notes on the daily-ceiling
 loss (§17.4) and the direct-provider-import bypass, both recorded in the ADR rather than mitigated.
+
+---
+
+## 18. Post-1.0 — extension and distribution *(added 2026-08-31)*
+
+§17 recorded what an implementation plan forced. This records what shipping and then *extending*
+the framework forced, and it exists for the reason §17.4's withdrawn claim exists: a design
+document asserting a mechanism nobody built decays into the thing `docs/controls-crosswalk.md` was
+written to catch. Two sections above describe shapes the code does not have, and one of them would
+lead somebody to rebuild what the extension work deliberately refuses.
+
+The full argument is `design/extension-packs.md`; the executable form is `design/gates.md`
+(`GATE-PACK-1` … `GATE-PACK-4`).
+
+### 18.1 A strategy is an adapter, and nothing selects one by name *(amends §5.7)*
+
+§5.7 describes a `Strategy` protocol with `execute(ctx, ai, inp)`, a registry of named approaches,
+and selection "most-specific wins" — per call via `strategy="wayfinder"`, then a bound
+`StrategySelector` over ticket labels or an AI triage, then a registered default. None of that
+shipped, and the replacement is narrower on purpose.
+
+**The strategy IS the adapter.** `lockstep.use(TDD)` binds it under the request type it serves;
+`AiStrategy` subclasses implement `invoke(ctx, request)`. What ships is `Oneshot`, `TDD` and
+`DiagnoseThenFix` — not `implement/wayfinder` or `implement/direct` — and review ships four lenses
+(`security`, `intent`, `performance`, `tests`), which are prompts rather than strategies.
+
+**Selection by string is gone, and its loss is the point.** A strategy chosen from ticket text is a
+strategy an untrusted author can steer, and a ticket is `UNTRUSTED_EXTERNAL` by construction. What
+remains is a bind-time code decision in a file loaded from a trusted ref, plus `via=` at a call
+site, which names an object rather than an id. The `StrategySelector` over ticket labels is
+therefore **withdrawn rather than deferred**: it is not a thing to build later.
+
+§5.7's *measurement* claim survives intact. `strategy_id` is still part of the eval-subject key
+(§8.2, §17.8), which is what `in-lockstep pack try` builds on.
+
+### 18.2 One extension entry point, and it offers rather than applies *(amends §12)*
+
+§12 says extension is "ordinary subclassing plus entry points (`in_lockstep.adapters`,
+`in_lockstep.workflows`, `in_lockstep.evaluators`)". Those three groups do not exist and **should
+not be built**. An entry point that binds an adapter without a line in `lockstep.py` is auto-binding
+by installation: which strategy runs would become a property of what happens to be installed rather
+than of a reviewed line, which is the property §18.1 just recorded as load-bearing.
+
+Two groups exist, and the difference between them is the design:
+
+| Group | Installing it | Why |
+|---|---|---|
+| `in_lockstep.standards` | **applies** it, inside `detect()` | may only tighten; the risk is a repository forgetting one |
+| `in_lockstep.extensions` | **offers** it, and nothing more | hands a model write/execute tools and spends; its arrival is a diff |
+
+Nothing an extension pack ships takes effect until `.lockstep/lockstep.py` names it.
+`in-lockstep pack ls | describe | try`, `add` and `market | search` are the surface;
+`.lockstep/packs/<name>.json` records what a repository accepted, and `DOC170`–`DOC172` compare the
+installed code against it.
+
+### 18.3 Three §12 claims that are not built *(amends §12)*
+
+Recorded rather than quietly dropped, and separated by whether they are still wanted:
+
+| Claim | State |
+|---|---|
+| `doctor` lints import-time purity "under a recording shim" | **Not built.** The convention is real and documented where a `lockstep.py` is written; the lint is not. Still wanted — it is checkable and nothing checks it. |
+| `in_lockstep.x.*` for incubating API | **Not built, and not wanted as stated.** Nothing has needed it, and a namespace nobody uses is a promise nobody keeps. The pack work added public API (`in_lockstep.packs`, `.receipt`, `.market`, `.trial`) directly. |
+| `.sync` mirror — `lockstep.sync.do(...)` | **Not built.** Every entry point is the CLI, which owns its own `asyncio.run`. Wanted only if somebody drives the framework from a REPL or a script, and nobody has. |
+
+The semver commitment in §12 stands, and `in_lockstep.*` is what it covers.
