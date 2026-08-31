@@ -232,6 +232,26 @@ The one file `add` writes is the dependency pin, which is `uv`'s job and reverse
 
 ---
 
+### What upgrades have to say out loud
+
+```
+$ in-lockstep doctor
+
+  DOC170  pack 'acme-tdd-pro' may now do more than this repository accepted: +reaches_network
+          Read what changed, then accept it in a diff:
+          `in-lockstep add acme-tdd-pro --accept`, and commit the record.       FAIL
+
+  DOC171  review/security does not open with the shipped guardrail baseline
+          Its stack starts guardrail:acme/only-ours.                            WARN
+
+  DOC172  pack 'acme-tdd-pro' is installed but not pinned                       WARN
+```
+
+Only `DOC170` is an error, and the line it draws is agency. `DOC170` is a *note* rather than a
+failure for a pack that was never accepted at all — installing offers a pack, it does not apply
+one, so an unaccepted pack that nothing binds is ordinary. `DOC171` reads the **bound** adapters
+rather than the installed packs, because what matters is the prompt a run would actually send.
+
 ## 5. The index
 
 A static file in a git repository. No service, no accounts, no ranking to defend.
@@ -325,8 +345,10 @@ locally-written extension debuggable. Nothing before step 4 requires deciding wh
    that offers without applying, and `in_lockstep.packs.pack()` for reading a data pack's resources.
    Ship one first-party example as `examples/acme-standards` did; a prompt pack is cheapest.
    *(The one step that adds public API.)*
-4. **Make installing a diff.** `add`: resolve, pin with a hash, re-derive the receipt, refuse on
-   drift, print the lines. `doctor` gains DOC170–172.
+4. **Make installing a diff.** *(Landed.)* `add`: re-derive the receipt, compare it with the
+   accepted record in `.lockstep/packs/<name>.json`, refuse widened capabilities without
+   `--accept`, record, and print the lines. `doctor` gains DOC170–172. It neither installs nor
+   pins — see §4 for why that moved.
 5. **Publish the catalog.** `index.toml` in a git repo, `market add` / `search`, receipts committed
    beside it. The gh-pages site is the natural home for the first one.
 6. **Rank by evidence.** `pack try`. Last because it needs all five above, and the step that makes
@@ -360,32 +382,31 @@ claim survives intact and is what §6 above builds on.
 
 For `design/gates.md` when this is implemented:
 
-| Gate | Status | Assertion |
-|---|---|---|
-| `GATE-PACK-1` | proposed | An `in_lockstep.extensions` entry point present in the environment produces **no** container binding after `Lockstep.detect()`; the same pack bound by a `lockstep.py` line appears in `ls` at `Tier.EXPLICIT`. |
-| `GATE-PACK-2` | proposed | `pack describe` output for a pack whose `layers=` omits the shipped stack has no `guardrail:baseline` entry in its projection, and `add` prints that fact before the binding lines. |
-| `GATE-PACK-3` | proposed | A receipt recomputed at install that differs from the published record refuses the install; the run leaves no partially-installed state. |
-| `GATE-PACK-4` | proposed | `add` writes no bytes to `.lockstep/lockstep.py` under any flag combination — asserted by mtime and content over the full CLI surface, not by inspecting the happy path. |
+The four `GATE-PACK-*` rows now live in [`design/gates.md`](gates.md#packs) with their real
+assertions and `held` status, discharged by tests that name them. They are not restated here: a
+gate recorded in two places drifts in one of them.
 
 For `doctor`, continuing the DOC1xx grouping:
 
 | Check | Fails when |
 |---|---|
-| `DOC170` | An installed pack's capabilities have widened since the version the module acknowledges. A pack may not silently gain `reaches_network`. |
-| `DOC171` | An installed pack's projection is missing `guardrail:baseline`. Warns rather than fails: it is legal and must be visible. |
-| `DOC172` | An installed pack is not pinned to a hash. |
+| `DOC170` | An installed pack's capabilities have widened since the receipt this repository accepted. Error. A pack never accepted at all is a note, and a change granting nothing new is a warning. |
+| `DOC171` | A **bound** prompt's projection does not open with `guardrail:baseline`. Warns rather than fails: it is legal and must be visible. |
+| `DOC172` | An installed pack is not pinned. `unknown` when there is no manifest to read, which is not the same as unpinned. |
 
-`DOC170` implies an acknowledgement spelling — `lockstep.use(AcmeTDD, acknowledged="2.4.0")` is the
-obvious one, and it is deliberately in the module rather than in a lockfile, because the thing being
-acknowledged is a grant.
+**Resolved:** the acknowledgement is the committed record at `.lockstep/packs/<name>.json`, not a
+call in `lockstep.py`. A version string in code says *when* something was accepted and not *what*,
+and the comparison that matters is over capabilities, offers and the layer projection. It also
+leaves `lockstep.py` free of bookkeeping a tool maintains, which is the same instinct as printing
+the bind lines rather than writing them.
 
 ---
 
 ## 11. Open
 
-- **Does `acknowledged=` belong on `use()`?** It is the right place for the grant and the wrong shape
-  for `use()`, whose job is completion rather than policy. An alternative is a separate
-  `lockstep.trust(AcmeTDD, "2.4.0")` line that reads as what it is.
+- ~~**Does `acknowledged=` belong on `use()`?**~~ **Answered: neither.** The acknowledgement is a
+  committed receipt file (§4), so `use()` keeps its single job and `lockstep.py` carries no
+  bookkeeping.
 - **Prompt packs and `emphasis`.** A data pack cannot ship a `Prompt` subclass, so the version label
   and any emphasis default live in the adopter's repository. Whether `pack.toml` should be allowed to
   carry an advisory emphasis string — read as data, like `Frontmatter` — or whether that starts an

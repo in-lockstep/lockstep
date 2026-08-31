@@ -63,8 +63,10 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _history_integrity(report, path)
     _egress(report)
     _prompt_bodies(report)
+    _packs(report, path)
     if lockstep is not None:
         _model_routes(report, lockstep)
+        _pack_guardrails(report, lockstep)
     if strict:
         _strict_policy(report, path)
         if lockstep is not None:
@@ -696,3 +698,100 @@ def _wrap(text: str, width: int) -> list[str]:
     if current:
         lines.append(current)
     return lines
+
+
+def _packs(report: Report, root: Path) -> None:
+    """DOC170-172. What an installed pack may do, against what this repository accepted.
+
+    The comparison is possible at all because a receipt is canonical and derived: `in-lockstep add`
+    recorded one, this re-derives from the code that is installed now, and the difference between
+    them is a fact rather than a judgement.
+
+    Only DOC170 is an error, and the line it draws is agency. A pack that gained a prompt, a
+    version or a corpus case has changed; a pack that gained `reaches_network` may now do something
+    this repository never agreed to, and the two should not fail the same way. Everything else here
+    warns, in the same posture the standards layer takes about removal: visible, not impossible.
+    """
+    from .packs import installed, pinning
+    from .receipt import compare, read_record, receipt_for_pack
+
+    try:
+        packs = installed()
+    except Exception:  # pragma: no cover - defensive: a broken environment is not a finding here
+        return
+    if not packs:
+        return
+
+    for subject in packs:
+        try:
+            derived = receipt_for_pack(subject)
+        except Exception as e:  # noqa: BLE001 - a pack that cannot be described is worth saying
+            report.add(
+                "DOC170",
+                Severity.WARNING,
+                f"pack {subject.name!r} could not be described: {e}",
+                "An installed pack this cannot read is one nothing can check before it runs.",
+            )
+            continue
+
+        drift = compare(read_record(root, subject.name), derived)
+        if not drift.accepted:
+            report.add(
+                "DOC170",
+                Severity.NOTE,
+                f"pack {subject.name!r} is installed and was never accepted here",
+                f"Ordinary until you bind it — installing offers a pack, it does not apply one. "
+                f"`in-lockstep add {subject.name}` records what it may do.",
+            )
+        elif drift.widened:
+            report.add(
+                "DOC170",
+                Severity.ERROR,
+                f"pack {subject.name!r} may now do more than this repository accepted: "
+                f"+{', +'.join(drift.widened)}",
+                f"Read what changed, then accept it in a diff: "
+                f"`in-lockstep add {subject.name} --accept`, and commit the record.",
+            )
+        elif drift.changes:
+            report.add(
+                "DOC170",
+                Severity.WARNING,
+                f"pack {subject.name!r} changed since it was accepted: {'; '.join(drift.changes)}",
+                f"No new agency, so this is a note rather than a refusal. "
+                f"`in-lockstep add {subject.name}` re-records it.",
+            )
+
+        state = pinning(root, subject.distribution)
+        if state == "unpinned":
+            report.add(
+                "DOC172",
+                Severity.WARNING,
+                f"pack {subject.name!r} is installed but not pinned",
+                "A receipt describes the code installed now; a pin is what makes that the code "
+                "installed next time. Without one, capabilities were accepted for a range.",
+            )
+
+
+def _pack_guardrails(report: Report, lockstep: Any) -> None:
+    """DOC171. A bound prompt whose stack no longer opens with the framework's baseline.
+
+    Legal, and greppable, and exactly the thing a reader of somebody else's extension most needs
+    told — so it warns rather than refuses, and it reads the BOUND adapters rather than the
+    installed packs, because what matters is the prompt a run would actually send.
+    """
+    from .receipt import receipt_for
+
+    try:
+        derived = receipt_for(lockstep, root=Path(lockstep.repo.root))
+    except Exception:  # pragma: no cover - defensive
+        return
+    for prompt in derived["prompts"]:
+        if not prompt["guardrails_intact"]:
+            report.add(
+                "DOC171",
+                Severity.WARNING,
+                f"{prompt['label']} does not open with the shipped guardrail baseline",
+                f"Its stack starts {prompt['projection'][0] if prompt['projection'] else '(empty)'}. "
+                f"Constructing a fresh PromptLayers replaces the baseline; `plus()` appends and "
+                f"keeps it. `in-lockstep show-prompt {prompt['label']} --diff` shows the change.",
+            )

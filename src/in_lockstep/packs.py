@@ -273,3 +273,39 @@ def pack(name: str, entries: Any = None) -> Pack:
         f"Packs arrive by being installed — `uv add <distribution>` — and take effect by being "
         f"named in .lockstep/lockstep.py."
     )
+
+
+def pinning(root: Path, distribution: str) -> str:
+    """`pinned`, `unpinned`, or `unknown` — whether this project fixes the pack's version.
+
+    A receipt describes the code that is installed right now; a pin is what makes that the code
+    that will be installed next time. Without one, a repository that accepted a pack's capabilities
+    has accepted them for a version range, which is not the same thing at all.
+
+    `unknown` when there is no manifest to read, because a project this cannot inspect has not been
+    checked. Reporting it as pinned would be the reassuring answer, and reporting it as unpinned
+    would be an accusation nothing supports.
+    """
+    if not distribution:
+        return "unknown"
+    lock = root / "uv.lock"
+    if lock.is_file():
+        # uv.lock pins a version and a hash for everything it resolves, so naming the distribution
+        # there IS the pin. Read as text: the file is TOML, and parsing it to answer a membership
+        # question would make this care about a lockfile format that is not ours.
+        needle = f'name = "{distribution}"'
+        if needle in lock.read_text():
+            return "pinned"
+        return "unpinned"
+    manifest = root / "pyproject.toml"
+    if not manifest.is_file():
+        return "unknown"
+    try:
+        project = tomllib.loads(manifest.read_text()).get("project") or {}
+    except tomllib.TOMLDecodeError:
+        return "unknown"
+    for dependency in project.get("dependencies") or ():
+        text = str(dependency)
+        if text.split("[")[0].split("=")[0].split(">")[0].split("<")[0].strip() == distribution:
+            return "pinned" if "==" in text else "unpinned"
+    return "unpinned"

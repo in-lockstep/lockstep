@@ -236,7 +236,18 @@ runs from becoming a string a ticket body could eventually reach.
 ```bash
 in-lockstep pack ls                              # offered, not in force
 in-lockstep pack describe acme-review-prompts    # what it holds, before you trust it
+in-lockstep add acme-review-prompts              # accept it, and print the lines to paste
 ```
+
+`add` re-derives the receipt from the code that is installed, compares it with what this repository
+accepted before, records the result at `.lockstep/packs/<name>.json` — commit that file, it is the
+acknowledgement — and prints the lines. It does not write `lockstep.py` and it does not install
+anything: putting a stranger's code on your machine belongs in your dependency diff.
+
+A capability the pack did not previously hold is refused until `--accept` says so, because more
+agency is the change that should cost a decision. `doctor` re-derives against the record afterwards:
+`DOC170` fails on widened capabilities, `DOC171` warns when a bound prompt no longer opens with the
+shipped baseline, `DOC172` warns when a pack is installed unpinned.
 
 ```python
 from in_lockstep.packs import pack

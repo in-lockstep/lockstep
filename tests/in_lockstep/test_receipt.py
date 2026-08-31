@@ -57,8 +57,9 @@ def test_capabilities_come_off_the_bound_object(tmp_path: Path) -> None:
 
 
 def test_a_replaced_layer_stack_is_flagged_rather_than_refused(tmp_path: Path) -> None:
-    """Constructing a fresh `PromptLayers` drops the shipped baseline. That is legal — and it is
-    the one thing a reader of somebody else's extension most needs told, so it is a field."""
+    """GATE-PACK-2, the receipt half. Constructing a fresh `PromptLayers` drops the shipped
+    baseline. That is legal — and it is the one thing a reader of somebody else's extension most
+    needs told, so it is a field rather than a refusal."""
     step = _lockstep(tmp_path)
     step.bind(Review, AiReview(layers=PromptLayers(guardrails=(("acme/only-ours", "Do not xxx."),))))
     receipt = receipt_for(step, root=tmp_path)
