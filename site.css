@@ -245,7 +245,9 @@ section { padding: 92px 0; position: relative; }
 
 /* ---------- personas ---------- */
 
-.roles { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+/* Five roles, and they should read as one row: "the same framework, five questions". At 230px
+   the fifth orphaned onto a line of its own, which read as an afterthought rather than a set. */
+.roles { display: grid; gap: 18px 20px; grid-template-columns: repeat(auto-fit, minmax(194px, 1fr)); }
 .role { border-top: 2px solid var(--line); padding-top: 16px; }
 .role b { display: block; font-size: 15.5px; margin-bottom: 4px; }
 .role span { font-size: 14.5px; color: var(--text-3); }
