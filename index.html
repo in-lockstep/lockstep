@@ -4,888 +4,242 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>in-lockstep — an agentic SDLC framework for Python</title>
-<meta name="description" content="Your lifecycle is executable code. Review, implement, fix, triage, backport and RFE — run by AI models under budgets, gates and a tamper-evident ledger. Eleven enterprise personas read the repo; this page is what they found.">
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="2" y="20" width="8" height="8" fill="%23b0402c"/><rect x="12" y="12" width="8" height="8" fill="%231c1a17"/><rect x="22" y="4" width="8" height="8" fill="%23b0402c"/></svg>'>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --paper: #faf7f2;
-    --paper-deep: #f3eee5;
-    --ink: #1c1a17;
-    --muted: #6f675b;
-    --faint: #948b7d;
-    --rule: #e2dbcf;
-    --rule-dark: #c9c0b0;
-    --accent: #b0402c;
-    --accent-deep: #8e3323;
-    --runs: #3e6b4f;
-    --partial: #96690f;
-    --term-bg: #21201c;
-    --term-ink: #d9d3c7;
-    --term-dim: #8f897c;
-    --term-green: #8fae94;
-    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
-    --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 16px;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-  }
-  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--rule-dark); }
-  a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
-  .kicker {
-    font-family: var(--mono); font-size: 12px; font-weight: 500;
-    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
-  }
-  code, .mono { font-family: var(--mono); }
-
-  /* ---------- header ---------- */
-  header {
-    border-bottom: 1px solid var(--rule);
-    background: var(--paper);
-  }
-  .nav {
-    display: flex; align-items: baseline; gap: 28px;
-    padding: 18px 0;
-  }
-  .wordmark {
-    font-family: var(--mono); font-weight: 600; font-size: 17px;
-    color: var(--ink); border-bottom: none; letter-spacing: -0.02em;
-  }
-  .wordmark:hover { color: var(--accent); }
-  .wordmark .tick { color: var(--accent); }
-  .nav-links { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
-  .nav-links a {
-    font-family: var(--mono); font-size: 13px; color: var(--muted);
-    border-bottom: none;
-  }
-  .nav-links a:hover { color: var(--accent); }
-
-  /* ---------- hero ---------- */
-  .hero { padding: 72px 0 64px; border-bottom: 1px solid var(--rule); position: relative; overflow: hidden; }
-  .hero-grid {
-    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-    gap: 56px; align-items: start;
-  }
-  h1 {
-    font-family: var(--serif); font-weight: 400;
-    font-size: clamp(44px, 6vw, 72px);
-    line-height: 1.02; letter-spacing: -0.015em;
-    margin: 18px 0 22px;
-  }
-  h1 em { font-style: italic; color: var(--accent); }
-  .lede { font-size: 18px; color: var(--muted); max-width: 34em; margin-bottom: 30px; }
-  .lede strong { color: var(--ink); font-weight: 500; }
-  .install {
-    display: flex; flex-direction: column; gap: 8px;
-    font-family: var(--mono); font-size: 14px;
-    background: var(--term-bg); color: var(--term-ink);
-    padding: 16px 20px; border-radius: 4px; margin-bottom: 26px;
-    overflow-x: auto;
-  }
-  .install .p { color: var(--term-green); user-select: none; }
-  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-  .btn {
-    display: inline-block; font-family: var(--mono); font-size: 14px; font-weight: 500;
-    padding: 11px 22px; border: 1px solid var(--ink); border-radius: 3px;
-    color: var(--ink); background: transparent;
-  }
-  .btn:hover { background: var(--ink); color: var(--paper); border-bottom-color: var(--ink); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fdfbf7; }
-  .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
-
-  .codecard {
-    background: var(--term-bg); border-radius: 5px; overflow: hidden;
-    box-shadow: 0 1px 0 var(--rule-dark), 0 14px 40px -18px rgba(28,26,23,0.35);
-  }
-  .codecard-bar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 16px; border-bottom: 1px solid #35332d;
-    font-family: var(--mono); font-size: 12px; color: var(--term-dim);
-  }
-  .codecard pre {
-    padding: 18px 20px; font-family: var(--mono); font-size: 13px;
-    line-height: 1.7; color: var(--term-ink); overflow-x: auto;
-  }
-  .c-com { color: var(--term-dim); }
-  .c-kw { color: #c9a86a; }
-  .c-str { color: var(--term-green); }
-  .c-num { color: #c98a7a; }
-  .codecard-note {
-    font-family: var(--mono); font-size: 12px; color: var(--muted);
-    padding: 10px 4px 0; line-height: 1.6;
-  }
-  .steps-motif { margin-top: 28px; display: block; }
-
-  /* ---------- section scaffolding ---------- */
-  section { padding: 72px 0; border-bottom: 1px solid var(--rule); }
-  h2 {
-    font-family: var(--serif); font-weight: 400;
-    font-size: clamp(32px, 4vw, 46px); line-height: 1.1;
-    margin: 14px 0 16px; letter-spacing: -0.01em;
-  }
-  h2 em { font-style: italic; color: var(--accent); }
-  .section-intro { color: var(--muted); max-width: 44em; font-size: 17px; }
-  .section-intro + .section-intro { margin-top: 12px; }
-
-  /* ---------- panel ledger ---------- */
-  .ledger { margin-top: 44px; border-top: 1px solid var(--rule-dark); }
-  .persona {
-    display: grid; grid-template-columns: 240px minmax(0, 1fr);
-    gap: 32px; padding: 30px 0 26px;
-    border-bottom: 1px solid var(--rule);
-  }
-  .persona-id { display: flex; gap: 14px; align-items: baseline; }
-  .persona-num {
-    font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 500;
-  }
-  .persona-role h3 {
-    font-family: var(--sans); font-weight: 600; font-size: 16px; line-height: 1.35;
-  }
-  .persona-role .cares { font-size: 13px; color: var(--faint); margin-top: 4px; line-height: 1.5; }
-  .persona-find .feat {
-    font-family: var(--serif); font-size: 24px; line-height: 1.2; margin-bottom: 10px;
-  }
-  .persona-find blockquote {
-    color: var(--muted); font-size: 15.5px; max-width: 46em;
-  }
-  .persona-find blockquote::before { content: "“"; color: var(--rule-dark); }
-  .persona-find blockquote::after { content: "”"; color: var(--rule-dark); }
-  .evidence {
-    font-family: var(--mono); font-size: 12.5px; color: var(--faint);
-    margin-top: 12px; line-height: 1.8; overflow-wrap: anywhere;
-  }
-  .evidence b { color: var(--muted); font-weight: 500; }
-  .reservation {
-    margin-top: 14px; padding-left: 14px; border-left: 2px solid var(--accent);
-    font-size: 14px; color: var(--muted); max-width: 46em;
-  }
-  .reservation .tag {
-    font-family: var(--mono); font-size: 11px; font-weight: 600;
-    letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
-    display: block; margin-bottom: 2px;
-  }
-  details.more { margin-top: 14px; max-width: 46em; }
-  details.more summary {
-    cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--muted);
-    list-style: none; display: inline-flex; align-items: center; gap: 8px;
-  }
-  details.more summary::-webkit-details-marker { display: none; }
-  details.more summary::before {
-    content: ""; width: 8px; height: 8px; flex: none;
-    border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent);
-    transform: rotate(-45deg); transition: transform 0.15s ease; margin-top: -2px;
-  }
-  details.more[open] summary::before { transform: rotate(45deg); margin-top: -4px; }
-  details.more summary:hover { color: var(--accent); }
-  details.more ul { margin: 12px 0 4px 2px; list-style: none; }
-  details.more li {
-    font-size: 14px; color: var(--muted); padding-left: 18px; position: relative; margin-bottom: 10px;
-  }
-  details.more li::before {
-    content: ""; position: absolute; left: 0; top: 9px;
-    width: 8px; height: 2px; background: var(--rule-dark);
-  }
-  details.more li b { color: var(--ink); font-weight: 500; }
-
-  /* ---------- convergence ---------- */
-  .tally { margin-top: 44px; display: grid; gap: 0; border-top: 1px solid var(--rule-dark); }
-  .tally-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) 260px 70px;
-    gap: 24px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--rule);
-  }
-  .tally-row .what { font-size: 16px; }
-  .tally-row .what b { font-weight: 600; }
-  .tally-row .what span { display: block; font-size: 13px; color: var(--faint); margin-top: 2px; }
-  .tally-marks { display: flex; gap: 5px; }
-  .tally-marks i {
-    width: 14px; height: 22px; border: 1px solid var(--rule-dark);
-    border-radius: 1px; background: transparent;
-  }
-  .tally-marks i.on { background: var(--accent); border-color: var(--accent); }
-  .tally-count { font-family: var(--mono); font-size: 13px; color: var(--muted); text-align: right; }
-  .tally-note { margin-top: 22px; font-size: 15px; color: var(--muted); max-width: 46em; }
-
-  /* ---------- ships matrix ---------- */
-  .matrix-scroll { margin-top: 40px; overflow-x: auto; }
-  table.matrix { width: 100%; border-collapse: collapse; min-width: 640px; }
-  table.matrix th {
-    font-family: var(--mono); font-size: 11.5px; font-weight: 600;
-    letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
-    text-align: left; padding: 0 18px 12px 0; border-bottom: 1px solid var(--rule-dark);
-  }
-  table.matrix td {
-    padding: 13px 18px 13px 0; border-bottom: 1px solid var(--rule);
-    font-size: 14.5px; vertical-align: top;
-  }
-  table.matrix td.cap { font-weight: 500; white-space: nowrap; }
-  table.matrix td.what { color: var(--muted); font-size: 13.5px; }
-  table.matrix td.what code { font-size: 12.5px; background: var(--paper-deep); padding: 1px 5px; border-radius: 2px; }
-  .stamp {
-    font-family: var(--mono); font-size: 11px; font-weight: 600;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 2px; white-space: nowrap;
-  }
-  .stamp.runs { color: var(--runs); border: 1px solid var(--runs); }
-  .stamp.partial { color: var(--partial); border: 1px solid var(--partial); }
-  .stamp.planned { color: var(--faint); border: 1px dashed var(--rule-dark); }
-  .matrix-note { margin-top: 20px; font-size: 14px; color: var(--muted); max-width: 46em; }
-
-  /* ---------- doors ---------- */
-  .doors { margin-top: 44px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
-  .door { background: var(--paper); padding: 26px 24px 30px; display: flex; flex-direction: column; gap: 10px; }
-  .door:hover { background: var(--paper-deep); }
-  .door .q { font-family: var(--serif); font-size: 24px; line-height: 1.15; }
-  .door p { font-size: 14px; color: var(--muted); }
-  .door .links { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: 8px; }
-  .door .links a { font-family: var(--mono); font-size: 13px; border-bottom: none; }
-  .door .links a::before { content: "→ "; color: var(--rule-dark); }
-  .door .links a:hover::before { color: var(--accent); }
-
-  /* ---------- footer ---------- */
-  footer { padding: 44px 0 60px; color: var(--faint); font-size: 13.5px; }
-  footer .cols { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-  footer a { color: var(--muted); border-bottom-color: var(--rule); }
-  footer .fine { margin-top: 18px; max-width: 56em; line-height: 1.7; }
-
-  /* ---------- responsive ---------- */
-  @media (max-width: 920px) {
-    .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
-    .persona { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-    .persona-role .cares { display: none; }
-    .doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .tally-row { grid-template-columns: minmax(0, 1fr) 60px; }
-    .tally-marks { display: none; }
-  }
-  @media (max-width: 560px) {
-    section, .hero { padding: 52px 0; }
-    .doors { grid-template-columns: 1fr; }
-    .nav-links { gap: 14px; }
-  }
-</style>
+<meta name="description" content="Your lifecycle is executable code. Five reviewers read the source; here is what they found, and the terminal output that convinced them.">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header>
-  <div class="wrap nav">
-    <a class="wordmark" href="#"><span class="tick">▮</span> in-lockstep</a>
-    <nav class="nav-links">
-      <a href="#panel">the panel</a>
-      <a href="#converged">convergence</a>
-      <a href="#ships">what ships</a>
-      <a href="#doors">docs</a>
-      <a href="https://github.com/in-lockstep/lockstep">github</a>
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><span>▮</span> in-lockstep</a>
+    <nav>
+      <a href="#aspects">What they found</a>
+      <a href="#reservation">What they doubted</a>
+      <a href="#ships">What ships</a>
+      <a href="https://github.com/in-lockstep/lockstep">GitHub</a>
     </nav>
-  </div>
-</header>
-
-<div class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <span class="kicker">An agentic SDLC framework for Python</span>
-      <h1>Your lifecycle is <em>executable&nbsp;code.</em></h1>
-      <p class="lede">Not a manifest, not a spec, and not something that generates a pipeline —
-      <strong>the module you write is the thing that runs.</strong> Code review, implement, bug fix,
-      triage, backport and RFE, executed by AI models under budgets, approval gates and a
-      tamper-evident ledger.</p>
-      <div class="install">
-        <div><span class="p">$</span> uv tool install 'in-lockstep[anthropic]'</div>
-        <div><span class="p">$</span> in-lockstep init</div>
-      </div>
-      <div class="cta-row">
-        <a class="btn primary" href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">Get started — $0, no key</a>
-        <a class="btn" href="https://github.com/in-lockstep/lockstep">View the repository</a>
-      </div>
-      <svg class="steps-motif" width="220" height="56" viewBox="0 0 220 56" aria-hidden="true">
-        <rect x="0"   y="40" width="24" height="16" fill="#b0402c"/>
-        <rect x="32"  y="30" width="24" height="16" fill="#1c1a17" opacity="0.85"/>
-        <rect x="64"  y="20" width="24" height="16" fill="#b0402c"/>
-        <rect x="96"  y="10" width="24" height="16" fill="#1c1a17" opacity="0.85"/>
-        <rect x="128" y="0"  width="24" height="16" fill="#b0402c"/>
-        <line x1="0" y1="55.5" x2="220" y2="55.5" stroke="#c9c0b0" stroke-width="1"/>
-      </svg>
-    </div>
-    <div>
-      <div class="codecard">
-        <div class="codecard-bar">.lockstep/lockstep.py — the whole configuration</div>
-        <pre><span class="c-kw">from</span> in_lockstep <span class="c-kw">import</span> Lockstep
-<span class="c-kw">from</span> in_lockstep.adapters <span class="c-kw">import</span> (
-    PytestTest, RuffValidate, Test, Validate,
-)
-<span class="c-kw">from</span> in_lockstep.middleware <span class="c-kw">import</span> (
-    CostBudget, otel,
-)
-
-lockstep = Lockstep.detect()
-lockstep.bind(Test, PytestTest(args=[<span class="c-str">"-q"</span>]))
-lockstep.bind(Validate, RuffValidate())
-lockstep.middleware += [
-    otel(), CostBudget(usd=<span class="c-num">2.00</span>),
-]</pre>
-      </div>
-      <p class="codecard-note">A change to your review policy becomes a diff in a pull request —
-      with blame, history and rollback. Extend a verb by subclassing, override by rebinding,
-      compose cross-cutting concerns as middleware. <code>in-lockstep ls</code> prints what will
-      actually run.</p>
-    </div>
-  </div>
+  </header>
 </div>
 
-<section id="panel">
-  <div class="wrap">
-    <span class="kicker">The panel</span>
-    <h2>Eleven readers, <em>one repository.</em></h2>
-    <p class="section-intro">Before this page was written, eleven independent reviewers — each
-    playing a different role in an enterprise software organization — read the repository and
-    reported the features that mattered most to them, with the evidence that backs each claim.</p>
-    <p class="section-intro">Their reservations are published alongside their endorsements,
-    because that is this project's own discipline: a claim without a test is just a claim.
-    (<code>docs/needs.md</code> lists "an entry surface that routes by persona" as an open need.
-    You are looking at it.)</p>
-
-    <div class="ledger">
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">01</span>
-          <div class="persona-role">
-            <h3>Engineering Manager</h3>
-            <p class="cares">Delivery predictability, spend visibility, adoption friction.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Spend controls, before the invoice</p>
-          <blockquote>I can put a real dollar cap on what a run — and a day — costs, instead of
-          finding out from an invoice line after a chat-ops loop fires all night.</blockquote>
-          <p class="evidence"><b>evidence</b> · CostBudget(usd=2.00) · IN_LOCKSTEP_DAILY_LIMIT ·
-          org-limit attestation checked by <b>doctor</b> (DOC101)</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Cassette replay for onboarding and CI.</b> The team demos and CI-gates the
-              review workflow with zero API spend and zero flakiness from live model calls.</li>
-              <li><b>A ledger for 2 a.m. accountability.</b> "Who approved this AI change and what
-              did it cost" is answered by an append-only record, not a Slack thread.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          <code>doctor</code> fails a fresh repo with two errors on purpose — the setup pass is
-          real work, and it gets skipped under deadline pressure unless doctor is a hard
-          onboarding gate.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">02</span>
-          <div class="persona-role">
-            <h3>Director of Engineering</h3>
-            <p class="cares">Standardization across ~50 engineers, governance that scales, lock-in.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Org standards as an installable package</p>
-          <blockquote>One place to set the floor — deny_tools, input scanning, turn limits —
-          and a repo can tighten it but never quietly weaken it. I am not chasing two hundred
-          copy-pasted config files.</blockquote>
-          <p class="evidence"><b>evidence</b> · in_lockstep.standards entry points at Tier.PLUGIN ·
-          tighten-only merge · worked example in examples/acme-standards ·
-          <b>in-lockstep ls</b> as the audit surface</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>An honest verification story.</b> The ledger's tamper-evidence states exactly
-              where the guarantee ends — a force-push is stopped by branch protection at the
-              remote, not by any local walk — instead of papering over it.</li>
-              <li><b>Not a lock-in play.</b> Providers are install-time extras
-              (<code>[anthropic]</code>, <code>[openai]</code>, <code>[google]</code>,
-              <code>[bedrock]</code>), and cassettes recorded against one provider replay against
-              another.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          As a library, the governance floor depends on every team wiring the trampoline, branch
-          protection and egress enforcement correctly — a real rollout and audit burden the
-          project itself is candid about.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">03</span>
-          <div class="persona-role">
-            <h3>Senior Tech Lead</h3>
-            <p class="cares">Architecture quality, extension seams, allergic to magic.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Tamper-evidence, not tamper-logging</p>
-          <blockquote>Most audit logs are a table anyone with prod access can quietly edit.
-          This one detects its own rewriting — the difference between an audit trail and a
-          compliance placebo.</blockquote>
-          <p class="evidence"><b>evidence</b> · GitLedger.verify() walks the lockstep-history
-          orphan branch · records modified or deleted after append are flagged ·
-          <b>doctor</b> fails on a rewritten ledger (DOC167)</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Capability-driven policy, one seam.</b> Bindings declare
-              <code>EXECUTES_CODE</code>, <code>REACHES_NETWORK</code>,
-              <code>SPENDS_BUDGET</code> — so egress enforcement, approval gates and retry-safety
-              key off declared capabilities instead of adapter-name string matching scattered
-              through middleware.</li>
-              <li><b>A trampoline contract that can't rot.</b> The credential split is six
-              enumerated, testable clauses in <code>docs/trampoline.md</code>, with a CI test
-              enforcing the workflow YAML's shell-line budget — not tribal knowledge in a
-              wiki.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          Every mitigation runs in the same process as the model call. That is a fundamentally
-          different trust boundary than an execution substrate, and the docs say so plainly.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">04</span>
-          <div class="persona-role">
-            <h3>Team Lead</h3>
-            <p class="cares">Day-one friction, the daily loop, whether juniors can use it safely.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">The lifecycle you can actually read</p>
-          <blockquote>A pull request that touches lockstep.py is reviewable like any other code
-          change, not a black box — <code>ls</code> prints the resolved bindings, middleware,
-          standards and policy that will actually run.</blockquote>
-          <p class="evidence"><b>evidence</b> · in-lockstep ls · sample output in
-          docs/getting-started.md · "a container is harder to read than a manifest, which is
-          what ls is for"</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Safe for juniors on day one.</b> <code>review --offline</code> replays real,
-              recorded model findings for zero dollars and zero risk — before anyone is trusted
-              with a live key or a budget.</li>
-              <li><b>It refuses rather than trusts.</b> An adapter that lets a model write or
-              execute with no approval path in the middleware chain is refused at startup
-              (GATE-APPROVAL-1).</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          The honesty is itself the signal: GitLab is "partial", the shared ledger store is
-          "planned", and a fresh install fails <code>doctor</code> until someone who has read the
-          controls crosswalk does the setup pass.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">05</span>
-          <div class="persona-role">
-            <h3>Software Engineer</h3>
-            <p class="cares">The local loop, debugging, working without a key.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Offline, keyless, deterministic — on a fresh clone</p>
-          <blockquote>No key, no network, no recording of my own — <code>review --offline</code>
-          still shows real model findings from a shipped cassette. That is how I poke at a tool
-          before I trust it with my org's key.</blockquote>
-          <p class="evidence"><b>evidence</b> · cassette recorded against a real merged PR ships
-          in the wheel · replays print <b>cost $0.0000 (replayed; nothing was billed)</b></p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b><code>show-prompt</code>, offline.</b> When a review comes back weird, "what
-              was the model actually told?" must not cost a run — the composed prompt prints
-              with no key at all.</li>
-              <li><b>Config is Python I can grep.</b> <code>bind()</code> and <code>route()</code>
-              calls I can diff and subclass — not another YAML DSL to fight.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          A misbehaving strategy runs with whatever access my process already has — the
-          isolation (egress policy, sandboxed worktrees, doctor checks) is mine to wire, not
-          free.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">06</span>
-          <div class="persona-role">
-            <h3>Quality Engineer</h3>
-            <p class="cares">Determinism, reproducibility, how AI output is verified.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Cassettes at the LLM seam, not the HTTP layer</p>
-          <blockquote>A test suite that hits a live model is a slot machine. Replays are
-          deterministic — and a replay that would silently call out raises an error instead,
-          because "a replay that silently called out would not be a replay."</blockquote>
-          <p class="evidence"><b>evidence</b> · cassettes keyed on the provider-agnostic
-          LLMInput/LLMOutput seam · they capture tool IO as well as model IO ·
-          ReplayProvider refuses a cassette miss</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>A gate ledger with a taxonomy for lying to yourself.</b>
-              <code>design/gates.md</code> distinguishes <i>held</i> / <i>unit only</i> /
-              <i>unmet</i> — and admits which of its own controls were caught existing with no
-              caller on any live path.</li>
-              <li><b>Eval subjects that can't drift silently.</b> Subjects are keyed on content
-              hashes of the composed prompt and skillset, and the coverage gate fails when the
-              floor quietly rises unrecorded, not just when it drops.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          The flaky-test adapter is still <i>planned</i> (roadmap item 26) — today an unattended
-          <code>fix</code> run has no first-class signal to tell a flaky test from a broken
-          one.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">07</span>
-          <div class="persona-role">
-            <h3>Documentation Lead</h3>
-            <p class="cares">Docs accuracy, drift, information architecture.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Docs drift is a failing test</p>
-          <blockquote>My biggest fear is a table that says "runs" for a feature that quietly
-          broke. Here, a runs row must name a verb that ships, a planned row must not have
-          quietly shipped — and CI enforces both directions.</blockquote>
-          <p class="evidence"><b>evidence</b> · tests/in_lockstep/test_docs.py execs the README's
-          code block and the cookbook's recipes · quickstart output lines are asserted against
-          the real CLI</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Copy-paste can't break.</b> The test suite's own docstring records the
-              postmortem — three separate readers hit the same <code>NameError</code> from an
-              unexecuted README snippet, so now the snippets execute in CI.</li>
-              <li><b>Gaps owned in writing.</b> The controls crosswalk tells the reader to
-              cross-check <code>design/gates.md</code> before citing any of its rows as
-              evidence — self-correction left visible in the text.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          There was no persona-routed entry surface — <code>docs/needs.md</code> N13, open.
-          This page is the answer to that reservation.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">08</span>
-          <div class="persona-role">
-            <h3>Product Manager</h3>
-            <p class="cares">Ticket-to-PR flow, triage automation, honest scoping.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">/implement — ticket in, pull request out</p>
-          <blockquote>A developer types /implement on an issue and the framework reads the
-          ticket, stages a change and opens a PR — the idea-becomes-shipped-code loop I am
-          trying to shorten, without anyone hand-holding it through CI.</blockquote>
-          <p class="evidence"><b>evidence</b> · three-job trampoline (gate / work / propose) ·
-          issue_comment and ai-generated-label triggers · docs/trampoline.md</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>My backlog lives in Jira, and that's fine.</b> A native
-              <code>JiraSource</code> reads the ticket, parses acceptance criteria out of the
-              description, and transitions and comments back.</li>
-              <li><b>Ideas become tickets a human approves.</b> <code>rfe --idea "…"</code>
-              drafts problem, proposal and acceptance criteria — and never files itself;
-              <code>--create</code> is a separate, human step.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          Before promising this to a cross-functional team I need our exact tracker and CI host
-          in the "runs" column — GitLab is partial, and there's no Linear or Azure DevOps
-          source.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">09</span>
-          <div class="persona-role">
-            <h3>Business Leader</h3>
-            <p class="cares">Cost control, ROI, audit trail, runaway-spend risk.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">Cost avoidance, not just cost caps</p>
-          <blockquote>Routine triage routes to a local model and bills exactly zero — while
-          tokens are still counted, because free is not unmeasured. Premium spend goes where
-          premium judgment is needed.</blockquote>
-          <p class="evidence"><b>evidence</b> · route(Verb.TRIAGE) to a local model — the $0
-          path · per-run CostBudget · rolling 24-hour IN_LOCKSTEP_DAILY_LIMIT refused
-          pre-run</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>An answer for the auditor.</b> Every run lands in an append-only record;
-              <code>report</code> flags anything rewritten after append rather than staying
-              silent.</li>
-              <li><b>Demos are free forever.</b> Record a workflow once, replay it
-              deterministically at $0 for every evaluation, demo and regression check
-              after.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          The daily ceiling sums this clone's own ledger — until the shared store ships, the
-          provider-console org limit is the real backstop, and the tool itself tells you to set
-          it.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">10</span>
-          <div class="persona-role">
-            <h3>Enterprise Customer</h3>
-            <p class="cares">Platform engineer at a regulated company; build-vs-buy.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">A privilege boundary, not a promise</p>
-          <blockquote>The process holding the model API key never also holds repo write access —
-          on GitHub, by not even installing the provider extra in the write job. That is a
-          control I can put in a SOC2 narrative.</blockquote>
-          <p class="evidence"><b>evidence</b> · trampoline clause 3: credentials never
-          co-resident · in-lockstep egress-manifest prints the hosts a run may dial ·
-          IN_LOCKSTEP_EGRESS=enforced probes a known-blocked host and refuses the run if it
-          connects</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Keyless CI.</b> GitHub OIDC exchanged at Anthropic — no
-              <code>ANTHROPIC_API_KEY</code> sitting in repository secrets at all.</li>
-              <li><b>Tamper-evidence with a documented blast radius.</b> The docs answer "how do
-              I know the run log wasn't rewritten," including the part local verification
-              cannot fix — before an incident forces the question.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          Keyless CI is Anthropic-specific today — a Bedrock or OpenAI lane in the same pipeline
-          is back to a static key. And the in-process posture is one I accept, not one I can
-          bolt on later.</p>
-        </div>
-      </article>
-
-      <article class="persona">
-        <div class="persona-id">
-          <span class="persona-num">11</span>
-          <div class="persona-role">
-            <h3>Vice President of Engineering</h3>
-            <p class="cares">Executive sponsor; defensibility to the board and auditors.</p>
-          </div>
-        </div>
-        <div class="persona-find">
-          <p class="feat">A system that doesn't grade its own homework</p>
-          <blockquote>The capability table is held by CI, the ledger detects rewritten history,
-          and the crosswalk publishes exactly which controls got weaker in the move to a
-          library. That is the kind of self-policing that survives due diligence.</blockquote>
-          <p class="evidence"><b>evidence</b> · two-sided what-ships test · GitLedger.verify() ·
-          controls-crosswalk rows marked "replaced, weaker by construction" with named
-          compensations</p>
-          <details class="more">
-            <summary>two more findings</summary>
-            <ul>
-              <li><b>Policy with blame and rollback.</b> Review policy is a Python diff in a
-              pull request — a lifecycle I can hold engineers accountable for in review, not a
-              rendered artifact.</li>
-              <li><b>They kill dead architectures.</b> ADR 0001 records the team archiving the
-              0.1.x compiler line rather than letting it linger — they'll do it again if this
-              bet stops paying.</li>
-            </ul>
-          </details>
-          <p class="reservation"><span class="tag">Filed reservation</span>
-          It's a 1.0 that replaced a 0.1.x with zero adopters. Before an org-wide rollout, show
-          me <code>report --by model</code> from real runs against our repositories — the
-          project's own standard of evidence, applied to itself.</p>
-        </div>
-      </article>
-
+<div class="wrap">
+  <section style="padding-top:56px">
+    <div class="col">
+      <p class="eyebrow">An agentic SDLC framework for Python</p>
+      <h1>Your lifecycle is executable code, and every claim on this page is a command you can run.</h1>
+      <p class="lede">Not a manifest, not a spec, not something that generates a pipeline. The
+        module you write is the thing that runs — and the black blocks on this site are bytes those
+        commands actually printed, not mock-ups.</p>
     </div>
-  </div>
-</section>
 
-<section id="converged">
-  <div class="wrap">
-    <span class="kicker">Convergence</span>
-    <h2>What eleven different jobs <em>agreed on.</em></h2>
-    <p class="section-intro">Each reviewer chose three features independently. Where different
-    incentives pick the same feature, that feature is probably load-bearing.</p>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>a clean checkout · no API key · no vendor account</b></div>
+<pre><span class="p">$</span> in-lockstep review --offline
 
-    <div class="tally">
-      <div class="tally-row">
-        <div class="what"><b>The tamper-evident ledger</b>
-          <span>Append-only orphan-branch records; verification that flags its own rewriting.</span></div>
-        <div class="tally-marks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="tally-count">6 / 11</div>
-      </div>
-      <div class="tally-row">
-        <div class="what"><b>Cassette replay — offline, keyless, $0</b>
-          <span>Deterministic replays at the LLM seam; the testing, debugging and eval story at once.</span></div>
-        <div class="tally-marks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="tally-count">5 / 11</div>
-      </div>
-      <div class="tally-row">
-        <div class="what"><b>The lifecycle as reviewable code</b>
-          <span>Python you can grep, diff, subclass and blame — with <code>ls</code> printing what actually runs.</span></div>
-        <div class="tally-marks"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="tally-count">3 / 11</div>
-      </div>
-      <div class="tally-row">
-        <div class="what"><b>Spend controls at three layers</b>
-          <span>Per-run predictive budget, rolling daily ceiling, org-limit attestation — plus a $0 local-model path.</span></div>
-        <div class="tally-marks"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="tally-count">3 / 11</div>
-      </div>
-      <div class="tally-row">
-        <div class="what"><b>The credential-split trampoline</b>
-          <span>The key-holding process and the write-holding process are never the same process.</span></div>
-        <div class="tally-marks"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="tally-count">2 / 11</div>
+<span class="c">config    local working tree</span>
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+review/security  <span class="g">succeeded</span>
+  actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows
+    word-splitting on paths with spaces or glob characters
+  actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}`
+    is interpolated directly into a shell script before variable assignment
+
+tokens    5361 in, 443 out
+cost      <span class="g">$0.0000  (replayed; nothing was billed)</span>
+ledger    lockstep-history:records/review-security-20260831T131848Z-8cdc.json</pre>
+      <p class="term-note">A real security review of a real merged pull request, replayed from a
+        cassette recorded against a real model. Deterministic, offline, and free.</p>
+    </div>
+
+    <div class="col">
+      <pre class="code"><span class="c"># install, and scaffold a lifecycle you own</span>
+uv tool install 'in-lockstep[anthropic]'
+in-lockstep init</pre>
+    </div>
+  </section>
+
+  <section id="reviewers">
+    <div class="col">
+      <h2>Five people read it. None of them was selling it.</h2>
+      <p>We ran five independent reviews of the source — not the README, the source — each by
+        someone with a different reason to say no. Everything quoted on this site comes from those
+        reviews, including the parts that are unflattering.</p>
+    </div>
+    <div class="people">
+      <div class="person"><b>Corporate Developer</b><span>will have to live with whatever is adopted</span></div>
+      <div class="person"><b>Development Manager</b><span>answers for it at 2am</span></div>
+      <div class="person"><b>Engineering Director</b><span>gets asked “can you prove that?”</span></div>
+      <div class="person"><b>VP of Engineering</b><span>owns the budget and the risk register</span></div>
+      <div class="person"><b>Open Source Engineer</b><span>reads source before README</span></div>
+    </div>
+  </section>
+
+  <section id="aspects">
+    <div class="col">
+      <h2>What they kept coming back to</h2>
+      <p>Six things, ordered by how many of the five raised them unprompted. Each has a page with
+        the full quotes, the mechanism, and what it does not do.</p>
+    </div>
+
+    <div class="aspects">
+      <a class="aspect" href="costs-nothing-to-try.html">
+        <span class="tally">4 of 5 raised it</span>
+        <h3>It costs nothing to try</h3>
+        <p>Cassettes replay at the model input/output seam, so a full agentic session runs offline,
+          deterministically, with no key and no spend.</p>
+        <p class="pull">I got a working, auditable run out of it in under a minute with no API key
+          and no vendor relationship.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+
+      <a class="aspect" href="claims-that-fail-ci.html">
+        <span class="tally">4 of 5 raised it</span>
+        <h3>Claims that fail CI</h3>
+        <p>The capability table is enforced in both directions. Controls that pass unit tests but
+          run on no live path get their own status, and the project used it against itself nine times.</p>
+        <p class="pull">This is the first one with a category for controls that exist, pass their
+          unit tests, and are called by nothing at runtime.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+
+      <a class="aspect" href="blast-radius.html">
+        <span class="tally">3 of 5 raised it</span>
+        <h3>The blast radius is designed</h3>
+        <p>The job holding the model key cannot write. The model stages changes it never applies.
+          A pull request stays a draft until its tests actually pass.</p>
+        <p class="pull">The write token and the model key are never in the same process, and the
+          file that defines the guardrails is one the agent is forbidden to touch.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+
+      <a class="aspect" href="spend-refused.html">
+        <span class="tally">3 of 5 raised it</span>
+        <h3>Spend is refused, not reported</h3>
+        <p>A run that cannot be priced does not start. Budgets merge to the lowest. The framework
+          says plainly which ceiling a bug could still defeat.</p>
+        <p class="pull">It refuses to start a run it cannot price. That is the only version of a
+          budget I have seen survive contact with an unattended trigger.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+
+      <a class="aspect" href="read-what-runs.html">
+        <span class="tally">3 of 5 raised it</span>
+        <h3>You can read what will run</h3>
+        <p>Config-as-code’s one real disadvantage is that a container is harder to read than a
+          manifest. One command prints the resolved answer; another derives it as an audit artifact.</p>
+        <p class="pull">One command and about four seconds, instead of an afternoon of reading YAML
+          and guessing which override won.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+
+      <a class="aspect" href="standards-that-travel.html">
+        <span class="tally">3 of 5 raised it</span>
+        <h3>Standards and extensions that travel</h3>
+        <p>An org floor arrives as a dependency and can only tighten. An extension pack arrives as
+          an offer and does nothing until a line you wrote puts it in force.</p>
+        <p class="pull">My problem was never authoring the standard, it was the repo that never got
+          the memo.</p>
+        <span class="more">Read the detail →</span>
+      </a>
+    </div>
+  </section>
+
+  <section id="reservation">
+    <div class="col">
+      <h2>What all five said next</h2>
+      <p>They agreed on the objection more than they agreed on the praise, and a project whose
+        pitch is honest accounting does not get to leave that off its own front page.</p>
+
+      <div class="limit">
+        <h3>Bus factor one, and no judged evidence yet</h3>
+        <p><strong>One author, nine days, no outside adopter.</strong> Every reviewer raised it
+          independently. The extension mechanism had never been installed from a real index until
+          the day this page was written; GitLab support has never run a live pipeline.</p>
+        <p><strong>The eval corpus is unjudged.</strong> The framework's own answer to “does this
+          produce good output” is currently that it cannot tell you — and it says so rather than
+          computing a number over an empty denominator:</p>
       </div>
     </div>
 
-    <p class="tally-note">And one pattern in the reservations: nearly every objection filed was
-    made possible by the project's own published gaps — the controls crosswalk that marks rows
-    <i>weaker</i>, the gates ledger that admits <i>unit only</i> and <i>unmet</i>. You can only
-    file a precise objection against a project that does its accounting in public.</p>
-  </div>
-</section>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>the project's own report on itself</b></div>
+<pre><span class="p">$</span> in-lockstep eval report
 
-<section id="ships">
-  <div class="wrap">
-    <span class="kicker">Honest numbers</span>
-    <h2>What ships <em>today.</em></h2>
-    <p class="section-intro">This table is kept honest by a CI test that reads it: a row claiming
-    <b>runs</b> must name a verb that ships, and a <b>planned</b> row must not — implementing a
-    feature without flipping its row fails the build, and so does deleting one the table still
-    advertises.</p>
+cases        27
+decided      0
+outstanding  <span class="w">27  (need a judge)</span>
+pass rate    <span class="w">n/a — nothing decided</span>
 
-    <div class="matrix-scroll">
-      <table class="matrix">
+<span class="c">A rubric nobody judged is outstanding, not passed.</span></pre>
+    </div>
+
+    <div class="col">
+      <div class="quote">
+        <blockquote>The self-documented weakness reads as credibility, not risk, and it is the
+          main reason I kept reading. That is a vendor that will not surprise me in an incident
+          review, which is worth more than a vendor with better numbers.</blockquote>
+        <p class="who"><b>VP of Engineering</b> <span>· on whether the honesty is an asset</span></p>
+      </div>
+      <p>What would change their minds is specific and written down: a judged corpus with a real
+        pass rate, ninety days of ledger from a repository the author does not own, and a second
+        maintainer with commit rights.</p>
+    </div>
+  </section>
+
+  <section id="ships">
+    <div class="col">
+      <h2>What ships today</h2>
+      <p>This table is mirrored from the README, where a test reads it in both directions: a row
+        claiming <strong>runs</strong> must name something that exists, and a <strong>planned</strong>
+        row must not. Implementing a feature without flipping its row fails CI, and so does deleting
+        a feature the table still advertises.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
         <thead><tr><th>Capability</th><th>Status</th><th>What that means</th></tr></thead>
         <tbody>
-          <tr><td class="cap">Code Review</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>review --aspect security</code>, per-lens prompts, cassette-replayable offline</td></tr>
-          <tr><td class="cap">Implement</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">oneshot and TDD strategies; <code>/implement</code> on an issue end to end via the three-job trampoline</td></tr>
-          <tr><td class="cap">Bug Fix</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>fix</code> verb; a failed run opens an <code>ai-generated</code> issue an agent can pick up, attempts bounded</td></tr>
-          <tr><td class="cap">Triage</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>triage</code> from a ticket, $0 on a local model</td></tr>
-          <tr><td class="cap">Backport</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">deterministic <code>cherry-pick -x</code> staged for <code>apply --base</code>; <code>--resolve</code> lets a model merge conflicts, budget- and approval-gated</td></tr>
-          <tr><td class="cap">RFE</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>rfe --idea</code> drafts the ticket; a human reads it, and <code>--create</code> files it through <code>TicketSource</code></td></tr>
-          <tr><td class="cap">GitHub</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">SCM, issues, chat-ops gate, trampolines</td></tr>
-          <tr><td class="cap">Keyless CI (federation)</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">GitHub OIDC exchanged at Anthropic; no <code>ANTHROPIC_API_KEY</code> in secrets</td></tr>
-          <tr><td class="cap">Org standards as a package</td><td><span class="stamp runs">runs</span></td>
-            <td class="what"><code>in_lockstep.standards</code> entry points at <code>Tier.PLUGIN</code>; worked example in <code>examples/acme-standards</code></td></tr>
-          <tr><td class="cap">Spend controls</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">per-run predictive budget, rolling daily ceiling, org-limit attestation</td></tr>
-          <tr><td class="cap">Ledger + tamper-evidence</td><td><span class="stamp runs">runs</span></td>
-            <td class="what">orphan-branch records; <code>report</code>/<code>doctor</code> flag a rewritten history</td></tr>
-          <tr><td class="cap">GitLab</td><td><span class="stamp partial">partial</span></td>
-            <td class="what"><code>GitLabScm</code>/<code>GitLabIssues</code> and host-aware <code>init</code> ship; no live dogfooded pipeline yet</td></tr>
-          <tr><td class="cap">Flaky-test adapter</td><td><span class="stamp planned">planned</span></td>
-            <td class="what">roadmap item 26</td></tr>
-          <tr><td class="cap">Shared ledger store</td><td><span class="stamp planned">planned</span></td>
-            <td class="what"><code>compare_and_set</code> is declared and refused at <code>LOCAL</code> scope; fan-out barriers need <code>SHARED</code></td></tr>
+          <tr><td>Code Review</td><td class="st runs">runs</td><td><code>review --aspect security</code>, per-lens prompts, cassette-replayable offline</td></tr>
+          <tr><td>Implement</td><td class="st runs">runs</td><td>oneshot and TDD strategies; <code>/implement</code> on an issue via the three-job trampoline</td></tr>
+          <tr><td>Bug Fix</td><td class="st runs">runs</td><td><code>fix</code> verb; a failed run opens an <code>ai-generated</code> issue, attempts bounded</td></tr>
+          <tr><td>Triage</td><td class="st runs">runs</td><td><code>triage</code> from a ticket, <code>$0</code> on a local model</td></tr>
+          <tr><td>Backport</td><td class="st runs">runs</td><td>deterministic <code>cherry-pick -x</code>; a model only on conflict, budget- and approval-gated</td></tr>
+          <tr><td>RFE</td><td class="st runs">runs</td><td><code>rfe --idea</code> drafts the ticket; a human reads it before <code>--create</code> files it</td></tr>
+          <tr><td>Extension packs</td><td class="st runs">runs</td><td>entry points that <strong>offer</strong> rather than apply; receipts derived from code, measured for <code>$0</code></td></tr>
+          <tr><td>Pack catalog</td><td class="st runs">runs</td><td>a static <code>index.toml</code> in a git repo; receipts re-derived locally and refused when they disagree</td></tr>
+          <tr><td>Org standards as a package</td><td class="st runs">runs</td><td><code>in_lockstep.standards</code> entry points at plugin tier; the repository still wins</td></tr>
+          <tr><td>Keyless CI (federation)</td><td class="st runs">runs</td><td>GitHub OIDC exchanged at Anthropic; no <code>ANTHROPIC_API_KEY</code> in secrets</td></tr>
+          <tr><td>Spend controls</td><td class="st runs">runs</td><td>per-run predictive budget, rolling daily ceiling, org-limit attestation</td></tr>
+          <tr><td>Ledger + tamper-evidence</td><td class="st runs">runs</td><td>orphan-branch records; <code>report</code> and <code>doctor</code> flag a rewritten history</td></tr>
+          <tr><td>GitHub</td><td class="st runs">runs</td><td>SCM, issues, chat-ops gate, trampolines</td></tr>
+          <tr><td>GitLab</td><td class="st partial">partial</td><td>the protocols and host-aware <code>init</code> ship; no live dogfooded pipeline yet</td></tr>
+          <tr><td>Flaky-test adapter</td><td class="st planned">planned</td><td>roadmap item 26</td></tr>
+          <tr><td>Shared ledger store</td><td class="st planned">planned</td><td><code>compare_and_set</code> is declared and refused at local scope</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="matrix-note">All six core workflows run. Two rows say <i>planned</i> because two
-    things are not done — and a test makes sure this page's source of truth can't pretend
-    otherwise.</p>
-  </div>
-</section>
+  </section>
 
-<section id="doors">
-  <div class="wrap">
-    <span class="kicker">Four doors</span>
-    <h2>Enter where <em>your question is.</em></h2>
-    <div class="doors">
-      <div class="door">
-        <p class="q">Evaluating?</p>
-        <p>Every command with the output it actually prints. Costs nothing to follow —
-        <code>--offline</code> and <code>--dry-run</code> need no key.</p>
-        <div class="links">
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">getting-started.md</a>
-        </div>
-      </div>
-      <div class="door">
-        <p class="q">Adopting?</p>
-        <p>Ten recipes of twenty lines or fewer — keyless CI, org standards, the daily ceiling,
-        chat-ops TDD — then the extension seams and the trampoline contract.</p>
-        <div class="links">
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/cookbook.md">cookbook.md</a>
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/extending.md">extending.md</a>
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/trampoline.md">trampoline.md</a>
-        </div>
-      </div>
-      <div class="door">
-        <p class="q">Auditing?</p>
-        <p>The honest accounting of what in-process invocation costs — what replaced each
-        substrate control, what is weaker, what was lost — and every claimed control against
-        the test that holds it.</p>
-        <div class="links">
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/controls-crosswalk.md">controls-crosswalk.md</a>
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/design/gates.md">gates.md</a>
-        </div>
-      </div>
-      <div class="door">
-        <p class="q">Why is it like this?</p>
-        <p>The essays — long, and deliberately below the fold rather than deleted. They are
-        where the decisions above stop being assertions.</p>
-        <div class="links">
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/design/in-lockstep-design.md">the design essay</a>
-          <a href="https://github.com/in-lockstep/lockstep/blob/main/design/adr/0001-pivot-to-runnable-framework.md">ADR 0001 — the pivot</a>
-        </div>
-      </div>
+  <section id="docs">
+    <div class="col">
+      <h2>Where to go next</h2>
     </div>
-  </div>
-</section>
+    <div class="doors">
+      <a class="door" href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">
+        <b>Evaluating</b><span>Every command with the output it actually prints. Costs nothing to follow.</span></a>
+      <a class="door" href="https://github.com/in-lockstep/lockstep/blob/main/docs/cookbook.md">
+        <b>Adopting</b><span>Ten recipes of twenty lines or fewer, executed by the test suite.</span></a>
+      <a class="door" href="https://github.com/in-lockstep/lockstep/blob/main/docs/controls-crosswalk.md">
+        <b>Auditing</b><span>What replaced each control, what is weaker, and the one that was lost.</span></a>
+      <a class="door" href="https://github.com/in-lockstep/lockstep/blob/main/design/extension-packs.md">
+        <b>Extending</b><span>Packs, catalogs, and the argument for each refusal in them.</span></a>
+    </div>
+  </section>
+</div>
 
 <footer>
   <div class="wrap">
-    <div class="cols">
-      <div class="mono">in-lockstep · v1.0.0 · Apache-2.0</div>
-      <div>
-        <a href="https://github.com/in-lockstep/lockstep">repository</a> ·
-        <a href="https://github.com/in-lockstep/lockstep/blob/main/CONTRIBUTING.md">contributing — the wanted list</a>
-      </div>
-    </div>
-    <p class="fine">Through 0.1.x this project was a compiler that lowered a markdown spec into
-    GitHub Agentic Workflows; 1.0 is a different product under the same name, and ADR 0001
-    records why. The panel above: eleven independent reads of the repository at
-    <code>e54f671</code>, each by a reviewer briefed only with a role and told to bring
-    evidence. Reservations were required, not optional.</p>
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Quotes on this site are from five independent persona reviews of the source, conducted
+      2026-08-31. Terminal output is captured verbatim from the commands shown.</p>
   </div>
 </footer>
 

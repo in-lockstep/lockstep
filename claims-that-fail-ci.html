@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claims that fail CI — in-lockstep</title>
+<meta name="description" content="The capability table is enforced in both directions, and controls that pass unit tests while running on no live path get a status of their own.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><span>▮</span> in-lockstep</a>
+    <nav><a href="index.html">Home</a><a href="https://github.com/in-lockstep/lockstep">GitHub</a></nav>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:52px">
+    <div class="col">
+      <p class="eyebrow">Raised by 4 of 5 reviewers</p>
+      <h1>Claims that fail CI</h1>
+      <p class="lede">Every project says its documentation is accurate. This one arranged for the
+        build to break when it stops being — and then applied the same instrument to its own
+        security controls, which is where it stops being a documentation feature and becomes a
+        governance one.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>the maintainer's own repository</b></div>
+<pre><span class="p">$</span> in-lockstep doctor
+
+<span class="b">ERROR   DOC101</span>  no provider-side organisation spend limit is attested
+                 Set a hard monthly cap in the provider console and record it as
+                 IN_LOCKSTEP_ORG_SPEND_LIMIT=&lt;amount&gt;. A per-run budget cannot bound a
+                 runaway trigger, and the per-day ceiling the substrate enforced no
+                 longer exists.
+<span class="b">ERROR   DOC121</span>  the default branch has no protection rule, or it could not be read
+<span class="w">WARNING DOC130</span>  no egress enforcement is declared
+
+3 finding(s), <span class="b">2 error(s)</span></pre>
+      <p class="term-note">Run against the author's own checkout. A fresh install is red until
+        somebody decides three things, and the tool exits non-zero rather than reporting a
+        reassuring green.</p>
+    </div>
+
+    <div class="quotes-grid">
+      <div class="quote">
+        <blockquote>Every vendor tells me what their controls do. This is the first one with a
+          category for controls that exist, pass their unit tests, and are called by nothing at
+          runtime — and it used that category against itself nine times.</blockquote>
+        <p class="who"><b>Engineering Director</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>I checked the docs against the tool in a scratch repo and they matched line for
+          line, including the parts that make the tool look bad. That is rarer than it should be,
+          and it is most of what onboarding cost actually is.</blockquote>
+        <p class="who"><b>Development Manager</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>The tests that check the tests are what convinced me. Anyone can write an AST
+          scan; almost nobody writes the assertion that fires when their scan quietly stops matching
+          anything.</blockquote>
+        <p class="who"><b>Open Source Engineer</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>I ran their diagnostic against their own repository and it failed on their own
+          ledger, by name, with commit hashes. That is the first compliance feature I have been
+          shown that told me something inconvenient.</blockquote>
+        <p class="who"><b>Engineering Director</b> <span>· on tamper-evidence</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Three ratchets, each failing in both directions</h2>
+
+      <h3>The capability table</h3>
+      <p>The table on the front page is read by a test. A row claiming <strong>runs</strong> must
+        name a verb or command that exists; a <strong>planned</strong> row must not. Shipping a
+        feature without flipping its row fails CI — and so does deleting a feature the table still
+        advertises. The safe-looking drift and the dangerous one both break the build.</p>
+
+      <h3>The gate ledger, and a status most projects do not have</h3>
+      <p><code>design/gates.md</code> tracks every claimed control against the test that holds it,
+        and it invented a status called <strong><code>unit only</code></strong>: the mechanism
+        exists, it is unit-tested, and nothing calls it during a run — <em>which is not a pass</em>.
+        Nine rows were in that state while another document was citing them as evidence that a
+        control had been replaced.</p>
+      <p>The ledger is itself a ratchet: a gate marked <code>held</code> must be discharged by a
+        test that names it, and a gate marked <code>unmet</code> must be discharged nowhere — so
+        implementing one without updating its row fails, in both directions.</p>
+
+      <h3>The scan that guards the scan</h3>
+      <p>Anything leaving the process must go through the redacting sink. The check is an AST scan
+        for the raw primitives, with three meta-assertions around it: one fails if the matcher
+        stops matching anything, one deletes exemptions whose call sites are gone, and one rejects
+        an exemption whose stated reason is under sixty characters.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What it does not do</h2>
+      <div class="limit">
+        <h3>The discipline is one person's attention, and it lapses</h3>
+        <p>The reviews that produced this page found two lapses in an afternoon, and both were real.</p>
+        <p><strong>A security test that only ran one way.</strong> Three tests asserting a sandboxed
+          child cannot read the parent's credentials hard-coded the interpreter as <code>python</code>.
+          Under <code>make check</code> they passed, because the runner puts a <code>python</code> shim
+          on the path; run any other way they failed. A gate that passes only under one invocation of
+          the test runner is worse than a red one, because nothing says so.</p>
+        <p><strong>Tightening the path guard weakened it.</strong> The tier-1 rules protecting
+          <code>conftest.py</code>, <code>*.pem</code> and <code>.env*</code> were gated on an
+          <em>identity</em> check against the shipped tuple — so an organisation adding one of its own
+          protected prefixes silently switched four protections off. Adding a rule removed four.</p>
+        <p>Both were fixed the day they were found, with tests that would have caught them. The
+          honest reading is not that the discipline is theatre — it is that a ratchet only holds
+          where somebody thought to put one, and a single maintainer has a finite number of
+          afternoons.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <a class="back" href="index.html">← All six aspects</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Quotes from five independent persona reviews of the source, 2026-08-31. Terminal output captured verbatim.</p>
+  </div>
+</footer>
+
+</body>
+</html>

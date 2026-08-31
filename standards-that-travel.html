@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standards and extensions that travel — in-lockstep</title>
+<meta name="description" content="An org floor arrives as a dependency and can only tighten. An extension pack arrives as an offer and does nothing until a line you wrote puts it in force.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><span>▮</span> in-lockstep</a>
+    <nav><a href="index.html">Home</a><a href="https://github.com/in-lockstep/lockstep">GitHub</a></nav>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:52px">
+    <div class="col">
+      <p class="eyebrow">Raised by 3 of 5 reviewers</p>
+      <h1>Standards and extensions that travel</h1>
+      <p class="lede">Two things move between repositories, and they move by opposite rules. A
+        standard installs itself, because the risk is a team forgetting it. An extension only
+        offers itself, because it hands a model tools and spends money. Getting that asymmetry
+        right is the whole design.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>a pack, genuinely installed — offered, and doing nothing</b></div>
+<pre><span class="p">$</span> uv add acme-review-prompts
+<span class="p">$</span> in-lockstep pack ls
+
+installed packs  (offered, not in force — bind one in .lockstep/lockstep.py)
+  acme-review-prompts   prompt   1.0.0   <span class="g">imports: none</span>   A security lens that knows
+                                                        about our ORM
+
+<span class="p">$</span> in-lockstep pack describe acme-review-prompts
+
+kind          prompt
+imports       <span class="g">none</span>  (nothing importable — every module is a docstring, so installing
+                    it runs nothing)
+evidence
+  corpus      2 case(s) — 2 with checks a machine settles, 2 needing a judge
+  cassettes   <span class="w">0  — nothing replays offline</span>
+
+digest        sha256:03208834909cadc0bbdde0dcebfb4fb7eac04d0bcbd3a0f4e19c4725c67dfb45</pre>
+      <p class="term-note"><code>imports: none</code> is derived by walking the AST of every
+        <code>.py</code> the distribution ships, not promised by the pack's declared kind. Listing a
+        stranger's pack runs no code it ships: discovery never calls the entry point.</p>
+    </div>
+
+    <div class="quotes-grid">
+      <div class="quote">
+        <blockquote>My problem was never authoring the standard, it was the repo that never got the
+          memo. Making it a dependency means the only way to not have it is to delete it from your
+          lockfile, and that shows up in review.</blockquote>
+        <p class="who"><b>Engineering Director</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>Standards that arrive as a package install and cannot be loosened downstream is
+          the first credible answer I have seen to governing this across three hundred repositories
+          without hiring people to police it.</blockquote>
+        <p class="who"><b>VP of Engineering</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>The extension surfaces are subclassing, binding and entry points — language
+          features, not a plugin DSL. And discovery never imports the thing being discovered, which
+          is a distinction most plugin systems don't bother to make.</blockquote>
+        <p class="who"><b>Open Source Engineer</b></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Two entry-point groups, one difference</h2>
+
+      <pre class="code">in_lockstep.standards      <span class="c">installing IS applying</span>
+  package ──▶ detect() ──▶ container        <span class="c">(plugin tier, tighten-only)</span>
+
+in_lockstep.extensions     <span class="c">installing only OFFERS</span>
+  package ──╳── container                   <span class="c">never binds itself</span>
+     └─────▶ a line in lockstep.py ─────▶ container</pre>
+
+      <p>A standards package may only tighten — lower a ceiling, never raise one; union the denied
+        tools; strictest scan wins — so applying it automatically is safe, and the real risk is a
+        repository that never picked it up. It binds at plugin tier, so a repository's own line
+        still wins, and overriding one thing costs one line rather than a fork.</p>
+
+      <p>An extension pack hands a model write and execute tools and pays for a model call, so its
+        arrival is a diff somebody read. <code>in-lockstep ls</code> will not mention a pack until
+        your module names it. That also preserves a property worth more than the convenience it
+        costs: <strong>which strategy runs is never a string</strong>, so nothing a ticket carries
+        can steer a run toward an approach with more reach.</p>
+
+      <h3>Accepting one is a record, not a rewrite</h3>
+      <p><code>add</code> re-derives the receipt from the code that is installed, compares it with
+        what you accepted before, and records the result at <code>.lockstep/packs/&lt;name&gt;.json</code>
+        — commit that file; it is the acknowledgement. Then it <em>prints</em> the lines for you to
+        paste. It never edits your lifecycle module, and it never installs anything.</p>
+      <p>A capability the pack did not previously hold is refused until <code>--accept</code> says
+        otherwise, and <code>doctor</code> re-derives against the record afterwards, so an upgrade
+        that widens what a pack may do fails a check instead of arriving quietly.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What it does not do</h2>
+      <div class="limit">
+        <h3>Visibility of removal, not impossibility</h3>
+        <p>A repository can delete the line that contributes your standard, or drop the dependency.
+          The framework says so in its own policy module rather than implying otherwise: a
+          middleware chain cannot bound code that never calls into it, and enforcement that must
+          survive a hostile repository owner lives in a required CI check and in provider billing
+          limits, not in a library.</p>
+        <p><strong>And five of the eight policy fields enforce nothing today.</strong> The
+          Engineering Director's review found it: <code>max_turns</code>, <code>deny_tools</code>
+          and <code>scan_input</code> reach the run; <code>network</code>, <code>permissions</code>
+          and three credit fields are merged, printed, and read by nothing else — while the
+          documentation was recommending one of them as an org floor. It is now recorded as an
+          unmet gate and the docs say which three bite. That is the project's own
+          “mechanism nobody invokes” failure, found in the place it most matters.</p>
+        <p>Nothing here had ever been installed from a real index until the day this page was
+          written — and doing it for the first time surfaced a bug where an editable install could
+          not be located at all.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <a class="back" href="index.html">← All six aspects</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Quotes from five independent persona reviews of the source, 2026-08-31. Terminal output captured verbatim.</p>
+  </div>
+</footer>
+
+</body>
+</html>

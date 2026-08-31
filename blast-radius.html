@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The blast radius is designed — in-lockstep</title>
+<meta name="description" content="The job holding the model key cannot write. The model stages changes it never applies. A pull request stays a draft until its tests actually pass.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><span>▮</span> in-lockstep</a>
+    <nav><a href="index.html">Home</a><a href="https://github.com/in-lockstep/lockstep">GitHub</a></nav>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:52px">
+    <div class="col">
+      <p class="eyebrow">Raised by 3 of 5 reviewers</p>
+      <h1>The blast radius is designed</h1>
+      <p class="lede">The developer's fear and the CISO's question turn out to be the same question
+        asked at different volumes: when this goes wrong, what could it reach? The answer is
+        arranged in three places, and none of them is the prompt.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>the path guard, consulted at every point that writes</b></div>
+<pre><span class="p">$</span> python -c "from in_lockstep.core.changes import ChangeGuard; ..."
+
+.lockstep/lockstep.py              <span class="b">REFUSED</span>  tier 1  rule .lockstep/
+.github/workflows/lockstep.yml     <span class="b">REFUSED</span>  tier 1  rule .github/
+src/app.py                         <span class="g">allowed</span></pre>
+      <p class="term-note">The file that defines every binding, tool grant and protected path is
+        itself the first entry in the deny list — so an agent cannot edit the file that constrains
+        it. The rule is enforced at three separate write paths driven off one shared list.</p>
+    </div>
+
+    <div class="quotes-grid">
+      <div class="quote">
+        <blockquote>It won't open a green-looking pull request it hasn't actually tested. If the
+          suite fails it stays a draft or turns into an issue, which is exactly what I'd want a
+          junior teammate to do.</blockquote>
+        <p class="who"><b>Corporate Developer</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>The write token and the model key are never in the same process, and the file
+          that defines the guardrails is one of the things the agent is forbidden to touch. That is
+          the part I can defend in an incident review.</blockquote>
+        <p class="who"><b>Development Manager</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>The job holding the model key cannot write, and there is no long-lived API key
+          in my secrets at all. That is the conversation with my CISO already half won.</blockquote>
+        <p class="who"><b>VP of Engineering</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>Somebody thought about the case where the loop counter silently stops counting,
+          and made the pre-flight check fail on it. That is the specific kind of paranoia I want in
+          something I let run unattended.</blockquote>
+        <p class="who"><b>Development Manager</b> <span>· on the self-feeding fix loop</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Three separations, and why each one exists</h2>
+
+      <h3>The credential split</h3>
+      <p>One process cannot hold two token scopes, so the work is two jobs. The job that talks to
+        the model holds the provider credential and <code>contents: read</code>. The job that opens
+        the change holds a write token and never sees the provider credential. That split is the
+        reason the trampoline has two jobs at all — it is not ceremony, it is the only way to have
+        both capabilities without having them together.</p>
+
+      <pre class="code"><span class="c">gate      →  implement            →  propose</span>
+<span class="c">(no key)     (provider key,          (write token,</span>
+<span class="c">              contents: read)         no provider key)</span></pre>
+
+      <h3>The model stages; it does not apply</h3>
+      <p>A session writes into a <code>ChangeSet</code> and touches nothing on disk. Applying it is
+        a separate step that runs the same path guard a second time, on the artifact. Locally that
+        is two commands; in CI it is two jobs, and only the second can write.</p>
+
+      <h3>A draft until the tests say otherwise</h3>
+      <p>An AI-authored change opens as a <strong>draft</strong> pull request. It is marked ready
+        only when the suite actually passed against the staged change — and if it did not, the run
+        files a follow-up issue instead, bounded by <code>max_attempts</code>. The attempt counter
+        lives in labels on the ticket, and <code>doctor</code> fails when those labels do not exist,
+        because a host that silently drops an unknown label would leave every follow-up reading
+        attempt zero and the cap bounding nothing.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What it does not do</h2>
+      <div class="limit">
+        <h3>The gate authorizes the asker, not the issue</h3>
+        <p>Anyone who can see a repository can file an issue in it. When a member types
+          <code>/implement</code> on a drive-by ticket, that body is handed to a model holding write
+          tools. The framework's answer is not that this cannot happen — it is that the ticket stays
+          classified untrusted, the writes are staged, the guard checks them twice, and the result
+          arrives as a pull request a person reads.</p>
+        <p><strong>The gate bounds who can spend money. It does not bound what the text says.</strong>
+          That sentence is in the documentation, not paraphrased from it.</p>
+        <p>And the guard governs the write path, not a running process: a command from an
+          allowlisted program could write anywhere the process can. That is why commands run in a
+          throwaway worktree of HEAD, inside a container with no network, with every credential
+          dropped from the environment — and why the framework refuses rather than silently falling
+          back when no container runtime is present.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <a class="back" href="index.html">← All six aspects</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Quotes from five independent persona reviews of the source, 2026-08-31. Terminal output captured verbatim.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You can read what will run — in-lockstep</title>
+<meta name="description" content="Config-as-code's one real disadvantage is that a container is harder to read than a manifest. One command prints the resolved answer; another derives it as an audit artifact.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><span>▮</span> in-lockstep</a>
+    <nav><a href="index.html">Home</a><a href="https://github.com/in-lockstep/lockstep">GitHub</a></nav>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:52px">
+    <div class="col">
+      <p class="eyebrow">Raised by 3 of 5 reviewers</p>
+      <h1>You can read what will run</h1>
+      <p class="lede">Configuration as code has exactly one real disadvantage over a manifest: you
+        can read a YAML file, but you cannot read a dependency-injection container. This is the
+        answer to that, and the project names it as such rather than pretending the disadvantage
+        is not there.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><b>what is bound, and what it will say to the model</b></div>
+<pre><span class="p">$</span> in-lockstep ls
+
+bindings
+  Fix                    -&gt; DiagnoseThenFix (singleton, explicit)
+  Implement              -&gt; TDD             (singleton, explicit)
+  Test                   -&gt; PytestTest      (singleton, explicit)
+  Validate               -&gt; RuffValidate    (singleton, explicit)
+
+<span class="c">prompts  (what each AI binding composes; * = not the shipped prompt)</span>
+  DiagnoseThenFix    fix/fix-writer fix/reproducer
+                     guardrails: baseline, fix/fixing
+  TDD                implement/oneshot implement/tdd
+                     guardrails: baseline, implement/implementing
+
+middleware  (privileged tier runs outside this chain and is not listed)
+  OtelMiddleware
+  CostBudget
+  ApprovalGate
+
+models  (verb -&gt; model; resolved per verb, overridable at the call)
+  implement              anthropic:claude-opus-4-6
+  triage                 local:qwen3-8b</pre>
+      <p class="term-note">One screen: which adapter serves each verb, which model each verb routes
+        to, the middleware order, and which prompts each AI binding composes — with a star on any
+        prompt that is not the shipped one.</p>
+    </div>
+
+    <div class="quotes-grid">
+      <div class="quote">
+        <blockquote>The first thing I do on any new repo is figure out what actually runs. Here
+          that's one command and about four seconds, instead of an afternoon of reading YAML and
+          guessing which override won.</blockquote>
+        <p class="who"><b>Corporate Developer</b> <span>· ranked this first of everything</span></p>
+      </div>
+      <div class="quote">
+        <blockquote>What I can hand an auditor is a file the tool computed off the running
+          configuration, not a questionnaire a team filled in about itself. Those are not the same
+          evidence and I have spent years pretending they were.</blockquote>
+        <p class="who"><b>Engineering Director</b></p>
+      </div>
+      <div class="quote">
+        <blockquote>It's a container and a middleware chain, not a DSL. I already know how to debug
+          that, and pdb lands where I'd expect it to.</blockquote>
+        <p class="who"><b>Corporate Developer</b></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>The same question, three depths</h2>
+
+      <h3>What is bound — <code>ls</code></h3>
+      <p>The resolved container, printed. Including the anomaly worth noticing: a verb that exists
+        and is bound to nothing, which is the shape a typo takes now that verbs are open values.</p>
+
+      <h3>What the model is told — <code>show-prompt</code></h3>
+      <p>Composed offline, off the <strong>bound</strong> adapter. That distinction was a real
+        defect for a while: the command imported the shipped prompt maps and never loaded your
+        module, so a team that had replaced a lens was shown the prompt they replaced — by the one
+        command whose entire job is saying otherwise. <code>--diff</code> now shows what you
+        changed against the shipped body.</p>
+
+      <h3>What all of it amounts to — <code>pack describe</code></h3>
+      <p>A receipt derived from the configuration: every binding with the capabilities it declares,
+        every prompt with its exact fragment order, the merged policy floor, model routes marked
+        priced or unpriced, the hosts a run may dial, and what evidence exists. Canonical JSON with
+        a digest over exactly what is printed, so it can be compared by recomputation.</p>
+
+      <pre class="code"><span class="c"># the fields, and what each is read off</span>
+capabilities   the bound object — the set ApprovalGate and the budget refusal key on
+projection     the composed prompt, via PromptLayers.projection()
+policy         the stack's own layers with their sources, and what they merged to
+models[].priced  the same table doctor's DOC151 uses
+corpus         files on disk, in this repository only — null when there are none</pre>
+
+      <p>Nothing there asks anybody what their code does. It reads what the objects already declare,
+        which is what makes it evidence rather than a description.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What it does not do</h2>
+      <div class="limit">
+        <h3>Reading the output is easy. Holding the model in your head is not.</h3>
+        <p>The developer who ranked this first also raised the sharpest objection to the framework
+          overall: the concept count is high and it lands on one person. Verbs and request types,
+          capabilities, container tiers, the policy stack, prompt layers, strategies, packs versus
+          standards, provenance classes, cassettes, egress modes, fifteen diagnostic codes and
+          sixty gates — the extending guide alone runs to seven hundred lines.</p>
+        <p>His words: <em>“on a team of eight, one of us becomes the lockstep person and the rest of
+          us file tickets, which is the same failure mode as the Jenkins guy we already have.”</em>
+          <code>ls</code> makes the configuration legible in four seconds. It does not make the
+          framework small.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <a class="back" href="index.html">← All six aspects</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Quotes from five independent persona reviews of the source, 2026-08-31. Terminal output captured verbatim.</p>
+  </div>
+</footer>
+
+</body>
+</html>
