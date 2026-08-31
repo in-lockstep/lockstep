@@ -33,8 +33,8 @@ from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
 from ...core.verbs import Capability, Verb
 from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
-from ._strategy import AiStrategy, PhaseError, read_reply, reported, run_phase
 from .implement import Implement, ImplementReport, ImplementSession
+from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase
 
 
 class Oneshot(AiStrategy):

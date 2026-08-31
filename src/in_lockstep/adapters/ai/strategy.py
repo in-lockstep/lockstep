@@ -38,12 +38,37 @@ DEFAULT_TURNS = 40
 DEFAULT_MAX_TOKENS = 8192
 
 
+#: What `_session` hands every subclass, unconditionally: `read_write_execute` grants `write_file`,
+#: `delete_file` and `run_script`, and the turn loop pays for a model call. Named because three
+#: strategies hand-copied this exact frozenset, and a copy is a chance to trim one.
+AGENCY = frozenset(
+    {
+        Capability.READS_REPO,
+        Capability.SPENDS_BUDGET,
+        Capability.WRITES_FILES,
+        Capability.EXECUTES_CODE,
+    }
+)
+
+
+class UndeclaredAgency(Exception):
+    """A strategy holds write and execute tools its `capabilities` does not admit to.
+
+    Beside `UngatedAgency` in spirit, and raised for the same reason: both are refusals about the
+    shape of a lifecycle, made before a run rather than during one.
+    """
+
+
 class AiStrategy:
     """The constructor and per-run assembly shared by the bindable strategies.
 
     Subclasses declare `id` (the label their reports carry), `verb`, `capabilities` — the
     load-bearing declaration every gate reads off the bound object — plus their session type and
     prompt/layer defaults, and implement `invoke(ctx, request)` starting from `self._session(ctx)`.
+
+    Prefer a per-verb base — `ImplementStrategy`, `FixStrategy` — which sets `verb`,
+    `capabilities` and the three session hooks for you. Subclass this directly only for a verb the
+    framework does not ship.
 
     No invoker by default: the model comes from `lockstep.models.route(<verb>, ...)`, resolved per
     run off the context. Passing `invoker_factory=` is the seam for a custom `ProviderRegistry`,
@@ -53,6 +78,38 @@ class AiStrategy:
     id: ClassVar[str] = ""
     verb: ClassVar[Verb]
     capabilities: ClassVar[frozenset[Capability]] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Refuse a subclass that declares less agency than `_session` gives it.
+
+        `capabilities` defaulted to the empty set while every subclass was handed write, delete and
+        execute tools plus a paid model call — so a strategy that simply omitted the line got an
+        adapter that walked past `ApprovalGate`, past `UndeclaredBudget` and past `Retry`'s
+        re-invocation refusal, all three of which read this frozenset off the bound object. It
+        failed OPEN, silently, on the one population most likely to hit it: somebody writing their
+        first strategy by following `docs/extending.md`.
+
+        A refusal, not an inference. `Capability` is declared and never inferred, and inference
+        could not do this job anyway — a `ToolSet` exists only inside a run, so the check would
+        move from startup to first call, and `SPENDS_BUDGET` belongs to no tool at all. What this
+        asserts is narrower and checkable at import: you may not declare LESS than you hold.
+
+        Declaring more stays legal and is sometimes correct — `read_write_execute` declares
+        `EXECUTES_CODE` even with no runner bound, because a set that could execute elsewhere must
+        not read as harmless here.
+        """
+        super().__init_subclass__(**kwargs)
+        missing = AGENCY - cls.capabilities
+        if missing:
+            raise UndeclaredAgency(
+                f"{cls.__name__} subclasses AiStrategy, so it is handed write_file, delete_file "
+                f"and run_script and it pays for a model call — but `capabilities` omits "
+                f"{sorted(c.value for c in missing)}. ApprovalGate, the budget refusal and Retry "
+                f"all read that set off the bound object, so an undeclared strategy is an ungated "
+                f"one. Either subclass a per-verb base (ImplementStrategy, FixStrategy), which "
+                f"declares it for you, or write:\n\n"
+                f"    capabilities: ClassVar[frozenset[Capability]] = AGENCY\n"
+            )
 
     #: Subclass hooks: the session dataclass, the shipped prompt map, the default layer stack.
     _session_cls: ClassVar[Any]

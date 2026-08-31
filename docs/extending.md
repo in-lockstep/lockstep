@@ -296,10 +296,23 @@ lockstep.bind(Implement, TDD())     # or Oneshot(), or your own class
 ```
 
 Writing one is subclassing `AiStrategy` (which carries the constructor and the per-run session
-assembly) and implementing `invoke(ctx, request)`. Declare `verb`, `capabilities` — the
-load-bearing frozenset every gate reads off the bound object — and `id`, which lands on the
-report so an eval subject and a ledger record can key on the approach that ran. Ship fixtures
-with a new strategy: ten unmeasured strategies are worse than one measured.
+assembly) and implementing `invoke(ctx, request)`. It imports from the package root:
+
+```python
+from in_lockstep.adapters.ai import AGENCY, AiStrategy
+```
+
+Declare `id`, which lands on the report so an eval subject and a ledger record can key on the
+approach that ran, and `verb`. `capabilities` is the load-bearing frozenset every gate reads off
+the bound object, and it is not optional: subclassing `AiStrategy` means being handed `write_file`,
+`delete_file` and `run_script` and paying for a model call, so declaring less than `AGENCY` is
+refused at class creation. `ApprovalGate`, the budget refusal and `Retry` all key on that set —
+an undeclared strategy would be an ungated one, which is why this is an error and not a warning.
+
+Declaring *more* is allowed, and is sometimes right: a set that could execute on some other
+configuration must not read as harmless on this one.
+
+Ship fixtures with a new strategy: ten unmeasured strategies are worse than one measured.
 
 Which strategy runs is a bind-time code decision in `lockstep.py`, reviewed like any other line.
 There is no request-time selection and no registry id, so nothing a ticket carries — a label, a
