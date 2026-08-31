@@ -2765,6 +2765,42 @@ def _write_changeset(changeset: Any) -> list[str]:
     return touched
 
 
+@main.group(name="pack")
+def pack_group() -> None:
+    """Inspect what a configuration does, in the form a shared extension will be published in.
+
+    Today the only subject is this repository. That is the useful order rather than a limitation:
+    a receipt format nobody has run against their own module is a format nobody has checked, and
+    the questions it answers — what is bound, what it may do, which guardrails survived, what
+    evidence exists — are the ones an adopter asks about their own repository first.
+    """
+
+
+@pack_group.command(name="describe")
+@click.option("--json", "as_json", is_flag=True, help="The canonical form, which is what a digest is over.")
+def pack_describe_cmd(as_json: bool) -> None:
+    """Derive the receipt for this repository: what it binds, may do, and can prove.
+
+    Everything printed is read off objects that already declare it — `capabilities` off the bound
+    adapter, the projection off the composed prompt, the merged floor off the policy stack — so
+    this describes what the code does rather than what anyone said about it. No key, no network,
+    no spend.
+
+    Two fields are the ones worth reading first. `guardrails_intact` says whether a prompt still
+    opens with the framework's baseline, which is legal to change and must be visible. `corpus`
+    says `none` rather than a borrowed number when this repository has measured nothing.
+    """
+    from .receipt import canonical, receipt_for, render
+
+    lockstep, _ = _default_lockstep()
+    receipt = receipt_for(lockstep, root=Path(lockstep.repo.root))
+    if as_json:
+        click.echo(canonical(receipt), nl=False)
+        return
+    for line in render(receipt):
+        click.echo(line)
+
+
 def _shipped_compositions() -> dict[str, Composition]:
     """Every prompt the framework ships, whether or not anything is bound to run it.
 
