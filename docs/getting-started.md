@@ -211,6 +211,7 @@ in-lockstep show-prompt security
 
 ```text
 # composed prompt: review/security  (version 1)
+# source: shipped
 #
 #   guardrail:baseline
 #   guardrail:review/reviewing
@@ -220,6 +221,14 @@ in-lockstep show-prompt security
 
 <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge order. -->
 ...
+```
+
+`source` says where that came from. It reads the prompt off the **bound adapter**, so once your
+module binds a lens of its own, this renders yours rather than the framework's — and
+`--diff` shows what you changed, which is the question a reviewer actually has:
+
+```bash
+in-lockstep show-prompt security --diff
 ```
 
 ## What the ledger says afterwards

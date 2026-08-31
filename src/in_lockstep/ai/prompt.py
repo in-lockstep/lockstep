@@ -18,10 +18,11 @@ definition, so importing a lifecycle module performs no IO.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any, ClassVar, Generic, TypeVar
+from typing import Any, ClassVar, Generic, Protocol, TypeVar, runtime_checkable
 
 from ..llm.types import Message
 from .context import ContextPackage
@@ -122,9 +123,29 @@ class Prompt(Generic[P, S]):
     output: ClassVar[type | None] = None
     emphasis: ClassVar[str] = ""
     exemplars: ClassVar[tuple[str, ...]] = ()
+    #: The `body:` sentinel this prompt contributes to a projection. Declared only where the name
+    #: differs from the resource — the four review lenses, whose bodies are `review/security.md`
+    #: and whose corpus identity is `review/security-reviewer`. Left empty everywhere else, where
+    #: `body_label` derives it, so a house prompt gets a stable identity without being told to
+    #: invent a convention.
+    body_name: ClassVar[str] = ""
 
     def package(self) -> str:
         return type(self).__module__.rsplit(".", 1)[0]
+
+    def body_label(self) -> str:
+        """What this prompt is called in a projection.
+
+        Derived from the body resource rather than the class name, because the resource is what a
+        reader can go and open. A prompt with no body at all is a `render`-replacing subclass; it
+        still needs a label, and its class name is the only honest one available.
+        """
+        if self.body_name:
+            return self.body_name
+        if self.body is None:
+            return type(self).__name__
+        resource = self.body.resource
+        return resource[:-3] if resource.endswith(".md") else resource
 
     def body_text(self) -> str:
         if self.body is None:
@@ -217,3 +238,59 @@ class PromptLayers:
             *[f"skill:{n}" for n, _ in self.skills],
             *[f"context:{n}" for n, _ in self.contexts],
         ]
+
+
+@dataclass(frozen=True)
+class Composition:
+    """One inspectable prompt: what a bound adapter would compose under a name.
+
+    `show-prompt` used to import the shipped maps directly, so every override `docs/extending.md`
+    tells a team to write was invisible to the one command whose job is answering "what was the
+    model actually told". The fix cannot be the CLI reaching into six adapters and knowing which
+    attribute each keeps its map in — that is inference, and this framework declares. So an
+    adapter says what it composes, and this is what it says it with.
+    """
+
+    label: str
+    prompt: Prompt[Any, Any]
+    layers: PromptLayers
+    #: The class that owns this composition — `AiReview`, `TDD` — or `"shipped"` when nothing is
+    #: bound and the answer came from the framework's own map.
+    source: str
+
+    def projection(self) -> list[str]:
+        return self.layers.projection(self.prompt.body_label())
+
+    def text(self) -> str:
+        return self.prompt.system(self.layers)
+
+
+def compositions(
+    prompts: Mapping[str, type[Prompt[Any, Any]]],
+    layers: PromptLayers,
+    *,
+    verb: str,
+    source: str,
+) -> dict[str, Composition]:
+    """Label an adapter's prompt map for inspection.
+
+    Keys arrive already namespaced everywhere except the review lenses, which are addressed by
+    bare aspect (`security`) because that is what `--aspect` takes. Both spellings resolve; the
+    label is the qualified one, so two verbs may hold a prompt of the same name.
+    """
+    return {
+        label: Composition(label=label, prompt=cls(), layers=layers, source=source)
+        for label, cls in ((key if "/" in key else f"{verb}/{key}", cls) for key, cls in prompts.items())
+    }
+
+
+@runtime_checkable
+class Inspectable(Protocol):
+    """What `show-prompt` and `ls` ask a bound adapter for.
+
+    A protocol rather than a base class, because the AI adapters share no ancestor — `AiReview` is
+    not an `AiStrategy` — and because an adapter somebody else writes should be inspectable by
+    satisfying an interface rather than by inheriting from us.
+    """
+
+    def compositions(self) -> dict[str, Composition]: ...

@@ -122,13 +122,63 @@ def test_every_ai_adapter_takes_injected_layers_and_defaults_to_the_shipped_set(
     implement = Oneshot(lambda ctx: None, layers=custom)
     session = implement._session(object())
     assert session.layers is custom, "the injected stack is the one strategies compose with"
-    assert (
-        Oneshot(lambda ctx: None)._session(object()).layers.projection("b")
-        == implement_layers().projection("b")
-    )
+    assert Oneshot(lambda ctx: None)._session(object()).layers.projection(
+        "b"
+    ) == implement_layers().projection("b")
 
     fix = DiagnoseThenFix(lambda ctx: None, layers=custom)
     assert fix._session(object()).layers is custom
 
     assert AiReview(lambda ctx: None, layers=custom).layers is custom
     assert AiTriage(lambda ctx: None, layers=custom).layers is custom
+
+
+def test_a_house_prompt_gets_a_body_label_without_inventing_a_convention() -> None:
+    """`body_label` is what a projection calls the body, and a third-party prompt needs one.
+
+    Derived from the body resource, because that is the file a reader can open. Declared only
+    where the corpus already knows a different name: the four review lenses are `review/x.md` on
+    disk and `review/x-reviewer` in every captured projection, and that identity is what the
+    characterization corpus asserts on.
+    """
+    from in_lockstep.ai.prompt import Body, Prompt
+    from in_lockstep.prompts.review import LENSES
+
+    class HousePrompt(Prompt[str, str]):
+        body = Body.from_path("prompts/our-review.md")
+
+    class Bodyless(Prompt[str, str]):
+        pass
+
+    assert HousePrompt().body_label() == "prompts/our-review"
+    assert LENSES["security"]().body_label() == "review/security-reviewer"
+    assert Bodyless().body_label() == "Bodyless", "a render-replacing subclass still needs a name"
+
+
+def test_every_ai_adapter_reports_what_it_composes() -> None:
+    """The seam `show-prompt` and `ls` read. Declared per adapter rather than discovered, because
+    discovery would mean the CLI knowing that `AiReview` keeps its map in `lenses` and every other
+    adapter keeps one in `prompts` — and a renamed attribute would then make an override invisible
+    again, silently, which is the defect this closes."""
+    from in_lockstep.adapters.ai.backport import AiBackportResolver
+    from in_lockstep.adapters.ai.fix import DiagnoseThenFix
+    from in_lockstep.adapters.ai.oneshot import Oneshot
+    from in_lockstep.adapters.ai.review import AiReview
+    from in_lockstep.adapters.ai.rfe import AiRfe
+    from in_lockstep.adapters.ai.triage import AiTriage
+    from in_lockstep.ai.prompt import Inspectable
+
+    for adapter, expected in (
+        (AiReview(), "review/security"),
+        (Oneshot(), "implement/oneshot"),
+        (DiagnoseThenFix(), "fix/reproducer"),
+        (AiTriage(), "triage/analyst"),
+        (AiRfe(), "rfe/drafter"),
+        (AiBackportResolver(), "backport/conflict-resolver"),
+    ):
+        assert isinstance(adapter, Inspectable), f"{type(adapter).__name__} is not inspectable"
+        composed = adapter.compositions()
+        assert expected in composed, f"{type(adapter).__name__}: {sorted(composed)}"
+        assert composed[expected].source == type(adapter).__name__
+        # Every label is qualified by its verb, so two verbs may hold a prompt of one short name.
+        assert all("/" in label for label in composed)
