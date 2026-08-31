@@ -69,7 +69,12 @@ ALLOWED: dict[str, set[str]] = {
     # receipt IS a configured `Lockstep`, and typing that parameter `Any` to dodge a line in this
     # dict would buy nothing and cost the check mypy makes. Acyclic: the facade cannot import
     # `receipt` — its own allowance below forbids it — and nothing in `lockstep` needs to.
-    "receipt": {"ai", "core", "evaluation", "lockstep", "privileged", "receipt"},
+    # `packs` reads distribution metadata and files; it reaches `ai` for `Body` and the
+    # frontmatter split, so a pack's guardrail fragment is handled exactly like a shipped one.
+    # Nothing deeper: discovery must not be able to bind, and a layer it cannot import is a layer
+    # it cannot bind into.
+    "packs": {"ai", "packs"},
+    "receipt": {"ai", "core", "evaluation", "lockstep", "packs", "privileged", "receipt"},
     # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
@@ -104,6 +109,7 @@ ALLOWED: dict[str, set[str]] = {
         "evaluation",
         "strategies",
         "receipt",
+        "packs",
         "cli",
     },
 }
