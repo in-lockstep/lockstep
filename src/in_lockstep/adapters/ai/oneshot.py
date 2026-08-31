@@ -31,31 +31,16 @@ from typing import Any, ClassVar
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
-from ...core.verbs import Capability, Verb
-from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
-from .implement import Implement, ImplementReport, ImplementSession
-from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase
+from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
+from .implement import Implement, ImplementReport, ImplementStrategy
+from .strategy import PhaseError, read_reply, reported, run_phase
 
 
-class Oneshot(AiStrategy):
+class Oneshot(ImplementStrategy):
     """One session with read, search, write and run tools. Explores the repository, stages the
     change, reports what it could not do."""
 
     id: ClassVar[str] = "implement/oneshot"
-    verb: ClassVar[Verb] = Verb.IMPLEMENT
-    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
-    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
-    capabilities: ClassVar[frozenset[Capability]] = frozenset(
-        {
-            Capability.READS_REPO,
-            Capability.SPENDS_BUDGET,
-            Capability.WRITES_FILES,
-            Capability.EXECUTES_CODE,
-        }
-    )
-    _session_cls = ImplementSession
-    _shipped_prompts = PROMPTS
-    _layers_factory = staticmethod(implement_layers)
 
     async def invoke(self, ctx: Any, inp: Implement) -> Outcome[ImplementReport]:
         session = self._session(ctx)

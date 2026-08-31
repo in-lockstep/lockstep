@@ -31,11 +31,10 @@ from typing import Any, ClassVar
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
-from ...core.verbs import Capability, Verb
-from ...prompts.implement import IMPLEMENT_SCHEMA, PROMPTS, ImplementParams, implement_layers
+from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..worktree import head_state, materialize
-from .implement import Implement, ImplementReport, ImplementSession
-from .strategy import AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
+from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
+from .strategy import PhaseError, read_reply, reported, run_phase, test_findings
 
 _RED_DIRECTIVE = (
     "Step 1 of 2 — the failing test.\n\n"
@@ -70,24 +69,10 @@ def _green_directive(tests: ChangeSet) -> str:
     )
 
 
-class TDD(AiStrategy):
+class TDD(ImplementStrategy):
     """Red then green: write a failing test, confirm red, implement, confirm green."""
 
     id: ClassVar[str] = "implement/tdd"
-    verb: ClassVar[Verb] = Verb.IMPLEMENT
-    # The load-bearing declaration: WRITES_FILES + EXECUTES_CODE beside SPENDS_BUDGET is what
-    # makes ApprovalGate a startup requirement and egress enforcement mandatory.
-    capabilities: ClassVar[frozenset[Capability]] = frozenset(
-        {
-            Capability.READS_REPO,
-            Capability.SPENDS_BUDGET,
-            Capability.WRITES_FILES,
-            Capability.EXECUTES_CODE,
-        }
-    )
-    _session_cls = ImplementSession
-    _shipped_prompts = PROMPTS
-    _layers_factory = staticmethod(implement_layers)
 
     async def invoke(self, ctx: Any, inp: Implement) -> Outcome[ImplementReport]:
         container = getattr(ctx, "container", None)

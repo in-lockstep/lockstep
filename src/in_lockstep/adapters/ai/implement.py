@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from ...ai.builtins import ToolRunnerImpl, Workspace
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage
@@ -25,7 +25,9 @@ from ...ai.prompt import PromptLayers
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
-from ...prompts.implement import ImplementPrompt
+from ...core.verbs import Capability, Verb
+from ...prompts.implement import PROMPTS, ImplementPrompt, implement_layers
+from .strategy import AGENCY, AiStrategy
 
 
 @dataclass(frozen=True)
@@ -87,3 +89,24 @@ class ImplementSession:
         """The ticket, curated. Provenance comes from `Ticket.as_context`, not from here."""
         items: list[ContextItem] = list(request.ticket.as_context())
         return self.curator.curate(items, ContextNeed(token_budget=request.token_budget))
+
+
+class ImplementStrategy(AiStrategy):
+    """The base for anything serving `Implement`. Subclass this, not `AiStrategy`.
+
+    It carries the four declarations every implement strategy had to repeat verbatim — the verb,
+    the capability set, the session type, the shipped prompt map and the layer stack — so a
+    subclass writes its `id`, its prompt, and its idea. `Oneshot` and `TDD` differ in exactly one
+    thing, which is what a strategy is supposed to be: one session, or red then green.
+
+    `capabilities` living here rather than in each subclass is the point, not a tidy-up. It was
+    hand-copied three times with an identical "the load-bearing declaration" comment above it, and
+    a hand-copied frozenset is one careless trim away from an ungated adapter. Inherited, it is not
+    a subclass's to get wrong — and `AiStrategy.__init_subclass__` refuses anything that narrows it.
+    """
+
+    verb: ClassVar[Verb] = Verb.IMPLEMENT
+    capabilities: ClassVar[frozenset[Capability]] = AGENCY
+    _session_cls = ImplementSession
+    _shipped_prompts = PROMPTS
+    _layers_factory = staticmethod(implement_layers)

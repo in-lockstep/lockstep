@@ -619,3 +619,43 @@ def test_every_shipped_strategy_passes_its_own_refusal() -> None:
 
     for strategy in (Oneshot, TDD, DiagnoseThenFix):
         assert strategy.capabilities >= AGENCY, strategy.__name__
+
+
+def test_a_per_verb_base_is_all_a_house_strategy_has_to_subclass() -> None:
+    """Job (B) in two lines, which was the point of the bases.
+
+    Before, a strategy for a shipped verb had to set `verb`, hand-copy the capability frozenset,
+    and name three private ClassVars — `_session_cls`, `_shipped_prompts`, `_layers_factory` —
+    none of which `docs/extending.md` mentioned. Each was one AttributeError per round trip, and
+    the frozenset was one careless trim from an ungated adapter.
+    """
+    from in_lockstep.adapters.ai import AGENCY, ImplementStrategy
+
+    class PlanThenWrite(ImplementStrategy):
+        id = "implement/plan-then-write"
+
+    assert PlanThenWrite.verb is Verb.IMPLEMENT
+    assert PlanThenWrite.capabilities == AGENCY
+    assert PlanThenWrite._session_cls.__name__ == "ImplementSession"
+    assert PlanThenWrite._shipped_prompts, "the shipped prompt map is inherited, not re-imported"
+    assert PlanThenWrite._layers_factory() is not None
+
+
+def test_a_subclass_cannot_narrow_the_capabilities_it_inherits() -> None:
+    """Inheriting the declaration is only worth something if it cannot be undone quietly."""
+    from in_lockstep.adapters.ai import ImplementStrategy, UndeclaredAgency
+
+    with pytest.raises(UndeclaredAgency):
+
+        class Sneaky(ImplementStrategy):
+            id = "implement/sneaky"
+            capabilities = frozenset({Capability.READS_REPO})
+
+
+def test_the_shipped_strategies_sit_on_the_bases_they_advertise() -> None:
+    """If `Oneshot` stopped using the base, the base would stop being the tested path."""
+    from in_lockstep.adapters.ai import TDD, DiagnoseThenFix, FixStrategy, ImplementStrategy, Oneshot
+
+    assert issubclass(Oneshot, ImplementStrategy)
+    assert issubclass(TDD, ImplementStrategy)
+    assert issubclass(DiagnoseThenFix, FixStrategy)
