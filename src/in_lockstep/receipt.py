@@ -32,8 +32,9 @@ from typing import Any
 
 from . import __version__
 from .ai.prompt import Inspectable
-from .core.verbs import capabilities_of, verb_of
+from .core.verbs import SHIPPED_VERBS, capabilities_of, verb_of
 from .lockstep import Lockstep
+from .packs import Pack, PackError
 
 #: Bumped when a field changes meaning. A consumer that cannot read this version must say so
 #: rather than guess at the fields it recognises.
@@ -235,25 +236,41 @@ def _corpus(root: Path) -> dict[str, Any] | None:
     that an approach bound in this module has never been measured.
     """
     for candidate in (root / "corpus", root / ".lockstep" / "corpus"):
-        if not candidate.is_dir():
-            continue
-        from .evaluation import load_cases
-
-        cases = load_cases(candidate)
-        if not cases:
-            continue
-        families: dict[str, int] = {}
-        for case in cases:
-            family = case.path.parent.parent.name if case.path else "?"
-            families[family] = families.get(family, 0) + 1
-        return {
-            "path": str(candidate.relative_to(root)),
-            "cases": len(cases),
-            "deterministic": sum(1 for c in cases if c.deterministic),
-            "rubric": sum(1 for c in cases if c.rubric),
-            "families": dict(sorted(families.items())),
-        }
+        counted = _corpus_at(candidate, root)
+        if counted is not None:
+            return counted
     return None
+
+
+def _corpus_at(directory: Path | None, base: Path | None) -> dict[str, Any] | None:
+    """Count what a corpus directory holds, deterministic and rubric apart.
+
+    Apart, because they are not the same evidence: a rubric nobody judged is outstanding rather
+    than passed, and a single total would let a suite of unjudged rubrics read as measurement.
+    """
+    if directory is None or not directory.is_dir():
+        return None
+
+    from .evaluation import load_cases
+
+    cases = load_cases(directory)
+    if not cases:
+        return None
+    families: dict[str, int] = {}
+    for case in cases:
+        family = case.path.parent.parent.name if case.path else "?"
+        families[family] = families.get(family, 0) + 1
+    try:
+        path = str(directory.relative_to(base)) if base is not None else str(directory)
+    except ValueError:  # pragma: no cover - a corpus outside the subject's own tree
+        path = str(directory)
+    return {
+        "path": path,
+        "cases": len(cases),
+        "deterministic": sum(1 for c in cases if c.deterministic),
+        "rubric": sum(1 for c in cases if c.rubric),
+        "families": dict(sorted(families.items())),
+    }
 
 
 def _cassettes(root: Path) -> list[str]:
@@ -331,15 +348,227 @@ def render(receipt: dict[str, Any]) -> list[str]:
         # measurement rather than as its absence.
         lines.append("  corpus      none in this repository — nothing bound here has been measured")
     else:
+        # Two counts over the same cases, not a partition of them: a case may carry both a
+        # deterministic expectation and a rubric, and phrasing it as "A deterministic, B rubric"
+        # invited the reading that they add up to the total.
         lines.append(
-            f"  corpus      {corpus['cases']} case(s) in {corpus['path']} "
-            f"({corpus['deterministic']} deterministic, {corpus['rubric']} rubric)"
+            f"  corpus      {corpus['cases']} case(s) in {corpus['path']} — "
+            f"{corpus['deterministic']} with checks a machine settles, "
+            f"{corpus['rubric']} needing a judge"
         )
     cassettes = receipt["cassettes"]
     lines.append(
         f"  cassettes   {len(cassettes)}"
         + (f"  ({', '.join(cassettes)})" if cassettes else "  — nothing replays offline")
     )
+
+    lines += ["", f"digest        {receipt['digest']}"]
+    return lines
+
+
+# -- the other subject: a pack ---------------------------------------------------------
+
+
+def receipt_for_pack(subject: Pack, *, load: bool = True) -> dict[str, Any]:
+    """Derive the receipt for an installed extension pack.
+
+    The order of operations is the security story rather than an implementation detail. `imports`
+    is computed from the AST of the files the distribution recorded, before anything is imported —
+    so a pack that reports `none` has been shown to be inert by a path that never ran it. Only
+    then, and only when there is something to import, is the module loaded to see what it offers.
+
+    `load=False` keeps it a pure metadata read at the cost of the `offers` list, which is the
+    right trade when the caller has not decided to trust the pack yet.
+    """
+    imports = subject.imports()
+    declared: dict[str, Any] | None = None
+    problems: list[str] = []
+    try:
+        manifest = subject.manifest()
+        declared = {"kind": manifest.kind, "summary": manifest.summary}
+    except PackError as e:
+        problems.append(str(e))
+
+    offers: list[dict[str, Any]] = []
+    imported = False
+    if load and imports == "modules":
+        try:
+            offers = _offers(subject.module)
+            imported = True
+        except Exception as e:  # a pack that cannot be imported offers nothing, and says why
+            problems.append(f"importing {subject.module!r} failed: {e}")
+
+    receipt: dict[str, Any] = {
+        "receipt": RECEIPT_VERSION,
+        "subject": {
+            "kind": "pack",
+            "name": subject.name,
+            "module": subject.module,
+            "distribution": subject.distribution,
+            "version": subject.version,
+        },
+        "requires": {"in-lockstep": __version__},
+        "declares": declared,
+        "imports": imports,
+        "imported": imported,
+        "offers": offers,
+        "corpus": _corpus_at(subject.corpus(), subject.root),
+        "cassettes": subject.cassettes(),
+        "problems": problems,
+    }
+    receipt["kind_matches"] = _kind_matches(declared, offers, imports)
+    receipt["digest"] = digest(receipt)
+    return receipt
+
+
+def _kind_matches(declared: dict[str, Any] | None, offers: list[dict[str, Any]], imports: str) -> bool | None:
+    """Whether what a pack calls itself agrees with what it turned out to hold.
+
+    Declared *and* cross-checked, which is the only arrangement that is honest about both halves:
+    `kind` is an author's intent and a derivation cannot read intent, but an intent nothing checks
+    is a claim. `None` where the answer is unknown — an unresolvable distribution, or a pack whose
+    modules were not loaded — because a mismatch nobody could have detected is not a match.
+    """
+    if declared is None or imports == "unknown":
+        return None
+    kind = declared["kind"]
+    kinds_offered = {offer["offers"] for offer in offers}
+    if kind == "prompt":
+        return imports == "none" or kinds_offered <= {"prompt"}
+    if not offers:
+        return None
+    return kind in kinds_offered
+
+
+def _offers(module_name: str) -> list[dict[str, Any]]:
+    """What a pack's module exports that this framework recognises.
+
+    Derived by walking the imported namespace rather than read from a manifest, for the reason the
+    whole receipt exists: a list of classes an author wrote down is a claim, and a list of classes
+    the interpreter found is a fact. Only names defined in the pack's own package count — a pack
+    that imports `TDD` to subclass it is not offering `TDD`.
+
+    Recognition goes through `core`'s vocabulary rather than through `AiStrategy`, and not only to
+    keep this module out of `adapters`. "A verb is an interface; anything satisfying it can serve
+    it" is the documented contract, so `verb` plus `capabilities` IS the interface — and a pack
+    offering a deterministic adapter is described by the same code that describes an AI one, which
+    an `AiStrategy` check would have silently skipped.
+    """
+    import importlib
+    import inspect
+
+    from .ai.prompt import Prompt
+
+    module = importlib.import_module(module_name)
+    top = module_name.split(".")[0]
+    out: list[dict[str, Any]] = []
+    for name, value in sorted(vars(module).items()):
+        if not inspect.isclass(value) or getattr(value, "__module__", "").split(".")[0] != top:
+            continue
+        verb = verb_of(value)
+        if verb is not None:
+            request = getattr(value, "request", None)
+            out.append(
+                {
+                    "name": name,
+                    # A verb the framework does not ship is the thing a "verb" pack offers, and it
+                    # is worth distinguishing here: such a pack owes a route, a price, a prompt and
+                    # a corpus that a strategy for a shipped verb inherits.
+                    "offers": "strategy" if verb.value in SHIPPED_VERBS else "verb",
+                    "id": str(getattr(value, "id", "") or ""),
+                    "verb": verb.value,
+                    "request": getattr(request, "__name__", ""),
+                    "capabilities": sorted(c.value for c in capabilities_of(value)),
+                }
+            )
+        elif issubclass(value, Prompt):
+            out.append({"name": name, "offers": "prompt", "body": value().body_label()})
+    return out
+
+
+def namespace_problems(receipt: dict[str, Any]) -> list[str]:
+    """Ids that would land in a ledger under a name nothing ties back to this pack.
+
+    A strategy's `id` is what an eval subject and a ledger record key on, so two packs shipping
+    `implement/tdd` produce records that cannot be told apart afterwards. Reported rather than
+    refused here, and an entry criterion for a published index — the same split the guardrail
+    projection gets.
+    """
+    name = receipt["subject"]["name"]
+    return [
+        f"{offer['name']} declares id={offer['id']!r}, which is not namespaced by {name!r}"
+        for offer in receipt["offers"]
+        if offer["offers"] == "strategy" and offer["id"] and not offer["id"].startswith(f"{name}/")
+    ]
+
+
+def render_pack(receipt: dict[str, Any]) -> list[str]:
+    """The human form of a pack receipt."""
+    subject = receipt["subject"]
+    declared = receipt["declares"]
+    lines = [
+        f"pack          {subject['name']}  {subject['version'] or '(version unknown)'}",
+        f"distribution  {subject['distribution'] or '(unresolved)'}  module {subject['module']}",
+        f"kind          {declared['kind'] if declared else '(undeclared)'}",
+    ]
+    if declared and declared["summary"]:
+        lines.append(f"summary       {declared['summary']}")
+
+    explain = {
+        "none": "nothing importable — every module is a docstring, so installing it runs nothing",
+        "modules": "importable code — installing puts it in your import graph",
+        "unknown": "NOT CHECKED — the distribution could not be resolved to files",
+    }[receipt["imports"]]
+    lines += ["", f"imports       {receipt['imports']}  ({explain})"]
+    if receipt["imports"] == "modules":
+        lines.append(
+            f"              {'imported to read what it offers' if receipt['imported'] else 'not imported'}"
+        )
+
+    match = receipt["kind_matches"]
+    if match is False:
+        lines.append(
+            f"              <- what it offers does not match kind={declared['kind'] if declared else '?'}"
+        )
+    elif match is None:
+        lines.append("              <- kind could not be checked against what it offers")
+
+    lines += ["", "offers"]
+    for offer in receipt["offers"] or []:
+        if offer["offers"] == "strategy":
+            lines.append(
+                f"  {offer['name']:<24} strategy  {offer['request'] or '(no request)'}  "
+                f"[{offer['verb']}]  id={offer['id'] or '(unset)'}"
+            )
+            lines.append(f"  {'':<24} {', '.join(offer['capabilities']) or '(declares none)'}")
+        else:
+            lines.append(f"  {offer['name']:<24} prompt    body:{offer['body']}")
+    if not receipt["offers"]:
+        lines.append("  (nothing importable to offer — resources only)")
+
+    lines += ["", "evidence"]
+    corpus = receipt["corpus"]
+    if corpus is None:
+        lines.append("  corpus      none — this pack ships no cases, so it cannot be measured")
+    else:
+        # Two counts over the same cases, not a partition of them: a case may carry both a
+        # deterministic expectation and a rubric, and phrasing it as "A deterministic, B rubric"
+        # invited the reading that they add up to the total.
+        lines.append(
+            f"  corpus      {corpus['cases']} case(s) in {corpus['path']} — "
+            f"{corpus['deterministic']} with checks a machine settles, "
+            f"{corpus['rubric']} needing a judge"
+        )
+    cassettes = receipt["cassettes"]
+    lines.append(
+        f"  cassettes   {len(cassettes)}"
+        + (f"  ({', '.join(cassettes)})" if cassettes else "  — nothing replays offline")
+    )
+
+    problems = list(receipt["problems"]) + namespace_problems(receipt)
+    if problems:
+        lines += ["", "problems"]
+        lines += [f"  {problem}" for problem in problems]
 
     lines += ["", f"digest        {receipt['digest']}"]
     return lines

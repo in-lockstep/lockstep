@@ -1,0 +1,8 @@
+{
+  "name": "nothing-to-find",
+  "input": {"diff": "+def slug(title: str) -> str:\n+    return title.lower().replace(' ', '-')\n"},
+  "expect": {
+    "count": {"findings": 0},
+    "rubric": "Reports nothing. A lens that always finds something is a lens nobody can act on, and this corpus exists to hold that line."
+  }
+}
