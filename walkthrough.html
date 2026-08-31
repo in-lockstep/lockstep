@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The walkthrough — in-lockstep</title>
+<meta name="description" content="A real project adopts in-lockstep in four commands, then one change travels the whole lifecycle: idea, ticket, red, green, review, merge.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><i>▮</i> in-lockstep</a>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="#adopt">Adopt</a>
+      <a href="#travel">The path</a>
+      <a href="#real">The receipts</a>
+    </nav>
+    <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:40px">
+    <div class="col">
+      <p class="eyebrow">The walkthrough</p>
+      <h1>Four commands to adopt it. Then watch one change <em>walk the whole path.</em></h1>
+      <p class="lede">Below is a real Python library — <code>tempo</code>, which parses duration
+        strings — adopting the framework, and then a feature travelling from a rough idea to a
+        merged pull request. <strong>Every terminal block on this page is captured output</strong>,
+        not a mock-up. Where a step needs a model, we say so.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="adopt">
+    <div class="col">
+      <p class="eyebrow">Part one</p>
+      <h2>Adoption is four commands and one file you own</h2>
+      <p class="lede">There is no service to sign up for, no control plane, and nothing to
+        configure before the first run works.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">Step 1 · install</span>
+        <h3>Add it like any other dependency</h3>
+        <p class="tight">One distribution. Provider SDKs are extras, so a bare install pulls none of
+          them — cold start matters in CI.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>tempo — a small Python library, 4 files, 4 tests</b></div>
+<pre><span class="p">$</span> uv add in-lockstep</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 2 · init</span>
+        <h3>It reads your project before it writes anything</h3>
+        <p class="tight">No questionnaire, no wizard. It looks at what is already there and
+          scaffolds a lifecycle that binds the tools you actually use.</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>detection, then two files</b></div>
+<pre><span class="p">$</span> in-lockstep init
+
+wrote .lockstep/lockstep.py
+  detected <span class="g">stack: python; tests: pytest; lint: ruff; Makefile (check)</span>
+wrote .github/workflows/lockstep.yml
+
+One job, because reviewing is read-only. Add the privileged `apply` job the
+day a verb of yours produces a change to write; the file says where.</pre>
+          <p class="term-cap">It found pytest and ruff and wrote the bindings for them. It also
+            noticed there is nothing here that writes yet, and scaffolded the CI file accordingly —
+            one job, not two.</p>
+        </div>
+        <p>The file it wrote is thirty lines and it is yours. This is the whole of it that matters:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>.lockstep/lockstep.py</b></div>
+<pre><span class="d">from</span> in_lockstep <span class="d">import</span> Lockstep
+<span class="d">from</span> in_lockstep.adapters <span class="d">import</span> PytestTest, RuffValidate, Test, Validate
+<span class="d">from</span> in_lockstep.middleware <span class="d">import</span> CostBudget, otel
+
+lockstep = Lockstep.detect()
+
+lockstep.bind(Test, <span class="w">PytestTest(args=["-q"])</span>)
+lockstep.bind(Validate, <span class="w">RuffValidate()</span>)
+
+lockstep.middleware += [otel(), <span class="y">CostBudget(usd=2.00)</span>]</pre>
+          <p class="term-cap">Executable Python, not a manifest. Your lifecycle is a module that
+            runs — so it diffs, it reviews, it has blame, and you can put a breakpoint in it.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 3 · ls</span>
+        <h3>Read what will actually run</h3>
+        <p class="tight">Configuration as code has one honest disadvantage: you can read a YAML
+          file, but you cannot read a container. This is the answer to it.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>the resolved lifecycle</b></div>
+<pre><span class="p">$</span> in-lockstep ls
+
+<span class="d">detected  stack: python; tests: pytest; lint: ruff; Makefile (check); ci: github</span>
+
+bindings
+  EgressPolicy           -&gt; UnsandboxedEgress(singleton, explicit)
+  Test                   -&gt; <span class="g">PytestTest</span>      (singleton, explicit)
+  Validate               -&gt; <span class="g">RuffValidate</span>    (singleton, explicit)
+
+middleware  <span class="d">(privileged tier runs outside this chain and is not listed)</span>
+  OtelMiddleware
+  CostBudget</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 4 · run</span>
+        <h3>A real run, in under a second, for nothing</h3>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>no API key set</b></div>
+<pre><span class="p">$</span> in-lockstep run selfcheck
+
+validate  <span class="g">succeeded</span>
+test      <span class="g">succeeded</span>
+
+spend     <span class="g">$0.0000</span>, 0.88s
+ledger    lockstep-history:records/selfcheck-20260831T135020Z-775b.json</pre>
+          <p class="term-cap">Two verbs ran out of process, and the run left a record. From a plain
+            Python project to a working lifecycle with an audit trail: four commands, no credential,
+            no cost.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 5 · make it yours</span>
+        <h3>Adding a house rule is a diff, not a support ticket</h3>
+        <p class="tight">Every team has a rule the shipped prompts do not know about. Ours: do not
+          widen the grammar without a test for the new unit. One file, one line of binding — and
+          then the framework will show you exactly what changed about what the model is told.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>what your guardrail actually did to the prompt</b></div>
+<pre><span class="p">$</span> in-lockstep show-prompt security --diff
+
+<span class="d">--- shipped/review/security</span>
+<span class="d">+++ AiReview/review/security</span>
+<span class="d">@@ -42,6 +42,10 @@</span>
+<span class="g">+&lt;!-- guardrail: tempo/house --&gt;</span>
+<span class="g">+Never propose a change to `src/tempo/parse.py` that widens the grammar without</span>
+<span class="g">+a test for every new unit. The grammar is the whole library; an untested unit</span>
+<span class="g">+is a silent parse failure downstream.</span></pre>
+          <p class="term-cap">Four lines, reviewable, in the diff of the pull request that added
+            them. <code>plus()</code> appends — a house rule lands after the shipped baseline and
+            cannot displace it.</p>
+        </div>
+        <p class="tight">And <code>ls</code> keeps score, so nobody has to remember which prompts a
+          team has customised:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>in-lockstep ls</b></div>
+<pre>prompts  <span class="d">(what each AI binding composes; * = not the shipped prompt)</span>
+  AiReview           review/intent review/performance review/security review/tests
+                     guardrails: baseline, review/reviewing, <span class="y">tempo/house</span></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="travel">
+    <div class="col">
+      <p class="eyebrow">Part two</p>
+      <h2>One change, the whole path</h2>
+      <p class="lede">The feature: <code>tempo</code> should understand weeks, so <code>2w</code>
+        parses as 1,209,600. Watch where the machine works and where <span style="color:var(--human)">a
+        person decides</span> — the two tracks the name refers to.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">Stage 1 · rfe</span>
+        <h3>A rough idea becomes a ticket somebody can argue with</h3>
+        <p class="tight">You have a sentence. The framework turns it into a draft with a problem
+          statement and acceptance criteria — and then stops.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>drafted, and deliberately not filed</b></div>
+<pre><span class="p">$</span> in-lockstep rfe --idea "tempo should understand weeks, so 2w parses as 1209600"
+
+rfe       <span class="g">succeeded</span>
+
+<span class="y">not filed. Read it, then re-run with --create to file it — or edit and
+file it yourself.</span></pre>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">A person decides</span>
+        <h3>Nothing reaches your tracker without a human</h3>
+        <div class="decision">
+          <h4>The human boundary</h4>
+          <p>The draft is printed, not filed. <code>--create</code> is a second command a person
+            runs after reading it. The framework's position is that the human acts in the system of
+            record — the tracker, the pull request, the environment approval — never in a bespoke
+            UI it invented.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 2 · triage</span>
+        <h3>Classify it before anyone expensive looks at it</h3>
+        <p>What kind of work is this, how urgent, what is missing from the description. Cheap
+          enough to route to a local model — <code>triage</code> on <code>local:qwen3-8b</code>
+          costs exactly nothing and still counts its tokens.</p>
+      </div>
+
+      <div class="step human">
+        <span class="tag">A person decides</span>
+        <h3>The first thing the framework does is refuse</h3>
+        <p class="tight">Ask it to implement, and it stops — because nothing in this lifecycle yet
+          says how a human stays in the loop.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>a startup refusal, with the fix</b></div>
+<pre><span class="p">$</span> in-lockstep implement --ticket-file weeks.md --strategy tdd
+
+<span class="r">Error: TDD lets a model write or execute, and no ApprovalGate is in the
+middleware chain. Add one:</span>
+
+    <span class="y">lockstep.middleware += [ApprovalGate()]</span>
+
+The human acts in your system of record — a review request, an environment
+approval — so the gate refuses without a grant rather than prompting.</pre>
+          <p class="term-cap">Before the first model call, before a cent is spent. The refusal names
+            the line to paste, and explains why it would rather refuse than ask you a question in a
+            terminal nobody is watching at 2am.</p>
+        </div>
+        <div class="decision">
+          <h4>You add one line</h4>
+          <p>That line is a diff, in a file loaded from a trusted ref, reviewed like any other code.
+            Which is the point: the thing that grants an agent its authority is itself under
+            review.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 3 · implement, test-first</span>
+        <h3>Red, then green — enforced by the strategy, not asked for in a prompt</h3>
+        <p class="tight">The TDD strategy runs in two model steps with a real test run between
+          them. It asks for a failing test, <strong>materialises that test in a throwaway worktree
+          and runs your suite to confirm it is red</strong>, then asks for the implementation and
+          runs the suite again to confirm green.</p>
+        <p class="tight">A test that passes before anything was written stops the run
+          (<code>tdd.not_red</code>) — because a test that was already green tested nothing. An
+          implementation that leaves it failing comes back <code>tdd.not_green</code> rather than
+          opening a pull request that does not work.</p>
+        <div class="control"><b>The control:</b> the strategy will not proceed without a red test
+          first. Not a prompt asking nicely — a `Test` verb it actually ran.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 4 · staging</span>
+        <h3>The model writes nothing to your tree</h3>
+        <p class="tight">A session stages its work into a <code>ChangeSet</code> and touches
+          nothing. Applying it is a separate step that re-runs the path guard on the artifact.</p>
+        <div class="control"><b>The control:</b> in CI those are two jobs — and only the second
+          holds a write token. The job that talks to the model has <code>contents: read</code> and
+          no ability to write; the job that opens the change never sees the provider credential.
+          One process cannot hold both.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 5 · review</span>
+        <h3>Four lenses, each an agent rather than a checklist row</h3>
+        <p class="tight">Security, intent, performance, tests — separately promptable, separately
+          budgetable, separately measurable. Here is the security lens on a real merged pull
+          request, replayed offline:</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>no key, deterministic, free</b></div>
+<pre><span class="p">$</span> in-lockstep review --offline
+
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+review/security  <span class="g">succeeded</span>
+  actions/save/action.yml:29 <span class="w">Unquoted variable in `find` allows word-splitting
+    on paths with spaces or glob characters</span>
+  actions/save/action.yml:23 <span class="w">GitHub Actions expression `${{ inputs.paths }}`
+    is interpolated into a shell script before variable assignment</span>
+
+cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
+          <p class="term-cap">Two genuine findings in a real workflow file. This exact command works
+            on a clean install with no key, which is how you evaluate the output quality before you
+            spend anything.</p>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">A person decides</span>
+        <h3>It opens as a draft, and it says so</h3>
+        <div class="decision">
+          <h4>Draft until the tests actually pass</h4>
+          <p>An AI-authored change opens as a <strong>draft</strong> pull request, and is marked
+            ready only when the suite passed against the staged change. If it did not, the run files
+            a follow-up issue instead — and the comment it leaves says, in as many words,
+            <em>“Nobody has read it yet.”</em></p>
+          <p>Your reviewers keep the last word, and the tool never pretends otherwise.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 6 · when it fails</span>
+        <h3>A failed run becomes a ticket, not a silence</h3>
+        <p class="tight">If the suite goes red, the run opens an <code>ai-generated</code> issue
+          describing what it tried — which an agent may pick up and attempt again.</p>
+        <div class="control"><b>The control:</b> the loop is bounded. Attempts are capped, the count
+          lives in labels on the ticket, and <code>doctor</code> <em>fails</em> if those labels do
+          not exist — because a tracker that silently drops an unknown label would leave every
+          follow-up reading attempt zero and the cap bounding nothing.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Stage 7 · backport</span>
+        <h3>Deterministic first; a model only where one is needed</h3>
+        <p class="tight">Replaying a merged change onto a release line is <code>git cherry-pick
+          -x</code> in a throwaway worktree — no model, no cost, no risk. A model is invited only
+          for the conflicted paths, only with <code>--resolve</code>, and only inside the same
+          budget and approval gates as everything else.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="real">
+    <div class="col">
+      <p class="eyebrow">Part three</p>
+      <h2>This is not a demo. Here are the receipts.</h2>
+      <p class="lede">The path above ran in this framework's own repository, on a real bug, with
+        nobody watching. Every number below comes from the ledger record that run wrote.</p>
+    </div>
+
+    <div class="term" style="margin-top:34px">
+      <div class="term-bar"><span class="dot on"></span><b>lockstep-history:records/fix-from-ticket-33334652697-…json</b></div>
+<pre>workflow   <span class="w">fix/from-ticket</span>          args      {"ticket": "<span class="w">#109</span>"}
+status     <span class="g">succeeded</span>                 decided   true
+approval   {"attended": <span class="y">false</span>, "by": "<span class="y">labeled:tpouyer</span>"}
+tokens     3,013,462                 cost_usd  <span class="y">9.62445</span>
+
+findings
+  fix.staged                  wrote src/in_lockstep/ai/builtins.py
+  fix.staged                  wrote tests/…/test_sandbox_fixtures_use_sys_executable.py
+  <span class="y">injection.exfil_token_names</span> ×11     <span class="d">the scanner reading the ticket text</span>
+  <span class="y">injection.ignore_previous</span>   ×5
+  fix.unstructured            <span class="d">the final message was not the JSON the schema asked
+                              for; its text was kept as the summary. The staged change
+                              came through the tool boundary and is unaffected.</span></pre>
+      <p class="term-cap">Note the last line. The model returned something malformed, the framework
+        noticed, kept what was usable, and said which part it could not parse — rather than throwing
+        away a correct change or pretending the reply was fine.</p>
+    </div>
+
+    <div class="proof" style="margin-top:30px">
+      <div><b>#109</b><span>an issue labelled <code>ai-generated</code> — filed by an earlier failed run, not by a person</span></div>
+      <div><b>$9.62</b><span>one unattended fix run, inside a declared ceiling</span></div>
+      <div><b>#112</b><span>the pull request it produced: +55 / −5, merged</span></div>
+      <div><b>2</b><span>files staged — the fix, and a regression test for it</span></div>
+    </div>
+
+    <div class="col" style="margin-top:34px">
+      <p>Read that chain again, because it is the whole product in one line: <strong>a run failed
+        and filed its own bug report; a person put a label on it; an agent fixed it and opened a
+        pull request; a person merged it.</strong> Neither side of that did the other's job.</p>
+      <a class="backlink" href="index.html">← Back to the overview</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Terminal output on this page is captured verbatim from the commands shown, run against the
+      <code>tempo</code> sample project and this framework's own repository.</p>
+  </div>
+</footer>
+
+</body>
+</html>

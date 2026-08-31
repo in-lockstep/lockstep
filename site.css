@@ -1,0 +1,278 @@
+/* in-lockstep — "the two tracks".
+ *
+ * The name is the thesis: automation and people advance together, synchronising at every human
+ * boundary. So the page is built on two coloured tracks — mint for what the machine did, gold for
+ * where a person decided — and the walkthrough is a spine those two run down rather than a section
+ * with bullet points in it. */
+
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  --ink:        #0D0E12;
+  --ink-2:      #14161C;
+  --ink-3:      #1C1F27;
+  --line:       #262A34;
+  --line-soft:  #1B1E26;
+
+  --text:       #E8E6E1;
+  --text-2:     #A7A9AF;
+  --text-3:     #6E727C;
+
+  --machine:    #74D6C2;   /* what the framework did */
+  --machine-dim:#2A4B47;
+  --human:      #E9B872;   /* where a person decided */
+  --human-dim:  #4A3C26;
+  --alarm:      #E5806B;
+
+  --ivory:      #F3F0E9;
+  --ivory-ink:  #16171B;
+
+  --measure:    66ch;
+  --glow:       0 0 0 1px rgba(116,214,194,.16), 0 24px 60px -30px rgba(116,214,194,.35);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: Manrope, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+.col  { max-width: var(--measure); }
+.mid  { max-width: 860px; margin-left: auto; margin-right: auto; }
+
+a { color: var(--machine); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:focus-visible { outline: 2px solid var(--machine); outline-offset: 4px; border-radius: 2px; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 24px 0; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 20;
+  background: linear-gradient(to bottom, var(--ink) 62%, rgba(13,14,18,0));
+  backdrop-filter: blur(2px);
+}
+.mark {
+  font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700;
+  color: var(--text); text-decoration: none; letter-spacing: -.02em;
+}
+.mark i { font-style: normal; color: var(--machine); }
+.masthead nav { display: flex; gap: 24px; font-size: 14.5px; }
+.masthead nav a { color: var(--text-2); text-decoration: none; }
+.masthead nav a:hover { color: var(--machine); }
+.cta {
+  font-family: "JetBrains Mono", monospace; font-size: 13px;
+  border: 1px solid var(--machine-dim); color: var(--machine);
+  padding: 7px 14px; border-radius: 4px; text-decoration: none;
+}
+.cta:hover { border-color: var(--machine); }
+
+/* ---------- type ---------- */
+
+h1 {
+  font-family: Newsreader, Georgia, serif; font-weight: 400;
+  font-size: clamp(44px, 7.4vw, 86px); line-height: 1.0; letter-spacing: -.028em;
+  margin: 0 0 24px; text-wrap: balance;
+}
+h1 em { font-style: italic; color: var(--machine); }
+h2 {
+  font-family: Newsreader, Georgia, serif; font-weight: 400;
+  font-size: clamp(30px, 4.2vw, 46px); line-height: 1.1; letter-spacing: -.02em;
+  margin: 0 0 18px; text-wrap: balance;
+}
+h3 {
+  font-family: Newsreader, Georgia, serif; font-weight: 500;
+  font-size: 24px; line-height: 1.2; letter-spacing: -.012em; margin: 0 0 10px;
+}
+h4 {
+  font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
+  margin: 0 0 14px;
+}
+p { margin: 0 0 20px; }
+.lede { font-size: 21.5px; line-height: 1.5; color: var(--text-2); font-weight: 400; }
+.lede strong { color: var(--text); font-weight: 600; }
+.eyebrow {
+  font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--machine); margin: 0 0 20px;
+}
+ul { margin: 0 0 20px; padding-left: 20px; }
+li { margin-bottom: 10px; }
+li::marker { color: var(--text-3); }
+code {
+  font-family: "JetBrains Mono", monospace; font-size: .85em;
+  background: var(--ink-3); padding: 2px 6px; border-radius: 3px; color: var(--text);
+}
+strong { font-weight: 600; }
+
+section { padding: 92px 0; position: relative; }
+.rule { border: 0; border-top: 1px solid var(--line-soft); margin: 0; }
+
+/* ---------- terminal ---------- */
+
+.term {
+  background: #08090C; border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden; margin: 28px 0;
+}
+.term.lit { box-shadow: var(--glow); }
+.term-bar {
+  display: flex; align-items: center; gap: 9px; padding: 10px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--text-3);
+  letter-spacing: .05em;
+}
+.term-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #2A2E38; }
+.term-bar .dot.on { background: var(--machine); }
+.term pre {
+  margin: 0; padding: 20px 18px 22px; overflow-x: auto;
+  font-family: "JetBrains Mono", monospace; font-size: 13px; line-height: 1.66;
+  color: #C9CDD4;
+}
+.term .p { color: var(--machine); }
+.term .d { color: var(--text-3); }
+.term .g { color: var(--machine); }
+.term .y { color: var(--human); }
+.term .r { color: var(--alarm); }
+.term .w { color: #FFFFFF; }
+.term-cap {
+  padding: 0 18px 16px; font-size: 13.5px; color: var(--text-3); line-height: 1.5;
+  border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: -2px;
+}
+
+/* ---------- the spine: two tracks ---------- */
+
+.spine { position: relative; padding-left: 46px; }
+.spine::before {
+  content: ""; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px;
+  background: linear-gradient(to bottom, var(--machine-dim), var(--human-dim), var(--machine-dim));
+}
+.step { position: relative; padding: 0 0 54px; }
+.step::before {
+  content: ""; position: absolute; left: -39px; top: 7px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ink); border: 2px solid var(--machine);
+}
+.step.human::before { border-color: var(--human); }
+.step .tag {
+  font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--machine); margin-bottom: 8px; display: block;
+}
+.step.human .tag { color: var(--human); }
+.step h3 { margin-bottom: 8px; }
+.step p { color: var(--text-2); max-width: var(--measure); }
+.step p.tight { margin-bottom: 12px; }
+
+.control {
+  border-left: 2px solid var(--human-dim); padding: 4px 0 4px 16px; margin: 18px 0 0;
+  font-size: 15px; color: var(--text-2); max-width: var(--measure);
+}
+.control b { color: var(--human); font-weight: 600; }
+
+/* the human-decision card: ivory, because a person is not a terminal */
+.decision {
+  background: var(--ivory); color: var(--ivory-ink); border-radius: 8px;
+  padding: 24px 26px; margin: 24px 0; max-width: 640px;
+}
+.decision h4 { color: #6B6250; margin-bottom: 10px; }
+.decision p { color: #34363C; margin-bottom: 0; }
+.decision p + p { margin-top: 12px; }
+.decision code { background: rgba(0,0,0,.07); color: #16171B; }
+
+/* ---------- quotes ---------- */
+
+.quote { margin: 30px 0; max-width: 760px; }
+.quote blockquote {
+  margin: 0 0 14px; font-family: Newsreader, Georgia, serif; font-weight: 300;
+  font-size: clamp(22px, 2.7vw, 30px); line-height: 1.34; letter-spacing: -.012em;
+  color: var(--text);
+}
+.quote .who { font-size: 14px; color: var(--text-3); font-family: "JetBrains Mono", monospace; }
+.quote .who b { color: var(--text-2); font-weight: 500; }
+
+.qgrid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.qcard {
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: 8px; padding: 24px;
+}
+.qcard blockquote {
+  margin: 0 0 14px; font-family: Newsreader, Georgia, serif; font-weight: 300;
+  font-size: 19px; line-height: 1.4; color: var(--text);
+}
+.qcard .who { font-size: 13px; font-family: "JetBrains Mono", monospace; color: var(--text-3); }
+.qcard .who b { display: block; color: var(--machine); font-weight: 500; margin-bottom: 2px; }
+
+/* ---------- proof strip ---------- */
+
+.proof { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+         background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.proof div { background: var(--ink-2); padding: 22px 20px; }
+.proof b {
+  display: block; font-family: Newsreader, serif; font-size: 30px; font-weight: 400;
+  color: var(--machine); letter-spacing: -.02em; line-height: 1.1; margin-bottom: 6px;
+}
+.proof span { font-size: 13.5px; color: var(--text-3); line-height: 1.4; display: block; }
+
+/* ---------- start block ---------- */
+
+.start { display: grid; gap: 26px; grid-template-columns: 1.05fr 1fr; align-items: start; }
+@media (max-width: 900px) { .start { grid-template-columns: 1fr; } }
+.start ol { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+.start ol li {
+  counter-increment: s; position: relative; padding-left: 40px; margin-bottom: 22px;
+}
+.start ol li::before {
+  content: counter(s); position: absolute; left: 0; top: 0;
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--machine-dim);
+  color: var(--machine); font-family: "JetBrains Mono", monospace; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Mono, because Manrope renders `--flag` as something that looks like an en dash, and a command
+   somebody might retype must be unambiguous about its hyphens. */
+.start ol li b {
+  display: block; font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 500;
+  color: var(--text); margin-bottom: 5px; letter-spacing: -.01em;
+}
+.start ol li span { color: var(--text-2); font-size: 15px; }
+
+/* ---------- personas ---------- */
+
+.roles { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.role { border-top: 2px solid var(--line); padding-top: 16px; }
+.role b { display: block; font-size: 15.5px; margin-bottom: 4px; }
+.role span { font-size: 14.5px; color: var(--text-3); }
+
+/* ---------- footer / cta ---------- */
+
+.final { text-align: center; padding: 100px 0; }
+.final h2 { margin-bottom: 22px; }
+.install {
+  display: inline-block; text-align: left; background: #08090C; border: 1px solid var(--line);
+  border-radius: 8px; padding: 18px 24px; font-family: "JetBrains Mono", monospace;
+  font-size: 14px; color: #C9CDD4; margin: 8px 0 20px;
+}
+.install .p { color: var(--machine); }
+
+footer { border-top: 1px solid var(--line-soft); padding: 32px 0 64px; font-size: 14px; color: var(--text-3); }
+footer a { color: var(--text-2); }
+footer p { margin: 0 0 8px; }
+
+.backlink { display: inline-block; margin-top: 40px; font-family: "JetBrains Mono", monospace; font-size: 13px; }
+
+@media (max-width: 640px) {
+  body { font-size: 16.5px; }
+  .wrap { padding: 0 18px; }
+  section { padding: 64px 0; }
+  .term pre { font-size: 12px; }
+  .spine { padding-left: 32px; }
+  .step::before { left: -25px; }
+  .masthead nav { display: none; }
+}
