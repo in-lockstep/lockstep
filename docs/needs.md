@@ -13,7 +13,7 @@ adoption did not care which architecture served it.
 | | Need | Who | Status |
 |---|---|---|---|
 | **N1** | Publish the capabilities | everyone | **moot** — the composite actions and the exec image belonged to the compiler and went with it. What replaces them is a CLI and a twelve-line trampoline. |
-| **N2** | Run the loop on this repository | everyone | **closed in principle, open in fact.** The framework validates and tests itself in-process, and `review` runs the whole path offline. A live model call has not happened, so this is not yet evidence. |
+| **N2** | Run the loop on this repository | everyone | **closed in principle, thin in fact.** The framework validates and tests itself in-process, `review` runs the whole path offline, and live model calls have now happened — `/implement` and `/fix` have both run from a comment, and the ledger carries their records. What is still missing is volume: a handful of runs is not a merge rate, and N3 stays open. |
 | **N3** | A measured time to first value | leader, small team | open. `init` writes two files; nobody has timed the path from that to a first useful review. |
 | **N4** | A shorter first day | small team | **improved.** The first day used to be a spec tree of seven directories. It is now `init`, then editing one Python file. |
 | **N5** | A way to tell a working judge from a broken one | small team | open, and now visible: `eval report` says 27 outstanding rather than reporting a pass rate, so a suite with no judge announces itself. |
@@ -24,7 +24,7 @@ adoption did not care which architecture served it.
 | **N10** | A controls crosswalk | security | **done** — [`controls-crosswalk.md`](controls-crosswalk.md), and it says which control was lost rather than replaced. |
 | **N11** | An inner loop for prompt iteration | author | **done** — `show-prompt` renders the composition offline with no key, and `--offline` replays a cassette. |
 | **N12** | A quick reference for the layer taxonomy | author | **partly moot.** The compiler's three prompt layers are now guardrails, body, skills and contexts, composed in `Prompt.system` and frozen in the characterization corpus. |
-| **N13** | An entry surface that routes by persona | everyone | open. |
+| **N13** | An entry surface that routes by persona | everyone | **done** — the site at https://in-lockstep.github.io/lockstep/ is built from five independent persona reviews of the source: six aspects ranked by how many reviewers raised each, one detail page per aspect with their quotes, and the objection all five shared on the front page. Terminal output on it is captured verbatim, not mocked. |
 | **N14** | Publish the Python distributions | everyone | **done** for 0.1.x. 1.0 reuses the name for a different product, which ADR 0001 records as a deliberate and slightly uncomfortable decision. |
 
 ## The one that matters most

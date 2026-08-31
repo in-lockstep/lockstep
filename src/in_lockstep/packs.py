@@ -241,8 +241,19 @@ def _module_root(dist: Any, module: str) -> Path | None:
     """Where a distribution put a module's files, without importing it.
 
     `dist.files` plus `locate_file` is the metadata answer to a question `importlib.resources`
-    answers by importing. It is allowed to fail: a distribution installed from a zip has no such
-    path, and `imports()` reports `unknown` rather than guessing.
+    answers by importing, and it is the first thing tried because it is the most direct.
+
+    It does not always answer. An **editable** install records a `.pth` and its dist-info and
+    nothing else — which is how a pack author installs their own pack while writing it, so the
+    population most likely to hit this is the one least able to explain it. Their pack reported
+    `imports: unknown` and no `pack.toml`, and the honest-but-useless answer looked like a broken
+    framework. Found by installing the worked example for the first time, which is what
+    `design/extension-packs.md` §11 said would happen.
+
+    So the fallback is `find_spec`, which resolves a top-level name to its directory through the
+    ordinary path finders and **does not execute the module** — asserted in the tests, because
+    "listing a pack runs no code it ships" is the property this whole module is arranged around
+    and a fallback that quietly broke it would be worse than reporting `unknown`.
     """
     top = module.split(".")[0]
     try:
@@ -254,6 +265,19 @@ def _module_root(dist: Any, module: str) -> Path | None:
                 return located.parents[len(parts) - 2] if len(parts) > 1 else located.parent
     except Exception:  # pragma: no cover - defensive: metadata shapes vary by installer
         return None
+    return _located_without_importing(top)
+
+
+def _located_without_importing(top: str) -> Path | None:
+    """A top-level package's directory, via the import machinery but not the import."""
+    import importlib.util
+
+    try:
+        spec = importlib.util.find_spec(top)
+    except (ImportError, ValueError):  # a name that is not importable at all
+        return None
+    for location in (spec.submodule_search_locations or ()) if spec else ():
+        return Path(str(location)).resolve()
     return None
 
 

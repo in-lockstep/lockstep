@@ -436,3 +436,66 @@ def test_a_pack_offering_a_custom_verb_is_told_apart_from_a_strategy(
     assert offer["request"] == "Benchmark"
     assert offer["capabilities"] == ["executes_code"]
     assert receipt["kind_matches"] is True
+
+
+class EditableDist:
+    """What `importlib.metadata` reports for an editable install: a `.pth` and dist-info.
+
+    Not a hypothetical shape. `uv pip install -e` on the worked example records exactly this, so
+    `dist.files` names nothing inside the package and the metadata path cannot answer.
+    """
+
+    name = "acme-review-prompts"
+    version = "1.0.0"
+    files = (
+        "_editable_impl_acme_review_prompts.pth",
+        "acme_review_prompts-1.0.0.dist-info/METADATA",
+        "acme_review_prompts-1.0.0.dist-info/RECORD",
+    )
+
+    def locate_file(self, path):  # pragma: no cover - never reached for these entries
+        raise AssertionError("no recorded file belongs to the package")
+
+
+class EditableEntry:
+    def __init__(self, name: str, module: str) -> None:
+        self.name = name
+        self.value = module
+        self.dist = EditableDist()
+
+    def load(self):  # pragma: no cover - listing must not import
+        raise AssertionError("listing a pack must not import it")
+
+
+def test_an_editable_install_is_located_without_importing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug the first real install found, and the property the fix must not cost.
+
+    An editable install records no package files, so the metadata path returns nothing and a pack
+    reported `imports: unknown` with no `pack.toml` — the honest-but-useless answer, shown to the
+    population least able to explain it, since installing your own pack editable is how you write
+    one. `find_spec` resolves the directory through the ordinary path finders and does not execute
+    the module, which is asserted here rather than assumed: "listing a pack runs no code it ships"
+    is the property this module is arranged around.
+    """
+    module = tmp_path / "editable_pack"
+    module.mkdir()
+    (module / "__init__.py").write_text('"""Prose only."""\n')
+    (module / "pack.toml").write_text('[pack]\nkind = "prompt"\nsummary = "Editable"\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("editable_pack", None)
+
+    found = installed(entries=[EditableEntry("editable-pack", "editable_pack")])[0]
+
+    assert found.root == module.resolve(), "an editable install could not be located"
+    assert found.imports() == "none"
+    assert found.manifest().kind == "prompt"
+    assert "editable_pack" not in sys.modules, "locating a pack imported it"
+
+
+def test_a_module_that_does_not_exist_stays_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fallback may not invent a location. A pack nothing can resolve has not been checked."""
+    found = installed(entries=[EditableEntry("ghost", "no_such_module_anywhere_xyz")])[0]
+    assert found.root is None
+    assert found.imports() == "unknown"

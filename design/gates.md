@@ -132,6 +132,12 @@ no enforcement will not survive seven phases" — applies with equal force to se
 | `GATE-CI-1` | P7 | held | No workflow under `.github/workflows/` invokes `lockstep`; no `aw-*.lock.yml` remains. |
 | `GATE-PLUGIN-1` | — | held | The container docstring's promised order — explicit, then plugins, then defaults — is real end to end: an `in_lockstep.standards` entry point applies during `Lockstep.detect()`, its every bind lands at `Tier.PLUGIN` (the facade offers no tier parameter, so a plugin *cannot* bind `EXPLICIT`), its policy layers carry `plugin:<name>` as source, application order is entry-point-name order on every machine, and the repository's own `lockstep.bind` wins whether it ran before or after. A plugin that fails to load raises `StandardsError` naming it rather than running without standards somebody installed; there is no skip-loading environment variable, per the sealed-standards posture (visibility of removal, not impossibility). `ls` prints what applied. Post-1.0 addition (roadmap item 23), hence no phase. |
 
+## Policy
+
+| Gate | Phase | Status | Assertion |
+|---|---|---|---|
+| `GATE-POLICY-2` | — | unmet | Every field `Policy` carries reaches something that enforces it. It does not: `InvokePolicy.under()` composes `max_turns`, `deny_tools` and `scan_input` into the loop, while `network`, `permissions`, `max_ai_credits`, `per_run_ai_credits` and `daily_ai_credits` are merged by `resolve()`, printed by `ls`, reported in the receipt, and read by nothing else — the three credit fields are referenced nowhere outside `policy.py` at all. This is the shape `GATE-POLICY-1` was raised about from the other side: the merge semantics were correct and tested while `resolve()` had one consumer, so a contributed ceiling was a comment. Recorded here rather than fixed because the resolution is a decision, not a patch: `network` is superseded by the enforced egress control (`IN_LOCKSTEP_EGRESS`, probe-verified, `UnsandboxedEgress` as the named opt-out) and should probably be deleted rather than wired, while the credit fields predate `Budget` and `Spend` doing the same job in dollars. Until one or the other happens, `docs/extending.md` says which three bite. Found by a persona review of the org-standards path, 2026-08-31. |
+
 ## Packs
 
 Post-1.0, from `design/extension-packs.md`. Extension packs distribute a strategy, a prompt or a

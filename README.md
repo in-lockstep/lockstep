@@ -40,6 +40,8 @@ still advertises.
 | GitLab | partial | `GitLabScm`/`GitLabIssues` and host-aware `init` ship; no live dogfooded pipeline yet |
 | Keyless CI (federation) | runs | GitHub OIDC exchanged at Anthropic; no `ANTHROPIC_API_KEY` in secrets |
 | Org standards as a package | runs | `in_lockstep.standards` entry points at `Tier.PLUGIN`; worked example in `examples/acme-standards` |
+| Extension packs | runs | `in_lockstep.extensions` entry points that **offer** rather than apply; `pack describe` derives a receipt, `add` records what you accepted, `pack try` measures it for `$0` |
+| Pack catalog | runs | a static `index.toml` in a git repo; `market add`/`search`/`lint`, receipts re-derived locally and refused when they disagree |
 | Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
 | Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
@@ -54,6 +56,32 @@ produces a worse version of each.
 The cost is that a container is harder to read than a manifest, which is what `in-lockstep ls` is
 for: it prints what will actually run.
 
+## Extensions that travel
+
+Config-as-code makes extension ordinary — subclass a prompt, write a strategy, declare a verb — and
+for a long time it made extension *local*: what one team wrote could not reach another. An
+extension pack is that same code as an installable distribution, and the rule it turns on is short.
+
+**Installing a pack offers it. A line you wrote is what puts it in force.** `in_lockstep.standards`
+packages apply themselves, because they can only tighten and the risk is forgetting one. An
+extension hands a model write and execute tools and spends money, so its arrival is a diff:
+`in-lockstep ls` will not mention a pack until `lockstep.py` names it.
+
+What you can know before you trust one is derived from its code rather than claimed in a file:
+
+```bash
+in-lockstep pack describe acme-tdd-pro   # capabilities, imports, guardrails, evidence — no key
+in-lockstep pack try acme-tdd-pro --corpus ./our-cases   # measured on YOUR cases, replaying, $0
+in-lockstep add acme-tdd-pro             # records what you accepted; prints the lines to paste
+```
+
+`add` never writes `.lockstep/lockstep.py` and never installs anything. It records the receipt you
+accepted at `.lockstep/packs/<name>.json`, and `doctor` re-derives against it: `DOC170` fails when a
+pack may do more than you agreed to, which is the upgrade that would otherwise arrive quietly.
+
+[`docs/extending.md`](docs/extending.md) is the how; [`design/extension-packs.md`](design/extension-packs.md)
+is why each refusal is where it is.
+
 ## Commands
 
 ```bash
@@ -66,6 +94,7 @@ in-lockstep rfe --idea "..."     # draft a ticket from a rough idea; --create fi
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
 in-lockstep pack ls              # installed extension packs — offered, not yet in force
+in-lockstep market add <url>     # register a catalog; https only, and committed
 in-lockstep search <query>       # packs across the catalogs this repository reads
 in-lockstep add <pack>           # accept one: re-derive, record, print the lines to paste
 in-lockstep pack try <pack>      # measure it on your cases, replaying a cassette, for $0
@@ -108,8 +137,13 @@ shows every command with the output it actually prints, and costs nothing to fol
 
 **Adopting?** The [cookbook](docs/cookbook.md) is ten recipes of twenty lines or fewer — keyless
 CI, org standards as a package, the daily ceiling, chat-ops TDD. Then
-[extending](docs/extending.md) for adapters, prompts and strategies, and the
+[extending](docs/extending.md) for adapters, prompts, strategies and packs, and the
 [trampoline contract](docs/trampoline.md) for what a CI file owes the framework on any host.
+
+**Distributing an extension?** [`design/extension-packs.md`](design/extension-packs.md) is the
+whole mechanism and the argument for each refusal in it; the worked examples are a prompt pack
+([`examples/acme-review-prompts`](examples/acme-review-prompts/)) and a catalog
+([`examples/lockstep-index`](examples/lockstep-index/)).
 
 **Auditing?** The [controls crosswalk](docs/controls-crosswalk.md) is the honest accounting of
 what in-process invocation costs — what replaced each substrate control, what is weaker, what

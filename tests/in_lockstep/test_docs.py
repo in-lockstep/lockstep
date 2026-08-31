@@ -109,6 +109,14 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),
         "Spend controls": _importable("in_lockstep.core.spend", "DailySpendExceeded"),
         "Ledger + tamper-evidence": _importable("in_lockstep.platform.ledger", "GitLedger"),
+        # A pack is offered by an entry point and put in force by `add` printing lines somebody
+        # pastes, so the claim is pinned to both halves: the discovery module and the commands.
+        "Extension packs": (
+            _importable("in_lockstep.packs", "installed")
+            and _importable("in_lockstep.trial", "run")
+            and {"pack", "add"} <= commands
+        ),
+        "Pack catalog": _importable("in_lockstep.market", "read_catalog") and "search" in commands,
     }
     for row, status in rows.items():
         if status == "runs" and row in proof:

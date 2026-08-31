@@ -271,42 +271,6 @@ A pack's guardrail is labelled `<pack>/<name>` in the projection, because a proj
 answer "whose rule is this" and two packs contributing `house` would otherwise be
 indistinguishable in the one artifact meant to tell them apart.
 
-### Measuring one before you trust it
-
-Everything else about a pack can be checked; none of it says whether the pack is any **good**. The
-honest answer to that is a measurement you make on your own cases.
-
-```bash
-in-lockstep pack try acme-review-prompts --corpus ./our-cases
-```
-
-It replays the pack's cassette — no key, no spend — runs its corpus and yours, and counts them
-apart, because the number worth installing on is the one measured on your cases.
-
-Read the states, not only the rate:
-
-| State | Means |
-|---|---|
-| `decided` | a machine settled it; only these feed the pass rate |
-| `outstanding` | a rubric, and no judge has answered it |
-| `unrecorded` | the cassette holds no answer for this case — an absence of evidence, never a failure |
-| `unexercised` | a corpus family a trial cannot drive yet (it drives `review`) |
-
-When nothing was decided there is no pass rate, and the output says which absence that is rather
-than printing a zero.
-
-**Somebody has to pay once.** A trial replays what was recorded, so a pack with no cassette cannot
-be measured for nothing — which is what the project catalog's fourth criterion is about, and why
-`pack try` says so rather than reporting an empty result. The author records it with
-`in-lockstep pack try <pack> --record`, once, against a real model, and commits the cassette into
-the pack. Recording transmits, so it is subject to the same egress rules as any other real call;
-replaying transmits nothing, and the invoker knows it.
-
-The trial composes the pack's `prompts/<aspect>.md` inside the **shipped** layer stack, paired with
-`corpus/review/<aspect>-reviewer/`. Your own guardrails are deliberately not applied: measuring a
-pack through your configuration would measure your configuration, and two repositories would get
-different numbers for the same pack with no way to tell why.
-
 ### Finding one: catalogs
 
 A catalog is a static `index.toml` in a git repository — no service, no accounts, no ranking.
@@ -360,18 +324,65 @@ strategy says so in its own receipt.
 [`examples/acme-review-prompts/`](../examples/acme-review-prompts/) is the worked example — the
 cheapest kind: markdown, a corpus that measures it, and one `__init__.py` holding a docstring.
 
+### Measuring one before you trust it
+
+Everything else about a pack can be checked; none of it says whether the pack is any **good**. The
+honest answer to that is a measurement you make on your own cases.
+
+```bash
+in-lockstep pack try acme-review-prompts --corpus ./our-cases
+```
+
+It replays the pack's cassette — no key, no spend — runs its corpus and yours, and counts them
+apart, because the number worth installing on is the one measured on your cases.
+
+Read the states, not only the rate:
+
+| State | Means |
+|---|---|
+| `decided` | a machine settled it; only these feed the pass rate |
+| `outstanding` | a rubric, and no judge has answered it |
+| `unrecorded` | the cassette holds no answer for this case — an absence of evidence, never a failure |
+| `unexercised` | a corpus family a trial cannot drive yet (it drives `review`) |
+
+When nothing was decided there is no pass rate, and the output says which absence that is rather
+than printing a zero.
+
+**Somebody has to pay once.** A trial replays what was recorded, so a pack with no cassette cannot
+be measured for nothing — which is what the project catalog's fourth criterion is about, and why
+`pack try` says so rather than reporting an empty result. The author records it with
+`in-lockstep pack try <pack> --record`, once, against a real model, and commits the cassette into
+the pack. Recording transmits, so it is subject to the same egress rules as any other real call;
+replaying transmits nothing, and the invoker knows it.
+
+The trial composes the pack's `prompts/<aspect>.md` inside the **shipped** layer stack, paired with
+`corpus/review/<aspect>-reviewer/`. Your own guardrails are deliberately not applied: measuring a
+pack through your configuration would measure your configuration, and two repositories would get
+different numbers for the same pack with no way to tell why.
+
 ## Organisation standards
 
 Bindings resolve repository-above-organisation, which is right for adapters and wrong for
 standards. Standards go on the policy stack instead:
 
 ```python
-lockstep.contribute(Policy(name="acme-floor", network="deny-all", max_turns=8))
+lockstep.contribute(Policy(name="acme-floor", max_turns=8, deny_tools=("run_script",), scan_input="block"))
 ```
 
-Contributions append and only tighten. `deny-all` egress is an irreversible floor; ceilings take
-the lowest of several rather than the last read; tool denies union; the strictest scan wins. There
-is no removal API.
+Contributions append and only tighten: ceilings take the lowest of several rather than the last
+read, tool denies union, the strictest scan wins. There is no removal API.
+
+**Three fields reach a run, and the rest are printed.** `max_turns`, `deny_tools` and `scan_input`
+are what `InvokePolicy.under()` composes into the loop — a denied tool is removed from the
+`ToolSet` rather than refused when called, and `scan_input="block"` refuses before the first model
+call. `Policy` also carries `network`, `permissions` and three credit fields; those are merged,
+printed by `ls` and reported in the receipt, and **nothing enforces them today**
+(`GATE-POLICY-2`, `unmet`). Do not write an org floor that leans on them.
+
+Egress is the one worth knowing about, because it looks like the gap and is not: a real egress
+floor is `IN_LOCKSTEP_EGRESS=enforced` under a host that constrains destinations, verified by a
+probe, with `UnsandboxedEgress` as the named opt-out. That control is enforced and is checked by
+`doctor`; `Policy(network=...)` is a field the compiler-era design left behind.
 
 At one repository, that line lives in `lockstep.py`. At two hundred, a line every repository has
 to remember is drift by another name — so standards also travel as an **installable package**: an
