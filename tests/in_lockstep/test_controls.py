@@ -878,11 +878,16 @@ def test_every_model_job_outlives_the_session_deadline_it_runs() -> None:
     """
     import yaml
 
+    from in_lockstep import Workshop
+
     root = Path(__file__).resolve().parents[2]
     module = (root / ".lockstep" / "lockstep.py").read_text()
-    deadlines = {int(m) for m in re.findall(r"deadline_seconds=(\d+)", module)}
-    assert deadlines, "no session deadline declared; this test has nothing to compare against"
-    longest_session_minutes = max(deadlines) / 60
+    # Two sources, and the module may use either. `Workshop` carries the default every strategy
+    # `use()` completes inherits; an explicit `deadline_seconds=` on a constructor overrides it for
+    # that one strategy. The longest session any of them may run is what a job has to outlive.
+    declared = {int(m) for m in re.findall(r"deadline_seconds=(\d+)", module)}
+    longest_session_minutes = max({Workshop().deadline_seconds, *declared}) / 60
+    assert longest_session_minutes > 0, "no session deadline anywhere; nothing to compare against"
 
     checked = []
     for path in sorted((root / ".github" / "workflows").glob("*.yml")):

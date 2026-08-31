@@ -29,7 +29,7 @@ from .core import (
     workflow,
 )
 from .core.spend import Budget
-from .lockstep import Lockstep
+from .lockstep import Lockstep, Workshop
 
 # The ticket vocabulary is part of the authoring surface: a workflow signature says
 # `tickets: TicketSource` and a request says `ticket=await tickets.get(...)`, so these names
@@ -67,6 +67,7 @@ __all__ = [
     "Validate",
     "ValidationReport",
     "Verb",
+    "Workshop",
     "__version__",
     "workflow",
 ]

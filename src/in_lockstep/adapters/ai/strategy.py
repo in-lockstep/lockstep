@@ -77,6 +77,10 @@ class AiStrategy:
 
     id: ClassVar[str] = ""
     verb: ClassVar[Verb]
+    #: The request type this strategy serves, and so the key it binds under. Set by the
+    #: per-verb bases; `Lockstep.use` refuses a strategy that does not name one, because
+    #: guessing a container key from a verb is how a bind lands somewhere nobody reads.
+    request: ClassVar[Any] = None
     capabilities: ClassVar[frozenset[Capability]] = frozenset()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -133,6 +137,9 @@ class AiStrategy:
         #: Empty defaults to the run's own repository (`ctx.repo.root`) at session time.
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
+        #: Whether the caller named one. `Lockstep.use` completes an unset policy from the
+        #: module's resolved floor and must not overwrite one somebody wrote down.
+        self._policy_declared = policy is not None
         self.curator = curator or ContextCurator()
         # No runner by default, so `run_script` refuses until a caller supplies one. The tool is
         # still declared and the capability is still visible to policy — see `read_write_execute`.
@@ -150,6 +157,43 @@ class AiStrategy:
         # here, usually as `<verb>_layers().plus(guardrails=...)` so the shipped baseline stays
         # underneath.
         self.layers = layers
+
+    def complete_for(self, lockstep: Any) -> Any:
+        """Finish constructing this strategy from the module binding it, and return the key it
+        wants. Called by `Lockstep.use`, which cannot reach into `adapters` itself — the layering
+        contract forbids it — so the knowledge lives here and the facade calls a method.
+
+        Two of the values filled in here are why this exists rather than a docs example. Both were
+        optional keyword arguments a hand-written bind could omit, and omitting either was silent:
+
+          * `InvokePolicy.under(policy.resolve(), ...)`. A strategy constructed without it ignores
+            the contributed policy floor — `deny_tools` and `scan_input` are simply dropped, one
+            bind at a time, with nothing to see in `ls`.
+          * The `WorktreeRunner` wrap. An unwrapped `Sandbox` bind-mounts the live tree
+            read-write; the wrap is what makes the container mount a throwaway copy instead.
+            `adapters/worktree.py` calls the unwrapped case "goal 8's one confirmed
+            non-bypassability hole".
+
+        Anything the caller named is left alone. This completes; it does not override.
+        """
+        from ..worktree import WorktreeRunner
+
+        workshop = getattr(lockstep, "workshop", None)
+        if workshop is not None:
+            if not self._policy_declared:
+                self.policy = InvokePolicy.under(
+                    lockstep.policy.resolve(),
+                    max_turns=workshop.max_turns,
+                    max_tokens=workshop.max_tokens,
+                    deadline_seconds=workshop.deadline_seconds,
+                )
+            if self.commands is None:
+                self.commands = workshop.commands
+        if self.commands is not None and not isinstance(self.commands, WorktreeRunner):
+            self.commands = WorktreeRunner(self.commands, lockstep.repo.root)
+        if not self.repo_root:
+            self.repo_root = lockstep.repo.root
+        return type(self).request
 
     def _session(self, ctx: Any) -> Any:
         """The per-run bundle. Built fresh each invoke: the workspace accumulates staged writes,
