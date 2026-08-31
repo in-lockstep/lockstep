@@ -2811,6 +2811,141 @@ def pack_ls_cmd() -> None:
         )
 
 
+@main.command(name="add")
+@click.argument("name")
+@click.option("--accept", is_flag=True, help="Accept capabilities this pack did not previously hold.")
+def add_cmd(name: str, accept: bool) -> None:
+    """Accept an installed pack, and print the lines that would put it to work.
+
+    Three things happen, and the one that does not happen is the point.
+
+    It **re-derives** the receipt from the code that is actually installed and compares it with
+    what this repository accepted before, in `.lockstep/packs/<name>.json`. A capability the pack
+    did not hold last time is refused until `--accept` says otherwise, because more agency is
+    exactly the change that should cost somebody a decision.
+
+    It **records** what you accepted, as a committed file. That record is the acknowledgement:
+    `doctor` re-derives and compares against it, so an upgrade that widens what a pack may do
+    fails a check rather than arriving quietly.
+
+    It **prints** the lines for `.lockstep/lockstep.py` and does not write them. That file can
+    rebind any adapter, remove any middleware and grant any tool — it is the first entry in its own
+    protected-path deny list and it loads from a trusted ref — and "every line in it was typed by a
+    person" is worth more than two saved keystrokes.
+
+    It does not install anything either. Putting a stranger's code on your machine is your package
+    manager's job, in your dependency diff, and a framework that did it for you would be the one
+    deciding what you trust.
+    """
+    from .packs import PackNotFound, pack, pinning
+    from .receipt import compare, read_record, receipt_for_pack, render_pack, write_record
+
+    lockstep, _ = _default_lockstep()
+    root = Path(lockstep.repo.root)
+    try:
+        subject = pack(name)
+    except PackNotFound as e:
+        raise click.ClickException(str(e)) from None
+
+    derived = receipt_for_pack(subject)
+    drift = compare(read_record(root, name), derived)
+
+    for line in render_pack(derived):
+        click.echo(line)
+    click.echo("")
+
+    if drift.widened:
+        click.echo("capabilities this pack did not hold when you accepted it")
+        for capability in drift.widened:
+            click.echo(f"  + {capability}")
+        if not accept:
+            raise click.ClickException(
+                f"refused: {name} may now do more than this repository accepted. Read what changed "
+                f"above, then say so explicitly:\n\n    in-lockstep add {name} --accept\n"
+            )
+        click.echo("  accepted, because --accept said so")
+        click.echo("")
+    for change in drift.changes:
+        click.echo(f"changed  {change}")
+    if drift.changes:
+        click.echo("")
+
+    state = pinning(root, subject.distribution)
+    if state == "unpinned":
+        click.echo(
+            f"NOT PINNED    {subject.distribution or name} is not fixed to a version here, so this "
+            f"receipt describes\n              code that may not be the code installed next time. "
+            f"`uv add {subject.distribution or name}`."
+        )
+        click.echo("")
+    elif state == "unknown":
+        click.echo("pin           could not be checked — no uv.lock or pyproject.toml to read")
+        click.echo("")
+
+    written = write_record(root, derived)
+    click.echo(f"recorded      {_relative(written, root)}")
+    click.echo("              commit it: the record IS the acknowledgement, and doctor reads it.")
+    click.echo("")
+    click.echo("paste into .lockstep/lockstep.py:")
+    click.echo("")
+    for line in _bind_lines(subject, derived):
+        click.echo(f"    {line}")
+    click.echo("")
+    click.echo(f"until you do, nothing changes: `in-lockstep ls` will not mention {name}.")
+
+
+def _relative(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:  # pragma: no cover - a record outside the repository
+        return str(path)
+
+
+def _bind_lines(subject: Any, receipt: dict[str, Any]) -> list[str]:
+    """The lines a person would type, derived from what the pack turned out to offer.
+
+    Printed rather than written, and derived rather than templated: a pack offering a strategy
+    gets `use()`, one offering an adapter for a verb it brought along gets `bind()` with the
+    request type it named, and a pack with nothing importable gets the resource spelling — which
+    is a shape, not a snippet, because where a body belongs depends on the lens it replaces.
+    """
+    strategies = [offer for offer in receipt["offers"] if offer["offers"] == "strategy"]
+    adapters = [offer for offer in receipt["offers"] if offer["offers"] == "verb"]
+    lines: list[str] = []
+
+    for offer in strategies:
+        lines += [
+            f"from {subject.module} import {offer['name']}",
+            f"{offer['verb']} = lockstep.use({offer['name']})",
+            "",
+        ]
+    for offer in adapters:
+        request = offer["request"] or "<RequestType>"
+        lines += [
+            f"from {subject.module} import {offer['name']}, {request}",
+            f"lockstep.bind({request}, {offer['name']}())",
+            "",
+        ]
+    if not lines:
+        lines = [
+            "from in_lockstep.packs import pack",
+            "",
+            f"{_handle(subject.name)} = pack({subject.name!r})",
+            "",
+            "# then point a prompt subclass at one of its bodies, and pass any guardrails to the",
+            "# adapter's `layers=` — `plus()` appends, so the shipped baseline stays underneath:",
+            f"#     body = {_handle(subject.name)}.body('prompts/<name>.md')",
+            f"#     layers = review_layers().plus(guardrails={_handle(subject.name)}.guardrails('<name>'))",
+        ]
+    return [line for line in lines if line is not None]
+
+
+def _handle(name: str) -> str:
+    """A legal identifier a person would plausibly have chosen for this pack."""
+    handle = "".join(character if character.isalnum() else "_" for character in name).strip("_")
+    return handle if handle and not handle[0].isdigit() else f"pack_{handle}"
+
+
 @pack_group.command(name="describe")
 @click.argument("name", default="")
 @click.option("--json", "as_json", is_flag=True, help="The canonical form, which is what a digest is over.")

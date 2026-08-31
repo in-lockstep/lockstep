@@ -57,7 +57,12 @@ ALLOWED: dict[str, set[str]] = {
     # GITHUB_* here is how the check silently skipped GitLab), and the route check loads the
     # module through `loader` — with `core.workflow`'s snapshot/restore so a diagnostic leaves
     # no registrations behind. Acyclic: none of those import doctor back; only `cli` does.
-    "doctor": {"ai", "core", "loader", "platform", "privileged", "prompts", "doctor"},
+    # `packs` and `receipt` were added for DOC170-172, which ask what an installed pack may do
+    # against what this repository accepted. Both edges are reads of a derivation that already
+    # exists: re-deriving the comparison inline here is how two answers to one question start
+    # disagreeing, which is the argument `_model_routes` already makes about `table_for`.
+    # Acyclic: neither imports doctor back; only `cli` does.
+    "doctor": {"ai", "core", "loader", "packs", "platform", "privileged", "prompts", "receipt", "doctor"},
     "evaluation": {"evaluation"},
     # `receipt` derives what a configuration does, so it reads across the layers that hold the
     # declarations: capabilities off `core`, the composed projection off `ai`, prices and egress

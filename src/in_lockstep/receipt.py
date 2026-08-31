@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -572,3 +573,101 @@ def render_pack(receipt: dict[str, Any]) -> list[str]:
 
     lines += ["", f"digest        {receipt['digest']}"]
     return lines
+
+
+# -- the accepted record ---------------------------------------------------------------
+
+#: Where a repository keeps what it accepted, one file per pack. Committed on purpose: the record
+#: IS the acknowledgement, so it has to be something review sees. `.lockstep/` is the directory the
+#: framework owns, and this sits beside `lockstep.py` rather than inside it — bookkeeping a tool
+#: maintains does not belong in the file whose value is that a person typed every line of it.
+RECORD_DIR = "packs"
+
+
+@dataclass(frozen=True)
+class Drift:
+    """What changed between the receipt a repository accepted and the one derived now.
+
+    `widened` is separated from every other difference because it is the only one that means the
+    pack may now do something the repository never agreed to. A new prompt, a version bump, a
+    corpus that grew: all worth showing, none worth refusing over.
+    """
+
+    accepted: bool
+    widened: tuple[str, ...] = ()
+    changes: tuple[str, ...] = ()
+
+    @property
+    def clean(self) -> bool:
+        return self.accepted and not self.widened and not self.changes
+
+
+def record_path(root: Path, name: str) -> Path:
+    return root / ".lockstep" / RECORD_DIR / f"{name}.json"
+
+
+def read_record(root: Path, name: str) -> dict[str, Any] | None:
+    path = record_path(root, name)
+    if not path.is_file():
+        return None
+    try:
+        loaded = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def write_record(root: Path, receipt: dict[str, Any]) -> Path:
+    """Record a derived receipt as accepted. The canonical form, so a diff reads as a change.
+
+    Through the redacting sink like every other on-disk write, and not merely to satisfy the scan
+    that enforces it: a receipt carries strings a stranger wrote — a pack's summary, its offers'
+    names, the labels in a projection — and this file is committed. A pack whose summary contains
+    something shaped like a token would otherwise have that committed to the repository that
+    installed it, by the command whose whole job is being careful about what it accepts.
+    """
+    from .privileged import sink
+
+    path = record_path(root, receipt["subject"]["name"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic, because `doctor` reads this back: a torn record would read as drift.
+    sink.write_text_atomic(path, canonical(receipt))
+    return path
+
+
+def compare(recorded: dict[str, Any] | None, derived: dict[str, Any]) -> Drift:
+    """What a repository would be accepting, stated as a difference rather than a new document.
+
+    Capability widening is computed over the union of what the pack's offers declare, because that
+    is the granularity the gates work at: `ApprovalGate` and the budget refusal ask what a bound
+    adapter may do, not which class it came from. A capability that appears on a *new* offer is
+    still a capability this pack did not previously hold.
+    """
+    if recorded is None:
+        return Drift(accepted=False)
+
+    widened = sorted(_capabilities(derived) - _capabilities(recorded))
+    changes: list[str] = []
+    if recorded["subject"].get("version") != derived["subject"].get("version"):
+        changes.append(
+            f"version {recorded['subject'].get('version') or '(unknown)'} -> "
+            f"{derived['subject'].get('version') or '(unknown)'}"
+        )
+    if recorded.get("imports") != derived.get("imports"):
+        changes.append(f"imports {recorded.get('imports')} -> {derived.get('imports')}")
+
+    before = {offer["name"] for offer in recorded.get("offers", [])}
+    after = {offer["name"] for offer in derived.get("offers", [])}
+    changes += [f"offers {name}, which it did not before" for name in sorted(after - before)]
+    changes += [f"no longer offers {name}" for name in sorted(before - after)]
+
+    if recorded.get("digest") != derived.get("digest") and not changes and not widened:
+        # Something moved that none of the named comparisons cover — a corpus case, a summary, a
+        # prompt body's label. Said plainly rather than left out: "the digest changed and I will
+        # not tell you where" is worse than a vague sentence.
+        changes.append("something changed that no named comparison covers; read the two receipts")
+    return Drift(accepted=True, widened=tuple(widened), changes=tuple(changes))
+
+
+def _capabilities(receipt: dict[str, Any]) -> set[str]:
+    return {cap for offer in receipt.get("offers", []) for cap in offer.get("capabilities", [])}
