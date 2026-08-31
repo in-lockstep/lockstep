@@ -13,14 +13,13 @@ first entry in the protected-path deny list, and why it is loaded from a trusted
 from whichever branch is under review.
 """
 
-from in_lockstep import Lockstep, RunContext
+from in_lockstep import Lockstep, RunContext, Workshop
 from in_lockstep.adapters import PytestTest, RuffValidate
 from in_lockstep.adapters.ai import TDD, DiagnoseThenFix, Fix, Implement
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
-from in_lockstep.ai.invoker import InvokePolicy
+from in_lockstep.adapters.worktree import verdict_over_staged
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
@@ -170,6 +169,24 @@ lockstep.models.route("triage", "local:qwen3-8b")
 # should be running three times rather than once.
 lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 
+# -- the workshop -------------------------------------------------------------------
+#
+# What every AI strategy below is completed from, declared once. It used to be typed once per verb,
+# and the two paragraphs were identical apart from the class name — which meant two chances to drop
+# the `WorktreeRunner` wrap or the `InvokePolicy.under(...)`, neither of which is optional in
+# spirit and neither of which shows up in `ls` when it is missing.
+#
+# `run_script` executes in this container with `--network=none` and refuses rather than falling
+# back to the host — the per-command egress constraint that makes allowing the tool at all
+# defensible under the `UnsandboxedEgress` binding above. `use()` wraps it in a `WorktreeRunner`,
+# so what the container bind-mounts read-write is a throwaway worktree of HEAD rather than the live
+# tree: without the wrap, a model's command could write `.git/hooks` or this very file past
+# ChangeGuard.
+lockstep.workshop = Workshop(
+    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
+)
+
+
 # -- the implementing verb ----------------------------------------------------------
 #
 # Bound here, not by the CLI. `in-lockstep implement` binds a default when a repository has said
@@ -185,16 +202,7 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # defensible under the `UnsandboxedEgress` binding above. Wrapped in `WorktreeRunner`, so what the
 # container bind-mounts read-write is a throwaway worktree of HEAD, not the live tree: without the
 # wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
-tdd = TDD(
-    commands=WorktreeRunner(
-        Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
-        lockstep.repo.root,
-    ),
-    policy=InvokePolicy.under(
-        lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
-    ),
-)
-lockstep.bind(Implement, tdd)
+tdd = lockstep.use(TDD)
 
 
 # -- the fixing verb ----------------------------------------------------------------
@@ -207,16 +215,7 @@ lockstep.bind(Implement, tdd)
 # What it does NOT share with implement is the model — see the `fix` route above — and what it
 # does not share with either is a way to reach the repository: like every writing verb here it
 # stages into a ChangeSet, and the privileged half opens the change.
-fix = DiagnoseThenFix(
-    commands=WorktreeRunner(
-        Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
-        lockstep.repo.root,
-    ),
-    policy=InvokePolicy.under(
-        lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
-    ),
-)
-lockstep.bind(Fix, fix)
+fix = lockstep.use(DiagnoseThenFix)
 
 
 # -- middleware ---------------------------------------------------------------------

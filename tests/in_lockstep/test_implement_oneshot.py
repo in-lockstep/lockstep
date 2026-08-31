@@ -659,3 +659,92 @@ def test_the_shipped_strategies_sit_on_the_bases_they_advertise() -> None:
     assert issubclass(Oneshot, ImplementStrategy)
     assert issubclass(TDD, ImplementStrategy)
     assert issubclass(DiagnoseThenFix, FixStrategy)
+
+
+# -- lockstep.use ---------------------------------------------------------------------------------
+
+
+def _module_with_workshop():  # noqa: ANN202
+    from in_lockstep import Lockstep, Workshop
+    from in_lockstep.adapters.sandbox import Sandbox
+
+    lockstep = Lockstep()
+    lockstep.workshop = Workshop(commands=Sandbox(image="python:3.12-slim", require_container=True))
+    return lockstep
+
+
+def test_use_completes_the_two_arguments_a_hand_written_bind_can_drop() -> None:
+    """The reason `use` exists, and it is not line count.
+
+    Both values below were optional keyword arguments. Omitting `InvokePolicy.under(...)` drops the
+    contributed policy floor — `deny_tools`, `scan_input` — silently, one bind at a time. Omitting
+    the `WorktreeRunner` wrap leaves the container bind-mounting the live tree, which
+    `adapters/worktree.py` calls goal 8's one confirmed non-bypassability hole. Neither omission
+    shows up in `ls`.
+    """
+    from in_lockstep.adapters.ai import TDD
+    from in_lockstep.adapters.worktree import WorktreeRunner
+
+    lockstep = _module_with_workshop()
+    tdd = lockstep.use(TDD)
+
+    assert isinstance(tdd.commands, WorktreeRunner), "an unwrapped sandbox mounts the live tree"
+    assert tdd.policy.deadline_seconds == 1800.0
+    assert tdd.repo_root, "a strategy with no repo root falls back to cwd at session time"
+
+
+def test_use_binds_under_the_request_type_the_strategy_serves() -> None:
+    from in_lockstep.adapters.ai import TDD, Implement
+
+    lockstep = _module_with_workshop()
+    tdd = lockstep.use(TDD)
+
+    assert lockstep.container.has(Implement)
+    assert lockstep.container.resolve(Implement) is tdd, "use returns what it bound, for `via=`"
+
+
+def test_use_completes_but_never_overrides() -> None:
+    """A policy somebody wrote down is a decision, not a gap to fill."""
+    from in_lockstep.adapters.ai import TDD
+    from in_lockstep.ai.invoker import InvokePolicy
+
+    lockstep = _module_with_workshop()
+    tdd = lockstep.use(TDD(policy=InvokePolicy(max_turns=8, max_tokens=1024)))
+
+    assert tdd.policy.max_turns == 8, "the workshop must not overwrite a declared policy"
+    assert tdd.policy.max_tokens == 1024
+
+
+def test_use_wraps_a_named_runner_rather_than_replacing_it() -> None:
+    from in_lockstep.adapters.ai import TDD
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.adapters.worktree import WorktreeRunner
+
+    lockstep = _module_with_workshop()
+    tdd = lockstep.use(TDD(commands=Sandbox(image="mine")))
+
+    assert isinstance(tdd.commands, WorktreeRunner)
+    assert tdd.commands.inner.image == "mine", "the caller's runner, wrapped — not the workshop's"
+
+
+def test_use_refuses_something_it_cannot_complete() -> None:
+    """Guessing a container key from a verb is how a bind lands somewhere nobody reads."""
+    lockstep = _module_with_workshop()
+
+    with pytest.raises(TypeError) as caught:
+        lockstep.use(object())
+    assert "complete_for" in str(caught.value)
+    assert "lockstep.bind" in str(caught.value), "the refusal has to name the spelling that works"
+
+
+def test_a_workshop_with_no_runner_leaves_run_script_refusing() -> None:
+    """`commands=None` is the shipped default, not 'run on the host'. Turning execution on stays a
+    line somebody wrote."""
+    from in_lockstep import Lockstep
+    from in_lockstep.adapters.ai import AGENCY, TDD
+
+    lockstep = Lockstep()
+    tdd = lockstep.use(TDD)
+
+    assert tdd.commands is None
+    assert tdd.capabilities == AGENCY, "the capability is declared either way — see read_write_execute"

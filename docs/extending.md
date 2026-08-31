@@ -292,8 +292,25 @@ The strategy IS the adapter. A binding does not choose a dispatcher configured b
 names the approach itself:
 
 ```python
-lockstep.bind(Implement, TDD())     # or Oneshot(), or your own class
+lockstep.workshop = Workshop(commands=Sandbox(image=IMAGE, require_container=True))
+tdd = lockstep.use(TDD)             # or Oneshot, or your own class
 ```
+
+`use` binds the strategy under the request type it serves and finishes constructing it from the
+module: the resolved policy floor, the repo root, and the workshop's runner wrapped in a
+`WorktreeRunner`. It completes what was left unset and overrides nothing, so
+`lockstep.use(TDD(policy=InvokePolicy(max_turns=8)))` keeps the policy you named.
+
+`bind` remains the primitive and the long spelling still works:
+
+```python
+lockstep.bind(Implement, TDD(commands=WorktreeRunner(sandbox, root), policy=...))
+```
+
+Prefer `use` anyway. The two arguments it fills in are the two a hand-written bind can silently
+drop — without `InvokePolicy.under(policy.resolve(), ...)` the contributed policy floor is ignored,
+and without the `WorktreeRunner` wrap the container bind-mounts your live tree. Neither omission
+appears in `ls`.
 
 Writing one is subclassing `AiStrategy` (which carries the constructor and the per-run session
 assembly) and implementing `invoke(ctx, request)`. It imports from the package root:

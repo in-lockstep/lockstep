@@ -100,6 +100,7 @@ class FixStrategy(AiStrategy):
     """
 
     verb: ClassVar[Verb] = Verb.FIX
+    request: ClassVar[Any] = Fix
     capabilities: ClassVar[frozenset[Capability]] = AGENCY
     _session_cls = FixSession
     _shipped_prompts = FIX_PROMPTS

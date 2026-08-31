@@ -3442,7 +3442,7 @@ _SCAFFOLD_FIX_MODULE = '''
 # The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
 # comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
-from in_lockstep import RunContext
+from in_lockstep import RunContext, Workshop
 
 from in_lockstep.adapters.ai import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
@@ -3477,18 +3477,11 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # .git/.lockstep past ChangeGuard.
 # The strategy IS the adapter: `ls` prints `Fix -> DiagnoseThenFix`. The model comes from the
 # `models.route("fix", ...)` line above; the invoker is assembled per run.
-lockstep.bind(
-    Fix,
-    DiagnoseThenFix(
-        commands=WorktreeRunner(
-            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
-            lockstep.repo.root,
-        ),
-        policy=InvokePolicy.under(
-            lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
-        ),
-    ),
-)
+if lockstep.workshop.commands is None:
+    lockstep.workshop = Workshop(
+        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
+    )
+lockstep.use(DiagnoseThenFix)
 
 #: Where the unprivileged half leaves the fix for the privileged half to open.
 FIX_CHANGESET = "fix-changeset"
@@ -3799,7 +3792,7 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 #
 #     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
 
-from in_lockstep import RunContext
+from in_lockstep import RunContext, Workshop
 
 from in_lockstep.adapters.ai import Implement, Oneshot
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
@@ -3844,18 +3837,10 @@ lockstep.middleware += [ApprovalGate()]
 # answer to "how does implementing happen here". Swap `Oneshot` for `TDD` to require
 # red-then-green. The model comes from the `models.route("implement", ...)` line above; the
 # invoker is assembled per run, so no factory is threaded here.
-lockstep.bind(
-    Implement,
-    Oneshot(
-        commands=WorktreeRunner(
-            Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
-            lockstep.repo.root,
-        ),
-        policy=InvokePolicy.under(
-            lockstep.policy.resolve(), max_turns=30, max_tokens=8192, deadline_seconds=1800
-        ),
-    ),
+lockstep.workshop = Workshop(
+    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
 )
+lockstep.use(Oneshot)
 
 # Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
 # its verdict rides the artifact into the PR body, so a reviewer sees whether the change passed

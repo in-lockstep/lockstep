@@ -33,6 +33,30 @@ class Models:
         self.routes[key] = model_id
 
 
+@dataclass
+class Workshop:
+    """The execution environment every AI strategy this module binds should inherit.
+
+    Declared once because it was being typed once per verb. The construction paragraph — a
+    `WorktreeRunner` around a `Sandbox`, and an `InvokePolicy.under(policy.resolve(), ...)` —
+    appeared six times across this repository and its own scaffolds, identical apart from the class
+    name, and every copy was a chance to drop one of the two arguments that are not optional in
+    spirit: without the wrap the container mounts the live tree, and without `under(...)` the
+    contributed policy floor is silently ignored.
+
+    `commands=None` is NOT "run on the host". It is the shipped default: `run_script` is still
+    declared, policy still sees `EXECUTES_CODE`, and every call refuses until a runner is named.
+    Turning execution on stays a line somebody wrote in a diff.
+    """
+
+    #: The `CommandRunner` a model's `run_script` reaches. `Sandbox(image=..., require_container=True)`
+    #: is the usual answer; `Lockstep.use` wraps it in a `WorktreeRunner` if it is not already.
+    commands: Any = None
+    max_turns: int = 30
+    max_tokens: int = 8192
+    deadline_seconds: float = 1800.0
+
+
 class Lockstep:
     def __init__(
         self,
@@ -51,6 +75,8 @@ class Lockstep:
         # fails its tests it opens an `ai-generated` bug issue, which an agent may pick up and try
         # again; this bounds that loop. The repo owner raises or lowers it in `lockstep.py`.
         self.max_attempts = 3
+        # What `use()` completes a strategy from. Inert until a module names a runner.
+        self.workshop = Workshop()
         # Where this configuration came from, in the loader's words — "trusted ref X", "local
         # working tree", "none (detected defaults)". Set by whoever loaded the module; recorded
         # into every ledger record, because which lockstep.py constrained a run is part of the
@@ -61,6 +87,43 @@ class Lockstep:
         self.standards: list[str] = []
 
     # -- configuration -------------------------------------------------------------
+
+    def use(self, strategy: Any, *, name: str | None = None, tier: Tier = Tier.EXPLICIT) -> Any:
+        """Bind an AI strategy under the request type it serves, completing its construction from
+        this module's workshop, repo root and resolved policy. Returns the adapter, so `via=` at a
+        call site still names an object.
+
+            lockstep.workshop = Workshop(commands=Sandbox(image=IMAGE, require_container=True))
+            tdd = lockstep.use(TDD)                                  # ls: Implement -> TDD
+            fix = lockstep.use(DiagnoseThenFix(policy=InvokePolicy(max_turns=8)))
+
+        Sugar over `bind`, and deliberately thin: `bind` stays the primitive, `ls` still renders
+        the container, and a module that spells the whole construction out keeps working unchanged.
+        What it buys is that the two easy-to-omit arguments — the `WorktreeRunner` wrap and
+        `InvokePolicy.under(...)` — are no longer possible to omit from the short spelling. It
+        completes what was left unset and overrides nothing.
+
+        The strategy fills itself in rather than being filled in here, because this layer may not
+        import `adapters` — the layering contract that keeps the facade from becoming the god
+        object at the centre of the framework.
+        """
+        adapter = strategy() if isinstance(strategy, type) else strategy
+        complete = getattr(adapter, "complete_for", None)
+        if not callable(complete):
+            raise TypeError(
+                f"{type(adapter).__name__} is not a strategy this can complete — it has no "
+                f"`complete_for`. Subclass a per-verb base (ImplementStrategy, FixStrategy), or "
+                f"bind it directly with `lockstep.bind(<RequestType>, ...)`."
+            )
+        request = complete(self)
+        if request is None:
+            raise TypeError(
+                f"{type(adapter).__name__} names no `request` type, so there is no key to bind it "
+                f"under. Set `request` on the class, or use `lockstep.bind(<RequestType>, ...)` "
+                f"and say which key you mean."
+            )
+        self.bind(request, adapter, name=name, tier=tier)
+        return adapter
 
     def bind(
         self,

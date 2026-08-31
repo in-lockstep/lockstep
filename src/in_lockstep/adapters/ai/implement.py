@@ -106,6 +106,7 @@ class ImplementStrategy(AiStrategy):
     """
 
     verb: ClassVar[Verb] = Verb.IMPLEMENT
+    request: ClassVar[Any] = Implement
     capabilities: ClassVar[frozenset[Capability]] = AGENCY
     _session_cls = ImplementSession
     _shipped_prompts = PROMPTS
