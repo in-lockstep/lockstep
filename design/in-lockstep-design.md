@@ -1035,7 +1035,7 @@ lead somebody to rebuild what the extension work deliberately refuses.
 The full argument is `design/extension-packs.md`; the executable form is `design/gates.md`
 (`GATE-PACK-1` … `GATE-PACK-4`).
 
-### 18.1 A strategy is an adapter, and nothing selects one by name *(amends §5.7)*
+### 18.1 A strategy is an adapter, and nothing resolves one by name *(amends §5.7)*
 
 §5.7 describes a `Strategy` protocol with `execute(ctx, ai, inp)`, a registry of named approaches,
 and selection "most-specific wins" — per call via `strategy="wayfinder"`, then a bound
@@ -1047,11 +1047,25 @@ shipped, and the replacement is narrower on purpose.
 `DiagnoseThenFix` — not `implement/wayfinder` or `implement/direct` — and review ships four lenses
 (`security`, `intent`, `performance`, `tests`), which are prompts rather than strategies.
 
-**Selection by string is gone, and its loss is the point.** A strategy chosen from ticket text is a
-strategy an untrusted author can steer, and a ticket is `UNTRUSTED_EXTERNAL` by construction. What
-remains is a bind-time code decision in a file loaded from a trusted ref, plus `via=` at a call
-site, which names an object rather than an id. The `StrategySelector` over ticket labels is
-therefore **withdrawn rather than deferred**: it is not a thing to build later.
+**Selection by string is withdrawn permanently.** A registry that resolves `strategy="wayfinder"`
+at request time lets untrusted input *name* a strategy, and a ticket is `UNTRUSTED_EXTERNAL` by
+construction. What remains is a bind-time code decision in a file loaded from a trusted ref, plus
+`via=` at a call site, which names an object rather than an id. That much is not a thing to build
+later.
+
+**The `StrategySelector` itself is deferred rather than withdrawn**, which corrects this section as
+first written. The danger was stated imprecisely: it is not selection that is unsafe, it is
+selection *across a capability line*. Choosing between `Oneshot` and `TDD` — identical `AGENCY`,
+identical policy floor — changes approach and cost, not authority, and untrusted input may
+legitimately influence a quality decision. Choosing between them and a strategy declaring
+`REACHES_NETWORK` is privilege escalation with extra steps.
+
+A selector over a **closed set of already-bound candidates whose declared capabilities are
+identical**, refused at startup otherwise, is therefore buildable; crossing a capability line
+requires a signal an outsider cannot write, which `Provenance` already classifies. The design is
+`design/strategy-selection.md`, including the three residues the invariant does not remove. It is
+deferred rather than open work: nothing selects between strategies today, and a mechanism built
+before it has a user has its design decided by guesses.
 
 §5.7's *measurement* claim survives intact. `strategy_id` is still part of the eval-subject key
 (§8.2, §17.8), which is what `in-lockstep pack try` builds on.
