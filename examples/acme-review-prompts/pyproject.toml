@@ -1,0 +1,22 @@
+# A prompt pack: markdown, and one `__init__.py` holding a docstring.
+#
+# The distribution is ordinary. What makes it a pack is the entry point below, and what makes it a
+# *data* pack is that `in-lockstep pack describe` finds nothing importable in it — every .py it
+# ships is a docstring, so installing it puts no code of its own in your import graph. That is a
+# fact the tool derives, not a claim this file makes.
+[project]
+name = "acme-review-prompts"
+version = "1.0.0"
+description = "Acme's review prose: a house security lens and the guardrail that goes with it"
+requires-python = ">=3.11"
+dependencies = ["in-lockstep"]
+
+# The group in-lockstep discovers. Unlike `in_lockstep.standards`, discovery is ALL this does:
+# installing this package offers the prompts, and a line in .lockstep/lockstep.py is what puts
+# them in force. The NAME is how a person, `pack describe` and an index address it.
+[project.entry-points."in_lockstep.extensions"]
+acme-review-prompts = "acme_review_prompts"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

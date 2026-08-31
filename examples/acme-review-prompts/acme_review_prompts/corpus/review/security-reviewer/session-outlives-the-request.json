@@ -1,0 +1,10 @@
+{
+  "name": "session-outlives-the-request",
+  "input": {
+    "diff": "+SESSION = Session(bind=engine)\n+\n+def handler(request):\n+    return SESSION.query(User).all()\n"
+  },
+  "expect": {
+    "contains": ["SESSION"],
+    "rubric": "Names the module-global session as the mechanism, not merely 'possible resource leak'. A finding that does not say which line to change is not a pass."
+  }
+}

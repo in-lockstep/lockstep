@@ -2776,10 +2776,58 @@ def pack_group() -> None:
     """
 
 
+@pack_group.command(name="ls")
+def pack_ls_cmd() -> None:
+    """List installed extension packs. None of them is in force.
+
+    Installing a pack offers it; a line in `.lockstep/lockstep.py` is what puts it to work. That
+    is the difference between this group and `in_lockstep.standards`, where installing IS
+    applying — a standards package can only tighten, and an extension hands a model tools.
+
+    Nothing here is imported. The names, versions and the `imports` column all come from
+    distribution metadata, so listing a stranger's package runs no code it ships.
+    """
+    from .packs import PackError, installed
+
+    packs = installed()
+    if not packs:
+        click.echo("no extension packs installed")
+        click.echo("")
+        click.echo("A pack is an ordinary distribution declaring an `in_lockstep.extensions`")
+        click.echo("entry point. Installing one offers it; naming it in .lockstep/lockstep.py")
+        click.echo("is what puts it in force.")
+        return
+
+    click.echo("installed packs  (offered, not in force — bind one in .lockstep/lockstep.py)")
+    for found in packs:
+        try:
+            manifest = found.manifest()
+            kind, summary = manifest.kind, manifest.summary
+        except PackError as e:
+            kind, summary = "?", str(e)
+        click.echo(
+            f"  {found.name:<26} {kind:<9} {found.version or '(unknown)':<10} "
+            f"imports: {found.imports():<8} {summary}"
+        )
+
+
 @pack_group.command(name="describe")
+@click.argument("name", default="")
 @click.option("--json", "as_json", is_flag=True, help="The canonical form, which is what a digest is over.")
-def pack_describe_cmd(as_json: bool) -> None:
-    """Derive the receipt for this repository: what it binds, may do, and can prove.
+@click.option(
+    "--no-load",
+    is_flag=True,
+    help="Never import the pack, at the cost of knowing what it offers.",
+)
+def pack_describe_cmd(name: str, as_json: bool, no_load: bool) -> None:
+    """Derive a receipt — for an installed pack by NAME, or for this repository.
+
+    With a NAME, the order of operations is the point: `imports` is computed from the AST of the
+    files the distribution recorded, before anything is imported, so a pack reporting `none` has
+    been shown to be inert by a path that never ran it. The module is loaded afterwards, and only
+    when there is something to load, to see what it offers. `--no-load` declines even that.
+
+    With no NAME the subject is this repository: what it binds, may do, and can prove.
 
     Everything printed is read off objects that already declare it — `capabilities` off the bound
     adapter, the projection off the composed prompt, the merged floor off the policy stack — so
@@ -2790,7 +2838,22 @@ def pack_describe_cmd(as_json: bool) -> None:
     opens with the framework's baseline, which is legal to change and must be visible. `corpus`
     says `none` rather than a borrowed number when this repository has measured nothing.
     """
-    from .receipt import canonical, receipt_for, render
+    from .receipt import canonical, receipt_for, receipt_for_pack, render, render_pack
+
+    if name:
+        from .packs import PackNotFound, pack
+
+        try:
+            subject = pack(name)
+        except PackNotFound as e:
+            raise click.ClickException(str(e)) from None
+        pack_receipt = receipt_for_pack(subject, load=not no_load)
+        if as_json:
+            click.echo(canonical(pack_receipt), nl=False)
+        else:
+            for line in render_pack(pack_receipt):
+                click.echo(line)
+        return
 
     lockstep, _ = _default_lockstep()
     receipt = receipt_for(lockstep, root=Path(lockstep.repo.root))

@@ -1,0 +1,7 @@
+# Everything a pack.toml may carry, which is deliberately almost nothing: a kind and a summary.
+# An unknown key is refused rather than ignored — the moment this file can carry a binding, a
+# policy or a model route, it has become the alternate configuration surface this framework does
+# not have.
+[pack]
+kind = "prompt"
+summary = "A security lens that knows about our ORM, and a guardrail about migrations"

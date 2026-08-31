@@ -215,6 +215,76 @@ What you cannot do here is redaction, egress or residency. Those are privileged:
 this chain because `--no-middleware` exists, and a debugging flag must not be able to switch off
 the thing keeping credentials out of a committed record.
 
+## Packs — an extension that travels
+
+Everything above is an extension you wrote in your own repository. A pack is the same thing
+packaged so another repository can install it: an ordinary Python distribution declaring an
+`in_lockstep.extensions` entry point.
+
+```toml
+[project.entry-points."in_lockstep.extensions"]
+acme-review-prompts = "acme_review_prompts"
+```
+
+**Installing a pack offers it. It does not apply it.** That is the one difference from
+`in_lockstep.standards` above, and it is deliberate: a standards package may only tighten, so
+applying it automatically is safe and forgetting it is the real risk — while an extension hands a
+model write and execute tools and pays for a model call. Nothing is in force until a line in your
+`lockstep.py` says so, and that file loads from a trusted ref, which is what keeps which strategy
+runs from becoming a string a ticket body could eventually reach.
+
+```bash
+in-lockstep pack ls                              # offered, not in force
+in-lockstep pack describe acme-review-prompts    # what it holds, before you trust it
+```
+
+```python
+from in_lockstep.packs import pack
+
+acme = pack("acme-review-prompts")
+
+class OurSecurity(SecurityReviewPrompt):
+    version = "acme-1"
+    body = acme.body("prompts/security.md")
+
+lockstep.bind(
+    Review,
+    AiReview(
+        lenses={**LENSES, "security": OurSecurity},
+        layers=review_layers().plus(guardrails=acme.guardrails("house")),
+    ),
+)
+```
+
+A pack's guardrail is labelled `<pack>/<name>` in the projection, because a projection is read to
+answer "whose rule is this" and two packs contributing `house` would otherwise be
+indistinguishable in the one artifact meant to tell them apart.
+
+### What `pack describe` tells you before you install
+
+Every field is read off something that already declares it, so a listing is a computation rather
+than an author's prose. Two are worth reading first.
+
+`imports` says what installing puts in your import graph: `none` when every `.py` the pack ships
+holds a docstring and nothing else — derived by walking the AST, not promised by the pack's kind —
+`modules` when there is real code, and `unknown` when the distribution could not be resolved to
+files, which is not the same as inert. `pack ls` and `pack describe` never import a pack to answer
+this; `describe` imports afterwards, and only when it has already reported there is something to
+import.
+
+`guardrails_intact` says whether the prompts it offers still open with the framework's baseline.
+Replacing the stack wholesale is legal — see *House guardrails* above — and this is where it
+becomes visible.
+
+`pack.toml` carries a kind and a summary, and nothing else is accepted. An unknown key is refused
+rather than ignored: the moment that file can carry a binding, a policy or a model route, it has
+become the alternate configuration surface this framework does not have. The kind is also
+cross-checked against what `describe` derived, so a pack that calls itself prose and ships a
+strategy says so in its own receipt.
+
+[`examples/acme-review-prompts/`](../examples/acme-review-prompts/) is the worked example — the
+cheapest kind: markdown, a corpus that measures it, and one `__init__.py` holding a docstring.
+
 ## Organisation standards
 
 Bindings resolve repository-above-organisation, which is right for adapters and wrong for
