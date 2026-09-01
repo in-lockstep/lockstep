@@ -159,6 +159,12 @@ lockstep.bind(EgressPolicy, egress)
 # So: $100 and half an hour, which is a ceiling for a session and not for a call. It still fires
 # on a loop going wrong; it no longer fires on the work.
 #
+# WALL CLOCK IS NOW THE BINDING CEILING, and that is worth knowing before reading a refusal. The
+# workshop below grants 100 turns per invocation and TDD runs two invocations, so at anything like
+# a minute a turn the run reaches 1800 seconds long before it reaches either turn cap or $100. If
+# a run is refused for `wall` while the dollars are barely touched, this is the number to raise —
+# not the turns, which are not what stopped it.
+#
 # `turns` and `tokens` are NOT set, and that is the deliberate half of this line.
 #
 # `Spend` is run-scoped and accumulates across every invocation in the run, so a `turns` ceiling
