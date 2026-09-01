@@ -2559,7 +2559,15 @@ def implement_cmd(
     if approval.granted and not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
         lockstep.middleware = [*lockstep.middleware, ApprovalGate()]
 
-    resolved = _load_ticket(ticket, ticket_file, lockstep.repo.root, source=_bound_ticket_source(lockstep))
+    resolved = _load_ticket(
+        ticket,
+        ticket_file,
+        lockstep.repo.root,
+        source=_bound_ticket_source(lockstep),
+        # So a second `implement` on the same ticket reads the review of the first, exactly as the
+        # CI workflow does. The laptop and the runner are the same run with a different approval.
+        scm=_bound_scm(lockstep),
+    )
 
     auth = Auth()
     try:
@@ -2696,24 +2704,52 @@ def _bound_ticket_source(lockstep: Lockstep) -> Any:
     return lockstep.container.resolve(TicketSource)  # type: ignore[type-abstract]
 
 
-def _load_ticket(key: str, path: str, root: str, source: Any = None) -> Any:
+def _bound_scm(lockstep: Lockstep) -> Any:
+    """The repository's own `Scm` if its module bound one, else the detected host's.
+
+    The detected host rather than GitHub by name, for the reason `_post_review_comment` gives: on
+    a GitLab project, hardcoding the GitHub adapter reads nothing while claiming to have tried.
+    """
+    from .platform.hosted import hosted_scm
+    from .platform.scm import Scm
+
+    if lockstep.container.has(Scm):
+        return lockstep.container.resolve(Scm)  # type: ignore[type-abstract]
+    return hosted_scm(lockstep.repo.root)
+
+
+def _load_ticket(key: str, path: str, root: str, source: Any = None, scm: Any = None) -> Any:
     """A ticket from a file, a bound `TicketSource`, or the GitHub default.
 
     A repository that binds `JiraSource` (or any other tracker) in its module has `source` passed
     in, so `implement --ticket PROJ-123` reaches Jira; with nothing bound, GitHub Issues is the
     zero-config default, matching what `_default_lockstep` assumes elsewhere.
+
+    With `scm`, the ticket also carries what people said on the open change requests opened for it,
+    so a second `implement` from a laptop reads the review the same way the CI workflow does. The
+    note is echoed rather than swallowed: context that silently did not arrive is the kind of thing
+    a person discovers six rounds later.
     """
     if path:
-        return _ticket_from_file(path)
-    from pathlib import Path as _Path
+        loaded = _ticket_from_file(path)
+    else:
+        from pathlib import Path as _Path
 
-    from .platform.tickets import GitHubIssues
+        from .platform.tickets import GitHubIssues
 
-    tracker = source if source is not None else GitHubIssues(root=_Path(root))
-    try:
-        return asyncio.run(tracker.get(key))
-    except (RuntimeError, OSError) as e:
-        raise click.ClickException(f"could not read ticket {key!r}: {e}") from None
+        tracker = source if source is not None else GitHubIssues(root=_Path(root))
+        try:
+            loaded = asyncio.run(tracker.get(key))
+        except (RuntimeError, OSError) as e:
+            raise click.ClickException(f"could not read ticket {key!r}: {e}") from None
+
+    if scm is None:
+        return loaded
+    from .platform.conversation import with_review
+
+    reviewed, note = asyncio.run(with_review(loaded, scm))
+    click.echo(note)
+    return reviewed
 
 
 def _write_artifact(path: str, changeset: Any) -> None:
@@ -4104,6 +4140,10 @@ jobs:
       contents: read
       # Read-only, and needed: the workflow resolves TicketSource to fetch the issue.
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
@@ -4204,6 +4244,7 @@ from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
+from in_lockstep.platform.conversation import with_review
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
@@ -4238,15 +4279,24 @@ FIX_CHANGESET = "fix-changeset"
 
 
 @workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
-    """Read the bug, reproduce it, fix it, and leave the change staged for the privileged half.
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+    """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
 
-    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
-    dispatcher fills it. Writes nothing to the tree. A fix that did not go green stages nothing —
+    `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
+    dispatcher fills them. Writes nothing to the tree. A fix that did not go green stages nothing —
     a broken fix must not travel — and the propose half says so on the ticket rather than opening
     a pull request.
+
+    `with_review` is why a second `/fix` is not a repeat of the first. It gathers what people said
+    on the open pull request this workflow opened last time — the thread, the verdicts, the notes
+    pinned to a line — and hands them over on the ticket, untrusted like the ticket body. Replying
+    to a reviewer is then just running the verb again, which is the point: the argument a developer
+    would have had with an AI on a laptop happens on the pull request instead, where the rest of
+    the team can read it afterwards.
     """
-    outcome = await ctx.do(Fix(ticket=await tickets.get(ticket)))
+    source, note = await with_review(await tickets.get(ticket), scm)
+    print(note)
+    outcome = await ctx.do(Fix(ticket=source))
 
     report = outcome.value
     if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
@@ -4360,6 +4410,10 @@ jobs:
     permissions:
       contents: read
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
@@ -4463,6 +4517,10 @@ jobs:
     permissions:
       contents: read
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
@@ -4554,6 +4612,7 @@ from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
+from in_lockstep.platform.conversation import with_review
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import Scm
@@ -4620,15 +4679,24 @@ CHANGESET = "changeset"
 
 
 @workflow(id="implement/from-ticket")
-async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
-    """Read the ticket, implement it, test the staged change, leave it in an artifact.
+async def implement_from_ticket(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm
+) -> Outcome:
+    """Read the ticket and the review of the last attempt, implement it, test it, stage it.
 
-    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
-    dispatcher fills it. Writes nothing to the tree. The change set — and the verdict of running
+    `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
+    dispatcher fills them. Writes nothing to the tree. The change set — and the verdict of running
     the suite against it — travel to the job that holds a write token, and cross the guard again
     when they get there.
+
+    `with_review` is what makes a second `/implement` a reply rather than a retry: it gathers what
+    people said on the open pull request this workflow opened last time and hands it over on the
+    ticket, untrusted like the ticket body. A reviewer objecting on line 29 becomes context the
+    next attempt can act on, instead of a sentence nothing ever read.
     """
-    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)))
+    source, note = await with_review(await tickets.get(ticket), scm)
+    print(note)
+    outcome = await ctx.do(Implement(ticket=source))
 
     report = outcome.value
     if report is not None and report.changeset.changes:

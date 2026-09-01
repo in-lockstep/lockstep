@@ -71,6 +71,10 @@ jobs:
       contents: read
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the bug report.
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
       # Workload identity federation, granted to THIS job only — the same reasoning as
       # implement.yml. An identity token in the job holding the write token would put both
       # credentials in one process, which is the co-residency the three-job split exists to

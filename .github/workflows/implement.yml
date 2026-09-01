@@ -89,6 +89,10 @@ jobs:
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the issue. The split
       # this file is built around is about WRITE access.
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
       # Workload identity federation: this job may mint a short-lived GitHub OIDC token, which
       # the framework exchanges at Anthropic for the run's credential — no long-lived provider
       # key in repository secrets. Granted to THIS job only: gate and propose call no model, and
