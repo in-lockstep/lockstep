@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>in-lockstep — the SDLC as a program, and agents held to it</title>
-<meta name="description" content="Your lifecycle is executable Python, not YAML. Agents run inside controls you wrote, in a file with blame on it — and the whole thing runs on your laptop for nothing.">
+<title>in-lockstep — AI in your software lifecycle, the same way every time</title>
+<meta name="description" content="Every developer prompts differently and nobody can compare the results. in-lockstep standardises how your organisation uses AI, records every interaction, and lets you test whether a change actually helped.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -13,10 +13,10 @@
   <header class="masthead">
     <a class="mark" href="index.html"><i>▮</i> in-lockstep</a>
     <nav>
+      <a href="#problem">The problem</a>
+      <a href="#answer">The answer</a>
       <a href="#start">Start</a>
-      <a href="walkthrough.html">Walkthrough</a>
-      <a href="#value">Why teams keep it</a>
-      <a href="#receipts">Receipts</a>
+      <a href="walkthrough.html">See it work</a>
     </nav>
     <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
   </header>
@@ -24,34 +24,176 @@
 
 <div class="wrap">
 
-  <section style="padding-top:64px;padding-bottom:64px">
-    <div class="col" style="max-width:20ch">
-    </div>
-    <h1 style="max-width:16ch">The automation and the people advance <em>in lockstep.</em></h1>
+  <section style="padding-top:70px;padding-bottom:52px">
+    <h1 style="max-width:19ch">Your best engineer gets great results from AI. Your newest one <em>doesn't.</em></h1>
     <div class="col">
-      <p class="lede">Your software lifecycle is executable Python — not a manifest, not a spec, not
-        something that generates a pipeline. Agents run inside controls <strong>you wrote, in a file
-        with blame on it</strong>. And every bit of it runs on your laptop, offline, for nothing,
-        before you spend a cent or sign anything.</p>
+      <p class="lede">Right now, that difference <em style="font-style:normal;color:var(--human)">is</em>
+        your AI strategy.</p>
+      <p class="lede" style="font-size:19px;color:var(--text-2);margin-top:24px">in-lockstep makes AI
+        a standard part of your software lifecycle instead of a habit each developer invents. The
+        same prompts, the same guardrails, the same rules about when a model is even the right tool
+        — for every engineer and every repository. Every interaction gets recorded. And when you
+        change a standard, you can test whether it actually helped instead of arguing about it.</p>
     </div>
 
-    <div class="term lit" style="margin-top:44px">
-      <div class="term-bar"><span class="dot on"></span><b>a plain Python project, forty seconds ago</b></div>
-<pre><span class="p">$</span> in-lockstep init
+    <div class="install" style="margin-top:34px">
+<span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
+<span class="p">$</span> in-lockstep init
+    </div>
+    <p style="color:var(--text-3);font-size:14.5px;margin-top:4px">Open source, Apache-2.0. Runs on
+      your laptop. The whole evaluation costs nothing — see <a href="#start">getting started</a>.</p>
+  </section>
 
-wrote .lockstep/lockstep.py
-  detected <span class="g">stack: python; tests: pytest; lint: ruff; Makefile (check)</span>
-wrote .github/workflows/lockstep.yml
+  <hr class="rule">
 
-<span class="p">$</span> in-lockstep run selfcheck
+  <section id="problem">
+    <div class="col">
+      <p class="eyebrow">The problem</p>
+      <h2>Nobody has figured out how to do this at scale.</h2>
+      <p class="lede">Your engineers are already using AI all day. That part happened without you.
+        What has not happened is any of the things that would make it an engineering practice
+        rather than a collection of private habits.</p>
+    </div>
 
-validate  <span class="g">succeeded</span>
-test      <span class="g">succeeded</span>
+    <div class="spine" style="margin-top:44px">
+      <div class="step human">
+        <span class="tag">Today</span>
+        <h3>Everyone is prompting, and nobody is comparing</h3>
+        <p>Each developer has their own prompts, their own sense of what context to paste in, their
+          own instinct for when to trust the answer. Some are genuinely good at it. Some are still
+          learning. The results vary exactly as much as you would expect, and nothing anywhere
+          records which was which.</p>
+      </div>
+      <div class="step human">
+        <span class="tag">Today</span>
+        <h3>The good habits stay in one person's head</h3>
+        <p>When somebody works out a prompt that gets reliably useful reviews, it lives in their
+          editor. It does not reach the other thirteen people on their team, and it certainly does
+          not reach the other two hundred repositories.</p>
+      </div>
+      <div class="step human">
+        <span class="tag">Today</span>
+        <h3>And you cannot improve what you never saw</h3>
+        <p>The interaction happened in a terminal. The prompt is gone, the response is gone, and the
+          only trace is a diff somebody may or may not have read carefully. Ask “are we getting
+          better at this?” and there is nothing to point at — so the answer is a matter of opinion,
+          and the loudest opinion wins.</p>
+      </div>
+    </div>
+  </section>
 
-spend     <span class="g">$0.0000</span>, 0.88s
-ledger    lockstep-history:records/selfcheck-20260831T135020Z-775b.json</pre>
-      <p class="term-cap">Captured, not mocked. It read the project, bound the tools it found, ran
-        two verbs out of process and left an audit record — with no credential anywhere.</p>
+  <hr class="rule">
+
+  <section id="answer">
+    <div class="col">
+      <p class="eyebrow">The answer</p>
+      <h2>Make it a process, not a personal skill.</h2>
+      <p class="lede">Four moves. Each one is ordinary engineering practice, applied to the part of
+        your work that quietly stopped having any.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">Move one</span>
+        <h3>Standardise what the model is told</h3>
+        <p class="tight">The prompt, the guardrails, the context and the skills stop being personal
+          habits and become part of your lifecycle — attached to the situation they belong to. A
+          security review composes the security prompt, then your organisation's guardrails, then
+          the review skills, in that order, in every repository. Implementing a ticket composes
+          something different. Nobody assembles it by hand, and nobody has to remember.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>what a security review is actually sent</b></div>
+<pre><span class="p">$</span> in-lockstep show-prompt security --projection
+
+<span class="y">guardrail:baseline</span>              <span class="d">← every AI call in the company gets this</span>
+<span class="y">guardrail:review/reviewing</span>      <span class="d">← every review gets this</span>
+<span class="y">guardrail:acme/house</span>            <span class="d">← your organisation's rule</span>
+body:review/security-reviewer   <span class="d">← the prompt for this job</span>
+skill:review/review-format
+skill:review/review-revision</pre>
+          <p class="term-cap">Composed the same way every time, and printable offline before it ever
+            runs. Guardrails come first — that is a property of the framework, not a convention
+            somebody has to follow.</p>
+        </div>
+        <p>An organisation ships its standards as a package. Installing it applies it, so there is
+          no line for a team to forget, and it can only tighten what a repository already had —
+          a team can be stricter than the standard and never looser.</p>
+      </div>
+
+      <div class="step">
+        <span class="tag">Move two</span>
+        <h3>Standardise when a model is used at all</h3>
+        <p class="tight">Half of the value is knowing where <em>not</em> to put one. Cherry-picking a
+          commit is <code>git cherry-pick</code>. Running your tests is running your tests. Deciding
+          whether a report is a bug or a feature request is judgement, and that is where a model
+          earns its place.</p>
+        <p class="tight">Your lifecycle says which is which, in one readable file, and the same file
+          says what happens when the deterministic path hits something it cannot handle — a
+          backport replays a commit with plain git, and only asks a model about the paths that
+          actually conflicted.</p>
+        <div class="control"><b>Why it matters:</b> a model invited into a job that did not need one
+          is cost, latency and risk you took on for nothing. That decision should be made once, by
+          your organisation, not forty times a day by whoever is at the keyboard.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Move three</span>
+        <h3>Capture the whole interaction, not just the outcome</h3>
+        <p class="tight">Because the work happens in an issue or a pull request rather than on
+          somebody's laptop, all of it is recorded. Every message and every tool result, turn by
+          turn — written always, not only when something breaks, because the run cannot know yet
+          whether it went wrong. Plus what it cost, what it decided, and who approved it.</p>
+        <p class="tight">The prompt itself does not need storing: it is composed from files in your
+          repository, so <code>show-prompt</code> reproduces exactly what any run was sent, at any
+          time, offline. Reconstructable beats archived — an archived prompt tells you what happened
+          once, a reproducible one tells you what will happen next time.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>one real run's record, from the ledger</b></div>
+<pre>workflow   fix/from-ticket        args      {"ticket": "#109"}
+status     <span class="g">succeeded</span>              approval  {"by": "labeled:tpouyer"}
+tokens     3,013,462              cost_usd  <span class="y">9.62445</span>
+
+findings
+  fix.staged                  wrote src/in_lockstep/ai/builtins.py
+  fix.staged                  wrote tests/…/test_sandbox_fixtures.py
+  <span class="y">injection.exfil_token_names</span> ×11   <span class="d">← the scanner, reading the ticket text</span></pre>
+          <p class="term-cap">Nothing here depended on somebody remembering to paste a transcript
+            into a ticket. The run wrote it because that is what a run does.</p>
+        </div>
+        <p>This is the part that makes everything after it possible. A recorded interaction is
+          evidence you can go back to — and the raw material for the next move.</p>
+      </div>
+
+      <div class="step">
+        <span class="tag">Move four</span>
+        <h3>Test a change to the standard, instead of guessing</h3>
+        <p class="tight">This is the one that changes how the work feels. Someone proposes a better
+          guardrail. Today, in most organisations, that is a conversation — the loudest person wins
+          and nobody finds out for six months.</p>
+        <p class="tight">Here, captured interactions become <strong>cases</strong>: an input, and
+          what a good answer looks like. Change the prompt, run the cases, and read what moved.
+          Some of it a machine settles on its own; the parts that need judgement are marked as
+          needing judgement rather than quietly counted as wins.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>the framework, reporting on itself</b></div>
+<pre><span class="p">$</span> in-lockstep eval report
+
+cases        27
+decided      0
+outstanding  <span class="y">27  (need a judge)</span>
+pass rate    <span class="y">n/a — nothing decided</span>
+
+<span class="d">A rubric nobody judged is outstanding, not passed.</span></pre>
+          <p class="term-cap">Note what it refuses to do. A tool that will not print a pass rate it
+            has not earned is a tool whose pass rates mean something when it does print them.</p>
+        </div>
+        <div class="control"><b>Where this is going:</b> the loop closes when captured runs are
+          harvested into cases automatically and a proposed prompt change arrives as a pull request
+          carrying its own evidence. The capture and the measurement both ship today; the harvesting
+          between them is the roadmap, and the project says so rather than implying otherwise.</div>
+      </div>
+
     </div>
   </section>
 
@@ -61,242 +203,51 @@ ledger    lockstep-history:records/selfcheck-20260831T135020Z-775b.json</pre>
     <div class="col">
       <p class="eyebrow">Getting started</p>
       <h2>Four commands. No key, no account, no platform team.</h2>
+      <p class="lede">Nothing here needs a credential or a purchase order. You can find out whether
+        it fits in an afternoon.</p>
     </div>
 
     <div class="start" style="margin-top:36px">
       <ol>
         <li>
           <b>uv add in-lockstep</b>
-          <span>One distribution. Provider SDKs are extras, so a bare install pulls none of them.</span>
+          <span>One package. Nothing else to run, host or sign up for.</span>
         </li>
         <li>
           <b>in-lockstep init</b>
-          <span>It reads your repository first — test runner, linter, Makefile, CI host — and writes
-            a lifecycle that already binds them. Thirty lines, and they are yours.</span>
+          <span>It reads your repository — test runner, linter, CI — and writes a lifecycle file
+            that already fits it. Thirty lines, and they are yours to edit.</span>
         </li>
         <li>
           <b>in-lockstep ls</b>
-          <span>The resolved answer to “what will actually run”: every binding, the middleware
-            order, the model route per verb, and the prompts each one composes.</span>
+          <span>Prints what will actually happen: which steps use a model, which do not, and exactly
+            which prompts and guardrails each one composes.</span>
         </li>
         <li>
           <b>in-lockstep review --offline</b>
-          <span>A real security review of a real merged pull request, replayed from a shipped
-            recording — deterministic, under a second, and
-            <span style="white-space:nowrap">billed <b style="color:var(--machine)">$0.0000</b>.</span></span>
+          <span>A real security review of a real pull request, replayed from a recording —
+            <span style="white-space:nowrap">under a second, billed <b style="color:var(--machine)">$0.0000</b>.</span></span>
         </li>
       </ol>
 
       <div>
         <div class="quote" style="margin-top:0">
-          <blockquote>A new engineer runs <code>review --offline</code> on their first morning and
-            gets real findings back in under a second, without a key and without asking me for
-            anything. That used to be a two-day errand.</blockquote>
+          <blockquote>A new engineer runs it on their first morning and gets real findings back in
+            under a second, without a key and without asking me for anything. That used to be a
+            two-day errand.</blockquote>
           <p class="who"><b>Development Manager</b> · fourteen engineers</p>
         </div>
         <div class="quote">
-          <blockquote>What I remember is how much I could see before anyone issued a key.</blockquote>
-          <p class="who"><b>Engineering Director</b> · ninety engineers, regulated industry</p>
-        </div>
-        <div class="quote">
-          <blockquote>1,498 passed on the first attempt — no key, no network, no fixture that
-            wanted a token. That basically never happens.</blockquote>
-          <p class="who"><b>Open Source Maintainer</b> · two-person project</p>
+          <blockquote>Our standards are a dependency now, not a paragraph in the onboarding doc.</blockquote>
+          <p class="who"><b>Engineering Director</b> · ninety engineers</p>
         </div>
       </div>
     </div>
 
-    <div class="col" style="margin-top:20px">
+    <div class="col" style="margin-top:26px">
       <p><a href="walkthrough.html">See the whole thing end to end →</a> — a real library adopting
-        it, then one change travelling from a rough idea to a merged pull request.</p>
-    </div>
-  </section>
-
-  <hr class="rule">
-
-  <section>
-    <div class="col">
-      <p class="eyebrow">The idea</p>
-      <h2>A pipeline you cannot read is a policy nobody agreed to.</h2>
-      <p class="lede">Most delivery automation is a pile of YAML that no test covers, that nobody
-        can run locally, and that quietly became the most important program in your company.</p>
-    </div>
-    <div class="col">
-      <p>in-lockstep makes it a module. Your review policy is a Python file — so changing it is a
-        pull request with blame, history and a rollback, rather than a ticket to a platform team.
-        You extend a verb by subclassing. You override behaviour by rebinding. You compose
-        cross-cutting concerns as middleware. Not because those are clever, but because they are
-        language features, and reinventing each one in YAML produces a worse version of it.</p>
-      <p>And because it is a program, the agents inside it are subject to the same thing everyone
-        else is: code that was reviewed.</p>
-    </div>
-
-    <div class="quote mid" style="margin-top:44px">
-      <blockquote>The first time it refused my own changeset for silencing a test, I realised the
-        tool was going to keep me out of the code review I did not want to be in.</blockquote>
-      <p class="who"><b>Developer</b> · eight-person team, daily use</p>
-    </div>
-  </section>
-
-  <hr class="rule">
-
-  <section id="value">
-    <div class="col">
-      <p class="eyebrow">Why teams keep it</p>
-      <h2>The same framework, answering five different questions.</h2>
-      <p class="lede">What people value turns out to depend entirely on what they are accountable
-        for. Below is what each role says it actually changed.</p>
-    </div>
-
-    <div class="roles" style="margin:40px 0 12px">
-      <div class="role"><b>Developer</b><span>“Every question anyone asks me about what the bot did
-        — what it was told, what it cost, why it refused — I can answer from my terminal in about a
-        second, for nothing.”</span></div>
-      <div class="role"><b>Development Manager</b><span>“Our lifecycle policy stopped living in my
-        seniors' heads and in copy-pasted YAML, and became a Python file with blame on it.”</span></div>
-      <div class="role"><b>Engineering Director</b><span>“I can publish our engineering standard as
-        a package, and then prove per repository, in one command with an exit code, that it is
-        actually in force.”</span></div>
-      <div class="role"><b>VP of Engineering</b><span>“Two numbers I put in a budget, and a document
-        I hand to risk without rehearsing it first.”</span></div>
-      <div class="role"><b>Open Source Maintainer</b><span>“It gave a two-person project a real
-        review-and-fix loop, and I can run every part of it — suite, prompts, pack trials — without
-        a key or a card on file.”</span></div>
-    </div>
-
-    <h3 style="margin-top:56px">Standards roll out. Agency does not.</h3>
-    <div class="col">
-      <p>An organisation's floor arrives as a dependency — installing it <em>is</em> applying it,
-        so there is no import for a team to forget. It merges tighten-only: a repository can lower a
-        ceiling and can never raise one. An extension pack works the opposite way: installing it
-        only <em>offers</em> it, and nothing runs until a line in your own file says so.</p>
-    </div>
-    <div class="term">
-      <div class="term-bar"><span class="dot on"></span><b>installing a standards package into a repo that was not touched</b></div>
-<pre><span class="d">before</span>  policy  = <span class="d">scan=warn   max_turns=30</span>
-<span class="d">after</span>   policy  = <span class="g">scan=block  deny_tools=1  max_turns=16</span>
-
-<span class="d"># then a team contributes a layer trying to loosen it:</span>
-<span class="d">        Policy(max_turns=50, scan_input="warn")</span>
-<span class="d">result</span>  policy  = <span class="g">scan=block  max_turns=16</span>   <span class="y">← the floor holds</span></pre>
-    </div>
-    <div class="qgrid" style="margin-top:30px">
-      <div class="qcard">
-        <blockquote>The stack has three public methods and none of them takes anything away.</blockquote>
-        <p class="who"><b>Engineering Director</b>ninety engineers, regulated industry</p>
-      </div>
-      <div class="qcard">
-        <blockquote>The control rolls out on its own and the agency does not. That asymmetry is the
-          reason I was willing to put this in front of four hundred people.</blockquote>
-        <p class="who"><b>VP of Engineering</b>four hundred engineers</p>
-      </div>
-      <div class="qcard">
-        <blockquote>Our standards are a dependency now, not a paragraph in the onboarding doc. When
-          a team overrides one, it's one line in their lockstep.py and <code>ls</code> shows it to me
-          with an asterisk.</blockquote>
-        <p class="who"><b>Development Manager</b>fourteen engineers</p>
-      </div>
-    </div>
-
-    <h3 style="margin-top:64px">Spend is refused before it happens, not reported afterwards.</h3>
-    <div class="col">
-      <p>A run that cannot be priced does not start. Budgets merge to the lowest, not the last, so a
-        number you say out loud stays that number after four hundred people have edited their own
-        configuration. And a model the framework has no rate for is blocked with zero model calls —
-        because the alternative is a fabricated number inside a budget check.</p>
-    </div>
-    <div class="qgrid" style="margin-top:26px">
-      <div class="qcard">
-        <blockquote>I can say a number out loud, and it is still that number after four hundred
-          people have edited their own config.</blockquote>
-        <p class="who"><b>VP of Engineering</b>four hundred engineers</p>
-      </div>
-      <div class="qcard">
-        <blockquote>I fat-fingered a model route and <code>doctor</code> told me the provider was not
-          registered and listed the five that were. That would otherwise have been a red build
-          twenty minutes later.</blockquote>
-        <p class="who"><b>Developer</b>eight-person team</p>
-      </div>
-      <div class="qcard">
-        <blockquote>The bound on the retry loop lives on the ticket labels, and <code>doctor</code>
-          fails if those labels are missing — because that's the case where the cap quietly stops
-          being a cap.</blockquote>
-        <p class="who"><b>Development Manager</b>fourteen engineers</p>
-      </div>
-    </div>
-
-    <h3 style="margin-top:64px">You can always ask what the model was told.</h3>
-    <div class="col">
-      <p>Offline, with no key, off the adapter your module actually bound — not the shipped default.
-        Change a prompt and the diff is three lines you can paste into a pull request, which is the
-        difference between a review thread that ends and one that does not.</p>
-    </div>
-    <div class="qgrid" style="margin-top:26px">
-      <div class="qcard">
-        <blockquote>I added one house guardrail, and <code>show-prompt security --diff</code>
-          printed the three lines it added to the prompt. That is what I paste into the pull
-          request, and the thread is over.</blockquote>
-        <p class="who"><b>Developer</b>eight-person team</p>
-      </div>
-      <div class="qcard">
-        <blockquote>When the reviewer says something strange I run <code>review --offline</code> and
-          get the identical answer back in under a second, then read the turn-by-turn transcript it
-          already wrote. I used to re-run those and hope they failed the same way.</blockquote>
-        <p class="who"><b>Developer</b>eight-person team</p>
-      </div>
-      <div class="qcard">
-        <blockquote>The receipt is derived from the objects, not written by whoever published the
-          package.</blockquote>
-        <p class="who"><b>Engineering Director</b>ninety engineers</p>
-      </div>
-    </div>
-  </section>
-
-  <hr class="rule">
-
-  <section>
-    <div class="col">
-      <p class="eyebrow">Extending it</p>
-      <h2>Language features, not a plugin DSL.</h2>
-      <p class="lede">You extend a verb by subclassing. You install a prompt by binding it. You
-        distribute either as an ordinary Python package. There is nothing new to learn because
-        there is nothing new here — which is the point.</p>
-    </div>
-
-    <div class="term" style="margin-top:32px">
-      <div class="term-bar"><span class="dot on"></span><b>a strategy that forgot to declare what it holds</b></div>
-<pre><span class="r">UndeclaredAgency:</span> AcmeTDD subclasses AiStrategy, so it is handed write_file,
-delete_file and run_script and it pays for a model call — but `capabilities`
-omits <span class="y">['executes_code', 'spends_budget', 'writes_files']</span>.
-
-ApprovalGate, the budget refusal and Retry all read that set off the bound
-object, so an undeclared strategy is an ungated one. Either subclass a per-verb
-base (ImplementStrategy, FixStrategy), which declares it for you, or write:
-
-    <span class="y">capabilities: ClassVar[frozenset[Capability]] = AGENCY</span></pre>
-      <p class="term-cap">Refused at class-creation time, before anything runs — because the three
-        gates that would have been silently skipped all read the same declaration.</p>
-    </div>
-
-    <div class="qgrid" style="margin-top:30px">
-      <div class="qcard">
-        <blockquote>I wrote a three-line strategy subclass that omitted <code>capabilities</code> and
-          it refused to define the class at all. The error named the four things I was actually
-          holding and the base class that would have declared them for me.</blockquote>
-        <p class="who"><b>Open Source Maintainer</b>two-person project</p>
-      </div>
-      <div class="qcard">
-        <blockquote>The layering test doesn't skip an unknown package, it fails it. Somebody had
-          already been burned by a gate that quietly checked nothing and wrote the reason into the
-          assertion message.</blockquote>
-        <p class="who"><b>Open Source Maintainer</b>two-person project</p>
-      </div>
-      <div class="qcard">
-        <blockquote><code>pack try</code> exited 1 and told me the pack ships no cassette, so there
-          was nothing to replay and nothing to measure. It would have been very easy to print 100%
-          there.</blockquote>
-        <p class="who"><b>Open Source Maintainer</b>two-person project</p>
-      </div>
+        it in four commands, then one change travelling from a rough idea to a merged pull
+        request.</p>
     </div>
   </section>
 
@@ -304,42 +255,40 @@ base (ImplementStrategy, FixStrategy), which declares it for you, or write:
 
   <section id="receipts">
     <div class="col">
-      <p class="eyebrow">The receipts</p>
+      <p class="eyebrow">It works on real work</p>
       <h2>A bug that filed itself, fixed itself, and waited to be let in.</h2>
-      <p class="lede">This happened in the framework's own repository, unattended, and every number
-        below is from the ledger record that run wrote.</p>
+      <p class="lede">This happened in the framework's own repository, with nobody watching, and
+        every number is from the record that run wrote.</p>
     </div>
 
-    <div class="proof" style="margin-top:34px">
-      <div><b>#109</b><span>an issue labelled <code>ai-generated</code> — filed by an earlier failed run, not by a person</span></div>
-      <div><b>$9.62</b><span>one unattended fix run, inside a ceiling declared in advance</span></div>
-      <div><b>#112</b><span>the pull request it produced: +55 / −5, merged</span></div>
-      <div><b>2</b><span>files staged — the fix, and a regression test for it</span></div>
+    <div class="proof" style="margin-top:32px">
+      <div><b>#109</b><span>an issue filed automatically by an earlier run that failed</span></div>
+      <div><b>$9.62</b><span>one unattended fix, inside a ceiling set in advance</span></div>
+      <div><b>#112</b><span>the pull request it opened: +55 / −5, merged</span></div>
+      <div><b>2</b><span>files written — the fix, and a test to stop it coming back</span></div>
     </div>
 
-    <div class="col" style="margin-top:34px">
-      <p>A run failed and filed its own bug report. A person put a label on it. An agent fixed it,
-        staged the change and opened a pull request. A person merged it.
-        <strong>Neither side did the other's job</strong> — which is the entire thesis, and the
-        reason for the name.</p>
-      <p><a href="walkthrough.html">Walk the same path, step by step →</a></p>
+    <div class="col" style="margin-top:32px">
+      <p>A run failed and filed its own bug report. A person put a label on it. An agent fixed it and
+        opened a pull request. A person merged it. <strong>Neither side did the other's job</strong>
+        — which is where the name comes from.</p>
     </div>
   </section>
 
   <hr class="rule">
 
   <section class="final">
-    <h2 style="max-width:22ch;margin-left:auto;margin-right:auto">Find out in an afternoon,
-      for nothing.</h2>
-    <p class="lede mid" style="margin-bottom:26px">The entire evaluation runs offline. Nobody has to
-      approve a key to discover whether it fits.</p>
+    <h2 style="max-width:20ch;margin-left:auto;margin-right:auto">Stop guessing whether it is
+      working.</h2>
+    <p class="lede mid" style="margin-bottom:26px">Standardise how your organisation uses AI, record
+      what happens, and measure the changes you make to it.</p>
     <div class="install">
 <span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
 <span class="p">$</span> in-lockstep init
     </div>
     <p><a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a> ·
-       <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">Getting started</a> ·
-       <a href="walkthrough.html">The walkthrough</a></p>
+       <a href="walkthrough.html">See it work</a> ·
+       <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">Docs</a></p>
   </section>
 </div>
 
@@ -347,8 +296,7 @@ base (ImplementStrategy, FixStrategy), which declares it for you, or write:
   <div class="wrap">
     <p><strong>in-lockstep</strong> · Apache-2.0 · an agentic SDLC framework for Python</p>
     <p>Terminal output is captured verbatim from the commands shown. Quotes are drawn from
-      structured reviews conducted in the voice of each role, and are attributed by role rather than
-      by company.</p>
+      structured reviews conducted in the voice of each role, and are attributed by role.</p>
   </div>
 </footer>
 
