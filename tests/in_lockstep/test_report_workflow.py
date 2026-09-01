@@ -1,0 +1,170 @@
+"""A run that failed still answers on the ticket.
+
+`implement/propose` comments on every outcome it sees — a change opened, no change staged, tests
+failed. It only ever saw the outcomes that reached it. A strategy refusing in its first phase does
+not: the work job exits non-zero, `needs:` skips propose, and the person who typed `/implement` is
+left watching a thread that never replies.
+
+That happened for real on #139. A test-first run refused with `tdd.not_red`, $21 was spent, and the
+issue got nothing — no comment, no follow-up, no sign the run had even happened. The alternative to
+an answer is not "no answer"; it is somebody assuming it worked, because the last thing the tool
+said was that it had started.
+
+These run against this repository's own `.lockstep/lockstep.py` rather than the scaffold string,
+because that file is what the failing run actually executed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from in_lockstep.core.workflow import get, restore, snapshot
+from in_lockstep.loader import load, lockstep_from
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class _Tracker:
+    """A tracker that records what was said to it, and nothing else."""
+
+    def __init__(self) -> None:
+        self.said: list[str] = []
+
+    async def get(self, key: str) -> Any:
+        from in_lockstep.platform.tickets import Ticket
+
+        return Ticket(key=key, title="a ticket")
+
+    async def comment(self, ticket: Any, body: str) -> None:
+        self.said.append(body)
+
+
+class _Host:
+    """Enough `Scm` for `ticket_for` to leave the key alone."""
+
+    shared_numbering = False
+
+
+def _ledger_with(tmp_path: Path, *records: dict[str, Any]) -> Any:
+    """A file-backed store holding exactly these records."""
+    from in_lockstep.platform.ledger.store import InRepoLedger
+
+    root = tmp_path / "ledger"
+    root.mkdir()
+    for index, record in enumerate(records):
+        record.setdefault("epoch", "in-process")
+        (root / f"r{index}.json").write_text(json.dumps(record))
+    return InRepoLedger(root=root)
+
+
+@pytest.fixture
+def workflows():
+    """This repository's own lifecycle, loaded and then unregistered again."""
+    state = snapshot()
+    module, _ref = load(str(ROOT))
+    yield lockstep_from(module)
+    restore(state)
+
+
+def _run(entry: Any, **kwargs: Any) -> Any:
+    class _Ctx:
+        run_id = "test"
+
+    return asyncio.run(entry.fn(_Ctx(), **kwargs))
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_failed_run_says_so_on_the_ticket(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """The whole point. A reason a person can act on, not silence."""
+    entry = get(f"{verb}/report")
+    assert entry is not None, f"{verb}/report is not registered"
+
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-1",
+            "kind": verb,
+            "args": {"ticket": "#139"},
+            "status": "failed",
+            "reason": "tdd.not_red",
+            "cost_usd": 21.6135,
+            "ts": "2026-09-01T19:54:34+00:00",
+            "findings": {
+                "count": 1,
+                "items": [{"id": "tdd.not_red", "message": "the staged test did not fail"}],
+            },
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(entry, ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "tdd.not_red" in said, "the reason is the one thing the person needs"
+    assert "$21.61" in said, "what it cost is the other"
+    assert "no pull request was opened" in said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_it_still_answers_when_the_run_recorded_nothing(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """A run that died before writing a record is the case most likely to go quiet, so it is the
+    case worth checking. Saying "the job log is the only account of it" beats saying nothing."""
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "failed before it recorded anything" in said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """The report job runs on `failure()`, but the record it reads is found by matching the ticket
+    — so a ticket whose only runs succeeded must not have one of them described as the failure."""
+    ledger = _ledger_with(
+        tmp_path,
+        {"run_id": "ok", "args": {"ticket": "#139"}, "status": "succeeded", "reason": None},
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "failed before it recorded anything" in said, "a succeeded run is not a failure to report"
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """Records are matched on the ticket they carry. Reporting #7's failure onto #139 would be a
+    confident, specific, wrong answer — worse than the silence this replaced."""
+    ledger = _ledger_with(
+        tmp_path,
+        {"run_id": "other", "args": {"ticket": "#7"}, "status": "failed", "reason": "budget"},
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "budget" not in said
+    assert "failed before it recorded anything" in said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_reporting_a_failure_is_not_itself_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """A second red mark on a run whose failure is already recorded would hide the one thing this
+    job is for: whether the answer actually reached the ticket."""
+    from in_lockstep.core.outcome import Status
+
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
+    outcome = _run(get(f"{verb}/report"), ticket="#139", tickets=_Tracker(), scm=_Host())
+    assert outcome.status is Status.SUCCEEDED

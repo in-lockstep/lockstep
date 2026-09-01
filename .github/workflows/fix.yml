@@ -184,3 +184,44 @@ jobs:
             --push
         if: always()
         continue-on-error: true
+
+  # The answer a failed run would otherwise never give. `propose` is skipped by `needs:` when the
+  # work job exits non-zero, and `fix/propose` is what comments on the ticket — so a strategy
+  # refusing in its first phase left the person who asked watching a thread that never replied.
+  # That is the one failure a chat-ops trigger cannot afford: the alternative to an answer is
+  # somebody assuming it worked.
+  #
+  # Holds a write token and no provider key, exactly like `propose`, so the credential split is
+  # unchanged. It says what happened and publishes the record; it opens nothing.
+  report:
+    needs: [gate, fix]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: fix-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/fix
+        continue-on-error: true
+      # Absorbed first, so the comment below can read the record the failed run wrote rather than
+      # being told what happened by this file.
+      - run: |
+          uv run in-lockstep history \
+            --from-bundle "${RUNNER_TEMP}/fix/history.bundle" \
+            --push
+        continue-on-error: true
+      - run: |
+          uv run in-lockstep run fix/report \
+            --arg ticket="#${ISSUE}"
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

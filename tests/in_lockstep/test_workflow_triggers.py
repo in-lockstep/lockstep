@@ -206,8 +206,17 @@ ALLOWED_STATEMENTS = (
     re.compile(r'^echo "\w+=\$\w+" >> "\$GITHUB_OUTPUT"$'),
 )
 
-#: Statements, not lines. Three jobs each doing its work and moving its evidence.
-MAX_STATEMENTS = 12
+#: Statements, not lines. Four jobs each doing its work and moving its evidence.
+#:
+#: Moved 12 -> 13 when the `report` job was added — the job that answers on the ticket when the
+#: work half failed and `propose` was therefore skipped. Recorded rather than quietly bumped,
+#: because a cap somebody raises whenever it bites is not a cap.
+#:
+#: Note what this number does and does not guard. `ALLOWED_STATEMENTS` above is the real gate: it
+#: is what refuses an `if`, a `case`, a composed commit message or a `gh` call, and it did not move.
+#: This is the secondary tripwire on growth, and every one of the thirteen is still a bare
+#: invocation of the framework.
+MAX_STATEMENTS = 13
 
 
 def _statements(workflow: str) -> list[str]:
