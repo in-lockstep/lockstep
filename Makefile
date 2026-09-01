@@ -36,9 +36,22 @@ test:
 # The rcfile is passed to BOTH halves. Passing it to only one made the floor check and the ratchet
 # read different numbers off the same run, which is a gate that contradicts itself.
 # GATE-TEST-3 lives here rather than in pytest: it is a property of the run, not of a test.
+#
+# `--cov=src/in_lockstep`, a PATH, and not `--cov=in_lockstep`, a module name. The module name
+# measures anything imported into that namespace, and `init` scaffolds a `.lockstep/lockstep.py`
+# that loads as `in_lockstep._lifecycle` — so eighty test-written scaffold files under pytest's
+# tmp_path were in the denominator, contributing 838 statements nothing was ever going to cover.
+# The gate therefore moved whenever the scaffold changed size, which is a gate measuring the
+# fixtures rather than the code. It also swept in this repository's own `.lockstep/lockstep.py`,
+# which is configuration.
+#
+# The floor moved UP, 88 -> 89, in the same change and for that reason. Read the direction
+# carefully: this is stricter, not more comfortable. 88% was a blend of the package with a thousand
+# statements of generated fixtures; 89.68% is what `src/in_lockstep` actually measures, and there is
+# nowhere left to hide a drop behind a bigger scaffold.
 cov:
 	@floor=$$(cat .coverage-floor); \
-	uv run pytest -q --cov=in_lockstep --cov-config=/dev/null \
+	uv run pytest -q --cov=src/in_lockstep --cov-config=/dev/null \
 	  --cov-report=term-missing --cov-fail-under=$$floor || exit 1; \
 	actual=$$(uv run python -c "import json,subprocess; \
 	print(int(json.loads(subprocess.run(['uv','run','coverage','json','--rcfile=/dev/null', \

@@ -27,9 +27,9 @@ from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
+from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import fix_body, implement_body
-from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -293,8 +293,13 @@ async def implement_from_ticket(
     print(note)
     outcome = await ctx.do(Implement(ticket=source), via=tdd)
 
+    # `SUCCEEDED` and not merely "there are changes", which is what this used to check — and the
+    # difference is a real run that cost $21 and would have opened a pull request containing a
+    # test that tested nothing. A test-first strategy that refuses in its red phase still returns
+    # the test it staged, so `changeset.changes` is truthy on precisely the outcome that must not
+    # travel. The fixing verb's own half has always guarded on the status; this now matches it.
     report = outcome.value
-    if report is not None and report.changeset.changes:
+    if outcome.status is Status.SUCCEEDED and report is not None and report.changeset.changes:
         # The suite, run against a throwaway worktree of HEAD plus the staged change, before any
         # of it travels. The verdict rides the artifact so the privileged half can decide what to
         # open — a reviewer should learn whether the change passed from the pull request, not by
@@ -384,6 +389,79 @@ async def implement_propose(
 
 #: Where the unprivileged half leaves the fix for the privileged half to open.
 FIX_CHANGESET = "fix-changeset"
+
+
+@workflow(id="implement/report")
+async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+    """Say on the ticket that the run failed, when the half that would have said so never ran.
+
+    `implement/propose` answers on every outcome it sees — a change opened, no change staged, tests
+    failed. It only sees the outcomes that reach it, and a strategy refusing in its first phase
+    never gets there: the work job exits non-zero, `needs:` skips propose, and the person who typed
+    `/implement` is left watching a thread that never replies.
+
+    Which is the one failure a chat-ops trigger cannot afford. The alternative to an answer is not
+    "no answer" — it is somebody assuming it worked, because the last thing the tool said was that
+    it had started.
+
+    Reads the record the run already wrote rather than being handed a reason by the CI file: the
+    reason, the cost and the findings are all in the ledger, and a workflow that took them as
+    arguments would be a workflow whose YAML had to know what happened.
+    """
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source = await tickets.get(key)
+    record = _last_unsuccessful(key)
+
+    if record is None:
+        body = (
+            "`/implement` failed before it recorded anything. Nothing was staged and nothing was "
+            "opened; the job log is the only account of it."
+        )
+    else:
+        reason = str(record.get("reason") or record.get("status") or "failed")
+        cost = record.get("cost_usd")
+        spent = f" ${float(cost):.2f} spent." if isinstance(cost, (int, float)) else ""
+        findings = [
+            f"- `{f.get('id')}`: {f.get('message')}"
+            for f in (record.get("findings") or {}).get("items", [])[:5]
+            if isinstance(f, dict)
+        ]
+        detail = ("\n\n" + "\n".join(findings)) if findings else ""
+        body = (
+            f"`/implement` did not produce a change — the run failed with `{reason}`.{spent} "
+            f"Nothing was staged and no pull request was opened.{detail}"
+        )
+
+    await tickets.comment(source, body)
+    print(f"commented {key}")
+    # SUCCEEDED: this job's job was to say what happened, and it did. Failing here would put a
+    # second red mark on a run whose failure is already recorded, and hide whether the answer
+    # actually reached the ticket.
+    return Outcome(status=Status.SUCCEEDED, reason=None)
+
+
+def _last_unsuccessful(ticket: str) -> dict | None:
+    """The newest recorded run for this ticket that did not succeed.
+
+    Matched on the `ticket` the record carries rather than on the run id, because a run id is a
+    string a person would have to parse and the field exists for exactly this.
+    """
+    from in_lockstep.platform.ledger import store_for
+
+    store = store_for(lockstep.container)
+    reader = getattr(store, "records", None)
+    if reader is None:
+        return None
+    wanted = {ticket, ticket.lstrip("#"), "#" + ticket.lstrip("#")}
+    mine = [
+        r
+        for r in reader()
+        if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
+        and r.get("status") != "succeeded"
+    ]
+    mine.sort(key=lambda r: str(r.get("ts", "")))
+    return mine[-1] if mine else None
 
 
 @workflow(id="fix/from-ticket")
@@ -488,3 +566,76 @@ async def fix_propose(
     )
     print(f"change    {change.url or change.branch}")
     return Outcome(status=Status.SUCCEEDED, value=change)
+
+
+@workflow(id="fix/report")
+async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+    """Say on the ticket that the run failed, when the half that would have said so never ran.
+
+    `fix/propose` answers on every outcome it sees — a change opened, no change staged, tests
+    failed. It only sees the outcomes that reach it, and a strategy refusing in its first phase
+    never gets there: the work job exits non-zero, `needs:` skips propose, and the person who typed
+    `/fix` is left watching a thread that never replies.
+
+    Which is the one failure a chat-ops trigger cannot afford. The alternative to an answer is not
+    "no answer" — it is somebody assuming it worked, because the last thing the tool said was that
+    it had started.
+
+    Reads the record the run already wrote rather than being handed a reason by the CI file: the
+    reason, the cost and the findings are all in the ledger, and a workflow that took them as
+    arguments would be a workflow whose YAML had to know what happened.
+    """
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source = await tickets.get(key)
+    record = _last_unsuccessful(key)
+
+    if record is None:
+        body = (
+            "`/fix` failed before it recorded anything. Nothing was staged and nothing was "
+            "opened; the job log is the only account of it."
+        )
+    else:
+        reason = str(record.get("reason") or record.get("status") or "failed")
+        cost = record.get("cost_usd")
+        spent = f" ${float(cost):.2f} spent." if isinstance(cost, (int, float)) else ""
+        findings = [
+            f"- `{f.get('id')}`: {f.get('message')}"
+            for f in (record.get("findings") or {}).get("items", [])[:5]
+            if isinstance(f, dict)
+        ]
+        detail = ("\n\n" + "\n".join(findings)) if findings else ""
+        body = (
+            f"`/fix` did not produce a change — the run failed with `{reason}`.{spent} "
+            f"Nothing was staged and no pull request was opened.{detail}"
+        )
+
+    await tickets.comment(source, body)
+    print(f"commented {key}")
+    # SUCCEEDED: this job's job was to say what happened, and it did. Failing here would put a
+    # second red mark on a run whose failure is already recorded, and hide whether the answer
+    # actually reached the ticket.
+    return Outcome(status=Status.SUCCEEDED, reason=None)
+
+
+def _last_unsuccessful(ticket: str) -> dict | None:
+    """The newest recorded run for this ticket that did not succeed.
+
+    Matched on the `ticket` the record carries rather than on the run id, because a run id is a
+    string a person would have to parse and the field exists for exactly this.
+    """
+    from in_lockstep.platform.ledger import store_for
+
+    store = store_for(lockstep.container)
+    reader = getattr(store, "records", None)
+    if reader is None:
+        return None
+    wanted = {ticket, ticket.lstrip("#"), "#" + ticket.lstrip("#")}
+    mine = [
+        r
+        for r in reader()
+        if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
+        and r.get("status") != "succeeded"
+    ]
+    mine.sort(key=lambda r: str(r.get("ts", "")))
+    return mine[-1] if mine else None
