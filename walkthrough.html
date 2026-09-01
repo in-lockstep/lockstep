@@ -317,11 +317,39 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
 
       <div class="step human">
         <span class="tag">A person · step 9</span>
-        <h3>You disagree. You say so, in the thread.</h3>
+        <h3>You disagree. You review it, the way you review anything.</h3>
         <p class="tight">The first finding is right and the fix took the easy half of it. Quoting
           the variable stops the word-splitting, but <code>paths</code> is a newline-delimited list
-          — the team wants the entries iterated. On a laptop this is where the developer would type
-          another sentence at their AI. Here they type it where it is kept.</p>
+          — the team wants the entries iterated. On a laptop this is where a developer types another
+          sentence at their AI. Here they leave a review, on the line, in the normal way.</p>
+
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · pull request #219 · files changed</div>
+          <div class="thread">
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg">
+                <b><i>dana</i> commented on <code>actions/save/action.yml</code> line 29</b>
+                <div class="in">
+                  <p>Don't just quote it — <code>paths</code> is newline-delimited, so iterate the
+                    entries. Same as we do in <code>actions/restore</code>.</p>
+                </div>
+              </div>
+            </div>
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg">
+                <b><i>dana</i> requested changes</b>
+                <div class="in"><p>One note inline. Otherwise the shape is right.</p></div>
+              </div>
+            </div>
+          </div>
+          <div class="ghfoot">All three kinds are read: the conversation thread, the verdict on a
+            review, and the note pinned to a file and a line — which is the most specific thing a
+            reviewer ever writes and the one worth the most to whoever tries again.</div>
+        </div>
+
+        <p class="tight">Then, on the issue, one word to ask for another go:</p>
 
         <div class="gh">
           <div class="gh-bar"><b>acme/build-actions</b> · issue #218 · leave a comment</div>
@@ -329,30 +357,43 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
             <div class="ghc person">
               <span class="av">DR</span>
               <div class="msg" style="border:0">
-                <div class="composer">Don't just quote it — <code>paths</code> is newline-delimited,
-                  so iterate the entries. Same as we do in <code>actions/restore</code>.<br><br>/fix<span class="cursor">▍</span></div>
+                <div class="composer">/fix<span class="cursor">▍</span></div>
               </div>
             </div>
           </div>
-          <div class="ghfoot">Put it on the <strong>issue</strong>, not on the pull request. The run
-            reads the issue and its comments — that is the context it is given — and the
-            <code>/fix</code> trigger deliberately ignores comments made on pull requests. If you
-            want the framework to hear you, say it where it is listening.</div>
+          <div class="ghfoot">Feedback goes where you would naturally put it. The <em>command</em>
+            still goes on the issue, because that is where the trigger lives — a comment on a pull
+            request is read, and does not start a run.</div>
         </div>
       </div>
 
       <div class="step">
         <span class="tag">The framework · step 10</span>
-        <h3>Your sentence is now part of the prompt</h3>
+        <h3>Your review is now part of the prompt</h3>
         <p class="tight">Not a setting you changed, not a prompt file you edited. The run fetches
-          the issue <em>and every comment on it</em>, and each one becomes a piece of context —
-          tagged untrusted, scanned like the rest, and sent. That is the loop from step 5 doing its
-          job.</p>
+          the issue and every comment on it, <strong>and the conversation on the pull request it
+          opened last time</strong> — the thread, the verdict, the notes pinned to a line. Each
+          becomes a piece of context, tagged untrusted and scanned like the rest. That is the loop
+          from step 5 doing its job.</p>
+        <p class="tight">A reviewer's note keeps the line it was written against, because a sentence
+          handed over without its location is an opinion rather than an instruction:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>what the second run was given</b></div>
+<pre>review    3 remark(s) from <span class="y">#219</span>
+
+<span class="d">context (untrusted)</span>
+  <span class="w">@dana reviewed actions/save/action.yml:29 on #219:</span>
+  <span class="w">Don't just quote it — `paths` is newline-delimited, so iterate</span>
+  <span class="w">the entries. Same as we do in `actions/restore`.</span></pre>
+          <p class="term-cap">Only pull requests this framework opened are read, matched on the
+            branch it created — so a change request a stranger opened saying "fixes #218" is not
+            gathered as though a reviewer of yours had written it.</p>
+        </div>
         <p class="tight">The second run opens <a href="#">#220</a> with the entries iterated, the
           reproducer still red-then-green, and the same review comment updated in place.</p>
         <div class="control"><b>Why this matters more than it looks:</b> the correction is now a
-          durable artifact. It is in the issue, in the run's record, and readable by the next person
-          who hits the same thing — instead of evaporating in a terminal on one laptop.</div>
+          durable artifact. It is in the pull request, in the run's record, and readable by the next
+          person who hits the same thing — instead of evaporating in a terminal on one laptop.</div>
       </div>
 
       <div class="step human">
@@ -438,7 +479,7 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
       │
       ├── <span class="g">yes</span> ──▶ <span class="y">merge</span>. <span class="d">the loop exits.</span>
       │
-      └── <span class="r">no</span>  ──▶ <span class="y">a comment on the issue</span>
+      └── <span class="r">no</span>  ──▶ <span class="y">a review on the PR</span>
                     <span class="d">which becomes context for the next round</span>
                     └──▶ back to the top</pre>
           <p class="term-cap">The exit criterion here is not a passing test. It is a person being
