@@ -25,6 +25,12 @@ build/
 .lockstep/runs/
 .lockstep/cassettes/
 .lockstep/ledger/
+# Transcripts hold the full message history of a run, including tool results. `transcript.py`'s
+# docstring already claimed they were ignored "like the rest of a run's working state" and they
+# were not — the entries above are named individually, and this one was missing. A transcript is
+# the file most likely to be pasted whole into an issue; it is also the one most likely to be
+# committed by a `git add .` after a failed run.
+.lockstep/transcripts/
 # The loader imports `.lockstep/lockstep.py`, and Python writes bytecode beside what it imports.
 .lockstep/__pycache__/
 # The previous layout, still ignored for a checkout that predates the move.
