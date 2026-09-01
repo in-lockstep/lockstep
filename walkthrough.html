@@ -349,10 +349,10 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
             reviewer ever writes and the one worth the most to whoever tries again.</div>
         </div>
 
-        <p class="tight">Then, on the issue, one word to ask for another go:</p>
+        <p class="tight">Then, without going anywhere, one word to ask for another go:</p>
 
         <div class="gh">
-          <div class="gh-bar"><b>acme/build-actions</b> · issue #218 · leave a comment</div>
+          <div class="gh-bar"><b>acme/build-actions</b> · pull request #219 · leave a comment</div>
           <div class="thread">
             <div class="ghc person">
               <span class="av">DR</span>
@@ -361,9 +361,11 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
               </div>
             </div>
           </div>
-          <div class="ghfoot">Feedback goes where you would naturally put it. The <em>command</em>
-            still goes on the issue, because that is where the trigger lives — a comment on a pull
-            request is read, and does not start a run.</div>
+          <div class="ghfoot">On the pull request, because that is where you already are. The
+            comment carries <em>#219</em> and the work is <em>#218</em>, so the run resolves one to
+            the other from the record it wrote when it opened the pull request — and a pull request
+            nobody's framework opened is refused by name rather than run against a number that is
+            not a ticket. <code>/fix</code> on the issue still works; both mean the same thing.</div>
         </div>
       </div>
 
@@ -379,7 +381,8 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
           handed over without its location is an opinion rather than an instruction:</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>what the second run was given</b></div>
-<pre>review    3 remark(s) from <span class="y">#219</span>
+<pre>ticket    <span class="y">#218</span> (resolved from change request #219)
+review    3 remark(s) from <span class="y">#219</span>
 
 <span class="d">context (untrusted)</span>
   <span class="w">@dana reviewed actions/save/action.yml:29 on #219:</span>
@@ -479,8 +482,8 @@ items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
       │
       ├── <span class="g">yes</span> ──▶ <span class="y">merge</span>. <span class="d">the loop exits.</span>
       │
-      └── <span class="r">no</span>  ──▶ <span class="y">a review on the PR</span>
-                    <span class="d">which becomes context for the next round</span>
+      └── <span class="r">no</span>  ──▶ <span class="y">a review on the PR, and /fix there</span>
+                    <span class="d">the review becomes context for the next round</span>
                     └──▶ back to the top</pre>
           <p class="term-cap">The exit criterion here is not a passing test. It is a person being
             satisfied — the one criterion that genuinely matters and the one you cannot write into
