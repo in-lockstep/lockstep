@@ -553,3 +553,102 @@ def test_init_leaves_an_existing_gitlab_ci_file_alone(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".gitlab-ci.yml").read_text() == "stages: [build]\n"
     assert "left alone" in result.output
+
+
+# -- reading the review conversation ---------------------------------------------------
+#
+# Parity, and the reason it is tested rather than assumed: the GitHub adapter reaches three
+# endpoints and this one reaches a single `notes` collection that mixes everything together. The
+# same four facts have to come out of both, or "a reviewer's comment reaches the next run" is true
+# on one host and a documentation error on the other.
+
+
+def test_gitlab_changes_for_matches_the_source_branch(tmp_path: Path) -> None:
+    """On the branch `branch_for` wrote, never on the description — a merge request a stranger
+    opened saying "closes #218" is not a review of our change."""
+    from in_lockstep.platform.scm.base import branch_for
+
+    root = _repo(tmp_path)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.params.get("state") == "opened", "closing one is how a person says ignore it"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "iid": 219,
+                    "web_url": "u/219",
+                    "title": "Draft: ours",
+                    "source_branch": branch_for("fix", "r1", ticket="#218"),
+                },
+                {"iid": 300, "web_url": "u/300", "title": "closes #218", "source_branch": "dana/hand-rolled"},
+            ],
+        )
+
+    changes = asyncio.run(_scm(root, handler).changes_for("#218"))
+    assert [c.number for c in changes] == [219]
+    assert changes[0].draft is True
+    assert changes[0].title == "ours", "ChangeRequest.title never carries the Draft: prefix"
+
+
+def test_gitlab_remarks_locate_a_diff_note_and_drop_the_system_ones(tmp_path: Path) -> None:
+    """ "changed the description" is an event, not something a reviewer said. A prompt full of them
+    is a prompt with less room for the sentence that mattered."""
+    root = _repo(tmp_path)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {"author": {"username": "dana"}, "body": "thanks", "system": False},
+                {"author": {"username": "bot"}, "body": "changed the description", "system": True},
+                {
+                    "author": {"username": "sam"},
+                    "body": "iterate the entries",
+                    "system": False,
+                    "position": {"new_path": "actions/save/action.yml", "new_line": 29},
+                },
+            ],
+        )
+
+    remarks = asyncio.run(_scm(root, handler).remarks(219))
+    assert [r.kind for r in remarks] == ["comment", "line"]
+    assert remarks[1].as_text(where="!219").startswith("@sam reviewed actions/save/action.yml:29 on !219:")
+
+
+def test_gitlab_remarks_strip_the_frameworks_own_marker(tmp_path: Path) -> None:
+    """Its own sticky review note is gathered — it is what the human was replying to — but the
+    marker that lets `upsert_comment` find it again is not a thing to teach a model to write."""
+    root = _repo(tmp_path)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {"author": {"username": "bot"}, "body": "findings\n\n<!-- in-lockstep:review:security -->"}
+            ],
+        )
+
+    (remark,) = asyncio.run(_scm(root, handler).remarks(1))
+    assert remark.body == "findings"
+
+
+def test_gitlab_ticket_of_reads_the_record_it_wrote(tmp_path: Path) -> None:
+    """Parity with the GitHub adapter, and the one place the two hosts genuinely differ is
+    declared rather than papered over: `shared_numbering` is False here, so `ticket_for` will not
+    resolve an iid at all — an issue and a merge request can both be number 7."""
+    from in_lockstep.platform.scm.base import change_body
+
+    root = _repo(tmp_path)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "description": change_body("x", {"Ticket": "#218"}),
+                "source_branch": "in-lockstep/fix/218/r1",
+            },
+        )
+
+    assert asyncio.run(_scm(root, handler).ticket_of(7)) == "#218"
+    assert GitLabScm.shared_numbering is False

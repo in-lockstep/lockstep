@@ -101,7 +101,35 @@ def test_the_trigger_is_a_prefix_match_not_a_mention() -> None:
     condition = _load("implement.yml")["jobs"]["gate"]["if"]
     assert "startsWith(github.event.comment.body" in condition
     assert "contains(" not in condition
-    assert "!github.event.issue.pull_request" in condition, "issue_comment fires for PRs too"
+
+
+def test_a_pull_request_comment_fires_the_trigger_too() -> None:
+    """It used to be filtered out, and the filter was the bug.
+
+    `issue_comment` fires for pull-request comments as well, and a reviewer deciding another
+    attempt is needed is standing on the pull request when they decide it. Sending them somewhere
+    else to say so is how a tool teaches people it is awkward.
+    """
+    for name in ("implement.yml", "fix.yml"):
+        condition = _load(name)["jobs"]["gate"]["if"]
+        assert "issue.pull_request" not in condition, f"{name} still refuses a reviewer's comment"
+
+
+def test_which_ticket_a_comment_is_about_is_not_decided_in_yaml() -> None:
+    """The resolution is `ticket_for`, in Python, where it has tests.
+
+    A pull-request comment carries the pull request's number, not the ticket's, so *something* has
+    to resolve one to the other. Doing it in an `if:` or a `run:` would put lifecycle logic back
+    in the file this repository keeps free of it — and it is the kind of logic that fails silently,
+    because an expression that evaluates wrong reads exactly like "nobody asked".
+
+    So the workflow passes the number through untouched and the workflow function resolves it.
+    """
+    for name in ("implement.yml", "fix.yml"):
+        text = (WORKFLOWS / name).read_text()
+        body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        assert "issue.pull_request" not in body, f"{name} branches on the comment's location"
+        assert "github.event.issue.number" in body, f"{name} no longer passes the number through"
 
 
 def test_the_actor_gate_runs_before_anything_holding_a_credential() -> None:

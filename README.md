@@ -33,6 +33,7 @@ still advertises.
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
+| Review conversation as context | runs | what a reviewer said on the pull request — the thread, the verdicts, the notes pinned to a line — reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
 | Flaky-test adapter | planned | roadmap item 26 |

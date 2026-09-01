@@ -47,9 +47,15 @@ jobs:
     # `/implement`, which includes every comment explaining why not to run it. There is no `trim`
     # in GitHub's expression language, so a leading space means nothing happens — the failure
     # worth having, since the other direction is a command fired by a comment that was not one.
-    if: >-
-      !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/implement')
+    # A pull-request comment fires `issue_comment` too, and is deliberately NOT filtered out: a
+    # reviewer decides another attempt is needed while reading the pull request, and sending them
+    # elsewhere to say so is how a tool teaches people it is awkward. Which ticket the run is about
+    # is resolved in Python (`ticket_for`) from the number passed through below — GitHub draws
+    # issue and pull-request numbers from one sequence, so a number is one or the other and never
+    # both. `concurrency` groups on that raw number, so a round asked for on the issue and one
+    # asked for on the pull request can overlap; they cannot collide, because every run gets its
+    # own branch.
+    if: startsWith(github.event.comment.body, '/implement')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -89,6 +95,10 @@ jobs:
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the issue. The split
       # this file is built around is about WRITE access.
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
       # Workload identity federation: this job may mint a short-lived GitHub OIDC token, which
       # the framework exchanges at Anthropic for the run's credential — no long-lived provider
       # key in repository secrets. Granted to THIS job only: gate and propose call no model, and

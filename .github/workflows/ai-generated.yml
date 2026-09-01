@@ -42,6 +42,10 @@ jobs:
     permissions:
       contents: read
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
       # Workload identity federation, granted to THIS job only — see implement.yml.
       id-token: write
     steps:

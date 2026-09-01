@@ -29,6 +29,7 @@ from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import fix_body, implement_body
+from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -266,13 +267,18 @@ CHANGESET = "changeset"
 
 @workflow(id="implement/from-ticket")
 async def implement_from_ticket(
-    ctx: RunContext, ticket: str, tickets: TicketSource, actor: str = ""
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, actor: str = ""
 ) -> Outcome:
-    """Read the ticket, implement it, leave the change staged in an artifact.
+    """Read the ticket and the review of the last attempt, implement it, leave it staged.
 
-    `tickets` arrives from the `TicketSource` binding above — the signature names the port, the
-    dispatcher fills it. Writes nothing. The change set travels to the job that holds a write
+    `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
+    dispatcher fills them. Writes nothing. The change set travels to the job that holds a write
     token, and crosses the guard again when it gets there.
+
+    `with_review` is what makes a second `/implement` a reply rather than a retry: it gathers what
+    people said on the open pull request this workflow opened last time — including the notes
+    pinned to a line, which are the most specific thing a reviewer ever writes — and hands them
+    over on the ticket, untrusted like the ticket body.
     """
     # `--approved-by` in CLI terms: a named human asked for this specific run, and the actor gate
     # verified them before this job started. Recorded, because a grant nobody can be traced to is
@@ -281,7 +287,11 @@ async def implement_from_ticket(
     # `via=tdd` says at the execution site what serves this request — the same adapter the module
     # binds above, named here so the reader of this line knows Implement means red-then-green
     # without scrolling to the binding.
-    outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
+    print(note)
+    outcome = await ctx.do(Implement(ticket=source), via=tdd)
 
     report = outcome.value
     if report is not None and report.changeset.changes:
@@ -305,6 +315,11 @@ async def implement_propose(
     from another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set
     before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between
+    # jobs: both halves are handed the number the comment was left on, and a fact both can
+    # derive is not one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 
@@ -372,13 +387,20 @@ FIX_CHANGESET = "fix-changeset"
 
 
 @workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
-    """Read the bug, reproduce it, fix it, and leave the change staged for the privileged half.
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+    """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
 
     Writes nothing to the tree. A fix that did not go green stages nothing — a broken fix must not
     travel — and the propose half says so on the ticket rather than opening a pull request.
+
+    `with_review` gathers what people said on the open pull request this workflow opened last time,
+    so replying to a reviewer is running the verb again rather than explaining yourself twice.
     """
-    outcome = await ctx.do(Fix(ticket=await tickets.get(ticket)), via=fix)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
+    print(note)
+    outcome = await ctx.do(Fix(ticket=source), via=fix)
 
     report = outcome.value
     if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
@@ -406,6 +428,11 @@ async def fix_propose(
     another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set before
     it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between
+    # jobs: both halves are handed the number the comment was left on, and a fact both can
+    # derive is not one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 

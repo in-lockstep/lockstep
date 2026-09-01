@@ -32,9 +32,15 @@ jobs:
   gate:
     # `startsWith` rather than `contains`: `contains` would fire on every comment that merely
     # MENTIONS `/fix`, which includes every comment explaining why not to run it.
-    if: >-
-      !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/fix')
+    # A pull-request comment fires `issue_comment` too, and is deliberately NOT filtered out: a
+    # reviewer decides another attempt is needed while reading the pull request, and sending them
+    # elsewhere to say so is how a tool teaches people it is awkward. Which ticket the run is about
+    # is resolved in Python (`ticket_for`) from the number passed through below — GitHub draws
+    # issue and pull-request numbers from one sequence, so a number is one or the other and never
+    # both. `concurrency` groups on that raw number, so a round asked for on the issue and one
+    # asked for on the pull request can overlap; they cannot collide, because every run gets its
+    # own branch.
+    if: startsWith(github.event.comment.body, '/fix')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -71,6 +77,10 @@ jobs:
       contents: read
       # Read-only, and needed: the workflow resolves `TicketSource` to fetch the bug report.
       issues: read
+      # Also read-only, and also needed: the workflow reads what people said on the pull request
+      # it opened last time, so a reviewer's objection is context the next attempt can act on.
+      # This job still holds no write token — proposing is the next job, which holds no key.
+      pull-requests: read
       # Workload identity federation, granted to THIS job only — the same reasoning as
       # implement.yml. An identity token in the job holding the write token would put both
       # credentials in one process, which is the co-residency the three-job split exists to

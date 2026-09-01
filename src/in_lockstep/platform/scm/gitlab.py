@@ -25,7 +25,22 @@ from urllib.parse import quote
 
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
-from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for, change_body, conventional_subject
+from .base import (
+    MAX_CHANGES_READ,
+    MAX_REMARK_CHARS,
+    MAX_REMARKS,
+    ChangeRequest,
+    Diff,
+    GitLocal,
+    Ref,
+    Remark,
+    branch_for,
+    change_body,
+    conventional_subject,
+    is_run_branch_for,
+    ticket_from_branch,
+    trailers_from,
+)
 
 #: One sticky comment lives among at most this many pages of notes. A bound, so a misbehaving
 #: server that repeats a next-page header cannot loop this forever; 20 pages of 100 is far past
@@ -82,6 +97,11 @@ def server_from_remote(url: str) -> str:
 
 
 class GitLabScm:
+    #: GitLab numbers issues and merge requests in SEPARATE sequences, so iid 7 can be both an
+    #: issue and a merge request. A comment's number therefore cannot say which kind of thing it
+    #: was left on, and `ticket_for` must not guess — see its own note.
+    shared_numbering = False
+
     def __init__(
         self,
         root: str | Path = ".",
@@ -268,6 +288,86 @@ class GitLabScm:
                 return
         self._request("POST", path, json={"body": marked})
 
+    async def changes_for(self, ticket: str) -> tuple[ChangeRequest, ...]:
+        """The OPEN merge requests this framework opened for `ticket`, newest first.
+
+        Matched on the source branch that `branch_for` wrote, exactly as the GitHub adapter does —
+        never on the description, so a merge request that merely mentions the issue is not mistaken
+        for one of ours. Open only: closing one is how a person says "ignore that thread".
+        """
+        rows = self._request(
+            "GET",
+            f"/projects/{self._project_path()}/merge_requests",
+            params={"state": "opened", "per_page": 60, "order_by": "created_at", "sort": "desc"},
+        )
+        mine = [
+            row
+            for row in (rows if isinstance(rows, list) else [])
+            if isinstance(row, dict) and is_run_branch_for(str(row.get("source_branch") or ""), ticket)
+        ]
+        return tuple(
+            ChangeRequest(
+                id=str(row.get("web_url") or ""),
+                url=str(row.get("web_url") or ""),
+                branch=str(row.get("source_branch") or ""),
+                title=str(row.get("title") or "").removeprefix("Draft:").strip(),
+                number=int(row.get("iid") or 0) or None,
+                draft=bool(row.get("draft") or str(row.get("title") or "").startswith("Draft:")),
+            )
+            for row in mine[:MAX_CHANGES_READ]
+        )
+
+    async def ticket_of(self, number: int) -> str | None:
+        """The ticket a merge request was opened for. `None` when `number` is not one at all.
+
+        GitLab numbers merge requests and issues in SEPARATE sequences, so unlike GitHub an iid
+        can be both. That is not this method's problem to solve and it must not pretend otherwise:
+        it answers only "is there a merge request with this iid, and what work does it record".
+        The caller resolving a comment knows which kind of thing the comment was left on.
+        """
+        try:
+            data = self._request("GET", f"/projects/{self._project_path()}/merge_requests/{number}")
+        except RuntimeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        ticket = trailers_from(str(data.get("description") or "")).get("Ticket", "")
+        return ticket or ticket_from_branch(str(data.get("source_branch") or ""))
+
+    async def remarks(self, number: int) -> tuple[Remark, ...]:
+        """What people said on one merge request: the thread, and the notes pinned to a diff line.
+
+        One endpoint rather than GitHub's two, because GitLab keeps both in `notes` and tells them
+        apart by whether a note carries a `position`. System notes are dropped: "changed the
+        description" is an event, not something a reviewer said, and a prompt full of them is a
+        prompt with less room for the sentence that mattered.
+
+        Approval state is deliberately not read. GitLab records it on a separate endpoint and it is
+        a fact about the merge request rather than a thing anyone wrote — the honest surface here is
+        the conversation, and claiming more than that would mean inventing a verdict the notes do
+        not contain.
+        """
+        path = f"/projects/{self._project_path()}/merge_requests/{number}/notes"
+        out: list[Remark] = []
+        for note in self._notes(path):
+            if note.get("system"):
+                continue
+            raw_position = note.get("position")
+            position: dict[str, Any] = raw_position if isinstance(raw_position, dict) else {}
+            line = position.get("new_line") or position.get("old_line")
+            out.append(
+                Remark(
+                    author=_login(note.get("author")),
+                    body=_clean(note.get("body")),
+                    kind="line" if position else "comment",
+                    path=str(position.get("new_path") or position.get("old_path") or ""),
+                    line=int(line) if isinstance(line, int) else None,
+                )
+            )
+            if len(out) >= MAX_REMARKS:
+                break
+        return tuple(out)
+
     def _notes(self, path: str) -> list[dict[str, Any]]:
         """Every note on the thread, following GitLab's `x-next-page` header."""
         import httpx
@@ -287,3 +387,17 @@ class GitLabScm:
             if not page:
                 break
         return out
+
+
+def _login(author: Any) -> str:
+    """A `@username` from GitLab's author object, or empty."""
+    name = str((author or {}).get("username", "")) if isinstance(author, dict) else ""
+    return f"@{name}" if name else ""
+
+
+def _clean(body: Any) -> str:
+    """A note body as a prompt should see it: capped, and without the framework's own marker."""
+    import re
+
+    text = re.sub(r"<!--\s*in-lockstep:[^>]*-->", "", str(body or "")).strip()
+    return text[:MAX_REMARK_CHARS]

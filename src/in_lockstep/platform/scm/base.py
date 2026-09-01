@@ -75,6 +75,51 @@ def change_body(body: str, trailers: dict[str, str]) -> str:
     return f"{body}\n\n<details><summary>in-lockstep</summary>\n\n```json\n{block}\n```\n\n</details>"
 
 
+#: A ticket key as a branch segment can hold it: digits (`218`), or a tracker key (`PROJ-123`).
+#: Used only to decide whether a branch segment IS a ticket, never to validate one — `branch_for`
+#: accepts whatever a tracker calls a key and sanitises it.
+_LOOKS_LIKE_A_KEY = re.compile(r"^(?:\d+|[A-Za-z][A-Za-z0-9]*-\d+)$")
+
+
+def trailers_from(body: str) -> dict[str, str]:
+    """Read back the machine-readable block `change_body` wrote, or an empty dict.
+
+    The pair to `change_body`, and here for the same reason `branch_key` is its own function: two
+    spellings of one format is one of them drifting. A change request records the ticket it was
+    opened for, and that record is what lets a comment left on the pull request resolve to the
+    work it is about instead of to the pull request's own number.
+    """
+    import json
+
+    match = re.search(r"<details><summary>in-lockstep</summary>.*?```json\s*(\{.*?\})\s*```", body, re.DOTALL)
+    if not match:
+        return {}
+    try:
+        data = json.loads(match.group(1))
+    except ValueError:
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def ticket_from_branch(branch: str) -> str:
+    """The ticket key `branch_for` put in a run branch, or empty when it did not put one there.
+
+    A fallback for a change request whose body somebody edited, and deliberately a cautious one.
+    `in-lockstep/<workflow>/<ticket>/<run-id>` cannot be read positionally on its own, because the
+    workflow segment may itself contain a slash — `in-lockstep/fix/from-ticket/run-9` and
+    `in-lockstep/fix/218/run-9` have the same shape and only one of them names a ticket.
+
+    So the candidate has to LOOK like a key. That is a heuristic and it is the honest kind: it can
+    only decline to resolve a real ticket, never resolve the wrong one, because a workflow segment
+    shaped like `218` or `PROJ-1` would have to be a deliberate collision with a key format.
+    """
+    parts = branch.split("/")
+    if len(parts) < 4 or parts[0] != RUN_BRANCH_PREFIX:
+        return ""
+    candidate = parts[-2]
+    return candidate if _LOOKS_LIKE_A_KEY.match(candidate) else ""
+
+
 class DirectPushRefused(Exception):
     """A write was attempted outside the run-scoped namespace."""
 
@@ -87,6 +132,17 @@ class GuardRefused(Exception):
         self.refusals = refusals
 
 
+def branch_key(ticket: str) -> str:
+    """A ticket key as it appears in a branch name. Empty when there is no key.
+
+    Its own function because two things depend on producing the identical string: `branch_for`
+    writes it, and `is_run_branch_for` reads it back to find the change requests opened for a
+    ticket. Two spellings of one sanitisation is one of them drifting, and the failure would be
+    silent — a run that simply never finds its own pull request.
+    """
+    return "".join(c if c.isalnum() or c in "-_" else "-" for c in ticket.lstrip("#")).strip("-")
+
+
 def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     """`in-lockstep/<workflow>/<ticket>/<run-id>`, the ticket segment omitted when there is none.
 
@@ -97,9 +153,23 @@ def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     stripped because shells treat it as a comment even though git would accept it.
     """
     safe = "".join(c if c.isalnum() or c in "-_/" else "-" for c in workflow)
-    key = "".join(c if c.isalnum() or c in "-_" else "-" for c in ticket.lstrip("#")).strip("-")
+    key = branch_key(ticket)
     middle = f"{safe}/{key}" if key else safe
     return f"{RUN_BRANCH_PREFIX}/{middle}/{run_id}"
+
+
+def is_run_branch_for(branch: str, ticket: str) -> bool:
+    """Whether `branch` is one this framework opened for `ticket`.
+
+    Matched against `branch_for`'s layout rather than against text anywhere else, which is what
+    makes it safe to feed the result into a prompt: a pull request that merely *mentions* the
+    ticket — including one a stranger opened saying "fixes #218" — is not one of ours and its
+    conversation is not gathered as though it were.
+    """
+    key = branch_key(ticket)
+    if not key or not branch.startswith(f"{RUN_BRANCH_PREFIX}/"):
+        return False
+    return f"/{key}/" in branch[len(RUN_BRANCH_PREFIX) :]
 
 
 @dataclass(frozen=True)
@@ -129,6 +199,60 @@ class ChangeRequest:
     #: change starts here by default and is marked ready once its tests pass and the workflow wants
     #: a human to look. Always False for a host with no draft concept (local git).
     draft: bool = False
+
+
+#: How many change requests one ticket's conversation is gathered from, and how much of each is
+#: read. The same shape of cap `TicketSource` puts on issue comments, for the same reason: this
+#: text goes into a prompt, and a prompt whose size is set by how talkative a pull request got is
+#: a prompt with no ceiling.
+MAX_CHANGES_READ = 3
+MAX_REMARKS = 40
+MAX_REMARK_CHARS = 4_000
+
+
+@dataclass(frozen=True)
+class Remark:
+    """One thing somebody said on a change request.
+
+    Three kinds, because a reviewer says different things in different places and flattening them
+    loses the part that carries the most instruction. `comment` is the conversation thread.
+    `review` is the summary attached to an approval or a request for changes — the verdict.
+    `line` is a note pinned to a file and a line, which is the most specific thing a reviewer ever
+    says and the one a model most needs located rather than paraphrased.
+
+    Untrusted, like every other word a person can write at the framework. Nothing here is a
+    command; it is evidence of what a human asked for, and it is tagged as such on the way in.
+    """
+
+    author: str
+    body: str
+    kind: str = "comment"
+    #: For a `line` remark. Empty otherwise.
+    path: str = ""
+    line: int | None = None
+    #: For a `review` remark: the verdict the host recorded — APPROVED, CHANGES_REQUESTED,
+    #: COMMENTED. Carried because "this was a request for changes" is not recoverable from prose.
+    state: str = ""
+
+    def as_text(self, *, where: str = "") -> str:
+        """One block for a prompt: who said it, where, and what.
+
+        The location leads, because a reviewer writing "iterate the entries instead" on line 29 of
+        one file has said something precise, and a model handed the sentence without the line has
+        been handed an opinion.
+        """
+        at = f" on {where}" if where else ""
+        if self.kind == "line" and self.path:
+            spot = f"{self.path}:{self.line}" if self.line is not None else self.path
+            head = f"{self.author or 'someone'} reviewed {spot}{at}"
+        elif self.kind == "review":
+            verdict = {"APPROVED": "approved", "CHANGES_REQUESTED": "requested changes"}.get(
+                self.state.upper(), "reviewed"
+            )
+            head = f"{self.author or 'someone'} {verdict}{at}"
+        else:
+            head = f"{self.author or 'someone'} commented{at}"
+        return f"{head}:\n{self.body.strip()}" if self.body.strip() else f"{head}."
 
 
 @dataclass(frozen=True)

@@ -147,6 +147,13 @@ def test_a_runs_row_names_something_that_ships() -> None:
             and {"pack", "add"} <= commands
         ),
         "Pack catalog": _importable("in_lockstep.market", "read_catalog") and "search" in commands,
+        # Both halves: the join that gathers the conversation, and a host adapter that can read
+        # one. `with_review` alone would be a claim that degrades to "unavailable" everywhere.
+        "Review conversation as context": (
+            _importable("in_lockstep.platform.conversation", "with_review")
+            and _importable("in_lockstep.platform.scm", "GitHubScm")
+            and hasattr(__import__("in_lockstep.platform.scm", fromlist=["GitHubScm"]).GitHubScm, "remarks")
+        ),
     }
     for row, status in rows.items():
         if status == "runs" and row in proof:

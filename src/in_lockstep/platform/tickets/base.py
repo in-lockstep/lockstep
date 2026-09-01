@@ -61,6 +61,16 @@ class Ticket:
     assignees: tuple[str, ...] = ()
     acceptance_criteria: tuple[str, ...] = ()
     comments: tuple[str, ...] = ()
+    #: What people said on the pull requests opened for this ticket — the review conversation,
+    #: rendered one block per remark by `platform.conversation.with_review`, which is the only
+    #: thing that fills it.
+    #:
+    #: It lives on `Ticket` rather than arriving through a second channel because
+    #: `Implement.ticket`'s own comment says `as_context` "is the only route in": one place that
+    #: tags untrusted text is a property worth more than the taxonomy. A reviewer's note is a
+    #: person writing at the model exactly as an issue comment is, and it must not be able to
+    #: reach a prompt by a path that forgot to say so.
+    review: tuple[str, ...] = ()
     raw_state: str = ""
     # Release traceability — what a backport workflow routes on and a release manager greps for.
     # Empty on trackers that have no such concept, which GitHub Issues mostly is: `milestone` is
@@ -88,6 +98,18 @@ class Ticket:
                 path=f"{self.key}#comment",
             )
             for comment in self.comments
+        ]
+        # Same provenance, different path, because the two are not interchangeable to a reader:
+        # a reviewer objecting on a pull request is answering work that already exists, and a
+        # model that cannot tell that from the original request will re-litigate the ticket.
+        items += [
+            ContextItem(
+                kind="review",
+                content=remark,
+                provenance=Provenance.UNTRUSTED_EXTERNAL,
+                path=f"{self.key}#review",
+            )
+            for remark in self.review
         ]
         return tuple(items)
 

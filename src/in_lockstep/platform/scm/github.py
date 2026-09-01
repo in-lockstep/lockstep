@@ -9,10 +9,31 @@ from typing import Any
 
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
-from .base import ChangeRequest, Diff, GitLocal, Ref, branch_for, change_body, conventional_subject
+from .base import (
+    MAX_CHANGES_READ,
+    MAX_REMARK_CHARS,
+    MAX_REMARKS,
+    ChangeRequest,
+    Diff,
+    GitLocal,
+    Ref,
+    Remark,
+    branch_for,
+    change_body,
+    conventional_subject,
+    is_run_branch_for,
+    ticket_from_branch,
+    trailers_from,
+)
 
 
 class GitHubScm:
+    #: GitHub draws issue and pull-request numbers from ONE sequence, so a number is one or the
+    #: other and never both. That is what lets a comment be resolved to the work it is about from
+    #: its number alone, and it is a fact about the host rather than about this adapter — hence a
+    #: flag a caller can read instead of a `isinstance` check it would have to keep updated.
+    shared_numbering = True
+
     def __init__(
         self,
         root: str | Path = ".",
@@ -142,6 +163,123 @@ class GitHubScm:
                 return
         self._api_write(f"repos/{{owner}}/{{repo}}/issues/{target}/comments", "-f", f"body={marked}")
 
+    async def changes_for(self, ticket: str) -> tuple[ChangeRequest, ...]:
+        """The OPEN pull requests this framework opened for `ticket`, newest first.
+
+        Matched on the head branch, which `branch_for` wrote — never on the body or the title. A
+        pull request that merely says "fixes #218" is somebody else's, and its conversation must
+        not arrive as though a reviewer of *our* change had written it.
+
+        Open only, and that is a control rather than an omission. A reviewer who wants the next run
+        to read their feedback leaves the pull request open; closing it is how you say "start over,
+        ignore that thread", and a merged one is a conversation that already concluded. Both are
+        decisions a person makes with a button they already have.
+        """
+        raw = self._gh_json(
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "60",
+            "--json",
+            "number,url,title,headRefName,isDraft",
+        )
+        rows = [r for r in (raw if isinstance(raw, list) else []) if isinstance(r, dict)]
+        mine = [r for r in rows if is_run_branch_for(str(r.get("headRefName") or ""), ticket)]
+        # Newest first, and by number rather than by the order `gh` happened to return: the most
+        # recent attempt is the one a reviewer was looking at, and it should not be the one the
+        # cap drops.
+        mine.sort(key=lambda r: int(r.get("number") or 0), reverse=True)
+        return tuple(
+            ChangeRequest(
+                id=str(r.get("url") or ""),
+                url=str(r.get("url") or ""),
+                branch=str(r.get("headRefName") or ""),
+                title=str(r.get("title") or ""),
+                number=int(r.get("number") or 0) or None,
+                draft=bool(r.get("isDraft")),
+            )
+            for r in mine[:MAX_CHANGES_READ]
+        )
+
+    async def ticket_of(self, number: int) -> str | None:
+        """The ticket a change request was opened for. `None` when `number` is not one at all.
+
+        Three answers, because a caller has three different things to do about them. `None` means
+        the number is an issue — GitHub draws issue and pull-request numbers from one sequence, so
+        it is one or the other and never both, which is what makes resolving a comment's location
+        unambiguous. A key means the pull request records the work it belongs to. An empty string
+        means it IS a pull request and names no ticket — somebody's hand-opened branch — and the
+        caller has to say so rather than treat the pull request's own number as a ticket and fail
+        two steps later with a confusing error.
+
+        The recorded trailers first, the branch second. The trailers are what `open_change` wrote
+        and are exact; the branch is the fallback for a body somebody edited, and declines rather
+        than guesses when its shape is ambiguous.
+        """
+        try:
+            raw = self._gh_json("pr", "view", str(number), "--json", "body,headRefName")
+        except RuntimeError:
+            # `gh pr view` on an issue number fails, which is the answer rather than an error.
+            return None
+        data = raw if isinstance(raw, dict) else {}
+        if not data:
+            return None
+        ticket = trailers_from(str(data.get("body") or "")).get("Ticket", "")
+        return ticket or ticket_from_branch(str(data.get("headRefName") or ""))
+
+    async def remarks(self, number: int) -> tuple[Remark, ...]:
+        """Everything said on one pull request: the thread, the review verdicts, the line notes.
+
+        Two calls because GitHub keeps them in two places, and the second is worth the extra
+        request: `gh pr view` returns conversation comments and review summaries but not the notes
+        pinned to a file and a line, which are the most actionable thing a reviewer writes.
+
+        The framework's own sticky review comment is included rather than filtered out. It is what
+        the human was reading when they replied, so dropping it leaves their "the second one is
+        right" pointing at nothing. Its invisible marker is stripped, because a marker is noise in
+        a prompt and meaning only to `upsert_comment`.
+        """
+        out: list[Remark] = []
+        view = self._gh_json("pr", "view", str(number), "--json", "comments,reviews")
+        data = view if isinstance(view, dict) else {}
+
+        for c in (data.get("comments") or [])[:MAX_REMARKS]:
+            out.append(Remark(author=_login(c.get("author")), body=_clean(c.get("body")), kind="comment"))
+        for r in (data.get("reviews") or [])[:MAX_REMARKS]:
+            state = str(r.get("state") or "")
+            body = _clean(r.get("body"))
+            # A bare COMMENTED review with no body is the envelope around line notes and says
+            # nothing itself; an APPROVED or CHANGES_REQUESTED with no body is a verdict and does.
+            if body or state.upper() in ("APPROVED", "CHANGES_REQUESTED"):
+                out.append(Remark(author=_login(r.get("author")), body=body, kind="review", state=state))
+
+        # `per_page` rather than `--paginate`: one page is the cap, and a pull request with three
+        # hundred line notes should cost one request and arrive truncated, not cost thirty and
+        # arrive too big for the curator anyway.
+        try:
+            notes = self._gh_json(
+                "api", f"repos/{{owner}}/{{repo}}/pulls/{number}/comments?per_page={MAX_REMARKS}"
+            )
+        except RuntimeError:
+            # A token without `pull-requests: read` reaches the two above through the issues
+            # endpoint and fails here. Returning what was gathered beats losing all of it.
+            notes = None
+        for n in notes if isinstance(notes, list) else []:
+            if not isinstance(n, dict):
+                continue
+            out.append(
+                Remark(
+                    author=_login(n.get("user")),
+                    body=_clean(n.get("body")),
+                    kind="line",
+                    path=str(n.get("path") or ""),
+                    line=_line_of(n),
+                )
+            )
+        return tuple(out)
+
     def _api_write(self, *args: str) -> None:
         code, _out, err = self._gh("api", *args)
         if code != 0:
@@ -151,3 +289,32 @@ class GitHubScm:
 def _number_from(url: str) -> int | None:
     tail = url.rstrip("/").rsplit("/", 1)[-1]
     return int(tail) if tail.isdigit() else None
+
+
+def _login(actor: Any) -> str:
+    """A `@login` from either shape GitHub uses — `author` from `gh`, `user` from the REST API."""
+    login = str((actor or {}).get("login", "")) if isinstance(actor, dict) else ""
+    return f"@{login}" if login else ""
+
+
+def _clean(body: Any) -> str:
+    """A comment body as a prompt should see it: capped, and without the framework's own marker.
+
+    The marker is an HTML comment, invisible where a human reads it and meaningless to a model —
+    it exists so `upsert_comment` can find its own comment again, and carrying it into a prompt
+    would be teaching the model a token it must never emit.
+    """
+    import re
+
+    text = re.sub(r"<!--\s*in-lockstep:[^>]*-->", "", str(body or "")).strip()
+    return text[:MAX_REMARK_CHARS]
+
+
+def _line_of(note: dict[str, Any]) -> int | None:
+    """Where a line note is pinned. `line` is null once the comment goes outdated, and
+    `original_line` is where it was written — which is the one a reader wants either way."""
+    for key in ("line", "original_line"):
+        value = note.get(key)
+        if isinstance(value, int):
+            return value
+    return None
