@@ -53,23 +53,61 @@ body {
 a { color: var(--machine); text-underline-offset: 3px; text-decoration-thickness: 1px; }
 a:focus-visible { outline: 2px solid var(--machine); outline-offset: 4px; border-radius: 2px; }
 
-/* ---------- masthead ---------- */
+/* ---------- the bar ----------
+ *
+ * Two tiers, because the old one flattened two different questions into one list and answered
+ * neither. "The problem", "Governance" and "On your laptop" sat side by side looking identical
+ * while one scrolled the page, one left it, and nothing said which page you were on — so following
+ * a link felt like it might or might not take you somewhere.
+ *
+ * Now the top row is WHERE YOU ARE IN THE SITE: three destinations, the same three on every page,
+ * with the current one marked twice — named beside the wordmark and underlined in the nav. The
+ * second row is WHERE YOU ARE ON THIS PAGE, set in mono and grey so it reads as subordinate, and
+ * `site.js` lights the section you are actually looking at. */
 
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--ink); border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: blur(3px);
+}
 .masthead {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  padding: 24px 0; flex-wrap: wrap;
-  position: sticky; top: 0; z-index: 20;
-  background: linear-gradient(to bottom, var(--ink) 62%, rgba(13,14,18,0));
-  backdrop-filter: blur(2px);
+  padding: 18px 0 12px; flex-wrap: wrap;
+  position: static; background: none;
 }
 .mark {
   font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700;
   color: var(--text); text-decoration: none; letter-spacing: -.02em;
+  display: inline-flex; align-items: baseline; gap: 9px;
 }
 .mark i { font-style: normal; color: var(--machine); }
-.masthead nav { display: flex; gap: 24px; font-size: 14.5px; }
-.masthead nav a { color: var(--text-2); text-decoration: none; }
-.masthead nav a:hover { color: var(--machine); }
+/* The breadcrumb half. A separator drawn in CSS rather than typed, so the wordmark stays one
+   readable string in the markup and the page name cannot be mistaken for part of it. */
+.mark b { font-weight: 400; color: var(--text-3); }
+.mark b::before { content: "/"; margin-right: 9px; color: var(--line); }
+
+.masthead nav.site { display: flex; gap: 26px; font-size: 14.5px; }
+.masthead nav.site a {
+  color: var(--text-2); text-decoration: none;
+  padding-bottom: 5px; border-bottom: 2px solid transparent;
+}
+.masthead nav.site a:hover { color: var(--machine); }
+.masthead nav.site a[aria-current="page"] { color: var(--text); border-bottom-color: var(--machine); }
+
+.onpage {
+  display: flex; align-items: baseline; gap: 22px; flex-wrap: wrap; padding: 0 0 13px;
+  font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+}
+.onpage > span {
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-3);
+}
+/* The links are read; the label is only glanced at. `--text-3` at 12.5px is a caption colour and
+   these are targets, so they take the brighter token and the label keeps the dimmer one. */
+.onpage a { color: var(--text-2); text-decoration: none; }
+.onpage a:hover { color: var(--machine); }
+/* Set by site.js. Absent without JavaScript, which costs the reader a highlight and nothing else. */
+.onpage a.here { color: var(--machine); }
+
 .cta {
   font-family: "JetBrains Mono", monospace; font-size: 13px;
   border: 1px solid var(--machine-dim); color: var(--machine);
@@ -245,7 +283,12 @@ footer p { margin: 0 0 8px; }
   .term pre { font-size: 12px; }
   .spine { padding-left: 32px; }
   .step::before { left: -25px; }
-  .masthead nav { display: none; }
+  /* The three destinations stay; the per-page anchor list is what a narrow screen cannot
+     hold, and it is the row a reader can reproduce by scrolling. */
+  .onpage { display: none; }
+  .masthead { padding-bottom: 14px; }
+  .masthead nav.site { gap: 18px; font-size: 13.5px; order: 3; width: 100%; }
+  .mark b { display: none; }
 }
 
 /* ---------- the GitHub surface ----------
