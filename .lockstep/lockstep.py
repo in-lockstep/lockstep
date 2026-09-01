@@ -88,7 +88,8 @@ lockstep.contribute(
         # below, and it is what actually stops a long session, because it is checked against a
         # projection before each turn. 12 was sized against a reviewer that takes exactly one
         # turn; an implementing session spends several before it has done anything wrong.
-        max_turns=30,
+        max_turns=100,
+        max_tokens=20000,
         scan_input="warn",
         deny_tools=(),
     )
@@ -147,7 +148,7 @@ lockstep.bind(EgressPolicy, egress)
 # close enough that a loop going wrong is stopped in cents rather than dollars.
 #
 # $2.00 was a hundredfold headroom, which is not a ceiling so much as a formality.
-lockstep.budget = Budget(usd=25.00, wall_seconds=900)
+lockstep.budget = Budget(usd=100.00, wall_seconds=1800, max_turns=100, max_tokens=20000)
 
 # -- the ports those workflows receive ----------------------------------------------
 #
