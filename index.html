@@ -32,8 +32,9 @@
       <p class="lede" style="font-size:19px;color:var(--text-2);margin-top:24px">in-lockstep makes AI
         a standard part of your software lifecycle instead of a habit each developer invents. The
         same prompts, the same guardrails, the same rules about when a model is even the right tool
-        — for every engineer and every repository. Every interaction gets recorded. And when you
-        change a standard, you can test whether it actually helped instead of arguing about it.</p>
+        — for every engineer and every repository. Every run leaves a record in your own
+        repository. And when you change a standard, you can see exactly what it changed before
+        anyone pays for it.</p>
     </div>
 
     <div class="install" style="margin-top:34px">
@@ -139,17 +140,15 @@ skill:review/review-revision</pre>
 
       <div class="step">
         <span class="tag">Move three</span>
-        <h3>Capture the whole interaction, not just the outcome</h3>
-        <p class="tight">Because the work happens in an issue or a pull request rather than on
-          somebody's laptop, all of it is recorded. Every message and every tool result, turn by
-          turn — written always, not only when something breaks, because the run cannot know yet
-          whether it went wrong. Plus what it cost, what it decided, and who approved it.</p>
-        <p class="tight">The prompt itself does not need storing: it is composed from files in your
-          repository, so <code>show-prompt</code> reproduces exactly what any run was sent, at any
-          time, offline. Reconstructable beats archived — an archived prompt tells you what happened
-          once, a reproducible one tells you what will happen next time.</p>
+        <h3>Every run leaves a record, in your repository</h3>
+        <p class="tight">Not a log that scrolls away, and not a vendor's dashboard you lose access
+          to. Each run appends a record to a branch in your own git: when it ran, which commit it
+          ran against, whether the tree was dirty, who approved it, what it decided, how many tokens
+          and how many dollars.</p>
+        <p class="tight">Runs that were <em>refused</em> leave records too — a run blocked by a
+          budget ceiling or an approval gate is exactly the run you want evidence for later.</p>
         <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>one real run's record, from the ledger</b></div>
+          <div class="term-bar"><span class="dot on"></span><b>one real run's record</b></div>
 <pre>workflow   fix/from-ticket        args      {"ticket": "#109"}
 status     <span class="g">succeeded</span>              approval  {"by": "labeled:tpouyer"}
 tokens     3,013,462              cost_usd  <span class="y">9.62445</span>
@@ -158,40 +157,58 @@ findings
   fix.staged                  wrote src/in_lockstep/ai/builtins.py
   fix.staged                  wrote tests/…/test_sandbox_fixtures.py
   <span class="y">injection.exfil_token_names</span> ×11   <span class="d">← the scanner, reading the ticket text</span></pre>
-          <p class="term-cap">Nothing here depended on somebody remembering to paste a transcript
-            into a ticket. The run wrote it because that is what a run does.</p>
+          <p class="term-cap">Nobody typed this. The run wrote it, and it is committed where your
+            other history lives.</p>
         </div>
-        <p>This is the part that makes everything after it possible. A recorded interaction is
-          evidence you can go back to — and the raw material for the next move.</p>
+        <p class="tight">The instructions behind it do not need storing, because they are composed
+          from files in your repository: <code>show-prompt</code> reproduces exactly what any run
+          was sent, offline, at any time. Reconstructable beats archived — an archived prompt tells
+          you what happened once; a reproducible one tells you what happens next time.</p>
+        <div class="control"><b>Being straight about the edges:</b> a run dispatched through your
+          own workflow also appends the full back-and-forth with the model, turn by turn. The
+          built-in commands do not yet, and tool arguments are recorded by name rather than in full.
+          Those gaps are tracked, not glossed.</div>
       </div>
 
       <div class="step">
         <span class="tag">Move four</span>
-        <h3>Test a change to the standard, instead of guessing</h3>
-        <p class="tight">This is the one that changes how the work feels. Someone proposes a better
-          guardrail. Today, in most organisations, that is a conversation — the loudest person wins
-          and nobody finds out for six months.</p>
-        <p class="tight">Here, captured interactions become <strong>cases</strong>: an input, and
-          what a good answer looks like. Change the prompt, run the cases, and read what moved.
-          Some of it a machine settles on its own; the parts that need judgement are marked as
-          needing judgement rather than quietly counted as wins.</p>
+        <h3>See what a change does before you ship it</h3>
+        <p class="tight">Someone proposes a better guardrail. In most organisations that is a
+          conversation, the loudest person wins, and nobody finds out for six months.</p>
+        <p class="tight">Here it is a diff. Before anything runs and before anything is spent, you
+          can see precisely what your change does to the instructions every review in the company
+          will be sent — every layer, in order, with what came from where.</p>
         <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>the framework, reporting on itself</b></div>
+          <div class="term-bar"><span class="dot on"></span><b>one house rule added, and exactly what it did</b></div>
+<pre><span class="p">$</span> in-lockstep show-prompt security --diff
+
+<span class="d">--- shipped/review/security</span>
+<span class="d">+++ AiReview/review/security</span>
+<span class="g">+&lt;!-- guardrail: acme/house --&gt;</span>
+<span class="g">+Never propose a change that widens the grammar without a test for</span>
+<span class="g">+every new unit.</span></pre>
+        </div>
+        <p class="tight">Then measure it. Cases carry an input and what a good answer looks like,
+          and a runner scores them against recorded answers offline for nothing — reporting what a
+          machine settled, what still needs judgement, and what it could not run, as three different
+          numbers.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>the framework, refusing to flatter itself</b></div>
 <pre><span class="p">$</span> in-lockstep eval report
 
 cases        27
-decided      0
 outstanding  <span class="y">27  (need a judge)</span>
 pass rate    <span class="y">n/a — nothing decided</span>
 
 <span class="d">A rubric nobody judged is outstanding, not passed.</span></pre>
-          <p class="term-cap">Note what it refuses to do. A tool that will not print a pass rate it
-            has not earned is a tool whose pass rates mean something when it does print them.</p>
+          <p class="term-cap">A tool that will not print a score it has not earned is a tool whose
+            scores mean something when it does.</p>
         </div>
-        <div class="control"><b>Where this is going:</b> the loop closes when captured runs are
-          harvested into cases automatically and a proposed prompt change arrives as a pull request
-          carrying its own evidence. The capture and the measurement both ship today; the harvesting
-          between them is the roadmap, and the project says so rather than implying otherwise.</div>
+        <div class="control"><b>Where this is going:</b> the loop closes when your recorded runs are
+          turned into cases automatically and a proposed change arrives carrying its own before-and-
+          after. Today you can see any change exactly, and you can score cases you write. Harvesting
+          history into those cases is the roadmap — and this project would rather tell you that than
+          let you find out.</div>
       </div>
 
     </div>
