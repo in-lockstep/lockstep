@@ -15,7 +15,7 @@ OIDC- or vault-derived token that was never in the environment.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -57,10 +57,37 @@ class Credentials:
 
     values: Mapping[str, SecretStr] = field(default_factory=dict)
     source: str = ""  # "env:ANTHROPIC_API_KEY" | "oidc:..." | "keychain" | "none"
+    #: Re-mints these values, for a credential that expires sooner than a run finishes.
+    #:
+    #: A GitHub OIDC identity token lives minutes, and an implementing session now runs longer than
+    #: that — so the token resolved at client construction is expired by the time the SDK tries to
+    #: exchange it again, and the run dies at `provider.authentication` with the work half done and
+    #: the money already spent. `values` is a snapshot; this is how to take another one.
+    #:
+    #: It must go back through `Auth`, never around it: minting is the only moment a secret is
+    #: visible before a client swallows it, and therefore the only moment redaction can be seeded.
+    #: A refresh that resolved a token directly would put an unredacted JWT into every error string
+    #: for the rest of the run.
+    #:
+    #: `None` means these values are all this credential will ever have, which is the right answer
+    #: for a long-lived API key.
+    refresh: Callable[[], Credentials] | None = None
 
     @classmethod
     def none(cls) -> Credentials:
         return cls(values={}, source="none")
+
+    def fresh(self) -> Credentials:
+        """These credentials, re-minted if they know how. Never raises: a refresh that fails
+        returns the snapshot, so the caller's fallback is the behaviour that existed before there
+        was a refresh at all, rather than a new way to lose a run."""
+        if self.refresh is None:
+            return self
+        try:
+            renewed = self.refresh()
+        except Exception:  # noqa: BLE001 - a stale credential beats an exception from a getter
+            return self
+        return renewed if renewed.secret_values() else self
 
     def get(self, key: str) -> str:
         secret = self.values.get(key)

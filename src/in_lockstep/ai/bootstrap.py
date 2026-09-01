@@ -9,6 +9,7 @@ answers to "may this repository send code there".
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from ..llm.interface import Credentials, DataPolicy, LLMProvider, ProviderSettings
@@ -353,9 +354,22 @@ def _federation_credentials(auth: Auth, provider: str) -> Credentials:
     if os.environ.get("ANTHROPIC_IDENTITY_TOKEN") or os.environ.get("ANTHROPIC_IDENTITY_TOKEN_FILE"):
         return Credentials.none()
     minting = Auth.chain(OidcResolver(audience=ANTHROPIC_FEDERATION_AUDIENCE), registry=auth.registry)
-    return minting.credentials_for(
-        AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=("id_token",))
-    )
+    request = AuthRequest(target=AuthTarget.MODEL_PROVIDER, name=provider, keys=("id_token",))
+
+    def mint() -> Credentials:
+        """A fresh JWT from GitHub, seeded into redaction on the way past.
+
+        `ACTIONS_ID_TOKEN_REQUEST_URL` stays callable for the life of the job, so this is a real
+        source of new tokens rather than a cache read — which is what the SDK's
+        `identity_token_provider` needs it to be. The token itself lives minutes; a session now
+        outlives it, and the run that discovered that had spent $33.80 by the time the exchange
+        was refused.
+        """
+        return minting.credentials_for(request)
+
+    # `refresh=mint` rather than `mint` being called once and captured: the point is that the
+    # provider can ask again later, not that this function has a helper.
+    return replace(mint(), refresh=mint)
 
 
 def credentials_for(auth: Auth, provider: str) -> Credentials:
