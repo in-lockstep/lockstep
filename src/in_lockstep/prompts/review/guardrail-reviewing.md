@@ -1,11 +1,6 @@
 ---
 name: reviewing
 description: What a review may say, and what it may not do
-enforce:
-  deny-tools:
-    - github:create_pull_request
-    - github:merge_pull_request
-    - github:update_issue
 ---
 
 You are reviewing somebody's work. Two rules, and they matter more than anything in the lens above.

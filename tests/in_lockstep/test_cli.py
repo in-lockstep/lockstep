@@ -1453,15 +1453,64 @@ def test_the_fixture_is_a_real_recording(repo: Path) -> None:
     assert entry["stop_reason"] == "end_turn", "not truncated"
 
 
-def test_the_fixture_carries_no_credential() -> None:
-    """It was written through Redact, and it is committed. Both facts have to hold together."""
+def test_gate_fixture_1_the_shipped_request_is_the_one_that_was_recorded() -> None:
+    """The invariant that makes the fixture explain itself instead of just failing.
+
+    A cassette holds a hash of its request and nothing else, so for the life of this repository
+    the shipped recording could be looked up and never read. When a prompt edit moved the key, the
+    fixture stopped being evidence and became an unexplained miss — for the one reader who has
+    nothing recorded and cannot re-record.
+
+    The request now ships beside the response, and this asserts the two agree: hashing what is
+    shipped must reproduce the cassette's only key. Nothing was re-keyed to make that true. The
+    request was reconstructed by composing at the commit the recording was made from, and its hash
+    matching is the proof it is the real one rather than a plausible one.
+    """
+    import json
+
+    from in_lockstep.ai.replay import key_of, request_from
     from in_lockstep.cli import _shipped_fixture
 
     fixture = _shipped_fixture()
     assert fixture is not None
-    raw = Path(fixture["cassette"]).read_text()
+    recorded = key_of(request_from(fixture["request"]))
+    keys = list(json.loads(Path(fixture["cassette"]).read_text())["provider_calls"])
+    assert keys == [recorded], "the shipped request does not hash to the shipped response's key"
+
+
+def test_the_shipped_request_contains_the_shipped_diff() -> None:
+    """Three files describe one recording, and two of them now carry the diff.
+
+    `example.diff` is composed into the prompt at run time; `request.json` is the prompt as it was
+    sent, so it embeds that diff. Duplication of a fact is that fact going stale, unless something
+    checks — this is the something.
+    """
+    from in_lockstep.cli import _shipped_fixture
+
+    fixture = _shipped_fixture()
+    assert fixture is not None
+    sent = "\n".join(m["content"] for m in fixture["request"]["messages"])
+    # A line long enough to be unambiguous, from the middle of the diff rather than its header.
+    body = [line for line in str(fixture["diff"]).splitlines() if len(line) > 60]
+    assert body, "the shipped diff has no substantial line to check"
+    assert body[len(body) // 2] in sent, "the shipped request was not composed from the shipped diff"
+
+
+def test_the_fixture_carries_no_credential() -> None:
+    """It was written through Redact, and it is committed. Both facts have to hold together.
+
+    The request is scanned too, and it is the likelier of the two: a response is a model's prose,
+    while a request is whatever this repository put in front of it.
+    """
+    import json
+
+    from in_lockstep.cli import _shipped_fixture
+
+    fixture = _shipped_fixture()
+    assert fixture is not None
+    raw = Path(fixture["cassette"]).read_text() + json.dumps(fixture["request"])
     for shape in ("sk-ant-", "ghp_", "Bearer ", "AKIA"):
-        assert shape not in raw, f"the shipped cassette contains something shaped like {shape!r}"
+        assert shape not in raw, f"the shipped fixture contains something shaped like {shape!r}"
 
 
 def test_a_stale_fixture_says_so_rather_than_raising(repo: Path) -> None:

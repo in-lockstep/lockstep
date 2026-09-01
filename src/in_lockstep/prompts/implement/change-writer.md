@@ -1,18 +1,6 @@
 ---
 name: change-writer
 description: Write the change the plan describes
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 1000 credits at the ~5 a tool turn measured on run 32792379720 is 200 turns.
-max_tool_turns: 200
-guardrails: [implementing]
-skills: [change-format]
-github:
-  max-ai-credits: { default: 500, min: 100, max: 1000 }
-  timeout-minutes: { default: 75, max: 180 }
 ---
 
 You write the change the plan describes. The plan is the decision; you are not revisiting it.

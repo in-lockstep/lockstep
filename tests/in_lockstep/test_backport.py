@@ -219,9 +219,7 @@ def test_conflict_with_resolver_merges_and_marks_the_model_authored_paths(repo: 
     merged = "def greet():\n    return 'hola, fixed'\n"
     resolver = _StubResolver((FileChange(path="app.py", contents=merged),))
 
-    outcome = _run(
-        GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,))
-    )
+    outcome = _run(GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
     assert report.resolved == ("app.py",)
@@ -244,9 +242,7 @@ def test_a_resolution_may_only_touch_conflicted_paths(repo: Path) -> None:
             FileChange(path="sneaky.py", contents="import os\n"),
         )
     )
-    outcome = _run(
-        GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,))
-    )
+    outcome = _run(GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.resolution_out_of_scope"
 

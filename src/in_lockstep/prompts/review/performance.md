@@ -1,18 +1,6 @@
 ---
 name: performance-reviewer
 description: Review a pull request for work it does that it does not need to
-model: { default: claude-haiku-4-5, allow: [claude-haiku-4-5, claude-sonnet-4-6] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 150 credits at the ~5 a tool turn measured on run 32792379720 is 30 turns.
-max_tool_turns: 30
-guardrails: [reviewing]
-skills: [review-format, review-revision]
-github:
-  max-ai-credits: { default: 40, min: 15, max: 150 }
-  timeout-minutes: { default: 15, max: 45 }
 ---
 
 You review one pull request for work it does that it does not need to do.

@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ..llm.interface import LLMProvider
-from ..llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
+from ..llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall, ToolDefinition
 from ..privileged import sink
 from ..privileged.redact import Redact
 
@@ -169,6 +170,101 @@ class ReplayProvider(LLMProvider):
                 f"no cassette entry for this request against {input.model!r}. A replay that "
                 f"silently called out would not be a replay; re-record with --record."
             )
+        return output
+
+
+def request_from(payload: dict[str, Any]) -> LLMInput:
+    """An `LLMInput` from the JSON shape a recorded request ships in.
+
+    A cassette stores a *hash* of its request and nothing else, which is right for lookup and
+    useless for everything else: the recording cannot be read, cannot be diffed against what the
+    code composes today, and cannot be replayed once anything upstream of the hash moves. Shipping
+    the request beside the response is what makes a recording an artifact rather than a checksum.
+    """
+    return LLMInput(
+        model=str(payload.get("model", "")),
+        system=str(payload.get("system", "")),
+        messages=[
+            Message(
+                role=str(m.get("role", "")),
+                content=str(m.get("content", "")),
+                tool_calls=[
+                    ToolCall(
+                        id=str(c.get("id", "")), name=str(c.get("name", "")), input=dict(c.get("input", {}))
+                    )
+                    for c in m.get("tool_calls", [])
+                ],
+                tool_call_id=str(m.get("tool_call_id", "")),
+                tool_name=str(m.get("tool_name", "")),
+            )
+            for m in payload.get("messages", [])
+        ],
+        max_tokens=int(payload.get("max_tokens", 16384)),
+        tools=[
+            ToolDefinition(
+                name=str(t.get("name", "")),
+                description=str(t.get("description", "")),
+                parameters=dict(t.get("parameters", {})),
+            )
+            for t in payload.get("tools", [])
+        ],
+        temperature=float(payload.get("temperature", 0.0)),
+    )
+
+
+def key_of(request: LLMInput) -> str:
+    """The cassette identity of a request, for callers that need to compare two of them."""
+    return _key(request)
+
+
+class FixtureProvider(LLMProvider):
+    """Replay for the *shipped demo*, which has one problem `ReplayProvider` cannot have.
+
+    A recording is keyed on the whole composed prompt. For a user replaying their own recording
+    that is exactly right: a miss means the prompt moved, and serving the old answer to a new
+    question would be a fabricated result. But the shipped fixture is replayed by someone who has
+    recorded nothing and cannot re-record — no key, no spend — and it is the first thing a new
+    adopter runs. Under strict keying, one word edited in a guardrail turns that first run into a
+    crash, and the only remedy is a real model call by somebody else.
+
+    So this one degrades instead. On a miss it replays the request the response was *actually*
+    recorded against — shipped verbatim beside the cassette, so nothing is re-keyed and nothing is
+    invented — and calls `on_drift` so the difference is said out loud rather than papered over.
+    A demo that quietly claimed to be today's output would be the fabrication; a demo that says
+    "this is what was recorded, and this build composes something different" is a recording.
+
+    It is deliberately not the default. `ReplayProvider` still serves every other `--offline` run,
+    including this fixture the moment the user supplies their own range, because a replay that
+    answers a question it was not asked is only acceptable when the answer is labelled.
+    """
+
+    transmits = False
+
+    def __init__(
+        self, cassette: Cassette, recorded: LLMInput, *, on_drift: Callable[[LLMInput, LLMInput], None]
+    ) -> None:
+        self.cassette = cassette
+        self.recorded = recorded
+        self.on_drift = on_drift
+
+    def name(self) -> str:
+        return "replay:fixture"
+
+    async def generate(self, input: LLMInput) -> LLMOutput:
+        output = self.cassette.replay_provider(input)
+        if output is not None:
+            return output
+        output = self.cassette.replay_provider(self.recorded)
+        if output is None:
+            # Not drift: the shipped request and the shipped cassette disagree, which is a
+            # packaging defect rather than anything the user did. `GATE-FIXTURE-1` exists so this
+            # is caught in CI and never reaches the person who has nothing recorded.
+            raise LookupError(
+                f"the shipped request does not match the shipped cassette for "
+                f"{self.recorded.model!r}. This is a defect in the fixture itself, not in your "
+                f"repository; please report it."
+            )
+        self.on_drift(input, self.recorded)
         return output
 
 

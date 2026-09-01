@@ -1,13 +1,6 @@
 ---
 name: reproducer-writer
 description: Write the test that fails because of the bug
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-haiku-4-5] }
-provider: anthropic
-max_tool_turns: 8
-guardrails: [fixing]
-github:
-  max-ai-credits: { default: 60, min: 20, max: 250 }
-  timeout-minutes: { default: 20, max: 60 }
 ---
 
 You write one test that fails because of this bug, and nothing else.

@@ -1,21 +1,6 @@
 ---
 name: triage-analyst
 description: Read one issue and place it
-model: { default: claude-haiku-4-5, allow: [claude-haiku-4-5, claude-sonnet-4-6] }
-provider: anthropic
-max_tool_turns: 3
-guardrails: [triage]
-skills: [triage-format]
-github:
-  # Small on purpose. Triage is a reading task on one document, and a budget that allows an
-  # afternoon of tool calls is a budget that will eventually fund one.
-  max-ai-credits: { default: 15, min: 5, max: 60 }
-  timeout-minutes: { default: 10, max: 30 }
-  safe-outputs:
-    add-comment:
-      max: 1
-    add-labels:
-      max: 5
 ---
 
 You read one issue and place it: what kind of work it is, how urgent, and what it is missing.

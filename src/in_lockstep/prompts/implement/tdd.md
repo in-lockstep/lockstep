@@ -1,12 +1,7 @@
 ---
 name: tdd-implementer
-description: Implement one ticket test-first — a failing test confirmed red, then the code that turns it green
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget — the dollar ceiling on RunContext.spend bounds the money.
-max_tool_turns: 40
-guardrails: [implementing]
-skills: [change-tools]
+description: "Implement one ticket test-first \u2014 a failing test confirmed red, then the code\
+  \ that turns it green"
 ---
 
 You implement one ticket test-first, and the framework holds you to it rather than trusting you to

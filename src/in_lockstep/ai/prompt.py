@@ -70,13 +70,35 @@ class Body:
 
 @dataclass(frozen=True)
 class Frontmatter:
-    """Advisory input to a Python-declared binding, never an alternate configuration surface."""
+    """What a prompt file says about itself: an identity and a one-line description.
 
-    model: str = ""
-    guardrails: tuple[str, ...] = ()
-    skills: tuple[str, ...] = ()
-    max_tool_turns: int = 0
-    load: str = ""  # "always" exempts a skill from progressive disclosure
+    It used to declare `model`, `provider`, `max_tool_turns`, a `github:` credit budget and an
+    `enforce:` block, inherited from the compiler this project replaced. None of it was ever read —
+    `parse_frontmatter` had seven callers and all seven discarded the parsed object — and the
+    mismatch was visible in the type: this dataclass declared `model: str` while every shipped file
+    carried `model: {default: ..., allow: [...]}`. A field nothing consumes cannot be wrong, which
+    is how it stayed wrong.
+
+    Those fields are gone rather than wired, and the distinction is the docstring's own: frontmatter
+    is "advisory input to a Python-declared binding, never an alternate configuration surface". A
+    prompt body is data — a non-programmer edits it, and a pack can ship one — so a body that could
+    choose the model, raise a turn cap or set a credit budget would be exactly the surface that
+    sentence refuses. Which model runs and how long it may run are decisions `lockstep.py` makes,
+    in code, loaded from a trusted ref.
+
+    What is left is what a prompt may honestly say about itself. `name` is its identity, which the
+    projection and the eval corpus key on. `description` is one line for a human reading a list.
+    Neither can change what a run does.
+    """
+
+    #: The prompt's identity, e.g. `security-reviewer`. Qualified by the body's directory to form
+    #: the projection sentinel — `review/security-reviewer` — so a corpus and a composed prompt
+    #: agree without anybody restating the name in Python.
+    name: str = ""
+    #: One line, for `show-prompt` and `ls`. Never sent to the model.
+    description: str = ""
+    #: Everything else the file carried, unread. Kept so a house prompt may annotate itself without
+    #: this parser refusing, and so `doctor` can one day say "this key does nothing".
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -98,17 +120,10 @@ def parse_frontmatter(text: str) -> tuple[Frontmatter, str]:
     if not isinstance(data, dict):
         return Frontmatter(), body
 
-    def seq(key: str) -> tuple[str, ...]:
-        value = data.get(key) or []
-        return tuple(str(v) for v in value) if isinstance(value, list) else ()
-
     return (
         Frontmatter(
-            model=str(data.get("model") or ""),
-            guardrails=seq("guardrails"),
-            skills=seq("skills"),
-            max_tool_turns=int(data.get("max-tool-turns") or data.get("max_tool_turns") or 0),
-            load=str(data.get("load") or ""),
+            name=str(data.get("name") or ""),
+            description=str(data.get("description") or ""),
             raw=data,
         ),
         body,
@@ -157,24 +172,70 @@ class Prompt(Generic[P, S]):
     def package(self) -> str:
         return type(self).__module__.rsplit(".", 1)[0]
 
+    def meta(self) -> Frontmatter:
+        """What the body file says about itself. Empty when there is no body or no header."""
+        if self.body is None:
+            return Frontmatter()
+        try:
+            front, _ = parse_frontmatter(self.body.resolve(self.package()))
+        except BodyNotFound:
+            return Frontmatter()
+        return front
+
+    def describe(self) -> str:
+        """One line for a human reading a list of prompts. Never sent to the model."""
+        return self.meta().description
+
     def body_label(self) -> str:
         """What this prompt is called in a projection.
 
-        Derived from the body resource rather than the class name, because the resource is what a
-        reader can go and open. A prompt with no body at all is a `render`-replacing subclass; it
-        still needs a label, and its class name is the only honest one available.
+        Read from the body file's own `name`, qualified by the directory the body sits in, so
+        `review/security.md` declaring `name: security-reviewer` is `review/security-reviewer` —
+        which is what the characterization corpus has always keyed on.
+
+        That used to be four `body_name` ClassVars restating in Python what the four files already
+        said. Two spellings of one fact is one of them going stale, and the Python copy is the one
+        a prompt author would never think to update.
+
+        Falls back to the resource path for a body with no header, and to the class name for a
+        `render`-replacing subclass with no body at all. `body_name` still wins when set, because a
+        house prompt may need a label its file does not carry.
         """
         if self.body_name:
             return self.body_name
         if self.body is None:
             return type(self).__name__
         resource = self.body.resource
-        return resource[:-3] if resource.endswith(".md") else resource
+        stem = resource[:-3] if resource.endswith(".md") else resource
+        declared = self.meta().name
+        if not declared:
+            return stem
+        directory = stem.rsplit("/", 1)[0] if "/" in stem else ""
+        return f"{directory}/{declared}" if directory else declared
 
     def body_text(self) -> str:
+        """The body, with its frontmatter stripped.
+
+        Stripped, because it was being sent to the model. Every shipped body opens with a YAML
+        header — `name`, `description`, `model`, `provider`, `max-ai-credits`, a `github:` block —
+        and `Frontmatter` is documented as "advisory input to a Python-declared binding, never an
+        alternate configuration surface". Advisory turned out to mean unread: `parse_frontmatter`
+        is called at seven sites and every one discards the parsed object, so nothing anywhere
+        consumes those keys.
+
+        The header still reached the model, though, because this method did not strip it — roughly
+        2.6KB of dead compiler-era configuration at the top of every review's system prompt, in the
+        position where instructions carry the most weight, telling the model things like
+        `model: { default: claude-sonnet-4-6 }`. The guardrail and skill fragments were already
+        stripped by `prompts/review.py::_text`; only the body was not, which is why nobody noticed.
+
+        Found by a review that asked what the framework actually sends, on a framework whose whole
+        claim is that it standardises exactly that.
+        """
         if self.body is None:
             raise BodyNotFound(f"{type(self).__name__} declares no body")
-        return self.body.resolve(self.package())
+        _, body = parse_frontmatter(self.body.resolve(self.package()))
+        return body
 
     def system(self, layers: PromptLayers | None = None) -> str:
         """Compose the system prompt.

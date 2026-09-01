@@ -408,7 +408,7 @@ def routed_invoker(verb: Any) -> Any:
         model_id = str((getattr(ctx, "models", None) or {}).get(key, "") or "")
         if not model_id:
             raise MissingModelRoute(
-                f"no model routed for {key!r}: add `lockstep.models.route(\"{key}\", ...)` to "
+                f'no model routed for {key!r}: add `lockstep.models.route("{key}", ...)` to '
                 f"lockstep.py, or pass `invoker_factory=` to the adapter. Nothing was sent and "
                 f"nothing was charged."
             )

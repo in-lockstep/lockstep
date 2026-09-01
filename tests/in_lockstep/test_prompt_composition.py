@@ -6,6 +6,7 @@ compiler's section identity while it still ran, and this asserts the new compose
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -60,17 +61,54 @@ def test_body_resolution_is_lazy_so_import_performs_no_io() -> None:
 
 
 def test_frontmatter_is_advisory_not_a_configuration_surface() -> None:
+    """The property this test is named after, which it did not previously check.
+
+    It used to assert that the parser READ `model` and `skills` — the opposite of advisory, and a
+    claim nothing else in the package could have honoured, because no caller ever looked at the
+    parsed object. A prompt body is data: a non-programmer edits it and a pack may ship one, so a
+    body that could choose the model or raise a turn cap would be the configuration surface the
+    docstring refuses. What a prompt may say is what it IS, never what should happen to it.
+    """
     frontmatter, body = parse_frontmatter(
-        "---\nname: x\nmodel: claude-sonnet-4-6\nskills: [a, b]\n---\n\nThe prose.\n"
+        "---\n"
+        "name: x\n"
+        "description: what it is\n"
+        "model: claude-opus-5\n"
+        "max_tool_turns: 900\n"
+        "github: {max-ai-credits: 100000}\n"
+        "---\n\nThe prose.\n"
     )
-    assert frontmatter.model == "claude-sonnet-4-6"
-    assert frontmatter.skills == ("a", "b")
+    assert frontmatter.name == "x"
+    assert frontmatter.description == "what it is"
     assert body.strip() == "The prose."
+
+    # Nothing that could steer a run is reachable as a field — only `raw`, which nothing reads.
+    fields = {f.name for f in dataclasses.fields(frontmatter)}
+    assert fields == {"name", "description", "raw"}, f"a configuring field came back: {fields}"
+    assert frontmatter.raw["model"] == "claude-opus-5", "kept, unread, so doctor can flag it later"
+
+
+def test_no_frontmatter_key_reaches_the_model() -> None:
+    """The leak this replaced. The header was sent verbatim at the top of every system prompt."""
+    prompt = LENSES["security"]()
+    system = prompt.system(review_layers())
+    for key in ("name:", "description:", "model:", "provider:", "max_tool_turns:", "github:"):
+        assert key not in system, f"{key!r} reached the composed prompt"
+    assert "security-reviewer" not in system.split("Guardrails are inlined first")[0]
+
+
+def test_a_prompts_identity_comes_from_its_own_file() -> None:
+    """`review/security.md` says `name: security-reviewer`; the projection says
+    `body:review/security-reviewer`. One fact, one place — it used to be restated in Python."""
+    assert LENSES["security"]().body_label() == "review/security-reviewer"
+    assert LENSES["tests"]().body_label() == "review/tests-reviewer"
+    assert LENSES["security"]().describe() == "Review a pull request for ways in"
 
 
 def test_absent_frontmatter_is_not_an_error() -> None:
     frontmatter, body = parse_frontmatter("Just prose.\n")
-    assert frontmatter.model == ""
+    assert frontmatter.name == ""
+    assert frontmatter.description == ""
     assert body == "Just prose.\n"
 
 
