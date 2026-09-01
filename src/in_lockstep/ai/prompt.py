@@ -172,9 +172,28 @@ class Prompt(Generic[P, S]):
         return resource[:-3] if resource.endswith(".md") else resource
 
     def body_text(self) -> str:
+        """The body, with its frontmatter stripped.
+
+        Stripped, because it was being sent to the model. Every shipped body opens with a YAML
+        header — `name`, `description`, `model`, `provider`, `max-ai-credits`, a `github:` block —
+        and `Frontmatter` is documented as "advisory input to a Python-declared binding, never an
+        alternate configuration surface". Advisory turned out to mean unread: `parse_frontmatter`
+        is called at seven sites and every one discards the parsed object, so nothing anywhere
+        consumes those keys.
+
+        The header still reached the model, though, because this method did not strip it — roughly
+        2.6KB of dead compiler-era configuration at the top of every review's system prompt, in the
+        position where instructions carry the most weight, telling the model things like
+        `model: { default: claude-sonnet-4-6 }`. The guardrail and skill fragments were already
+        stripped by `prompts/review.py::_text`; only the body was not, which is why nobody noticed.
+
+        Found by a review that asked what the framework actually sends, on a framework whose whole
+        claim is that it standardises exactly that.
+        """
         if self.body is None:
             raise BodyNotFound(f"{type(self).__name__} declares no body")
-        return self.body.resolve(self.package())
+        _, body = parse_frontmatter(self.body.resolve(self.package()))
+        return body
 
     def system(self, layers: PromptLayers | None = None) -> str:
         """Compose the system prompt.
