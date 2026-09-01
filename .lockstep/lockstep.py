@@ -88,8 +88,17 @@ lockstep.contribute(
         # below, and it is what actually stops a long session, because it is checked against a
         # projection before each turn. 12 was sized against a reviewer that takes exactly one
         # turn; an implementing session spends several before it has done anything wrong.
+        #
+        # This number alone does not raise anything. `InvokePolicy.under` takes the LOWEST of this
+        # and the workshop's `max_turns`, because a contributed floor may only tighten — so a run
+        # gets 100 turns only once the workshop below says 100 too. Raising this one on its own
+        # is a line that reads like a change and is not one.
         max_turns=100,
-        max_tokens=20000,
+        # No `max_tokens` here, and it is not an omission. `Policy` is the tighten-only stack an
+        # ORG contributes to, and every field on it merges by `min` across contributions — which
+        # is the right semantics for a ceiling on the whole run and the wrong semantics for the
+        # per-request output cap, where the lowest of two upstreams would silently truncate the
+        # answer rather than refuse. That cap is a property of the workshop, so it lives there.
         scan_input="warn",
         deny_tools=(),
     )
@@ -140,15 +149,28 @@ lockstep.bind(EgressPolicy, egress)
 # no in-process equivalent — see docs/controls-crosswalk.md, entry 3. The replacement is a
 # provider-side organisation limit, which `doctor` can ask about but cannot verify.
 #
-# $0.25 rather than $2.00, sized against a measurement instead of a guess. A security review of a
-# median diff costs about $0.02 and the pre-flight estimate for one is about $0.07 — the estimate
-# bounds output by `max_tokens` rather than by an expected value, so it is deliberately the larger
-# number. That leaves roughly a threefold margin over the estimate and tenfold over the actual
-# spend, which is what a ceiling wants: far enough above normal that it never fires on a good run,
-# close enough that a loop going wrong is stopped in cents rather than dollars.
+# The numbers were sized against a single-turn reviewer: a security review of a median diff costs
+# about $0.02, its pre-flight estimate about $0.07, and $0.25 left a threefold margin over the
+# estimate. That is the right shape of ceiling for a verb that makes one call, and the wrong one
+# for a verb that explores — a TDD implement runs two model phases of many turns each, re-sending
+# its accumulated messages every turn, so cost is quadratic in turns rather than linear. #139 was
+# refused at the ceiling rather than at anything it did wrong.
 #
-# $2.00 was a hundredfold headroom, which is not a ceiling so much as a formality.
-lockstep.budget = Budget(usd=100.00, wall_seconds=1800, max_turns=100, max_tokens=20000)
+# So: $100 and half an hour, which is a ceiling for a session and not for a call. It still fires
+# on a loop going wrong; it no longer fires on the work.
+#
+# `turns` and `tokens` are NOT set, and that is the deliberate half of this line.
+#
+# `Spend` is run-scoped and accumulates across every invocation in the run, so a `turns` ceiling
+# equal to the per-invocation cap lets the red phase spend all of it and leaves the green phase
+# nothing — a run that stops halfway and reports a budget refusal for work it was never given
+# room to do. And `tokens` here is the run total, not the per-request output cap that shares the
+# name on `Workshop`: 20000 would be under one turn's output, so it would refuse every run
+# immediately while reading like generous headroom.
+#
+# `usd` is the ceiling that bounds all of it, and it is the one checked against a projection
+# before each turn.
+lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
 
 # -- the ports those workflows receive ----------------------------------------------
 #
@@ -184,8 +206,24 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # so what the container bind-mounts read-write is a throwaway worktree of HEAD rather than the live
 # tree: without the wrap, a model's command could write `.git/hooks` or this very file past
 # ChangeGuard.
+# The two ceilings on the loop itself live here, and this is the only place raising them has an
+# effect: `use()` completes every strategy below from this object, and `InvokePolicy.under` takes
+# `min(workshop.max_turns, policy.max_turns)`. The policy floor above is the *upper bound on what
+# this may ask for*, never the grant.
+#
+# 100 turns rather than the shipped 30. 30 was sized against a reviewer, and an implementing
+# session spends turns reading before it has done anything at all; #139 spent $21 and never got
+# past exploring. Both phases of TDD get 100 each — the cap is per invocation, and the run total
+# is bounded by `lockstep.budget` above, which is the ceiling that should be doing that job.
+#
+# 20000 output tokens rather than 8192, because a diff plus its reasoning does not fit in 8192 and
+# a truncated turn is charged in full and then retried. Raising it also raises the pre-flight
+# estimate, which bounds output by this number rather than by an expected value — that is the
+# intended coupling, not a side effect: asking for more room means the projection reserves more.
 lockstep.workshop = Workshop(
-    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
+    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+    max_turns=100,
+    max_tokens=20000,
 )
 
 
