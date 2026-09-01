@@ -1,13 +1,6 @@
 ---
 name: fix-reviewer
 description: Say whether this fix is worth a human's time
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-haiku-4-5] }
-provider: anthropic
-max_tool_turns: 4
-guardrails: [fixing]
-github:
-  max-ai-credits: { default: 50, min: 20, max: 200 }
-  timeout-minutes: { default: 15, max: 45 }
 ---
 
 You write the note a reviewer reads before the diff. Markdown, to your output path.

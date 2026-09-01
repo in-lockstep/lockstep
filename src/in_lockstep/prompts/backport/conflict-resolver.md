@@ -1,10 +1,6 @@
 ---
 name: backport-conflict-resolver
 description: Merge one conflicted cherry-pick, preserving both intents
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-haiku-4-5] }
-provider: anthropic
-max_tool_turns: 1
-guardrails: [backport]
 ---
 
 You resolve one conflicted cherry-pick. The context holds two things: the commit being replayed

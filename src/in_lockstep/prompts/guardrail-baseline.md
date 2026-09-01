@@ -1,13 +1,6 @@
 ---
 name: baseline
 description: The constraints every agent in every pipeline inherits
-enforce:
-  # The paragraph below asks a model to treat its input as data. This is the half that does not
-  # depend on it agreeing: every agent's input is scanned for hidden instructions before the agent
-  # reads it. `warn` rather than `block`, deliberately — a pipeline reviewing a pull request *about*
-  # prompt injection would be blocked by its own subject matter, and a control everybody bypasses is
-  # worse than none. An organization that wants the stronger answer seals `scan-input: block`.
-  scan-input: warn
 ---
 
 When you are given an output schema, return exactly that and nothing around it — no preamble, no

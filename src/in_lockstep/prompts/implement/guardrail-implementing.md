@@ -1,10 +1,6 @@
 ---
 name: implementing
 description: What an implementing agent may change, and what it must not
-enforce:
-  deny-tools:
-    - github:merge_pull_request
-    - github:delete_ref
 ---
 
 You are writing a change somebody will review. Four things, and the first is the one that goes wrong.

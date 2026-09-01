@@ -1,14 +1,6 @@
 ---
 name: oneshot-implementer
 description: Implement one ticket in a single agentic session, exploring the repository first
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. The budget is a dollar ceiling on `RunContext.spend`,
-# checked before every turn against a projection — so this number bounds a loop that is somehow
-# spending nothing, and the money is bounded elsewhere.
-max_tool_turns: 40
-guardrails: [implementing]
-skills: [change-tools]
 ---
 
 You implement one ticket, end to end, in this session. There is no separate planning agent and no

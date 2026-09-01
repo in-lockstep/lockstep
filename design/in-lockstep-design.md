@@ -899,8 +899,19 @@ This keeps prose reviewable by the people who write it, and it is also a securit
 Improver-authored prompt change (§8.4) is **data**, not executable code entering `lockstep.py`'s
 import graph.
 
-§5.8 gains a `load: always` frontmatter key exempting a skill from progressive disclosure — the
-destination for repo knowledge that must reach every invocation.
+**A body's frontmatter says what the prompt is, never how to run it.** `name` and `description`
+are read; a header may carry anything else and it is kept, unread. `model`, `max_tool_turns` and a
+`github:` credit budget were declared here once and never read by anything — which is the only
+reason the mismatch survived — and wiring them now would contradict the paragraph above: a body is
+*data*, so a body that picks the model is exactly the executable-configuration surface file-backed
+bodies exist to avoid. Which model runs, and how long, stay in `lockstep.py`, in code, loaded from
+a trusted ref (§17.9 item 10).
+
+`load: always` — announced here as exempting a skill from progressive disclosure — is withdrawn,
+and the key no longer parses. Progressive disclosure was never built: `PromptLayers` inlines every
+skill body verbatim, so every skill already loads always and the exemption has nothing to exempt it
+from. Repo knowledge that must reach every invocation reaches it through the skills layer today.
+The key returns when curation does, and not before.
 
 ### 17.6 Standards are a monotone policy stack *(amends §4.5)*
 
@@ -938,8 +949,10 @@ inflating the floor until real regressions read "within noise."
 
 `composed_prompt_sha256` is the **static layer flatten** (guardrails → body → skills → contexts),
 not the rendered prompt — the rendered reading makes every subject N=1 and no baseline ever
-accumulates. `skillset_hash` is retained separately because §5.8 loads skill bodies by progressive
-disclosure, so they are not in the composed text.
+accumulates. `skillset_hash` is retained separately against the day skill bodies load by curation rather than
+inlining and so leave the composed text (§17.5). Today `PromptLayers` inlines them and the hash is
+redundant — kept because re-deriving a subject key later would orphan every baseline recorded
+before the change.
 
 Ledger records carry `schema` and `epoch`; comparing across epochs raises rather than averaging.
 
@@ -1008,7 +1021,7 @@ are not on `RunContext` at 1.0.
 | R5-SEC-1 | The substrate egress firewall has no replacement, and `InvokePolicy` was wrongly credited with covering it. | Resolved: §10 item 9 (§17.9). **Sign-off.** |
 | R5-SEC-2 | The trust boundary moved before any bounding control existed. | Resolved: controls-parity phase gate; first value is attended, read-only, tokenless. **Sign-off.** |
 | R5-SEC-3 | `Redact` unseedable — providers consume credentials inside SDK clients; provider error text reaches a git-committed ledger. | Resolved: constructor seam + privileged sink filter (§17.2, §17.3). **Sign-off.** |
-| R5-DX-2 | Prose forced into Python; repo-knowledge contexts had no destination. | Resolved: file-backed bodies, `load: always` (§17.5). **Sign-off.** |
+| R5-DX-2 | Prose forced into Python; repo-knowledge contexts had no destination. | Resolved: file-backed bodies (§17.5). **Sign-off**, corrected since: `load: always` was signed off unbuilt and is withdrawn — skills inline unconditionally, so the destination exists without it. |
 | R5-DX-3 | Sealed guardrails are a capability the container cannot reproduce. | Resolved: monotone `PolicyStack`; loss of *impossibility* recorded (§17.6). **Sign-off.** |
 | R5-SRE-1 | `CostBudget` at `ctx.do` cannot see a quadratic in-loop runaway. | Resolved: predictive per-turn `Spend` (§17.4). **Sign-off.** |
 | R5-SRE-3 | Blocking SDK calls make `KillSwitch`, wall-clock, cancellation and `max_parallel` unenforceable. | Resolved: async transports; `GATE-ASYNC-1..4`. **Sign-off.** |

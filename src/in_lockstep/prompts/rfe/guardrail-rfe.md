@@ -1,11 +1,6 @@
 ---
 name: rfe
 description: What an enhancement drafter may and may not decide
-enforce:
-  deny-tools:
-    - github:create_issue
-    - github:update_issue
-    - github:create_pull_request
 ---
 
 Drafting is a writing task about somebody else's idea. You are turning a rough request into a

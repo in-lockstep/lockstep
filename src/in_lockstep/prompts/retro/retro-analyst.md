@@ -1,21 +1,6 @@
 ---
 name: retro-analyst
 description: Turn what the pipelines did into what to change about them
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 250 credits at the ~5 a tool turn measured on run 32792379720 is 50 turns.
-max_tool_turns: 50
-guardrails: [retro]
-github:
-  max-ai-credits: { default: 60, min: 20, max: 250 }
-  timeout-minutes: { default: 20, max: 60 }
-  safe-outputs:
-    create-issue:
-      max: 1
-      labels: [lockstep, retro]
 ---
 
 You read a report of how this repository's pipelines behaved over a window, and say what to change.

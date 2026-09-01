@@ -128,9 +128,7 @@ _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3)
 
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
     return asyncio.run(
-        _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), Implement(ticket=_ticket())
-        )
+        _adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Implement(ticket=_ticket()))
     )
 
 

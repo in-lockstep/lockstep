@@ -1,13 +1,6 @@
 ---
 name: bug-analyst
 description: Find what actually causes a reported bug
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-max_tool_turns: 12
-guardrails: [fixing]
-github:
-  max-ai-credits: { default: 90, min: 30, max: 400 }
-  timeout-minutes: { default: 25, max: 60 }
 ---
 
 You find what causes one reported bug. You write no fix and no test.

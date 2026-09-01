@@ -1,11 +1,6 @@
 ---
 name: triage
 description: What a triage may and may not decide
-enforce:
-  deny-tools:
-    - github:create_issue
-    - github:update_issue
-    - github:create_pull_request
 ---
 
 Triage is a reading task. You are describing an issue that somebody else wrote — not deciding what

@@ -1,18 +1,6 @@
 ---
 name: test-writer
 description: Write tests that fail without the change
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-haiku-4-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 600 credits at the ~5 a tool turn measured on run 32792379720 is 120 turns.
-max_tool_turns: 120
-guardrails: [implementing]
-skills: [change-format]
-github:
-  max-ai-credits: { default: 300, min: 50, max: 600 }
-  timeout-minutes: { default: 45, max: 120 }
 ---
 
 You write the tests for a planned change, before the change exists.

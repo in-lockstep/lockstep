@@ -1,10 +1,6 @@
 ---
 name: fixing
 description: What fixing a bug means here
-enforce:
-  deny-tools:
-    - github:merge_pull_request
-    - github:delete_ref
 ---
 
 **Fix the cause, not the symptom.** A `try` around the traceback makes the report go away and leaves

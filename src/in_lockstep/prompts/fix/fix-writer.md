@@ -1,13 +1,6 @@
 ---
 name: fix-writer
 description: Make the failing test pass by fixing the cause
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5] }
-provider: anthropic
-max_tool_turns: 12
-guardrails: [fixing]
-github:
-  max-ai-credits: { default: 120, min: 40, max: 500 }
-  timeout-minutes: { default: 30, max: 90 }
 ---
 
 You make the failing test pass by fixing what the analysis found.

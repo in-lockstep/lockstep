@@ -82,25 +82,21 @@ class ReviewPrompt(Prompt[ReviewParams, "dict[str, object]"]):
 class SecurityReviewPrompt(ReviewPrompt):
     aspect: ClassVar[str] = "security"
     body: ClassVar[Body | None] = Body.from_file("review/security.md", package="in_lockstep.prompts")
-    body_name: ClassVar[str] = "review/security-reviewer"
 
 
 class IntentReviewPrompt(ReviewPrompt):
     aspect: ClassVar[str] = "intent"
     body: ClassVar[Body | None] = Body.from_file("review/intent.md", package="in_lockstep.prompts")
-    body_name: ClassVar[str] = "review/intent-reviewer"
 
 
 class PerformanceReviewPrompt(ReviewPrompt):
     aspect: ClassVar[str] = "performance"
     body: ClassVar[Body | None] = Body.from_file("review/performance.md", package="in_lockstep.prompts")
-    body_name: ClassVar[str] = "review/performance-reviewer"
 
 
 class TestsReviewPrompt(ReviewPrompt):
     aspect: ClassVar[str] = "tests"
     body: ClassVar[Body | None] = Body.from_file("review/tests.md", package="in_lockstep.prompts")
-    body_name: ClassVar[str] = "review/tests-reviewer"
 
 
 LENSES: dict[str, type[ReviewPrompt]] = {

@@ -118,11 +118,7 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
-    return asyncio.run(
-        _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound), Fix(ticket=_ticket())
-        )
-    )
+    return asyncio.run(_adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Fix(ticket=_ticket())))
 
 
 def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path) -> None:

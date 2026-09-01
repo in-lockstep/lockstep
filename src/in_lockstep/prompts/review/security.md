@@ -1,18 +1,6 @@
 ---
 name: security-reviewer
 description: Review a pull request for ways in
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-opus-5, claude-haiku-4-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 400 credits at the ~5 a tool turn measured on run 32792379720 is 80 turns.
-max_tool_turns: 80
-guardrails: [reviewing]
-skills: [review-format, review-revision]
-github:
-  max-ai-credits: { default: 90, min: 30, max: 400 }
-  timeout-minutes: { default: 20, max: 60 }
 ---
 
 You review one pull request for security, and for nothing else.

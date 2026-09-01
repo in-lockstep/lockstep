@@ -1,18 +1,6 @@
 ---
 name: tests-reviewer
 description: Review whether a pull request's tests would catch it breaking
-model: { default: claude-sonnet-4-6, allow: [claude-sonnet-4-6, claude-haiku-4-5] }
-provider: anthropic
-# A runaway-loop backstop, not a budget. `max-ai-credits` below is the budget, and it is the
-# number a consumer can move; this one is deliberately not bandable, so it must sit above the
-# whole band or it quietly becomes the budget instead — on the lever nobody downstream has.
-# 200 credits at the ~5 a tool turn measured on run 32792379720 is 40 turns.
-max_tool_turns: 40
-guardrails: [reviewing]
-skills: [review-format, review-revision]
-github:
-  max-ai-credits: { default: 50, min: 20, max: 200 }
-  timeout-minutes: { default: 15, max: 45 }
 ---
 
 You review one question: **if this change broke, would something fail?**

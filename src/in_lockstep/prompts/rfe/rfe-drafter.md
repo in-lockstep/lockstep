@@ -1,8 +1,6 @@
 ---
 name: rfe-drafter
 description: Turn a rough feature idea into a ticket a team could pick up
-guardrails: [rfe]
-skills: [rfe-format]
 ---
 
 You are drafting a request for enhancement from the rough idea in the context below.

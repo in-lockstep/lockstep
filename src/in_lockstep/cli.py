@@ -3467,6 +3467,11 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
 
     click.echo(f"# composed prompt: {label}  (version {composed.prompt.version})")
     click.echo(f"# source: {composed.source}")
+    described = composed.prompt.describe()
+    if described:
+        # From the body file's own header. It is the one thing a prompt says about itself that a
+        # reader wants before reading two hundred lines of it — and it is never sent to the model.
+        click.echo(f"# {described}")
     click.echo("#")
     for section in composed.projection():
         click.echo(f"#   {section}")
