@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governance — in-lockstep</title>
+<meta name="description" content="Publish your organisation's standards as a package. Installing it applies it. Teams can still change anything — and every change is a diff somebody can see.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="mark" href="index.html"><i>▮</i> in-lockstep</a>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="#ship">Ship a standard</a>
+      <a href="#bounds">What it can do</a>
+      <a href="#extend">Extending it</a>
+      <a href="#visible">Enforcement</a>
+      <a href="walkthrough.html">See it work</a>
+    </nav>
+    <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
+  </header>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:44px;padding-bottom:36px">
+    <div class="col">
+      <p class="eyebrow">Governance</p>
+      <h1>Publish your standards. <em>Install</em> them. Watch them hold.</h1>
+      <p class="lede">Your organisation decides how AI is used in engineering — which guardrails,
+        which ceilings, which tools an agent may never touch. That decision has to reach two
+        hundred repositories, survive contact with two hundred teams, and still let those teams do
+        their jobs.</p>
+      <p class="lede" style="font-size:18px;margin-top:18px">in-lockstep does that as a Python
+        package. You publish it, teams depend on it, and installing it <em style="font-style:normal;color:var(--machine)">is</em>
+        applying it. What a team changes afterwards, they change in a pull request — which is the
+        part most governance tools get backwards.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="ship">
+    <div class="col">
+      <p class="eyebrow">Part one</p>
+      <h2>A standard is one function and one line of metadata</h2>
+      <p class="lede">There is no console to configure, no policy language to learn, and nothing to
+        host. Your standards are a package your platform team maintains like any other library.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">The package · 1 of 2</span>
+        <h3>The function</h3>
+        <p class="tight">One entry point, handed a small facade. This is the whole of Acme's
+          organisation-wide floor:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>acme_lockstep/__init__.py</b></div>
+<pre><span class="d">from</span> in_lockstep <span class="d">import</span> Policy
+
+
+<span class="d">def</span> <span class="w">apply</span>(std):
+    std.contribute(
+        Policy(
+            name=<span class="w">"acme-baseline"</span>,
+            <span class="d"># strictest wins — nobody can soften it</span>
+            scan_input=<span class="y">"block"</span>,
+            <span class="d"># ceilings merge lowest — nobody can raise it</span>
+            max_turns=<span class="y">16</span>,
+            <span class="d"># denies union — nobody can subtract</span>
+            deny_tools=(<span class="y">"run_script"</span>,),
+        )
+    )</pre>
+          <p class="term-cap">That is a real file — it ships in this repository as
+            <code>examples/acme-standards</code>, and everything on this page was produced by
+            installing it.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">The package · 2 of 2</span>
+        <h3>The line that makes it discoverable</h3>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>pyproject.toml</b></div>
+<pre>[project]
+name = <span class="w">"acme-lockstep"</span>
+version = <span class="w">"1.0.0"</span>
+dependencies = [<span class="w">"in-lockstep"</span>]
+
+[project.entry-points.<span class="w">"in_lockstep.standards"</span>]
+acme = <span class="w">"acme_lockstep:apply"</span></pre>
+          <p class="term-cap">The <strong>name</strong> on the left orders application when several
+            standards packages are installed. Organisation before team is
+            <code>00-acme</code> before <code>10-payments</code> — stated in the name, where
+            everyone can read it, rather than left to a dependency resolver nobody can.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="arrive">
+    <div class="col">
+      <p class="eyebrow">Part two</p>
+      <h2>It arrives by being a dependency</h2>
+      <p class="claim">Installing it <em>is</em> applying it. There is no import to remember.</p>
+      <p class="lede">That is the whole distribution mechanism, and the reason for it is
+        arithmetic. At two hundred repositories, a convention that has to be hand-imported is drift
+        by another name: every repo that forgets the line runs without your standards, and nothing
+        anywhere says so.</p>
+    </div>
+
+    <div class="term" style="margin-top:30px;max-width:780px">
+      <div class="term-bar"><span class="dot on"></span><b>a team repository's pyproject.toml</b></div>
+<pre>dependencies = [
+  <span class="w">"in-lockstep"</span>,
+  <span class="y">"acme-lockstep"</span>,   <span class="d"># ← this line is the governance</span>
+]</pre>
+    </div>
+
+    <div class="col">
+      <p>Nothing else changes in the repository. The team's own <code>lockstep.py</code> stays
+        theirs; the standards apply underneath it, before its first line runs.</p>
+    </div>
+
+    <div class="control"><b>And failure is loud.</b> A standards package that cannot be loaded
+      stops the run, by name — <em>“its standards are NOT in force, and running without standards
+      somebody installed is worse than stopping.”</em> There is deliberately no environment
+      variable that skips loading, because an env var is removal that nothing reviews.</div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="bounds">
+    <div class="col">
+      <p class="eyebrow">Part three</p>
+      <h2>What a standard can do — and what it cannot</h2>
+      <p class="lede">A standards package is handed a small facade rather than the repository's
+        lifecycle. It can raise the floor. It cannot take the building.</p>
+    </div>
+
+    <div class="pair">
+      <div class="can">
+        <h5>It can</h5>
+        <ul>
+          <li>Contribute policy: ceilings, denied tools, scan strictness, egress</li>
+          <li>Bind implementations — a cost table, a tracker adapter, a house strategy</li>
+          <li>Only ever <strong>tighten</strong> what a repository already had</li>
+        </ul>
+      </div>
+      <div class="cant">
+        <h5>It cannot</h5>
+        <ul>
+          <li>Touch the middleware chain, the budget, or the model routes</li>
+          <li>Bind at the repository's own tier — everything it binds is <code>plugin</code></li>
+          <li>Loosen anything, in any direction, ever</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-top:36px">Tighten-only is not a promise. It is the merge.</h3>
+      <p class="tight">Guardrails are an append-only registry. There is no removal API, and the
+        merge has one direction: ceilings take the <em>lowest</em>, denied tools <em>union</em>,
+        the strictest scan setting wins, and a closed egress rule cannot be reopened.</p>
+      <p class="tight">So a team that wants more turns can ask, and it will not get them:</p>
+    </div>
+
+    <div class="term" style="max-width:780px">
+      <div class="term-bar"><span class="dot on"></span><b>the payments team's lockstep.py, asking for more</b></div>
+<pre>lockstep.policy.contribute(
+    Policy(name=<span class="w">"payments-house"</span>, <span class="r">max_turns=50</span>, <span class="r">scan_input="warn"</span>)
+)</pre>
+      <p class="term-cap">Legal, greppable, and completely ineffective in the direction they tried.
+        Here is what the run actually gets:</p>
+<pre><span class="p">$</span> in-lockstep ls
+
+standards  <span class="d">(in_lockstep.standards entry points; applied before this module's own lines)</span>
+  acme  <span class="d">&lt;- acme-lockstep 1.0.0</span>
+
+policy
+  acme-baseline   <span class="d">&lt;- plugin:acme</span>
+  payments-house  <span class="d">&lt;- local</span>
+  = network=(unset) scan=<span class="g">block</span> deny_tools=1
+
+<span class="p">$</span> <span class="d"># and the resolved ceiling the invoker is handed:</span>
+max_turns  = <span class="g">16</span>     <span class="d">← the org's, not the 50 that was asked for</span>
+scan_input = <span class="g">block</span>  <span class="d">← the org's, not the "warn" that was asked for</span></pre>
+      <p class="term-cap">Real output, from a repository with that exact file. The team's layer is
+        still listed, with its source — because a contribution that had no effect is worth seeing
+        too.</p>
+    </div>
+
+    <div class="control"><b>The one thing sealing cannot be:</b> bindings resolve
+      repository-above-organisation by construction, so a container cannot express “a standard the
+      repository may not replace”. That is why guardrails are a <em>stack</em> and not a slot. What
+      the stack preserves is the direction of travel; what it does not claim is impossibility.
+      Part five is about that distinction, because it is the whole design.</div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="extend">
+    <div class="col">
+      <p class="eyebrow">Part four</p>
+      <h2>Teams still own their repository</h2>
+      <p class="lede">A governance model everyone routes around is worse than none, because it is
+        the same outcome plus a false sense of coverage. So a team can change essentially anything
+        — and the standard still holds where it matters.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">Extend · bindings</span>
+        <h3>One line beats the organisation's</h3>
+        <p class="tight">Standards bind at <code>plugin</code> tier. The repository binds at
+          <code>explicit</code>, and explicit wins regardless of order. Overriding the org's choice
+          of anything is one line, in a file under review.</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>.lockstep/lockstep.py</b></div>
+<pre>lockstep.bind(CostTable, <span class="y">our_own_table</span>)   <span class="d"># beats plugin:acme's</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Extend · prompts</span>
+        <h3>Add a rule of your own, and see exactly what it did</h3>
+        <p class="tight"><code>plus()</code> appends, so a house guardrail lands after the shipped
+          baseline instead of displacing it. And the framework will show you the change to what the
+          model is told, before anything runs and before anything is spent:</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>what one house rule did to the prompt</b></div>
+<pre><span class="p">$</span> in-lockstep show-prompt security --diff
+
+<span class="d">--- shipped/review/security</span>
+<span class="d">+++ AiReview/review/security</span>
+<span class="d">@@ -42,6 +42,10 @@</span>
+<span class="g">+&lt;!-- guardrail: payments/actions --&gt;</span>
+<span class="g">+Never approve a new `run:` step in a workflow without naming, in the</span>
+<span class="g">+finding, which secrets that step can read.</span></pre>
+        </div>
+        <p class="tight">And <code>ls</code> keeps the score, so nobody has to remember which
+          repositories have customised which prompts:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>in-lockstep ls</b></div>
+<pre>prompts  <span class="d">(what each AI binding composes; * = not the shipped prompt)</span>
+  AiReview           review/intent review/performance review/security review/tests
+                     guardrails: baseline, review/reviewing, <span class="y">payments/actions</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Extend · strategies and verbs</span>
+        <h3>Or replace how the work is done entirely</h3>
+        <p class="tight">A team that wants red-then-green instead of one pass writes
+          <code>lockstep.use(TDD)</code>. A team that wants its own approach writes a strategy class
+          and binds that. A team with a step nobody else has adds a verb.
+          <a href="walkthrough.html#loop">The walkthrough covers how a strategy works →</a></p>
+        <div class="control"><b>All of it still runs inside the standard.</b> A house strategy that
+          asks for forty turns under an organisation ceiling of sixteen gets sixteen. Extending the
+          framework does not extend its permissions.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="visible">
+    <div class="col">
+      <p class="eyebrow">Part five</p>
+      <h2>Enforcement is visibility, not prevention</h2>
+      <p class="claim">A team <em>can</em> remove your standard. What they cannot do is remove it
+        quietly.</p>
+      <p class="lede">This is the design decision the rest of the page rests on, and it is worth
+        stating plainly rather than implying otherwise. in-lockstep does not try to make a
+        repository unable to change its own configuration. It makes every such change a diff, in a
+        pull request, in history, with a name on it.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step human">
+        <span class="tag">Removing a standard</span>
+        <h3>Is deleting a dependency</h3>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>the pull request somebody has to open</b></div>
+<pre><span class="d">--- a/pyproject.toml</span>
+<span class="d">+++ b/pyproject.toml</span>
+ dependencies = [
+   "in-lockstep",
+<span class="r">-  "acme-lockstep",</span>
+ ]</pre>
+          <p class="term-cap">Reviewable, blameable, and searchable across every repository you
+            own. Compare that with the alternative most tools ship: a setting in a console, changed
+            by someone with the right role, leaving a log entry nobody reads.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Weakening a prompt</span>
+        <h3>Is a diff the framework prints for you</h3>
+        <p class="tight">Replacing the guardrail stack instead of appending to it is legal. It is
+          also <em>reported</em>, on every prompt a bound adapter composes, by a command that needs
+          no credential:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>in-lockstep doctor</b></div>
+<pre><span class="y">WARNING DOC171</span>  review/security does not open with the shipped guardrail baseline
+                 Its stack starts guardrail:payments/actions. Constructing a fresh
+                 PromptLayers replaces the baseline; `plus()` appends and keeps it.
+                 `in-lockstep show-prompt review/security --diff` shows the change.</pre>
+          <p class="term-cap">A warning, never a refusal. Replacing the stack is a legitimate thing
+            to do — and it is exactly the thing a reader of somebody else's repository most needs
+            told.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">The audit answer</span>
+        <h3>“What is actually in force, in this repository, right now?”</h3>
+        <p class="tight">Configuration as code has one honest disadvantage: you can read a YAML
+          file, but you cannot read a container. <code>ls</code> is the answer to it — one command,
+          no credential, no spend, printing what applied and where every layer came from.</p>
+        <div class="control"><b>And the config itself is loaded from a trusted ref.</b> A pull
+          request cannot supply the file that defines the controls constraining its own review.
+          That one is not visibility — that one is prevention, and it is where prevention actually
+          belongs.</div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">Being straight about the limit</span>
+        <h3>Where hard enforcement really lives</h3>
+        <div class="decision">
+          <h4>What a framework cannot do</h4>
+          <p>A middleware chain cannot bound code that never calls into it. Nothing installed
+            <em>inside</em> a repository can stop a determined owner of that repository — and any
+            tool that tells you otherwise is selling you the feeling rather than the control.</p>
+          <p>Enforcement that must survive a hostile repository owner lives in two places you
+            already have: <strong>required status checks</strong> on the branch, and
+            <strong>spend limits</strong> at the provider. in-lockstep is built to make those two
+            sufficient, by making everything else legible — so the check has something true to
+            check, and the bill has a name attached.</p>
+        </div>
+        <p class="tight">That is the trade, stated once: you give up the fantasy of a configuration
+          nobody can change, and you get an organisation where every change to it is a diff you can
+          find, read and revert.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="final">
+    <h2 style="max-width:22ch;margin-left:auto;margin-right:auto">One package. Two hundred
+      repositories. Every change visible.</h2>
+    <p class="lede mid" style="margin-bottom:26px">Start with the worked example — it is a real
+      package in the repository, and it is thirty lines.</p>
+    <div class="install">
+<span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
+<span class="p">$</span> in-lockstep ls
+    </div>
+    <p><a href="https://github.com/in-lockstep/lockstep/tree/main/examples/acme-standards">examples/acme-standards</a> ·
+       <a href="walkthrough.html">See a change go through</a> ·
+       <a href="index.html">Back to the overview</a></p>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Every block on this page is captured from a real repository with
+      <code>examples/acme-standards</code> installed — the <code>ls</code> output, the resolved
+      ceilings, the prompt diff and the <code>doctor</code> warning included. The package source is
+      quoted from the file that ships.</p>
+  </div>
+</footer>
+
+</body>
+</html>
