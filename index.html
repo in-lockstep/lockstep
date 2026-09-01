@@ -16,6 +16,7 @@
       <a href="#problem">The problem</a>
       <a href="#answer">The answer</a>
       <a href="#start">Start</a>
+      <a href="governance.html">Governance</a>
       <a href="walkthrough.html">See it work</a>
     </nav>
     <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
@@ -119,7 +120,8 @@ skill:review/review-revision</pre>
         </div>
         <p>An organisation ships its standards as a package. Installing it applies it, so there is
           no line for a team to forget, and it can only tighten what a repository already had —
-          a team can be stricter than the standard and never looser.</p>
+          a team can be stricter than the standard and never looser.
+          <a href="governance.html">How the governance model works →</a></p>
       </div>
 
       <div class="step">
@@ -247,17 +249,21 @@ pass rate    <span class="y">n/a — nothing decided</span>
         </li>
       </ol>
 
-      <div>
-        <div class="quote" style="margin-top:0">
-          <blockquote>A new engineer runs it on their first morning and gets real findings back in
-            under a second, without a key and without asking me for anything. That used to be a
-            two-day errand.</blockquote>
-          <p class="who"><b>Development Manager</b> · fourteen engineers</p>
-        </div>
-        <div class="quote">
-          <blockquote>Our standards are a dependency now, not a paragraph in the onboarding doc.</blockquote>
-          <p class="who"><b>Engineering Director</b> · ninety engineers</p>
-        </div>
+      <div class="term lit" style="margin-top:0">
+        <div class="term-bar"><span class="dot on"></span><b>step four, on a clean install</b></div>
+<pre><span class="p">$</span> in-lockstep review --offline
+
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+review/security  <span class="g">succeeded</span>
+  actions/save/action.yml:29 <span class="w">Unquoted variable in `find` allows
+    word-splitting on paths with spaces or glob characters</span>
+  actions/save/action.yml:23 <span class="w">GitHub Actions expression
+    `${{ inputs.paths }}` is interpolated into a shell script before
+    variable assignment</span>
+
+cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
+        <p class="term-cap">Two genuine findings in a real workflow file, from a recorded model
+          call that ships with the tool. One line about the age of that recording is elided.</p>
       </div>
     </div>
 
@@ -306,6 +312,7 @@ pass rate    <span class="y">n/a — nothing decided</span>
     </div>
     <p><a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a> ·
        <a href="walkthrough.html">See it work</a> ·
+       <a href="governance.html">Governance</a> ·
        <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">Docs</a></p>
   </section>
 </div>
@@ -313,8 +320,8 @@ pass rate    <span class="y">n/a — nothing decided</span>
 <footer>
   <div class="wrap">
     <p><strong>in-lockstep</strong> · Apache-2.0 · an agentic SDLC framework for Python</p>
-    <p>Terminal output is captured verbatim from the commands shown. Quotes are drawn from
-      structured reviews conducted in the voice of each role, and are attributed by role.</p>
+    <p>Terminal output on this site is captured verbatim from the commands shown, run against
+      this framework's own repository and the worked examples in it.</p>
   </div>
 </footer>
 

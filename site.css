@@ -188,28 +188,6 @@ section { padding: 92px 0; position: relative; }
 .decision p + p { margin-top: 12px; }
 .decision code { background: rgba(0,0,0,.07); color: #16171B; }
 
-/* ---------- quotes ---------- */
-
-.quote { margin: 30px 0; max-width: 760px; }
-.quote blockquote {
-  margin: 0 0 14px; font-family: Newsreader, Georgia, serif; font-weight: 300;
-  font-size: clamp(22px, 2.7vw, 30px); line-height: 1.34; letter-spacing: -.012em;
-  color: var(--text);
-}
-.quote .who { font-size: 14px; color: var(--text-3); font-family: "JetBrains Mono", monospace; }
-.quote .who b { color: var(--text-2); font-weight: 500; }
-
-.qgrid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.qcard {
-  background: var(--ink-2); border: 1px solid var(--line); border-radius: 8px; padding: 24px;
-}
-.qcard blockquote {
-  margin: 0 0 14px; font-family: Newsreader, Georgia, serif; font-weight: 300;
-  font-size: 19px; line-height: 1.4; color: var(--text);
-}
-.qcard .who { font-size: 13px; font-family: "JetBrains Mono", monospace; color: var(--text-3); }
-.qcard .who b { display: block; color: var(--machine); font-weight: 500; margin-bottom: 2px; }
-
 /* ---------- proof strip ---------- */
 
 .proof { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -242,15 +220,6 @@ section { padding: 92px 0; position: relative; }
   color: var(--text); margin-bottom: 5px; letter-spacing: -.01em;
 }
 .start ol li span { color: var(--text-2); font-size: 15px; }
-
-/* ---------- personas ---------- */
-
-/* Five roles, and they should read as one row: "the same framework, five questions". At 230px
-   the fifth orphaned onto a line of its own, which read as an afterthought rather than a set. */
-.roles { display: grid; gap: 18px 20px; grid-template-columns: repeat(auto-fit, minmax(194px, 1fr)); }
-.role { border-top: 2px solid var(--line); padding-top: 16px; }
-.role b { display: block; font-size: 15.5px; margin-bottom: 4px; }
-.role span { font-size: 14.5px; color: var(--text-3); }
 
 /* ---------- footer / cta ---------- */
 
@@ -394,3 +363,33 @@ table.gh-t code { font-size: 12px; white-space: nowrap; }
   .thread { padding: 12px 12px 16px; }
   .gh-head { padding: 14px 14px 4px; }
 }
+
+/* ---------- can / cannot ----------
+ *
+ * The governance page turns on one distinction — what a standard may do to a repository, and what
+ * it may not — and a bulleted list flattens exactly the pair that has to stay apart. Two columns,
+ * mint and gold, the same two colours the rest of the site uses for machine and person. */
+
+.pair { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; margin: 26px 0; max-width: 780px; }
+@media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
+.pair > div {
+  border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; background: var(--ink-2);
+}
+.pair h5 {
+  font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 500;
+  letter-spacing: .13em; text-transform: uppercase; margin: 0 0 14px;
+}
+.pair .can  h5 { color: var(--machine); }
+.pair .cant h5 { color: var(--human); }
+.pair ul { margin: 0; padding-left: 18px; }
+.pair li { font-size: 15px; color: var(--text-2); margin-bottom: 9px; }
+.pair li:last-child { margin-bottom: 0; }
+.pair li code { font-size: 12.5px; }
+
+/* the sentence a section turns on, set apart from the prose around it */
+.claim {
+  font-family: Newsreader, Georgia, serif; font-weight: 300;
+  font-size: clamp(22px, 2.8vw, 31px); line-height: 1.32; letter-spacing: -.012em;
+  color: var(--text); max-width: 22ch; margin: 0 0 22px;
+}
+.claim em { font-style: italic; color: var(--machine); }
