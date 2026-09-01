@@ -49,6 +49,36 @@ def _key(request: LLMInput) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def _request_record(request: LLMInput, redact: Redact) -> dict[str, Any]:
+    """A request as a cassette stores it: everything `_key` hashes, so it round-trips exactly.
+
+    Deliberately the same field set as the key rather than a friendlier summary. A stored request
+    that hashed differently from the one recorded would be a recording that cannot find itself,
+    and `GATE-EVAL-1` is the assertion that it does not.
+    """
+    return {
+        "model": request.model,
+        "system": redact.text(request.system),
+        "messages": [
+            {
+                "role": m.role,
+                "content": redact.text(m.content),
+                "tool_calls": [
+                    {"id": tc.id, "name": tc.name, "input": redact.value(tc.input)} for tc in m.tool_calls
+                ],
+                "tool_call_id": m.tool_call_id,
+                "tool_name": m.tool_name,
+            }
+            for m in request.messages
+        ],
+        "max_tokens": request.max_tokens,
+        "tools": [
+            {"name": t.name, "description": t.description, "parameters": t.parameters} for t in request.tools
+        ],
+        "temperature": request.temperature,
+    }
+
+
 def _tool_key(server: str, name: str, args: dict[str, object]) -> str:
     return hashlib.sha256(
         json.dumps({"server": server, "name": name, "args": args}, sort_keys=True, default=str).encode()
@@ -88,6 +118,17 @@ class Cassette:
     def record_provider(self, request: LLMInput, output: LLMOutput, redact: Redact) -> None:
         key = _key(request)
         self.provider_calls[key] = {
+            # The request, beside its answer. A cassette used to keep only the hash, which is
+            # enough to look a recording up and not enough to do anything else with it: it could
+            # not be read, diffed against what the code composes now, or turned into a case. That
+            # last one is the cost that mattered — a repository accumulating recordings of real
+            # runs had no way to turn them into anything it could measure against, so the evidence
+            # piled up and stayed inert. `eval harvest` reads this field.
+            #
+            # Redacted like everything else here. The request is the likelier of the two to carry
+            # a secret: an answer is a model's prose, a request is whatever the repository put in
+            # front of it.
+            "request": _request_record(request, redact),
             "content": redact.text(output.content),
             "tool_calls": [
                 {"id": tc.id, "name": tc.name, "input": redact.value(tc.input)} for tc in output.tool_calls
