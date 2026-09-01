@@ -36,6 +36,56 @@ from ..worktree import head_state, materialize
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import PhaseError, read_reply, reported, run_phase, test_findings
 
+
+async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]:
+    """The staged Python files, if running the suite over just those collects no tests at all.
+
+    One extra pytest invocation scoped to the new files, which costs about a second because it runs
+    only them. The alternative — a baseline run of the whole suite to compare totals against —
+    doubles the slowest step of the strategy to learn the same fact.
+
+    Empty means "collection is not the problem", which includes the case where the second run could
+    not be scoped at all. This decides the wording of a failure, so a wrong guess would be a
+    confident, specific, wrong diagnosis; when it cannot tell, it says nothing and the general
+    message stands.
+    """
+    paths = tuple(sorted(c.path for c in tests.changes if c.path.endswith(".py")))
+    if not paths:
+        return ()
+    probe = await ctx.do(Test(root=tree, paths=paths, expect="fail"))
+    report = probe.value
+    if report is None:
+        return ()
+    return paths if report.total == 0 else ()
+
+
+def _not_red_finding(uncollected: tuple[str, ...]) -> Finding:
+    """One of two messages, and the difference is what the next attempt does about it."""
+    if uncollected:
+        return Finding(
+            id="tdd.test_not_collected",
+            message=(
+                "the staged test was never run: pytest collected 0 tests from "
+                f"{', '.join(uncollected)}. The suite is green because it did not execute your "
+                "test, not because your test passes. Check this repository's collection settings "
+                "before rewriting the assertions — `python_files`, `python_classes` and "
+                "`python_functions` in pyproject.toml or pytest.ini decide which names are picked "
+                "up, and `testpaths` decides which directories are searched at all. A class or "
+                "file that does not match is skipped in silence."
+            ),
+            severity=Severity.ERROR,
+            blocking=True,
+        )
+    return Finding(
+        id="tdd.not_red",
+        message="the staged test did not fail against the current code, so it "
+        "specifies nothing to implement. A test-first change starts from a test "
+        "that is red for the right reason.",
+        severity=Severity.ERROR,
+        blocking=True,
+    )
+
+
 _RED_DIRECTIVE = (
     "Step 1 of 2 — the failing test.\n\n"
     "Stage a test that captures the requirement above and fails against the code as it stands now. "
@@ -130,23 +180,31 @@ class TDD(ImplementStrategy):
 
             async with materialize(session.repo_root, tests) as tree:
                 red = await ctx.do(Test(root=tree, expect="fail"))
+                # Which of the three it was has to be decided while the worktree still exists.
+                uncollected = (
+                    await _uncollected(ctx, tree, tests) if red.status is not Status.SUCCEEDED else ()
+                )
             if red.status is not Status.SUCCEEDED:
-                # The test did not fail: it passed against the current code, collected nothing, or
-                # errored on collection. Any of those means it captures nothing to implement.
+                # The test did not fail, and the three reasons for that are not one finding.
+                #
+                # It passed against the current code — the model tested something that already
+                # works. Or the suite never ran it, because the file, the class or the directory
+                # does not match what this repository collects. Both used to arrive as "the staged
+                # test did not fail against the current code", which is a true sentence about the
+                # first case and a misleading one about the second: a model told its test passed
+                # rewrites the assertions, and the assertions were never the problem.
+                #
+                # It is not a hypothetical. Run 33566828825 spent $31.53 staging tests into a
+                # repository whose `python_classes = ["*Tests"]` meant a `Test*` class was collected
+                # by nothing; the suite ran 1581 tests, exactly the number it runs on a clean tree,
+                # and reported that the staged test had passed.
                 return Outcome(
                     status=Status.FAILED,
-                    reason="tdd.not_red",
+                    reason="tdd.test_not_collected" if uncollected else "tdd.not_red",
                     value=ImplementReport(changeset=tests, strategy=self.id, turns=red_inv.turn_count),
                     cost=red_inv.cost,
                     findings=(
-                        Finding(
-                            id="tdd.not_red",
-                            message="the staged test did not fail against the current code, so it "
-                            "specifies nothing to implement. A test-first change starts from a test "
-                            "that is red for the right reason.",
-                            severity=Severity.ERROR,
-                            blocking=True,
-                        ),
+                        _not_red_finding(uncollected),
                         *test_findings(red),
                     ),
                     decided=red.decided,

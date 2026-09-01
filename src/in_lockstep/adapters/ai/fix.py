@@ -105,6 +105,9 @@ class FixStrategy(AiStrategy):
     _session_cls = FixSession
     _shipped_prompts = FIX_PROMPTS
     _layers_factory = staticmethod(fix_layers)
+    # As for implement: `fix.yml` and `ai-generated.yml` trigger on `issue_comment` and
+    # `issues`, both of which run on the default branch.
+    reads_house_rules: ClassVar[bool] = True
 
 
 class DiagnoseThenFix(FixStrategy):

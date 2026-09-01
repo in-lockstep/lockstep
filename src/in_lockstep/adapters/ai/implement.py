@@ -111,3 +111,7 @@ class ImplementStrategy(AiStrategy):
     _session_cls = ImplementSession
     _shipped_prompts = PROMPTS
     _layers_factory = staticmethod(implement_layers)
+    # The repository's own AGENTS.md/CLAUDE.md reaches the system prompt. Safe for this verb
+    # because `implement.yml` triggers on `issue_comment`, which GitHub runs on the default
+    # branch — see `instructions.py` for why review must not do the same.
+    reads_house_rules: ClassVar[bool] = True

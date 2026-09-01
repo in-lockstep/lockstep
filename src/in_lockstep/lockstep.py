@@ -15,7 +15,7 @@ from typing import Any
 
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
-from .core.context import Approval, RepoFacts, RepoInfo, RunContext
+from .core.context import AGENT_INSTRUCTION_FILES, Approval, RepoFacts, RepoInfo, RunContext
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, DailySpendExceeded, Spend, UndeclaredBudget
@@ -389,7 +389,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         "github" if (root / ".github" / "workflows").is_dir() else ("gitlab" if has(".gitlab-ci.yml") else "")
     )
 
-    agent_instructions = tuple(n for n in ("CLAUDE.md", "AGENTS.md", ".cursorrules") if (root / n).exists())
+    agent_instructions = tuple(n for n in AGENT_INSTRUCTION_FILES if (root / n).exists())
 
     return RepoFacts(
         stack=stack,

@@ -159,13 +159,26 @@ def test_every_ai_adapter_takes_injected_layers_and_defaults_to_the_shipped_set(
 
     implement = Oneshot(lambda ctx: None, layers=custom)
     session = implement._session(object())
-    assert session.layers is custom, "the injected stack is the one strategies compose with"
-    assert Oneshot(lambda ctx: None)._session(object()).layers.projection(
-        "b"
-    ) == implement_layers().projection("b")
+    # Identity was the old spelling of this and stopped being available when the writing verbs
+    # began appending the repository's own AGENTS.md/CLAUDE.md as trailing context layers. The
+    # invariant is unchanged and is asserted directly instead: everything injected survives, in
+    # order, at the front. A stack that was replaced, reordered or partly dropped still fails.
+    assert session.layers.guardrails == custom.guardrails, "injected guardrails are not displaced"
+    assert session.layers.skills == custom.skills
+    assert session.layers.contexts[: len(custom.contexts)] == custom.contexts
+    # Whatever it appended is house rules and nothing else.
+    assert all(name.startswith("house-rules/") for name, _ in session.layers.contexts[len(custom.contexts) :])
+    # No injection: the shipped set, in the shipped order. Written as a prefix rather than an
+    # equality because this runs inside a repository that HAS a CLAUDE.md, so the default stack
+    # legitimately carries house-rules layers after the shipped ones. The property that matters is
+    # that the seam does not change the shipped prompt, and a prefix says exactly that.
+    default = Oneshot(lambda ctx: None)._session(object()).layers.projection("b")
+    shipped = implement_layers().projection("b")
+    assert default[: len(shipped)] == shipped
+    assert all(name.startswith("context:house-rules/") for name in default[len(shipped) :])
 
     fix = DiagnoseThenFix(lambda ctx: None, layers=custom)
-    assert fix._session(object()).layers is custom
+    assert fix._session(object()).layers.guardrails == custom.guardrails
 
     assert AiReview(lambda ctx: None, layers=custom).layers is custom
     assert AiTriage(lambda ctx: None, layers=custom).layers is custom
