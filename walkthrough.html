@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The walkthrough — in-lockstep</title>
-<meta name="description" content="A real project adopts in-lockstep in four commands, then one change travels the whole lifecycle: idea, ticket, red, green, review, merge.">
+<title>See it work — in-lockstep</title>
+<meta name="description" content="One bug report, from filed to merged, without anyone leaving GitHub. What the developer types, what the framework does, and where a person decides.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -14,155 +14,384 @@
     <a class="mark" href="index.html"><i>▮</i> in-lockstep</a>
     <nav>
       <a href="index.html">Home</a>
-      <a href="#adopt">Setting it up</a>
-      <a href="#travel">One change, start to finish</a>
-      <a href="#real">Did it really</a>
+      <a href="#thread">In your repo</a>
+      <a href="#loop">The agent loop</a>
+      <a href="#laptop">On your laptop</a>
+      <a href="#real">The receipts</a>
     </nav>
     <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
   </header>
 </div>
 
 <div class="wrap">
-  <section style="padding-top:40px">
+  <section style="padding-top:44px;padding-bottom:40px">
     <div class="col">
       <p class="eyebrow">See it work</p>
-      <h1>Set it up in four commands. Then watch one change <em>go all the way through.</em></h1>
-      <p class="lede">A real Python library — <code>tempo</code>, which parses duration strings —
-        adds in-lockstep to itself, and then one feature travels from a rough idea to a merged pull
-        request. At every step you can see what the AI was told, what it did, and where a person
-        had to decide. <strong>Every black block below is real output</strong>, not a mock-up.</p>
+      <h1>One bug report. Filed to merged. <em>Nobody left GitHub.</em></h1>
+      <p class="lede">A developer types two words in a comment box. Everything after that — which
+        prompt, which guardrails, who is allowed to ask, what it may write, who signs off — is your
+        lifecycle, running in your Actions, answering in the thread.</p>
+      <p class="lede" style="font-size:18px;margin-top:18px">It is the same back-and-forth a
+        developer already has with an AI on their laptop. The difference is that this one happened
+        somewhere everyone can see, and it is still there next year.</p>
+      <p style="color:var(--text-3);font-size:14.5px;margin-top:26px">
+        <span style="color:var(--human)">■</span> gold is a person deciding &nbsp;·&nbsp;
+        <span style="color:var(--machine)">■</span> mint is the framework working</p>
     </div>
   </section>
 
   <hr class="rule">
 
-  <section id="adopt">
+  <section id="thread">
     <div class="col">
       <p class="eyebrow">Part one</p>
-      <h2>Setting it up: four commands and one file you own</h2>
-      <p class="lede">Nothing to sign up for, nothing to host, and nothing to configure before the
-        first run works.</p>
+      <h2>Everything happens in the repository you already have</h2>
+      <p class="lede">The example: a small team keeps its build steps in
+        <code>acme/build-actions</code>. Someone notices their <code>save</code> action is dropping
+        files.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
 
-      <div class="step">
-        <span class="tag">Step 1 · install</span>
-        <h3>Add it like any other dependency</h3>
-        <p class="tight">One distribution. Provider SDKs are extras, so a bare install pulls none of
-          them — cold start matters in CI.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>tempo — a small Python library, 4 files, 4 tests</b></div>
-<pre><span class="p">$</span> uv add in-lockstep</pre>
+      <div class="step human">
+        <span class="tag">A person · step 1</span>
+        <h3>You file an issue. Nothing happens.</h3>
+        <p class="tight">No bot replies, no workflow fires, no money is spent. An issue is an issue.
+          The framework is not watching your repository — it is waiting to be asked.</p>
+
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · issue #218</div>
+          <div class="gh-head">
+            <h4><span class="pill open">Open</span> &nbsp;<code>save</code> action drops files whose
+              paths contain spaces <span>#218</span></h4>
+            <div class="tags"><em>bug</em><em>ci</em></div>
+          </div>
+          <div class="thread">
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg">
+                <b><i>dana</i> opened this issue · 2 days ago</b>
+                <div class="in">
+                  <p>Our nightly upload silently misses anything under
+                    <code>reports/Q3 final/</code>. Nothing errors — the files just are not there.</p>
+                  <p>Repro: add a file with a space in its path, run the save step, look at the
+                    artifact.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">A person · step 2</span>
+        <h3>You type two words</h3>
+        <p class="tight">In the comment box every developer on the team already uses. There is
+          nothing to install in an editor, no separate console to learn, and no second place where
+          the conversation lives.</p>
+
+        <div class="gh">
+          <div class="gh-bar">issue #218 · leave a comment</div>
+          <div class="thread">
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg" style="border:0">
+                <div class="composer">/fix<span class="cursor">▍</span></div>
+                <p class="composer-foot"><code>/fix</code> reproduces and repairs a bug.
+                  <code>/implement</code> builds a feature from a ticket. Both are ordinary comments
+                  — anyone can type one, which is exactly why the next step exists.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Step 2 · init</span>
-        <h3>It reads your project before it writes anything</h3>
-        <p class="tight">No questionnaire, no wizard. It looks at what is already there and
-          scaffolds a lifecycle that binds the tools you actually use.</p>
-        <div class="term lit">
-          <div class="term-bar"><span class="dot on"></span><b>detection, then two files</b></div>
-<pre><span class="p">$</span> in-lockstep init
+        <span class="tag">The framework · step 3</span>
+        <h3>First it works out whether you were allowed to ask</h3>
+        <p class="tight">A chat-ops trigger is an unauthenticated entry point wearing a familiar
+          interface. So the first job holds <strong>no credential at all</strong>, runs alone, and
+          answers one question: may this person start a run?</p>
 
-wrote .lockstep/lockstep.py
-  detected <span class="g">stack: python; tests: pytest; lint: ruff; Makefile (check)</span>
-wrote .github/workflows/lockstep.yml
-
-One job, because reviewing is read-only. Add the privileged `apply` job the
-day a verb of yours produces a change to write; the file says where.</pre>
-          <p class="term-cap">It found pytest and ruff and wrote the bindings for them. It also
-            noticed there is nothing here that writes yet, and scaffolded the CI file accordingly —
-            one job, not two.</p>
-        </div>
-        <p>The file it wrote is thirty lines and it is yours. This is the whole of it that matters:</p>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><b>.lockstep/lockstep.py</b></div>
-<pre><span class="d">from</span> in_lockstep <span class="d">import</span> Lockstep
-<span class="d">from</span> in_lockstep.adapters <span class="d">import</span> PytestTest, RuffValidate, Test, Validate
-<span class="d">from</span> in_lockstep.middleware <span class="d">import</span> CostBudget, otel
+          <div class="term-bar"><span class="dot on"></span><b>job 1 of 3 — no API key, no write token</b></div>
+<pre><span class="p">$</span> in-lockstep gate --actor dana --association MEMBER
 
-lockstep = Lockstep.detect()
+actor     dana
+          association=MEMBER
+          codeowner=no
+          teams-not-checked=1
+<span class="g">allowed   dana is MEMBER of this repository</span></pre>
+          <p class="term-cap">And for somebody who wandered in from the internet:</p>
+<pre><span class="p">$</span> in-lockstep gate --actor drive-by --association NONE
 
-lockstep.bind(Test, <span class="w">PytestTest(args=["-q"])</span>)
-lockstep.bind(Validate, <span class="w">RuffValidate()</span>)
+<span class="r">refused   drive-by is NONE and is not named in CODEOWNERS. CODEOWNERS also
+          names 1 team(s) (@acme/build-maintainers), and team membership
+          cannot be resolved here — it needs a token that can read the
+          organisation. Name the person directly, or add them to the
+          organisation.</span></pre>
+          <p class="term-cap">Note what the refusal does <em>not</em> do: quietly pass because it
+            could not check. It says which check it could not perform and what to do about it.</p>
+        </div>
 
-lockstep.middleware += [otel(), <span class="y">CostBudget(usd=2.00)</span>]</pre>
-          <p class="term-cap">Executable Python, not a manifest. Your lifecycle is a module that
-            runs — so it diffs, it reviews, it has blame, and you can put a breakpoint in it.</p>
+        <div class="control"><b>The control:</b> the gate authorises the <em>asker</em>, never the
+          issue. Anyone can write an issue, so the text of one stays untrusted input to a model no
+          matter who typed <code>/fix</code> underneath it. And the trigger matches
+          <code>startsWith</code> rather than <code>contains</code> — otherwise every comment
+          explaining why <em>not</em> to run <code>/fix</code> would run it.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">The framework · step 4</span>
+        <h3>The job that talks to the model cannot write. The job that writes never sees the key.</h3>
+        <p class="tight">This is the part that is genuinely hard to get right by hand, and it is why
+          the workflow the framework scaffolds has three jobs instead of one.</p>
+
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>.github/workflows/fix.yml — the credential split</b></div>
+<pre>jobs:
+  <span class="w">gate</span>:     permissions: {contents: read}
+             <span class="d">— decides who may ask. holds nothing.</span>
+
+  <span class="w">fix</span>:      permissions: {contents: read, issues: read}
+             env: <span class="y">ANTHROPIC_API_KEY</span>
+             <span class="d">— the model runs here, and cannot write a byte.</span>
+
+  <span class="w">propose</span>:  environment: fix
+             permissions: {contents: <span class="g">write</span>, pull-requests: <span class="g">write</span>,
+                           issues: <span class="g">write</span>}
+             <span class="d">— opens the pull request. never sees the key.</span></pre>
+        </div>
+
+        <div class="control"><b>The control:</b> no single process holds both the credential that
+          can spend and the token that can change your repository. The middle job stages its work
+          into a file; the last job picks that file up and re-checks every path in it before writing
+          anything. Put required reviewers on the <code>fix</code> environment and that last job
+          becomes a human approval — in GitHub's own settings, not in a UI this framework invented.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">The framework · step 5</span>
+        <h3>It reads your issue — and treats every word of it as hostile</h3>
+        <p class="tight">The issue body and every comment on it go into the prompt tagged
+          <strong>untrusted</strong>, and a scanner reads them on the way past. This is not
+          theoretical: the framework's own runs record injection attempts caught in ticket text.</p>
+
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>platform/tickets/base.py</b></div>
+<pre><span class="d">"""Ticket text is untrusted: anyone who can file</span>
+<span class="d">   one can write into a prompt."""</span>
+
+items = [ContextItem(kind=<span class="w">"ticket"</span>,
+                     content=<span class="w">f"{key}: {title}\n\n{body}"</span>,
+                     provenance=<span class="y">UNTRUSTED_EXTERNAL</span>)]
+
+items += [ContextItem(kind=<span class="w">"ticket"</span>, content=comment,
+                      provenance=<span class="y">UNTRUSTED_EXTERNAL</span>)
+          <span class="d">for</span> comment <span class="d">in</span> self.comments]</pre>
+          <p class="term-cap">Remember that second block. It is the line that makes step 9 work.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Step 3 · ls</span>
-        <h3>Read what will actually run</h3>
-        <p class="tight">Configuration as code has one honest disadvantage: you can read a YAML
-          file, but you cannot read a container. This is the answer to it.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>the resolved lifecycle</b></div>
-<pre><span class="p">$</span> in-lockstep ls
+        <span class="tag">The framework · step 6</span>
+        <h3>It reproduces the bug before it is allowed to fix it</h3>
+        <p class="tight">A failing test first, actually run, actually red. Then the fix, and the
+          suite again. A change that never went green stages nothing and opens nothing — the run
+          says so on the issue instead.</p>
+        <div class="control"><b>The control:</b> this is a step in the lifecycle, not a sentence in
+          a prompt asking the model to please write a test. The framework runs your test command and
+          reads the result. A "fix" for a bug that was never reproduced does not reach a reviewer.</div>
+      </div>
 
-<span class="d">detected  stack: python; tests: pytest; lint: ruff; Makefile (check); ci: github</span>
+      <div class="step">
+        <span class="tag">The framework · step 7</span>
+        <h3>It opens a pull request, and answers in the thread</h3>
+        <p class="tight">Where the developer was already standing. No email, no dashboard, no
+          notification in a tool half the team has muted.</p>
 
-bindings
-  EgressPolicy           -&gt; UnsandboxedEgress(singleton, explicit)
-  Test                   -&gt; <span class="g">PytestTest</span>      (singleton, explicit)
-  Validate               -&gt; <span class="g">RuffValidate</span>    (singleton, explicit)
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · issue #218</div>
+          <div class="thread">
+            <div class="ghc bot">
+              <span class="av">▮</span>
+              <div class="msg">
+                <b><i>github-actions</i> commented · just now</b>
+                <div class="in">
+                  <p><code>/fix</code> opened
+                    <a href="#">acme/build-actions#219</a>, ready for review.
+                    <strong>Nobody has read it yet.</strong></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-middleware  <span class="d">(privileged tier runs outside this chain and is not listed)</span>
-  OtelMiddleware
-  CostBudget</pre>
+        <p class="tight">That last sentence is not decoration. It is in the source, and it is there
+          because a tool that opens a pull request and goes quiet invites everyone to assume it was
+          checked.</p>
+
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · pull request #219</div>
+          <div class="gh-head">
+            <h4><span class="pill open">Open</span> &nbsp;Quote paths in the save action's find
+              invocation <span>#219</span></h4>
+            <div class="tags"><em>in-lockstep</em><em>fix</em><em>closes #218</em></div>
+          </div>
+          <div class="thread">
+            <div class="ghc bot">
+              <span class="av">▮</span>
+              <div class="msg">
+                <b><i>github-actions</i> · pull request description</b>
+                <div class="in">
+                  <p>A reproducer for this bug was written, confirmed red, and this change makes it
+                    pass.</p>
+                  <p>The ticket text is untrusted input to a model that held write tools, so review
+                    this as you would a change from a stranger who had read your repository.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="checks">
+            <div><i class="ok">✓</i><span>lockstep / review — security lens finished</span></div>
+            <div><i class="ok">✓</i><span>tests — 41 passed, run against the staged change before
+              it was proposed</span></div>
+            <div><i>·</i><span><small>branch is run-scoped; the guard refused nothing</small></span></div>
+          </div>
+        </div>
+
+        <div class="control"><b>The control:</b> a fix arrives ready for review only because its
+          reproducer went red and then green. An <code>/implement</code> change with no such proof
+          opens as a <strong>draft</strong> instead, and if the tests actually failed, the run opens
+          a follow-up issue rather than a pull request — with the number of attempts capped, and
+          counted in labels on the ticket.</div>
+      </div>
+
+      <div class="step">
+        <span class="tag">The framework · step 8</span>
+        <h3>The pull request reviews itself, in the same thread</h3>
+        <p class="tight">Opening a pull request in a repository that has in-lockstep fires the
+          review workflow — read-only, one credential, no write token. It leaves <strong>one</strong>
+          comment and edits that same comment on every later push, so a busy pull request has one
+          review comment rather than nine.</p>
+
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · pull request #219 · sticky comment</div>
+          <div class="thread">
+            <div class="ghc bot">
+              <span class="av">▮</span>
+              <div class="msg">
+                <b><i>github-actions</i> commented · just now &nbsp;<span style="color:var(--text-3)">(edited)</span></b>
+                <div class="in">
+                  <h5>in-lockstep review — security</h5>
+                  <p><strong>succeeded</strong> · $0.0000 — replayed, nothing billed ·
+                    5361 in / 443 out tokens</p>
+                  <div class="scroll">
+                  <table class="gh-t">
+                    <tr><th></th><th>location</th><th>finding</th></tr>
+                    <tr>
+                      <td>⚠️</td>
+                      <td><code>actions/save/action.yml:29</code></td>
+                      <td>Unquoted variable in <code>find</code> command allows word-splitting on
+                        paths with spaces or glob characters</td>
+                    </tr>
+                    <tr>
+                      <td>⚠️</td>
+                      <td><code>actions/save/action.yml:23</code></td>
+                      <td>GitHub Actions expression <code>${{ inputs.paths }}</code> is interpolated
+                        directly into a shell script before variable assignment</td>
+                    </tr>
+                  </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ghfoot">Real output. Those two findings are a security review of a change to
+            a file called <code>actions/save/action.yml</code>, recorded from an actual model call,
+            and the recording ships with the tool. Run
+            <code>in-lockstep review --offline --comment</code> and you get this comment back —
+            no key, nothing billed.</div>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">A person · step 9</span>
+        <h3>You disagree. You say so, in the thread.</h3>
+        <p class="tight">The first finding is right and the fix took the easy half of it. Quoting
+          the variable stops the word-splitting, but <code>paths</code> is a newline-delimited list
+          — the team wants the entries iterated. On a laptop this is where the developer would type
+          another sentence at their AI. Here they type it where it is kept.</p>
+
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · issue #218 · leave a comment</div>
+          <div class="thread">
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg" style="border:0">
+                <div class="composer">Don't just quote it — <code>paths</code> is newline-delimited,
+                  so iterate the entries. Same as we do in <code>actions/restore</code>.<br><br>/fix<span class="cursor">▍</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="ghfoot">Put it on the <strong>issue</strong>, not on the pull request. The run
+            reads the issue and its comments — that is the context it is given — and the
+            <code>/fix</code> trigger deliberately ignores comments made on pull requests. If you
+            want the framework to hear you, say it where it is listening.</div>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Step 4 · run</span>
-        <h3>A real run, in under a second, for nothing</h3>
-        <div class="term lit">
-          <div class="term-bar"><span class="dot on"></span><b>no API key set</b></div>
-<pre><span class="p">$</span> in-lockstep run selfcheck
+        <span class="tag">The framework · step 10</span>
+        <h3>Your sentence is now part of the prompt</h3>
+        <p class="tight">Not a setting you changed, not a prompt file you edited. The run fetches
+          the issue <em>and every comment on it</em>, and each one becomes a piece of context —
+          tagged untrusted, scanned like the rest, and sent. That is the loop from step 5 doing its
+          job.</p>
+        <p class="tight">The second run opens <a href="#">#220</a> with the entries iterated, the
+          reproducer still red-then-green, and the same review comment updated in place.</p>
+        <div class="control"><b>Why this matters more than it looks:</b> the correction is now a
+          durable artifact. It is in the issue, in the run's record, and readable by the next person
+          who hits the same thing — instead of evaporating in a terminal on one laptop.</div>
+      </div>
 
-validate  <span class="g">succeeded</span>
-test      <span class="g">succeeded</span>
-
-spend     <span class="g">$0.0000</span>, 0.88s
-ledger    lockstep-history:records/selfcheck-20260831T135020Z-775b.json</pre>
-          <p class="term-cap">Two verbs ran out of process, and the run left a record. From a plain
-            Python project to a working lifecycle with an audit trail: four commands, no credential,
-            no cost.</p>
+      <div class="step human">
+        <span class="tag">A person · step 11</span>
+        <h3>You merge it. That was always your job.</h3>
+        <div class="gh">
+          <div class="gh-bar"><b>acme/build-actions</b> · pull request #220</div>
+          <div class="gh-head">
+            <h4><span class="pill merged">Merged</span> &nbsp;Iterate save paths instead of
+              splitting on whitespace <span>#220</span></h4>
+          </div>
+          <div class="thread">
+            <div class="ghc person">
+              <span class="av">DR</span>
+              <div class="msg">
+                <b><i>dana</i> merged commit <code>4f1c9ad</code> into <code>main</code></b>
+                <div class="in"><p>Closes #218.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision">
+          <h4>The human boundary</h4>
+          <p>Every place a person decides is a place your organisation already has one: the merge
+            button, an environment approval, a CODEOWNERS entry, a label. The framework does not
+            build its own approval UI, because the one you have is the one that is audited.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Step 5 · make it yours</span>
-        <h3>Adding a house rule is a diff, not a support ticket</h3>
-        <p class="tight">Every team has a rule the shipped prompts do not know about. Ours: do not
-          widen the grammar without a test for the new unit. One file, one line of binding — and
-          then the framework will show you exactly what changed about what the model is told.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>what your guardrail actually did to the prompt</b></div>
-<pre><span class="p">$</span> in-lockstep show-prompt security --diff
-
-<span class="d">--- shipped/review/security</span>
-<span class="d">+++ AiReview/review/security</span>
-<span class="d">@@ -42,6 +42,10 @@</span>
-<span class="g">+&lt;!-- guardrail: tempo/house --&gt;</span>
-<span class="g">+Never propose a change to `src/tempo/parse.py` that widens the grammar without</span>
-<span class="g">+a test for every new unit. The grammar is the whole library; an untested unit</span>
-<span class="g">+is a silent parse failure downstream.</span></pre>
-          <p class="term-cap">Four lines, reviewable, in the diff of the pull request that added
-            them. <code>plus()</code> appends — a house rule lands after the shipped baseline and
-            cannot displace it.</p>
-        </div>
-        <p class="tight">And <code>ls</code> keeps score, so nobody has to remember which prompts a
-          team has customised:</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot"></span><b>in-lockstep ls</b></div>
-<pre>prompts  <span class="d">(what each AI binding composes; * = not the shipped prompt)</span>
-  AiReview           review/intent review/performance review/security review/tests
-                     guardrails: baseline, review/reviewing, <span class="y">tempo/house</span></pre>
-        </div>
+        <span class="tag">And afterwards</span>
+        <h3>The whole exchange is still there next year</h3>
+        <p class="tight">The thread has what was asked, what was objected to, and what came back.
+          Alongside it, each run appended a record to a branch in your own git: which commit, which
+          model, who approved it, what it decided, how many tokens, how many dollars, and every
+          finding — including the injection signals the scanner caught in the issue text.</p>
+        <p class="tight">And the instructions do not need archiving, because they can be
+          reproduced: <code>show-prompt</code> prints exactly what any run was sent, offline, at any
+          time.</p>
       </div>
 
     </div>
@@ -170,166 +399,266 @@ ledger    lockstep-history:records/selfcheck-20260831T135020Z-775b.json</pre>
 
   <hr class="rule">
 
-  <section id="travel">
+  <section id="loop">
     <div class="col">
       <p class="eyebrow">Part two</p>
-      <h2>One change, start to finish</h2>
-      <p class="lede">The feature: <code>tempo</code> should understand weeks, so <code>2w</code>
-        means 1,209,600 seconds. This is the part that is hard to standardise by hand — which step
-        uses AI, what it is told, what it is not allowed to do, and where a person has to sign off.
-        <span style="color:var(--machine)">Green</span> is the framework working.
-        <span style="color:var(--human)">Gold</span> is a person deciding.</p>
+      <h2>There are two loops, and one of them you just watched</h2>
+      <p class="lede">An agent does not do a job in one reply. It works, checks, and works again
+        until it is done — or until something stops it. Where that loop lives, and what stops it,
+        is the difference between a tool you can put in CI and one you cannot.</p>
+      <p class="lede" style="font-size:18px;margin-top:18px">In-lockstep has these loops at two
+        heights. The <strong>outer</strong> one runs between an issue and a merge, and its exit
+        criterion is a person being satisfied. The <strong>inner</strong> one runs inside a single
+        step of work, and its exit criterion is a test, a schema, or a ceiling. Neither can do the
+        other's job.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
 
-      <div class="step">
-        <span class="tag">Stage 1 · rfe</span>
-        <h3>A rough idea becomes a ticket somebody can argue with</h3>
-        <p class="tight">You have a sentence. The framework turns it into a draft with a problem
-          statement and acceptance criteria — and then stops.</p>
+      <div class="step human">
+        <span class="tag">The outer loop</span>
+        <h3>Issue → pull request → review → round again. It ends when a person says so.</h3>
+        <p class="tight">Part one <em>was</em> the loop. Read it back as one and the shape is
+          obvious: a request goes in, the agent produces work, a human judges it, the judgement
+          becomes part of the next request, and it goes round. What is unusual is only where each
+          turn is written down.</p>
+
         <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>drafted, and deliberately not filed</b></div>
-<pre><span class="p">$</span> in-lockstep rfe --idea "tempo should understand weeks, so 2w parses as 1209600"
-
-rfe       <span class="g">succeeded</span>
-
-<span class="y">not filed. Read it, then re-run with --create to file it — or edit and
-file it yourself.</span></pre>
+          <div class="term-bar"><span class="dot on"></span><b>the loop you already watched</b></div>
+<pre>  <span class="y">issue #218</span>  <span class="d">a person asks</span>
+      │
+      ▼
+  <span class="g">gated run</span>   <span class="d">who asked? what may it touch? what may it spend?</span>
+      │
+      ▼
+  <span class="g">PR #219</span>     <span class="d">the work, plus a review of the work</span>
+      │
+      ▼
+  <span class="y">a human</span>     <span class="d">reads it. is this what I meant?</span>
+      │
+      ├── <span class="g">yes</span> ──▶ <span class="y">merge</span>. <span class="d">the loop exits.</span>
+      │
+      └── <span class="r">no</span>  ──▶ <span class="y">a comment on the issue</span>
+                    <span class="d">which becomes context for the next round</span>
+                    └──▶ back to the top</pre>
+          <p class="term-cap">The exit criterion here is not a passing test. It is a person being
+            satisfied — the one criterion that genuinely matters and the one you cannot write into
+            a prompt. So the framework does not try to. It makes the round trip cheap, legible and
+            recorded, and leaves the judgement where it was already.</p>
         </div>
-      </div>
 
-      <div class="step human">
-        <span class="tag">A person decides</span>
-        <h3>Nothing reaches your tracker without a human</h3>
-        <div class="decision">
-          <h4>The human boundary</h4>
-          <p>The draft is printed, not filed. <code>--create</code> is a second command a person
-            runs after reading it. The framework's position is that the human acts in the system of
-            record — the tracker, the pull request, the environment approval — never in a bespoke
-            UI it invented.</p>
-        </div>
+        <div class="control"><b>What stops the outer loop:</b> nothing runs between rounds. There is
+          no long-lived agent sitting in your repository waiting for something to do — the default
+          state is stopped, and each round starts only because a person commented again, and is
+          gated and budgeted from scratch when they do. The one place the framework may start a
+          round on its own is a run that failed its own tests: it opens an <code>ai-generated</code>
+          issue, and that path is capped by <code>lockstep.max_attempts</code> (three, by default),
+          counted in labels on the ticket. At the cap it opens nothing and says so:
+          <em>“Automated fix attempts are exhausted (3/3). A human is needed.”</em>
+          <code>doctor</code> <em>fails</em> if those labels do not exist in your tracker — a label
+          silently dropped would leave every attempt reading zero and the cap bounding nothing.</div>
       </div>
 
       <div class="step">
-        <span class="tag">Stage 2 · triage</span>
-        <h3>Classify it before anyone expensive looks at it</h3>
-        <p>What kind of work is this, how urgent, what is missing from the description. Cheap
-          enough to route to a local model — <code>triage</code> on <code>local:qwen3-8b</code>
-          costs exactly nothing and still counts its tokens.</p>
-      </div>
+        <span class="tag">The inner loop · pluggable</span>
+        <h3>The inner loop lives in a <em>strategy</em>, and a strategy is one line you can swap</h3>
+        <p class="tight">Step 6 said “it reproduces the bug, then fixes it”, which is one sentence
+          hiding all of the interesting part. That sentence is a <strong>strategy</strong>, and it
+          is where the inner loop lives.</p>
+        <p class="tight">A verb says <em>what</em> — implement this, fix that. A strategy says
+          <em>how</em>: how many model steps, what runs between them, and what makes it stop.
+          Changing your team's approach is changing one line in the lifecycle file.</p>
 
-      <div class="step human">
-        <span class="tag">A person decides</span>
-        <h3>The first thing the framework does is refuse</h3>
-        <p class="tight">Ask it to implement, and it stops — because nothing in this lifecycle yet
-          says how a human stays in the loop.</p>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><b>a startup refusal, with the fix</b></div>
-<pre><span class="p">$</span> in-lockstep implement --ticket-file weeks.md --strategy tdd
+          <div class="term-bar"><span class="dot on"></span><b>.lockstep/lockstep.py</b></div>
+<pre><span class="d"># one model step, no test required — the fast one</span>
+lockstep.use(<span class="w">Oneshot</span>)
 
-<span class="r">Error: TDD lets a model write or execute, and no ApprovalGate is in the
-middleware chain. Add one:</span>
+<span class="d"># or: a failing test first, actually run, before any implementation</span>
+lockstep.use(<span class="w">TDD</span>)
 
-    <span class="y">lockstep.middleware += [ApprovalGate()]</span>
-
-The human acts in your system of record — a review request, an environment
-approval — so the gate refuses without a grant rather than prompting.</pre>
-          <p class="term-cap">Before the first model call, before a cent is spent. The refusal names
-            the line to paste, and explains why it would rather refuse than ask you a question in a
-            terminal nobody is watching at 2am.</p>
+<span class="d"># or: yours, with its own ceiling</span>
+lockstep.use(<span class="w">DiagnoseThenFix</span>(policy=InvokePolicy(<span class="y">max_turns=8</span>)))</pre>
+          <p class="term-cap">And <code>in-lockstep ls</code> prints <code>Implement -&gt; TDD</code>.
+            The whole answer to “how does implementing happen in this repository” is one line of
+            output, not an archaeology exercise.</p>
         </div>
-        <div class="decision">
-          <h4>You add one line</h4>
-          <p>That line is a diff, in a file loaded from a trusted ref, reviewed like any other code.
-            Which is the point: the thing that grants an agent its authority is itself under
-            review.</p>
-        </div>
+        <p class="tight">Writing your own is subclassing <code>ImplementStrategy</code> (or
+          <code>FixStrategy</code>, or the base for whichever verb). You get the composed prompt,
+          the context, the tools and the invoker; you decide the shape of the work. The framework
+          does not ship one true loop, because the right loop for a one-line typo fix is not the
+          right loop for a migration.</p>
       </div>
 
       <div class="step">
-        <span class="tag">Stage 3 · implement, test-first</span>
-        <h3>Red, then green — enforced by the strategy, not asked for in a prompt</h3>
-        <p class="tight">The TDD strategy runs in two model steps with a real test run between
-          them. It asks for a failing test, <strong>materialises that test in a throwaway worktree
-          and runs your suite to confirm it is red</strong>, then asks for the implementation and
-          runs the suite again to confirm green.</p>
-        <p class="tight">A test that passes before anything was written stops the run
-          (<code>tdd.not_red</code>) — because a test that was already green tested nothing. An
-          implementation that leaves it failing comes back <code>tdd.not_green</code> rather than
-          opening a pull request that does not work.</p>
-        <div class="control"><b>The control:</b> the strategy will not proceed without a red test
-          first. Not a prompt asking nicely — a `Test` verb it actually ran.</div>
-      </div>
+        <span class="tag">The inner loop · worked example</span>
+        <h3>How the TDD strategy works, and where it refuses</h3>
+        <p class="tight">This is not a prompt that asks a model to “do TDD”. A rule stated only in
+          prose is a request, and a model under pressure to finish will write the test and the
+          implementation together and call the result red-then-green without either half having
+          been run.</p>
+        <p class="tight">So the strategy is two model steps with a <strong>real test run standing
+          between them</strong> — and each step has a way to stop:</p>
 
-      <div class="step">
-        <span class="tag">Stage 4 · staging</span>
-        <h3>The model writes nothing to your tree</h3>
-        <p class="tight">A session stages its work into a <code>ChangeSet</code> and touches
-          nothing. Applying it is a separate step that re-runs the path guard on the artifact.</p>
-        <div class="control"><b>The control:</b> in CI those are two jobs — and only the second
-          holds a write token. The job that talks to the model has <code>contents: read</code> and
-          no ability to write; the job that opens the change never sees the provider credential.
-          One process cannot hold both.</div>
-      </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>implement/tdd — the two phases and their exits</b></div>
+<pre><span class="d">before anything</span>
+  no Test verb bound?          -&gt; <span class="r">refuse</span>  <span class="d">tdd.no_test</span>
+  <span class="d">rather than quietly degrade to an untested oneshot</span>
 
-      <div class="step">
-        <span class="tag">Stage 5 · review</span>
-        <h3>Four lenses, each an agent rather than a checklist row</h3>
-        <p class="tight">Security, intent, performance, tests — separately promptable, separately
-          budgetable, separately measurable. Here is the security lens on a real merged pull
-          request, replayed offline:</p>
-        <div class="term lit">
-          <div class="term-bar"><span class="dot on"></span><b>no key, deterministic, free</b></div>
-<pre><span class="p">$</span> in-lockstep review --offline
+<span class="y">phase 1 · red</span>
+  <span class="w">"stage a test that fails. only the test."</span>
+  <span class="g">agentic loop</span>  <span class="d">model works, calls tools, works again…</span>
+  materialise HEAD+test in a throwaway worktree
+  run your suite, <span class="w">expect="fail"</span>
+    passed / collected nothing / errored
+                               -&gt; <span class="r">stop</span>    <span class="d">tdd.not_red</span>
 
-replaying the shipped fixture: in-lockstep/lockstep#48, security lens
-review/security  <span class="g">succeeded</span>
-  actions/save/action.yml:29 <span class="w">Unquoted variable in `find` allows word-splitting
-    on paths with spaces or glob characters</span>
-  actions/save/action.yml:23 <span class="w">GitHub Actions expression `${{ inputs.paths }}`
-    is interpolated into a shell script before variable assignment</span>
+<span class="y">phase 2 · green</span>
+  <span class="w">"here is the confirmed-red test. implement it.</span>
+<span class="w">   do not edit, weaken, skip or delete it."</span>
+  <span class="g">agentic loop</span>
+  run your suite, <span class="w">expect="pass"</span>
+    still red                  -&gt; <span class="r">stop</span>    <span class="d">tdd.not_green</span>
+  <span class="d">no pull request is opened for a change that does not work</span>
 
-cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
-          <p class="term-cap">Two genuine findings in a real workflow file. This exact command works
-            on a clean install with no key, which is how you evaluate the output quality before you
-            spend anything.</p>
-        </div>
-      </div>
-
-      <div class="step human">
-        <span class="tag">A person decides</span>
-        <h3>It opens as a draft, and it says so</h3>
-        <div class="decision">
-          <h4>Draft until the tests actually pass</h4>
-          <p>An AI-authored change opens as a <strong>draft</strong> pull request, and is marked
-            ready only when the suite passed against the staged change. If it did not, the run files
-            a follow-up issue instead — and the comment it leaves says, in as many words,
-            <em>“Nobody has read it yet.”</em></p>
-          <p>Your reviewers keep the last word, and the tool never pretends otherwise.</p>
+<span class="y">then</span>
+  revert just the implementation and run again:
+  the suite must go <span class="r">red</span> once more
+  <span class="d">proof the test depends on the change, and was not
+  quietly weakened until it passed</span></pre>
+          <p class="term-cap">Every one of those exits is a deterministic step the framework ran,
+            not a claim the model made about itself. That is the whole difference.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Stage 6 · when it fails</span>
-        <h3>A failed run becomes a ticket, not a silence</h3>
-        <p class="tight">If the suite goes red, the run opens an <code>ai-generated</code> issue
-          describing what it tried — which an agent may pick up and attempt again.</p>
-        <div class="control"><b>The control:</b> the loop is bounded. Attempts are capped, the count
-          lives in labels on the ticket, and <code>doctor</code> <em>fails</em> if those labels do
-          not exist — because a tracker that silently drops an unknown label would leave every
-          follow-up reading attempt zero and the cap bounding nothing.</div>
+        <span class="tag">The inner loop · the turns</span>
+        <h3>Inside a phase: work, check, work again</h3>
+        <p class="tight">Each phase hands the model a prompt and a set of tools and lets it go. If
+          it answers, the phase is over. If it asks for a tool, the framework runs the tool, hands
+          back the result, and goes round again. That is the agentic loop, and this is its actual
+          shape:</p>
+
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>ai/invoker.py — the turn loop, trimmed</b></div>
+<pre><span class="d">for</span> index <span class="d">in</span> range(policy.<span class="y">max_turns</span>):
+    self._guard_turn(policy, started, index)      <span class="d"># kill switch. deadline.</span>
+
+    crossed = self.spend.would_exceed(projected)
+    <span class="d">if</span> crossed <span class="d">is not None</span>:
+        <span class="d">raise</span> InvocationBlocked(<span class="w">"cost.budget_exceeded"</span>,
+            <span class="w">f"turn {index} would cross the budget;</span>
+<span class="w">              refused before the call"</span>)
+
+    output = <span class="d">await</span> self.provider.generate(request)
+
+    <span class="d">if not</span> output.tool_calls:
+        <span class="d">return</span> Invocation(...)          <span class="g"># it answered. done.</span>
+
+    <span class="d">... run the tools, append the results, go again ...</span>
+
+<span class="d">return</span> Invocation(..., <span class="r">exhausted=True</span>)   <span class="d"># the cap.</span></pre>
+        </div>
       </div>
 
       <div class="step">
-        <span class="tag">Stage 7 · backport</span>
-        <h3>Deterministic first; a model only where one is needed</h3>
-        <p class="tight">Replaying a merged change onto a release line is <code>git cherry-pick
-          -x</code> in a throwaway worktree — no model, no cost, no risk. A model is invited only
-          for the conflicted paths, only with <code>--resolve</code>, and only inside the same
-          budget and approval gates as everything else.</p>
+        <span class="tag">The exit valves</span>
+        <h3>Five ways out, and none of them is “wait and see”</h3>
+        <p class="tight">A loop that can only end when the model decides it is finished is a loop
+          that can bill you all night. Every bound below is a ceiling rather than a target, checked
+          by the framework rather than promised by the prompt.</p>
+
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>what stops a stuck agent</b></div>
+<pre><span class="y">turn cap</span>       40 for implementing, 1 for a review lens
+               <span class="d">a reviewer is handed everything in one prompt;
+                an implementer has to go and find it</span>
+
+<span class="y">budget</span>         checked BEFORE each call, against a projection
+               <span class="d">so you never pay for the turn that breaks the
+                ceiling — it is refused while it is still free</span>
+
+<span class="y">deadline</span>       re-checked every turn, wall clock
+
+<span class="y">kill switch</span>    re-checked every turn — IN_LOCKSTEP_DISABLE
+
+<span class="y">tool results</span>   capped at 20,000 chars each
+               <span class="d">a tool result is model input; an unbounded one
+                is an unbounded prompt next turn, and the
+                history grows quadratically</span></pre>
+          <p class="term-cap">And an organisation's policy stack can only <em>tighten</em> these.
+            A strategy asking for forty turns under a ceiling of twelve gets twelve; a strategy
+            asking for four gets four. There is no direction in which a policy can loosen an
+            adapter's own bound.</p>
+        </div>
       </div>
 
+      <div class="step">
+        <span class="tag">And the honest part</span>
+        <h3>Running out of turns is its own answer — never a quiet pass</h3>
+        <p class="tight">When the loop hits the cap, the framework does not hand back the model's
+          last message as though it had finished. The invocation is marked <code>exhausted</code>,
+          and the outcome that carries it is marked as having <strong>decided nothing</strong>.</p>
+
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>adapters/ai/tdd.py</b></div>
+<pre>decided=<span class="y">not</span> green_inv.exhausted,
+reason=<span class="w">"exhausted"</span> <span class="d">if</span> green_inv.exhausted <span class="d">else None</span>,</pre>
+          <p class="term-cap">Two lines, and they are the reason a stuck run cannot be counted as a
+            success anywhere downstream — not on the pull request, not in the run record, not in a
+            future score. “It ran out of room” and “it decided the change was fine” are different
+            sentences, and the framework refuses to blur them.</p>
+        </div>
+
+        <div class="control"><b>Why this is the load-bearing bit:</b> anyone can build an agent that
+          loops. The question a team has to answer before putting one in CI is what happens on the
+          bad day — and “it stops, it says which bound it hit, and it does not claim to have
+          succeeded” is a much easier thing to sign off than a promise about how well the prompt
+          was written.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="laptop">
+    <div class="col">
+      <p class="eyebrow">Part three</p>
+      <h2>Or keep hacking on your laptop — it still gets written down</h2>
+      <p class="lede">Nobody wants to file an issue to try something. The same verbs run from a
+        terminal, against the same lifecycle file, with the same guardrails and the same ceilings.</p>
+    </div>
+
+    <div class="term" style="margin-top:32px;max-width:780px">
+      <div class="term-bar"><span class="dot on"></span><b>the same run, on a laptop</b></div>
+<pre><span class="p">$</span> in-lockstep run fix/from-ticket --arg ticket='<span class="w">#218</span>' --approve --budget 2.00
+
+staged    reproducer + fix -> .lockstep/artifacts/fix-changeset
+fix       <span class="g">succeeded</span>
+ledger    <span class="d">lockstep-history:records/fix-from-ticket-…json</span></pre>
+      <p class="term-cap">Same workflow id as the one CI runs. The trigger, the job split and the
+        credentials are what CI owns; the lifecycle is Python you can put a breakpoint in.</p>
+    </div>
+
+    <div class="col">
+      <p>What is different is only where the approval came from: <code>--approve</code> from a
+        person at a keyboard, a verified trigger in CI. What is the same is everything worth
+        keeping — the same prompt, the same guardrails, and a record appended to the history branch
+        either way.</p>
+      <p>Which means a developer exploring on their own machine is not working outside the process.
+        They are producing the same evidence as everyone else, and any run can be replayed later
+        with <code>--offline</code> for nothing.</p>
+    </div>
+
+    <div class="notyet">
+      <b>Not built yet, and worth being clear about.</b> Those records are the raw material for a
+      learning loop: harvest what happened, turn it into cases, and test a proposed change to a
+      prompt or a guardrail against real history before anyone pays for it. Today you can see
+      exactly what a change does to a prompt (<code>show-prompt --diff</code>) and score cases you
+      write yourself. <strong>Harvesting history into those cases automatically is designed and not
+      implemented.</strong> It is the reason the records are being kept in this shape now.
     </div>
   </section>
 
@@ -337,14 +666,21 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
 
   <section id="real">
     <div class="col">
-      <p class="eyebrow">Part three</p>
-      <h2>This is not a demo. Here are the receipts.</h2>
-      <p class="lede">The path above ran in this framework's own repository, on a real bug, with
-        nobody watching. Every number below comes from the ledger record that run wrote.</p>
+      <p class="eyebrow">Part four</p>
+      <h2>This already happened, unattended, in this framework's own repository</h2>
+      <p class="lede">Not the worked example above — a real chain, with nobody watching. Every
+        number is from the record the run wrote.</p>
     </div>
 
-    <div class="term" style="margin-top:34px">
-      <div class="term-bar"><span class="dot on"></span><b>lockstep-history:records/fix-from-ticket-33334652697-…json</b></div>
+    <div class="proof" style="margin-top:32px">
+      <div><b>#109</b><span>an issue filed by an earlier run that failed, not by a person</span></div>
+      <div><b>$9.62</b><span>one unattended fix, inside a ceiling set in advance</span></div>
+      <div><b>#112</b><span>the pull request it opened: +55 / −5, merged</span></div>
+      <div><b>2</b><span>files written — the fix, and a test to stop it coming back</span></div>
+    </div>
+
+    <div class="term" style="margin-top:30px;max-width:820px">
+      <div class="term-bar"><span class="dot on"></span><b>lockstep-history:records/fix-from-ticket-…json</b></div>
 <pre>workflow   <span class="w">fix/from-ticket</span>          args      {"ticket": "<span class="w">#109</span>"}
 status     <span class="g">succeeded</span>                 decided   true
 approval   {"attended": <span class="y">false</span>, "by": "<span class="y">labeled:tpouyer</span>"}
@@ -353,27 +689,20 @@ tokens     3,013,462                 cost_usd  <span class="y">9.62445</span>
 findings
   fix.staged                  wrote src/in_lockstep/ai/builtins.py
   fix.staged                  wrote tests/…/test_sandbox_fixtures_use_sys_executable.py
-  <span class="y">injection.exfil_token_names</span> ×11     <span class="d">the scanner reading the ticket text</span>
+  <span class="y">injection.exfil_token_names</span> ×11     <span class="d">the scanner, reading the ticket text</span>
   <span class="y">injection.ignore_previous</span>   ×5
   fix.unstructured            <span class="d">the final message was not the JSON the schema asked
                               for; its text was kept as the summary. The staged change
                               came through the tool boundary and is unaffected.</span></pre>
-      <p class="term-cap">Note the last line. The model returned something malformed, the framework
-        noticed, kept what was usable, and said which part it could not parse — rather than throwing
-        away a correct change or pretending the reply was fine.</p>
+      <p class="term-cap">Read the last line. The model returned something malformed, the framework
+        noticed, kept what was usable, and said which part it could not parse — rather than
+        discarding a correct change or pretending the reply was fine.</p>
     </div>
 
-    <div class="proof" style="margin-top:30px">
-      <div><b>#109</b><span>an issue labelled <code>ai-generated</code> — filed by an earlier failed run, not by a person</span></div>
-      <div><b>$9.62</b><span>one unattended fix run, inside a declared ceiling</span></div>
-      <div><b>#112</b><span>the pull request it produced: +55 / −5, merged</span></div>
-      <div><b>2</b><span>files staged — the fix, and a regression test for it</span></div>
-    </div>
-
-    <div class="col" style="margin-top:34px">
-      <p>Read that chain again, because it is the whole product in one line: <strong>a run failed
-        and filed its own bug report; a person put a label on it; an agent fixed it and opened a
-        pull request; a person merged it.</strong> Neither side of that did the other's job.</p>
+    <div class="col" style="margin-top:32px">
+      <p>A run failed and filed its own bug report. A person put a label on it. An agent fixed it
+        and opened a pull request. A person merged it. <strong>Neither side did the other's
+        job</strong> — which is where the name comes from.</p>
       <a class="backlink" href="index.html">← Back to the overview</a>
     </div>
   </section>
@@ -382,8 +711,11 @@ findings
 <footer>
   <div class="wrap">
     <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
-    <p>Terminal output on this page is captured verbatim from the commands shown, run against the
-      <code>tempo</code> sample project and this framework's own repository.</p>
+    <p>Terminal output is captured verbatim from the commands shown. Every message attributed to the
+      framework — the gate's verdict, the comment it leaves on an issue, the pull request body, the
+      review table — is quoted from its source. The review findings and the run record are from real
+      runs in this repository. <code>acme/build-actions</code> and its issue are a worked example
+      wrapped around them.</p>
   </div>
 </footer>
 
