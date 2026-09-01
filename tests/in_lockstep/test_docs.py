@@ -154,6 +154,13 @@ def test_a_runs_row_names_something_that_ships() -> None:
             and _importable("in_lockstep.platform.scm", "GitHubScm")
             and hasattr(__import__("in_lockstep.platform.scm", fromlist=["GitHubScm"]).GitHubScm, "remarks")
         ),
+        # Both halves again: the harvester, and the recorder keeping the request it needs. A
+        # harvester over cassettes that store only a hash would be a claim that raises on every
+        # recording a repository actually has.
+        "Harvesting history into cases": (
+            _importable("in_lockstep.evaluation.harvest", "harvest")
+            and "_request_record" in _source("in_lockstep.ai.replay")
+        ),
     }
     for row, status in rows.items():
         if status == "runs" and row in proof:
@@ -182,6 +189,14 @@ def test_a_planned_row_has_not_quietly_shipped() -> None:
         assert InRepoLedger().scope == "local" and GitLedger().scope == "local", (
             "a SHARED-scope store ships — flip the matrix row"
         )
+
+
+def _source(module: str) -> str:
+    """A module's source, for a claim whose proof is a behaviour rather than a name."""
+    import importlib
+    import inspect
+
+    return inspect.getsource(importlib.import_module(module))
 
 
 def _importable(module: str, attr: str) -> bool:

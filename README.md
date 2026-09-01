@@ -33,6 +33,7 @@ still advertises.
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
+| Harvesting history into cases | runs | `eval harvest` turns a recording into cases — real requests, real answers, expectations derived from them; `eval run` replays and settles them for nothing. Measures everything below the model; re-testing a changed prompt is a real call |
 | Review conversation as context | runs | what a reviewer said on the pull request — the thread, the verdicts, the notes pinned to a line — reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
@@ -105,7 +106,8 @@ in-lockstep report --by model    # what the ledger adds up to — and whether it
 in-lockstep history --explain X  # one run's record, every field, in words
 in-lockstep egress-manifest      # the hosts a run may dial, for the proxy that enforces it
 in-lockstep gate --actor ...     # is this person allowed to fire a chat-ops trigger
-in-lockstep eval report          # the corpus, offline
+in-lockstep eval harvest --from  # turn a recording into cases you can measure against
+in-lockstep eval run             # replay them and settle them, for nothing
 in-lockstep apply --from-artifact # the privileged half of the two-job trampoline
 ```
 

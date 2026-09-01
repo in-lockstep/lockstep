@@ -822,13 +822,127 @@ def ls_cmd() -> None:
         click.echo(f"  {entry.id}  ({entry.module})")
 
 
+def _eval_harvest(from_cassette: str, into: str, family: str) -> None:
+    """Cassette -> cases. Refuses rather than inventing when the recording cannot back one."""
+    from pathlib import Path as _Path
+
+    from .evaluation.harvest import NothingToHarvest, harvest
+
+    if not from_cassette:
+        raise click.ClickException(
+            "pass --from <cassette>. Recordings live in .lockstep/cassettes/ after a `--record` run."
+        )
+    try:
+        found = harvest(_Path(from_cassette), family=family)
+    except NothingToHarvest as e:
+        raise click.ClickException(str(e)) from None
+
+    from .privileged import sink
+
+    target = _Path(into)
+    for item in found:
+        path = item.path_in(target)
+        # Through the sink like every other write: a harvested case carries a whole request and a
+        # whole answer, which is the pair most likely to have a credential in it.
+        sink.write_json(path, item.case)
+        click.echo(f"wrote  {path}")
+    click.echo("")
+    click.echo(f"{len(found)} case(s) from {from_cassette}")
+    click.echo(
+        "Expectations were derived from the answers that were recorded, so these pass against "
+        "those answers today. What they buy is a baseline: run them after changing anything below "
+        "the model and they settle; change the prompt and measuring it is a real call."
+    )
+
+
+def _eval_run(cases: list[Any]) -> None:
+    """Replay each case's recorded request and grade the answer that comes back.
+
+    Free, and it measures the harness rather than the prompt — the request replayed is the one that
+    was recorded, so what is exercised is everything between a model's reply and an outcome. A case
+    with no recorded request cannot be settled this way, and is reported as such rather than
+    counted against anything.
+    """
+    from .ai.replay import Cassette, key_of, request_from
+    from .evaluation import summarize
+    from .evaluation.cases import grade
+
+    tapes: dict[str, Any] = {}
+    results: list[dict[str, Any]] = []
+    unplayable: list[tuple[str, str]] = []
+
+    for case in cases:
+        request = (case.input or {}).get("request")
+        where = str((case.harvested or {}).get("cassette", ""))
+        if not isinstance(request, dict) or not where:
+            unplayable.append((case.name, "no recorded request — written by hand, not harvested"))
+            continue
+        if where not in tapes:
+            tapes[where] = Cassette.load(where)
+        output = tapes[where].replay_provider(request_from(request))
+        if output is None:
+            unplayable.append(
+                (case.name, f"its recording is gone from {where} ({key_of(request_from(request))[:12]})")
+            )
+            continue
+        results.append(grade(case, _as_answer(output.content)))
+
+    for name, why in unplayable:
+        click.echo(f"  {'SKIP':<7} {name}  — {why}")
+    for result in results:
+        settled = result["deterministic_passed"]
+        mark = "ok" if settled else ("FAIL" if settled is False else "—")
+        click.echo(f"  {mark:<7} {result['case']}")
+        for check in result["checks"]:
+            if not check["passed"]:
+                click.echo(f"          {check['check']}: {check['detail']}")
+
+    summary = summarize(results)
+    click.echo("")
+    click.echo(f"cases        {summary['total']} replayed, {len(unplayable)} skipped")
+    click.echo(f"decided      {summary['decided']}")
+    click.echo(f"outstanding  {summary['outstanding']}  (need a judge)")
+    rate = summary["pass_rate"]
+    click.echo(f"pass rate    {'n/a — nothing decided' if rate is None else f'{rate:.0%}'}")
+    click.echo("")
+    click.echo("Replayed, so nothing was spent and no prompt was tested. This settles the path")
+    click.echo("between a model's reply and an outcome; changing the prompt is a real model call.")
+    if any(r["deterministic_passed"] is False for r in results):
+        raise SystemExit(EXIT_FAILED)
+
+
+def _as_answer(content: str) -> Any:
+    """A recorded reply as the grader should see it: parsed when it is JSON, text when it is not."""
+    import json as _json
+
+    try:
+        return _json.loads(content)
+    except ValueError:
+        return content
+
+
 @main.command(name="eval")
 @click.argument("action", default="report")
 @click.option("--corpus", default="", help="Where the cases live.")
-def eval_cmd(action: str, corpus: str) -> None:
-    """Run the eval corpus offline.
+@click.option(
+    "--from",
+    "from_cassette",
+    default="",
+    type=click.Path(),
+    help="harvest: the recording to build cases from.",
+)
+@click.option(
+    "--into", default="", type=click.Path(), help="harvest: where to write them. Defaults to --corpus."
+)
+@click.option("--family", default="", help="harvest: a directory to group the new cases under.")
+def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: str) -> None:
+    """Build cases from recorded runs, and settle them offline.
 
-    Deterministic expectations are settled here. Rubric expectations are reported as OUTSTANDING,
+    `harvest` turns a cassette into cases — real requests that were really sent, with expectations
+    derived from the answers that really came back. `run` replays each one and grades it. `report`
+    says what the corpus asks for without running anything, and `list` names the cases.
+
+    Deterministic expectations are settled. Rubric expectations are reported as OUTSTANDING,
     because a judge has not answered them — recording them as passes would put a perfect score
     computed from no evidence into a baseline that is then compared against forever.
     """
@@ -838,6 +952,11 @@ def eval_cmd(action: str, corpus: str) -> None:
     from .evaluation.cases import grade
 
     root = _Path(corpus) if corpus else _Path(__file__).parent / "corpus"
+
+    if action == "harvest":
+        _eval_harvest(from_cassette, into or str(root), family)
+        return
+
     if not root.exists():
         raise click.ClickException(f"no corpus at {root}")
 
@@ -847,6 +966,10 @@ def eval_cmd(action: str, corpus: str) -> None:
             rubric = " (rubric)" if case.rubric else ""
             click.echo(f"{case.name}{rubric}")
         click.echo(f"\n{len(cases)} case(s)")
+        return
+
+    if action == "run":
+        _eval_run(cases)
         return
 
     # No model runs here: this reports what the corpus asks of one.

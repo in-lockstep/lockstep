@@ -44,6 +44,10 @@ class Case:
     input: dict[str, Any] = field(default_factory=dict)
     expect: dict[str, Any] = field(default_factory=dict)
     path: Path | None = None
+    #: Where a harvested case came from — the cassette, the key, the model. Never graded, and
+    #: kept out of `input` on purpose: a grader that could see it might come to depend on it, and
+    #: then a case would mean something different depending on how it was made.
+    harvested: dict[str, Any] = field(default_factory=dict)
 
     @property
     def rubric(self) -> Rubric | None:
@@ -69,11 +73,13 @@ class Case:
             )
         if not expect:
             raise CaseError(f"{name}: a case with no expectation cannot fail")
+        harvested = raw.get("harvested") or {}
         return cls(
             name=name,
             input=raw.get("input") or {},
             expect=expect,
             path=path,
+            harvested=harvested if isinstance(harvested, dict) else {},
         )
 
     @classmethod
