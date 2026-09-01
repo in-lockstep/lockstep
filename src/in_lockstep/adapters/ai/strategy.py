@@ -23,6 +23,7 @@ from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
 from ...privileged.egress import EgressRefused
+from .instructions import house_rules
 
 #: Enough turns to look before writing, which is the whole premise of an implementing session. The
 #: ceiling is not free and the cost is not linear: every turn re-sends the accumulated history, so
@@ -119,6 +120,16 @@ class AiStrategy:
     _session_cls: ClassVar[Any]
     _shipped_prompts: ClassVar[Mapping[str, Any]]
     _layers_factory: ClassVar[Any]
+
+    #: Whether this verb reads the repository's `AGENTS.md`/`CLAUDE.md` into its system prompt.
+    #:
+    #: OFF here and set on the implement and fix bases only, because the answer is about the
+    #: checkout rather than the verb's usefulness. Those two run from `issue_comment` and `issues`
+    #: events, which GitHub executes on the default branch — the reviewed file. Review runs from
+    #: `pull_request`, where the checkout is the merge ref, so its `CLAUDE.md` is whatever the
+    #: contributor put there. Opting in per verb keeps that distinction greppable; a global switch
+    #: would make it one edit away from feeding attacker-authored text into a system prompt.
+    reads_house_rules: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -218,13 +229,18 @@ class AiStrategy:
         workspace = Workspace(root=Path(root), guard=self.guard, workflow_id=self.workflow_id)
         tools, runner = read_write_execute(workspace, commands=self.commands)
         factory = self.invoker_factory or routed_invoker(type(self).verb)
+        layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
+        if type(self).reads_house_rules:
+            # Appended, so the repository's conventions land after the framework's guardrails
+            # and the strategy body. `plus` is the only spelling that guarantees that ordering.
+            layers = layers.plus(contexts=house_rules(root))
         return type(self)._session_cls(
             invoker=factory(ctx),
             workspace=workspace,
             tools=tools,
             run_tool=runner,
             policy=self.policy,
-            layers=self.layers if self.layers is not None else type(self)._layers_factory(),
+            layers=layers,
             prompts=self.prompts,
             curator=self.curator,
             guard=self.guard,

@@ -579,6 +579,18 @@ runs the suite again to confirm green. A test that passes before anything was wr
 with `tdd.not_red`; an implementation that leaves the test failing comes back `tdd.not_green` rather
 than opening a pull request that does not work.
 
+A green suite has two causes and they are reported separately. If the staged files collected no
+tests at all, the reason is `tdd.test_not_collected` rather than `tdd.not_red`, and the finding
+names the files and points at `python_files`, `python_classes`, `python_functions` and `testpaths`.
+The distinction is worth a second pytest run: a suite that stayed green because it never executed
+the new test looks exactly like one where the test passed, and a model told its test passed will
+rewrite the assertions instead of the class name. Both of this repository's own early `/implement`
+runs failed this way.
+
+Relatedly, the writing verbs read the repository's `AGENTS.md`, `CLAUDE.md` and `.cursorrules` into
+their system prompt, after the framework guardrails. `review` deliberately does not: it runs over a
+`pull_request` checkout, where those files are contributor-authored.
+
 This is where the `run_script` caveat above stops applying: oneshot's `run_script` sees the tree as
 it was, but tdd's verdict comes from `ctx.do(Test(root=…))` against the *materialised*
 change, so it reflects the code as proposed. Because it needs to run the suite, `TDD`

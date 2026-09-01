@@ -188,6 +188,83 @@ def test_tdd_fails_when_the_staged_test_does_not_go_red(repo: Path) -> None:
     outcome = _run(provider, repo)
     assert outcome.status is Status.FAILED
     assert outcome.reason == "tdd.not_red"
+    assert "did not fail against the current code" in outcome.findings[0].message
+
+
+@pytest.fixture
+def repo_with_conventions(repo: Path) -> Path:
+    """The shape that cost $52 across two runs: a repository whose pytest configuration decides
+    which names are collected, and an existing suite so the run is not the empty-suite case."""
+
+    def run(*args: str) -> None:
+        subprocess.run(args, cwd=repo, capture_output=True, check=True)
+
+    (repo / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\npython_classes = ["*Tests"]\ntestpaths = ["tests"]\n'
+    )
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_existing.py").write_text("def test_existing():\n    assert True\n")
+    run("git", "add", "-A")
+    run("git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "conventions")
+    return repo
+
+
+def test_a_test_the_suite_never_collected_is_not_reported_as_a_test_that_passed(
+    repo_with_conventions: Path,
+) -> None:
+    """The $31 failure, reproduced.
+
+    `python_classes = ["*Tests"]` means a `Test*` class is collected by nothing. The suite runs,
+    stays green because it executed no new test, and the old code reported "the staged test did not
+    fail against the current code" — which sends a model to rewrite assertions that were never run.
+    Run 33566828825 executed 1581 tests, exactly the number a clean tree runs, and said the staged
+    test had passed.
+
+    The reason id is separate because a caller keying on `tdd.not_red` should not silently start
+    matching a different failure.
+    """
+    provider = Scripted(
+        [
+            _call(
+                "write_file",
+                path="tests/test_feature.py",
+                contents="class TestFeature:\n    def test_it(self):\n        assert False\n",
+            ),
+            _done("staged a failing test"),
+        ]
+    )
+    outcome = _run(provider, repo_with_conventions)
+
+    assert outcome.status is Status.FAILED
+    assert outcome.reason == "tdd.test_not_collected"
+
+    message = outcome.findings[0].message
+    assert "tests/test_feature.py" in message, "name the file, so the next attempt knows where"
+    assert "python_classes" in message, "name the setting that decides collection"
+    assert "did not execute your test" in message
+
+
+def test_a_staged_test_that_really_passes_is_still_reported_as_not_red(
+    repo_with_conventions: Path,
+) -> None:
+    """The other side of the split, and the one that keeps it honest. A collected test that passes
+    is a different problem with a different fix, and calling it a collection failure would be a
+    confident wrong answer — worse than the vague one this replaced."""
+    provider = Scripted(
+        [
+            _call(
+                "write_file",
+                path="tests/test_feature.py",
+                contents="def test_it():\n    assert True\n",
+            ),
+            _done("staged a passing test"),
+        ]
+    )
+    outcome = _run(provider, repo_with_conventions)
+
+    assert outcome.status is Status.FAILED
+    assert outcome.reason == "tdd.not_red"
+    assert "python_classes" not in outcome.findings[0].message
 
 
 def test_tdd_fails_when_the_implementation_leaves_the_test_red(repo: Path) -> None:

@@ -63,6 +63,18 @@ class Approval:
         return {"by": self.by, "attended": self.attended}
 
 
+#: The standing-instruction files a repository writes for whatever agent is working in it, in the
+#: order they are read. Declared once so detection and reading cannot drift apart — they did: the
+#: names were a literal inside `Lockstep.detect` and the only consumer was `ls`, so the framework
+#: reported finding a CLAUDE.md and then never opened it.
+#:
+#: All present files are read, not the first match. `AGENTS.md` is the vendor-neutral spelling that
+#: opencode and other clients read, `CLAUDE.md` is Claude Code's, and a repository that supports
+#: both keeps both — often with different content. Picking a winner would silently drop half of
+#: what somebody wrote down.
+AGENT_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", ".cursorrules")
+
+
 @dataclass(frozen=True)
 class RepoFacts:
     """What detection found in the tree, so the drop-in defaults fit the repository instead of
@@ -87,7 +99,7 @@ class RepoFacts:
     ci_host: str = ""  # "github" | "gitlab" | ""
     readme: bool = False
     docs: bool = False
-    agent_instructions: tuple[str, ...] = ()  # e.g. ("CLAUDE.md", "AGENTS.md")
+    agent_instructions: tuple[str, ...] = ()  # names only; the contents are read per run
 
     def summary(self) -> tuple[str, ...]:
         """A human-readable list of what was found, for `ls` and `doctor`."""
