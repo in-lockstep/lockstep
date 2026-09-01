@@ -47,9 +47,15 @@ jobs:
     # `/implement`, which includes every comment explaining why not to run it. There is no `trim`
     # in GitHub's expression language, so a leading space means nothing happens — the failure
     # worth having, since the other direction is a command fired by a comment that was not one.
-    if: >-
-      !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/implement')
+    # A pull-request comment fires `issue_comment` too, and is deliberately NOT filtered out: a
+    # reviewer decides another attempt is needed while reading the pull request, and sending them
+    # elsewhere to say so is how a tool teaches people it is awkward. Which ticket the run is about
+    # is resolved in Python (`ticket_for`) from the number passed through below — GitHub draws
+    # issue and pull-request numbers from one sequence, so a number is one or the other and never
+    # both. `concurrency` groups on that raw number, so a round asked for on the issue and one
+    # asked for on the pull request can overlap; they cannot collide, because every run gets its
+    # own branch.
+    if: startsWith(github.event.comment.body, '/implement')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

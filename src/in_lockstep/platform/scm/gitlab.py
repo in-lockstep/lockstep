@@ -38,6 +38,8 @@ from .base import (
     change_body,
     conventional_subject,
     is_run_branch_for,
+    ticket_from_branch,
+    trailers_from,
 )
 
 #: One sticky comment lives among at most this many pages of notes. A bound, so a misbehaving
@@ -95,6 +97,11 @@ def server_from_remote(url: str) -> str:
 
 
 class GitLabScm:
+    #: GitLab numbers issues and merge requests in SEPARATE sequences, so iid 7 can be both an
+    #: issue and a merge request. A comment's number therefore cannot say which kind of thing it
+    #: was left on, and `ticket_for` must not guess — see its own note.
+    shared_numbering = False
+
     def __init__(
         self,
         root: str | Path = ".",
@@ -309,6 +316,23 @@ class GitLabScm:
             )
             for row in mine[:MAX_CHANGES_READ]
         )
+
+    async def ticket_of(self, number: int) -> str | None:
+        """The ticket a merge request was opened for. `None` when `number` is not one at all.
+
+        GitLab numbers merge requests and issues in SEPARATE sequences, so unlike GitHub an iid
+        can be both. That is not this method's problem to solve and it must not pretend otherwise:
+        it answers only "is there a merge request with this iid, and what work does it record".
+        The caller resolving a comment knows which kind of thing the comment was left on.
+        """
+        try:
+            data = self._request("GET", f"/projects/{self._project_path()}/merge_requests/{number}")
+        except RuntimeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        ticket = trailers_from(str(data.get("description") or "")).get("Ticket", "")
+        return ticket or ticket_from_branch(str(data.get("source_branch") or ""))
 
     async def remarks(self, number: int) -> tuple[Remark, ...]:
         """What people said on one merge request: the thread, and the notes pinned to a diff line.

@@ -631,3 +631,24 @@ def test_gitlab_remarks_strip_the_frameworks_own_marker(tmp_path: Path) -> None:
 
     (remark,) = asyncio.run(_scm(root, handler).remarks(1))
     assert remark.body == "findings"
+
+
+def test_gitlab_ticket_of_reads_the_record_it_wrote(tmp_path: Path) -> None:
+    """Parity with the GitHub adapter, and the one place the two hosts genuinely differ is
+    declared rather than papered over: `shared_numbering` is False here, so `ticket_for` will not
+    resolve an iid at all — an issue and a merge request can both be number 7."""
+    from in_lockstep.platform.scm.base import change_body
+
+    root = _repo(tmp_path)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "description": change_body("x", {"Ticket": "#218"}),
+                "source_branch": "in-lockstep/fix/218/r1",
+            },
+        )
+
+    assert asyncio.run(_scm(root, handler).ticket_of(7)) == "#218"
+    assert GitLabScm.shared_numbering is False

@@ -1,4 +1,9 @@
-"""Everything a person has already said about a piece of work, from both places they say it.
+"""Where a person typed, what work that is about, and what has already been said about it.
+
+Two questions, one seam, because they are the same question asked from either end. A comment lands
+somewhere — an issue, or the pull request that answers it — and a run has to know both which piece
+of work it belongs to (`ticket_for`) and what people have already said about that work
+(`with_review`).
 
 A developer arguing with an AI on their laptop does it in one window. The same argument, moved
 into a repository, is split across two: the ticket, where the work was asked for, and the pull
@@ -38,6 +43,61 @@ from .scm.base import MAX_REMARKS
 #: What the caller prints. Always something: "none" and "unavailable" are different facts and both
 #: are worth a line in a run's output.
 Note = str
+
+
+class NoTicketForChange(Exception):
+    """A run was asked for on a change request that names no work.
+
+    Its own exception rather than a falsy return, because there is exactly one right thing to do
+    about it and it is not "carry on with a number that is not a ticket". A pull request somebody
+    opened by hand has no ticket to read, no ticket to comment back on, and no ticket to open the
+    next attempt against; continuing would fail two steps later with an error about a missing
+    issue, which is a true sentence about the wrong thing.
+    """
+
+
+async def ticket_for(key: str, scm: Any) -> tuple[str, Note]:
+    """The ticket a run is about, given the number the comment was left on.
+
+    A person asks for another attempt in one of two places, and both are reasonable. On the issue,
+    which is where the work was requested. Or on the pull request, which is where they are standing
+    when they decide another attempt is needed — and making them go somewhere else to say so is how
+    a tool teaches people it is awkward.
+
+    Both arrive here as a number, and on GitHub that is enough: issue and pull-request numbers come
+    from one sequence, so #219 is one or the other and never both. Where a host numbers them
+    separately, the number cannot say which kind of thing it named, and this declines to guess
+    rather than resolving a merge request's ticket onto an issue that happens to share its iid.
+
+    Returns the resolved key and a line for the caller to print. Raises `NoTicketForChange` when
+    the number IS a change request and records no ticket.
+    """
+    if not key or not hasattr(scm, "ticket_of"):
+        return key, f"ticket    {key or '(none)'}"
+    if not getattr(scm, "shared_numbering", False):
+        # Not a shortcoming to route around: on a host with two sequences the caller knows what it
+        # was handed and this does not, so guessing would be the bug.
+        return key, f"ticket    {key} (this host numbers issues and change requests separately)"
+
+    number = key.lstrip("#")
+    if not number.isdigit():
+        # A tracker key like `PROJ-123` is never a pull request number. Nothing to resolve.
+        return key, f"ticket    {key}"
+
+    try:
+        found = await scm.ticket_of(int(number))
+    except (RuntimeError, OSError) as e:
+        return key, f"ticket    {key} (could not check whether it is a change request: {_short(e)})"
+
+    if found is None:
+        return key, f"ticket    {key}"
+    if not found:
+        raise NoTicketForChange(
+            f"{key} is a change request that records no ticket — in-lockstep did not open it, or "
+            f"its description no longer carries the block that names the work. Ask on the issue "
+            f"instead, where the run can read the request and comment its answer back."
+        )
+    return found, f"ticket    {found} (resolved from change request {key})"
 
 
 async def with_review(ticket: Any, scm: Any) -> tuple[Any, Note]:

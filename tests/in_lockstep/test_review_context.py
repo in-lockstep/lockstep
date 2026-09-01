@@ -17,8 +17,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from in_lockstep.ai.context import Provenance
-from in_lockstep.platform.conversation import with_review
+from in_lockstep.platform.conversation import NoTicketForChange, ticket_for, with_review
 from in_lockstep.platform.scm import GitHubScm, GitLocal
 from in_lockstep.platform.scm.base import MAX_REMARKS, Remark, branch_for, is_run_branch_for
 from in_lockstep.platform.tickets import Ticket
@@ -313,3 +315,126 @@ def test_the_cap_drops_the_oldest_remarks() -> None:
     assert len(reviewed.review) == MAX_REMARKS
     assert f"note {MAX_REMARKS + 9}" in reviewed.review[-1]
     assert "note 0" not in " ".join(reviewed.review)
+
+
+# -- which ticket a comment is about ---------------------------------------------------------
+#
+# The other half of "reply where you are standing". A reviewer decides another attempt is needed
+# while reading the pull request, so the trigger fires there too — and a pull-request comment
+# carries the pull request's number, not the ticket's. Something has to resolve one to the other,
+# and this is that something, in Python where it has these.
+
+
+def test_a_change_request_records_the_ticket_it_was_opened_for() -> None:
+    """`change_body` writes the block; `trailers_from` reads it. One format, two directions."""
+    from in_lockstep.platform.scm.base import change_body, trailers_from
+
+    body = change_body("prose a human reads", {"In-Lockstep-Run": "r1", "Ticket": "#218"})
+    assert trailers_from(body) == {"In-Lockstep-Run": "r1", "Ticket": "#218"}
+    assert trailers_from("just prose") == {}
+    assert trailers_from("<details><summary>in-lockstep</summary>\n\n```json\n{oops\n```") == {}
+
+
+def test_the_branch_fallback_declines_rather_than_guessing() -> None:
+    """`in-lockstep/<workflow>/<ticket>/<run>` cannot be read positionally, because the workflow
+    segment may contain a slash of its own. The shape guard can only fail to resolve a real
+    ticket — never resolve the wrong one."""
+    from in_lockstep.platform.scm.base import ticket_from_branch
+
+    assert ticket_from_branch(branch_for("fix", "run-9", ticket="#218")) == "218"
+    assert ticket_from_branch(branch_for("fix", "run-9", ticket="PROJ-4")) == "PROJ-4"
+    assert ticket_from_branch("in-lockstep/fix/from-ticket/run-9") == "", "a workflow, not a ticket"
+    assert ticket_from_branch(branch_for("fix", "run-9")) == "", "no ticket segment at all"
+    assert ticket_from_branch("dana/my-branch") == ""
+
+
+def test_ticket_of_prefers_the_record_and_falls_back_to_the_branch(tmp_path: Path) -> None:
+    from in_lockstep.platform.scm.base import change_body
+
+    scm = GitHubScm(tmp_path)
+    scm._gh_json = lambda *a: {  # type: ignore[method-assign]
+        "body": change_body("x", {"Ticket": "#218"}),
+        "headRefName": branch_for("fix", "r", ticket="#999"),
+    }
+    assert _run(scm.ticket_of(219)) == "#218", "the record wins over the branch"
+
+    scm._gh_json = lambda *a: {  # type: ignore[method-assign]
+        "body": "somebody rewrote the description",
+        "headRefName": branch_for("fix", "r", ticket="#218"),
+    }
+    assert _run(scm.ticket_of(219)) == "218", "the branch is the fallback for an edited body"
+
+
+def test_ticket_of_says_not_a_change_request_rather_than_erroring(tmp_path: Path) -> None:
+    """`gh pr view` on an issue number fails, and that failure IS the answer."""
+
+    def boom(*a: str):
+        raise RuntimeError("gh pr view 218 failed: no pull requests found")
+
+    scm = GitHubScm(tmp_path)
+    scm._gh_json = boom  # type: ignore[method-assign]
+    assert _run(scm.ticket_of(218)) is None
+
+
+class _Numbered:
+    shared_numbering = True
+
+    def __init__(self, answer) -> None:
+        self.answer = answer
+
+    async def ticket_of(self, number: int):
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+def test_a_comment_on_the_issue_resolves_to_itself() -> None:
+    key, note = _run(ticket_for("#218", _Numbered(None)))
+    assert key == "#218"
+    assert note == "ticket    #218"
+
+
+def test_gate_review_2_a_comment_on_the_pull_request_resolves_to_the_same_ticket() -> None:
+    """GATE-REVIEW-2. Reply where you are standing, and the run is about the work you meant."""
+    key, note = _run(ticket_for("#219", _Numbered("#218")))
+    assert key == "#218"
+    assert "resolved from change request #219" in note
+
+
+def test_gate_review_2_a_hand_opened_pull_request_is_refused_by_name() -> None:
+    """GATE-REVIEW-2's other half.
+
+    Not "could not read ticket #219" two steps later, which is a true sentence about the wrong
+    thing.
+
+    A pull request somebody opened by hand has no ticket to read, none to comment back on, and
+    none to open the next attempt against. Saying so, once, at the point it is known, is the only
+    useful thing available.
+    """
+    with pytest.raises(NoTicketForChange, match="records no ticket"):
+        _run(ticket_for("#219", _Numbered("")))
+
+
+def test_a_host_with_two_number_sequences_is_not_guessed_at() -> None:
+    """GitLab numbers issues and merge requests separately, so iid 7 can be both. A number cannot
+    say which kind of thing it named, and resolving anyway would be the bug rather than the fix."""
+
+    class _Separate(_Numbered):
+        shared_numbering = False
+
+    key, note = _run(ticket_for("#7", _Separate("#218")))
+    assert key == "#7"
+    assert "numbers issues and change requests separately" in note
+
+
+def test_a_tracker_key_is_never_a_pull_request_number() -> None:
+    key, note = _run(ticket_for("PROJ-123", _Numbered("#218")))
+    assert key == "PROJ-123" and note == "ticket    PROJ-123"
+
+
+def test_a_host_that_cannot_be_asked_leaves_the_key_alone() -> None:
+    key, _ = _run(ticket_for("#218", object()))
+    assert key == "#218"
+
+    key, note = _run(ticket_for("#219", _Numbered(RuntimeError("gh: rate limited"))))
+    assert key == "#219" and "could not check" in note

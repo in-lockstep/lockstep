@@ -75,6 +75,51 @@ def change_body(body: str, trailers: dict[str, str]) -> str:
     return f"{body}\n\n<details><summary>in-lockstep</summary>\n\n```json\n{block}\n```\n\n</details>"
 
 
+#: A ticket key as a branch segment can hold it: digits (`218`), or a tracker key (`PROJ-123`).
+#: Used only to decide whether a branch segment IS a ticket, never to validate one — `branch_for`
+#: accepts whatever a tracker calls a key and sanitises it.
+_LOOKS_LIKE_A_KEY = re.compile(r"^(?:\d+|[A-Za-z][A-Za-z0-9]*-\d+)$")
+
+
+def trailers_from(body: str) -> dict[str, str]:
+    """Read back the machine-readable block `change_body` wrote, or an empty dict.
+
+    The pair to `change_body`, and here for the same reason `branch_key` is its own function: two
+    spellings of one format is one of them drifting. A change request records the ticket it was
+    opened for, and that record is what lets a comment left on the pull request resolve to the
+    work it is about instead of to the pull request's own number.
+    """
+    import json
+
+    match = re.search(r"<details><summary>in-lockstep</summary>.*?```json\s*(\{.*?\})\s*```", body, re.DOTALL)
+    if not match:
+        return {}
+    try:
+        data = json.loads(match.group(1))
+    except ValueError:
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def ticket_from_branch(branch: str) -> str:
+    """The ticket key `branch_for` put in a run branch, or empty when it did not put one there.
+
+    A fallback for a change request whose body somebody edited, and deliberately a cautious one.
+    `in-lockstep/<workflow>/<ticket>/<run-id>` cannot be read positionally on its own, because the
+    workflow segment may itself contain a slash — `in-lockstep/fix/from-ticket/run-9` and
+    `in-lockstep/fix/218/run-9` have the same shape and only one of them names a ticket.
+
+    So the candidate has to LOOK like a key. That is a heuristic and it is the honest kind: it can
+    only decline to resolve a real ticket, never resolve the wrong one, because a workflow segment
+    shaped like `218` or `PROJ-1` would have to be a deliberate collision with a key format.
+    """
+    parts = branch.split("/")
+    if len(parts) < 4 or parts[0] != RUN_BRANCH_PREFIX:
+        return ""
+    candidate = parts[-2]
+    return candidate if _LOOKS_LIKE_A_KEY.match(candidate) else ""
+
+
 class DirectPushRefused(Exception):
     """A write was attempted outside the run-scoped namespace."""
 

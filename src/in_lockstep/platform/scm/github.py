@@ -22,10 +22,18 @@ from .base import (
     change_body,
     conventional_subject,
     is_run_branch_for,
+    ticket_from_branch,
+    trailers_from,
 )
 
 
 class GitHubScm:
+    #: GitHub draws issue and pull-request numbers from ONE sequence, so a number is one or the
+    #: other and never both. That is what lets a comment be resolved to the work it is about from
+    #: its number alone, and it is a fact about the host rather than about this adapter — hence a
+    #: flag a caller can read instead of a `isinstance` check it would have to keep updated.
+    shared_numbering = True
+
     def __init__(
         self,
         root: str | Path = ".",
@@ -194,6 +202,32 @@ class GitHubScm:
             )
             for r in mine[:MAX_CHANGES_READ]
         )
+
+    async def ticket_of(self, number: int) -> str | None:
+        """The ticket a change request was opened for. `None` when `number` is not one at all.
+
+        Three answers, because a caller has three different things to do about them. `None` means
+        the number is an issue — GitHub draws issue and pull-request numbers from one sequence, so
+        it is one or the other and never both, which is what makes resolving a comment's location
+        unambiguous. A key means the pull request records the work it belongs to. An empty string
+        means it IS a pull request and names no ticket — somebody's hand-opened branch — and the
+        caller has to say so rather than treat the pull request's own number as a ticket and fail
+        two steps later with a confusing error.
+
+        The recorded trailers first, the branch second. The trailers are what `open_change` wrote
+        and are exact; the branch is the fallback for a body somebody edited, and declines rather
+        than guesses when its shape is ambiguous.
+        """
+        try:
+            raw = self._gh_json("pr", "view", str(number), "--json", "body,headRefName")
+        except RuntimeError:
+            # `gh pr view` on an issue number fails, which is the answer rather than an error.
+            return None
+        data = raw if isinstance(raw, dict) else {}
+        if not data:
+            return None
+        ticket = trailers_from(str(data.get("body") or "")).get("Ticket", "")
+        return ticket or ticket_from_branch(str(data.get("headRefName") or ""))
 
     async def remarks(self, number: int) -> tuple[Remark, ...]:
         """Everything said on one pull request: the thread, the review verdicts, the line notes.

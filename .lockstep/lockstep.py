@@ -29,7 +29,7 @@ from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import fix_body, implement_body
-from in_lockstep.platform.conversation import with_review
+from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -287,7 +287,9 @@ async def implement_from_ticket(
     # `via=tdd` says at the execution site what serves this request — the same adapter the module
     # binds above, named here so the reader of this line knows Implement means red-then-green
     # without scrolling to the binding.
-    source, note = await with_review(await tickets.get(ticket), scm)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
     print(note)
     outcome = await ctx.do(Implement(ticket=source), via=tdd)
 
@@ -313,6 +315,11 @@ async def implement_propose(
     from another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set
     before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between
+    # jobs: both halves are handed the number the comment was left on, and a fact both can
+    # derive is not one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 
@@ -389,7 +396,9 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
     `with_review` gathers what people said on the open pull request this workflow opened last time,
     so replying to a reviewer is running the verb again rather than explaining yourself twice.
     """
-    source, note = await with_review(await tickets.get(ticket), scm)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
     print(note)
     outcome = await ctx.do(Fix(ticket=source), via=fix)
 
@@ -419,6 +428,11 @@ async def fix_propose(
     another job, so none of it is trusted: `Scm.open_change` runs `ChangeGuard` over the set before
     it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between
+    # jobs: both halves are handed the number the comment was left on, and a fact both can
+    # derive is not one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 

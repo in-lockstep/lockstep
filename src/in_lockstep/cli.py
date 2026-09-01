@@ -4081,6 +4081,19 @@ _SCAFFOLD_IMPLEMENT_TRAMPOLINE = """\
 # no credential. The gate authorizes the ASKER, not the issue — the issue body stays untrusted
 # input to a model, which is why writes are staged and arrive as a pull request a person reads.
 #
+# GitHub fires `issue_comment` for pull-request comments too, and this deliberately does not filter
+# them out. A reviewer decides another attempt is needed while reading the pull request, and making
+# them go somewhere else to say so is how a tool teaches people it is awkward. Which ticket the run
+# is about is then a question, and it is answered in Python (`ticket_for`) rather than in YAML: the
+# number is passed through unchanged and the workflow resolves it, because GitHub draws issue and
+# pull-request numbers from one sequence so a number is one or the other and never both.
+#
+# One consequence, named rather than hidden: `concurrency` groups on that raw number, so a round
+# asked for on the issue and a round asked for on the pull request are in different groups and can
+# overlap. They cannot collide — every run gets its own branch, which is the design's whole
+# concurrency story — so this is wasted spend at worst, and the alternative is resolving the ticket
+# in YAML, which is the thing this file exists not to do.
+#
 # Pinned by version and by SHA for the same reason as lockstep.yml: an unpinned install runs
 # whatever the registry serves next, beside the provider key.
 name: implement
@@ -4101,9 +4114,7 @@ jobs:
   gate:
     # `startsWith` rather than `contains`: `contains` would fire on every comment that merely
     # MENTIONS `/implement`, which includes every comment explaining why not to run it.
-    if: >-
-      !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/implement')
+    if: startsWith(github.event.comment.body, '/implement')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -4244,7 +4255,7 @@ from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
-from in_lockstep.platform.conversation import with_review
+from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
@@ -4294,7 +4305,9 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
     would have had with an AI on a laptop happens on the pull request instead, where the rest of
     the team can read it afterwards.
     """
-    source, note = await with_review(await tickets.get(ticket), scm)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
     print(note)
     outcome = await ctx.do(Fix(ticket=source))
 
@@ -4315,6 +4328,11 @@ async def fix_propose(
     another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the set before
     it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between jobs:
+    # both halves are handed the number the comment was left on, and a fact both can derive is not
+    # one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
 
     if not changeset.changes:
@@ -4376,9 +4394,7 @@ concurrency:
 
 jobs:
   gate:
-    if: >-
-      !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/fix')
+    if: startsWith(github.event.comment.body, '/fix')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -4612,7 +4628,7 @@ from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
-from in_lockstep.platform.conversation import with_review
+from in_lockstep.platform.conversation import ticket_for, with_review
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import Scm
@@ -4694,7 +4710,9 @@ async def implement_from_ticket(
     ticket, untrusted like the ticket body. A reviewer objecting on line 29 becomes context the
     next attempt can act on, instead of a sentence nothing ever read.
     """
-    source, note = await with_review(await tickets.get(ticket), scm)
+    key, where = await ticket_for(ticket, scm)
+    print(where)
+    source, note = await with_review(await tickets.get(key), scm)
     print(note)
     outcome = await ctx.do(Implement(ticket=source))
 
@@ -4718,6 +4736,11 @@ async def implement_propose(
     came from another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the
     set before it writes a byte, and refuses any branch outside the run-scoped prefix.
     """
+    # The same resolution the unprivileged half did, run again rather than threaded between jobs:
+    # both halves are handed the number the comment was left on, and a fact both can derive is not
+    # one to carry across an artifact boundary where it would arrive untrusted.
+    ticket, where = await ticket_for(ticket, scm)
+    print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
 
