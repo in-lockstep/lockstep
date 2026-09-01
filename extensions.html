@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extensions — in-lockstep</title>
+<meta name="description" content="Share the prompts and approaches your team works out. Publish a pack like any package, find one in a plain-text catalog, check what is really in it — and nothing changes until you say so.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <header class="masthead">
+      <a class="mark" href="index.html"><i>▮</i> in-lockstep<b>Extensions</b></a>
+      <nav class="site">
+        <a href="index.html">Overview</a>
+        <a href="walkthrough.html">Walkthrough</a>
+        <a href="governance.html">Governance</a>
+        <a href="extensions.html" aria-current="page">Extensions</a>
+      </nav>
+      <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
+    </header>
+    <nav class="onpage">
+      <span>this page</span>
+      <a href="#make">Making one</a>
+      <a href="#find">Finding one</a>
+      <a href="#check">Checking it</a>
+      <a href="#why">Why a text file</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <section style="padding-top:44px;padding-bottom:36px">
+    <div class="col">
+      <p class="eyebrow">Extensions</p>
+      <h1>Somebody already solved it. <em>Borrow</em> their work.</h1>
+      <p class="lede">A team writes a really good security review for Django projects. Another team
+        works out how to make the AI handle their database migrations properly. Right now that work
+        stays where it was written.</p>
+      <p class="lede" style="font-size:18px;margin-top:18px">A <strong>pack</strong> is that work,
+        wrapped up so other people can use it. You publish one the way you publish any Python
+        package. Other people find it, check what is in it, try it for free, and switch it on — and
+        nothing happens to their project until they say so.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="make">
+    <div class="col">
+      <p class="eyebrow">Part one</p>
+      <h2>Making one</h2>
+      <p class="lede">A pack is a normal package with one extra line. The example below is real —
+        it ships in this project, and every command on this page was run against it.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">Step 1</span>
+        <h3>Put your work in a folder</h3>
+        <p class="tight">This one is prose — a security review that knows about the company's
+          database layer, and a rule about migrations. Just markdown files:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>the whole package</b></div>
+<pre>acme-review-prompts/
+├── pyproject.toml
+└── acme_review_prompts/
+    ├── __init__.py          <span class="d">a docstring, and nothing else</span>
+    ├── pack.toml            <span class="d">what kind of thing this is, in one line</span>
+    ├── prompts/
+    │   ├── security.md      <span class="d">the review itself</span>
+    │   └── house.md         <span class="d">the rule about migrations</span>
+    └── corpus/              <span class="d">example cases, so people can measure it</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 2</span>
+        <h3>Say what it is</h3>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>pack.toml</b></div>
+<pre>[pack]
+kind = <span class="w">"prompt"</span>
+summary = <span class="w">"A security lens that knows about our ORM, and a guardrail about migrations"</span></pre>
+          <p class="term-cap">That is the whole file, and it is deliberately almost empty. A pack
+            cannot set your budget or pick your model here, because the moment a downloaded file can
+            do that, downloading something has become a risk.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Step 3</span>
+        <h3>Add the line that makes it findable, and publish</h3>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>pyproject.toml</b></div>
+<pre>[project]
+name = <span class="w">"acme-review-prompts"</span>
+version = <span class="w">"1.0.0"</span>
+
+[project.entry-points.<span class="w">"in_lockstep.extensions"</span>]
+acme-review-prompts = <span class="w">"acme_review_prompts"</span></pre>
+          <p class="term-cap">Then publish it wherever you already publish packages — your company's
+            internal index, or the public one. There is nothing else to sign up for.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="find">
+    <div class="col">
+      <p class="eyebrow">Part two</p>
+      <h2>Finding one</h2>
+      <p class="lede">A catalog is a plain text file in a git repository listing packs. That is the
+        entire marketplace — no service, no accounts, no ranking anyone has to argue about.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step human">
+        <span class="tag">Step 1</span>
+        <h3>Point at a catalog</h3>
+        <p class="tight">Your company publishes one for internal packs. Public ones work the same
+          way. Adding it is one command, and it writes a file you commit like anything else:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>registering a catalog</b></div>
+<pre><span class="p">$</span> in-lockstep market add acme https://raw.githubusercontent.com/acme/index/main/index.toml
+
+registered  acme  https://raw.githubusercontent.com/acme/index/main/index.toml
+wrote       .lockstep/market.toml  — commit it</pre>
+          <p class="term-cap">It must be an <code>https</code> address. A catalog says which code to
+            install, so it is fetched over something nobody can tamper with along the way.</p>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">Step 2</span>
+        <h3>Search it</h3>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>in-lockstep search</b></div>
+<pre><span class="p">$</span> in-lockstep search security
+
+acme  <span class="d">(states entry criteria)</span>
+  acme-review-prompts   prompt   A security lens that knows about our ORM, and a
+                                 guardrail about migrations
+                                 <span class="y">&lt;- 1 criterion/criteria unmet</span></pre>
+          <p class="term-cap">Real output. Look at that last line: this catalog publishes standards
+            its entries are supposed to meet, and it is telling you that this pack does not meet one
+            of them. A listing you can check beats a listing you have to trust.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="check">
+    <div class="col">
+      <p class="eyebrow">Part three</p>
+      <h2>Checking it before you trust it</h2>
+      <p class="claim">Installing a pack changes <em>nothing</em> about how your project runs.</p>
+      <p class="lede">This is the difference between a pack and your company's rules. Rules apply
+        themselves the moment they are installed, because that is what rules are for. A pack from
+        someone you do not know only ever <em>offers</em>. Until you write a line saying to use it,
+        it sits there doing nothing.</p>
+    </div>
+
+    <div class="spine" style="margin-top:44px">
+
+      <div class="step">
+        <span class="tag">What is in it?</span>
+        <h3>One command reads it and tells you</h3>
+        <p class="tight">Not what the author claimed — what the files actually contain. This is
+          worked out on your machine, from the pack you downloaded:</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>in-lockstep pack describe</b></div>
+<pre><span class="p">$</span> in-lockstep pack describe acme-review-prompts
+
+pack          acme-review-prompts  1.0.0
+kind          prompt
+summary       A security lens that knows about our ORM, and a guardrail about migrations
+
+imports       <span class="g">none</span>  <span class="d">(nothing importable — every module is a docstring,
+                    so installing it runs nothing)</span>
+
+offers
+  <span class="d">(nothing importable to offer — resources only)</span>
+
+evidence
+  corpus      2 case(s) — 2 with checks a machine settles, 2 needing a judge
+  cassettes   0  — nothing replays offline
+
+digest        sha256:03208834909cadc0bbdde0dcebfb4fb7eac04d0bcbd3a0f4e19c4725c67dfb45</pre>
+          <p class="term-cap"><strong>“imports: none”</strong> is the line to read first. It means
+            this pack ships no runnable code at all — it is words and example cases. The tool worked
+            that out by reading every file, not by believing a label.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="tag">Is it any good?</span>
+        <h3>Measure it against your own cases, for nothing</h3>
+        <p class="tight">If a pack ships recordings of real AI answers, you can replay them against
+          your own examples and score it without spending a penny or handing over a key. This one
+          does not, and the tool says so rather than pretending:</p>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><b>in-lockstep pack try</b></div>
+<pre><span class="p">$</span> in-lockstep pack try acme-review-prompts
+
+acme-review-prompts ships no cassette, so there is nothing to replay
+and nothing to measure.
+
+That is a fact about the pack rather than a fault in it: somebody has to
+spend real money once, recording what a model actually said, before
+everyone after them can measure it for nothing.</pre>
+        </div>
+      </div>
+
+      <div class="step human">
+        <span class="tag">Accepting it</span>
+        <h3>You write down what you agreed to</h3>
+        <p class="tight">When you accept a pack, the tool re-reads it, records exactly what it found,
+          and hands you the lines to paste. If the pack later contains more than you accepted, that
+          shows up:</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>in-lockstep add — the end of the output</b></div>
+<pre>recorded      .lockstep/packs/acme-review-prompts.json
+              commit it: the record IS the acknowledgement.
+
+paste into .lockstep/lockstep.py:
+
+    from in_lockstep.packs import pack
+
+    acme_review_prompts = pack(<span class="w">'acme-review-prompts'</span>)
+
+<span class="y">until you do, nothing changes: `in-lockstep ls` will not mention
+acme-review-prompts.</span></pre>
+          <p class="term-cap">That last line is the whole safety model in one sentence, printed by
+            the tool itself. Installing offered. Pasting is what accepts.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="why">
+    <div class="col">
+      <p class="eyebrow">Part four</p>
+      <h2>Why a plain text file, and not a website</h2>
+      <p class="lede">Because the questions that actually matter cannot be answered by a website
+        anyway.</p>
+    </div>
+
+    <div class="pair">
+      <div class="can">
+        <h5>The catalog answers</h5>
+        <ul>
+          <li>What exists, and roughly what it is for</li>
+          <li>Where to get it, and who published it</li>
+          <li>What the author says it contains</li>
+        </ul>
+      </div>
+      <div class="cant">
+        <h5>Your machine answers</h5>
+        <ul>
+          <li>What is <em>really</em> in it — read from the files you downloaded</li>
+          <li>Whether it matches what the catalog claimed</li>
+          <li>Whether it is any good on <em>your</em> examples</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <p>So the catalog can be a file in git, reviewed by pull request like everything else, and a
+        company can run its own in an afternoon. There is nothing to host, nothing to log into, and
+        no popularity ranking to game — because the moment you accept a pack, everything worth
+        knowing is worked out again on your side.</p>
+      <p class="tight">And a pack never gets to change how a run behaves by being popular, or by
+        being installed. A project using a pack runs exactly as it would if you had copied the same
+        files in by hand — which is what stops any of this from becoming a way for a stranger's name
+        to end up steering your build.</p>
+    </div>
+
+    <div class="control"><b>Being straight about where this is:</b> the tools all work — publishing,
+      cataloguing, searching, checking, measuring, accepting. What does not exist yet is a big public
+      catalog with lots of packs in it. Today this is most useful <em>inside</em> a company, where
+      one team's good review prompt can reach the other forty.</div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="final">
+    <h2 style="max-width:24ch;margin-left:auto;margin-right:auto">Look at a real one before you
+      build yours.</h2>
+    <p class="lede mid" style="margin-bottom:26px">The pack, and the catalog listing it, both ship
+      in this project.</p>
+    <div class="install">
+<span class="p">$</span> in-lockstep pack ls<br>
+<span class="p">$</span> in-lockstep pack describe &lt;name&gt;
+    </div>
+    <p><a href="https://github.com/in-lockstep/lockstep/tree/main/examples/acme-review-prompts">The example pack</a> ·
+       <a href="https://github.com/in-lockstep/lockstep/tree/main/examples/lockstep-index">The example catalog</a> ·
+       <a href="governance.html">Company-wide rules</a></p>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>in-lockstep</strong> · Apache-2.0 · <a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a></p>
+    <p>Every command on this page was run against the example pack and catalog that ship in this
+      project, and the output is what came back.</p>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

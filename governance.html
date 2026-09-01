@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Governance — in-lockstep</title>
-<meta name="description" content="Publish your organisation's standards as a package. Installing it applies it. Teams can still change anything — and every change is a diff somebody can see.">
+<meta name="description" content="Write your engineering rules once as a small package. Teams install it and it works. They can be stricter, never looser — and every change they make is a diff somebody can see.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -17,16 +17,17 @@
         <a href="index.html">Overview</a>
         <a href="walkthrough.html">Walkthrough</a>
         <a href="governance.html" aria-current="page">Governance</a>
+        <a href="extensions.html">Extensions</a>
       </nav>
       <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
     </header>
     <nav class="onpage">
       <span>this page</span>
-      <a href="#ship">Ship a standard</a>
-      <a href="#arrive">How it arrives</a>
-      <a href="#bounds">What it can do</a>
-      <a href="#extend">Extending it</a>
-      <a href="#visible">Enforcement</a>
+      <a href="#ship">Write the rules</a>
+      <a href="#arrive">Getting them to teams</a>
+      <a href="#bounds">Stricter, never looser</a>
+      <a href="#extend">What teams still own</a>
+      <a href="#visible">How it's enforced</a>
     </nav>
   </div>
 </div>
@@ -35,15 +36,13 @@
   <section style="padding-top:44px;padding-bottom:36px">
     <div class="col">
       <p class="eyebrow">Governance</p>
-      <h1>Publish your standards. <em>Install</em> them. Watch them hold.</h1>
-      <p class="lede">Your organisation decides how AI is used in engineering — which guardrails,
-        which ceilings, which tools an agent may never touch. That decision has to reach two
-        hundred repositories, survive contact with two hundred teams, and still let those teams do
-        their jobs.</p>
-      <p class="lede" style="font-size:18px;margin-top:18px">in-lockstep does that as a Python
-        package. You publish it, teams depend on it, and installing it <em style="font-style:normal;color:var(--machine)">is</em>
-        applying it. What a team changes afterwards, they change in a pull request — which is the
-        part most governance tools get backwards.</p>
+      <h1>Write your rules once. <em>Every</em> team gets them.</h1>
+      <p class="lede">Somebody in your company has to decide how AI gets used in engineering. Which
+        rules it always follows. How much it may spend. What it is never allowed to touch.</p>
+      <p class="lede" style="font-size:18px;margin-top:18px">The hard part is not deciding. It is
+        making the decision reach two hundred teams, stay put, and still leave those teams free to
+        do their jobs. Here, your rules are a small Python package. Teams add it to their project
+        the way they add anything else, and it starts working.</p>
     </div>
   </section>
 
@@ -52,18 +51,18 @@
   <section id="ship">
     <div class="col">
       <p class="eyebrow">Part one</p>
-      <h2>A standard is one function and one line of metadata</h2>
-      <p class="lede">There is no console to configure, no policy language to learn, and nothing to
-        host. Your standards are a package your platform team maintains like any other library.</p>
+      <h2>Your rules are a small package</h2>
+      <p class="lede">Nothing to host, no console to set up, no new language to learn. If your team
+        can publish a library, you can publish your standards.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
 
       <div class="step">
-        <span class="tag">The package · 1 of 2</span>
-        <h3>The function</h3>
-        <p class="tight">One entry point, handed a small facade. This is the whole of Acme's
-          organisation-wide floor:</p>
+        <span class="tag">Step 1</span>
+        <h3>Write the rules</h3>
+        <p class="tight">One short function. This is all of Acme's — three rules that every
+          repository in the company will follow:</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>acme_lockstep/__init__.py</b></div>
 <pre><span class="d">from</span> in_lockstep <span class="d">import</span> Policy
@@ -81,15 +80,17 @@
             deny_tools=(<span class="y">"run_script"</span>,),
         )
     )</pre>
-          <p class="term-cap">That is a real file — it ships in this repository as
-            <code>examples/acme-standards</code>, and everything on this page was produced by
-            installing it.</p>
+          <p class="term-cap">A real file. It ships in this project as
+            <code>examples/acme-standards</code>, and everything else on this page came from
+            actually installing it.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">The package · 2 of 2</span>
-        <h3>The line that makes it discoverable</h3>
+        <span class="tag">Step 2</span>
+        <h3>Add the line that says “these are rules”</h3>
+        <p class="tight">An ordinary package description, plus one line telling lockstep where to
+          find your function:</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>pyproject.toml</b></div>
 <pre>[project]
@@ -99,10 +100,10 @@ dependencies = [<span class="w">"in-lockstep"</span>]
 
 [project.entry-points.<span class="w">"in_lockstep.standards"</span>]
 acme = <span class="w">"acme_lockstep:apply"</span></pre>
-          <p class="term-cap">The <strong>name</strong> on the left orders application when several
-            standards packages are installed. Organisation before team is
-            <code>00-acme</code> before <code>10-payments</code> — stated in the name, where
-            everyone can read it, rather than left to a dependency resolver nobody can.</p>
+          <p class="term-cap">If you publish more than one set of rules — the company's, then a
+            division's — the name decides which goes first. <code>00-acme</code> before
+            <code>10-payments</code>, so the order is something anyone can read rather than
+            something they have to work out.</p>
         </div>
       </div>
 
@@ -114,16 +115,15 @@ acme = <span class="w">"acme_lockstep:apply"</span></pre>
   <section id="arrive">
     <div class="col">
       <p class="eyebrow">Part two</p>
-      <h2>It arrives by being a dependency</h2>
-      <p class="claim">Installing it <em>is</em> applying it. There is no import to remember.</p>
-      <p class="lede">That is the whole distribution mechanism, and the reason for it is
-        arithmetic. At two hundred repositories, a convention that has to be hand-imported is drift
-        by another name: every repo that forgets the line runs without your standards, and nothing
-        anywhere says so.</p>
+      <h2>Teams get them by adding one line</h2>
+      <p class="claim">Installing it <em>is</em> turning it on.</p>
+      <p class="lede">There is no setup step afterwards and nothing for anyone to remember. That
+        matters more than it sounds: across two hundred repositories, a rule that each team has to
+        switch on is a rule most teams eventually do not have — and nobody finds out.</p>
     </div>
 
     <div class="term" style="margin-top:30px;max-width:780px">
-      <div class="term-bar"><span class="dot on"></span><b>a team repository's pyproject.toml</b></div>
+      <div class="term-bar"><span class="dot on"></span><b>a team's project file</b></div>
 <pre>dependencies = [
   <span class="w">"in-lockstep"</span>,
   <span class="y">"acme-lockstep"</span>,   <span class="d"># ← this line is the governance</span>
@@ -131,14 +131,13 @@ acme = <span class="w">"acme_lockstep:apply"</span></pre>
     </div>
 
     <div class="col">
-      <p>Nothing else changes in the repository. The team's own <code>lockstep.py</code> stays
-        theirs; the standards apply underneath it, before its first line runs.</p>
+      <p>That is the whole thing. Nothing else in the repository changes.</p>
     </div>
 
-    <div class="control"><b>And failure is loud.</b> A standards package that cannot be loaded
-      stops the run, by name — <em>“its standards are NOT in force, and running without standards
-      somebody installed is worse than stopping.”</em> There is deliberately no environment
-      variable that skips loading, because an env var is removal that nothing reviews.</div>
+    <div class="control"><b>And if it breaks, everything stops.</b> If your rules package fails to
+      load, the run halts and says so. It never quietly carries on without the rules somebody
+      installed — and there is no switch to skip them, because a switch is a way to turn off your
+      standards that leaves no trace.</div>
   </section>
 
   <hr class="rule">
@@ -146,45 +145,46 @@ acme = <span class="w">"acme_lockstep:apply"</span></pre>
   <section id="bounds">
     <div class="col">
       <p class="eyebrow">Part three</p>
-      <h2>What a standard can do — and what it cannot</h2>
-      <p class="lede">A standards package is handed a small facade rather than the repository's
-        lifecycle. It can raise the floor. It cannot take the building.</p>
+      <h2>Teams can be stricter. They cannot be looser.</h2>
+      <p class="lede">Your rules set a floor. A team can always stand higher than it — and there is
+        no way to dig underneath.</p>
     </div>
 
     <div class="pair">
       <div class="can">
-        <h5>It can</h5>
+        <h5>Your rules can</h5>
         <ul>
-          <li>Contribute policy: ceilings, denied tools, scan strictness, egress</li>
-          <li>Bind implementations — a cost table, a tracker adapter, a house strategy</li>
-          <li>Only ever <strong>tighten</strong> what a repository already had</li>
+          <li>Set limits — spend, how long the AI may work, what it may never touch</li>
+          <li>Swap in company defaults, like your own pricing table or issue tracker</li>
+          <li>Only ever make things <strong>stricter</strong> than they already were</li>
         </ul>
       </div>
       <div class="cant">
-        <h5>It cannot</h5>
+        <h5>Your rules cannot</h5>
         <ul>
-          <li>Touch the middleware chain, the budget, or the model routes</li>
-          <li>Bind at the repository's own tier — everything it binds is <code>plugin</code></li>
+          <li>Decide a team's budget, or which model they use</li>
+          <li>Outrank a team's own choice when they make one deliberately</li>
           <li>Loosen anything, in any direction, ever</li>
         </ul>
       </div>
     </div>
 
     <div class="col">
-      <h3 style="margin-top:36px">Tighten-only is not a promise. It is the merge.</h3>
-      <p class="tight">Guardrails are an append-only registry. There is no removal API, and the
-        merge has one direction: ceilings take the <em>lowest</em>, denied tools <em>union</em>,
-        the strictest scan setting wins, and a closed egress rule cannot be reopened.</p>
-      <p class="tight">So a team that wants more turns can ask, and it will not get them:</p>
+      <h3 style="margin-top:36px">Watch it hold</h3>
+      <p class="tight">Rules never replace each other — they combine, and only in one direction.
+        Two limits become the lower one. Two lists of banned tools become both lists. The stricter
+        setting always wins.</p>
+      <p class="tight">So a team can ask for more room, and simply not get it. Here is a team asking
+        to run the AI three times longer and to check its inputs less carefully:</p>
     </div>
 
     <div class="term" style="max-width:780px">
-      <div class="term-bar"><span class="dot on"></span><b>the payments team's lockstep.py, asking for more</b></div>
+      <div class="term-bar"><span class="dot on"></span><b>a team's own file, asking for more</b></div>
 <pre>lockstep.policy.contribute(
     Policy(name=<span class="w">"payments-house"</span>, <span class="r">max_turns=50</span>, <span class="r">scan_input="warn"</span>)
 )</pre>
-      <p class="term-cap">Legal, greppable, and completely ineffective in the direction they tried.
-        Here is what the run actually gets:</p>
+      <p class="term-cap">Perfectly legal to write, and it does nothing in the direction they
+        wanted. This is what the run actually gets:</p>
 <pre><span class="p">$</span> in-lockstep ls
 
 standards  <span class="d">(in_lockstep.standards entry points; applied before this module's own lines)</span>
@@ -198,16 +198,9 @@ policy
 <span class="p">$</span> <span class="d"># and the resolved ceiling the invoker is handed:</span>
 max_turns  = <span class="g">16</span>     <span class="d">← the org's, not the 50 that was asked for</span>
 scan_input = <span class="g">block</span>  <span class="d">← the org's, not the "warn" that was asked for</span></pre>
-      <p class="term-cap">Real output, from a repository with that exact file. The team's layer is
-        still listed, with its source — because a contribution that had no effect is worth seeing
-        too.</p>
+      <p class="term-cap">Real output. Notice their rule is still listed, and it says where it came
+        from — a rule that had no effect is worth being able to see.</p>
     </div>
-
-    <div class="control"><b>The one thing sealing cannot be:</b> bindings resolve
-      repository-above-organisation by construction, so a container cannot express “a standard the
-      repository may not replace”. That is why guardrails are a <em>stack</em> and not a slot. What
-      the stack preserves is the direction of travel; what it does not claim is impossibility.
-      Part five is about that distinction, because it is the whole design.</div>
   </section>
 
   <hr class="rule">
@@ -215,34 +208,33 @@ scan_input = <span class="g">block</span>  <span class="d">← the org's, not th
   <section id="extend">
     <div class="col">
       <p class="eyebrow">Part four</p>
-      <h2>Teams still own their repository</h2>
-      <p class="lede">A governance model everyone routes around is worse than none, because it is
-        the same outcome plus a false sense of coverage. So a team can change essentially anything
-        — and the standard still holds where it matters.</p>
+      <h2>Everything else is still theirs</h2>
+      <p class="lede">Rules that get in the way get worked around, and then you have the same
+        problem plus the belief that you solved it. So teams keep real freedom — inside the floor
+        you set.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
 
       <div class="step">
-        <span class="tag">Extend · bindings</span>
-        <h3>One line beats the organisation's</h3>
-        <p class="tight">Standards bind at <code>plugin</code> tier. The repository binds at
-          <code>explicit</code>, and explicit wins regardless of order. Overriding the org's choice
-          of anything is one line, in a file under review.</p>
+        <span class="tag">They can swap a piece out</span>
+        <h3>Their choice beats yours, when they make one on purpose</h3>
+        <p class="tight">Your package sets the default. A team that deliberately picks something
+          else writes one line, in a file that goes through review like any other code.</p>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><b>.lockstep/lockstep.py</b></div>
+          <div class="term-bar"><span class="dot"></span><b>the team's own file</b></div>
 <pre>lockstep.bind(CostTable, <span class="y">our_own_table</span>)   <span class="d"># beats plugin:acme's</span></pre>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Extend · prompts</span>
-        <h3>Add a rule of your own, and see exactly what it did</h3>
-        <p class="tight"><code>plus()</code> appends, so a house guardrail lands after the shipped
-          baseline instead of displacing it. And the framework will show you the change to what the
-          model is told, before anything runs and before anything is spent:</p>
+        <span class="tag">They can add their own rule</span>
+        <h3>And see exactly what it changed</h3>
+        <p class="tight">A team adds a rule of its own and it lands <em>after</em> the company's, so
+          yours stays underneath. Then the tool shows them precisely what they changed about the
+          instructions the AI gets — before anything runs, before anything is spent:</p>
         <div class="term lit">
-          <div class="term-bar"><span class="dot on"></span><b>what one house rule did to the prompt</b></div>
+          <div class="term-bar"><span class="dot on"></span><b>what one team rule did to the instructions</b></div>
 <pre><span class="p">$</span> in-lockstep show-prompt security --diff
 
 <span class="d">--- shipped/review/security</span>
@@ -252,8 +244,8 @@ scan_input = <span class="g">block</span>  <span class="d">← the org's, not th
 <span class="g">+Never approve a new `run:` step in a workflow without naming, in the</span>
 <span class="g">+finding, which secrets that step can read.</span></pre>
         </div>
-        <p class="tight">And <code>ls</code> keeps the score, so nobody has to remember which
-          repositories have customised which prompts:</p>
+        <p class="tight">And one command lists which repositories have added rules of their own, so
+          nobody has to keep track by hand:</p>
         <div class="term">
           <div class="term-bar"><span class="dot"></span><b>in-lockstep ls</b></div>
 <pre>prompts  <span class="d">(what each AI binding composes; * = not the shipped prompt)</span>
@@ -263,15 +255,14 @@ scan_input = <span class="g">block</span>  <span class="d">← the org's, not th
       </div>
 
       <div class="step">
-        <span class="tag">Extend · strategies and verbs</span>
-        <h3>Or replace how the work is done entirely</h3>
-        <p class="tight">A team that wants red-then-green instead of one pass writes
-          <code>lockstep.use(TDD)</code>. A team that wants its own approach writes a strategy class
-          and binds that. A team with a step nobody else has adds a verb.
-          <a href="walkthrough.html#loop">The walkthrough covers how a strategy works →</a></p>
-        <div class="control"><b>All of it still runs inside the standard.</b> A house strategy that
-          asks for forty turns under an organisation ceiling of sixteen gets sixteen. Extending the
-          framework does not extend its permissions.</div>
+        <span class="tag">They can change how the work is done</span>
+        <h3>Or replace the approach entirely</h3>
+        <p class="tight">A team that wants the AI to write a failing test first switches to that
+          approach in one line. A team with its own way of working writes it and uses that.
+          <a href="walkthrough.html#loop">The walkthrough shows how →</a></p>
+        <div class="control"><b>And it all still runs inside your rules.</b> A team's own approach
+          that asks for forty steps, under a company limit of sixteen, gets sixteen. Building on
+          the framework does not buy anyone extra permission.</div>
       </div>
 
     </div>
@@ -282,81 +273,80 @@ scan_input = <span class="g">block</span>  <span class="d">← the org's, not th
   <section id="visible">
     <div class="col">
       <p class="eyebrow">Part five</p>
-      <h2>Enforcement is visibility, not prevention</h2>
-      <p class="claim">A team <em>can</em> remove your standard. What they cannot do is remove it
-        quietly.</p>
-      <p class="lede">This is the design decision the rest of the page rests on, and it is worth
-        stating plainly rather than implying otherwise. in-lockstep does not try to make a
-        repository unable to change its own configuration. It makes every such change a diff, in a
-        pull request, in history, with a name on it.</p>
+      <h2>Nobody can change it quietly</h2>
+      <p class="claim">A team <em>can</em> remove your rules. What they cannot do is remove them
+        without anyone noticing.</p>
+      <p class="lede">This is the part worth saying out loud, because most tools imply the opposite.
+        in-lockstep does not try to make a repository unable to change its own setup. It makes every
+        such change show up as a normal code change — a pull request, with a diff, with a name on
+        it, kept in the history.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
 
       <div class="step human">
-        <span class="tag">Removing a standard</span>
-        <h3>Is deleting a dependency</h3>
+        <span class="tag">Dropping your rules</span>
+        <h3>Means deleting a line, in a pull request</h3>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><b>the pull request somebody has to open</b></div>
+          <div class="term-bar"><span class="dot"></span><b>what somebody would have to open</b></div>
 <pre><span class="d">--- a/pyproject.toml</span>
 <span class="d">+++ b/pyproject.toml</span>
  dependencies = [
    "in-lockstep",
 <span class="r">-  "acme-lockstep",</span>
  ]</pre>
-          <p class="term-cap">Reviewable, blameable, and searchable across every repository you
-            own. Compare that with the alternative most tools ship: a setting in a console, changed
-            by someone with the right role, leaving a log entry nobody reads.</p>
+          <p class="term-cap">Reviewable, attributable, and searchable across every repository you
+            own. Compare that with the usual alternative: a setting changed in a console by whoever
+            had the right permission, leaving a log entry nobody reads.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">Weakening a prompt</span>
-        <h3>Is a diff the framework prints for you</h3>
-        <p class="tight">Replacing the guardrail stack instead of appending to it is legal. It is
-          also <em>reported</em>, on every prompt a bound adapter composes, by a command that needs
-          no credential:</p>
+        <span class="tag">Weakening the AI's instructions</span>
+        <h3>Gets reported, by a command anyone can run</h3>
+        <p class="tight">A team can drop the company's rules out of the AI's instructions rather
+          than adding to them. That is allowed — and it is also announced, on every prompt, by a
+          command that needs no password and costs nothing:</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>in-lockstep doctor</b></div>
 <pre><span class="y">WARNING DOC171</span>  review/security does not open with the shipped guardrail baseline
                  Its stack starts guardrail:payments/actions. Constructing a fresh
                  PromptLayers replaces the baseline; `plus()` appends and keeps it.
                  `in-lockstep show-prompt review/security --diff` shows the change.</pre>
-          <p class="term-cap">A warning, never a refusal. Replacing the stack is a legitimate thing
-            to do — and it is exactly the thing a reader of somebody else's repository most needs
-            told.</p>
+          <p class="term-cap">A warning, never a refusal. Sometimes replacing the rules is the right
+            call — and it is exactly the thing somebody reading that repository later needs told.</p>
         </div>
       </div>
 
       <div class="step">
-        <span class="tag">The audit answer</span>
-        <h3>“What is actually in force, in this repository, right now?”</h3>
-        <p class="tight">Configuration as code has one honest disadvantage: you can read a YAML
-          file, but you cannot read a container. <code>ls</code> is the answer to it — one command,
-          no credential, no spend, printing what applied and where every layer came from.</p>
-        <div class="control"><b>And the config itself is loaded from a trusted ref.</b> A pull
-          request cannot supply the file that defines the controls constraining its own review.
-          That one is not visibility — that one is prevention, and it is where prevention actually
+        <span class="tag">The question an auditor asks</span>
+        <h3>“What is actually switched on in this repository, right now?”</h3>
+        <p class="tight">One command answers it — no password, no cost — listing every rule in force
+          and where each one came from. That is the answer to the one real drawback of keeping your
+          setup in code: you can read a config file at a glance, and you cannot read a program.</p>
+        <div class="control"><b>And the setup is read from a trusted place.</b> A pull request
+          cannot supply the file that sets the rules for reviewing that same pull request. That one
+          is not visibility — that one is genuinely prevented, and it is where prevention actually
           belongs.</div>
       </div>
 
       <div class="step human">
-        <span class="tag">Being straight about the limit</span>
-        <h3>Where hard enforcement really lives</h3>
+        <span class="tag">The honest limit</span>
+        <h3>Where real enforcement lives</h3>
         <div class="decision">
-          <h4>What a framework cannot do</h4>
-          <p>A middleware chain cannot bound code that never calls into it. Nothing installed
-            <em>inside</em> a repository can stop a determined owner of that repository — and any
-            tool that tells you otherwise is selling you the feeling rather than the control.</p>
-          <p>Enforcement that must survive a hostile repository owner lives in two places you
-            already have: <strong>required status checks</strong> on the branch, and
-            <strong>spend limits</strong> at the provider. in-lockstep is built to make those two
-            sufficient, by making everything else legible — so the check has something true to
-            check, and the bill has a name attached.</p>
+          <h4>What no framework can do</h4>
+          <p>Nothing installed <em>inside</em> a repository can stop somebody who owns that
+            repository. Any tool telling you otherwise is selling you the feeling of control rather
+            than the control.</p>
+          <p>Enforcement that has to survive a determined owner lives in two places you already
+            have: <strong>required checks</strong> before a branch can merge, and <strong>spending
+            limits</strong> at your AI provider. in-lockstep is built to make those two enough — by
+            making everything else easy to see, so the check has something real to check and the
+            bill has a name on it.</p>
         </div>
-        <p class="tight">That is the trade, stated once: you give up the fantasy of a configuration
-          nobody can change, and you get an organisation where every change to it is a diff you can
-          find, read and revert.</p>
+        <p class="tight">That is the trade, in one sentence: you give up the fantasy of a setup
+          nobody can change, and you get a company where every change to it is a diff you can find,
+          read, and undo.</p>
       </div>
 
     </div>
@@ -365,17 +355,17 @@ scan_input = <span class="g">block</span>  <span class="d">← the org's, not th
   <hr class="rule">
 
   <section class="final">
-    <h2 style="max-width:22ch;margin-left:auto;margin-right:auto">One package. Two hundred
-      repositories. Every change visible.</h2>
-    <p class="lede mid" style="margin-bottom:26px">Start with the worked example — it is a real
-      package in the repository, and it is thirty lines.</p>
+    <h2 style="max-width:22ch;margin-left:auto;margin-right:auto">One package. Every repository.
+      Every change visible.</h2>
+    <p class="lede mid" style="margin-bottom:26px">Start from the worked example — it is a real
+      package in this project, and it is about thirty lines.</p>
     <div class="install">
 <span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
 <span class="p">$</span> in-lockstep ls
     </div>
     <p><a href="https://github.com/in-lockstep/lockstep/tree/main/examples/acme-standards">examples/acme-standards</a> ·
-       <a href="walkthrough.html">See a change go through</a> ·
-       <a href="index.html">Back to the overview</a></p>
+       <a href="extensions.html">Sharing extensions</a> ·
+       <a href="walkthrough.html">See a change go through</a></p>
   </section>
 </div>
 
