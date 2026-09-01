@@ -5,6 +5,7 @@
   "head": "47e7a59d",
   "aspect": "security",
   "recorded": "a real Claude Sonnet 4.6 call against the real merged diff, not an authored stand-in",
-  "note": "A cassette is keyed on the whole composed prompt, which embeds the model id, the range and the diff. Replaying the fixture therefore has to reproduce all of them, which is why they are recorded here rather than inferred. Note what this does and does not mean: a recording is portable across provider IMPLEMENTATIONS, because it sits at the LLMInput/LLMOutput seam rather than at HTTP \u2014 but not across model ids, because the id is part of the request it replays.",
-  "model": "anthropic:claude-sonnet-4-6"
+  "note": "A cassette is keyed on the whole composed prompt, which embeds the model id, the range and the diff. Replaying the fixture therefore has to reproduce all of them, which is why they are recorded here rather than inferred. Note what this does and does not mean: a recording is portable across provider IMPLEMENTATIONS, because it sits at the LLMInput/LLMOutput seam rather than at HTTP — but not across model ids, because the id is part of the request it replays. It is also not portable across edits to the prompt itself, which is why request.json ships the request this response was recorded against: a reader with no API key cannot re-record, so the demo replays what was sent and says how it differs from what this build composes, rather than failing on a key miss it cannot act on.",
+  "model": "anthropic:claude-sonnet-4-6",
+  "request": "request.json, verbatim. Hashing it reproduces this cassette's only key."
 }

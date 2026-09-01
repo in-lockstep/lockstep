@@ -216,12 +216,13 @@ def _shipped_fixture() -> dict[str, Any] | None:
 
     try:
         root = resources.files("in_lockstep.cassettes")
-        cassette, diff, manifest = (
+        cassette, diff, manifest, recorded = (
             root / "review-security.json",
             root / "example.diff",
             root / "fixture.json",
+            root / "request.json",
         )
-        if not all(f.is_file() for f in (cassette, diff, manifest)):
+        if not all(f.is_file() for f in (cassette, diff, manifest, recorded)):
             return None
         meta = _json.loads(manifest.read_text())
         with resources.as_file(cassette) as path:
@@ -235,9 +236,53 @@ def _shipped_fixture() -> dict[str, Any] | None:
                 "aspect": meta["aspect"],
                 "model": meta["model"],
                 "label": meta["label"],
+                # The request the response was recorded against, shipped verbatim. A cassette
+                # keeps only a hash of its request, which is enough to look one up and not enough
+                # to explain a miss — so a prompt edit turned this fixture from evidence into an
+                # unexplained crash for the one user who cannot re-record.
+                "request": _json.loads(recorded.read_text())["request"],
             }
     except (ModuleNotFoundError, FileNotFoundError, KeyError):  # pragma: no cover - packaging
         return None
+
+
+def _say_drift(composed: Any, recorded: Any) -> None:
+    """Say that the shipped recording was made against a different prompt than this run composed.
+
+    The demo prints a real model's real findings, and a reader will take them for what this
+    repository would get today. That is true only while the two prompts agree. Naming the parts
+    that differ costs one line and is the whole difference between a recording and a stand-in —
+    the drift is usually the framework's own prompts moving, but a repository that has added a
+    guardrail sees it too, and for that reader the note is the only honest explanation available.
+    """
+
+    def messages(request: Any) -> Any:
+        return [(m.role, m.content) for m in request.messages]
+
+    differs = [
+        part
+        for part, mine, theirs in (
+            ("the system prompt", composed.system, recorded.system),
+            ("the messages", messages(composed), messages(recorded)),
+            ("the tools", [t.name for t in composed.tools], [t.name for t in recorded.tools]),
+            ("max_tokens", composed.max_tokens, recorded.max_tokens),
+            ("temperature", composed.temperature, recorded.temperature),
+        )
+        if mine != theirs
+    ]
+    import textwrap
+
+    click.echo(
+        textwrap.fill(
+            f"{' and '.join(differs)} moved since this fixture was recorded, so what follows is "
+            f"the model's answer to the prompt as recorded — not to the one composed just now, "
+            f"which `in-lockstep show-prompt review/security` prints. Re-recording is a real "
+            f"model call, which is the thing a reader trying this offline does not have.",
+            width=92,
+            initial_indent="  note: ",
+            subsequent_indent="        ",
+        )
+    )
 
 
 def _load_changeset(artifact: str) -> Any:
@@ -1336,7 +1381,14 @@ def review_cmd(
         table_for,
     )
     from .ai.invoker import AiInvoker, InvokePolicy
-    from .ai.replay import Cassette, DryRunProvider, RecordingProvider, ReplayProvider
+    from .ai.replay import (
+        Cassette,
+        DryRunProvider,
+        FixtureProvider,
+        RecordingProvider,
+        ReplayProvider,
+        request_from,
+    )
     from .core.spend import Budget
     from .privileged.egress import EgressPolicy
 
@@ -1375,6 +1427,9 @@ def review_cmd(
         supplied = patch.read_text()
 
     fixture = _shipped_fixture() if offline else None
+    # Set only on the demo path, and it is what selects the forgiving replay below. Supplying a
+    # range means the user is replaying something of their own, and gets strict keying.
+    recorded_request: Any = None
     if fixture is not None:
         cassette = cassette or str(fixture["cassette"])
         source = click.get_current_context().get_parameter_source
@@ -1386,6 +1441,7 @@ def review_cmd(
             # the id is part of the request being replayed. A repository's own route would
             # otherwise make the shipped fixture unreplayable for the person who most needs it.
             model = str(fixture["model"])
+            recorded_request = fixture["request"]
             click.echo(f"replaying the shipped fixture: {fixture['label']}")
         else:
             demo_diff = ""
@@ -1408,6 +1464,8 @@ def review_cmd(
         provider: LLMProvider
         if dry_run:
             provider = DryRunProvider()
+        elif recorded_request is not None:
+            provider = FixtureProvider(tape, request_from(recorded_request), on_drift=_say_drift)
         elif offline:
             provider = ReplayProvider(tape)
         else:

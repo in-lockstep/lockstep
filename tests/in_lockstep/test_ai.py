@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -20,14 +22,21 @@ from in_lockstep.ai.context import (
 from in_lockstep.ai.injection import scan
 from in_lockstep.ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
-from in_lockstep.ai.replay import Cassette, RecordingProvider, ReplayProvider
+from in_lockstep.ai.replay import (
+    Cassette,
+    FixtureProvider,
+    RecordingProvider,
+    ReplayProvider,
+    key_of,
+    request_from,
+)
 from in_lockstep.ai.retry import RetryPolicy
 from in_lockstep.ai.structured import SchemaError, parse, repair_truncated, validate
 from in_lockstep.ai.tools import AmbiguousTool, Tool, ToolSet, undeclared_is_dangerous
 from in_lockstep.core.spend import Budget, Spend, Unpriced
 from in_lockstep.core.verbs import Capability
 from in_lockstep.llm.interface import LLMProvider, RateLimitError, TransientError
-from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall
+from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall, ToolDefinition
 from in_lockstep.privileged.egress import EgressMode, EgressPolicy, EgressRefused
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
@@ -494,6 +503,80 @@ def test_replay_refuses_to_silently_call_out(tmp_path: Path) -> None:
     empty = ReplayProvider(Cassette(path=tmp_path / "none.json"))
     with pytest.raises(LookupError, match="no cassette entry"):
         asyncio.run(empty.generate(LLMInput(model="m", messages=[])))
+
+
+def test_the_shipped_fixtures_replay_serves_the_recorded_request_and_says_so(tmp_path: Path) -> None:
+    """`FixtureProvider` degrades where `ReplayProvider` must not, and never quietly.
+
+    Strict keying is right for a user replaying their own recording: a miss means the prompt moved,
+    and answering the new question with the old answer would be a fabricated result. The shipped
+    demo is the one case where that trade inverts — its reader has recorded nothing, has no key,
+    and meets a crash caused by somebody else editing a guardrail. So the recorded request ships
+    too, and a miss replays *that*, with the difference stated.
+    """
+    tape = Cassette(path=tmp_path / "c.json")
+    recorded = LLMInput(model="m", system="as recorded", messages=[Message(role="user", content="hi")])
+    inner = Stub(replies=[LLMOutput(content="the recorded answer", usage=TokenUsage(3, 4))])
+    asyncio.run(RecordingProvider(inner, tape, Redact(SecretRegistry())).generate(recorded))
+
+    said: list[tuple[str, str]] = []
+    provider = FixtureProvider(
+        tape, recorded, on_drift=lambda mine, theirs: said.append((mine.system, theirs.system))
+    )
+
+    exact = asyncio.run(provider.generate(recorded))
+    assert exact.content == "the recorded answer"
+    assert said == [], "an exact hit is not drift and must not be announced as one"
+
+    moved = replace(recorded, system="composed today")
+    drifted = asyncio.run(provider.generate(moved))
+    assert drifted.content == "the recorded answer"
+    assert said == [("composed today", "as recorded")], "the substitution has to be visible"
+
+
+def test_a_fixture_whose_request_does_not_match_its_cassette_is_a_packaging_defect(tmp_path: Path) -> None:
+    """The failure that stays a failure. Serving *something* here would be the fabrication."""
+    provider = FixtureProvider(
+        Cassette(path=tmp_path / "none.json"),
+        LLMInput(model="m", messages=[]),
+        on_drift=lambda mine, theirs: pytest.fail("nothing was replayed, so nothing drifted"),
+    )
+    with pytest.raises(LookupError, match="defect in the fixture itself"):
+        asyncio.run(provider.generate(LLMInput(model="m", system="anything", messages=[])))
+
+
+def test_a_recorded_request_survives_the_round_trip_through_json() -> None:
+    """Its hash is its identity, so a field dropped in serialization is a fixture that misses."""
+    request = LLMInput(
+        model="m",
+        system="s",
+        messages=[
+            Message(role="user", content="hi", tool_calls=[ToolCall(id="1", name="t", input={"a": 1})])
+        ],
+        max_tokens=4096,
+        tools=[ToolDefinition(name="t", description="d", parameters={"type": "object"})],
+        temperature=0.0,
+    )
+    payload = {
+        "model": request.model,
+        "system": request.system,
+        "messages": [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_calls": [{"id": c.id, "name": c.name, "input": c.input} for c in m.tool_calls],
+                "tool_call_id": m.tool_call_id,
+                "tool_name": m.tool_name,
+            }
+            for m in request.messages
+        ],
+        "max_tokens": request.max_tokens,
+        "tools": [
+            {"name": t.name, "description": t.description, "parameters": t.parameters} for t in request.tools
+        ],
+        "temperature": request.temperature,
+    }
+    assert key_of(request_from(json.loads(json.dumps(payload)))) == key_of(request)
 
 
 def test_cassettes_record_tool_io_too(tmp_path: Path) -> None:
