@@ -12,8 +12,9 @@
 # WHAT BOUNDS THE LOOP. `lockstep.max_attempts` (3): each escalation carries an `ai-attempt-N`
 # label, `escalate` reads the highest N off the source issue, and at the cap it comments asking for
 # a human instead of filing anything — nothing new gets the `ai-generated` label, so this trigger
-# stops firing on its own. Beside that: `--budget` per run, the per-issue concurrency group, and
-# the fact that every exit from the loop is a pull request a person still has to merge.
+# stops firing on its own. Beside that: the per-run ceiling `lockstep.py` declares, the per-issue
+# concurrency group, and the fact that every exit from the loop is a pull request a person still
+# has to merge.
 name: ai-generated
 
 on:
@@ -61,11 +62,14 @@ jobs:
       # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when this
       # framework opened the follow-up itself. The grant is the write-gated label, not a comment,
       # and recording which it was is the point of the flag.
+      # NO `--budget`, for the reason spelled out in `implement.yml`: the flag replaces the
+      # module's ceiling rather than merging, so a literal here becomes an invisible second place
+      # to raise. This loop is the one that most needs its ceiling to be the one somebody reads —
+      # it can fire without a person in the room.
       - run: |
           uv run in-lockstep run fix/from-ticket \
             --arg ticket="#${ISSUE}" \
-            --approved-by "labeled:${LABELER}" \
-            --budget 10.00
+            --approved-by "labeled:${LABELER}"
         env:
           ISSUE: ${{ github.event.issue.number }}
           LABELER: ${{ github.event.sender.login }}

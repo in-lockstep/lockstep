@@ -88,6 +88,43 @@ def test_the_run_budget_leaves_room_for_more_than_one_invocation(lockstep) -> No
         )
 
 
+#: The one workflow allowed to state a ceiling on the command line. `lockstep.yml` runs `review`,
+#: which is the workflow an adopter gets before they have written a lockstep.py at all — so a flag
+#: there is the ceiling rather than a second copy of one.
+BUDGET_ON_THE_COMMAND_LINE = {"lockstep.yml"}
+
+
+def test_no_workflow_shadows_the_ceiling_the_lifecycle_declares() -> None:
+    """`run --budget` REPLACES `lockstep.budget` rather than merging with it.
+
+    That is right at a terminal — a number somebody typed is a number somebody meant — and it is a
+    trap in CI, where nobody types anything and the literal simply outranks the module for good.
+    Run 33564844360 is the demonstration: `lockstep.budget` had just been raised to $100, the
+    workflow still said `--budget 25.00`, and the run was refused at `usd:25.1700>25.0000`. The
+    ceiling in force and the ceiling in the diff were different numbers, and nothing said so.
+
+    Worse than the dollars: `--budget X` builds `Budget(usd=X)`, so it also drops `wall_seconds`.
+    A flag stating one ceiling silently removed another.
+    """
+
+    def states_one(text: str) -> bool:
+        # Comment lines are skipped, or this fails on the paragraphs explaining why the flag is
+        # absent — a check that cannot survive its own rationale being written down is one that
+        # gets deleted rather than obeyed.
+        return any("--budget" in line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+    offenders = sorted(
+        path.name
+        for path in (ROOT / ".github" / "workflows").glob("*.yml")
+        if states_one(path.read_text()) and path.name not in BUDGET_ON_THE_COMMAND_LINE
+    )
+    assert not offenders, (
+        f"{', '.join(offenders)} state `--budget`, which replaces the ceiling `.lockstep/"
+        f"lockstep.py` declares instead of merging with it. Raise the module's number and delete "
+        f"the flag — two places to edit means one of them is wrong and neither says so."
+    )
+
+
 def test_the_run_still_declares_a_ceiling_in_dollars(lockstep) -> None:
     """The one that has to be set. `UndeclaredBudget` refuses at startup for a lifecycle that
     binds something which spends and names no ceiling, and this file binds three such verbs — so
