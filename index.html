@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>in-lockstep — AI in your software lifecycle, the same way every time</title>
-<meta name="description" content="Every developer prompts differently and nobody can compare the results. in-lockstep standardises how your organisation uses AI, records every interaction, and lets you test whether a change actually helped.">
+<title>in-lockstep — every engineer uses AI the same way</title>
+<meta name="description" content="Every developer asks AI differently and nobody can compare the results. in-lockstep makes it one way of working: the same instructions everywhere, every run written down, and a way to check whether a change actually helped.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -38,12 +38,12 @@
     <div class="col">
       <p class="lede">Right now, that difference <em style="font-style:normal;color:var(--human)">is</em>
         your AI strategy.</p>
-      <p class="lede" style="font-size:19px;color:var(--text-2);margin-top:24px">in-lockstep makes AI
-        a standard part of your software lifecycle instead of a habit each developer invents. The
-        same prompts, the same guardrails, the same rules about when a model is even the right tool
-        — for every engineer and every repository. Every run leaves a record in your own
-        repository. And when you change a standard, you can see exactly what it changed before
-        anyone pays for it.</p>
+      <p class="lede" style="font-size:19px;color:var(--text-2);margin-top:24px">in-lockstep turns
+        using AI into part of how your team builds software, instead of a habit each developer
+        invents privately. The same instructions, the same rules, the same answer to "should we even
+        be asking a model this?" — for every engineer and every project. Every run writes down what
+        happened, in your own repository. And when you change how the AI is instructed, you can see
+        exactly what you changed before anyone spends a penny.</p>
     </div>
 
     <div class="install" style="margin-top:34px">
@@ -51,7 +51,7 @@
 <span class="p">$</span> in-lockstep init
     </div>
     <p style="color:var(--text-3);font-size:14.5px;margin-top:4px">Open source, Apache-2.0. Runs on
-      your laptop. The whole evaluation costs nothing — see <a href="#start">getting started</a>.</p>
+      your laptop. Trying it costs nothing at all — see <a href="#start">getting started</a>.</p>
   </section>
 
   <hr class="rule">
@@ -60,9 +60,9 @@
     <div class="col">
       <p class="eyebrow">The problem</p>
       <h2>Nobody has figured out how to do this at scale.</h2>
-      <p class="lede">Your engineers are already using AI all day. That part happened without you.
-        What has not happened is any of the things that would make it an engineering practice
-        rather than a collection of private habits.</p>
+      <p class="lede">Your engineers are already using AI all day. That happened without you. What
+        has not happened is any of the things that would make it a way of working, rather than two
+        hundred private habits.</p>
     </div>
 
     <div class="spine" style="margin-top:44px">
@@ -84,9 +84,9 @@
       <div class="step human">
         <span class="tag">Today</span>
         <h3>And you cannot improve what you never saw</h3>
-        <p>The interaction happened in a terminal. The prompt is gone, the response is gone, and the
-          only trace is a diff somebody may or may not have read carefully. Ask “are we getting
-          better at this?” and there is nothing to point at — so the answer is a matter of opinion,
+        <p>It happened in a terminal window. What was asked is gone, what came back is gone, and the
+          only trace is a code change somebody may or may not have read carefully. Ask “are we
+          getting better at this?” and there is nothing to point at — so it is a matter of opinion,
           and the loudest opinion wins.</p>
       </div>
     </div>
@@ -106,12 +106,12 @@
 
       <div class="step">
         <span class="tag">Move one</span>
-        <h3>Standardise what the model is told</h3>
-        <p class="tight">The prompt, the guardrails, the context and the skills stop being personal
-          habits and become part of your lifecycle — attached to the situation they belong to. A
-          security review composes the security prompt, then your organisation's guardrails, then
-          the review skills, in that order, in every repository. Implementing a ticket composes
-          something different. Nobody assembles it by hand, and nobody has to remember.</p>
+        <h3>Standardise what the AI is told</h3>
+        <p class="tight">What the AI gets told stops being something each person types and becomes
+          part of how your team works — attached to the job it belongs to. A security review is
+          built the same way in every project: your company's rules first, then the review
+          instructions. Building a feature gets something different. Nobody assembles it by hand,
+          and nobody has to remember to.</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>what a security review is actually sent</b></div>
 <pre><span class="p">$</span> in-lockstep show-prompt security --projection
@@ -122,44 +122,42 @@
 body:review/security-reviewer   <span class="d">← the prompt for this job</span>
 skill:review/review-format
 skill:review/review-revision</pre>
-          <p class="term-cap">Composed the same way every time, and printable offline before it ever
-            runs. Guardrails come first — that is a property of the framework, not a convention
-            somebody has to follow.</p>
+          <p class="term-cap">Built the same way every time, and you can print it before anything
+            runs, without a key. Your company's rules always come first — that is built in, not a
+            convention somebody has to remember.</p>
         </div>
-        <p>An organisation ships its standards as a package. Installing it applies it, so there is
-          no line for a team to forget, and it can only tighten what a repository already had —
-          a team can be stricter than the standard and never looser.
-          <a href="governance.html">How the governance model works →</a></p>
-        <p>And a team that works out something good — a review that understands your framework, an
-          approach that suits your codebase — can package it up so the other forty teams can use it.
-          <a href="extensions.html">Sharing what your teams build →</a></p>
+        <p>Your company publishes its rules as a small package. Installing it is what switches it
+          on, so there is nothing for a team to forget — and it can only make things stricter. A
+          team can go further than the company rule and can never go under it.
+          <a href="governance.html">How that works →</a></p>
+        <p>And when a team works out something good — a review that understands your framework, a
+          way of working that suits your code — they can package it up so the other forty teams get
+          it too. <a href="extensions.html">Sharing what your teams build →</a></p>
       </div>
 
       <div class="step">
         <span class="tag">Move two</span>
-        <h3>Standardise when a model is used at all</h3>
-        <p class="tight">Half of the value is knowing where <em>not</em> to put one. Cherry-picking a
-          commit is <code>git cherry-pick</code>. Running your tests is running your tests. Deciding
-          whether a report is a bug or a feature request is judgement, and that is where a model
+        <h3>Standardise when the AI is used at all</h3>
+        <p class="tight">Half the value is knowing where <em>not</em> to use one. Copying a commit to
+          another branch is a git command. Running your tests is running your tests. Deciding
+          whether a report is a bug or a feature request takes judgement — and that is where a model
           earns its place.</p>
-        <p class="tight">Your lifecycle says which is which, in one readable file, and the same file
-          says what happens when the deterministic path hits something it cannot handle — a
-          backport replays a commit with plain git, and only asks a model about the paths that
-          actually conflicted.</p>
-        <div class="control"><b>Why it matters:</b> a model invited into a job that did not need one
-          is cost, latency and risk you took on for nothing. That decision should be made once, by
-          your organisation, not forty times a day by whoever is at the keyboard.</div>
+        <p class="tight">One readable file says which is which, and what happens when the ordinary
+          way hits something it cannot handle. Copying a fix to a release branch is plain git, and
+          the AI is only asked about the files that actually clashed.</p>
+        <div class="control"><b>Why it matters:</b> asking a model to do a job that did not need one
+          is money, waiting and risk you took on for nothing. That call should be made once, by your
+          company — not forty times a day by whoever happens to be at the keyboard.</div>
       </div>
 
       <div class="step">
         <span class="tag">Move three</span>
         <h3>Every run leaves a record, in your repository</h3>
-        <p class="tight">Not a log that scrolls away, and not a vendor's dashboard you lose access
-          to. Each run appends a record to a branch in your own git: when it ran, which commit it
-          ran against, whether the tree was dirty, who approved it, what it decided, how many tokens
-          and how many dollars.</p>
-        <p class="tight">Runs that were <em>refused</em> leave records too — a run blocked by a
-          budget ceiling or an approval gate is exactly the run you want evidence for later.</p>
+        <p class="tight">Not a log that scrolls away, and not a dashboard on somebody else's site
+          that you lose access to. Every run writes a record into your own git history: when it ran,
+          which version of the code, who approved it, what it decided, and what it cost.</p>
+        <p class="tight">Runs that were <em>refused</em> get written down too — a run stopped by a
+          spending limit or a missing sign-off is exactly the one you will want evidence of later.</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>one real run's record</b></div>
 <pre>workflow   fix/from-ticket        args      {"ticket": "#109"}
@@ -173,24 +171,24 @@ findings
           <p class="term-cap">Nobody typed this. The run wrote it, and it is committed where your
             other history lives.</p>
         </div>
-        <p class="tight">The instructions behind it do not need storing, because they are composed
-          from files in your repository: <code>show-prompt</code> reproduces exactly what any run
-          was sent, offline, at any time. Reconstructable beats archived — an archived prompt tells
-          you what happened once; a reproducible one tells you what happens next time.</p>
-        <div class="control"><b>Being straight about the edges:</b> a run dispatched through your
-          own workflow also appends the full back-and-forth with the model, turn by turn. The
-          built-in commands do not yet, and tool arguments are recorded by name rather than in full.
-          Those gaps are tracked, not glossed.</div>
+        <p class="tight">The instructions themselves do not need storing, because they are built
+          from files already in your repository. One command prints exactly what any run was sent,
+          offline, any time. That beats keeping a copy: a saved copy tells you what happened once,
+          and this tells you what will happen next time.</p>
+        <div class="control"><b>Being straight about the edges:</b> a run you set up yourself also
+          records the whole back-and-forth with the AI, turn by turn. The built-in commands do not
+          do that yet, and tool arguments are recorded by name rather than in full. Those gaps are
+          written down, not glossed over.</div>
       </div>
 
       <div class="step">
         <span class="tag">Move four</span>
         <h3>See what a change does before you ship it</h3>
-        <p class="tight">Someone proposes a better guardrail. In most organisations that is a
-          conversation, the loudest person wins, and nobody finds out for six months.</p>
+        <p class="tight">Somebody suggests a better rule. In most companies that is a meeting, the
+          loudest person wins, and nobody finds out for six months.</p>
         <p class="tight">Here it is a diff. Before anything runs and before anything is spent, you
-          can see precisely what your change does to the instructions every review in the company
-          will be sent — every layer, in order, with what came from where.</p>
+          can see exactly what your change does to the instructions every review in the company is
+          about to be given.</p>
         <div class="term">
           <div class="term-bar"><span class="dot on"></span><b>one house rule added, and exactly what it did</b></div>
 <pre><span class="p">$</span> in-lockstep show-prompt security --diff
@@ -245,8 +243,8 @@ pass rate    <span class="y">n/a — nothing decided</span></pre>
     <div class="col">
       <p class="eyebrow">Getting started</p>
       <h2>Four commands. No key, no account, no platform team.</h2>
-      <p class="lede">Nothing here needs a credential or a purchase order. You can find out whether
-        it fits in an afternoon.</p>
+      <p class="lede">Nothing here needs a password or a purchase order. You can find out whether it
+        fits in an afternoon.</p>
     </div>
 
     <div class="start" style="margin-top:36px">
@@ -257,13 +255,13 @@ pass rate    <span class="y">n/a — nothing decided</span></pre>
         </li>
         <li>
           <b>in-lockstep init</b>
-          <span>It reads your repository — test runner, linter, CI — and writes a lifecycle file
-            that already fits it. Thirty lines, and they are yours to edit.</span>
+          <span>It reads your project — how you run tests, how you build — and writes a setup file
+            that already fits. Thirty lines, and they are yours to edit.</span>
         </li>
         <li>
           <b>in-lockstep ls</b>
-          <span>Prints what will actually happen: which steps use a model, which do not, and exactly
-            which prompts and guardrails each one composes.</span>
+          <span>Prints what will actually happen: which steps use the AI, which do not, and exactly
+            what each one will be told.</span>
         </li>
         <li>
           <b>in-lockstep review --offline</b>
@@ -343,7 +341,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
 
 <footer>
   <div class="wrap">
-    <p><strong>in-lockstep</strong> · Apache-2.0 · an agentic SDLC framework for Python</p>
+    <p><strong>in-lockstep</strong> · Apache-2.0 · a Python framework for using AI the same way across a team</p>
     <p>Terminal output on this site is captured verbatim from the commands shown, run against
       this framework's own repository and the worked examples in it.</p>
   </div>
