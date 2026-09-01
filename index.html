@@ -201,27 +201,39 @@ findings
 <span class="g">+Never propose a change that widens the grammar without a test for</span>
 <span class="g">+every new unit.</span></pre>
         </div>
-        <p class="tight">Then measure it. Cases carry an input and what a good answer looks like,
-          and a runner scores them against recorded answers offline for nothing — reporting what a
-          machine settled, what still needs judgement, and what it could not run, as three different
-          numbers.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>the framework, refusing to flatter itself</b></div>
-<pre><span class="p">$</span> in-lockstep eval report
+        <p class="tight">Then measure it — against your own history, not an example suite. Every
+          recorded run becomes a test case automatically: the real question that was asked, and the
+          real answer that came back.</p>
+        <div class="term lit">
+          <div class="term-bar"><span class="dot on"></span><b>your runs, turned into tests</b></div>
+<pre><span class="p">$</span> in-lockstep eval harvest --from .lockstep/cassettes/review.json
 
-cases        27
-outstanding  <span class="y">27  (need a judge)</span>
-pass rate    <span class="y">n/a — nothing decided</span>
+wrote  corpus/review/review-this-diff-for-security-problems.json
 
-<span class="d">A rubric nobody judged is outstanding, not passed.</span></pre>
-          <p class="term-cap">A tool that will not print a score it has not earned is a tool whose
-            scores mean something when it does.</p>
+<span class="p">$</span> in-lockstep eval run
+
+  <span class="g">ok</span>      review-this-diff-for-security-problems
+pass rate    <span class="g">100%</span></pre>
+          <p class="term-cap">Free, under a second, and it goes red the moment an answer stops
+            being read the way it was.</p>
         </div>
-        <div class="control"><b>Where this is going:</b> the loop closes when your recorded runs are
-          turned into cases automatically and a proposed change arrives carrying its own before-and-
-          after. Today you can see any change exactly, and you can score cases you write. Harvesting
-          history into those cases is the roadmap — and this project would rather tell you that than
-          let you find out.</div>
+        <div class="term">
+          <div class="term-bar"><span class="dot on"></span><b>and it still refuses to flatter itself</b></div>
+<pre><span class="p">$</span> in-lockstep eval run   <span class="d"># on cases somebody wrote by hand</span>
+
+  <span class="y">SKIP</span>    production-outage  — no recorded request
+
+cases        0 replayed, 27 skipped
+pass rate    <span class="y">n/a — nothing decided</span></pre>
+          <p class="term-cap">A case with no recording is skipped and said so, not averaged into a
+            number. A tool that will not print a score it has not earned is a tool whose scores mean
+            something when it does.</p>
+        </div>
+        <div class="control"><b>Being straight about the halves:</b> replaying is free and tests
+          everything around the AI — how an answer gets read and turned into a result, which breaks
+          silently and now cannot. Testing a change to the AI's <em>instructions</em> is the same
+          recorded question asked again, so it is a real call and costs real money. What was missing
+          was never the willingness to pay for that. It was having anything to compare against.</div>
       </div>
 
     </div>

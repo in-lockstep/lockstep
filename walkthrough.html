@@ -686,14 +686,48 @@ ledger    <span class="d">lockstep-history:records/fix-from-ticket-…json</span
         nothing.</p>
     </div>
 
-    <div class="notyet">
-      <b>Not built yet, and worth saying plainly.</b> Those records are the raw material for
-      learning: take what happened, turn it into test cases, and check whether a proposed change to
-      the AI's instructions actually helps — against real history, before anyone pays for it. Today
-      you can see exactly what a change does to the instructions, and score cases you write
-      yourself. <strong>Turning history into those cases automatically is designed and not
-      built.</strong> It is why the records are being kept in this shape now.
+    <div class="col">
+      <h3 style="margin-top:40px">And those recordings turn into tests</h3>
+      <p class="tight">This is why the records are kept in the shape they are. One command reads a
+        recording and writes out test cases — real questions that were really asked, with the real
+        answers that came back:</p>
     </div>
+
+    <div class="term lit" style="max-width:780px">
+      <div class="term-bar"><span class="dot on"></span><b>history becoming something you can check</b></div>
+<pre><span class="p">$</span> in-lockstep eval harvest --from .lockstep/cassettes/review.json --family review
+
+wrote  corpus/review/review-this-diff-for-security-problems.json
+
+1 case(s) from .lockstep/cassettes/review.json</pre>
+      <p class="term-cap">The case it wrote expects what the AI actually said: two findings, and the
+        exact wording of each. Nobody typed any of that.</p>
+<pre><span class="p">$</span> in-lockstep eval run
+
+  <span class="g">ok</span>      review-this-diff-for-security-problems
+
+cases        1 replayed, 0 skipped
+decided      1
+pass rate    <span class="g">100%</span></pre>
+      <p class="term-cap">Free, and it takes under a second. Break something in how answers get
+        read, and it goes red with the specific check that broke:</p>
+<pre>  <span class="r">FAIL</span>    review-this-diff-for-security-problems
+          contains: 'Session outlives the request and leaks a connection'
+          count.findings: expected 2, got 1</pre>
+    </div>
+
+    <div class="col">
+      <p>So the pile of recordings stops being a pile. Every real run your team does becomes a test
+        of the situations your team actually hits — not the ones somebody imagined while writing an
+        example suite.</p>
+    </div>
+
+    <div class="control"><b>What this checks, and what it doesn't.</b> Replaying is free, and it
+      tests everything <em>around</em> the AI — how its answer gets read, parsed and turned into a
+      result. That breaks silently and now it can't. Testing a change to the AI's
+      <em>instructions</em> is a different thing: same recorded question, new answer, so it is a
+      real call and costs real money. What was missing was never the willingness to pay for that —
+      it was having anything to compare the result against.</div>
   </section>
 
   <hr class="rule">
