@@ -1,6 +1,7 @@
 # in-lockstep
 
-An agentic SDLC framework for Python. Your lifecycle is executable code — not a manifest, not a
+An agentic SDLC framework, written in Python, for a repository in any language. Your lifecycle
+is executable code: not a manifest, not a
 spec, and not something that generates a pipeline. The module you write is the thing that runs.
 
 ```bash
@@ -23,8 +24,8 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ## What ships today
 
 Six core workflows are the goal. This table is what actually runs, kept honest by a test that
-reads it: a row claiming **runs** must name a verb that ships, and a **planned** row must not —
-so implementing one without flipping its row fails CI, and so does deleting a feature the table
+reads it: a row claiming **runs** must name a verb that ships, and a **planned** row must not.
+So implementing one without flipping its row fails CI, and so does deleting a feature the table
 still advertises.
 
 | Capability | Status | What that means |
@@ -33,8 +34,8 @@ still advertises.
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
-| Harvesting history into cases | runs | `eval harvest` turns a recording into cases — real requests, real answers, expectations derived from them; `eval run` replays and settles them for nothing. Measures everything below the model; re-testing a changed prompt is a real call |
-| Review conversation as context | runs | what a reviewer said on the pull request — the thread, the verdicts, the notes pinned to a line — reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
+| Harvesting history into cases | runs | `eval harvest` turns a recording into cases (real requests, real answers, expectations derived from them); `eval run` replays and settles them for nothing. Measures everything below the model; re-testing a changed prompt is a real call |
+| Review conversation as context | runs | what a reviewer said on the pull request (the thread, the verdicts, the notes pinned to a line) reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
 | Flaky-test adapter | planned | roadmap item 26 |
@@ -53,15 +54,15 @@ still advertises.
 
 A change to your review policy becomes a diff in a pull request, with blame, history and rollback.
 You extend a verb by subclassing, override behaviour by rebinding, and compose cross-cutting
-concerns as middleware — because those are language features, and reinventing them in YAML
-produces a worse version of each.
+concerns as middleware. Those are language features, and reinventing them in YAML produces a worse
+version of each.
 
 The cost is that a container is harder to read than a manifest, which is what `in-lockstep ls` is
 for: it prints what will actually run.
 
 ## Extensions that travel
 
-Config-as-code makes extension ordinary — subclass a prompt, write a strategy, declare a verb — and
+Config-as-code makes extension ordinary (subclass a prompt, write a strategy, declare a verb), and
 for a long time it made extension *local*: what one team wrote could not reach another. An
 extension pack is that same code as an installable distribution, and the rule it turns on is short.
 
@@ -116,9 +117,11 @@ in-lockstep apply --from-artifact # the privileged half of the two-job trampolin
 
 `--dry-run` proves the wiring. `in-lockstep review --offline` works on a clean install with no
 key and no recording of your own: a cassette ships, recorded from a real model call against a real
-merged pull request. Replays are deterministic and free. Cassettes sit at the `LLMInput`/`LLMOutput` seam, so one recorded against a provider
-replays against a different one, and they capture tool IO as well as model IO. This is the
-debugging story, the testing story and the eval story at once.
+merged pull request. Replays are deterministic and free.
+
+Cassettes sit at the `LLMInput`/`LLMOutput` seam, so one recorded against a provider replays against
+a different one, and they capture tool IO as well as model IO. This is the debugging story, the
+testing story and the eval story at once.
 
 ## Two things worth knowing before running it unattended
 
@@ -129,17 +132,17 @@ process able to write. [`docs/controls-crosswalk.md`](docs/controls-crosswalk.md
 every one of those: what replaced it, what is weaker, and the one that was lost rather than
 replaced. `in-lockstep doctor` checks the same list.
 
-**Configuration is loaded from a trusted ref.** `.lockstep/lockstep.py` defines every binding, policy and
-protected path. Under review, loading it from the branch being reviewed would let a change rewrite
-the constraints that apply to reviewing it — so it comes from the base ref instead.
+**Configuration is loaded from a trusted ref.** `.lockstep/lockstep.py` defines every binding,
+policy and protected path. Under review, loading it from the branch being reviewed would let a
+change rewrite the constraints that apply to reviewing it, so it comes from the base ref instead.
 
 ## Documentation
 
 **Evaluating?** The matrix above says what runs; [getting started](docs/getting-started.md)
-shows every command with the output it actually prints, and costs nothing to follow —
-`--offline` and `--dry-run` need no key.
+shows every command with the output it actually prints, and costs nothing to follow. `--offline`
+and `--dry-run` need no key.
 
-**Adopting?** The [cookbook](docs/cookbook.md) is ten recipes of twenty lines or fewer — keyless
+**Adopting?** The [cookbook](docs/cookbook.md) is ten recipes of twenty lines or fewer: keyless
 CI, org standards as a package, the daily ceiling, chat-ops TDD. Then
 [extending](docs/extending.md) for adapters, prompts, strategies and packs, and the
 [trampoline contract](docs/trampoline.md) for what a CI file owes the framework on any host.
@@ -150,13 +153,13 @@ whole mechanism and the argument for each refusal in it; the worked examples are
 ([`examples/lockstep-index`](examples/lockstep-index/)).
 
 **Auditing?** The [controls crosswalk](docs/controls-crosswalk.md) is the honest accounting of
-what in-process invocation costs — what replaced each substrate control, what is weaker, what
-was lost — and [exit gates](design/gates.md) tracks every claimed control against the test that
-holds it, including the ones that are `unit only` or `unmet`.
+what in-process invocation costs (what replaced each substrate control, what is weaker, what was
+lost), and [exit gates](design/gates.md) tracks every claimed control against the test that holds
+it, including the ones that are `unit only` or `unmet`.
 
 **Why is it like this?** The essays: [design](design/in-lockstep-design.md) and
 [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md). Long, and deliberately below the
-fold rather than deleted — they are where the decisions above stop being assertions.
+fold rather than deleted. They are where the decisions above stop being assertions.
 
 Contributions: [CONTRIBUTING.md](CONTRIBUTING.md) ends with a wanted list.
 

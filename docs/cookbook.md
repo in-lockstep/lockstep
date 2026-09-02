@@ -4,10 +4,10 @@ Ten recipes, twenty lines or fewer each. Every `lockstep.py` snippet is executed
 suite, so a recipe that stops matching the API fails CI rather than a reader. Snippets go in
 `.lockstep/lockstep.py` unless a recipe says otherwise.
 
-## 1. Route triage to a local model — the $0 path
+## 1. Route triage to a local model: the $0 path
 
 The `local` provider ships pointed at Ollama and registered `free`, so nothing needs a price and
-the run bills exactly zero — while tokens are still counted, because free is not unmeasured.
+the run bills exactly zero. Tokens are still counted, because free is not unmeasured.
 
 ```python
 from in_lockstep import Lockstep
@@ -21,12 +21,12 @@ lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")
 in-lockstep triage --ticket '#42'
 ```
 
-## 2. Go keyless in CI — workload identity federation
+## 2. Go keyless in CI with workload identity federation
 
 Delete `ANTHROPIC_API_KEY` from repository secrets. Give the model-calling job an identity
-instead, and hand the framework the identifiers of the federation rule that accepts it — plain
-env, **not** secrets: an identifier in `secrets` seeds redaction and masks it out of the very
-errors that name it.
+instead, and hand the framework the identifiers of the federation rule that accepts it. Those go
+in plain env, **not** in secrets: an identifier in `secrets` seeds redaction and masks it out of
+the very errors that name it.
 
 ```yaml
 permissions:
@@ -44,8 +44,8 @@ Anthropic Console, add the identifiers, watch one green run, then delete the sec
 ## 3. TDD implement, triggered by a comment
 
 `/implement` on an issue runs `implement/from-ticket` on the default branch. The strategy IS the
-adapter, so making it test-driven is naming a different class in the binding — the scaffold binds
-`Oneshot`, and red-then-green costs a second model phase, which is why it is a choice and not the
+adapter, so making it test-driven is naming a different class in the binding. The scaffold binds
+`Oneshot`. Red-then-green costs a second model phase, which is why it is a choice and not the
 default.
 
 ```python
@@ -55,18 +55,18 @@ lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
 lockstep.bind(Implement, TDD())
 ```
 
-`in-lockstep ls` prints the whole story as one line — `Implement -> TDD` — and the model comes
-from the route above: an adapter bound with no explicit invoker resolves it per run, and egress
-from the bound `EgressPolicy`.
+`in-lockstep ls` prints the whole story as one line, `Implement -> TDD`. The model comes from the
+route above: an adapter bound with no explicit invoker resolves it per run, and egress from the
+bound `EgressPolicy`.
 
 This repository's own [.lockstep/lockstep.py](../.lockstep/lockstep.py) is the full worked
-version — including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the
+version, including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the
 live tree.
 
 ## 4. A rolling daily spend ceiling
 
-The per-run budget bounds one run; this bounds a runaway *trigger* — a chat-ops loop firing all
-night. Summed from the ledger's own records over a rolling 24 hours, refused before a run
+The per-run budget bounds one run. This bounds a runaway *trigger*, a chat-ops loop firing all
+night. It sums the ledger's own records over a rolling 24 hours, and refuses before a run
 starts:
 
 ```bash
@@ -99,7 +99,7 @@ lockstep.bind(
 
 ## 6. Ship your organisation's standards as a package
 
-At one repository, a `lockstep.contribute(...)` line; at two hundred, a package — installing it
+At one repository, a `lockstep.contribute(...)` line. At two hundred, a package: installing it
 is what applies it, and `Lockstep.detect()` discovers it before your module's own lines run.
 The entire org layer is a `pyproject.toml` entry point and one function:
 
@@ -119,7 +119,7 @@ Everything lands at `Tier.PLUGIN`, so any repository's own `lockstep.bind` still
 `in-lockstep ls` prints what applied. Worked example:
 [examples/acme-standards](../examples/acme-standards/).
 
-## 7. Feed your proxy — real egress enforcement
+## 7. Feed your proxy: real egress enforcement
 
 The framework never enforces destinations itself (an in-process allowlist would be a checkbox);
 it verifies that *something outside the process* does. The manifest is the bridge:
@@ -134,8 +134,8 @@ Feed that list to the proxy or firewall your CI host provides, then attest it:
 export IN_LOCKSTEP_EGRESS=enforced
 ```
 
-`enforced` is verified, not believed — a probe to a host that must be unreachable refuses the
-run if it connects. Extra hosts you decide to allow (a package registry, before an
+`enforced` is verified, not believed. A probe dials a host that must be unreachable, and the run
+is refused if it connects. Extra hosts you decide to allow (a package registry, before an
 `EXECUTES_CODE` step needs it) go in `EgressPolicy(allow=("pypi.org",))`, and the manifest
 prints them.
 
@@ -149,15 +149,15 @@ in-lockstep review --base origin/main --record       # one real call, writes the
 in-lockstep review --base origin/main --offline      # deterministic and free, from here on
 ```
 
-The replay refuses to silently call out when the prompt no longer matches the recording — a
+The replay refuses to silently call out when the prompt no longer matches the recording. A
 changed guardrail means re-recording, and it says so rather than billing you quietly.
 
 ## 9. A house review lens, bound rather than monkeypatched
 
-A lens is a prompt class; binding it is how it becomes real — visible in `ls`, loaded from the
+A lens is a prompt class. Binding it is how it becomes real: visible in `ls`, loaded from the
 trusted ref, never an import-time side effect.
 
-The body is a **file**, not a string literal — prompt text is data a non-programmer edits and a
+The body is a **file**, not a string literal. Prompt text is data a non-programmer edits and a
 diff reviews, which is why it lives outside the module. A string is refused at class creation
 rather than at render time.
 
@@ -188,6 +188,6 @@ in-lockstep report --by model     # aggregates, and flags any record rewritten a
 in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check
 ```
 
-The check reads the retained chain; a force-push that *replaced* the chain is the remote's to
-refuse. Protect `lockstep-history` with a ruleset blocking force-pushes and deletions — appends
+The check reads the retained chain. A force-push that *replaced* the chain is the remote's to
+refuse. Protect `lockstep-history` with a ruleset blocking force-pushes and deletions. Appends
 are fast-forwards and still flow, so it needs no reviews and slows nothing down.

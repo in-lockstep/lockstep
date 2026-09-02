@@ -6,14 +6,14 @@
 An extension pack is an ordinary Python distribution that offers a prompt, a strategy or a verb to
 any repository that installs it. A catalog is a static `index.toml` in a git repository listing
 packs and pointing at receipts committed beside them. Between the two, an extension one team writes
-can travel to another — and a repository can find out what one would do to it before installing,
+can travel to another. A repository can find out what one would do to it before installing,
 measure it before trusting it, and be told when it changes.
 
 The whole design turns on one sentence: **installing a pack offers it, and a line somebody wrote is
 what puts it in force.** Everything below is either that property or a consequence of it.
 
 This document described a proposal when it was written. It describes the code now. Where the
-implementation departed from the proposal — three places — it says so, because a design note that
+implementation departed from the proposal, in three places, it says so, because a design note that
 quietly rewrites its own history is worth less than the argument it lost.
 
 ---
@@ -28,13 +28,13 @@ distribution mechanism is a claim about where in this stack a stranger's code ma
 | 1st | shipped defaults | `SHIPPED` | bodies, layer stacks, `LENSES`, default policy |
 | 2nd | installed `in_lockstep.standards` packages | `PLUGIN` | tighten-only policy layers, plugin-tier bindings |
 | 3rd | `.lockstep/lockstep.py` | `EXPLICIT` | anything; outranks every plugin regardless of order |
-| 4th | the call site — `ctx.do(..., via=tdd)` | call-scoped | one run only; the same capability-keyed gates apply |
+| 4th | the call site, `ctx.do(..., via=tdd)` | call-scoped | one run only; the same capability-keyed gates apply |
 
 Policy is the exception and stays the exception: layers merge tighten-only, so order decides who is
 printed, not who wins.
 
 **A pack writes into band three and nowhere else.** There is no fifth band, and nothing lets a third
-party land at `Tier.EXPLICIT` on its own — a pack that is installed and not named in `lockstep.py`
+party land at `Tier.EXPLICIT` on its own. A pack that is installed and not named in `lockstep.py`
 has no effect whatsoever, which `GATE-PACK-1` holds.
 
 ---
@@ -61,7 +61,7 @@ in-lockstep show-prompt security --shipped  # the framework's version, ignoring 
 That was #118, and it was a defect rather than a feature request: `show-prompt` imported the
 shipped `LENSES`, `PROMPTS` and `TRIAGE_PROMPTS` maps and never loaded the module, so the one
 command whose job is answering *what was the model actually told* showed a team the prompt they had
-replaced. Three prompt families — `fix`, `rfe`, `backport` — shipped and were unreachable from it
+replaced. Three prompt families (`fix`, `rfe` and `backport`) shipped and were unreachable from it
 entirely.
 
 `ls` prints the same answer in summary: each AI binding's prompts, starred where the class is not
@@ -78,7 +78,7 @@ fills in the `WorktreeRunner` wrap and the `InvokePolicy.under(...)` floor that 
 
 `Verb("benchmark")` is first-class: its own telemetry label, step ids, spend accounting, middleware,
 kill switch. Everything keyed on the *adapter* comes free. Five things keyed on the *verb* are owed
-by the author — a strategy and request type, a route and a price, prompts and a layer stack, a
+by the author: a strategy and request type, a route and a price, prompts and a layer stack, a
 corpus family, and a `@workflow` (there is deliberately no CLI subcommand for a custom verb). A
 verb pack is that set, shipped together.
 
@@ -113,8 +113,8 @@ in_lockstep.extensions     installing only OFFERS
 ```
 
 The older group is right to apply itself: a standards package can only tighten, so the real risk is
-a repository forgetting one. An extension pack is the opposite risk — it hands a model write and
-execute tools and it spends money — so its arrival is a diff somebody read. `detect()` does not even
+a repository forgetting one. An extension pack is the opposite risk. It hands a model write and
+execute tools and it spends money, so its arrival is a diff somebody read. `detect()` does not even
 query the extensions group.
 
 That is the same structural property #104 and #116 established from the other direction: which
@@ -138,13 +138,13 @@ that already declares it:
 
 | Field | Read off |
 |---|---|
-| `capabilities` | the bound object — the same frozenset `ApprovalGate`, the budget refusal and `Retry` key on |
+| `capabilities` | the bound object: the same frozenset `ApprovalGate`, the budget refusal and `Retry` key on |
 | `projection` / `guardrails_intact` | the composed prompt, via `PromptLayers.projection()` |
 | `policy` | the stack's own layers with their sources, plus what they merged to |
 | `models[].priced` | the same `table_for` `DOC151` uses |
 | `egress` | the same manifest `egress-manifest` hands the proxy |
 | `imports` | an AST walk over every `.py` the distribution ships |
-| `offers` | the imported namespace, through `core`'s vocabulary — `verb` plus `capabilities` |
+| `offers` | the imported namespace, through `core`'s vocabulary: `verb` plus `capabilities` |
 | `corpus` / `cassettes` | files on disk |
 
 Two subjects. With no argument the subject is **this repository**, which is where the format was
@@ -152,23 +152,25 @@ exercised first and is useful on its own as an audit of your own configuration. 
 **installed pack**.
 
 `--json` is canonical: sorted keys, and the digest is over exactly what is printed, **excluding
-itself** — a receipt that hashed its own hash could not be verified by recomputation, which is the
+itself**. A receipt that hashed its own hash could not be verified by recomputation, which is the
 only thing the digest is for.
 
 Two fields carry the argument. `guardrails_intact` says whether a prompt still opens with
-`guardrail:baseline` — legal to change, and the thing a reader of somebody else's extension most
-needs told. `corpus` is `null` rather than `0` when a repository has none, and says in words that
-nothing bound there has been measured; borrowing the framework's shipped case count would be the
-reassuring number computed from somebody else's evidence. `priced` gets three states for the same
-reason: `true`, `false`, and `null` when the provider is not registered, because a machine that
-cannot check a route is not a repository with a broken one.
+`guardrail:baseline`. Changing that is legal, and it is the thing a reader of somebody else's
+extension most needs told.
+
+`corpus` is `null` rather than `0` when a repository has none, and says in words that nothing bound
+there has been measured. Borrowing the framework's shipped case count would be the reassuring number
+computed from somebody else's evidence. `priced` gets three states for the same reason: `true`,
+`false`, and `null` when the provider is not registered, because a machine that cannot check a route
+is not a repository with a broken one.
 
 ### 3.3 `imports`, and why it is a field rather than a tier
 
 `none`, `modules`, or `unknown`, derived by walking the AST: `none` means every module the pack
 ships holds a docstring and nothing else, so importing it can run no code of the pack's own.
 
-A **tier** — `kind = "prompt"` refuses any real Python — was considered and rejected. It buys a
+A **tier**, where `kind = "prompt"` refuses any real Python, was considered and rejected. It buys a
 category-wide guarantee and immediately meets its awkward case: the pack that wants to ship the
 three-line `Prompt` subclass binding its own body, which is the natural thing for a prompt author to
 include and which makes the pack code. Then either the tier lies or the pack is not a prompt pack.
@@ -180,7 +182,7 @@ catalog will not list a pack as `kind = "prompt"` unless it reports `imports: no
 checked, and reporting it as inert would be the reassuring answer computed from nothing.
 
 `pack.toml` carries a kind and a summary. An unknown key is **refused**, not ignored: a key silently
-accepted arrives, gets documented, and becomes load-bearing — which is how a declaration file turns
+accepted arrives, gets documented, and becomes load-bearing. That is how a declaration file turns
 into a configuration language. The kind is cross-checked against what `describe` derived, so a pack
 calling itself prose while shipping a strategy says so in its own receipt.
 
@@ -213,11 +215,13 @@ protected-path deny list and it loads from a trusted ref precisely because every
 typed by a person. The failure mode is good too: a pack installed and unbound does nothing at all,
 and `ls` says so, which is a better state than a binding nobody noticed arriving.
 
-**It does not install anything either — a departure from the proposal.** The first draft had `add`
-pin the dependency itself. Putting a stranger's code on your machine is your package manager's job,
-in your dependency diff, and a framework that ran the installer would be the thing deciding what you
-trust rather than the thing telling you what you are trusting. `add` requires the pack to be
-installed, reports whether it is pinned, and prints `uv add <distribution>` when it is not.
+**It does not install anything either, and that is a departure from the proposal.** The first draft
+had `add` pin the dependency itself. Putting a stranger's code on your machine is your package
+manager's job, in your dependency diff, and a framework that ran the installer would be the thing
+deciding what you trust rather than the thing telling you what you are trusting.
+
+`add` requires the pack to be installed, reports whether it is pinned, and prints
+`uv add <distribution>` when it is not.
 
 ### 4.1 The acknowledgement is a committed file
 
@@ -225,13 +229,13 @@ installed, reports whether it is pinned, and prints `uv add <distribution>` when
 replaced the proposal's `lockstep.use(AcmeTDD, acknowledged="2.4.0")`: a version string in code says
 *when* something was accepted and not *what*, and the comparison that matters is over capabilities,
 offers and the projection. It also keeps bookkeeping a tool maintains out of the file whose value is
-that a person wrote it — the same instinct as printing the bind lines.
+that a person wrote it, the same instinct as printing the bind lines.
 
 **Widening is the line.** A capability the pack did not previously hold is refused until `--accept`
 says otherwise, and a refusal records nothing, so it cannot leave a repository having accepted what
-it declined (`GATE-PACK-3`). Everything else — a version, a new prompt, a corpus that grew — is
-recorded without a flag and reported. Refusing over those too would teach people to pass `--accept`
-by reflex, which is how the flag that guards agency stops meaning anything.
+it declined (`GATE-PACK-3`). Everything else is recorded without a flag and reported: a version, a
+new prompt, a corpus that grew. Refusing over those too would teach people to pass `--accept` by
+reflex, which is how the flag that guards agency stops meaning anything.
 
 Comparison runs over a **material** subset of the receipt, excluding `requires` and `imported`: a
 receipt published on one framework version compared against one derived on another differs in the
@@ -252,7 +256,7 @@ $ in-lockstep doctor
 ```
 
 Only `DOC170` is an error, and the line it draws is agency. It is a **note** rather than a failure
-for a pack installed and never accepted — installing offers a pack, so one that nothing binds is
+for a pack installed and never accepted. Installing offers a pack, so one that nothing binds is
 ordinary, and failing over it would make the group's premise read as a problem. `DOC171` reads the
 **bound** adapters rather than the installed packs, because what matters is the prompt a run would
 actually send.
@@ -285,11 +289,12 @@ in-lockstep market lint index.toml      # for whoever publishes one, in their CI
 ```
 
 `market add` writes `.lockstep/market.toml`, committed, because registering a source decides where
-this repository looks for code. **https only** — a catalog says what to install, so over plain http
+this repository looks for code. **https only.** A catalog says what to install, so over plain http
 that description is whatever the network says it is, and the receipt comparison below would be
-checking an attacker's document. An entry may not carry a key that configures, the refusal
-`pack.toml` already makes. An entry's `receipt` path may not leave the repository: it is untrusted
-input naming a file this process opens.
+checking an attacker's document.
+
+An entry may not carry a key that configures, the refusal `pack.toml` already makes. An entry's
+`receipt` path may not leave the repository: it is untrusted input naming a file this process opens.
 
 `search` groups by source and reports a name two catalogs claim rather than resolving it. Guessing
 which one somebody meant is how the wrong code gets installed under the right name.
@@ -299,8 +304,8 @@ that installed a pack is identical to a run of one that vendored the same class 
 
 **Its receipts are falsifiable.** An entry points at a receipt derived by `pack describe`, so it
 records what the author's code did rather than what the author wrote. `add` re-derives it and
-refuses a pack that holds more than the catalog published — outright, not behind `--accept`, because
-that is not a decision to weigh, it is a listing that does not describe the code.
+refuses a pack that holds more than the catalog published, outright rather than behind `--accept`.
+That is not a decision to weigh. It is a listing that does not describe the code.
 
 ### 5.1 Entry criteria, not endorsement
 
@@ -324,8 +329,8 @@ somebody who pays.
 
 The wording is load-bearing. Meeting these says a pack keeps the framework's guardrails and can be
 measured before it is trusted. It says nothing whatever about whether the code is good, and a catalog
-implying otherwise would transfer a judgement nobody made — the distinction `evaluation/` already
-insists on when it reports an unjudged rubric as outstanding rather than as a pass.
+implying otherwise would transfer a judgement nobody made. That is the distinction `evaluation/`
+already insists on when it reports an unjudged rubric as outstanding rather than as a pass.
 
 An organisation's internal tap carries no criteria, because it answers a different question: an
 internal pack is trusted by the fact that someone inside the company published it.
@@ -359,8 +364,8 @@ Four states, and keeping them distinct is the point:
 |---|---|---|
 | `decided` | a machine settled it | yes |
 | `outstanding` | a rubric, and no judge has answered | no |
-| `unrecorded` | the cassette holds no answer for this case | no — absence of evidence, not a failure |
-| `unexercised` | a corpus family a trial cannot drive | no — counted, never dropped |
+| `unrecorded` | the cassette holds no answer for this case | no (absence of evidence, not a failure) |
+| `unexercised` | a corpus family a trial cannot drive | no (counted, never dropped) |
 
 Counting `unrecorded` against a pack would penalise an author's incomplete recording rather than
 their code. Dropping `unexercised` silently would report a pass rate over a corpus the trial never
@@ -380,7 +385,7 @@ needed an exemption for measurement.
 ### 6.1 The honest limit
 
 A $0 trial ranks on **deterministic cases only**. Rubrics need a judge and a judge costs money. This
-step did not resolve that; it made it visible — a pack whose corpus is mostly rubrics shows a small
+step did not resolve that; it made it visible. A pack whose corpus is mostly rubrics shows a small
 `decided` beside a large `outstanding` on every run, which is the true shape of its evidence.
 
 ---
@@ -407,7 +412,7 @@ standards package, where contributions merge tighten-only and print with their s
 |---|---|
 | `show-prompt <name> [--diff\|--shipped\|--projection]` | what the model is told, off the bound adapter |
 | `ls` | what is bound, and what each AI binding composes |
-| `pack ls` | which packs are installed — offered, not in force |
+| `pack ls` | which packs are installed: offered, not in force |
 | `pack describe [<name>] [--json\|--no-load]` | the receipt, for this repository or a pack |
 | `pack try <name> [--corpus\|--record\|--json]` | what it scores, on its cases and yours |
 | `add <name> [--accept]` | accept it, record what was accepted, print the lines |
@@ -427,18 +432,18 @@ and [`examples/lockstep-index/`](../examples/lockstep-index/).
 
 Two sections of the master design document described shapes the code does not have, and one of them
 would have led somebody to rebuild what §3.1 refuses. They are amended in **§18** of that document,
-following the idiom §17 established — an "amends §X" delta rather than an edit in place, so what was
+following the idiom §17 established: an "amends §X" delta rather than an edit in place, so what was
 designed and what shipped are both readable.
 
-- **§18.1 *(amends §5.7)*** — the strategy protocol, the registry of named approaches, and
+- **§18.1 *(amends §5.7)***. The strategy protocol, the registry of named approaches, and
   selection by string. The registry is withdrawn permanently: resolving a strategy by name at
   request time lets untrusted input *name* one. The `StrategySelector` is deferred rather than
-  withdrawn, behind an invariant that makes it a quality decision instead of a privilege one —
+  withdrawn, behind an invariant that makes it a quality decision instead of a privilege one. See
   [`design/strategy-selection.md`](strategy-selection.md).
-- **§18.2 *(amends §12)*** — the three entry-point groups that were never built, and the one that
+- **§18.2 *(amends §12)***. The three entry-point groups that were never built, and the one that
   was. `in_lockstep.adapters`, `in_lockstep.workflows` and `in_lockstep.evaluators` should be struck
   rather than built, for the reason in §3.1.
-- **§18.3 *(amends §12)*** — three further §12 claims found unbuilt while checking the first two:
+- **§18.3 *(amends §12)***. Three further §12 claims found unbuilt while checking the first two:
   the import-purity lint (still wanted), the `in_lockstep.x.*` incubation namespace (not wanted as
   stated), and the `.sync` mirror (wanted only when somebody needs it). Recorded rather than quietly
   dropped, because a design document asserting a mechanism nobody built is the decay
@@ -450,7 +455,7 @@ designed and what shipped are both readable.
 assertions and `held` status, each discharged by a test that names it. They are not restated here: a
 gate recorded in two places drifts in one of them.
 
-`DOC170`–`DOC172` are in `doctor`, described in §4.2.
+`DOC170` through `DOC172` are in `doctor`, described in §4.2.
 
 ---
 
@@ -467,7 +472,7 @@ That is deliberate and documented in both places: fabricating a recorded model e
 lint green would be inventing the evidence this project exists to refuse to invent. Clearing it is
 one real `--record` run against a real change.
 
-**`pack try` drives one verb.** `review` only — a single model turn with the diff in the prompt,
+**`pack try` drives one verb.** `review` only: a single model turn with the diff in the prompt,
 which is exactly what a cassette replays. `implement` and `fix` interleave tool calls whose results a
 cassette also holds, so extending it is reachable and is more work than what landed.
 
@@ -485,12 +490,12 @@ marketplace is.
 
 | | Step | PR |
 |---|---|---|
-| 1 | Make an override visible — `show-prompt` off the bound adapter, `--diff`, the `ls` block | [#118](https://github.com/in-lockstep/lockstep/pull/118) |
-| 2 | Derive the receipt — against your own repository first | [#119](https://github.com/in-lockstep/lockstep/pull/119) |
-| 3 | Name the container — the pack layout, `pack.toml`, the entry point that offers | [#121](https://github.com/in-lockstep/lockstep/pull/121) |
-| 4 | Make installing a diff — `add`, the accepted record, `DOC170`–`DOC172` | [#122](https://github.com/in-lockstep/lockstep/pull/122) |
-| 5 | Publish the catalog — `index.toml`, `market`, `search` | [#123](https://github.com/in-lockstep/lockstep/pull/123) |
-| 6 | Rank by evidence — `pack try` | [#124](https://github.com/in-lockstep/lockstep/pull/124) |
+| 1 | Make an override visible: `show-prompt` off the bound adapter, `--diff`, the `ls` block | [#118](https://github.com/in-lockstep/lockstep/pull/118) |
+| 2 | Derive the receipt: against your own repository first | [#119](https://github.com/in-lockstep/lockstep/pull/119) |
+| 3 | Name the container: the pack layout, `pack.toml`, the entry point that offers | [#121](https://github.com/in-lockstep/lockstep/pull/121) |
+| 4 | Make installing a diff: `add`, the accepted record, `DOC170` through `DOC172` | [#122](https://github.com/in-lockstep/lockstep/pull/122) |
+| 5 | Publish the catalog: `index.toml`, `market`, `search` | [#123](https://github.com/in-lockstep/lockstep/pull/123) |
+| 6 | Rank by evidence: `pack try` | [#124](https://github.com/in-lockstep/lockstep/pull/124) |
 
 Three decisions were taken while drafting and all three survived implementation: installing prints
 rather than writes (§4), `imports` is a derived fact rather than a tier (§3.3), and the project's
