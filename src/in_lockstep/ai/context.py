@@ -145,7 +145,15 @@ class ContextCurator:
     comparison measures assembly noise rather than the prompt.
     """
 
-    priority: tuple[str, ...] = ("diff", "test-failure", "file", "ticket", "log")
+    #: Packed in this order, so what does not fit is what is left. `verdict` and `attempt` are
+    #: APPENDED rather than slotted in, and that matters: every existing kind keeps its index, so
+    #: no package a cassette was recorded against reorders.
+    #:
+    #: Both sit after `ticket` because a session that evicted the request would be implementing
+    #: nothing in particular. `verdict` outranks `attempt` because it is small and it is the half
+    #: that makes resuming work — told only its own diff a model defends it, told which tests
+    #: failed it debugs. If only one survives a tight budget, that one should be the failures.
+    priority: tuple[str, ...] = ("diff", "test-failure", "file", "ticket", "log", "verdict", "attempt")
 
     def curate(self, items: list[ContextItem], need: ContextNeed) -> ContextPackage:
         ordered = sorted(
