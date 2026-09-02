@@ -1,8 +1,11 @@
 {
   "aspect": "security",
   "billed_fraction": 0.0,
+  "branch": "feat/resume-from-last-attempt",
+  "config": "local working tree",
   "cost_usd": 0.0,
   "decided": true,
+  "dirty": true,
   "epoch": "in-process",
   "findings": {
     "count": 2,
@@ -25,15 +28,17 @@
       }
     ]
   },
+  "head": "26101f9250834faff4dfcb722feb71106ed1ffec",
   "input_tokens": 5361,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 443,
   "priced_fraction": 1.0,
   "reason": null,
-  "run_id": "review-security",
-  "schema": 3,
+  "run_id": "review-security-20260902T033839Z-03ff",
+  "schema": 4,
   "status": "succeeded",
   "tokens": 5804,
-  "wall_seconds": 0.013
+  "ts": "2026-09-02T03:38:39+00:00",
+  "wall_seconds": 0.015
 }

@@ -1,6 +1,8 @@
 {
   "aspect": "security",
   "billed_fraction": 0.0,
+  "branch": "main",
+  "config": "local working tree",
   "cost_usd": 0.0,
   "decided": true,
   "epoch": "in-process",
@@ -25,15 +27,17 @@
       }
     ]
   },
+  "head": "7fd7d369da434c505ac720b64dd56234019ff8b5",
   "input_tokens": 5361,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 443,
   "priced_fraction": 1.0,
   "reason": null,
-  "run_id": "review-security",
-  "schema": 3,
+  "run_id": "review-security-20260902T080200Z-ccfd",
+  "schema": 4,
   "status": "succeeded",
   "tokens": 5804,
-  "wall_seconds": 0.013
+  "ts": "2026-09-02T08:02:00+00:00",
+  "wall_seconds": 0.012
 }

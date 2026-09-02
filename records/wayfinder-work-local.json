@@ -1,0 +1,28 @@
+{
+  "args": {
+    "target": "MAP-1"
+  },
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "wayfinder.not_on_frontier",
+        "message": "MAP-1 is blocked by MAP-2, MAP-3. The frontier is the set of unblocked tickets; claiming behind it is how a map stops describing the work.",
+        "severity": "error"
+      }
+    ]
+  },
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "reason": "wayfinder.not_on_frontier",
+  "run_id": "wayfinder-work-local",
+  "schema": 3,
+  "status": "blocked",
+  "tokens": 0,
+  "wall_seconds": 0.0,
+  "workflow": "wayfinder/work"
+}

@@ -1,0 +1,21 @@
+{
+  "billed_fraction": 0.0,
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "input_tokens": 10,
+  "kind": "triage",
+  "model": "local:qwen3-8b",
+  "output_tokens": 5,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "triage-412",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 15,
+  "wall_seconds": 0.013
+}

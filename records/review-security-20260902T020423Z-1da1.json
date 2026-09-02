@@ -1,6 +1,8 @@
 {
   "aspect": "security",
   "billed_fraction": 0.0,
+  "branch": "perf/ask-for-the-cache-we-already-measure",
+  "config": "local working tree",
   "cost_usd": 0.0,
   "decided": true,
   "epoch": "in-process",
@@ -25,15 +27,17 @@
       }
     ]
   },
+  "head": "921221ad6632d93fe5b9bebdeccd8ca6fb397b60",
   "input_tokens": 5361,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 443,
   "priced_fraction": 1.0,
   "reason": null,
-  "run_id": "review-security",
-  "schema": 3,
+  "run_id": "review-security-20260902T020423Z-1da1",
+  "schema": 4,
   "status": "succeeded",
   "tokens": 5804,
-  "wall_seconds": 0.013
+  "ts": "2026-09-02T02:04:23+00:00",
+  "wall_seconds": 0.012
 }

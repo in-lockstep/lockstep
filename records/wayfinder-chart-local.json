@@ -1,0 +1,40 @@
+{
+  "args": {
+    "target": "MAP-1"
+  },
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "wayfinder.frontier",
+        "message": "claimable now: MAP-2, MAP-3, MAP-4",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "wayfinder.destination",
+        "message": "MAP-1 is blocked by MAP-2, MAP-3",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "wayfinder.fog",
+        "message": "MAP-3 is not sharp enough to phrase precisely yet; left as fog.",
+        "severity": "note"
+      }
+    ]
+  },
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "reason": null,
+  "run_id": "wayfinder-chart-local",
+  "schema": 3,
+  "status": "succeeded",
+  "tokens": 0,
+  "wall_seconds": 0.0,
+  "workflow": "wayfinder/chart"
+}

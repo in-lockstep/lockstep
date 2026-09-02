@@ -1,0 +1,29 @@
+{
+  "args": {},
+  "billed_fraction": null,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "7fd7d369da434c505ac720b64dd56234019ff8b5",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": null,
+  "run_id": "selfcheck-20260902T081704Z-3c96",
+  "schema": 4,
+  "status": "completed",
+  "tokens": 0,
+  "ts": "2026-09-02T08:17:04+00:00",
+  "wall_seconds": 0.062,
+  "workflow": "selfcheck"
+}

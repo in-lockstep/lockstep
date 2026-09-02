@@ -1,8 +1,11 @@
 {
   "aspect": "security",
   "billed_fraction": 0.0,
+  "branch": "fix/propose-survives-the-title",
+  "config": "local working tree",
   "cost_usd": 0.0,
   "decided": true,
+  "dirty": true,
   "epoch": "in-process",
   "findings": {
     "count": 2,
@@ -25,15 +28,17 @@
       }
     ]
   },
+  "head": "dd078490ab9f74c2c0a3c2896b3c374b3cb53365",
   "input_tokens": 5361,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 443,
   "priced_fraction": 1.0,
   "reason": null,
-  "run_id": "review-security",
-  "schema": 3,
+  "run_id": "review-security-20260902T014628Z-fe67",
+  "schema": 4,
   "status": "succeeded",
   "tokens": 5804,
-  "wall_seconds": 0.013
+  "ts": "2026-09-02T01:46:28+00:00",
+  "wall_seconds": 0.012
 }

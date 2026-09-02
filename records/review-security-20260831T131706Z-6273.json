@@ -1,8 +1,11 @@
 {
   "aspect": "security",
   "billed_fraction": 0.0,
+  "branch": "strategy-selection-design",
+  "config": "local working tree",
   "cost_usd": 0.0,
   "decided": true,
+  "dirty": true,
   "epoch": "in-process",
   "findings": {
     "count": 2,
@@ -25,15 +28,17 @@
       }
     ]
   },
+  "head": "20c9774ef3767ec66a27fdf694ed04cd3211cecc",
   "input_tokens": 5361,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 443,
   "priced_fraction": 1.0,
   "reason": null,
-  "run_id": "review-security",
-  "schema": 3,
+  "run_id": "review-security-20260831T131706Z-6273",
+  "schema": 4,
   "status": "succeeded",
   "tokens": 5804,
-  "wall_seconds": 0.013
+  "ts": "2026-08-31T13:17:06+00:00",
+  "wall_seconds": 0.011
 }
