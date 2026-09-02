@@ -21,6 +21,7 @@ from .base import (
     branch_for,
     change_body,
     conventional_subject,
+    is_run_branch,
     is_run_branch_for,
     ticket_from_branch,
     trailers_from,
@@ -202,6 +203,61 @@ class GitHubScm:
             )
             for r in mine[:MAX_CHANGES_READ]
         )
+
+    def delivery_rows(self, *, limit: int = 200) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Pull requests this framework opened, and issues it filed, as rows for `metrics.delivery`.
+
+        Not on the `Scm` port, deliberately. It is a reporting convenience rather than something a
+        workflow needs, and putting it on the port would oblige every host — including the local
+        git one, which has no pull requests at all — to answer a question only a hosted forge can.
+        `report --scm` asks for it with `getattr` and prints why it could not when the answer is no,
+        which is what "degrade with a reason" means here.
+
+        ALL states, unlike `changes_for`, which is deliberately open-only: this is asking what
+        happened to the work, and a merged pull request is the answer that matters most.
+
+        The branch filter is `is_run_branch`, so a pull request that merely mentions our work — or
+        one a person opened from our branch's diff — is not counted as something this framework
+        delivered. Issues are matched on the `ai-generated` label, which is the one this framework
+        applies itself and which is write-gated on GitHub.
+        """
+        raw = self._gh_json(
+            "pr", "list", "--state", "all", "--limit", str(limit),
+            "--json", "number,headRefName,createdAt,mergedAt,closedAt",
+        )  # fmt: skip
+        pulls = [
+            {
+                "number": row.get("number"),
+                "created_at": row.get("createdAt"),
+                "merged_at": row.get("mergedAt"),
+                "closed_at": row.get("closedAt"),
+            }
+            for row in (raw if isinstance(raw, list) else [])
+            if isinstance(row, dict) and is_run_branch(str(row.get("headRefName") or ""))
+        ]
+
+        raw = self._gh_json(
+            "issue", "list", "--state", "all", "--limit", str(limit),
+            "--label", "ai-generated", "--json", "number,createdAt,closedAt,comments",
+        )  # fmt: skip
+        issues = []
+        for row in raw if isinstance(raw, list) else []:
+            if not isinstance(row, dict):
+                continue
+            # First response is the first comment by anybody. `gh` returns them oldest first; an
+            # issue nobody answered carries None rather than a zero, so it lowers the denominator
+            # instead of pulling the median toward "answered instantly".
+            comments = row.get("comments") or []
+            first = comments[0].get("createdAt") if comments and isinstance(comments[0], dict) else None
+            issues.append(
+                {
+                    "number": row.get("number"),
+                    "created_at": row.get("createdAt"),
+                    "closed_at": row.get("closedAt"),
+                    "first_response_at": first,
+                }
+            )
+        return pulls, issues
 
     async def ticket_of(self, number: int) -> str | None:
         """The ticket a change request was opened for. `None` when `number` is not one at all.

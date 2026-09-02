@@ -115,15 +115,19 @@ def _seed(ledger: InRepoLedger, run_id: str, record: dict) -> None:
 
 
 def test_report_groups_the_ledger_and_keeps_absent_distinct_from_zero(hermetic: Path) -> None:
-    """`report --by kind` over a store where one kind was never token-measured: the unmeasured
+    """`report --by-kind` over a store where one kind was never token-measured: the unmeasured
     column renders `-`, because a reassuring 0 nobody measured is the number this ledger exists
-    to refuse."""
+    to refuse.
+
+    `--by-kind` since the full report became the default. The grouped table is still what you want
+    when you already know which column you are reading, and this is the test that keeps it working.
+    """
     ledger = InRepoLedger()
     _seed(ledger, "r1", {"kind": "review", "status": "succeeded", "tokens": 100, "cost_usd": 0.02})
     _seed(ledger, "r2", {"kind": "review", "status": "failed", "tokens": 300, "cost_usd": 0.04})
     _seed(ledger, "w1", {"kind": "workflow", "status": "succeeded"})
 
-    result = CliRunner().invoke(main, ["report"])
+    result = CliRunner().invoke(main, ["report", "--by-kind"])
     assert result.exit_code == 0, result.output
     review_row = next(line for line in result.output.splitlines() if line.startswith("review"))
     assert " 2 " in review_row and " 1 " in review_row, "two runs, one failed"
@@ -524,3 +528,88 @@ def test_the_cli_exits_blocked_when_the_ceiling_refuses(hermetic: Path, monkeypa
     result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(hermetic)])
     assert result.exit_code == 3, result.output
     assert "cost.daily_exceeded" in result.output
+
+
+# -- the full report, the page, and the host ------------------------------------------
+
+
+def test_the_default_report_is_the_full_one_and_still_says_what_the_history_is(
+    hermetic: Path,
+) -> None:
+    """The evidence footer lived inside the grouped-table branch. A richer default that inherited
+    every number and none of the caveat would be the worst possible version of this change."""
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded", "cost_usd": 0.02})
+
+    result = CliRunner().invoke(main, ["report"])
+    assert result.exit_code == 0, result.output
+    assert "outcomes" in result.output and "what it found" in result.output
+    assert "A dash is a number nobody measured" in result.output
+    assert "unverifiable" in result.output, "the caveat survives on the default path"
+
+
+def test_the_page_is_written_through_the_redacting_sink(hermetic: Path, tmp_path: Path) -> None:
+    """`metrics` returns a string and never writes one. A report carries finding text and run ids,
+    so putting it on disk is a redaction sink and belongs to the layer that may reach `privileged`.
+    """
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded", "cost_usd": 0.02})
+    page = tmp_path / "out" / "report.html"
+
+    result = CliRunner().invoke(main, ["report", "--html", str(page)])
+    assert result.exit_code == 0, result.output
+    assert page.exists(), "the parent directory is created, like every other sink"
+
+    html = page.read_text()
+    assert html.startswith("<!doctype html>")
+    assert "http://" not in html and "https://" not in html and "<script" not in html
+
+
+def test_the_report_degrades_with_a_reason_when_the_host_cannot_answer(hermetic: Path, monkeypatch) -> None:
+    """A metrics page is a document somebody reads. The alternative to "we could not reach the
+    host" is not "no page" — it is a page that quietly omits a section, which is the failure
+    `Measured` exists to prevent, one level up."""
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
+
+    class _Mute:
+        """A host with no `delivery_rows` at all — which is every host but GitHub."""
+
+    monkeypatch.setattr("in_lockstep.cli._bound_scm", lambda _lockstep: _Mute())
+
+    result = CliRunner().invoke(main, ["report", "--scm"])
+    assert result.exit_code == 0, result.output
+    assert "delivery   skipped" in result.stderr
+    assert "_Mute cannot list pull requests" in result.stderr
+    assert "outcomes" in result.stdout, "the rest of the report still printed"
+
+
+def test_a_host_that_raises_does_not_take_the_report_with_it(hermetic: Path, monkeypatch) -> None:
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
+
+    class _Angry:
+        def delivery_rows(self):
+            raise RuntimeError("gh: not authenticated")
+
+    monkeypatch.setattr("in_lockstep.cli._bound_scm", lambda _lockstep: _Angry())
+
+    result = CliRunner().invoke(main, ["report", "--scm"])
+    assert result.exit_code == 0, result.output
+    assert "gh: not authenticated" in result.stderr
+    assert "outcomes" in result.stdout
+
+
+def test_delivery_reaches_the_report_when_the_host_answers(hermetic: Path, monkeypatch) -> None:
+    _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
+
+    class _Host:
+        def delivery_rows(self):
+            return (
+                [{"created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-01T03:00:00Z"}],
+                [{"created_at": "2026-09-01T00:00:00Z", "closed_at": "2026-09-01T06:00:00Z"}],
+            )
+
+    monkeypatch.setattr("in_lockstep.cli._bound_scm", lambda _lockstep: _Host())
+
+    result = CliRunner().invoke(main, ["report", "--scm"])
+    assert result.exit_code == 0, result.output
+    assert "delivery" in result.output
+    assert "asked of the host" in result.output, "labelled as somebody else's evidence"
+    assert "3.0h" in result.output
