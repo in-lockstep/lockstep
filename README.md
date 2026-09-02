@@ -1,3 +1,10 @@
+> **Archived.** This branch is the last state of the `0.1.x` compiler, which lowered a markdown
+> spec into GitHub Agentic Workflows. It is kept for the record and receives no changes. From
+> `0.2.0` the `in-lockstep` name is a different product, the framework on `main`;
+> [ADR 0001](https://github.com/in-lockstep/lockstep/blob/main/design/adr/0001-pivot-to-runnable-framework.md)
+> records why. The `in-lockstep-exec` distribution and the `pipeline-exec` image this line
+> published are withdrawn.
+
 # Lockstep
 
 Compiles pipeline definitions — commands, agents, guardrails, skills, contexts, profiles — into
