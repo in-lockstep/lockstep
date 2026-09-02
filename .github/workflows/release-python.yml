@@ -87,10 +87,15 @@ jobs:
           python3 -m venv /tmp/proof
           /tmp/proof/bin/pip install -q dist/in-lockstep/*.whl
           /tmp/proof/bin/in-lockstep --version
-          # A prompt body, read from site-packages rather than from a checkout.
-          /tmp/proof/bin/in-lockstep show-prompt security | grep -q "guardrail:baseline"
-          # And the eval corpus.
-          /tmp/proof/bin/in-lockstep eval report | grep -q "27"
+          # A prompt body, read from site-packages rather than from a checkout. Captured first,
+          # then searched: `grep -q` closes the pipe on its first match, the CLI then takes EPIPE
+          # on a later write and exits 1, and `pipefail` fails the step on a prompt that was
+          # correct. That race never fires on a 64KB macOS pipe and fired on the first tag here.
+          prompt=$(/tmp/proof/bin/in-lockstep show-prompt security)
+          grep -q "guardrail:baseline" <<<"$prompt"
+          # And the eval corpus, the same way.
+          corpus=$(/tmp/proof/bin/in-lockstep eval report)
+          grep -q "27" <<<"$corpus"
           mkdir -p /tmp/proof-repo && cd /tmp/proof-repo
           /tmp/proof/bin/in-lockstep init
           test -f .lockstep/lockstep.py
