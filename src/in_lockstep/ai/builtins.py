@@ -53,6 +53,13 @@ MAX_SEARCH_MATCHES = 80
 MAX_SCRIPT_OUTPUT_CHARS = 6_000
 DEFAULT_SCRIPT_TIMEOUT = 300.0
 
+#: How many times one session may run the suite by default. Three, because the loop this exists to
+#: close is write → run → correct, and a model that has not converged in three full runs is not
+#: going to on the fourth — it is going to spend the rest of its turns re-reading the same failures.
+#: Each run costs real wall-clock (this repository's own suite takes about a hundred seconds), and
+#: that time comes out of the same ceiling the model needs to finish.
+DEFAULT_TEST_RUNS = 3
+
 # What a model may run, by argv[0]. An allowlist rather than a denylist, because the interesting
 # property is "somebody wrote this down", and a denylist of shells is trivially defeated by the
 # next interpreter nobody thought of.
@@ -77,6 +84,25 @@ ALLOWED_COMMANDS: tuple[str, ...] = (
 
 
 @runtime_checkable
+@runtime_checkable
+class TestRunner(Protocol):
+    """Runs the repository's suite over HEAD plus what this session has staged.
+
+    Structural and injected for the same reason `CommandRunner` is: materialising a change set
+    lives in `adapters/worktree.py`, and `ai` may not import `adapters`. Naming a protocol is also
+    the better answer on its own — what a repository substitutes here decides whether a model's
+    "the tests pass" is a measurement or a claim.
+
+    `paths` narrows the run. It matters more than it looks: a full suite here is about a hundred
+    seconds, so an unnarrowed loop spends its budget waiting rather than working. It is also the
+    one dangerous affordance in this tool — a model can run a subset that passes and talk itself
+    into finishing — which is why the framework's own full run still decides the outcome, and why
+    the result of this tool is never what a strategy reports.
+    """
+
+    async def __call__(self, paths: tuple[str, ...] = ()) -> str: ...
+
+
 class CommandRunner(Protocol):
     """Whatever actually executes a command. Structural on purpose.
 
@@ -219,8 +245,10 @@ def read_write_execute(
     workspace: Workspace,
     *,
     commands: CommandRunner | None = None,
+    tests: TestRunner | None = None,
     allowed_commands: tuple[str, ...] = ALLOWED_COMMANDS,
     script_timeout: float = DEFAULT_SCRIPT_TIMEOUT,
+    max_test_runs: int = DEFAULT_TEST_RUNS,
 ) -> tuple[ToolSet, ToolRunnerImpl]:
     """Read, stage, and run a command. The most capable set the framework ships.
 
@@ -236,9 +264,38 @@ def read_write_execute(
     """
     tools, runner = read_write(workspace)
     runner.commands = commands
+    runner.tests = tests
     runner.allowed_commands = allowed_commands
     runner.script_timeout = script_timeout
+    runner.max_test_runs = max_test_runs
     tools = tools | ToolSet.of(
+        Tool(
+            server=BUILTIN_SERVER,
+            name="run_tests",
+            description=(
+                "Run this repository's test suite over the current code PLUS everything you have "
+                "staged with write_file, and return what it said. This is the only way to find out "
+                "whether your change works before the run ends — run_script sees the tree WITHOUT "
+                f"your staged writes. Limited to {max_test_runs} call(s) per session, because the "
+                "suite costs real time; narrow it with `paths` rather than spending a call on the "
+                "whole suite. Passing a subset does not mean the change is done: the framework runs "
+                "everything at the end, and that run is what decides."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            'test files or directories to run, e.g. ["tests/in_lockstep/test_x.py"].'
+                            " Omit to run everything, which is slow."
+                        ),
+                    }
+                },
+            },
+            capabilities=frozenset({Capability.EXECUTES_CODE}),
+        ),
         Tool(
             server=BUILTIN_SERVER,
             name="run_script",
@@ -274,6 +331,16 @@ class ToolRunnerImpl:
     commands: CommandRunner | None = None
     allowed_commands: tuple[str, ...] = ALLOWED_COMMANDS
     script_timeout: float = DEFAULT_SCRIPT_TIMEOUT
+    #: Runs the bound Test verb over HEAD plus what this session has staged. Injected, and it has
+    #: to be: materialising a changeset lives in `adapters`, which `ai` may not import. The same
+    #: inversion `commands` uses — this layer declares the seam, the composition root fills it.
+    #: Absent makes `run_tests` refuse, exactly as an absent runner makes `run_script` refuse.
+    tests: TestRunner | None = None
+    #: How many times one session may run the suite. A ceiling rather than a budget: the suite
+    #: costs wall-clock, and a model that runs it after every edit exhausts its turns before it
+    #: finishes. Set from `InvokePolicy.max_test_runs` at the binding site.
+    max_test_runs: int = DEFAULT_TEST_RUNS
+    _test_runs: int = 0
 
     async def __call__(self, server: str, name: str, args: dict[str, object]) -> str:
         if server != BUILTIN_SERVER:  # pragma: no cover - ToolSet resolves before this
@@ -285,6 +352,7 @@ class ToolRunnerImpl:
             "write_file": self._write,
             "delete_file": self._delete,
             "run_script": self._script,
+            "run_tests": self._tests,
         }.get(name)
         if handler is None:  # pragma: no cover - ToolSet resolves before this
             return f"refused: no builtin tool named {name!r}"
@@ -292,6 +360,36 @@ class ToolRunnerImpl:
         # One handler is async and the rest are not. Awaiting whatever comes back keeps that an
         # implementation detail of the handler rather than a fact every caller has to know.
         return await result if inspect.isawaitable(result) else result  # type: ignore[return-value]
+
+    async def _tests(self, args: dict[str, object]) -> str:
+        """Run the suite over what this session has staged, and say what happened.
+
+        The whole point of the tool: without it a model writes an implementation, stops, and learns
+        whether it worked only after the run is over and paid for. Run 33582850420 is what that
+        costs — `tdd.not_green`, 13 failing tests of 1644, $13.84 for a diff one test run would have
+        rejected.
+        """
+        if self.tests is None:
+            return (
+                "refused: no Test verb is bound, so there is nothing to run. Bind Test (e.g. "
+                "PytestTest) in lockstep.py, or work without a suite."
+            )
+        if self._test_runs >= self.max_test_runs:
+            # A refusal that says the number, because the alternative is a model retrying a call
+            # that will never work and burning the turns it needs to finish.
+            return (
+                f"refused: the suite has already been run {self._test_runs} time(s), which is this "
+                f"session's limit. Decide from what the last run said rather than running it again."
+            )
+        raw = args.get("paths") or ()
+        paths = tuple(str(p) for p in raw if str(p).strip()) if isinstance(raw, (list, tuple)) else ()
+        self._test_runs += 1
+        try:
+            return await self.tests(paths)
+        except Exception as e:  # noqa: BLE001 - a tool result is a message, never a crash
+            # A failing runner is something the model can react to. Raising here would end the
+            # session with the staged work unreported, which is the loss this tool exists to avoid.
+            return f"error: could not run the suite: {e}"
 
     def _read(self, args: dict[str, object]) -> str:
         path = str(args.get("path", ""))
