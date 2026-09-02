@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cookbook · in-lockstep</title>
+<meta name="description" content="Ten recipes of twenty lines or fewer. Every Python snippet on this page is executed by the test suite, so a recipe that stops matching the API fails CI rather than you.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='3' y='3' rx='1.5' fill='%2300A87C'/%3E%3Crect width='16' height='3' y='10' rx='1.5' fill='%23C77716'/%3E%3C/svg%3E">
+<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/geistmono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../site.css">
+<script>
+  /* Both of these run before first paint. The theme so a reader who chose one never sees the other
+     flash, and the `js` class so that the rules which hide a diagram before it animates apply only
+     where something is actually going to animate it. Without this the page would be correct with
+     JavaScript on and half-blank with it off. */
+  document.documentElement.className += " js";
+  try { var t = localStorage.getItem("ls-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html" aria-label="in-lockstep, home">
+      <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+        <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+        <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+        <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+      </svg>
+      in-lockstep
+    </a>
+    <nav class="nav-links" aria-label="Site">
+      <a href="../walkthrough.html">Walkthrough</a>
+      <a href="../governance.html">Governance</a>
+      <a href="../extensions.html">Extensions</a>
+      <a href="../docs/getting-started.html">Docs</a>
+    </nav>
+    <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+      </svg>
+    </button>
+    <a class="btn btn-ghost" href="https://github.com/in-lockstep/lockstep">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+<div class="wrap doc">
+  <aside class="doc-toc" aria-label="On this page">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#1-route-triage-to-a-local-model-the-0-path">1. Route triage to a local model: the $0 path</a></li>
+      <li><a href="#2-go-keyless-in-ci-with-workload-identity-federation">2. Go keyless in CI with workload identity federation</a></li>
+      <li><a href="#3-tdd-implement-triggered-by-a-comment">3. TDD implement, triggered by a comment</a></li>
+      <li><a href="#4-a-rolling-daily-spend-ceiling">4. A rolling daily spend ceiling</a></li>
+      <li><a href="#5-house-guardrails-in-every-review">5. House guardrails in every review</a></li>
+      <li><a href="#6-ship-your-organisation-s-standards-as-a-package">6. Ship your organisation&#x27;s standards as a package</a></li>
+      <li><a href="#7-feed-your-proxy-real-egress-enforcement">7. Feed your proxy: real egress enforcement</a></li>
+      <li><a href="#8-record-a-cassette-once-review-offline-forever">8. Record a cassette once, review offline forever</a></li>
+      <li><a href="#9-a-house-review-lens-bound-rather-than-monkeypatched">9. A house review lens, bound rather than monkeypatched</a></li>
+      <li><a href="#10-make-the-ledger-auditable">10. Make the ledger auditable</a></li>
+    </ol>
+  </aside>
+  <article class="doc-body">
+    <h1>Cookbook</h1>
+    <p class="lede">Ten recipes of twenty lines or fewer. Every Python snippet on this page is executed by the test suite, so a recipe that stops matching the API fails CI rather than you.</p>
+<p>Ten recipes, twenty lines or fewer each. Every <code>lockstep.py</code> snippet is executed by the test suite, so a recipe that stops matching the API fails CI rather than a reader. Snippets go in <code>.lockstep/lockstep.py</code> unless a recipe says otherwise.</p>
+<h2 id="1-route-triage-to-a-local-model-the-0-path">1. Route triage to a local model: the $0 path</h2>
+<p>The <code>local</code> provider ships pointed at Ollama and registered <code>free</code>, so nothing needs a price and the run bills exactly zero. Tokens are still counted, because free is not unmeasured.</p>
+<pre data-lang="python"><code>from in_lockstep import Lockstep
+from in_lockstep.core.verbs import Verb
+
+lockstep = Lockstep.detect()
+lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")</code></pre>
+<pre data-lang="bash"><code>in-lockstep triage --ticket '#42'</code></pre>
+<h2 id="2-go-keyless-in-ci-with-workload-identity-federation">2. Go keyless in CI with workload identity federation</h2>
+<p>Delete <code>ANTHROPIC_API_KEY</code> from repository secrets. Give the model-calling job an identity instead, and hand the framework the identifiers of the federation rule that accepts it. Those go in plain env, <strong>not</strong> in secrets: an identifier in <code>secrets</code> seeds redaction and masks it out of the very errors that name it.</p>
+<pre data-lang="yaml"><code>permissions:
+  contents: read
+  id-token: write   # mint a short-lived GitHub OIDC token; the framework exchanges it
+env:
+  ANTHROPIC_FEDERATION_RULE_ID: fdrl_...
+  ANTHROPIC_ORGANIZATION_ID: &lt;org uuid&gt;
+  ANTHROPIC_SERVICE_ACCOUNT_ID: svac_...   # the id, not the name — a name is refused locally</code></pre>
+<p>A static key set in env still wins when present, so migration is: configure the rule in the Anthropic Console, add the identifiers, watch one green run, then delete the secret.</p>
+<h2 id="3-tdd-implement-triggered-by-a-comment">3. TDD implement, triggered by a comment</h2>
+<p><code>/implement</code> on an issue runs <code>implement/from-ticket</code> on the default branch. The strategy IS the adapter, so making it test-driven is naming a different class in the binding. The scaffold binds <code>Oneshot</code>. Red-then-green costs a second model phase, which is why it is a choice and not the default.</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import TDD, Implement
+
+lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
+lockstep.bind(Implement, TDD())</code></pre>
+<p><code>in-lockstep ls</code> prints the whole story as one line, <code>Implement -&gt; TDD</code>. The model comes from the route above: an adapter bound with no explicit invoker resolves it per run, and egress from the bound <code>EgressPolicy</code>.</p>
+<p>This repository's own <a href="https://github.com/in-lockstep/lockstep/blob/main/lockstep/lockstep.py">.lockstep/lockstep.py</a> is the full worked version, including the <code>WorktreeRunner</code> wrap that keeps a model-chosen command's writes off the live tree.</p>
+<h2 id="4-a-rolling-daily-spend-ceiling">4. A rolling daily spend ceiling</h2>
+<p>The per-run budget bounds one run. This bounds a runaway <em>trigger</em>, a chat-ops loop firing all night. It sums the ledger's own records over a rolling 24 hours, and refuses before a run starts:</p>
+<pre data-lang="bash"><code>export IN_LOCKSTEP_DAILY_LIMIT=10.00</code></pre>
+<p>Honest scope: the window sums this clone's ledger, so a runner that never fetched <code>lockstep-history</code> sums less than the truth. The provider console's organisation limit (<code>IN_LOCKSTEP_ORG_SPEND_LIMIT</code>, attested to <code>doctor</code>) remains the durable backstop.</p>
+<h2 id="5-house-guardrails-in-every-review">5. House guardrails in every review</h2>
+<p>Prompt text is data; the binding site is where data enters, visibly. <code>.plus</code> appends after the shipped baseline, so extending cannot quietly drop it.</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import review_layers
+
+lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
+lockstep.bind(
+    Review,
+    AiReview(
+        layers=review_layers().plus(
+            guardrails=(("house", "Do NOT propose new dependencies; flag them instead."),),
+        ),
+    ),
+)</code></pre>
+<h2 id="6-ship-your-organisation-s-standards-as-a-package">6. Ship your organisation's standards as a package</h2>
+<p>At one repository, a <code>lockstep.contribute(...)</code> line. At two hundred, a package: installing it is what applies it, and <code>Lockstep.detect()</code> discovers it before your module's own lines run. The entire org layer is a <code>pyproject.toml</code> entry point and one function:</p>
+<pre data-lang="toml"><code>[project.entry-points."in_lockstep.standards"]
+acme = "acme_lockstep:apply"</code></pre>
+<pre data-lang="python"><code>from in_lockstep import Policy
+
+def apply(std):
+    std.contribute(Policy(name="acme-baseline", scan_input="block", max_turns=16))</code></pre>
+<p>Everything lands at <code>Tier.PLUGIN</code>, so any repository's own <code>lockstep.bind</code> still wins, and <code>in-lockstep ls</code> prints what applied. Worked example: <a href="https://github.com/in-lockstep/lockstep/blob/main/examples/acme-standards/">examples/acme-standards</a>.</p>
+<h2 id="7-feed-your-proxy-real-egress-enforcement">7. Feed your proxy: real egress enforcement</h2>
+<p>The framework never enforces destinations itself (an in-process allowlist would be a checkbox); it verifies that <em>something outside the process</em> does. The manifest is the bridge:</p>
+<pre data-lang="bash"><code>in-lockstep egress-manifest        # the hosts a run may dial, one per line</code></pre>
+<p>Feed that list to the proxy or firewall your CI host provides, then attest it:</p>
+<pre data-lang="bash"><code>export IN_LOCKSTEP_EGRESS=enforced</code></pre>
+<p><code>enforced</code> is verified, not believed. A probe dials a host that must be unreachable, and the run is refused if it connects. Extra hosts you decide to allow (a package registry, before an <code>EXECUTES_CODE</code> step needs it) go in <code>EgressPolicy(allow=("pypi.org",))</code>, and the manifest prints them.</p>
+<h2 id="8-record-a-cassette-once-review-offline-forever">8. Record a cassette once, review offline forever</h2>
+<p>Cassettes sit at the <code>LLMInput</code>/<code>LLMOutput</code> seam, so a recording replays against a different provider, and tool IO is captured alongside model IO.</p>
+<pre data-lang="bash"><code>in-lockstep review --base origin/main --record       # one real call, writes the cassette
+in-lockstep review --base origin/main --offline      # deterministic and free, from here on</code></pre>
+<p>The replay refuses to silently call out when the prompt no longer matches the recording. A changed guardrail means re-recording, and it says so rather than billing you quietly.</p>
+<h2 id="9-a-house-review-lens-bound-rather-than-monkeypatched">9. A house review lens, bound rather than monkeypatched</h2>
+<p>A lens is a prompt class. Binding it is how it becomes real: visible in <code>ls</code>, loaded from the trusted ref, never an import-time side effect.</p>
+<p>The body is a <strong>file</strong>, not a string literal. Prompt text is data a non-programmer edits and a diff reviews, which is why it lives outside the module. A string is refused at class creation rather than at render time.</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.ai.prompt import Body
+from in_lockstep.prompts.review import LENSES, ReviewPrompt
+
+class LicenseLens(ReviewPrompt):
+    aspect = "license"
+    body = Body.from_path(".lockstep/prompts/license.md")
+
+lockstep.bind(
+    Review,
+    AiReview(lenses={**LENSES, "license": LicenseLens}),
+)</code></pre>
+<p><code>in-lockstep show-prompt license</code> renders it offline, and <code>ls</code> stars it as not-the-shipped-prompt.</p>
+<h2 id="10-make-the-ledger-auditable">10. Make the ledger auditable</h2>
+<p>Every run records to the <code>lockstep-history</code> orphan branch. Two commands read it, and both check it was not rewritten:</p>
+<pre data-lang="bash"><code>in-lockstep report --by model     # aggregates, and flags any record rewritten after append
+in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check</code></pre>
+<p>The check reads the retained chain. A force-push that <em>replaced</em> the chain is the remote's to refuse. Protect <code>lockstep-history</code> with a ruleset blocking force-pushes and deletions. Appends are fast-forwards and still flow, so it needs no reviews and slows nothing down.</p>
+  </article>
+</div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-about">
+      <a class="brand" href="../index.html" aria-label="in-lockstep, home">
+        <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+          <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+          <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+          <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+          <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        </svg>
+        in-lockstep
+      </a>
+      <p class="foot-p">An agentic SDLC framework, written in Python, for a repository in any language. Apache 2.0.</p>
+      <p class="foot-p">Every block of terminal output on this page is the verbatim output of the
+        command in its title bar, run against this framework's own repository. Nothing here is a
+        mock-up, and nothing has been tidied.</p>
+    </div>
+    <nav aria-label="Product">
+      <h4>Product</h4>
+      <a href="../walkthrough.html">Walkthrough</a>
+      <a href="../governance.html">Governance</a>
+      <a href="../extensions.html">Extensions</a>
+    </nav>
+    <nav aria-label="Documentation">
+      <h4>Docs</h4>
+      <a href="../docs/getting-started.html">Getting started</a>
+      <a href="../docs/cookbook.html">Cookbook</a>
+      <a href="../docs/extending.html">Extending</a>
+    </nav>
+    <nav aria-label="Project">
+      <h4>Project</h4>
+      <a href="https://github.com/in-lockstep/lockstep">Source</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/design/gates.md">Exit gates</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/CONTRIBUTING.md">Contributing</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>

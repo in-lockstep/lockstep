@@ -1,0 +1,10 @@
+Geist and Geist Mono
+Copyright (c) 2023 Vercel, Inc.
+
+Licensed under the SIL Open Font License, Version 1.1.
+The full license text is available at https://openfontlicense.org and in the
+Geist source repository at https://github.com/vercel/geist-font.
+
+The .woff2 files in this directory are the latin and latin-ext subsets of the
+variable weight axis, obtained from Google Fonts. They are vendored rather than
+linked so the site depends on no third-party host at render time.

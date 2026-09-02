@@ -1,438 +1,987 @@
-/* in-lockstep — "the two tracks".
+/* in-lockstep — "blueprint".
  *
- * The name is the thesis: automation and people advance together, synchronising at every human
- * boundary. So the page is built on two coloured tracks — mint for what the machine did, gold for
- * where a person decided — and the walkthrough is a spine those two run down rather than a section
- * with bullet points in it. */
+ * The name is the argument: the automation and the people advance together, synchronising at every
+ * human boundary. So the whole page is built on two signal tracks that never merge and never
+ * diverge. Green is what the machine did. Amber is where a person decided. Nothing else on this
+ * site is coloured, which is what makes those two mean something when they appear.
+ *
+ * Everything is hand-written CSS with no build step, because the site is served from an orphan
+ * gh-pages branch and a toolchain nobody runs locally is a toolchain that rots. Fonts are
+ * self-hosted for the same reason: one fewer host between a reader and the page.
+ *
+ * ONE radius rule, applied everywhere: 6px on controls and small chips, 10px on panels and cards,
+ * no pills. ONE theme at a time: light and dark are both fully designed, sections never invert.
+ */
 
-@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+/* ---------- fonts (self-hosted; Geist and Geist Mono, SIL OFL 1.1) ---------- */
 
-:root {
-  --ink:        #0D0E12;
-  --ink-2:      #14161C;
-  --ink-3:      #1C1F27;
-  --line:       #262A34;
-  --line-soft:  #1B1E26;
-
-  --text:       #E8E6E1;
-  --text-2:     #A7A9AF;
-  --text-3:     #6E727C;
-
-  --machine:    #74D6C2;   /* what the framework did */
-  --machine-dim:#2A4B47;
-  --human:      #E9B872;   /* where a person decided */
-  --human-dim:  #4A3C26;
-  --alarm:      #E5806B;
-
-  --ivory:      #F3F0E9;
-  --ivory-ink:  #16171B;
-
-  --measure:    66ch;
-  --glow:       0 0 0 1px rgba(116,214,194,.16), 0 24px 60px -30px rgba(116,214,194,.35);
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/geist-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/geist-latin-ext.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/geistmono-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/geistmono-latin-ext.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* ---------- tokens ----------
+ *
+ * Light is the base definition; dark redefines only what changes, twice: once for the system
+ * preference and once for the explicit toggle, so the toggle wins in both directions. Every colour
+ * has a value on bare :root, so nothing depends on a media query having matched. */
+
+:root {
+  --bg:        #FAF9F7;
+  --bg-2:      #FFFFFF;
+  --bg-3:      #F1EFEA;
+  --bg-code:   #FFFFFF;
+  --line:      #E4E1DA;
+  --line-2:    #CBC7BE;
+
+  --text:      #14161A;
+  --text-2:    #545861;
+  --text-3:    #686C75;
+
+  /* the two tracks */
+  --machine:   #00795A;
+  --machine-2: #00A87C;
+  --machine-bg:#E8F5F0;
+  --human:     #9A5400;
+  --human-2:   #C77716;
+  --human-bg:  #FBF1E2;
+  --alarm:     #B02A18;
+  --alarm-bg:  #FBEDEA;
+
+  --r:         6px;
+  --r-lg:      10px;
+  --measure:   66ch;
+  --page:      1180px;
+  --nav-h:     64px;
+
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --shadow-sm: 0 1px 2px rgba(20, 22, 26, .05), 0 1px 1px rgba(20, 22, 26, .04);
+  --shadow:    0 2px 4px rgba(20, 22, 26, .04), 0 12px 28px -14px rgba(20, 22, 26, .18);
+  --ease:      cubic-bezier(.2, .7, .3, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0A0C10;
+    --bg-2:      #10141A;
+    --bg-3:      #161B23;
+    --bg-code:   #0D1117;
+    --line:      #222833;
+    --line-2:    #333B48;
+
+    --text:      #E9EBEF;
+    --text-2:    #9EA5B1;
+    --text-3:    #848B96;
+
+    --machine:   #3FDCA6;
+    --machine-2: #6BE9BF;
+    --machine-bg:#0C221B;
+    --human:     #F0A860;
+    --human-2:   #F7BE84;
+    --human-bg:  #241906;
+    --alarm:     #FF7C64;
+    --alarm-bg:  #2A1310;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow:    0 2px 4px rgba(0, 0, 0, .3), 0 16px 40px -18px rgba(0, 0, 0, .8);
+
+    color-scheme: dark;
+  }
+}
+
+/* Explicit choice beats the system preference, in both directions. Duplicated rather than nested,
+   because a rule inside a media query cannot be overridden by a later selector of equal weight. */
+:root[data-theme="dark"] {
+  --bg:        #0A0C10;
+  --bg-2:      #10141A;
+  --bg-3:      #161B23;
+  --bg-code:   #0D1117;
+  --line:      #222833;
+  --line-2:    #333B48;
+
+  --text:      #E9EBEF;
+  --text-2:    #9EA5B1;
+  --text-3:    #848B96;
+
+  --machine:   #3FDCA6;
+  --machine-2: #6BE9BF;
+  --machine-bg:#0C221B;
+  --human:     #F0A860;
+  --human-2:   #F7BE84;
+  --human-bg:  #241906;
+  --alarm:     #FF7C64;
+  --alarm-bg:  #2A1310;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow:    0 2px 4px rgba(0, 0, 0, .3), 0 16px 40px -18px rgba(0, 0, 0, .8);
+
+  color-scheme: dark;
+}
+
+/* ---------- base ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-padding-top: calc(var(--nav-h) + 20px);
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--bg);
   color: var(--text);
-  font-family: Manrope, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--sans);
   font-size: 17px;
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-.wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+img, svg { max-width: 100%; }
+svg { display: block; }
+
+a {
+  color: var(--text);
+  text-decoration-line: underline;
+  text-decoration-color: var(--line-2);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color .15s var(--ease);
+}
+a:hover { color: var(--text); text-decoration-color: var(--text-3); }
+
+:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; border-radius: 3px; }
+
+::selection { background: var(--text); color: var(--bg); }
+
+/* ---------- layout primitives ---------- */
+
+.wrap { width: 100%; max-width: var(--page); margin: 0 auto; padding: 0 24px; }
 .col  { max-width: var(--measure); }
-.mid  { max-width: 860px; margin-left: auto; margin-right: auto; }
+.mid  { max-width: 760px; margin-inline: auto; }
 
-a { color: var(--machine); text-underline-offset: 3px; text-decoration-thickness: 1px; }
-a:focus-visible { outline: 2px solid var(--machine); outline-offset: 4px; border-radius: 2px; }
+section { position: relative; }
+.band { padding: 96px 0; }
+.band-tight { padding: 68px 0; }
+.band + .band { border-top: 1px solid var(--line); }
+.band-alt { background: var(--bg-3); }
 
-/* ---------- the bar ----------
- *
- * Two tiers, because the old one flattened two different questions into one list and answered
- * neither. "The problem", "Governance" and "On your laptop" sat side by side looking identical
- * while one scrolled the page, one left it, and nothing said which page you were on — so following
- * a link felt like it might or might not take you somewhere.
- *
- * Now the top row is WHERE YOU ARE IN THE SITE: three destinations, the same three on every page,
- * with the current one marked twice — named beside the wordmark and underlined in the nav. The
- * second row is WHERE YOU ARE ON THIS PAGE, set in mono and grey so it reads as subordinate, and
- * `site.js` lights the section you are actually looking at. */
-
-.topbar {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--ink); border-bottom: 1px solid var(--line-soft);
-  backdrop-filter: blur(3px);
+@media (max-width: 767px) {
+  .band { padding: 64px 0; }
+  .band-tight { padding: 48px 0; }
 }
-.masthead {
-  display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  padding: 18px 0 12px; flex-wrap: wrap;
-  position: static; background: none;
-}
-.mark {
-  font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700;
-  color: var(--text); text-decoration: none; letter-spacing: -.02em;
-  display: inline-flex; align-items: baseline; gap: 9px;
-}
-.mark i { font-style: normal; color: var(--machine); }
-/* The breadcrumb half. A separator drawn in CSS rather than typed, so the wordmark stays one
-   readable string in the markup and the page name cannot be mistaken for part of it. */
-.mark b { font-weight: 400; color: var(--text-3); }
-.mark b::before { content: "/"; margin-right: 9px; color: var(--line); }
-
-.masthead nav.site { display: flex; gap: 26px; font-size: 14.5px; }
-.masthead nav.site a {
-  color: var(--text-2); text-decoration: none;
-  padding-bottom: 5px; border-bottom: 2px solid transparent;
-}
-.masthead nav.site a:hover { color: var(--machine); }
-.masthead nav.site a[aria-current="page"] { color: var(--text); border-bottom-color: var(--machine); }
-
-.onpage {
-  display: flex; align-items: baseline; gap: 22px; flex-wrap: wrap; padding: 0 0 13px;
-  font-family: "JetBrains Mono", monospace; font-size: 12.5px;
-}
-.onpage > span {
-  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-3);
-}
-/* The links are read; the label is only glanced at. `--text-3` at 12.5px is a caption colour and
-   these are targets, so they take the brighter token and the label keeps the dimmer one. */
-.onpage a { color: var(--text-2); text-decoration: none; }
-.onpage a:hover { color: var(--machine); }
-/* Set by site.js. Absent without JavaScript, which costs the reader a highlight and nothing else. */
-.onpage a.here { color: var(--machine); }
-
-.cta {
-  font-family: "JetBrains Mono", monospace; font-size: 13px;
-  border: 1px solid var(--machine-dim); color: var(--machine);
-  padding: 7px 14px; border-radius: 4px; text-decoration: none;
-}
-.cta:hover { border-color: var(--machine); }
 
 /* ---------- type ---------- */
 
-h1 {
-  font-family: Newsreader, Georgia, serif; font-weight: 400;
-  font-size: clamp(44px, 7.4vw, 86px); line-height: 1.0; letter-spacing: -.028em;
-  margin: 0 0 24px; text-wrap: balance;
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
-h1 em { font-style: italic; color: var(--machine); }
-h2 {
-  font-family: Newsreader, Georgia, serif; font-weight: 400;
-  font-size: clamp(30px, 4.2vw, 46px); line-height: 1.1; letter-spacing: -.02em;
-  margin: 0 0 18px; text-wrap: balance;
-}
-h3 {
-  font-family: Newsreader, Georgia, serif; font-weight: 500;
-  font-size: 24px; line-height: 1.2; letter-spacing: -.012em; margin: 0 0 10px;
-}
-h4 {
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 500;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
+
+h1 { font-size: clamp(2.4rem, 5.4vw, 3.9rem); letter-spacing: -0.038em; }
+h2 { font-size: clamp(1.8rem, 3.2vw, 2.5rem); }
+h3 { font-size: 1.1rem; letter-spacing: -0.018em; line-height: 1.35; }
+h4 { font-size: 0.95rem; letter-spacing: -0.01em; }
+
+p { margin: 0 0 1.1em; max-width: var(--measure); }
+p:last-child { margin-bottom: 0; }
+
+.lede { font-size: 1.2rem; line-height: 1.55; color: var(--text-2); max-width: 58ch; }
+.sub { color: var(--text-2); }
+.dim { color: var(--text-3); }
+.mono { font-family: var(--mono); }
+
+/* The one small-caps label style on the site. The house rules cap these at one per three sections,
+   so it is defined once and used deliberately, not as section furniture. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
   margin: 0 0 14px;
 }
-p { margin: 0 0 20px; }
-.lede { font-size: 21.5px; line-height: 1.5; color: var(--text-2); font-weight: 400; }
-.lede strong { color: var(--text); font-weight: 600; }
-.eyebrow {
-  font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .16em;
-  text-transform: uppercase; color: var(--machine); margin: 0 0 20px;
-}
-ul { margin: 0 0 20px; padding-left: 20px; }
-li { margin-bottom: 10px; }
-li::marker { color: var(--text-3); }
-code {
-  font-family: "JetBrains Mono", monospace; font-size: .85em;
-  background: var(--ink-3); padding: 2px 6px; border-radius: 3px; color: var(--text);
-}
-strong { font-weight: 600; }
 
-section { padding: 92px 0; position: relative; }
-.rule { border: 0; border-top: 1px solid var(--line-soft); margin: 0; }
+.hed > h2 { margin-bottom: 16px; }
+.hed > .lede { margin-bottom: 0; }
 
-/* ---------- terminal ---------- */
+/* ---------- controls ---------- */
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 20px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  font: 500 15px/1 var(--sans);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform .15s var(--ease), background-color .15s var(--ease),
+              border-color .15s var(--ease), color .15s var(--ease);
+}
+.btn:active { transform: translateY(1px); }
+
+/* Ink on paper, inverted: the same pair in both themes, so a CTA can never end up light on light,
+   and the green stays reserved for meaning. */
+.btn-primary { background: var(--text); color: var(--bg); }
+.btn-primary:hover { background: var(--text-2); color: var(--bg); }
+
+.btn-ghost { border-color: var(--line-2); color: var(--text); background: var(--bg-2); }
+.btn-ghost:hover { border-color: var(--text-3); color: var(--text); }
+
+/* ---------- nav ---------- */
+
+.nav {
+  position: sticky; top: 0; z-index: 40;
+  height: var(--nav-h);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s var(--ease);
+}
+.nav.stuck { border-bottom-color: var(--line); }
+.nav > .wrap { height: 100%; display: flex; align-items: center; gap: 26px; }
+
+.brand {
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 600 15.5px/1 var(--sans); letter-spacing: -0.03em;
+  color: var(--text); text-decoration: none; margin-right: auto;
+}
+.brand:hover { color: var(--text); }
+
+.nav-links { display: flex; align-items: center; gap: 24px; }
+.nav-links a {
+  font-size: 14.5px; color: var(--text-2); text-decoration: none;
+  transition: color .15s var(--ease);
+}
+.nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); }
+
+.nav .btn { height: 34px; padding: 0 14px; font-size: 13.5px; }
+
+.icon-btn {
+  display: inline-grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: transparent; color: var(--text-2); cursor: pointer;
+  transition: color .15s var(--ease), border-color .15s var(--ease);
+}
+.icon-btn:hover { color: var(--text); border-color: var(--line-2); }
+
+@media (max-width: 900px) { .nav-links { display: none; } }
+
+/* ---------- terminal ----------
+ *
+ * Every block of terminal output on this site is copied verbatim from the command in its title bar,
+ * run against this framework's own repository. That is the whole reason it gets a chrome: the
+ * chrome is a claim that nothing inside it was written by hand. */
 
 .term {
-  background: #08090C; border: 1px solid var(--line); border-radius: 10px;
-  overflow: hidden; margin: 28px 0;
+  background: var(--bg-code);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
 }
-.term.lit { box-shadow: var(--glow); }
 .term-bar {
-  display: flex; align-items: center; gap: 9px; padding: 10px 16px;
-  border-bottom: 1px solid var(--line-soft);
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--text-3);
-  letter-spacing: .05em;
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-3);
+  font: 500 12.5px/1.35 var(--mono);
+  color: var(--text-3);
 }
-.term-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #2A2E38; }
-.term-bar .dot.on { background: var(--machine); }
+.term-bar b { font-weight: 500; color: var(--text-2); }
 .term pre {
-  margin: 0; padding: 20px 18px 22px; overflow-x: auto;
-  font-family: "JetBrains Mono", monospace; font-size: 13px; line-height: 1.66;
-  color: #C9CDD4;
+  margin: 0; padding: 16px 18px 18px;
+  font: 400 13px/1.62 var(--mono);
+  color: var(--text-2);
+  overflow-x: auto;
+  tab-size: 2;
 }
-.term .p { color: var(--machine); }
-.term .d { color: var(--text-3); }
+.term pre b { color: var(--text); font-weight: 500; }
+.term .p { color: var(--text-3); user-select: none; }
 .term .g { color: var(--machine); }
 .term .y { color: var(--human); }
 .term .r { color: var(--alarm); }
-.term .w { color: #FFFFFF; }
+.term .d { color: var(--text-3); }
 .term-cap {
-  padding: 0 18px 16px; font-size: 13.5px; color: var(--text-3); line-height: 1.5;
-  border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: -2px;
+  margin: 0; padding: 12px 18px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-3);
+  font-size: 14px; line-height: 1.5; color: var(--text-2);
+  max-width: none;
+}
+.term-cap strong { color: var(--text); font-weight: 500; }
+
+@media (max-width: 640px) {
+  .term pre { font-size: 11.5px; padding: 13px 14px; }
 }
 
-/* ---------- the spine: two tracks ---------- */
+/* ---------- code ---------- */
 
-.spine { position: relative; padding-left: 46px; }
-.spine::before {
-  content: ""; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px;
-  background: linear-gradient(to bottom, var(--machine-dim), var(--human-dim), var(--machine-dim));
+.code {
+  background: var(--bg-code);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
-.step { position: relative; padding: 0 0 54px; }
-.step::before {
-  content: ""; position: absolute; left: -39px; top: 7px;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--ink); border: 2px solid var(--machine);
+.code pre {
+  margin: 0; padding: 16px 18px 18px;
+  font: 400 13px/1.72 var(--mono);
+  color: var(--text-2);
+  overflow-x: auto;
 }
-.step.human::before { border-color: var(--human); }
-.step .tag {
-  font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--machine); margin-bottom: 8px; display: block;
-}
-.step.human .tag { color: var(--human); }
-.step h3 { margin-bottom: 8px; }
-.step p { color: var(--text-2); max-width: var(--measure); }
-.step p.tight { margin-bottom: 12px; }
+/* Code is highlighted with weight and value, not hue. Conventional syntax colouring would put a
+   third and fourth colour on a page whose entire argument rests on there being exactly two. */
+.code .k { color: var(--text-3); }
+.code .n { color: var(--text); font-weight: 500; }
+.code .s { color: var(--text-2); }
+.code .c { color: var(--text-3); }
+.code .t { color: var(--text-2); font-weight: 500; }
 
-.control {
-  border-left: 2px solid var(--human-dim); padding: 4px 0 4px 16px; margin: 18px 0 0;
-  font-size: 15px; color: var(--text-2); max-width: var(--measure);
-}
-.control b { color: var(--human); font-weight: 600; }
+@media (max-width: 640px) { .code pre { font-size: 11.5px; padding: 13px 14px; } }
 
-/* the human-decision card: ivory, because a person is not a terminal */
-.decision {
-  background: var(--ivory); color: var(--ivory-ink); border-radius: 8px;
-  padding: 24px 26px; margin: 24px 0; max-width: 640px;
-}
-.decision h4 { color: #6B6250; margin-bottom: 10px; }
-.decision p { color: #34363C; margin-bottom: 0; }
-.decision p + p { margin-top: 12px; }
-.decision code { background: rgba(0,0,0,.07); color: #16171B; }
+/* ---------- install strip ---------- */
 
-/* ---------- proof strip ---------- */
-
-.proof { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-         background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.proof div { background: var(--ink-2); padding: 22px 20px; }
-.proof b {
-  display: block; font-family: Newsreader, serif; font-size: 30px; font-weight: 400;
-  color: var(--machine); letter-spacing: -.02em; line-height: 1.1; margin-bottom: 6px;
-}
-.proof span { font-size: 13.5px; color: var(--text-3); line-height: 1.4; display: block; }
-
-/* ---------- start block ---------- */
-
-.start { display: grid; gap: 26px; grid-template-columns: 1.05fr 1fr; align-items: start; }
-@media (max-width: 900px) { .start { grid-template-columns: 1fr; } }
-.start ol { counter-reset: s; list-style: none; padding: 0; margin: 0; }
-.start ol li {
-  counter-increment: s; position: relative; padding-left: 40px; margin-bottom: 22px;
-}
-.start ol li::before {
-  content: counter(s); position: absolute; left: 0; top: 0;
-  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--machine-dim);
-  color: var(--machine); font-family: "JetBrains Mono", monospace; font-size: 12px;
-  display: flex; align-items: center; justify-content: center;
-}
-/* Mono, because Manrope renders `--flag` as something that looks like an en dash, and a command
-   somebody might retype must be unambiguous about its hyphens. */
-.start ol li b {
-  display: block; font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 500;
-  color: var(--text); margin-bottom: 5px; letter-spacing: -.01em;
-}
-.start ol li span { color: var(--text-2); font-size: 15px; }
-
-/* ---------- footer / cta ---------- */
-
-.final { text-align: center; padding: 100px 0; }
-.final h2 { margin-bottom: 22px; }
 .install {
-  display: inline-block; text-align: left; background: #08090C; border: 1px solid var(--line);
-  border-radius: 8px; padding: 18px 24px; font-family: "JetBrains Mono", monospace;
-  font-size: 14px; color: #C9CDD4; margin: 8px 0 20px;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 10px 10px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font: 400 14px/1.5 var(--mono);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  max-width: 100%;
 }
-.install .p { color: var(--machine); }
-
-footer { border-top: 1px solid var(--line-soft); padding: 32px 0 64px; font-size: 14px; color: var(--text-3); }
-footer a { color: var(--text-2); }
-footer p { margin: 0 0 8px; }
-
-.backlink { display: inline-block; margin-top: 40px; font-family: "JetBrains Mono", monospace; font-size: 13px; }
-
-@media (max-width: 640px) {
-  body { font-size: 16.5px; }
-  .wrap { padding: 0 18px; }
-  section { padding: 64px 0; }
-  .term pre { font-size: 12px; }
-  .spine { padding-left: 32px; }
-  .step::before { left: -25px; }
-  /* The three destinations stay; the per-page anchor list is what a narrow screen cannot
-     hold, and it is the row a reader can reproduce by scrolling. */
-  .onpage { display: none; }
-  .masthead { padding-bottom: 14px; }
-  .masthead nav.site { gap: 18px; font-size: 13.5px; order: 3; width: 100%; }
-  .mark b { display: none; }
+.install code { overflow-x: auto; white-space: nowrap; }
+.install .p { color: var(--text-3); user-select: none; }
+.copy {
+  flex: none; display: inline-grid; place-items: center;
+  width: 28px; height: 28px;
+  border: 0; border-radius: var(--r);
+  background: transparent; color: var(--text-3); cursor: pointer;
+  transition: color .15s var(--ease), background-color .15s var(--ease);
 }
+.copy:hover { color: var(--text); background: var(--bg-3); }
+.copy .tick { display: none; color: var(--machine); }  /* a tick is the machine confirming; this one is earned */
+.copy.done .tick { display: block; }
+.copy.done .clip { display: none; }
 
-/* ---------- the GitHub surface ----------
+/* ---------- panels ---------- */
+
+.panel {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 24px;
+}
+.grid { display: grid; gap: 20px; }
+
+/* ---------- track chips ----------
  *
- * The walkthrough's argument is that none of this happens anywhere new: the developer types in the
- * comment box they already use, and every reply lands in the thread. So the page has to show
- * GitHub, not a diagram of GitHub. These are deliberately a different material from `.term` —
- * a terminal is where you drive it, a thread is where it answers — and the two colours carry over:
- * gold avatars are people, mint avatars are the framework. */
+ * The only place the two colours are named in words. Used once, beside the first diagram, so the
+ * reader learns the code before the page starts relying on it. */
 
-.gh {
-  background: #0B0D11; border: 1px solid var(--line); border-radius: 10px;
-  overflow: hidden; margin: 26px 0; max-width: 780px;
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 500 12.5px/1 var(--mono);
+  letter-spacing: -0.01em;
+  color: var(--text-2);
 }
-.gh-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 16px; border-bottom: 1px solid var(--line-soft);
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--text-3);
-}
-.gh-bar b { color: var(--text-2); font-weight: 500; }
-.gh-head { padding: 18px 20px 4px; }
-.gh-head h4 {
-  font-family: Newsreader, Georgia, serif; font-size: 25px; font-weight: 400; line-height: 1.2;
-  letter-spacing: -.012em; color: var(--text); text-transform: none; margin: 0 0 12px;
-}
-.gh-head h4 span { color: var(--text-3); }
+.chip::before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: var(--text-3); }
+.chip.m::before { background: var(--machine); }
+.chip.h::before { background: var(--human); }
 
-.pill {
-  display: inline-block; border-radius: 999px; padding: 3px 11px; vertical-align: 2px;
-  font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .1em;
-  text-transform: uppercase; white-space: nowrap;
-}
-.pill.open   { background: #17351F; color: #7EE2A8; }
-.pill.merged { background: #2B2247; color: #C0A6F0; }
-.pill.draft  { background: #1F232B; color: var(--text-3); }
-
-.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
-.tags em {
-  font-style: normal; font-family: "JetBrains Mono", monospace; font-size: 11px;
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--text-2);
+.legend {
+  display: flex; flex-wrap: wrap; gap: 10px 28px;
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 
-.thread { padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
-.ghc { display: flex; gap: 12px; align-items: flex-start; }
-.ghc .av {
-  flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: "JetBrains Mono", monospace; font-size: 10.5px; font-weight: 700;
-  background: var(--ink-3); color: var(--text-3);
-}
-.ghc.person .av { background: var(--human-dim); color: var(--human); }
-.ghc.bot    .av { background: var(--machine-dim); color: var(--machine); }
-.ghc .msg { flex: 1 1 auto; min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.ghc .msg > b {
-  display: block; padding: 7px 14px; background: var(--ink-2);
-  border-bottom: 1px solid var(--line-soft);
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 400; color: var(--text-3);
-}
-.ghc.person .msg > b i { font-style: normal; color: var(--human); }
-.ghc.bot    .msg > b i { font-style: normal; color: var(--machine); }
-.ghc .in { padding: 14px; font-size: 15px; line-height: 1.55; color: var(--text-2); }
-.ghc .in > :last-child { margin-bottom: 0; }
-.ghc .in p { margin: 0 0 10px; }
-.ghc .in strong { color: var(--text); }
-.ghc .in h5 {
-  font-family: Manrope, sans-serif; font-size: 15.5px; font-weight: 600;
-  color: var(--text); margin: 0 0 12px; letter-spacing: -.01em;
+/* ---------- footer ---------- */
+
+.foot { border-top: 1px solid var(--line); padding: 46px 0 56px; background: var(--bg-3); }
+.foot .wrap { display: flex; flex-wrap: wrap; gap: 30px 56px; align-items: flex-start; }
+.foot .foot-about { flex: 1 1 300px; }
+.foot p { font-size: 14px; color: var(--text-3); max-width: 44ch; }
+.foot nav { display: flex; flex-direction: column; gap: 9px; }
+.foot nav a { font-size: 14px; color: var(--text-2); text-decoration: none; }
+.foot nav a:hover { color: var(--text); }
+.foot h4 {
+  font: 500 11.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 6px;
 }
 
-/* the empty comment box, so "what the developer does" is literally two words in it */
-.composer {
-  border: 1px solid var(--line); border-radius: 8px; background: var(--ink-2);
-  padding: 13px 15px; font-family: "JetBrains Mono", monospace; font-size: 15px; color: var(--text);
-}
-.composer .cursor { color: var(--human); }
-.composer + .composer-foot {
-  font-size: 13px; color: var(--text-3); margin: 8px 0 0; font-family: Manrope, sans-serif;
-}
-
-.scroll { overflow-x: auto; }
-table.gh-t { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 12px; }
-table.gh-t th, table.gh-t td {
-  border: 1px solid var(--line); padding: 7px 10px; text-align: left;
-  color: var(--text-2); vertical-align: top;
-}
-table.gh-t th {
-  color: var(--text-3); font-family: "JetBrains Mono", monospace; font-size: 10.5px;
-  text-transform: uppercase; letter-spacing: .1em; font-weight: 400;
-}
-table.gh-t code { font-size: 12px; white-space: nowrap; }
-
-.checks { border-top: 1px solid var(--line-soft); padding: 12px 20px 16px; }
-.checks div { display: flex; gap: 10px; font-size: 14px; color: var(--text-2); padding: 3px 0; }
-.checks i { font-style: normal; flex: 0 0 14px; }
-.checks .ok { color: var(--machine); }
-.checks .no { color: var(--alarm); }
-.checks small { color: var(--text-3); font-size: 13px; }
-
-.ghfoot {
-  border-top: 1px solid var(--line-soft); padding: 12px 20px 15px;
-  font-size: 13.5px; color: var(--text-3); line-height: 1.5;
-}
-
-/* a claim about what is NOT built. It has to look different from a feature. */
-.notyet {
-  border: 1px dashed var(--line); border-left: 2px solid var(--alarm); border-radius: 6px;
-  padding: 16px 18px; margin: 22px 0; max-width: var(--measure);
-  font-size: 15px; color: var(--text-2);
-}
-.notyet b { color: var(--alarm); font-weight: 600; }
-
-@media (max-width: 640px) {
-  .gh-head h4 { font-size: 21px; }
-  .ghc .av { display: none; }
-  .thread { padding: 12px 12px 16px; }
-  .gh-head { padding: 14px 14px 4px; }
-}
-
-/* ---------- can / cannot ----------
+/* ---------- motion ----------
  *
- * The governance page turns on one distinction — what a standard may do to a repository, and what
- * it may not — and a bulleted list flattens exactly the pair that has to stay apart. Two columns,
- * mint and gold, the same two colours the rest of the site uses for machine and person. */
+ * One entrance, driven by an IntersectionObserver in site.js rather than a scroll handler. Two
+ * things move on this site and both of them mean something: content arrives as you reach it, and
+ * the rails in the diagrams draw themselves, because "these lines converge" is the argument the
+ * diagram makes and a still image can only assert it. */
 
-.pair { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; margin: 26px 0; max-width: 780px; }
-@media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
-.pair > div {
-  border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; background: var(--ink-2);
+.rise { opacity: 0; transform: translateY(14px); }
+.rise.in {
+  opacity: 1; transform: none;
+  transition: opacity .6s var(--ease), transform .6s var(--ease);
+  transition-delay: var(--d, 0ms);
 }
-.pair h5 {
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; font-weight: 500;
-  letter-spacing: .13em; text-transform: uppercase; margin: 0 0 14px;
-}
-.pair .can  h5 { color: var(--machine); }
-.pair .cant h5 { color: var(--human); }
-.pair ul { margin: 0; padding-left: 18px; }
-.pair li { font-size: 15px; color: var(--text-2); margin-bottom: 9px; }
-.pair li:last-child { margin-bottom: 0; }
-.pair li code { font-size: 12.5px; }
 
-/* the sentence a section turns on, set apart from the prose around it */
-.claim {
-  font-family: Newsreader, Georgia, serif; font-weight: 300;
-  font-size: clamp(22px, 2.8vw, 31px); line-height: 1.32; letter-spacing: -.012em;
-  color: var(--text); max-width: 22ch; margin: 0 0 22px;
+@media (prefers-reduced-motion: reduce) {
+  .rise, .rise.in { opacity: 1; transform: none; transition: none; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
 }
-.claim em { font-style: italic; color: var(--machine); }
+
+/* ---------- diagrams ----------
+ *
+ * Every diagram on this site is inline SVG using the same colour tokens as the rest of the page, so
+ * it themes with everything else and needs no second asset for dark mode. Text inside an SVG is
+ * real text: selectable, searchable, and readable by a screen reader through title and desc.
+ *
+ * They are hand-drawn rather than pulled from a library because the thing being drawn is this
+ * framework's own mechanism, and no library has a shape for "the job holding the key cannot write". */
+
+.fig { margin: 0; }
+.dia { width: 100%; height: auto; overflow: visible; }
+
+.dia text { font-family: var(--sans); fill: var(--text-2); }
+
+.t-row {
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  letter-spacing: .1em; text-transform: uppercase; fill: var(--text-3);
+}
+.t-row-now { fill: var(--text); }
+.t-cap { font-size: 14.5px; font-weight: 450; fill: var(--text-2); }
+.t-cap-now { fill: var(--text); font-weight: 500; }
+.t-turn {
+  font-family: var(--mono); font-size: 13px; font-weight: 500; fill: var(--text-3);
+}
+.t-turn-now { fill: var(--machine); font-size: 15px; }
+.divider { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 4; }
+
+/* The one animation on the site that is not a fade. The arrows draw themselves toward the target
+   when the figure is reached, because "three of these arrive and two do not" is the argument the
+   drawing makes, and a static picture can only assert it. The arrows that fall short keep their
+   dash pattern and fade in instead, since a dash pattern and a draw-in are the same CSS property
+   and cannot both have it.
+
+   Everything animated here is stroke-dashoffset or opacity, so it runs on the compositor, and all
+   of it collapses to the finished state the moment reduced motion is asked for. */
+.js .dia .flows path.landed { stroke-dasharray: 700; stroke-dashoffset: 700; }
+.js .dia .flows path.short,
+.js .dia .stubs circle { opacity: 0; }
+
+.dia.drawn .flows path.landed {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1.15s var(--ease) .15s;
+}
+.dia.drawn .flows path.short { opacity: 1; transition: opacity .5s ease .75s; }
+.dia.drawn .stubs circle { opacity: 1; transition: opacity .4s ease 1s; }
+
+/* The second band is the payoff, so it arrives a beat after the first rather than alongside it. */
+.dia.drawn .row-now .flows path.landed { transition-delay: .45s; }
+.dia.drawn .row-now .flows path.short { transition-delay: 1.05s; }
+.dia.drawn .row-now .stubs circle { transition-delay: 1.3s; }
+
+/* The four test panels arrive left to right, which is the order they happen in. */
+.js .dia-tdd .tdd-panel { opacity: 0; }
+.dia-tdd.drawn .tdd-panel { opacity: 1; transition: opacity .45s ease; }
+.dia-tdd.drawn .tdd-panel:nth-of-type(2) { transition-delay: .12s; }
+.dia-tdd.drawn .tdd-panel:nth-of-type(3) { transition-delay: .24s; }
+.dia-tdd.drawn .tdd-panel:nth-of-type(4) { transition-delay: .36s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .js .dia .flows path.landed { stroke-dashoffset: 0; }
+  .js .dia .flows path.short,
+  .js .dia .stubs circle,
+  .js .dia-tdd .tdd-panel { opacity: 1; }
+}
+
+@media (max-width: 700px) {
+  .t-cap { font-size: 16px; }
+  .t-row { font-size: 15px; }
+  .t-turn { font-size: 16px; }
+  .t-turn-now { font-size: 18px; }
+}
+
+/* ============================================================ page sections
+ *
+ * Every section commits to the full width it is given. The old site put a 66ch column inside an
+ * 1140px wrapper on every page, which left roughly 40% of each screen empty and read as a page
+ * nobody finished. Prose still wraps at a readable measure, but it does so inside a layout that
+ * has something in the other column. */
+
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--bg-2); color: var(--text); padding: 10px 16px;
+  border: 1px solid var(--line); border-radius: var(--r);
+}
+.skip:focus { left: 12px; top: 12px; }
+
+.center { text-align: center; }
+.center-p { margin-inline: auto; }
+.vh {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.term code, .code code, .install code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+/* ---------- hero ----------
+ *
+ * Asymmetric split: the claim owns the left, the proof bleeds off the right. The proof is a
+ * terminal because the claim is "this is real and free to try", and the only thing that settles
+ * that is output the reader can reproduce. */
+
+.hero { padding: 68px 0 88px; }
+
+/* The headline takes the full measure of the page so it lands on exactly two lines, and the split
+   happens underneath it. Putting the h1 inside the left column shrank it to a 460px box, where a
+   ten-word line broke four ways and the "hero fits the viewport" rule was gone. */
+.hero-h1 { margin-bottom: 18px; }
+/* The definition, in plain words, directly under the headline. Half the first-time readers said the
+   footer was where they finally learned what the product is; it belongs at the top. */
+.hero-def { font-size: 1.08rem; line-height: 1.5; color: var(--text-2); max-width: 66ch; margin: 0 0 22px; }
+.hero-install { margin: 0 0 36px; }
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 52px;
+  align-items: start;
+}
+.hero-copy .lede { margin-bottom: 30px; max-width: 44ch; }
+
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+
+@media (max-width: 980px) {
+  .hero { padding: 44px 0 64px; }
+  .hero-h1 { margin-bottom: 26px; }
+  .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 38px; }
+  .hero-copy .lede { max-width: none; }
+}
+
+/* ---------- shared section pieces ---------- */
+
+.hed { margin-bottom: 44px; }
+.hed.mid { margin-bottom: 40px; }
+.fig-wide { margin: 8px 0 0; }
+.after-fig { margin-top: 40px; }
+/* The punchline of a figure, and it is allowed to be as big as a subheading, because on the rhyme
+   diagram it is the sentence the whole section exists to deliver. */
+.fig-say {
+  margin-top: 30px;
+  text-align: center;
+  font-size: clamp(1.25rem, 2.1vw, 1.65rem);
+  line-height: 1.25;
+  letter-spacing: -0.028em;
+  color: var(--text);
+  font-weight: 600;
+  text-wrap: balance;
+}
+.dia-jobs + .fig-say { font-size: clamp(1.05rem, 1.6vw, 1.28rem); font-weight: 500; }
+.say-strong {
+  font-size: 1.2rem; color: var(--text); font-weight: 500; letter-spacing: -0.022em;
+}
+
+.two-up {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 48px;
+}
+.two-col p { max-width: 54ch; }
+
+@media (max-width: 900px) {
+  .two-up, .two-col { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- diagram: the rhyme ---------- */
+
+.srcbox rect { fill: var(--bg-2); stroke: var(--line-2); stroke-width: 1; }
+.srcbox text { font-family: var(--mono); font-size: 12.5px; fill: var(--text-2); }
+.target rect { fill: none; stroke: var(--text-3); stroke-width: 1.6; }
+.target text {
+  font-family: var(--mono); font-size: 14px; font-weight: 500;
+  fill: var(--text); text-anchor: middle;
+}
+.row-now .srcbox rect { stroke: var(--line-2); }
+.row-now .target rect { stroke: var(--text-2); }
+
+/* ---------- diagram: red, green, revert, red ---------- */
+
+.tdd-panel .blk { fill: var(--text-3); }
+.tdd-panel .blk.off { fill: none; stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.tdd-panel .blk.struck { fill: var(--line-2); }
+.tdd-panel .strike { stroke: var(--text-2); stroke-width: 1.4; }
+.tdd-panel .bar.red { fill: var(--alarm); }
+.tdd-panel .bar.green { fill: var(--machine); }
+.tdd-panel .bar.idle { fill: var(--line-2); }
+.t-panel { font-size: 15px; font-weight: 500; fill: var(--text); letter-spacing: -0.015em; }
+.t-panel-key { fill: var(--text); }
+.t-sub { font-family: var(--mono); font-size: 12px; fill: var(--text-3); }
+.t-sub-key { fill: var(--machine); }
+
+/* ---------- diagram: three jobs ---------- */
+
+.job rect { fill: var(--bg-2); stroke: var(--line); stroke-width: 1; }
+.job-machine rect { stroke: var(--machine); }
+.job-human rect { stroke: var(--human); }
+.t-job {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  fill: var(--text); letter-spacing: -0.01em;
+}
+.job-machine .t-job { fill: var(--machine); }
+.job-human .t-job { fill: var(--human); }
+.t-kv { font-family: var(--mono); font-size: 11.5px; fill: var(--text-3); }
+.t-kvv { fill: var(--text-2); }
+.t-kw { font-size: 13px; fill: var(--text-2); }
+.t-note { font-family: var(--mono); font-size: 11.5px; fill: var(--text-3); }
+.hand rect { fill: var(--bg-2); stroke: var(--line-2); stroke-width: 1.4; }
+.hand path { stroke: var(--line-2); stroke-width: 1.4; }
+.t-hand {
+  font-family: var(--mono); font-size: 11px; fill: var(--text-3); text-anchor: middle;
+}
+
+.jobs-after {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 22px 48px; align-items: start; margin-top: 44px;
+}
+.jobs-note p { font-size: 15.5px; color: var(--text-2); max-width: 50ch; }
+.jobs-note p + p { margin-top: 1em; }
+
+@media (max-width: 900px) { .jobs-after { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- the receipt ---------- */
+
+.ledger { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
+.lg-lead { font-size: 1.05rem; color: var(--text); max-width: 34ch; }
+
+/* Not a four-cell stat bar. The numbers hang off mono labels in a definition list, so each figure
+   reads as a field of one record rather than a marketing tile. */
+.lg-stats { margin: 26px 0 0; display: grid; gap: 0; }
+.lg-stats > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 20px;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.lg-stats > div:first-child { border-top: 1px solid var(--line); }
+.lg-stats dt {
+  font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-3);
+}
+.lg-stats dd {
+  margin: 0; font-family: var(--mono); font-size: 1.15rem; font-weight: 500;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+
+.lg-h {
+  font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 14px;
+}
+.lg-h-2 { margin-top: 30px; }
+
+.tbl-scroll { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 15px; }
+.tbl th, .tbl td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--line); }
+.tbl thead th {
+  font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-3); padding-bottom: 8px;
+}
+.tbl td { color: var(--text-2); }
+.tbl .num {
+  text-align: right; padding-right: 0;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text);
+}
+.tbl tfoot th, .tbl tfoot td {
+  border-bottom: 0; padding-top: 12px; font-weight: 500; color: var(--text);
+}
+.tbl tbody td:first-child { color: var(--text); white-space: nowrap; }
+
+/* The only decorative-looking dots on the site, and they are not decorative: each one is the
+   outcome's own track colour. Green ran to completion, amber is a place a control or a person
+   intervened, red is a genuine failure. */
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 9px; vertical-align: 1px; }
+.dot.m { background: var(--machine); }
+.dot.h { background: var(--human); }
+.dot.r { background: var(--alarm); }
+
+.lg-note { margin-top: 22px; font-size: 15px; color: var(--text-2); max-width: 62ch; }
+
+@media (max-width: 900px) { .ledger { grid-template-columns: minmax(0, 1fr); gap: 40px; } }
+
+/* ---------- the edges ---------- */
+
+.edges { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 56px; align-items: start; }
+.edges h2 { margin-bottom: 16px; }
+.edges .lede { margin-bottom: 30px; }
+
+.limits { list-style: none; margin: 0; padding: 0; }
+.limits li {
+  padding: 16px 0 16px 22px;
+  border-top: 1px solid var(--line);
+  font-size: 15.5px; line-height: 1.55; color: var(--text-2);
+  position: relative; max-width: 58ch;
+}
+.limits li:last-child { border-bottom: 1px solid var(--line); }
+/* Hanging marker in the margin rather than a bullet glyph, so the list reads as a register of
+   known limits instead of a feature list wearing the wrong hat. */
+.limits li::before {
+  content: ""; position: absolute; left: 0; top: 25px;
+  width: 10px; height: 1px; background: var(--text-3);
+}
+.limits b { color: var(--text); font-weight: 500; }
+
+@media (max-width: 900px) { .edges { grid-template-columns: minmax(0, 1fr); gap: 40px; } }
+
+/* ---------- what runs ---------- */
+
+.ships { max-width: 760px; }
+.verbs { margin: 0; }
+.verbs > div {
+  display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 16px;
+  padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline;
+}
+.verbs > div:last-child { border-bottom: 1px solid var(--line); }
+.verbs dt { font-family: var(--mono); font-size: 14px; color: var(--text); font-weight: 500; }
+.verbs dd { margin: 0; font-size: 15px; color: var(--text-2); }
+.ships-p { font-size: 15.5px; color: var(--text-2); max-width: 58ch; }
+.ships-link { margin-top: 20px; font-size: 15px; }
+
+@media (max-width: 900px) { .ships { grid-template-columns: minmax(0, 1fr); gap: 40px; } }
+
+/* ---------- close ---------- */
+
+.close { padding-bottom: 104px; }
+.close .mid { margin-bottom: 0; }
+.close h2 { margin-bottom: 16px; }
+.close .lede { margin-bottom: 30px; }
+.install-lg { margin: 0 auto; font-size: 14.5px; }
+
+.doors {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px; margin-top: 56px; text-align: left;
+}
+.door {
+  display: block; padding: 22px 22px 24px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-lg);
+  text-decoration: none; color: inherit;
+  transition: border-color .15s var(--ease), transform .15s var(--ease);
+}
+.door:hover { border-color: var(--line-2); transform: translateY(-2px); }
+.door:active { transform: translateY(0); }
+.door h3 { margin-bottom: 8px; color: var(--text); }
+.door p { font-size: 14.5px; color: var(--text-2); margin: 0; }
+
+@media (max-width: 820px) { .doors { grid-template-columns: minmax(0, 1fr); } }
+
+.foot-p { font-size: 14px; color: var(--text-3); max-width: 44ch; }
+.foot-about .brand { margin-bottom: 14px; }
+.foot-about p + p { margin-top: 10px; }
+
+/* ---------- narrow screens ----------
+ *
+ * Every multi-column layout above already collapses at its own breakpoint. This block handles the
+ * things that are not grids: the diagrams, whose text is sized for a 1000-unit viewBox and becomes
+ * unreadable once that box is squeezed into a phone. They get a horizontal scroll container rather
+ * than being shrunk, because a diagram nobody can read is worse than one they have to pan. */
+
+@media (max-width: 720px) {
+  .fig-wide { overflow-x: auto; }
+  .fig-wide svg { min-width: 660px; }
+  .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .install { width: 100%; }
+}
+
+/* A terminal carrying one line of evidence rather than a screen of output. No caption, because the
+   line is the caption. */
+.term-slim { max-width: 760px; }
+.term-slim pre { padding: 14px 18px; }
+
+/* ---------- the loop ----------
+ *
+ * The developer's own edit/build/run/test cycle, drawn as a loop and annotated twice: what does
+ * each step in your repository today, and what in-lockstep binds it to. Deliberately uncoloured.
+ * Green and amber mean "the machine acted" and "a person decided", and this diagram is the loop as
+ * it exists BEFORE any of that applies, so spending either colour here would say something untrue. */
+
+.loop-fig { margin-top: 34px; }
+.loop-step rect { fill: var(--bg-2); stroke: var(--line-2); stroke-width: 1; }
+.t-step {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  fill: var(--text); text-anchor: middle; letter-spacing: -0.01em;
+}
+.t-does {
+  font-family: var(--mono); font-size: 12px; fill: var(--text-2); text-anchor: middle;
+}
+.t-bind {
+  font-family: var(--mono); font-size: 11.5px; fill: var(--text-3); text-anchor: middle;
+}
+/* A step whose shape is reserved and whose adapter is yours to supply. Italic rather than a colour,
+   because "not shipped yet" is not one of the two things colour means on this site. */
+.t-open { font-style: italic; }
+.loop-arrow, .loop-back { stroke: var(--text-3); stroke-width: 1.5; }
+.loop-back { stroke-dasharray: 4 4; }
+
+/* Centred as a block, left-aligned as text. Three lines of centred prose wrapped around an inline
+   code chip set a different rag on every line and read as decoration rather than as a note. */
+.loop-note {
+  margin: 28px auto 30px;
+  max-width: 74ch;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--text-2);
+}
+.loop-note strong { color: var(--text); font-weight: 500; }
+
+
+
+/* A step the scan wired on its own, as against one you bind yourself. Weight, not colour: green
+   would say "the machine acted during a run", and this is something that happened at install time. */
+.t-found { fill: var(--text-2); font-weight: 500; }
+
+/* The evidence under a figure: one terminal at a readable measure, then the notes that qualify it.
+   Narrower than the figure on purpose, so the figure stays the thing the eye lands on. */
+.evidence { max-width: 860px; margin: 48px auto 0; }
+
+@media (max-width: 720px) {
+  .evidence { margin-top: 36px; }
+}
+
+/* ============================================================ docs pages
+ *
+ * The three reference pages are documents, not arguments, so they get a document
+ * layout: a sticky list of the page's own headings on the left and one reading column on the right,
+ * wider than the marketing measure because these pages carry code. Same shell, same tokens, same
+ * two-colour rule. Lighter on design by intent: a reader here has already decided to read. */
+
+.doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; padding: 56px 0 96px; }
+.doc-toc { position: sticky; top: calc(var(--nav-h) + 28px); align-self: start; }
+.doc-toc h4 {
+  font: 500 11.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 14px;
+}
+.doc-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.doc-toc a {
+  display: block; padding: 5px 0 5px 12px;
+  border-left: 1px solid var(--line);
+  font-size: 13.5px; line-height: 1.4; color: var(--text-2); text-decoration: none;
+}
+.doc-toc a:hover { color: var(--text); border-left-color: var(--text-3); }
+.doc-toc a.here { color: var(--text); border-left-color: var(--text); }
+
+.doc-body { max-width: 76ch; min-width: 0; }
+.doc-body > h1 { margin-bottom: 14px; font-size: clamp(2rem, 4vw, 2.8rem); }
+.doc-body > .lede { margin-bottom: 40px; }
+.doc-body h2 {
+  font-size: 1.45rem; margin: 56px 0 14px; padding-top: 28px; border-top: 1px solid var(--line);
+}
+.doc-body h2:first-of-type { margin-top: 24px; }
+.doc-body h3 { font-size: 1.08rem; margin: 30px 0 10px; }
+.doc-body p { max-width: none; }
+.doc-body ul, .doc-body ol { padding-left: 22px; margin: 0 0 1.1em; }
+.doc-body li { margin-bottom: .45em; }
+.doc-body li p { margin-bottom: .45em; }
+.doc-body a { text-decoration-color: var(--text-3); }
+
+/* Fenced code in a document. The same chrome as a terminal, without the title bar, because most of
+   what these pages show is source rather than the output of a named command. */
+.doc-body pre {
+  margin: 0 0 1.3em; padding: 15px 18px;
+  background: var(--bg-code); border: 1px solid var(--line); border-radius: var(--r-lg);
+  font: 400 13px/1.65 var(--mono); color: var(--text-2); overflow-x: auto; tab-size: 2;
+}
+.doc-body pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
+.doc-body pre b { color: var(--text); font-weight: 500; }
+
+/* A readable table: hairlines between rows only, mono for the columns that carry identifiers. */
+.doc-body table { width: 100%; border-collapse: collapse; margin: 0 0 1.4em; font-size: 15px; }
+.doc-body th, .doc-body td { text-align: left; vertical-align: top; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); }
+.doc-body thead th {
+  font: 500 11.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3);
+}
+.doc-body td { color: var(--text-2); }
+.doc-body td:first-child { color: var(--text); }
+.doc-body .tbl-scroll { overflow-x: auto; margin-bottom: 1.4em; }
+.doc-body .tbl-scroll table { margin-bottom: 0; }
+
+@media (max-width: 900px) {
+  .doc { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-top: 36px; }
+  .doc-toc { position: static; }
+  .doc-toc ol { flex-direction: row; flex-wrap: wrap; gap: 4px 6px; }
+  .doc-toc a { border-left: 0; border: 1px solid var(--line); border-radius: var(--r); padding: 6px 10px; font-size: 13px; }
+}
+
+/* ---------- a screenshot ----------
+ *
+ * The one raster image on the site, and it is a render of a page the tool writes, not a mock-up.
+ * It wears the terminal chrome for the same reason a terminal does: the title bar names the command
+ * that produced it. Constrained to the page's own width so the 2x PNG never upsizes. */
+
+.shot {
+  margin: 0 0 22px;
+  background: var(--bg-code); border: 1px solid var(--line); border-radius: var(--r-lg);
+  overflow: hidden; box-shadow: var(--shadow);
+}
+.shot img { display: block; width: 100%; height: auto; max-width: 980px; margin: 0 auto; background: #0D0E12; }
+.shot .term-cap { border-top: 1px solid var(--line); }
