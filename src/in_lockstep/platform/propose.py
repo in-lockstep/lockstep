@@ -68,9 +68,51 @@ async def escalate(tickets: Any, source: Any, failure: str, *, max_attempts: int
         description=(
             f"An automated attempt to fix {source.key} did not produce a change that passes its "
             f"tests:\n\n{failure}\n\nThis ticket is free for an agent to pick up. It is attempt "
-            f"{attempt + 1} of at most {max_attempts}."
+            f"{attempt + 1} of at most {max_attempts}.\n\n{RESUME_MARKER} {source.key}"
         ),
         type=TicketType.BUG,
         labels=(AI_GENERATED, f"{ATTEMPT_PREFIX}{attempt + 1}"),
     )
     return await tickets.create(draft)
+
+
+#: How an escalated ticket says which work its attempt belongs to. A marker in the body rather than
+#: a new field, because `TicketDraft` is the shape every tracker adapter writes and a Jira project
+#: has nowhere to put a field this framework invented. The key that follows it is the ORIGINAL
+#: ticket — attempt 3 resumes from what attempt 2 staged for the same underlying bug, not from a
+#: chain of escalation tickets nobody filed work against.
+RESUME_MARKER = "in-lockstep:resume-from"
+
+
+def resumes_from(description: str) -> str:
+    """The ticket an escalated bug's attempt belongs to, or empty.
+
+    The read half of what `escalate` writes, and its own function for the reason `branch_key` is:
+    two spellings of one format is one of them drifting, and the failure would be silent — a retry
+    that simply never finds the attempt it was supposed to continue.
+    """
+    for line in (description or "").splitlines():
+        head, sep, rest = line.strip().partition(" ")
+        if sep and head == RESUME_MARKER and rest.strip():
+            return rest.strip()
+    return ""
+
+
+def resumes_automatically(labels: Any) -> bool:
+    """Whether a run on this ticket should resume without anybody asking.
+
+    THIS DIVERGES FROM `/implement`, DELIBERATELY, and the reason is written here because two paths
+    with opposite defaults and no recorded argument is how one of them later gets "fixed" to match
+    the other.
+
+    A person resuming is opt-in: `--resume` exists because a model handed its own wrong diff will
+    defend it, and sometimes the right answer is a clean start that only a human can judge is
+    needed. That reasoning inverts for a ticket this loop filed itself. Nobody is watching an
+    `ai-generated` run — the label is the authorization and `ai-generated.yml` fires on it — so
+    there is no one to type the flag, and the alternative to resuming is provably repeating the
+    same failure at full price. Attempt 2 rebuilding from the ticket text can reproduce attempt 1's
+    mistake exactly, and attempt 3 again.
+
+    `max_attempts` still bounds it. This makes each attempt better informed, not more numerous.
+    """
+    return attempt_of(labels) > 0
