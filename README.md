@@ -45,6 +45,7 @@ still advertises.
 | Extension packs | runs | `in_lockstep.extensions` entry points that **offer** rather than apply; `pack describe` derives a receipt, `add` records what you accepted, `pack try` measures it for `$0` |
 | Pack catalog | runs | a static `index.toml` in a git repo; `market add`/`search`/`lint`, receipts re-derived locally and refused when they disagree |
 | Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
+| Metrics report | runs | `report` reads the ledger back: outcomes, effort, spend, turns per strategy, what it keeps finding. `--html` writes one self-contained page, `--scm` adds merge and issue timings. Every number carries its denominator, and a field nobody measured is a dash |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
 | Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
 

@@ -64,6 +64,12 @@ ALLOWED: dict[str, set[str]] = {
     # Acyclic: neither imports doctor back; only `cli` does.
     "doctor": {"ai", "core", "loader", "packs", "platform", "privileged", "prompts", "receipt", "doctor"},
     "evaluation": {"evaluation"},
+    # `metrics` is a leaf beside `evaluation`, and for the same reason spelled there: the
+    # moment it reaches for a store it stops being testable against a list somebody wrote by
+    # hand, and a metrics module you cannot write a fixture for is one nobody checks the
+    # arithmetic of. It takes `list[dict]` and returns strings; the caller does the reading,
+    # the network and the writing.
+    "metrics": {"metrics"},
     # `receipt` derives what a configuration does, so it reads across the layers that hold the
     # declarations: capabilities off `core`, the composed projection off `ai`, prices and egress
     # hosts off `ai`/`privileged`, cases off `evaluation`. Almost `doctor`'s allowance, and beside
@@ -122,6 +128,11 @@ ALLOWED: dict[str, set[str]] = {
         "platform",
         "doctor",
         "evaluation",
+        # `cli` reads `metrics` and does the two things `metrics` may not: the store read
+        # and the write through `privileged.sink`. The edge points down and there is no
+        # edge back — `metrics` imports nothing of ours, which is what keeps its arithmetic
+        # testable against a list somebody wrote by hand.
+        "metrics",
         "strategies",
         "receipt",
         "packs",

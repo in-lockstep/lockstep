@@ -158,6 +158,17 @@ def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     return f"{RUN_BRANCH_PREFIX}/{middle}/{run_id}"
 
 
+def is_run_branch(branch: str) -> bool:
+    """Whether `branch` is one this framework opened, for any ticket.
+
+    Split out of `is_run_branch_for` rather than spelled again beside it, because two readings of
+    `branch_for`'s layout is one of them drifting — the argument `branch_key` already makes. The
+    delivery metrics need this one: "every pull request we opened" has no ticket to key on, and
+    matching on a title or a body would count a pull request somebody else wrote about our work.
+    """
+    return branch.startswith(f"{RUN_BRANCH_PREFIX}/")
+
+
 def is_run_branch_for(branch: str, ticket: str) -> bool:
     """Whether `branch` is one this framework opened for `ticket`.
 
@@ -167,7 +178,7 @@ def is_run_branch_for(branch: str, ticket: str) -> bool:
     conversation is not gathered as though it were.
     """
     key = branch_key(ticket)
-    if not key or not branch.startswith(f"{RUN_BRANCH_PREFIX}/"):
+    if not key or not is_run_branch(branch):
         return False
     return f"/{key}/" in branch[len(RUN_BRANCH_PREFIX) :]
 

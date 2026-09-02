@@ -1147,6 +1147,56 @@ def _explain_run(run_id: str) -> None:
         click.echo(f"{'session':<10}{transcript}  (per-turn transcript)")
 
 
+def _history_line(verify: Any, tampered: list[Any]) -> str:
+    """Whether the numbers just printed came from a history that is still append-only.
+
+    Its own function because both report shapes have to end with it. It was written once, inside
+    the grouped-table branch, and the richer report added beside it would have inherited every
+    number and none of the caveat.
+    """
+    if not callable(verify):
+        # The file store keeps no history, so there is nothing to verify — and saying nothing
+        # would read as verified. Absent is not zero, for evidence as much as for numbers.
+        return "history   unverifiable (file store keeps no history; tamper-evidence needs the git ledger)"
+    if tampered:
+        return f"history   NOT APPEND-ONLY: {len(tampered)} record(s) rewritten (see above)"
+    return "history   append-only across the retained chain"
+
+
+def _with_delivery(report: Any) -> Any:
+    """`report` plus what the host says happened to the work, or `report` and a printed reason.
+
+    Never raises. A metrics page is a document somebody reads, and the alternative to "we could not
+    reach the host" is not "no page" — it is a page that quietly omits a section, which is the
+    failure `Measured` exists to prevent, one level up.
+
+    `delivery_rows` is asked for with `getattr` rather than declared on the `Scm` port: the local
+    git host has no pull requests at all, and obliging every host to answer a reporting question
+    would put a method on the port that most of them can only refuse.
+    """
+    from dataclasses import replace as _replace
+
+    from . import metrics
+
+    try:
+        # `_bound_scm`, not `GitHubScm()`: on a GitLab project, naming the GitHub adapter here
+        # would read nothing while claiming to have tried.
+        lockstep, _recorder = _default_lockstep()
+        host = _bound_scm(lockstep)
+        rows = getattr(host, "delivery_rows", None)
+        if rows is None:
+            click.echo(
+                f"delivery   skipped: {type(host).__name__} cannot list pull requests and issues",
+                err=True,
+            )
+            return report
+        pulls, issues = rows()
+    except Exception as e:  # noqa: BLE001 - a report degrades with a reason, it does not fail
+        click.echo(f"delivery   skipped: {e}", err=True)
+        return report
+    return _replace(report, delivery=metrics.delivery(pulls, issues))
+
+
 @main.command(name="report")
 @click.option(
     "--by",
@@ -1157,13 +1207,34 @@ def _explain_run(run_id: str) -> None:
     help="What one row aggregates over.",
 )
 @click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]), show_default=True)
-def report_cmd(group_by: str, fmt: str) -> None:
-    """What the ledger adds up to: runs, failures, and spend, grouped.
+@click.option(
+    "--by-kind",
+    "grouped",
+    is_flag=True,
+    help="The original grouped table, one row per --by value, instead of the full report.",
+)
+@click.option(
+    "--html",
+    "html_path",
+    default="",
+    help="Also write a standalone page here — inline style, inline SVG, nothing to fetch.",
+)
+@click.option(
+    "--scm",
+    "with_scm",
+    is_flag=True,
+    help="Also ask the host what happened to the work: merges, and how long issues stayed open.",
+)
+def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm: bool) -> None:
+    """What the ledger adds up to: runs, failures, spend, effort, and what it keeps finding.
 
     Reads whichever store this repository records into — the orphan branch in a git repository,
     the file store elsewhere, or whatever the module bound. The numbers follow the ledger's own
-    discipline: absent is not zero, so a column nobody measured renders as `-` rather than as a
-    reassuring 0.
+    discipline: absent is not zero, so a number nobody measured renders as a dash carrying its
+    denominator rather than as a reassuring 0.
+
+    `--scm` is opt-in because it needs a token and a network call, and because evidence this
+    framework wrote and evidence it asked somebody else for are kept apart on the page.
     """
     from .platform.ledger.store import summarize
 
@@ -1185,6 +1256,33 @@ def report_cmd(group_by: str, fmt: str) -> None:
     tampered = verify() if callable(verify) else []
     for problem in tampered:
         click.echo(f"TAMPERED  {problem}", err=True)
+
+    # The full report is the default now. `--format json` and `--by-kind` keep the original two
+    # outputs working unchanged: the json shape is somebody's script, and a grouped table is what
+    # you want when you already know which column you are reading.
+    if fmt == "table" and not grouped:
+        from . import metrics
+
+        report = metrics.build(records)
+        if with_scm:
+            report = _with_delivery(report)
+        for line in metrics.as_text(report):
+            click.echo(line)
+        # On this path too, and not only under `--by-kind`. The footer is what GATE-LEDGER-8
+        # asserts, and a richer report that quietly stopped saying whether the history behind it
+        # is append-only would be a page of numbers with the one caveat about them removed.
+        click.echo(_history_line(verify, tampered))
+        if html_path:
+            # Written HERE and not by `metrics`, which is a leaf that may not reach `privileged`.
+            # A report carries finding text and run ids, so putting it on disk is a redaction sink.
+            #
+            # `_atomic` because the alternative to a whole page is not "no page" — it is a
+            # truncated one that still opens in a browser and renders as though the numbers simply
+            # stopped. A report about evidence should not have that failure mode.
+            sink.write_text_atomic(Path(html_path), metrics.as_html(report))
+            click.echo("")
+            click.echo(f"{'page':<10}{html_path}")
+        return
 
     stats = summarize(records, by=group_by)
     if fmt == "json":
@@ -1213,17 +1311,7 @@ def report_cmd(group_by: str, fmt: str) -> None:
         click.echo(f"{key:<{width}}  {stat.runs:>4}  {stat.failures:>6}  {tokens}  {cost}  {mean}")
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
-    if callable(verify):
-        if tampered:
-            click.echo(f"history   NOT APPEND-ONLY: {len(tampered)} record(s) rewritten (see above)")
-        else:
-            click.echo("history   append-only across the retained chain")
-    else:
-        # The file store keeps no history, so there is nothing to verify — and saying nothing
-        # would read as verified. Absent is not zero, for evidence as much as for numbers.
-        click.echo(
-            "history   unverifiable (file store keeps no history; tamper-evidence needs the git ledger)"
-        )
+    click.echo(_history_line(verify, tampered))
 
 
 @main.command(name="doctor")
