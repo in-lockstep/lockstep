@@ -78,6 +78,13 @@ the compiler's 0.1.0 so an unpinned install resolves forward, and the rest of 0.
 API to move in. Nothing else in this decision changes: the compiler's tags and its 0.1.0 on PyPI
 stay exactly where they are.
 
+The second distribution gets the same treatment, stated so nobody has to infer it.
+`in-lockstep-exec` 0.1.0 remains on PyPI, yanked rather than deleted, so a pinned install still
+resolves and an unpinned one is refused with the reason; deleting it would free the name to
+anyone. Its GitHub publisher environment, `pypi-in-lockstep-exec`, is removed, so nothing in this
+repository can publish under that name again. Nothing on this line builds it, and
+`test_decommission.py` holds that.
+
 ### The AI layer
 
 `LLMProvider.generate(LLMInput) -> LLMOutput` is the transport seam: one method, one input type,
