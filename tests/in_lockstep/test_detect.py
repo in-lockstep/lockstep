@@ -263,14 +263,28 @@ def test_an_empty_command_is_refused() -> None:
 # the whole answer, and a target that is not in the file is not guessed.
 
 
-def test_a_makefile_build_and_run_target_bind_the_two_verbs_nothing_else_serves(tmp_path: Path) -> None:
-    _write(tmp_path, {"Makefile": "build:\n\tgo build ./...\nrun:\n\t./app\ntest:\n\tgo test ./...\n"})
+def test_a_makefile_serves_every_verb_it_has_a_target_for_when_nothing_structured_does(
+    tmp_path: Path,
+) -> None:
+    """A Go repository: no pytest, no ruff, and a Makefile that says how it is tested, linted,
+    built and run. All four verbs bind to it, each reporting an exit code."""
+    _write(
+        tmp_path,
+        {
+            "Makefile": (
+                "build:\n\tgo build ./...\nrun:\n\t./app\n"
+                "test:\n\tgo test ./...\nlint:\n\tgolangci-lint run\n"
+            )
+        },
+    )
     facts = _detect_facts(tmp_path)
+    assert facts.test_command == ("make", "test")
+    assert facts.lint_command == ("make", "lint")
     assert facts.build_command == ("make", "build")
     assert facts.run_command == ("make", "run")
     kinds = {i: type(x) for i, x in detected_bindings(facts)}
-    assert kinds[Build] is CommandBuild and kinds[Run] is CommandRun
-    assert Test not in kinds, "`make test` is not bound: it would trade per-test cases for an exit code"
+    assert kinds == {Test: CommandTest, Validate: CommandValidate, Build: CommandBuild, Run: CommandRun}
+    assert "tests: make test" in facts.summary() and "lint: make lint" in facts.summary()
 
 
 def test_a_makefile_without_those_targets_binds_neither(tmp_path: Path) -> None:
@@ -309,20 +323,48 @@ def test_a_makefile_target_beats_a_package_json_script_for_the_same_verb(tmp_pat
     assert facts.run_command == ("npm", "start")
 
 
-def test_pytest_still_beats_a_makefile_test_target(tmp_path: Path) -> None:
+def test_pytest_and_ruff_still_beat_makefile_test_and_lint_targets(tmp_path: Path) -> None:
     """The precedence, stated: structured output wins the verb where the structure matters. A fix
-    loop reproduces from pytest's per-test cases, which `make test` would replace with an exit
-    code; build has nothing to trade, so the Makefile serves it."""
+    loop reproduces from pytest's per-test cases and a review reads ruff's per-rule findings;
+    `make test` and `make lint` would replace both with an exit code. Build has no structured
+    tool, so the Makefile serves it outright."""
     _write(
         tmp_path,
         {
-            "pyproject.toml": "[tool.pytest.ini_options]\n",
-            "Makefile": "test:\n\tpytest\nbuild:\n\tpython -m build\n",
+            "pyproject.toml": "[tool.pytest.ini_options]\n[tool.ruff]\n",
+            "Makefile": "test:\n\tpytest\nlint:\n\truff check\nbuild:\n\tpython -m build\n",
         },
     )
-    kinds = {i: type(x) for i, x in detected_bindings(_detect_facts(tmp_path))}
-    assert kinds[Test] is PytestTest
+    facts = _detect_facts(tmp_path)
+    assert facts.test_command == () and facts.lint_command == ()
+    kinds = {i: type(x) for i, x in detected_bindings(facts)}
+    assert kinds[Test] is PytestTest and kinds[Validate] is RuffValidate
     assert kinds[Build] is CommandBuild
+
+
+def test_the_makefile_beats_package_json_for_test_as_it_does_for_build(tmp_path: Path) -> None:
+    """One rule, not four: where nothing structured serves a verb, the Makefile is the repository's
+    own statement and package.json is the fallback, whatever the target wraps."""
+    _write(
+        tmp_path,
+        {
+            "Makefile": "test:\n\tnpm test -- --ci\n",
+            "package.json": '{"scripts": {"test": "jest", "start": "node ."}}',
+        },
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.test_command == ("make", "test")
+    assert facts.run_command == ("npm", "start")
+
+
+def test_eslint_still_serves_validate_when_the_makefile_has_no_lint_target(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        {"Makefile": "build:\n\ttsc\n", "package.json": '{"scripts": {"test": "x"}}', "eslint.config.js": ""},
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.lint_command == ("npx", "eslint", ".")
+    assert facts.build_command == ("make", "build")
 
 
 def test_a_build_target_past_the_summary_cap_is_still_found(tmp_path: Path) -> None:

@@ -21,12 +21,13 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     """The `(interface, implementation)` pairs a repository's detected parts imply. Empty when
     nothing recognisable was found — an honest absence, not a guessed default that would run.
 
-    The precedence, stated rather than left to the order of the `if`s: a tool with structured
-    output wins the verb where that structure matters (pytest's per-test cases are what a fix loop
-    reproduces from; ruff's per-rule findings are what a review reads), and the Makefile or
-    package.json serves the verbs where an exit code is the whole answer. That is why `make test`
-    is never bound here while `make build` is: the first would trade cases for an exit code, the
-    second has nothing to trade.
+    The precedence, decided in `_detect_facts` and stated here where it is consumed: a tool with
+    structured output wins the verb where that structure matters (pytest's per-test cases are what
+    a fix loop reproduces from; ruff's per-rule findings are what a review reads). Where none was
+    found, the Makefile serves the verb before package.json does, so a Go repository with
+    `make test` gets a Test binding that reports an exit code, which is less than pytest gives and
+    more than nothing. Build and run have no structured tool at all, so for them the Makefile is
+    the first choice rather than the fallback.
     """
     out: list[tuple[type[Any], Any]] = []
 
@@ -40,8 +41,8 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     elif facts.lint_command:
         out.append((Validate, CommandValidate(facts.lint_command)))
 
-    # Only what is actually in the file, decided in `_detect_facts`: a `build` target or script
-    # that exists. An invented `make build` is a binding that fails at run time.
+    # Only what is actually in the file: a `build` target or script that exists. An invented
+    # `make build` is a binding that fails at run time.
     if facts.build_command:
         out.append((Build, CommandBuild(facts.build_command)))
     if facts.run_command:

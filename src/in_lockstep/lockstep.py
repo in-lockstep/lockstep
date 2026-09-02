@@ -373,9 +373,26 @@ def _detect_facts(root: Path) -> RepoFacts:
     pytest = python and (
         has("pytest.ini", "conftest.py") or "[tool.pytest" in pyproject or "[pytest]" in read("tox.ini")
     )
+    make_targets: tuple[str, ...] = ()
+    makefile = has("Makefile", "makefile")
+    if makefile:
+        make_targets = _make_targets(read("Makefile") or read("makefile"))
+
+    # One rule for all four deterministic verbs. A tool with structured output wins the verb
+    # where that structure matters: pytest's per-test cases are what a fix loop reproduces from,
+    # and ruff's per-rule findings are what a review reads. Where no such tool was found, the
+    # Makefile serves the verb before package.json does, because a Makefile is a repository's own
+    # statement of how it is tested, built and run whatever language it is in and whatever its
+    # targets wrap, and package.json is the same statement for a Node repository without one.
+    # Only a target or script that is actually in the file is bound. Inventing `make build` for a
+    # Makefile without a `build` target produces a binding that fails at run time, which is worse
+    # than an honest absence.
     test_command: tuple[str, ...] = ()
-    if not pytest and "test" in scripts:
-        test_command = ("npm", "test")
+    if not pytest:
+        if "test" in make_targets:
+            test_command = ("make", "test")
+        elif "test" in scripts:
+            test_command = ("npm", "test")
 
     ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
     eslint = (
@@ -384,18 +401,13 @@ def _detect_facts(root: Path) -> RepoFacts:
         or has("eslint.config.js", "eslint.config.mjs", "eslint.config.cjs")
         or isinstance(package.get("eslintConfig"), dict)
     )
-    lint_command: tuple[str, ...] = ("npx", "eslint", ".") if (eslint and not ruff) else ()
+    lint_command: tuple[str, ...] = ()
+    if not ruff:
+        if "lint" in make_targets:
+            lint_command = ("make", "lint")
+        elif eslint:
+            lint_command = ("npx", "eslint", ".")
 
-    make_targets: tuple[str, ...] = ()
-    makefile = has("Makefile", "makefile")
-    if makefile:
-        make_targets = _make_targets(read("Makefile") or read("makefile"))
-
-    # Build and run: the Makefile first, package.json second. A Makefile is a repository's own
-    # statement of how it is built and run whatever language it is in, and package.json is the
-    # same statement for a Node repository that has no Makefile. Only a target or script that is
-    # actually in the file is bound. Inventing `make build` for a Makefile without a `build`
-    # target produces a binding that fails at run time, which is worse than an honest absence.
     build_command: tuple[str, ...] = ()
     if "build" in make_targets:
         build_command = ("make", "build")

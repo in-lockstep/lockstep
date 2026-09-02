@@ -83,10 +83,11 @@ lockstep.bind(EgressPolicy, UnsandboxedEgress())
 lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
-Detection reads the Makefile and package.json too. A `build` or `run` target, or a `build` or
-`start` script, binds `Build` and `Run` the same way, to the command that is already there. A
-target that is not in the file is not guessed: `ls` says `build: make build` only when the
-Makefile has one.
+Detection reads the Makefile and package.json too. Where no pytest or ruff was found, a `test`
+or `lint` target serves `Test` or `Validate` with an exit code, and a `build` or `run` target (or a
+`build` or `start` script) serves `Build` and `Run` the same way, to the command that is already
+there. A target that is not in the file is not guessed: `ls` says `build: make build` only when
+the Makefile has one.
 
 Because it is code, a change to your review policy is a diff in a pull request, with blame,
 history and rollback. And because it is code, you can read what it resolves to:
