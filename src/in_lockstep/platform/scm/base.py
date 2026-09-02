@@ -390,6 +390,49 @@ class GitLocal:
                 return candidate
         return ref  # unresolvable: let the checkout fail with git's own message
 
+    def rebase_onto(self, base: Ref) -> str:
+        """Replay HEAD's commits onto `base`. Returns the new HEAD.
+
+        The deterministic half of bringing a stale change forward, and the same claim
+        `adapters/backport.py` makes about a cherry-pick: most rebases are git succeeding, for free,
+        and a model is needed at exactly one point — a conflict.
+
+        `start_point` because a CI checkout has the target only as `origin/main`; `identity()`
+        because a rebase writes commits and an unconfigured runner has no author.
+
+        A conflict raises with git's own message and leaves the tree mid-rebase, deliberately —
+        `cherry_pick` gives the reason directly above: resolving one is a decision, and cleaning up
+        silently here would discard exactly what a person needs in order to make it.
+        `abort_rebase` is the honest retreat.
+        """
+        self.git(*self.identity(), "rebase", self.start_point(base), check=True)
+        return self.head()
+
+    def unmerged_paths(self) -> tuple[str, ...]:
+        """Paths git reports as conflicted right now, sorted. Empty when the tree is clean.
+
+        Sorted rather than in git's order, because this is read to describe a state to a person or
+        to a resolver, and two reads of one tree should not differ by however the index happened to
+        be walked. `adapters/backport.py` has its own unsorted reader for the same information;
+        de-duplicating them is deliberately NOT done here — it returns git's order, and changing
+        that inside a module with its own suite is a separate change with its own argument.
+        """
+        return tuple(
+            sorted(
+                line.strip()
+                for line in self.git("diff", "--name-only", "--diff-filter=U").splitlines()
+                if line.strip()
+            )
+        )
+
+    def abort_rebase(self) -> None:
+        """`git rebase --abort` — the caller's honest retreat from a conflicted tree.
+
+        Not `check=True`: aborting when no rebase is in progress is a caller being careful rather
+        than a caller being wrong, and raising there would make the safe spelling the awkward one.
+        """
+        self.git("rebase", "--abort")
+
     def cherry_pick(self, *commits: str) -> str:
         """Apply commits onto HEAD, `-x` so each records where it came from. Returns new HEAD.
 
