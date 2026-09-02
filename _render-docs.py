@@ -39,9 +39,7 @@ else:
 PAGES = [
     ("docs/getting-started.md", "docs/getting-started.html", "Getting started",
      "Every command below shows the output it actually prints, captured from a real run and held "
-     "against the tool by a test. Nothing here needs a key. Until the 0.2.0 release is on PyPI, "
-     "install with: uv tool install 'in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep'",
-     "Getting started"),
+     "against the tool by a test. Nothing here needs a key.", "Getting started"),
     ("docs/cookbook.md", "docs/cookbook.html", "Cookbook",
      "Ten recipes of twenty lines or fewer. Every Python snippet on this page is executed by the "
      "test suite, so a recipe that stops matching the API fails CI rather than you.", "Cookbook"),
