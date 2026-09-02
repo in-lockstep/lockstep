@@ -140,6 +140,8 @@ _REVIEW_MAX_TOKENS = 4096
 # How many findings a record keeps. A ledger record is meant to stay readable and diffable, and a
 # run that produced two hundred findings has a problem the two hundredth will not explain.
 _LEDGER_MAX_FINDINGS = 50
+#: Per step, under `steps`. Smaller, because the top-level list already carries the run's.
+_LEDGER_MAX_STEP_FINDINGS = 20
 
 
 def _approval(approve: bool, approved_by: str) -> Any:
@@ -400,7 +402,7 @@ def _run_registered(
         # to take the recommendation.
         raise click.ClickException(str(e)) from None
 
-    click.echo(f"{entry.id}  {_describe(result)}")
+    click.echo(f"{entry.id}  {_describe(result, ctx)}")
     # Findings, not just the verdict. For a workflow whose whole product is a judgement, the
     # status line is the least interesting part of it.
     for finding in getattr(result, "findings", ())[:20]:
@@ -410,7 +412,7 @@ def _run_registered(
     _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
-    _exit_for(result)
+    _exit_for(result, ctx)
 
 
 def _ledger(lockstep: Any = None) -> Any:
@@ -490,7 +492,17 @@ def _write_workflow_ledger(
     They pass through the same redacting writer as everything else.
     """
     cost = getattr(result, "cost", None)
-    findings = getattr(result, "findings", ()) or ()
+    status, reason, decided, own = _workflow_verdict(result, ctx)
+    # The findings come from wherever the verdict came from: the workflow's own Outcome, or else
+    # its top-level steps, so a red test step's `test.expectation_unmet` is on the record and
+    # `report` can count what keeps going wrong. Top-level steps only, like the verdict: an
+    # adapter that ran a test inside its own step already carries that test's findings upward,
+    # and listing the inner step too would count one red suite twice.
+    findings: tuple[Any, ...] = (
+        tuple(getattr(result, "findings", ()) or ())
+        if own
+        else tuple(f for step in ctx.steps for f in step.outcome.findings)
+    )
     _record(
         _ledger(lockstep),
         ctx.run_id,
@@ -502,9 +514,12 @@ def _write_workflow_ledger(
             # Who asked, and whether they watched. Absent when nobody did, which is the
             # ordinary case for a workflow needing no grant.
             **({"approval": ctx.approval.as_record()} if ctx.approval.granted else {}),
-            "status": getattr(getattr(result, "status", None), "value", "completed"),
-            "reason": getattr(result, "reason", None),
-            "decided": getattr(result, "decided", True),
+            "status": status,
+            "reason": reason,
+            "decided": decided,
+            # What ran, in order, so `history --explain` can name the step that went red and a
+            # reader of the raw record does not have to take the verdict on trust.
+            "steps": [step.as_record(max_findings=_LEDGER_MAX_STEP_FINDINGS) for step in ctx.steps],
             # `total_tokens` is input plus output and EXCLUDES the cache, which is exactly the
             # number that stops making sense once caching is on. Run 33582850420 recorded 62,190
             # tokens for $13.84 — a thirty-three-fold drop against the run before it, and no way to
@@ -551,23 +566,37 @@ def _parameters(fn: Any, ctx: Any = None) -> list[str]:
     return [p for p in inspect.signature(fn).parameters if p != "ctx" and p not in injected]
 
 
-def _describe(result: Any) -> str:
+def _workflow_verdict(result: Any, ctx: Any) -> tuple[str, str | None, bool, bool]:
+    """How a workflow run ended: the workflow's own `Outcome` when it returned one, else what its
+    steps say. The record, the console line and the exit code all read this, so they cannot
+    disagree: a run whose test step went red is `failed` in all three places or none. The last
+    element says which of the two it was, so the record can take the findings from the same
+    source it took the verdict from.
+
+    The workflow's own verdict wins when it gave one, because a workflow may run a step it
+    expects to fail (a reproducer before a fix) and say so by succeeding. A dict or `None` is not
+    a verdict, and stamping it `"completed"` (a word the status set does not contain) is how a
+    red run reached the report as not failed: the report had nothing to count it as. A result
+    with a `status` that is not a `Status` (a `TestVerdict`, a string) is not a verdict either.
+    """
+    status = getattr(result, "status", None)
+    if isinstance(status, Status):
+        return status.value, getattr(result, "reason", None), bool(getattr(result, "decided", True)), True
+    derived, reason, decided = ctx.verdict()
+    return derived.value, reason, decided, False
+
+
+def _describe(result: Any, ctx: Any) -> str:
     """A workflow returns whatever it likes; say something true about it either way."""
-    status = getattr(result, "status", None)
-    if status is None:
-        return "completed"
-    reason = getattr(result, "reason", None)
-    decided = getattr(result, "decided", True)
-    return (
-        f"{status.value}" + (f"  ({reason})" if reason else "") + ("" if decided else "  (decided nothing)")
-    )
+    status, reason, decided, _ = _workflow_verdict(result, ctx)
+    return status + (f"  ({reason})" if reason else "") + ("" if decided else "  (decided nothing)")
 
 
-def _exit_for(result: Any) -> None:
-    status = getattr(result, "status", None)
-    if status is Status.BLOCKED:
+def _exit_for(result: Any, ctx: Any) -> None:
+    status, _, _, _ = _workflow_verdict(result, ctx)
+    if status == Status.BLOCKED.value:
         raise SystemExit(EXIT_BLOCKED)
-    if status is not None and status is not Status.SUCCEEDED:
+    if status != Status.SUCCEEDED.value:
         raise SystemExit(EXIT_FAILED)
 
 
@@ -735,12 +764,10 @@ def run_cmd(
     # to the one dispatch that predates it. Selfcheck is the first command an adopter runs, and
     # its record carrying schema-4 provenance is how they see what a record even is.
     _write_workflow_ledger(lockstep, ctx, "selfcheck", result, {})
-
-    if validate is not None and validate.status is Status.BLOCKED:
-        raise SystemExit(EXIT_BLOCKED)
-    statuses = [o.status for o in (validate, tests) if o is not None]
-    if any(s is not Status.SUCCEEDED for s in statuses):
-        raise SystemExit(EXIT_FAILED)
+    # The same verdict the record just took, so the exit code cannot disagree with it. The old
+    # logic here sent a blocked test step out as EXIT_FAILED while the record said blocked, and
+    # CI read a control working as a failure.
+    _exit_for(result, ctx)
 
 
 @main.command(name="ls")
@@ -1177,6 +1204,29 @@ def _explain_run(run_id: str) -> None:
             if isinstance(item, dict):
                 where = f"{item.get('path')}:{item.get('line')} " if item.get("path") else ""
                 click.echo(f"          {where}{item.get('id', '')}: {item.get('message', '')}")
+    # The steps, so the line above can be checked against what actually ran: which step went red,
+    # and what it said. A verdict without its steps is a number to take on trust.
+    steps = record.get("steps")
+    if isinstance(steps, list) and steps:
+        click.echo("steps")
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            label = f"{step.get('step', '?')}"
+            state = str(step.get("status", "?"))
+            if step.get("reason"):
+                state += f"  ({step['reason']})"
+            if step.get("decided") is False:
+                state += "  decided nothing"
+            # The label is data (`step=` names are the caller's), so it gets at least one space
+            # rather than the fixed-width pad the short fixed labels above can rely on.
+            click.echo(f"  {label}{' ' * max(1, 10 - len(label))}{state}")
+            step_findings = step.get("findings")
+            if isinstance(step_findings, dict):
+                for item in step_findings.get("items") or []:
+                    if isinstance(item, dict):
+                        where = f"{item.get('path')}:{item.get('line')} " if item.get("path") else ""
+                        click.echo(f"            {where}{item.get('id', '')}: {item.get('message', '')}")
     from .ai.transcript import TranscriptWriter
 
     transcript = TranscriptWriter(run_id).path()
@@ -1351,6 +1401,8 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
             key: {
                 "runs": stat.runs,
                 "failures": stat.failures,
+                # Runs with no verdict to count; `failure_rate` is over the rest, or null.
+                "unclassified": stat.unclassified,
                 "failure_rate": stat.failure_rate,
                 "tokens": stat.tokens,
                 "cost_usd": stat.cost_usd,
@@ -1370,6 +1422,12 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
         cost = f"${stat.cost_usd:>8.4f}" if stat.cost_usd is not None else f"{'-':>9}"
         mean = f"${stat.mean_cost:.4f}" if stat.mean_cost is not None else "-"
         click.echo(f"{key:<{width}}  {stat.runs:>4}  {stat.failures:>6}  {tokens}  {cost}  {mean}")
+    unclassified = sum(stat.unclassified for stat in stats.values())
+    if unclassified:
+        click.echo(
+            f"{unclassified} record(s) carry no verdict (written before schema 5 by a workflow that "
+            f"returned no Outcome); they are in `runs` and not in `failed`"
+        )
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
     click.echo(_history_line(verify, tampered))

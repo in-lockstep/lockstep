@@ -182,6 +182,47 @@ def _hash_input(value: object) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+@dataclass(frozen=True)
+class StepOutcome:
+    """One step's outcome, kept on the context so the run's record can be derived from what ran.
+
+    A workflow returns whatever it likes, and most return a dict or nothing. The record used to
+    stamp those runs `"completed"`, a word the status set does not contain, so a selfcheck whose
+    test step went red was reported as not failed: the failure was not misclassified, it was not on
+    the record at all. The steps are the evidence; this is where they wait to be written down.
+    """
+
+    step: str
+    verb: str
+    outcome: Outcome[Any]
+
+    def as_record(self, *, max_findings: int = 20) -> dict[str, object]:
+        outcome = self.outcome
+        record: dict[str, object] = {
+            "step": self.step,
+            "verb": self.verb,
+            "status": outcome.status.value,
+            "decided": outcome.decided,
+            "wall_seconds": round(outcome.cost.wall_seconds, 3),
+            "findings": {
+                "count": len(outcome.findings),
+                "items": [f.as_record() for f in outcome.findings[:max_findings]],
+            },
+        }
+        if outcome.reason:
+            record["reason"] = outcome.reason
+        return record
+
+
+#: How many `run_call`s deep the current task is. Zero means the workflow itself is calling.
+_call_depth: ContextVar[int] = ContextVar("in_lockstep_call_depth", default=0)
+
+#: The order in which a step's status decides the run's: a control stopping a step is the fact
+#: about the run, above infrastructure breaking, above the domain saying no. A step that
+#: succeeded decides nothing on its own.
+_VERDICT_PRECEDENCE = (Status.BLOCKED, Status.ERRORED, Status.FAILED)
+
+
 @dataclass
 class RunContext:
     run_id: str
@@ -206,6 +247,26 @@ class RunContext:
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()
+    #: The steps the workflow itself asked for, in order, replayed checkpoints included. What the
+    #: record derives its verdict from when the workflow returned no `Outcome` of its own. Top
+    #: level only: a step an adapter runs inside one of these (a strategy's mid-loop test probe,
+    #: a reproducer expected to fail) is the adapter's business, and the adapter's own outcome is
+    #: its statement about it. Counting those would fail a run whose implementing step succeeded.
+    steps: list[StepOutcome] = field(default_factory=list, repr=False)
+
+    def verdict(self) -> tuple[Status, str | None, bool]:
+        """How this run ended, read off its steps: status, the deciding step's reason, decided.
+
+        For a workflow that returned no `Outcome`. Any blocked step makes the run blocked, else any
+        errored step makes it errored, else any failed step makes it failed, else it succeeded; the
+        reason is the deciding step's; and the run decided something only if every step did. A run
+        that ran no steps succeeded at nothing in particular, which is still not a failure.
+        """
+        for status in _VERDICT_PRECEDENCE:
+            for step in self.steps:
+                if step.outcome.status is status:
+                    return status, step.outcome.reason, all(s.outcome.decided for s in self.steps)
+        return Status.SUCCEEDED, None, all(s.outcome.decided for s in self.steps)
 
     # -- declaring and running work ------------------------------------------------
 
@@ -230,11 +291,17 @@ class RunContext:
         # The kill switch is checked before anything else, including middleware. It is not part
         # of the chain, so `--no-middleware` cannot reach past it and neither can a bug in a
         # layer that would otherwise run first.
+        # Whether this call is the workflow's own or one an adapter makes inside it. A contextvar
+        # rather than a counter on the context, because a fan-out runs top-level steps in
+        # concurrent tasks and each task carries its own copy.
+        top_level = _call_depth.get() == 0
         if os.environ.get(DISABLE_ENV):
-            return Outcome(
-                status=Status.BLOCKED,
-                reason="killswitch",
-            )
+            refused: Outcome[Any] = Outcome(status=Status.BLOCKED, reason="killswitch")
+            if top_level:
+                self.steps.append(
+                    StepOutcome(step=call.step or call.iface.__name__.lower(), verb="", outcome=refused)
+                )
+            return refused
 
         # A call-scoped adapter wins over the container binding — the call site said `via=`, and
         # code in the lifecycle module is exactly who may decide that. The container is never
@@ -251,6 +318,10 @@ class RunContext:
             existing = self.state.load_step(self.run_id, str(step_id))
             if isinstance(existing, Outcome):
                 self.last_step = step_id
+                if top_level:
+                    self.steps.append(
+                        StepOutcome(step=step_id.call_site, verb=_verb_name(call), outcome=existing)
+                    )
                 return existing
 
         started = time.monotonic()
@@ -266,11 +337,17 @@ class RunContext:
             return result
 
         chain: Next = compose([*self.middleware, *call.middleware], terminal, self, call)
-        outcome = await chain()
+        depth = _call_depth.set(_call_depth.get() + 1)
+        try:
+            outcome = await chain()
+        finally:
+            _call_depth.reset(depth)
 
         if self.state is not None and outcome.terminal:
             self.state.save_step(self.run_id, str(step_id), outcome)
 
+        if top_level:
+            self.steps.append(StepOutcome(step=step_id.call_site, verb=_verb_name(call), outcome=outcome))
         self.last_step = step_id
         self.last_capabilities = capabilities
         return outcome
@@ -316,6 +393,10 @@ class RunContext:
         _current.set(self)
 
 
+def _verb_name(call: ActionCall) -> str:
+    return call.verb.value if call.verb else call.iface.__name__.lower()
+
+
 def killswitch_engaged() -> bool:
     return bool(os.environ.get(DISABLE_ENV))
 
@@ -325,6 +406,7 @@ __all__ = [
     "RepoInfo",
     "RunContext",
     "StepId",
+    "StepOutcome",
     "Verb",
     "current_context",
     "killswitch_engaged",

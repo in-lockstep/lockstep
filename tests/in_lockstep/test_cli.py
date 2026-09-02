@@ -2057,6 +2057,124 @@ def test_run_states_a_ceiling_the_module_did_not(repo: Path) -> None:
     assert CliRunner().invoke(main, ["run", "demo/ok", "--budget", "3.00"]).exit_code == 0
 
 
+def test_a_selfcheck_whose_test_step_fails_is_recorded_failed_and_the_report_counts_it(repo: Path) -> None:
+    """GATE-LEDGER-9, on the path every scaffolded repository runs first. Two first-time users
+    ran selfcheck over a red suite, saw `test failed` and exit 1, then saw `report` print
+    `failed 0% (0 of 10)`: the record said `"completed"`, a word the report cannot count."""
+    import json
+
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\ntestpaths = ['tests']\n")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_red.py").write_text("def test_red():\n    assert False\n")
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert result.exit_code == 1, result.output
+    assert "test      failed" in result.output
+
+    from in_lockstep.platform.ledger.store import SCHEMA
+
+    record = json.loads(_ledger_record(repo, "selfcheck").read_text())
+    assert record["status"] == "failed"
+    assert record["schema"] == SCHEMA
+    steps = {s["step"]: s for s in record["steps"]}
+    assert steps["test"]["status"] == "failed"
+    assert steps["test"]["findings"]["items"][0]["id"] == "test.expectation_unmet"
+    assert record["findings"]["items"][0]["id"] == "test.expectation_unmet", (
+        "and the run's own list carries it"
+    )
+
+    report = CliRunner().invoke(main, ["report"])
+    assert report.exit_code == 0, report.output
+    assert "failed        100%  (1 of 1)" in report.output, report.output
+
+
+def test_a_workflow_returning_a_dict_with_a_failed_step_is_failed_in_the_record_the_line_and_the_exit(
+    repo: Path,
+) -> None:
+    """The three places a verdict shows must agree. Before, a dict-returning workflow exited 0,
+    printed `completed` and recorded `completed`, whatever its steps had done."""
+    import json
+
+    _workflow_repo(
+        repo,
+        "from in_lockstep.core.types import Validate\n"
+        "from in_lockstep.core.verbs import Capability, Verb\n"
+        "class Red:\n"
+        "    verb = Verb.VALIDATE\n"
+        "    capabilities = frozenset({Capability.READS_REPO})\n"
+        "    async def invoke(self, ctx, inp):\n"
+        "        return Outcome(status=Status.FAILED, reason='demo.red')\n"
+        "lockstep.bind(Validate, Red())\n"
+        "@workflow(id='demo/dict')\n"
+        "async def demo(ctx):\n"
+        "    await ctx.do(Validate(), step='reproducer')\n"
+        "    return {'done': True}\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/dict"])
+    assert result.exit_code == 1, result.output
+    assert "demo/dict  failed  (demo.red)" in result.output
+    record = json.loads(_ledger_record(repo, "demo-dict").read_text())
+    assert record["status"] == "failed" and record["reason"] == "demo.red"
+    assert record["steps"][0]["verb"] == "validate" and record["steps"][0]["step"] == "reproducer"
+
+    explained = CliRunner().invoke(main, ["history", "--explain", "demo-dict"])
+    assert explained.exit_code == 0, explained.output
+    assert "steps" in explained.output
+    # A ten-character step name still gets a space before its status.
+    assert "reproducer failed  (demo.red)" in explained.output
+
+
+def test_a_selfcheck_whose_test_step_is_blocked_exits_three_and_records_blocked(repo: Path) -> None:
+    """The exit code reads the verdict the record took. The old selfcheck logic sent a blocked
+    test step out as a failure while the record said blocked, and CI read a control working as
+    a broken build (GATE-LEDGER-9)."""
+    import json
+
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.adapters import PytestTest, Test\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.middleware import ApprovalGate\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.00)\n"
+        "lockstep.bind(Test, PytestTest())\n"
+        "lockstep.middleware += [ApprovalGate()]\n"
+    )
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert result.exit_code == 3, result.output
+    record = json.loads(_ledger_record(repo, "selfcheck").read_text())
+    assert record["status"] == "blocked"
+    assert record["steps"][0]["status"] == "blocked"
+
+
+def test_a_workflows_own_outcome_still_wins_over_its_steps(repo: Path) -> None:
+    """A reproducer is a step expected to fail. A workflow that returns SUCCEEDED after one has
+    said so, and its steps do not overrule it; they are recorded beside it."""
+    import json
+
+    _workflow_repo(
+        repo,
+        "from in_lockstep.core.types import Validate\n"
+        "from in_lockstep.core.verbs import Capability, Verb\n"
+        "class Red:\n"
+        "    verb = Verb.VALIDATE\n"
+        "    capabilities = frozenset({Capability.READS_REPO})\n"
+        "    async def invoke(self, ctx, inp):\n"
+        "        return Outcome(status=Status.FAILED, reason='demo.red')\n"
+        "lockstep.bind(Validate, Red())\n"
+        "@workflow(id='demo/own')\n"
+        "async def demo(ctx):\n"
+        "    await ctx.do(Validate())\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    result = CliRunner().invoke(main, ["run", "demo/own"])
+    assert result.exit_code == 0, result.output
+    record = json.loads(_ledger_record(repo, "demo-own").read_text())
+    assert record["status"] == "succeeded"
+    assert record["steps"][0]["status"] == "failed"
+
+
 def test_selfcheck_still_works(repo: Path) -> None:
     """The one built-in workflow, which the old dispatcher special-cased."""
     CliRunner().invoke(main, ["init"])

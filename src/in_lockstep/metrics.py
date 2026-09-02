@@ -37,6 +37,11 @@ from typing import Any, TypeGuard
 #: a failure would make every budget ceiling look like a bug.
 FAILED = ("failed", "errored")
 
+#: Every status a record can honestly carry. A record outside this set has no verdict the report
+#: can count, and it is counted as exactly that rather than as "not failed": schema-4 workflow
+#: records stamped `"completed"` read as 0% failed over eleven red selfchecks (#166).
+VERDICTS = ("succeeded", "failed", "errored", "blocked")
+
 #: How many entries a "what does it keep finding" list shows. Long enough to see a pattern, short
 #: enough that the tail does not read as though it mattered.
 TOP_N = 8
@@ -73,10 +78,13 @@ class Group:
     undecided: int
     cost: Measured
     seconds: Measured
+    #: Runs in this row whose status is a verdict. The failure rate's denominator; `runs` is not,
+    #: because a record with no verdict is not evidence of success.
+    judged: int = 0
 
     @property
     def failure_rate(self) -> float | None:
-        return self.failures / self.runs if self.runs else None
+        return self.failures / self.judged if self.judged else None
 
 
 @dataclass(frozen=True)
@@ -93,6 +101,8 @@ class Report:
     failure_rate: Measured = Measured(None)
     undecided_rate: Measured = Measured(None)
     blocked: int = 0
+    #: Records whose status is not a verdict. Never folded into the failure rate's denominator.
+    unclassified: int = 0
     top_reasons: list[tuple[str, int]] = field(default_factory=list)
 
     cost_total: Measured = Measured(None)
@@ -205,9 +215,10 @@ def _group(records: list[dict[str, Any]], by: str) -> list[Group]:
             name=name,
             runs=len(group),
             failures=sum(1 for r in group if r.get("status") in FAILED),
-            undecided=sum(1 for r in group if r.get("decided") is False),
+            undecided=sum(1 for r in group if r.get("status") in VERDICTS and r.get("decided") is False),
             cost=_measure(_numbers(group, "cost_usd"), len(group)),
             seconds=_measure(_numbers(group, "wall_seconds"), len(group), "median"),
+            judged=sum(1 for r in group if r.get("status") in VERDICTS),
         )
         for name, group in buckets.items()
     ]
@@ -353,6 +364,9 @@ def build(records: list[dict[str, Any]]) -> Report:
     stamps = sorted(str(r["ts"]) for r in records if isinstance(r.get("ts"), str))
     reasons = Counter(str(r["reason"]) for r in records if r.get("reason"))
     findings_total, top_findings, injections = _findings(records)
+    # The failure rate is a share of the records that carry a verdict. A record that carries none
+    # is not evidence of success, and putting it in the denominator says it is.
+    judged = [r for r in records if r.get("status") in VERDICTS]
 
     return Report(
         records=total,
@@ -360,9 +374,12 @@ def build(records: list[dict[str, Any]]) -> Report:
         runs_by_kind=_group(records, "kind"),
         runs_by_model=_group(records, "model"),
         by_week=_weeks(records),
-        failure_rate=_share(records, lambda r: r.get("status") in FAILED),
-        undecided_rate=_share(records, lambda r: r.get("decided") is False),
+        failure_rate=_share(judged, lambda r: r.get("status") in FAILED),
+        # Over the judged records as well: a schema-4 dict-returning workflow record carries
+        # `decided: true` as a default nobody measured, not as a fact about the run.
+        undecided_rate=_share(judged, lambda r: r.get("decided") is False),
         blocked=sum(1 for r in records if r.get("status") == "blocked"),
+        unclassified=total - len(judged),
         top_reasons=reasons.most_common(TOP_N),
         cost_total=_measure(_numbers(records, "cost_usd"), total),
         cost_per_run=_measure(_numbers(records, "cost_usd"), total, "mean"),
@@ -481,6 +498,11 @@ def as_text(report: Report) -> list[str]:
     out += [f"  failed        {_pct(report.failure_rate)}"]
     out += [f"  decided none  {_pct(report.undecided_rate)}"]
     out += [f"  blocked       {report.blocked}  (a control stopping a run is the control working)"]
+    if report.unclassified:
+        out += [
+            f"  no verdict    {report.unclassified}  (written before schema 5 by a workflow that "
+            f"returned no Outcome; not counted as anything)"
+        ]
     for reason, count in report.top_reasons:
         out += [f"    {reason:<28} {count}"]
 
@@ -514,9 +536,10 @@ def as_text(report: Report) -> list[str]:
     out += ["", "by kind"]
     for group in report.runs_by_kind:
         rate = "—" if group.failure_rate is None else f"{group.failure_rate:.0%}"
+        unjudged = group.runs - group.judged
         out += [
             f"  {group.name:<14} {group.runs:>4} run(s)   {rate:>4} failed   "
-            f"{group.seconds.render('s')} median"
+            f"{group.seconds.render('s')} median" + (f"   ({unjudged} with no verdict)" if unjudged else "")
         ]
 
     out += ["", "attempts per ticket"]
@@ -617,6 +640,11 @@ def _cards(report: Report) -> str:
             "stopped by a control",
             f"{report.blocked:,}",
             "a budget or a missing sign-off; working as intended",
+        ),
+        *(
+            [("no verdict", f"{report.unclassified:,}", "recorded before schema 5; counted as nothing")]
+            if report.unclassified
+            else []
         ),
         ("total spend", _money(report.cost_total), ""),
         ("per run", _money(report.cost_per_run), ""),
