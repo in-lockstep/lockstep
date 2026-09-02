@@ -38,7 +38,7 @@ from .platform.tickets import Ticket, TicketDraft, TicketSource, TicketState, Ti
 
 # Kept in step with `pyproject.toml` by hand, and by a test — the two are separate declarations
 # and a wheel whose `--version` disagrees with its own name is not something a tag check catches.
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "Budget",
