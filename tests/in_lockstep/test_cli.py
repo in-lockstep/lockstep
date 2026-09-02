@@ -305,14 +305,13 @@ def test_an_explicit_model_flag_does_outrank_it(repo: Path) -> None:
 def test_no_module_still_runs_on_detected_defaults(repo: Path) -> None:
     """A repository without a lockstep.py is supported, not an error.
 
-    It still has to state a ceiling, because `review` binds something that spends. That is
-    GATE-BUDGET-1 rather than a gap in the fallback: the alternative is the CLI inventing a
-    number, which is the failure the gate exists to prevent.
+    And a dry run of it needs no ceiling: the canned provider bills nothing, so the CLI states a
+    ceiling of zero rather than refusing. GATE-BUDGET-1 is scoped to runs that can spend, and the
+    first live run is where a budget has to come from somewhere.
     """
-    result = CliRunner().invoke(
-        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "1.00", "--diff", _diff(repo)]
-    )
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
     assert result.exit_code == 0, result.output
+    assert "$0.0000" in result.output
 
 
 def test_telemetry_says_when_the_cli_cannot_see_the_chain(repo: Path) -> None:
@@ -1081,26 +1080,33 @@ def test_the_killswitch_halts_before_any_adapter(repo: Path, monkeypatch: pytest
     assert result.exit_code == 3, result.output
 
 
-def test_review_refuses_a_repo_that_declares_no_budget(repo: Path) -> None:
+def test_review_refuses_a_repo_that_declares_no_budget(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """GATE-BUDGET-1 through the CLI, which is where a person meets it.
 
     `--budget` deliberately has no default. A flag that silently supplies a ceiling would make
     this unsatisfiable in the one place it matters: every run would have a budget nobody chose,
     and the refusal could never fire.
+
+    A live run, not a dry one: `--dry-run` bills nothing and states a zero ceiling, so it no
+    longer meets this gate. The refusal comes before any credential is looked up, which is what
+    "refused at startup" means; the key is removed so a regression fails on the missing budget
+    rather than by reaching a provider.
     """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
-    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    result = CliRunner().invoke(main, ["review", "--base", "HEAD", "--diff", _diff(repo)])
     assert result.exit_code != 0
     assert "no budget is declared" in result.output
     assert "Traceback" not in result.output, "a refusal is a message, not a crash"
 
 
-def test_an_explicit_budget_flag_satisfies_it(repo: Path) -> None:
+def test_an_explicit_budget_flag_satisfies_it(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same live run with the flag: past the gate, the next thing it needs is a credential."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
-    result = CliRunner().invoke(
-        main, ["review", "--dry-run", "--base", "HEAD", "--budget", "0.50", "--diff", _diff(repo)]
-    )
-    assert result.exit_code == 0, result.output
+    result = CliRunner().invoke(main, ["review", "--base", "HEAD", "--budget", "0.50", "--diff", _diff(repo)])
+    assert "no budget is declared" not in result.output, result.output
+    assert "ANTHROPIC_API_KEY" in result.output, result.output
 
 
 def test_ls_still_works_without_a_budget(repo: Path) -> None:
@@ -1429,6 +1435,29 @@ def test_offline_works_with_nothing_recorded(repo: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "replaying the shipped fixture" in result.output
     assert "actions/save/action.yml" in result.output
+
+
+def test_offline_needs_no_module_and_no_budget(repo: Path) -> None:
+    """The site's first promise: `review --offline` on a clean install, in an empty directory.
+
+    Nothing bound, nothing declared, no key. Five clean installs of 0.2.0 were refused here by
+    GATE-BUDGET-1, for spend a cassette cannot incur (#174). A replay states a ceiling of zero
+    instead, and the two findings come back at $0.0000. No `_write` on purpose: the module it
+    scaffolds declares the very ceiling this is about.
+    """
+    result = CliRunner().invoke(main, ["review", "--offline"])
+    assert result.exit_code == 0, result.output
+    assert "no budget is declared" not in result.output
+    assert result.output.count("review.security:") == 2, result.output
+    assert "$0.0000" in result.output
+
+
+def test_a_dry_run_needs_no_budget(repo: Path) -> None:
+    """The same statement for the canned provider, with a module that declares nothing."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    assert result.exit_code == 0, result.output
+    assert "$0.0000" in result.output
 
 
 def test_the_fixture_is_a_real_recording(repo: Path) -> None:

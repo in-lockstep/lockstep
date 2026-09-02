@@ -429,13 +429,18 @@ def test_cli_resolve_without_an_approval_path_is_refused(repo: Path) -> None:
 
 
 def test_cli_resolve_without_a_budget_is_refused(repo: Path) -> None:
+    """GATE-BUDGET-1 for the one backport that can spend.
+
+    A live run, not a dry one: `--dry-run` bills nothing and states a ceiling of zero, so it is
+    not this gate's concern. The refusal lands before any credential is looked up, and the fixture
+    has already removed the key, so a regression fails here and not by reaching a provider.
+    """
     sha = _diverge(repo)
     result = CliRunner().invoke(
-        main,
-        ["backport", "--target", "release-1.0", "--commit", sha, "--resolve", "--approve", "--dry-run"],
+        main, ["backport", "--target", "release-1.0", "--commit", sha, "--resolve", "--approve"]
     )
     assert result.exit_code != 0
-    assert "budget" in result.output.lower()
+    assert "no budget is declared" in result.output, result.output
 
 
 def test_cli_conflict_names_the_retreat_and_exits_nonzero(repo: Path) -> None:

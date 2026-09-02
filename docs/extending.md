@@ -557,7 +557,7 @@ capability declaration rather than anything the strategy configures:
 |---|---|---|
 | `ApprovalGate` … `UngatedAgency` | A model that can write and spend needs a human in the loop. | Add `ApprovalGate()` to your middleware, or pass `--approve` for an attended local run. |
 | `egress.unenforced` | The tool set declares `EXECUTES_CODE`, which makes egress enforcement mandatory. | Run under a host that constrains egress with `IN_LOCKSTEP_EGRESS=enforced`, or `lockstep.bind(EgressPolicy, UnsandboxedEgress())`. |
-| `UndeclaredBudget` | Something bound spends money and no ceiling was declared. | `lockstep.budget = Budget(usd=2.00)`, or `--budget`. |
+| `UndeclaredBudget` | Something bound spends money and no ceiling was declared. A replay cannot spend, so `--offline` and `--dry-run` state a ceiling of zero for you. | `lockstep.budget = Budget(usd=2.00)`, or `--budget`. |
 
 The egress one is the surprise on a laptop, and the opt-out is a binding rather than a flag on
 purpose: `UnsandboxedEgress` is named after what it does, so it greps and it reviews.

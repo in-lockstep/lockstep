@@ -724,6 +724,30 @@ def test_an_empty_budget_object_is_not_a_declaration() -> None:
         lockstep.context(run_id="r")
 
 
+def test_a_ceiling_of_zero_is_a_declaration_and_is_enforced() -> None:
+    """GATE-BUDGET-1 accepts `Budget(usd=0.0)`. "Absent is not zero" runs both ways.
+
+    Zero is how a run that cannot spend says so: `--offline`, `--dry-run` and `apply` state it
+    rather than asking the gate for an exemption. The statement is only honest if it is enforced,
+    so the second half checks that `Spend` refuses the first projected cent under it while an
+    unbilled projection, which is what a replay produces, goes through.
+    """
+    from in_lockstep.core.outcome import Cost
+    from in_lockstep.core.spend import Budget, Spend
+    from in_lockstep.lockstep import Lockstep
+
+    class Review: ...
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Review, _spender()())
+    lockstep.budget = Budget(usd=0.0)
+    assert lockstep.context(run_id="r") is not None
+
+    spend = Spend(budget=Budget(usd=0.0))
+    assert spend.would_exceed(Cost(usd=0.0)) is None, "a replay's projection is unbilled"
+    assert spend.would_exceed(Cost(usd=0.01)) is not None, "a real one is refused before the call"
+
+
 # -- GATE-LEDGER-5 -----------------------------------------------------------------------------
 #
 # The metric namespace broke at the pivot: `lockstep.*` was the compiler's, `in_lockstep.*` is the

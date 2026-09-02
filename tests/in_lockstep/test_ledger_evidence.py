@@ -475,6 +475,27 @@ def test_the_daily_ceiling_refuses_a_run_pre_start_and_the_window_rolls(hermetic
     assert lockstep.context(run_id="next") is not None
 
 
+def test_the_daily_ceiling_lets_a_run_with_a_zero_ceiling_start(hermetic: Path, monkeypatch) -> None:
+    """A replay or a dry run declares a ceiling of zero, and cannot add to the window.
+
+    Scoped like GATE-BUDGET-1 and for the same reason: refusing a free replay because yesterday's
+    agent runs were expensive teaches people the refusal is noise.
+    """
+    from datetime import UTC, datetime
+
+    from in_lockstep.core.spend import Budget
+
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    now = datetime.now(UTC)
+    asyncio.run(ledger.append("r1", {"ts": now.isoformat(timespec="seconds"), "cost_usd": 0.80}))
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "0.75")
+    lockstep = _spending_lockstep()
+    lockstep.budget = Budget(usd=0.0)
+    assert lockstep.context(run_id="replay") is not None
+
+
 def test_no_declared_daily_limit_means_no_ledger_read(hermetic: Path, monkeypatch) -> None:
     """Advisory-first, resolved tension #4: the ceiling is an opt-in an organisation states, not
     a default that surprises every laptop."""

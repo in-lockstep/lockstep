@@ -238,6 +238,12 @@ class Lockstep:
         Scoped to lifecycles that can actually spend. A repository binding only Test and Validate
         needs no ceiling, and demanding one would teach people to write `Budget(usd=999)` to make
         the framework be quiet — which is worse than no check, because it looks like a decision.
+
+        A run that cannot spend is not exempted here; it declares a ceiling of zero. The CLI does
+        that for `--offline` and `--dry-run` (`_declare_zero_ceiling`), whose providers transmit
+        nothing, and for `apply`, which binds no model at all. Zero is a declaration this gate
+        accepts and `Spend` enforces, where an exemption keyed on a flag would be a gate that
+        trusts the flag.
         """
         if self.declared_ceiling().declared:
             return
@@ -274,6 +280,11 @@ class Lockstep:
         # and refusing a free selfcheck because yesterday's agent runs were expensive teaches
         # people the refusal is noise.
         if not self.spenders():
+            return
+        # A run whose declared ceiling is zero cannot add to the window either. That is how a
+        # replay or a dry run says it bills nothing (`cli._declare_zero_ceiling`), and refusing it
+        # for yesterday's spend would be the same noise.
+        if self.declared_ceiling().usd == 0.0:
             return
         try:
             limit = float(raw)
