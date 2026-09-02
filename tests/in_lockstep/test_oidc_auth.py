@@ -339,3 +339,86 @@ def test_a_service_account_name_is_refused_before_any_exchange(monkeypatch) -> N
 
     monkeypatch.setenv("ANTHROPIC_SERVICE_ACCOUNT_ID", "svac_0123abc")
     default_registry(Auth())
+
+
+# -- a token that outlives its own run ---------------------------------------------------------
+
+
+def test_the_identity_token_is_minted_again_rather_than_replayed(monkeypatch) -> None:
+    """The SDK re-runs the exchange as its access token nears expiry, and a GitHub OIDC JWT lives
+    minutes — so what `identity_token_provider` returns the second time has to be a NEW token.
+
+    It was `lambda: id_token`, closed over one string resolved at client construction. Every
+    refresh replayed the same, by-then-expired JWT and came back 401. Run 33569602761 died there
+    at eight minutes in with $33.80 spent, and the error text — "Ensure your federation rule
+    matches your identity token" — sends you to look at the rule, which was fine.
+    """
+    from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
+
+    minted = iter(["jwt-first", "jwt-second", "jwt-third"])
+
+    def mint() -> Credentials:
+        return Credentials(values={"id_token": SecretStr(next(minted))}, source="oidc:anthropic")
+
+    creds = Credentials(values={"id_token": SecretStr("jwt-zeroth")}, source="oidc:anthropic", refresh=mint)
+    settings = ProviderSettings(extra={"federation-rule-id": "fdrl_test"})
+
+    provider = _client_kwargs(monkeypatch, creds, settings)["credentials"]
+    assert provider._identity_token_provider() == "jwt-first"
+    assert provider._identity_token_provider() == "jwt-second", "each exchange gets its own token"
+
+
+def test_a_refresh_that_fails_serves_the_token_it_already_had(monkeypatch) -> None:
+    """A getter the SDK calls is the wrong place to raise from: the old behaviour was to present a
+    stale token, and a stale token at least has a chance. Losing the run to an exception inside a
+    callback would be a new failure introduced by the fix for an old one."""
+    from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
+
+    def explode() -> Credentials:
+        raise RuntimeError("the metadata endpoint is having a day")
+
+    creds = Credentials(values={"id_token": SecretStr("jwt-cached")}, source="oidc", refresh=explode)
+    provider = _client_kwargs(monkeypatch, creds, ProviderSettings(extra={"federation-rule-id": "f"}))[
+        "credentials"
+    ]
+    assert provider._identity_token_provider() == "jwt-cached"
+
+
+def test_an_empty_refresh_does_not_blank_the_credential(monkeypatch) -> None:
+    """`OidcResolver` returns nothing at all when the CI variables are missing, so a refresh can
+    legitimately come back empty. Handing "" to the exchange would turn a working run into an
+    authentication error for the rest of its life."""
+    from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
+
+    creds = Credentials(
+        values={"id_token": SecretStr("jwt-cached")},
+        source="oidc",
+        refresh=lambda: Credentials.none(),
+    )
+    provider = _client_kwargs(monkeypatch, creds, ProviderSettings(extra={"federation-rule-id": "f"}))[
+        "credentials"
+    ]
+    assert provider._identity_token_provider() == "jwt-cached"
+
+
+def test_every_minted_token_is_seeded_into_redaction(monkeypatch, tmp_path) -> None:
+    """The reason the refresh goes back through `Auth` instead of calling the resolver directly.
+
+    Minting is the only moment a secret is visible before a client swallows it, so it is the only
+    moment redaction can learn about it. A second, third and fourth JWT that `Redact` had never
+    seen would be four unredacted credentials in every error string the run produced after that.
+    """
+    from in_lockstep.ai.auth import Auth, AuthRequest, AuthTarget, StaticResolver
+    from in_lockstep.privileged.redact import SecretRegistry
+
+    registry = SecretRegistry()
+    request = AuthRequest(target=AuthTarget.MODEL_PROVIDER, name="anthropic", keys=("id_token",))
+
+    # Long enough to clear `_MIN_SECRET_LENGTH`; a real JWT is hundreds of characters.
+    tokens = ("jwt-first-token-value", "jwt-second-token-value")
+    for token in tokens:
+        Auth.chain(
+            StaticResolver(values={("anthropic", "id_token"): token}), registry=registry
+        ).credentials_for(request)
+
+    assert set(tokens) <= registry.known(), "a JWT Redact never saw is a JWT in the next log line"

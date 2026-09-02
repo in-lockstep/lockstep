@@ -42,8 +42,18 @@ class AnthropicProvider(ClaudeTransport):
 
             # The identifiers arrive through settings, never the environment (GATE-AUTH-1):
             # bootstrap read them at registration, the same road the workspace id travels.
+            # A PROVIDER, not a captured string. `identity_token_provider` exists because the SDK
+            # re-runs the exchange when its access token nears expiry, and a GitHub OIDC JWT lives
+            # minutes — so `lambda: id_token` handed the same, by-then-expired token back every
+            # time and the refresh 401'd. Run 33569602761 died that way at eight minutes in, with
+            # $33.80 already spent: "Advisory token refresh failed (112s remaining)". Nothing was
+            # wrong with the federation rule; the token was simply old.
+            #
+            # `creds.fresh()` mints through `Auth`, so each new JWT is seeded into redaction before
+            # it can reach a log — and falls back to this snapshot when it cannot, which is exactly
+            # the old behaviour rather than a new way to fail.
             kwargs["credentials"] = WorkloadIdentityCredentials(
-                identity_token_provider=lambda: id_token,
+                identity_token_provider=lambda: creds.fresh().get("id_token") or id_token,
                 federation_rule_id=settings.extra.get("federation-rule-id", ""),
                 organization_id=settings.extra.get("federation-organization-id", ""),
                 service_account_id=settings.extra.get("federation-service-account-id") or None,
