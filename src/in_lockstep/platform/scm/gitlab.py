@@ -39,6 +39,7 @@ from .base import (
     conventional_subject,
     is_run_branch_for,
     ticket_from_branch,
+    title_line,
     trailers_from,
 )
 
@@ -204,6 +205,9 @@ class GitLabScm:
         # Conventional Commits: this commit and the merge-request title it becomes are created by
         # a workflow, so both must be one.
         title = conventional_subject(title, workflow=workflow)
+        # The one-line, length-bounded form for the request itself; `title` keeps whatever
+        # body it has for the commit. See `title_line` for the run this cost.
+        subject = title_line(title)
 
         # Two spellings of `base`, deliberately: the git start-point may need `origin/<base>` (a
         # CI checkout has the release line only as a remote-tracking ref), while `target_branch`
@@ -231,7 +235,7 @@ class GitLabScm:
                     "target_branch": base or self._default_branch(),
                     # Draft is a title prefix here, not a field: opened not-yet-asking-for-review,
                     # and `mark_ready` strips it once the tests pass.
-                    "title": f"Draft: {title}" if draft else title,
+                    "title": f"Draft: {subject}" if draft else subject,
                     "description": change_body(body, trailers),
                 },
             )
@@ -243,7 +247,9 @@ class GitLabScm:
             id=url or branch,
             url=url,
             branch=branch,
-            title=title,
+            # The subject, not the commit text: `mark_ready` writes this back as the title, so a
+            # request carrying the multi-line form would restore it on the way out of draft.
+            title=subject,
             number=int(iid) if isinstance(iid, int) else None,
             trailers=trailers,
             draft=draft,

@@ -232,9 +232,20 @@ jobs:
   #
   # Holds a write token and no provider key, exactly like `propose`, so the credential split is
   # unchanged. It says what happened and publishes the record; it opens nothing.
+  # `propose` is in `needs` and the condition names both jobs explicitly.
+  #
+  # It was `needs: [gate, <work>]` with a bare `failure()`, which covered the run that never
+  # produced a change and missed the one that produced a change and could not publish it. Run
+  # 33578430422 is that case: the model did the work, the suite went green, `propose` was refused
+  # by the host — and because `implement` had SUCCEEDED, this job was skipped and the issue heard
+  # nothing at all. A run that did the work and then lost it is the one most worth telling somebody
+  # about.
+  #
+  # `always() && (... == 'failure')` rather than a bare `failure()`: with a skipped job in `needs`,
+  # a bare `failure()` is the ambiguous case, and this reads as what it means.
   report:
-    needs: [gate, implement]
-    if: failure()
+    needs: [gate, implement, propose]
+    if: ${{ always() && (needs.implement.result == 'failure' || needs.propose.result == 'failure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

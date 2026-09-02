@@ -4560,11 +4560,17 @@ async def fix_propose(
 
     # Ready for review, not draft: a change only reaches here when from-ticket confirmed the fix
     # green (a reproducer red before, passing after), so it is asking for the human sign-off.
+    # Fetched before the change is opened, because the title comes from it now.
+    issue = await tickets.get(ticket)
     change = await open_reviewable(
         scm,
         changeset,
         ready=True,
-        title=changeset.summary or f"Fix {ticket}",
+        # The ticket's own title, not the model's `summary`. A summary is free prose: run
+        # 33578430422 put a thousand characters of the model's running commentary here, and the
+        # host refused the pull request after the work was done and green. The issue title is a
+        # person's one-line statement of the same thing, which is what a title wants.
+        title=issue.title or changeset.summary or f"Fix {ticket}",
         body=(
             "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
             "The ticket text is untrusted input to a model that held write tools, so review this as "
@@ -4575,7 +4581,7 @@ async def fix_propose(
         run_id=ctx.run_id,
     )
     await tickets.comment(
-        await tickets.get(ticket),
+        issue,
         f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
@@ -5057,11 +5063,17 @@ async def implement_propose(
     # Draft by default; ready only when the change passed its tests — a green change awaiting a
     # human is what is asking for the sign-off.
     ready = verdict is not None and verdict.green
+    # Fetched before the change is opened, because the title comes from it now.
+    issue = await tickets.get(ticket)
     change = await open_reviewable(
         scm,
         changeset,
         ready=ready,
-        title=changeset.summary or f"Implement {ticket}",
+        # The ticket's own title, not the model's `summary`. A summary is free prose: run
+        # 33578430422 put a thousand characters of the model's running commentary here, and the
+        # host refused the pull request after the work was done and green. The issue title is a
+        # person's one-line statement of the same thing, which is what a title wants.
+        title=issue.title or changeset.summary or f"Implement {ticket}",
         body=implement_body(changeset, verdict),
         ticket=ticket,
         workflow="implement",
@@ -5069,7 +5081,7 @@ async def implement_propose(
     )
     state = "ready for review" if ready else "a draft — its tests have not passed"
     await tickets.comment(
-        await tickets.get(ticket),
+        issue,
         f"`/implement` opened {change.url or change.branch} as {state}. Nobody has read it yet.",
     )
     print(f"change    {change.url or change.branch}")
