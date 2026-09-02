@@ -24,6 +24,7 @@ from .base import (
     is_run_branch,
     is_run_branch_for,
     ticket_from_branch,
+    title_line,
     trailers_from,
 )
 
@@ -106,7 +107,11 @@ class GitHubScm:
         self.local.git("push", "-u", "origin", branch, check=True)
 
         rendered = change_body(body, trailers)
-        args = ["pr", "create", "--title", title, "--body", rendered, "--head", branch]
+        # `title_line`, not `title`: the commit above may carry a body, a pull-request title may
+        # not, and GitHub refuses one over 256 characters at the very end — after the branch is
+        # pushed and the model is paid for.
+        subject = title_line(title)
+        args = ["pr", "create", "--title", subject, "--body", rendered, "--head", branch]
         if base:
             args += ["--base", base]
         if draft:
@@ -122,7 +127,7 @@ class GitHubScm:
             id=url or branch,
             url=url,
             branch=branch,
-            title=title,
+            title=subject,
             number=number,
             trailers=trailers,
             draft=draft,

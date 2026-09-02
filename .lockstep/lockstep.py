@@ -405,18 +405,24 @@ async def implement_propose(
     # was staged to run against or the Test verb refused — is not a failure, but it has not earned
     # a place in somebody's review queue either.
     ready = verdict is not None and verdict.green
+    # Fetched before the change is opened, because the title comes from it now.
+    issue = await tickets.get(ticket)
     change = await open_reviewable(
         scm,
         changeset,
         ready=ready,
-        title=changeset.summary or f"Implement {ticket}",
+        # The ticket's own title, not the model's `summary`. A summary is free prose: run
+        # 33578430422 put a thousand characters of the model's running commentary here, and the
+        # host refused the pull request after the work was done and green. The issue title is a
+        # person's one-line statement of the same thing, which is what a title wants.
+        title=issue.title or changeset.summary or f"Implement {ticket}",
         body=implement_body(changeset, verdict),
         ticket=ticket,
         workflow="implement",
         run_id=ctx.run_id,
     )
     await tickets.comment(
-        await tickets.get(ticket),
+        issue,
         f"`/implement` opened {change.url or change.branch} as "
         f"{'ready for review' if ready else 'a draft — its tests have not passed'}. "
         "Nobody has read it yet.",
@@ -609,7 +615,7 @@ async def fix_propose(
         run_id=ctx.run_id,
     )
     await tickets.comment(
-        await tickets.get(ticket),
+        issue,
         f"`/fix` opened {change.url or change.branch} as "
         f"{'ready for review' if ready else 'a draft — the suite has not confirmed it'}. "
         "Nobody has read it yet.",

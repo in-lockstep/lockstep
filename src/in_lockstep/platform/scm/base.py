@@ -62,6 +62,39 @@ def conventional_subject(subject: str, *, workflow: str) -> str:
     return f"{prefixed}{sep}{rest}" if sep else prefixed
 
 
+#: The longest title a host will accept on a change request. GitHub refuses at 256 with a GraphQL
+#: error rather than truncating, and it refuses at the very end — after the branch is pushed, after
+#: the model has been paid for. GitLab's ceiling is higher, so the smallest wins: one number means a
+#: change that opens on one host opens on the other.
+MAX_TITLE_CHARS = 256
+
+
+def title_line(subject: str) -> str:
+    """One line, host-safe, for a change request title.
+
+    Separate from `conventional_subject` because a commit message may have a body and a title may
+    not — and the same string was being used for both. A summary with newlines became a multi-line
+    title, and a long one became an HTTP 400.
+
+    Run 33578430422 died exactly here. The model had done the work and the suite was green (1631
+    passed), and then the title — a thousand characters of the model's own running commentary, taken
+    from `changeset.summary` — was refused by the API. The work survived only because the changeset
+    was in the run's artifact.
+
+    Clamping is the floor and not the fix. A title should come from the ticket, which a person
+    wrote; the workflows do that now, and this stands behind them because a repository can bind any
+    strategy and a summary is model output whatever it is used for.
+    """
+    first = " ".join(subject.strip().split("\n", 1)[0].split())
+    if not first:
+        return "changes"
+    if len(first) <= MAX_TITLE_CHARS:
+        return first
+    # An ellipsis rather than a hard cut, so a reader can see the title was clipped rather than
+    # wondering why it stops mid-word.
+    return first[: MAX_TITLE_CHARS - 1].rstrip() + "…"
+
+
 def change_body(body: str, trailers: dict[str, str]) -> str:
     """The rendered half a human reads, plus a machine-readable block.
 

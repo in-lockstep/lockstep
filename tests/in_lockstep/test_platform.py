@@ -843,3 +843,64 @@ def test_this_repositorys_own_codeowners_parses() -> None:
     root = Path(__file__).resolve().parents[2]
     owners = parse_codeowners((root / ".github" / "CODEOWNERS").read_text())
     assert owners.handles, "the shipped CODEOWNERS names nobody, or the parser stopped matching"
+
+
+# -- a title a host will actually accept --------------------------------------------------
+
+
+def test_a_title_is_one_line_and_within_the_hosts_limit() -> None:
+    """GitHub refuses a pull-request title over 256 characters, with a GraphQL error and not a
+    truncation — and it refuses at the very end, after the branch is pushed and the model is paid.
+
+    Run 33578430422 died there. The model had implemented #146 and the suite was green (1631
+    passed); the title was a thousand characters of the model's own running commentary, taken from
+    `changeset.summary`, and the work survived only because it was in the run's artifact.
+    """
+    from in_lockstep.platform.scm.base import MAX_TITLE_CHARS, title_line
+
+    commentary = (
+        "Right — staged writes aren't visible to search. That's expected.\n\n"
+        "1. **test_a_ticket_in_four_records** — 4 records, cost sums to 109.73 ✓\n"
+        "2. **test_both_spellings** — args.ticket and top-level ticket ✓\n"
+    ) + ("x" * 900)
+    shaped = title_line(commentary)
+
+    assert "\n" not in shaped, "a commit message may have a body; a title may not"
+    assert len(shaped) <= MAX_TITLE_CHARS
+    assert shaped == "Right — staged writes aren't visible to search. That's expected."
+
+
+def test_a_single_line_longer_than_the_limit_is_clipped_and_says_so() -> None:
+    """The other half. First-line-only handles a summary with a body; this handles one that is a
+    single unbroken paragraph, which is just as plausible from a model."""
+    from in_lockstep.platform.scm.base import MAX_TITLE_CHARS, title_line
+
+    shaped = title_line("feat: " + ("a very long explanation " * 40))
+    assert len(shaped) <= MAX_TITLE_CHARS
+    assert shaped.endswith("…"), "a clipped title says it was clipped"
+    assert shaped.startswith("feat: a very long explanation")
+
+
+def test_a_short_title_is_left_exactly_as_it_is() -> None:
+    from in_lockstep.platform.scm.base import title_line
+
+    assert title_line("feat(metrics): count attempts per ticket") == (
+        "feat(metrics): count attempts per ticket"
+    )
+
+
+def test_an_empty_summary_still_produces_a_title() -> None:
+    """A host refuses an empty title too, and "" is what a model that answered with only tool calls
+    leaves behind."""
+    from in_lockstep.platform.scm.base import title_line
+
+    assert title_line("") == "changes"
+    assert title_line("   \n\n  ") == "changes"
+
+
+def test_interior_whitespace_is_collapsed_rather_than_carried() -> None:
+    """A title is rendered on one line whatever it contains, so runs of space that came from
+    wrapped prose would show up as gaps in the middle of it."""
+    from in_lockstep.platform.scm.base import title_line
+
+    assert title_line("feat:   count   attempts") == "feat: count attempts"

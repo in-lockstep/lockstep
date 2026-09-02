@@ -300,3 +300,24 @@ def test_no_workflow_asserts_an_egress_mode_this_repository_overrides() -> None:
                 f"{path.name} sets IN_LOCKSTEP_EGRESS while lockstep.py binds UnsandboxedEgress, "
                 f"which resolves first. The variable is never read."
             )
+
+
+def test_a_run_that_did_the_work_and_could_not_publish_it_still_answers() -> None:
+    """`report` used to be `needs: [gate, <work>]` with a bare `failure()`, which covered the run
+    that produced nothing and missed the run that produced something and could not publish it.
+
+    Run 33578430422 is the second case: the model implemented #146, the suite went green, and
+    `propose` was refused by the host over a title length. Because the work job had SUCCEEDED, this
+    job was skipped and the issue heard nothing — the failure mode this job exists to remove,
+    reappearing on the outcome where the loss is largest, because a change actually existed.
+    """
+    for path, work in (
+        (ROOT / ".github/workflows/implement.yml", "implement"),
+        (ROOT / ".github/workflows/fix.yml", "fix"),
+    ):
+        data = yaml.safe_load(path.read_text())
+        report = data["jobs"]["report"]
+        assert "propose" in report["needs"], f"{path.name}: report cannot see propose's outcome"
+        condition = str(report["if"])
+        assert f"needs.{work}.result == 'failure'" in condition
+        assert "needs.propose.result == 'failure'" in condition
