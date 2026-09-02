@@ -83,12 +83,6 @@ lockstep.bind(EgressPolicy, UnsandboxedEgress())
 lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
-Detection reads the Makefile and package.json too. Where no pytest or ruff was found, a `test`
-or `lint` target serves `Test` or `Validate` with an exit code, and a `build` or `run` target (or a
-`build` or `start` script) serves `Build` and `Run` the same way, to the command that is already
-there. A target that is not in the file is not guessed: `ls` says `build: make build` only when
-the Makefile has one.
-
 Because it is code, a change to your review policy is a diff in a pull request, with blame,
 history and rollback. And because it is code, you can read what it resolves to:
 
@@ -128,6 +122,13 @@ The `standards` line is where an organisation's installed policy package would a
 ([cookbook recipe 6](cookbook.md#6-ship-your-organisations-standards-as-a-package)). The `config`
 line says which `lockstep.py` constrained this invocation, which matters the day it is a trusted
 ref rather than your working tree.
+
+The `detected` line reads the Makefile and package.json as well as pyproject. Where no pytest or
+ruff was found, a `test` or `lint` target serves `Test` or `Validate` with an exit code, and a
+`build` or `run` target (or a `build` or `start` script) serves `Build` and `Run` the same way,
+to the command that is already there. `init` writes those bindings into the module, and a
+repository with no module runs on them directly. A target that is not in the file is not guessed:
+`build: make build` appears only when the Makefile has one.
 
 ## Verbs and outcomes
 

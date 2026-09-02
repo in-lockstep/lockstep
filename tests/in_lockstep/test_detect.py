@@ -462,3 +462,53 @@ def test_command_run_refuses_an_env_its_runner_cannot_carry_rather_than_dropping
     assert outcome.failed and outcome.value is None
     assert outcome.findings[0].id == "run.env_unsupported"
     assert sandbox.commands == []
+
+
+# -- what the review of issue 162 found in the Makefile scan and the output tail ---------------
+
+
+def test_a_posix_double_colon_assignment_is_not_a_target(tmp_path: Path) -> None:
+    """`run::=./app` is an assignment. The old lookahead let it through, so a Makefile with that
+    line and no `run` rule bound `make run`, which fails with "No rule to make target"."""
+    _write(tmp_path, {"Makefile": "run::=./app\nbuild::=x\ncheck:\n\tdo\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.make_targets == ("check",)
+    assert facts.run_command == () and facts.build_command == ()
+
+
+def test_help_text_inside_a_define_block_is_not_a_target(tmp_path: Path) -> None:
+    """A `define HELP` block full of `build:   build the image` lines scans like rules."""
+    _write(
+        tmp_path,
+        {
+            "Makefile": (
+                "define HELP\nUsage: make <target>\nbuild:   build the image\nrun:     run it\nendef\n"
+                "check:\n\tdo\n"
+            )
+        },
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.make_targets == ("check",)
+    assert facts.build_command == () and facts.run_command == ()
+
+
+def test_space_before_the_colon_and_several_targets_on_one_line_are_read(tmp_path: Path) -> None:
+    """Both are legal and common, and both left `build` unbound while `make build` worked."""
+    _write(tmp_path, {"Makefile": "build : deps\n\tdo\nrun test: deps\n\tdo\ndeps:\n\tdo\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.make_targets == ("build", "run", "test", "deps")
+    assert facts.build_command == ("make", "build") and facts.run_command == ("make", "run")
+
+
+def test_a_failure_tail_keeps_stdout_and_stderr_apart_and_ends_where_the_text_does() -> None:
+    """stdout without a trailing newline used to be glued to stderr's first line, showing a line
+    nothing printed; and an empty tail used to leave the message ending in a newline."""
+    glued = _FakeSandbox(2, stdout="building", stderr="error: x")
+    outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=glued).invoke(None, Build()))
+    assert outcome.findings[0].message == "make build exited 2\nbuilding\nerror: x"
+    assert outcome.value.log == "building\nerror: x"
+
+    silent = _FakeSandbox(2)
+    outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=silent).invoke(None, Build()))
+    assert outcome.findings[0].message == "make build exited 2"
+    assert outcome.value.log == ""

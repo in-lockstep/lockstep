@@ -50,7 +50,18 @@ _TAIL_LINES = 20
 
 
 def _tail(stdout: str, stderr: str) -> str:
-    return "\n".join((stdout + stderr).strip().splitlines()[-_TAIL_LINES:])
+    """The last lines a command printed: stdout, then stderr, neither glued to the other.
+
+    Concatenating the two strings put stdout's last line and stderr's first on one line whenever
+    stdout ended without a newline, which showed a line nothing printed. Empty when nothing was
+    printed, so a message that appends this ends where its own text does.
+    """
+    text = "\n".join(s.rstrip("\n") for s in (stdout, stderr) if s.strip())
+    return "\n".join(text.splitlines()[-_TAIL_LINES:])
+
+
+def _exited(cmd: list[str] | tuple[str, ...], code: int, tail: str) -> str:
+    return f"{' '.join(cmd)} exited {code}" + (f"\n{tail}" if tail else "")
 
 
 class CommandTest:
@@ -180,8 +191,7 @@ class CommandValidate:
             findings = (
                 Finding(
                     id="validate.command_failed",
-                    message=f"{' '.join(self.command)} exited {result.exit_code}\n"
-                    + _tail(result.stdout, result.stderr),
+                    message=_exited(self.command, result.exit_code, _tail(result.stdout, result.stderr)),
                     severity=Severity.ERROR,
                     blocking=True,
                 ),
@@ -233,7 +243,7 @@ class CommandBuild:
             findings = (
                 Finding(
                     id="build.command_failed",
-                    message=f"{' '.join(cmd)} exited {result.exit_code}\n" + log,
+                    message=_exited(cmd, result.exit_code, log),
                     severity=Severity.ERROR,
                     blocking=True,
                 ),
@@ -278,9 +288,11 @@ class CommandRun:
         runner = self.sandbox
         if inp.env:
             # The sandbox allows a fixed set of variables through and adds its own; a request's
-            # variables join those rather than replacing them, so the credential drop still holds.
-            # A runner that cannot carry variables gets a refusal rather than the command run
-            # without them: that would be a different command from the one the workflow asked for.
+            # variables join those rather than replacing them, so the credential drop still holds,
+            # and `Sandbox` carries them into a container as flags rather than leaving them on the
+            # runtime's client, where they would reach nothing. A runner that cannot carry
+            # variables gets a refusal rather than the command run without them: that would be a
+            # different command from the one the workflow asked for.
             if not isinstance(runner, Sandbox):
                 return Outcome(
                     status=Status.FAILED,
@@ -304,8 +316,7 @@ class CommandRun:
             findings = (
                 Finding(
                     id="run.command_failed",
-                    message=f"{' '.join(cmd)} exited {result.exit_code}\n"
-                    + _tail(result.stdout, result.stderr),
+                    message=_exited(cmd, result.exit_code, _tail(result.stdout, result.stderr)),
                     severity=Severity.ERROR,
                     blocking=True,
                 ),

@@ -452,22 +452,41 @@ def _detect_facts(root: Path) -> RepoFacts:
 
 
 def _make_targets(text: str) -> tuple[str, ...]:
-    """Every named target in a Makefile, in file order, ignoring pattern rules and `.PHONY`.
+    """Every named target in a Makefile, in file order.
 
-    All of them, not the first few: this list decides whether `build` and `run` get bound, and a
-    target does not stop existing because eight others precede it. `RepoFacts.summary()` does the
-    shortening for the line a person reads.
+    All of them, not the first few: this list decides whether `test`, `lint`, `build` and `run`
+    get bound, and a target does not stop existing because eight others precede it.
+    `RepoFacts.summary()` does the shortening for the line a person reads.
 
-    The `::?(?!=)` is what keeps a simply-expanded variable assignment out: `CC:=gcc` and the
-    double-colon `X::=y` both put an `=` right after the colon(s), where a real target
-    (`check:` or a double-colon rule `x::`) does not, so the lookahead excludes the assignments a
-    bare `:` would have captured as targets.
+    A rule line starts at column zero with one or more names and a colon. What is excluded, each
+    because it produced a target that was not one: a simply-expanded assignment, both `CC:=gcc`
+    and the POSIX spelling `X::=y` (an earlier `::?(?!=)` let the second through, because `::?`
+    backtracks to one colon and the lookahead then sees a colon rather than the `=`; the
+    lookahead now refuses `=` and `:=` after the first colon, and a double-colon rule `x::`
+    still passes); pattern and variable targets (`%.o`, `$(BIN)`), which do not start with a
+    letter; `.PHONY` and its kin, which start with a dot; recipe lines, which start with a tab;
+    and the body of a `define ... endef`, where help text of the form `build:   build the image`
+    scans exactly like a rule and bound a `make build` that did not exist. Several names on one
+    line (`build run: deps`) are each a target, and whitespace before the colon (`build : deps`)
+    is legal and common.
     """
     import re
 
+    rule = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_-]*)*)[ \t]*:(?!:?=)")
     seen: list[str] = []
-    for match in re.finditer(r"(?m)^([A-Za-z][A-Za-z0-9_-]*)::?(?!=)", text):
-        name = match.group(1)
-        if name not in seen and not name.startswith("."):
-            seen.append(name)
+    in_define = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if in_define:
+            in_define = not stripped.startswith("endef")
+            continue
+        if stripped == "define" or stripped.startswith("define "):
+            in_define = True
+            continue
+        match = rule.match(line)
+        if not match:
+            continue
+        for name in match.group(1).split():
+            if name not in seen:
+                seen.append(name)
     return tuple(seen)

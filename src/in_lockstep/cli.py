@@ -4067,9 +4067,11 @@ def _scaffold_module(facts: Any) -> str:
 
     The deterministic-verb binds are generated from the facts, the same way `detected_bindings`
     binds the drop-in defaults: a Node repository gets `CommandTest(["npm", "test"])`, a Makefile
-    with a `build` target gets `CommandBuild(["make", "build"])`, and a part detection could not
-    place is a commented stub — with its own import — rather than a wrong default that runs. Only
-    the adapters actually bound are imported, so a generated module never ships an unused import.
+    with a `build` target gets `CommandBuild(["make", "build"])`. A Test or Validate that detection
+    could not place is a commented stub — with its own import — rather than a wrong default that
+    runs; Build and Run get a line only when something was found, for the reason the inline
+    comment below gives. Only the adapters actually bound are imported, so a generated module never
+    ships an unused import.
     Everything else — the egress opt-out and the middleware — is identical in every scaffold; the
     trampoline is byte-identical across repos, and this file is the one `init` fits to the stack.
     """

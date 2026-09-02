@@ -1,10 +1,12 @@
 """Turning what detection found into shipped-default bindings.
 
-The composition root asks this for the bindings a `RepoFacts` implies, then installs them at
-`Tier.DEFAULT` — so a repository that binds nothing still gets adapters that fit its stack, and an
-explicit `lockstep.bind(...)` in the module wins over every one of them. The rule that a Node
-repository must not silently get pytest bound lives here, as data rather than an `if` buried in the
-CLI: this returns pytest only when pytest was actually detected.
+The composition root asks this for the bindings a `RepoFacts` implies and installs them at
+`Tier.DEFAULT` — for a repository with no `lockstep.py` at all, which then runs on adapters that fit
+its stack. A repository that ships a module has made its choices and gets none of these silently;
+`init` writes the same answer into the module it scaffolds, so the two paths agree on the day the
+module is created and the module is the truth from then on (`cli._default_lockstep` says why). The
+rule that a Node repository must not silently get pytest bound lives here, as data rather than an
+`if` buried in the CLI: this returns pytest only when pytest was actually detected.
 """
 
 from __future__ import annotations
