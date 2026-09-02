@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · in-lockstep</title>
+<meta name="description" content="Every command below shows the output it actually prints, captured from a real run and held against the tool by a test. Nothing here needs a key. Until the 0.2.0 release is on PyPI, install with: uv tool install &#x27;in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep&#x27;">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='3' y='3' rx='1.5' fill='%2300A87C'/%3E%3Crect width='16' height='3' y='10' rx='1.5' fill='%23C77716'/%3E%3C/svg%3E">
+<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/geistmono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../site.css">
+<script>
+  /* Both of these run before first paint. The theme so a reader who chose one never sees the other
+     flash, and the `js` class so that the rules which hide a diagram before it animates apply only
+     where something is actually going to animate it. Without this the page would be correct with
+     JavaScript on and half-blank with it off. */
+  document.documentElement.className += " js";
+  try { var t = localStorage.getItem("ls-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html" aria-label="in-lockstep, home">
+      <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+        <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+        <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+        <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+      </svg>
+      in-lockstep
+    </a>
+    <nav class="nav-links" aria-label="Site">
+      <a href="../walkthrough.html">Walkthrough</a>
+      <a href="../governance.html">Governance</a>
+      <a href="../extensions.html">Extensions</a>
+      <a href="../docs/getting-started.html">Docs</a>
+    </nav>
+    <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+      </svg>
+    </button>
+    <a class="btn btn-ghost" href="https://github.com/in-lockstep/lockstep">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+<div class="wrap doc">
+  <aside class="doc-toc" aria-label="On this page">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#where-things-live">Where things live</a></li>
+      <li><a href="#the-module-is-the-configuration">The module is the configuration</a></li>
+      <li><a href="#verbs-and-outcomes">Verbs and outcomes</a></li>
+      <li><a href="#the-first-model-shaped-run-costs-nothing">The first model-shaped run costs nothing</a></li>
+      <li><a href="#running-a-model-for-real">Running a model for real</a></li>
+      <li><a href="#what-the-ledger-says-afterwards">What the ledger says afterwards</a></li>
+      <li><a href="#local-models">Local models</a></li>
+      <li><a href="#before-running-unattended">Before running unattended</a></li>
+    </ol>
+  </aside>
+  <article class="doc-body">
+    <h1>Getting started</h1>
+    <p class="lede">Every command below shows the output it actually prints, captured from a real run and held against the tool by a test. Nothing here needs a key. Until the 0.2.0 release is on PyPI, install with: uv tool install &#x27;in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep&#x27;</p>
+<p><code>in-lockstep</code> treats the software lifecycle as a program. Not a program that <em>generates</em> a pipeline: the Python module you write is the thing that runs. There is no compilation step, no YAML output, and no intermediate configuration layer.</p>
+<p>Every command below shows the output it actually prints, captured from a real run in a small Python repository. Your paths, hashes and timings will differ; the shape will not. A test holds the stable lines of these captures against the real commands, so this page cannot quietly describe a previous version of the tool.</p>
+<pre data-lang="bash"><code>uv tool install 'in-lockstep[anthropic]'
+in-lockstep init</code></pre>
+<pre data-lang="text"><code>wrote .lockstep/lockstep.py
+  detected stack: python; tests: pytest; lint: ruff
+wrote .github/workflows/lockstep.yml
+
+One job, because reviewing is read-only. Add the privileged `apply` job the
+day a verb of yours produces a change to write; the file says where.</code></pre>
+<p>That writes two files. <code>.lockstep/lockstep.py</code> is your lifecycle. <code>.github/workflows/lockstep.yml</code> is a trampoline: it invokes the CLI and contains no lifecycle logic, because a CI host requires its own YAML and that YAML belongs to the host.</p>
+<h2 id="where-things-live">Where things live</h2>
+<pre data-lang=""><code>.lockstep/lockstep.py     your lifecycle, committed and reviewed
+.lockstep/runs/           checkpoints         (gitignored)
+.lockstep/cassettes/      recordings          (gitignored)
+lockstep-history          an orphan branch    (run records)</code></pre>
+<p>Two decisions worth knowing.</p>
+<p><strong>The lifecycle module is not at the repository root.</strong> The root is on <code>sys.path</code> for anything run from there, so a <code>lockstep.py</code> sitting in it is importable by your project whether or not anyone meant it to be, and framework types start appearing in code that never chose to depend on them.</p>
+<p>A dot-directory is not a valid package name, so nothing under <code>.lockstep/</code> can be imported by accident. The module is also loaded as <code>in_lockstep._lifecycle</code> rather than as <code>lockstep</code>, so it cannot collide with a module of your own by that name.</p>
+<p><strong>Run records go to an orphan branch, not the working tree.</strong> A record is what the run spent, what it decided and who approved it. Writing it into the tree makes it either untracked (which loses it) or a commit on the branch under review, which puts framework output into a diff a person is trying to read. <code>lockstep-history</code> shares no commit with any branch you work on.</p>
+<pre data-lang="bash"><code>in-lockstep history            # what has been recorded here
+in-lockstep history --push     # publish it; needs push access, never automatic</code></pre>
+<p>Local runs append to a local ref and stop. Reaching a remote needs credentials and is a side effect nobody asked for by typing a command in a terminal, so publishing is a separate act. In practice that act is CI, where the job that can push carries the record out as a bundle from the job that made it.</p>
+<h2 id="the-module-is-the-configuration">The module is the configuration</h2>
+<p><code>init</code> detected pytest and ruff above, so the scaffold it wrote already binds them:</p>
+<pre data-lang="python"><code>from in_lockstep import Lockstep
+from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
+from in_lockstep.middleware import CostBudget, otel
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+
+lockstep = Lockstep.detect()
+
+lockstep.bind(Test, PytestTest(args=["-q"]))
+lockstep.bind(Validate, RuffValidate())
+
+# The scaffold's one opt-out, with a long comment in the real file saying exactly why it is
+# defensible for read-only review and must be re-decided before any verb that writes.
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
+
+lockstep.middleware += [otel(), CostBudget(usd=2.00)]</code></pre>
+<p>Because it is code, a change to your review policy is a diff in a pull request, with blame, history and rollback. And because it is code, you can read what it resolves to:</p>
+<pre data-lang="bash"><code>in-lockstep ls</code></pre>
+<pre data-lang="text"><code>config    local working tree
+repo      /home/dev/code/demo
+head      8b822684ed7a  branch main
+detected  stack: python; tests: pytest; lint: ruff; ci: github
+
+bindings
+  EgressPolicy           -&gt; UnsandboxedEgress(singleton, explicit)
+  Test                   -&gt; PytestTest      (singleton, explicit)
+  Validate               -&gt; RuffValidate    (singleton, explicit)
+
+middleware  (privileged tier runs outside this chain and is not listed)
+  OtelMiddleware
+  CostBudget
+
+standards  (in_lockstep.standards entry points; applied before this module's own lines)
+  (none installed)
+
+policy
+  (nothing contributed)
+
+workflows
+  selfcheck  (in_lockstep.cli)</code></pre>
+<p>Config-as-code has one genuine disadvantage over a manifest: you can read a YAML file, but you cannot read a container. <code>ls</code> is the answer to it.</p>
+<p>The <code>standards</code> line is where an organisation's installed policy package would appear (<a href="cookbook.html#6-ship-your-organisations-standards-as-a-package">cookbook recipe 6</a>). The <code>config</code> line says which <code>lockstep.py</code> constrained this invocation, which matters the day it is a trusted ref rather than your working tree.</p>
+<h2 id="verbs-and-outcomes">Verbs and outcomes</h2>
+<p>A workflow asks for a verb; a binding decides what serves it.</p>
+<pre data-lang="python"><code>from in_lockstep import RunContext, Test, Validate, workflow
+
+@workflow(id="ci/check")
+async def check(ctx: RunContext, paths):
+    validate = await ctx.do(Validate(paths=paths))
+    if validate.blocked:
+        return validate
+    return await ctx.do(Test(paths=paths))</code></pre>
+<p>The request is one object, <code>Test(paths=...)</code>, and its type is what the binding serves, so the call reads as what it does: do this Test.</p>
+<p><code>ctx.do</code> returns an <code>Outcome</code>, and a red test suite is a <code>FAILED</code> outcome rather than an exception. Failure is data: workflows branch on it, and only programmer error unwinds the stack.</p>
+<p>An outcome carries a <code>status</code> and, separately, <code>decided</code>. Those answer different questions: "how did it end" and "did it produce evidence". A test run that collected nothing succeeded and decided nothing, and reporting it as a clean pass would be the reassuring number this framework tries hard not to produce.</p>
+<h2 id="the-first-model-shaped-run-costs-nothing">The first model-shaped run costs nothing</h2>
+<p>A cassette ships in the package, recorded from a real model call against a real merged pull request. Replaying it needs no key, no network and no spend:</p>
+<pre data-lang="bash"><code>in-lockstep review --offline</code></pre>
+<pre data-lang="text"><code>config    local working tree
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+review/security  succeeded
+  actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters
+  actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment
+
+tokens    5361 in, 443 out
+cost      $0.0000  (replayed; nothing was billed)
+spans     (lockstep.py declares its own middleware; the CLI is not in that chain)
+ledger    lockstep-history:records/review-security.json  (local; `in-lockstep history --push` to publish)</code></pre>
+<p>Those findings are what the model actually said about that pull request; the replay is deterministic and free. Cassettes sit at the <code>LLMInput</code>/<code>LLMOutput</code> seam rather than at HTTP, so one recorded against a provider replays against a different one, and they capture tool IO as well as model IO.</p>
+<p><code>--dry-run</code> is the cheaper cousin, a canned answer that proves the wiring. It needs a diff to review, so a repository with a single commit refuses it with <code>review.no_content</code>, which is the control working: make a second commit first.</p>
+<pre data-lang="bash"><code>in-lockstep review --dry-run --base HEAD~1</code></pre>
+<pre data-lang="text"><code>config    local working tree
+review/security  succeeded
+
+tokens    10 in, 5 out
+cost      $0.0000  (replayed; nothing was billed)</code></pre>
+<h2 id="running-a-model-for-real">Running a model for real</h2>
+<pre data-lang="bash"><code>in-lockstep review --base origin/main --aspect security
+in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change</code></pre>
+<p><code>review</code> reads and reports. <code>implement</code> reads a ticket, explores the repository with tools, and <strong>stages</strong> a change into an artifact. It writes nothing itself. <code>apply-inline --from-artifact</code> is the second half, and it re-runs the path guard on what the first half produced.</p>
+<p>Implementing needs an approval path and egress enforcement before it will start, because the adapter declares that it writes files and executes code. <code>docs/extending.md</code> has the three refusals and what each one wants.</p>
+<p>Before any of that, see exactly what the model would be told, composed at runtime from guardrails, a body, skills and contexts. The command works offline, because "what was the model actually told?" must not cost a run:</p>
+<pre data-lang="bash"><code>in-lockstep show-prompt security</code></pre>
+<pre data-lang="text"><code># composed prompt: review/security  (version 1)
+# source: shipped
+#
+#   guardrail:baseline
+#   guardrail:review/reviewing
+#   body:review/security-reviewer
+#   skill:review/review-format
+#   skill:review/review-revision
+
+&lt;!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge order. --&gt;
+...</code></pre>
+<p><code>source</code> says where that came from. It reads the prompt off the <strong>bound adapter</strong>, so once your module binds a lens of its own, this renders yours rather than the framework's. <code>--diff</code> shows what you changed, which is the question a reviewer actually has:</p>
+<pre data-lang="bash"><code>in-lockstep show-prompt security --diff</code></pre>
+<h2 id="what-the-ledger-says-afterwards">What the ledger says afterwards</h2>
+<p>Every run leaves a record on the <code>lockstep-history</code> orphan branch. <code>report</code> aggregates them. It also says whether the history it is summing has been rewritten:</p>
+<pre data-lang="bash"><code>in-lockstep report</code></pre>
+<pre data-lang="text"><code>kind    runs  failed  tokens      cost      mean
+review     1       0        15  $  0.0000  $0.0000
+
+1 record(s); `in-lockstep history --explain &lt;run&gt;` for any one of them
+history   append-only across the retained chain</code></pre>
+<p>Absent is not zero here: a column nobody measured renders <code>-</code> rather than a reassuring 0. One run's record, every field, in words:</p>
+<pre data-lang="bash"><code>in-lockstep history --explain review-security</code></pre>
+<pre data-lang="text"><code>run       review-security
+what      review  security
+status    succeeded
+when      2026-08-30T02:47:19+00:00
+head      309a05d0553d6ea7258317bb674e17eb2f2ac537
+branch    main
+config    local working tree
+model     anthropic:claude-sonnet-4-6
+spend     $0.0000  (15 tokens, 0.038s)</code></pre>
+<h2 id="local-models">Local models</h2>
+<p>A <code>local</code> provider is registered out of the box and points at Ollama, at <code>http://localhost:11434</code> or wherever <code>OLLAMA_URL</code> says. The registration declares itself <code>free</code>, so a local model needs no entry in the cost table: the run is priced at exactly zero rather than refused as unpriced, and the tokens are still counted, because free is not the same as unmeasured.</p>
+<pre data-lang="bash"><code>in-lockstep review --base origin/main --model local:qwen3-8b</code></pre>
+<p>Routing a verb to it in <code>lockstep.py</code> is one line. This repository routes its own triage that way:</p>
+<pre data-lang="python"><code>lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")</code></pre>
+<p>Two things to know. The shipped registration declares <code>structured_output=False</code>, so lenses depending on strict output shapes may want a larger model than the one that fits on a laptop. And <code>in-lockstep doctor</code> warns (<code>DOC150</code>/<code>DOC151</code>) when a routed model names an unregistered provider or an unpriced model. A route that a run would refuse at its first call is something you see beforehand, where nothing has been spent, rather than after a wait.</p>
+<h2 id="before-running-unattended">Before running unattended</h2>
+<pre data-lang="bash"><code>in-lockstep doctor</code></pre>
+<pre data-lang="text"><code>ERROR   DOC101  no provider-side organisation spend limit is attested
+                 Set a hard monthly cap in the provider console and record it as
+                 IN_LOCKSTEP_ORG_SPEND_LIMIT=&lt;amount&gt;. A per-run budget cannot bound a runaway trigger,
+                 and the per-day ceiling the substrate enforced no longer exists.
+ERROR   DOC121  the default branch has no protection rule, or it could not be read
+                 The apply job holds an ambient repository token that can write any branch, so branch
+                 protection is what keeps protected branches unreachable. Without it, 'writes go through
+                 a pull request' is a convention rather than a guarantee.
+WARNING DOC130  no egress enforcement is declared
+                 Set IN_LOCKSTEP_EGRESS=enforced where the host constrains egress. Runs that hold write
+                 or execute tools, or that read untrusted content, are refused without it.
+
+3 finding(s), 2 error(s)</code></pre>
+<p>That is a fresh repository being told the truth, not a broken install: nothing is attested yet, so <code>doctor</code> fails.</p>
+<p>Moving model invocation in-process removed an execution substrate that was also an egress firewall, an out-of-process spend ceiling and a privilege split. <code>doctor</code> checks what replaced each, and <code>docs/controls-crosswalk.md</code> is the honest accounting, including what was lost rather than replaced. The <a href="cookbook.html">cookbook</a> has the recipes that turn each finding green.</p>
+  </article>
+</div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-about">
+      <a class="brand" href="../index.html" aria-label="in-lockstep, home">
+        <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+          <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+          <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+          <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+          <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        </svg>
+        in-lockstep
+      </a>
+      <p class="foot-p">An agentic SDLC framework, written in Python, for a repository in any language. Apache 2.0.</p>
+      <p class="foot-p">Every block of terminal output on this page is the verbatim output of the
+        command in its title bar, run against this framework's own repository. Nothing here is a
+        mock-up, and nothing has been tidied.</p>
+    </div>
+    <nav aria-label="Product">
+      <h4>Product</h4>
+      <a href="../walkthrough.html">Walkthrough</a>
+      <a href="../governance.html">Governance</a>
+      <a href="../extensions.html">Extensions</a>
+    </nav>
+    <nav aria-label="Documentation">
+      <h4>Docs</h4>
+      <a href="../docs/getting-started.html">Getting started</a>
+      <a href="../docs/cookbook.html">Cookbook</a>
+      <a href="../docs/extending.html">Extending</a>
+    </nav>
+    <nav aria-label="Project">
+      <h4>Project</h4>
+      <a href="https://github.com/in-lockstep/lockstep">Source</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/design/gates.md">Exit gates</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/CONTRIBUTING.md">Contributing</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>

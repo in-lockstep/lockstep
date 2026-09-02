@@ -3,347 +3,850 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>in-lockstep — every engineer uses AI the same way</title>
-<meta name="description" content="Every developer asks AI differently and nobody can compare the results. in-lockstep makes it one way of working: the same instructions everywhere, every run written down, and a way to check whether a change actually helped.">
+<title>in-lockstep: make AI part of how your team builds software</title>
+<meta name="description" content="Everybody has the same model. Nobody has the same results. in-lockstep is a Python framework that turns your team's use of AI into ordinary engineering: named verbs, gates that refuse, tests that have to actually go red, and a record of every run with the cost on it.">
+<link rel="canonical" href="https://in-lockstep.github.io/lockstep/">
+<meta property="og:title" content="in-lockstep">
+<meta property="og:description" content="Everybody has the same model. Nobody has the same results. A Python framework that makes AI an engineering discipline.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='3' y='3' rx='1.5' fill='%2300A87C'/%3E%3Crect width='16' height='3' y='10' rx='1.5' fill='%23C77716'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/geistmono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="site.css">
+<script>
+  /* Both of these run before first paint. The theme so a reader who chose one never sees the other
+     flash, and the `js` class so that the rules which hide a diagram before it animates apply only
+     where something is actually going to animate it. Without this the page would be correct with
+     JavaScript on and half-blank with it off. */
+  document.documentElement.className += " js";
+  try { var t = localStorage.getItem("ls-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 </head>
 <body>
 
-<div class="topbar">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
   <div class="wrap">
-    <header class="masthead">
-      <a class="mark" href="index.html"><i>▮</i> in-lockstep<b>Overview</b></a>
-      <nav class="site">
-        <a href="index.html" aria-current="page">Overview</a>
-        <a href="walkthrough.html">Walkthrough</a>
-        <a href="governance.html">Governance</a>
-        <a href="extensions.html">Extensions</a>
-      </nav>
-      <a class="cta" href="https://github.com/in-lockstep/lockstep">GitHub</a>
-    </header>
-    <nav class="onpage">
-      <span>this page</span>
-      <a href="#problem">The problem</a>
-      <a href="#answer">The answer</a>
-      <a href="#start">Getting started</a>
-      <a href="#receipts">Receipts</a>
+    <a class="brand" href="index.html" aria-label="in-lockstep, home">
+      <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+        <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+        <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+        <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+      </svg>
+      in-lockstep
+    </a>
+    <nav class="nav-links" aria-label="Site">
+      <a href="walkthrough.html">Walkthrough</a>
+      <a href="governance.html">Governance</a>
+      <a href="extensions.html">Extensions</a>
+      <a href="docs/getting-started.html">Docs</a>
     </nav>
+    <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+      </svg>
+    </button>
+    <a class="btn btn-ghost" href="https://github.com/in-lockstep/lockstep">GitHub</a>
   </div>
-</div>
+</header>
 
-<div class="wrap">
+<main id="main">
 
-  <section style="padding-top:70px;padding-bottom:52px">
-    <h1 style="max-width:19ch">Your best engineer gets great results from AI. Your newest one <em>doesn't.</em></h1>
-    <div class="col">
-      <p class="lede">Right now, that difference <em style="font-style:normal;color:var(--human)">is</em>
-        your AI strategy.</p>
-      <p class="lede" style="font-size:19px;color:var(--text-2);margin-top:24px">in-lockstep turns
-        using AI into part of how your team builds software, instead of a habit each developer
-        invents privately. The same instructions, the same rules, the same answer to "should we even
-        be asking a model this?" — for every engineer and every project. Every run writes down what
-        happened, in your own repository. And when you change how the AI is instructed, you can see
-        exactly what you changed before anyone spends a penny.</p>
-    </div>
-
-    <div class="install" style="margin-top:34px">
-<span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
-<span class="p">$</span> in-lockstep init
-    </div>
-    <p style="color:var(--text-3);font-size:14.5px;margin-top:4px">Open source, Apache-2.0. Runs on
-      your laptop. Trying it costs nothing at all — see <a href="#start">getting started</a>.</p>
-  </section>
-
-  <hr class="rule">
-
-  <section id="problem">
-    <div class="col">
-      <p class="eyebrow">The problem</p>
-      <h2>Nobody has figured out how to do this at scale.</h2>
-      <p class="lede">Your engineers are already using AI all day. That happened without you. What
-        has not happened is any of the things that would make it a way of working, rather than two
-        hundred private habits.</p>
-    </div>
-
-    <div class="spine" style="margin-top:44px">
-      <div class="step human">
-        <span class="tag">Today</span>
-        <h3>Everyone is prompting, and nobody is comparing</h3>
-        <p>Each developer has their own prompts, their own sense of what context to paste in, their
-          own instinct for when to trust the answer. Some are genuinely good at it. Some are still
-          learning. The results vary exactly as much as you would expect, and nothing anywhere
-          records which was which.</p>
+<!-- ============================================================ 1. HERO
+     Four objects and no fifth: the claim, one sentence of mechanism, one action, one proof. The
+     proof is the right column and it is real. That terminal block is the verbatim output of the
+     command in its title bar, including the paragraph where the tool volunteers that its own
+     shipped recording has drifted. That paragraph is the most persuasive text on the page, so it
+     is not trimmed to save room. -->
+<section class="hero">
+  <div class="wrap">
+    <h1 class="hero-h1">Everybody has the same model.<br>Nobody has the same results.</h1>
+    <p class="hero-def">An agentic SDLC framework, written in Python, for a repository in any
+      language. It runs its own agent loop against a model API, on your laptop or in CI.</p>
+    <div class="install hero-install">
+        <code><span class="p">$</span> uv tool install 'in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep'</code>
+        <button class="copy" type="button" data-copy="uv tool install 'in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep'" aria-label="Copy install command">
+          <svg class="clip" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5v1"/>
+          </svg>
+          <svg class="tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4.5 12.5l5 5 10-11"/>
+          </svg>
+        </button>
       </div>
-      <div class="step human">
-        <span class="tag">Today</span>
-        <h3>The good habits stay in one person's head</h3>
-        <p>When somebody works out a prompt that gets reliably useful reviews, it lives in their
-          editor. It does not reach the other thirteen people on their team, and it certainly does
-          not reach the other two hundred repositories.</p>
-      </div>
-      <div class="step human">
-        <span class="tag">Today</span>
-        <h3>And you cannot improve what you never saw</h3>
-        <p>It happened in a terminal window. What was asked is gone, what came back is gone, and the
-          only trace is a code change somebody may or may not have read carefully. Ask “are we
-          getting better at this?” and there is nothing to point at — so it is a matter of opinion,
-          and the loudest opinion wins.</p>
-      </div>
-    </div>
-  </section>
+    <div class="hero-grid">
+    <div class="hero-copy">
+      <p class="lede">That gap is the only AI strategy most teams have. in-lockstep makes it a
+        discipline instead: one Python file, gates that refuse, and a record of every run with the
+        cost on it.</p>
 
-  <hr class="rule">
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#try">Try it without a key</a>
+        <a class="btn btn-ghost" href="https://github.com/in-lockstep/lockstep">Read the source</a>
+      </div>
 
-  <section id="answer">
-    <div class="col">
-      <p class="eyebrow">The answer</p>
-      <h2>Make it a process, not a personal skill.</h2>
-      <p class="lede">Four moves. Each one is ordinary engineering practice, applied to the part of
-        your work that quietly stopped having any.</p>
     </div>
 
-    <div class="spine" style="margin-top:44px">
+    <div class="hero-proof" id="try">
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep review --offline</b></div>
+<pre>config    local working tree
+replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+  note: the system prompt moved since this fixture was recorded, so what
+        follows is the model's answer to the prompt as recorded — not to
+        the one composed just now, which `in-lockstep show-prompt
+        review/security` prints. Re-recording is a real model call, which
+        is the thing a reader trying this offline does not have.
+<b>review/security</b>  <span class="g">succeeded</span>
+  actions/save/action.yml:29 review.security: Unquoted variable in `find`
+    command allows word-splitting on paths with spaces or glob characters
+  actions/save/action.yml:23 review.security: GitHub Actions expression
+    `${{ inputs.paths }}` is interpolated directly into a shell script
+    before variable assignment
 
-      <div class="step">
-        <span class="tag">Move one</span>
-        <h3>Standardise what the AI is told</h3>
-        <p class="tight">What the AI gets told stops being something each person types and becomes
-          part of how your team works — attached to the job it belongs to. A security review is
-          built the same way in every project: your company's rules first, then the review
-          instructions. Building a feature gets something different. Nobody assembles it by hand,
-          and nobody has to remember to.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>what a security review is actually sent</b></div>
-<pre><span class="p">$</span> in-lockstep show-prompt security --projection
+tokens    5361 in, 443 out
+cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
+        <p class="term-cap">Two real security findings in a real workflow file, on a clean install
+          with <strong>no API key, no network and no bill</strong>. A recording made against a real
+          merged pull request ships inside the package. Note that the tool tells you its own
+          recording has gone stale rather than hiding it.</p>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
 
-<span class="y">guardrail:baseline</span>              <span class="d">← every AI call in the company gets this</span>
-<span class="y">guardrail:review/reviewing</span>      <span class="d">← every review gets this</span>
-<span class="y">guardrail:acme/house</span>            <span class="d">← your organisation's rule</span>
-body:review/security-reviewer   <span class="d">← the prompt for this job</span>
+
+<!-- ============================================================ 2. THE PARALLEL
+     Full-bleed figure, nothing beside it. The two bands are deliberately the same drawing with
+     different words, because that identity IS the argument and anything placed next to it would
+     compete with the only thing the reader needs to notice. -->
+<section class="band band-alt">
+  <div class="wrap">
+    <div class="hed mid center">
+      <h2>We have watched this happen once already.</h2>
+    </div>
+
+    <figure class="fig fig-wide">
+<svg viewBox="0 0 1000 470" role="img" aria-labelledby="rhy-t rhy-d" class="dia dia-rhyme">
+  <title id="rhy-t">The same picture twice: deploy scripts in 2009, and prompts in 2026</title>
+  <desc id="rhy-d">Two stacked bands with identical geometry. In each, five labeled boxes on the
+    left send five arrows of differing weights toward a single box on the right. Three arrows
+    arrive; two stop short. The upper band is labeled 2009, before DevOps: its boxes are named deploy
+    dot sh, push dash prod dot sh, deploy underscore v2 underscore FINAL dot sh, rollout dot sh and
+    fix dot sh, and the target is production. The lower band is labeled 2026, writing code: its
+    boxes are the prompts fix the failing test, just make CI green, refactor this, add the feature
+    and try again, and the target is main.</desc>
+
+  <defs>
+    <marker id="tip" viewBox="0 0 9 9" refX="7.4" refY="4.5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="var(--text-3)"/>
+    </marker>
+  </defs>
+
+  <!-- ---------- band one: 2009 ---------- -->
+  <g class="band-row">
+    <text x="0" y="12" class="t-row">2009 &middot; before DevOps</text>
+
+    <g class="src">
+      <g class="srcbox"><rect x="0" y="34"  width="210" height="26" rx="4"/><text x="12" y="51">deploy.sh</text></g>
+      <g class="srcbox"><rect x="0" y="66"  width="210" height="26" rx="4"/><text x="12" y="83">push-prod.sh</text></g>
+      <g class="srcbox"><rect x="0" y="98"  width="210" height="26" rx="4"/><text x="12" y="115">deploy_v2_FINAL.sh</text></g>
+      <g class="srcbox"><rect x="0" y="130" width="210" height="26" rx="4"/><text x="12" y="147">rollout.sh</text></g>
+      <g class="srcbox"><rect x="0" y="162" width="210" height="26" rx="4"/><text x="12" y="179">fix.sh</text></g>
+    </g>
+
+    <g class="flows" fill="none" stroke="var(--text-3)" stroke-linecap="round">
+      <path d="M218,47  C 430,50 566,92  742,104" class="landed" stroke-width="2.4" marker-end="url(#tip)"/>
+      <path d="M218,79  C 420,82 580,106 742,115" class="landed" stroke-width="1.2" marker-end="url(#tip)"/>
+      <path d="M218,111 C 404,114 566,124 742,126" class="landed" stroke-width="3"   marker-end="url(#tip)"/>
+      <path d="M218,143 C 390,144 512,140 652,136" class="short" stroke-width="1.6" stroke-dasharray="5 5"/>
+      <path d="M218,175 C 380,174 496,166 632,160" class="short" stroke-width="1.6" stroke-dasharray="5 5"/>
+    </g>
+    <g class="stubs" fill="none" stroke="var(--text-3)" stroke-width="1.5">
+      <circle cx="657" cy="136" r="3.6"/><circle cx="637" cy="160" r="3.6"/>
+    </g>
+
+    <g class="target"><rect x="748" y="88" width="200" height="52" rx="5"/><text x="848" y="119">production</text></g>
+  </g>
+
+  <!-- ---------- band two: 2026. Identical geometry. Only the words change. ---------- -->
+  <g class="band-row row-now" transform="translate(0,250)">
+    <text x="0" y="12" class="t-row t-row-now">2026 &middot; writing code</text>
+
+    <g class="src">
+      <g class="srcbox"><rect x="0" y="34"  width="210" height="26" rx="4"/><text x="12" y="51">"fix the failing test"</text></g>
+      <g class="srcbox"><rect x="0" y="66"  width="210" height="26" rx="4"/><text x="12" y="83">"just make CI green"</text></g>
+      <g class="srcbox"><rect x="0" y="98"  width="210" height="26" rx="4"/><text x="12" y="115">"refactor this"</text></g>
+      <g class="srcbox"><rect x="0" y="130" width="210" height="26" rx="4"/><text x="12" y="147">"add the feature"</text></g>
+      <g class="srcbox"><rect x="0" y="162" width="210" height="26" rx="4"/><text x="12" y="179">"try again"</text></g>
+    </g>
+
+    <g class="flows" fill="none" stroke="var(--text-3)" stroke-linecap="round">
+      <path d="M218,47  C 430,50 566,92  742,104" class="landed" stroke-width="2.4" marker-end="url(#tip)"/>
+      <path d="M218,79  C 420,82 580,106 742,115" class="landed" stroke-width="1.2" marker-end="url(#tip)"/>
+      <path d="M218,111 C 404,114 566,124 742,126" class="landed" stroke-width="3"   marker-end="url(#tip)"/>
+      <path d="M218,143 C 390,144 512,140 652,136" class="short" stroke-width="1.6" stroke-dasharray="5 5"/>
+      <path d="M218,175 C 380,174 496,166 632,160" class="short" stroke-width="1.6" stroke-dasharray="5 5"/>
+    </g>
+    <g class="stubs" fill="none" stroke="var(--text-3)" stroke-width="1.5">
+      <circle cx="657" cy="136" r="3.6"/><circle cx="637" cy="160" r="3.6"/>
+    </g>
+
+    <g class="target"><rect x="748" y="88" width="200" height="52" rx="5"/><text x="848" y="119">main</text></g>
+  </g>
+</svg>
+      <figcaption class="fig-say">The second picture is the first picture.</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+
+<!-- ============================================================ 3. THE WHOLE CONFIGURATION
+     The complete file, not a fragment. Half the argument is what is absent from it, and you can
+     only see an absence in something complete. -->
+<section class="band" id="loop">
+  <div class="wrap">
+    <div class="hed">
+      <h2>The loop you already run, expressed as Python.</h2>
+      <p class="lede">Clone it, change something, build it, run it, test it. You already do this,
+        with scripts already in the repository. in-lockstep reads those and writes the loop down, so
+        the lifecycle becomes one file you can read, diff and review.</p>
+    </div>
+
+    <figure class="fig fig-wide loop-fig">
+<svg viewBox="0 0 1000 148" role="img" aria-labelledby="loop-t loop-d" class="dia dia-loop">
+  <title id="loop-t">The developer loop, and what serves each step</title>
+  <desc id="loop-d">Four boxes in a row, joined left to right and closed by a return arrow across
+    the top, forming a loop: change, build, run, test. Under each box is the command that already
+    does it in a repository: you or a model for change, and make build, make run and pytest for
+    the rest. Under that is what in-lockstep did with each: it bound a strategy to change, it found
+    and bound the test runner, and build and run are left for you to wire.</desc>
+
+  <defs>
+    <marker id="lt" viewBox="0 0 9 9" refX="7.2" refY="4.5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="var(--text-3)"/>
+    </marker>
+  </defs>
+
+  <!-- the return leg, which is what makes it a loop rather than a pipeline -->
+  <path class="loop-back" d="M875,36 L875,14 L125,14 L125,32" fill="none" marker-end="url(#lt)"/>
+
+  <g class="loop-step">
+    <rect x="35" y="36" width="180" height="40" rx="6"/>
+    <text x="125" y="61" class="t-step">change</text>
+    <text x="125" y="96" class="t-does">you, or a model</text>
+    <text x="125" y="116" class="t-bind t-found">Implement</text>
+  </g>
+  <path class="loop-arrow" d="M225,56 L277,56" fill="none" marker-end="url(#lt)"/>
+
+  <g class="loop-step">
+    <rect x="285" y="36" width="180" height="40" rx="6"/>
+    <text x="375" y="61" class="t-step">build</text>
+    <text x="375" y="96" class="t-does">make build</text>
+    <text x="375" y="116" class="t-bind t-found">Build</text>
+  </g>
+  <path class="loop-arrow" d="M475,56 L527,56" fill="none" marker-end="url(#lt)"/>
+
+  <g class="loop-step">
+    <rect x="535" y="36" width="180" height="40" rx="6"/>
+    <text x="625" y="61" class="t-step">run</text>
+    <text x="625" y="96" class="t-does">make run</text>
+    <text x="625" y="116" class="t-bind t-found">Run</text>
+  </g>
+  <path class="loop-arrow" d="M725,56 L777,56" fill="none" marker-end="url(#lt)"/>
+
+  <g class="loop-step">
+    <rect x="785" y="36" width="180" height="40" rx="6"/>
+    <text x="875" y="61" class="t-step">test</text>
+    <text x="875" y="96" class="t-does">pytest -q</text>
+    <text x="875" y="116" class="t-bind t-found">Test</text>
+  </g>
+</svg>
+      <figcaption class="loop-note"><strong>It does not bring its own tooling.</strong>
+        <code>in-lockstep init</code> reads the repository and binds these verbs to what is already
+        there: pytest and ruff here, <code>npm test</code> and eslint in a Node repository. It reads
+        your Makefile as well, and lists every target it finds.</figcaption>
+    </figure>
+
+    <div class="two-up">
+      <div class="code">
+        <div class="term-bar"><b>.lockstep/lockstep.py</b><span>the whole configuration</span></div>
+<pre><span class="k">from</span> <span class="n">in_lockstep</span> <span class="k">import</span> <span class="n">Lockstep</span>
+<span class="k">from</span> <span class="n">in_lockstep.adapters</span> <span class="k">import</span> (
+    <span class="n">PytestTest</span>, <span class="n">RuffValidate</span>, <span class="n">Test</span>, <span class="n">Validate</span>,
+)
+<span class="k">from</span> <span class="n">in_lockstep.adapters.ai</span> <span class="k">import</span> <span class="n">TDD</span>, <span class="n">Implement</span>
+<span class="k">from</span> <span class="n">in_lockstep.middleware</span> <span class="k">import</span> <span class="n">CostBudget</span>, <span class="n">otel</span>
+<span class="k">from</span> <span class="n">in_lockstep.privileged.egress</span> <span class="k">import</span> (
+    <span class="n">EgressPolicy</span>, <span class="n">UnsandboxedEgress</span>,
+)
+
+<span class="n">lockstep</span> = <span class="n">Lockstep</span>.<span class="n">detect</span>()
+
+<span class="c"># deterministic work stays deterministic</span>
+<span class="n">lockstep</span>.bind(<span class="n">Test</span>, <span class="n">PytestTest</span>(args=[<span class="s">"-q"</span>]))
+<span class="n">lockstep</span>.bind(<span class="n">Validate</span>, <span class="n">RuffValidate</span>())
+
+<span class="c"># the scaffold's one opt-out: fine for read-only review;</span>
+<span class="c"># re-decide it before any verb of yours writes</span>
+<span class="n">lockstep</span>.bind(<span class="n">EgressPolicy</span>, <span class="n">UnsandboxedEgress</span>())
+
+<span class="c"># a model is asked only where judgment is needed</span>
+<span class="n">lockstep</span>.bind(<span class="n">Implement</span>, <span class="n">TDD</span>())
+<span class="n">lockstep</span>.models.route(<span class="s">"implement"</span>, <span class="s">"anthropic:claude-opus-4-6"</span>)
+<span class="n">lockstep</span>.models.route(<span class="s">"triage"</span>, <span class="s">"local:qwen3-8b"</span>)
+
+<span class="c"># cross-cutting concerns are middleware</span>
+<span class="n">lockstep</span>.middleware += [<span class="n">otel</span>(), <span class="n">CostBudget</span>(usd=<span class="s">2.00</span>)]</pre>
+        <p class="term-cap">There is no second configuration file, and nothing here generates a
+          pipeline. This module is the thing that runs, so a change to how your team works is a diff
+          in a pull request, with blame, history and rollback.</p>
+      </div>
+
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep init</b><span>on a Node repository</span></div>
+<pre>wrote .lockstep/lockstep.py
+  detected stack: node; tests: npm test; lint: npx eslint .
+wrote .github/workflows/lockstep.yml
+
+One job, because reviewing is read-only. Add the privileged
+`apply` job the day a verb of yours produces a change to
+write; the file says where.</pre>
+        <p class="term-cap"><strong>It found <code>npm test</code> and eslint and bound them.</strong>
+          The two lines it wrote: <code>lockstep.bind(Test, CommandTest(['npm', 'test']))</code>
+          and <code>lockstep.bind(Validate, CommandValidate(['npx', 'eslint', '.']))</code>. The file
+          on the left is what it writes for a Python repository; the shape is the same.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 4. THE PROMPT IS ASSEMBLED
+     One sentence and one terminal. The composition itself, drawn as a stack, lives on the
+     governance page; on the landing page it was the point where first-time readers said they had
+     started reading internals and stopped. -->
+<section class="band" id="prompt">
+  <div class="wrap">
+    <div class="hed">
+      <h2>The prompt is assembled, not typed.</h2>
+      <p class="lede">Every call composes the same named fragments in the same order, with your
+        guardrails first, and you can print the result or diff it against the shipped version
+        before anything runs.</p>
+    </div>
+
+    <div class="evidence">
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep show-prompt review/security --projection</b></div>
+<pre>config    local working tree
+guardrail:baseline
+guardrail:review/reviewing
+body:review/security-reviewer
 skill:review/review-format
 skill:review/review-revision</pre>
-          <p class="term-cap">Built the same way every time, and you can print it before anything
-            runs, without a key. Your company's rules always come first — that is built in, not a
-            convention somebody has to remember.</p>
-        </div>
-        <p>Your company publishes its rules as a small package. Installing it is what switches it
-          on, so there is nothing for a team to forget — and it can only make things stricter. A
-          team can go further than the company rule and can never go under it.
-          <a href="governance.html">How that works →</a></p>
-        <p>And when a team works out something good — a review that understands your framework, a
-          way of working that suits your code — they can package it up so the other forty teams get
-          it too. <a href="extensions.html">Sharing what your teams build →</a></p>
-      </div>
-
-      <div class="step">
-        <span class="tag">Move two</span>
-        <h3>Standardise when the AI is used at all</h3>
-        <p class="tight">Half the value is knowing where <em>not</em> to use one. Copying a commit to
-          another branch is a git command. Running your tests is running your tests. Deciding
-          whether a report is a bug or a feature request takes judgement — and that is where a model
-          earns its place.</p>
-        <p class="tight">One readable file says which is which, and what happens when the ordinary
-          way hits something it cannot handle. Copying a fix to a release branch is plain git, and
-          the AI is only asked about the files that actually clashed.</p>
-        <div class="control"><b>Why it matters:</b> asking a model to do a job that did not need one
-          is money, waiting and risk you took on for nothing. That call should be made once, by your
-          company — not forty times a day by whoever happens to be at the keyboard.</div>
-      </div>
-
-      <div class="step">
-        <span class="tag">Move three</span>
-        <h3>Every run leaves a record, in your repository</h3>
-        <p class="tight">Not a log that scrolls away, and not a dashboard on somebody else's site
-          that you lose access to. Every run writes a record into your own git history: when it ran,
-          which version of the code, who approved it, what it decided, and what it cost.</p>
-        <p class="tight">Runs that were <em>refused</em> get written down too — a run stopped by a
-          spending limit or a missing sign-off is exactly the one you will want evidence of later.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>one real run's record</b></div>
-<pre>workflow   fix/from-ticket        args      {"ticket": "#109"}
-status     <span class="g">succeeded</span>              approval  {"by": "labeled:tpouyer"}
-tokens     3,013,462              cost_usd  <span class="y">9.62445</span>
-
-findings
-  fix.staged                  wrote src/in_lockstep/ai/builtins.py
-  fix.staged                  wrote tests/…/test_sandbox_fixtures.py
-  <span class="y">injection.exfil_token_names</span> ×11   <span class="d">← the scanner, reading the ticket text</span></pre>
-          <p class="term-cap">Nobody typed this. The run wrote it, and it is committed where your
-            other history lives.</p>
-        </div>
-        <p class="tight">The instructions themselves do not need storing, because they are built
-          from files already in your repository. One command prints exactly what any run was sent,
-          offline, any time. That beats keeping a copy: a saved copy tells you what happened once,
-          and this tells you what will happen next time.</p>
-        <div class="control"><b>Being straight about the edges:</b> a run you set up yourself also
-          records the whole back-and-forth with the AI, turn by turn. The built-in commands do not
-          do that yet, and tool arguments are recorded by name rather than in full. Those gaps are
-          written down, not glossed over.</div>
-      </div>
-
-      <div class="step">
-        <span class="tag">Move four</span>
-        <h3>See what a change does before you ship it</h3>
-        <p class="tight">Somebody suggests a better rule. In most companies that is a meeting, the
-          loudest person wins, and nobody finds out for six months.</p>
-        <p class="tight">Here it is a diff. Before anything runs and before anything is spent, you
-          can see exactly what your change does to the instructions every review in the company is
-          about to be given.</p>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>one house rule added, and exactly what it did</b></div>
-<pre><span class="p">$</span> in-lockstep show-prompt security --diff
-
-<span class="d">--- shipped/review/security</span>
-<span class="d">+++ AiReview/review/security</span>
-<span class="g">+&lt;!-- guardrail: acme/house --&gt;</span>
-<span class="g">+Never propose a change that widens the grammar without a test for</span>
-<span class="g">+every new unit.</span></pre>
-        </div>
-        <p class="tight">Then measure it — against your own history, not an example suite. Every
-          recorded run becomes a test case automatically: the real question that was asked, and the
-          real answer that came back.</p>
-        <div class="term lit">
-          <div class="term-bar"><span class="dot on"></span><b>your runs, turned into tests</b></div>
-<pre><span class="p">$</span> in-lockstep eval harvest --from .lockstep/cassettes/review.json
-
-wrote  corpus/review/review-this-diff-for-security-problems.json
-
-<span class="p">$</span> in-lockstep eval run
-
-  <span class="g">ok</span>      review-this-diff-for-security-problems
-pass rate    <span class="g">100%</span></pre>
-          <p class="term-cap">Free, under a second, and it goes red the moment an answer stops
-            being read the way it was.</p>
-        </div>
-        <div class="term">
-          <div class="term-bar"><span class="dot on"></span><b>and it still refuses to flatter itself</b></div>
-<pre><span class="p">$</span> in-lockstep eval run   <span class="d"># on cases somebody wrote by hand</span>
-
-  <span class="y">SKIP</span>    production-outage  — no recorded request
-
-cases        0 replayed, 27 skipped
-pass rate    <span class="y">n/a — nothing decided</span></pre>
-          <p class="term-cap">A case with no recording is skipped and said so, not averaged into a
-            number. A tool that will not print a score it has not earned is a tool whose scores mean
-            something when it does.</p>
-        </div>
-        <div class="control"><b>Being straight about the halves:</b> replaying is free and tests
-          everything around the AI — how an answer gets read and turned into a result, which breaks
-          silently and now cannot. Testing a change to the AI's <em>instructions</em> is the same
-          recorded question asked again, so it is a real call and costs real money. What was missing
-          was never the willingness to pay for that. It was having anything to compare against.</div>
-      </div>
-
-    </div>
-  </section>
-
-  <hr class="rule">
-
-  <section id="start">
-    <div class="col">
-      <p class="eyebrow">Getting started</p>
-      <h2>Four commands. No key, no account, no platform team.</h2>
-      <p class="lede">Nothing here needs a password or a purchase order. You can find out whether it
-        fits in an afternoon.</p>
-    </div>
-
-    <div class="start" style="margin-top:36px">
-      <ol>
-        <li>
-          <b>uv add in-lockstep</b>
-          <span>One package. Nothing else to run, host or sign up for.</span>
-        </li>
-        <li>
-          <b>in-lockstep init</b>
-          <span>It reads your project — how you run tests, how you build — and writes a setup file
-            that already fits. Thirty lines, and they are yours to edit.</span>
-        </li>
-        <li>
-          <b>in-lockstep ls</b>
-          <span>Prints what will actually happen: which steps use the AI, which do not, and exactly
-            what each one will be told.</span>
-        </li>
-        <li>
-          <b>in-lockstep review --offline</b>
-          <span>A real security review of a real pull request, replayed from a recording —
-            <span style="white-space:nowrap">under a second, billed <b style="color:var(--machine)">$0.0000</b>.</span></span>
-        </li>
-      </ol>
-
-      <div class="term lit" style="margin-top:0">
-        <div class="term-bar"><span class="dot on"></span><b>step four, on a clean install</b></div>
-<pre><span class="p">$</span> in-lockstep review --offline
-
-replaying the shipped fixture: in-lockstep/lockstep#48, security lens
-review/security  <span class="g">succeeded</span>
-  actions/save/action.yml:29 <span class="w">Unquoted variable in `find` allows
-    word-splitting on paths with spaces or glob characters</span>
-  actions/save/action.yml:23 <span class="w">GitHub Actions expression
-    `${{ inputs.paths }}` is interpolated into a shell script before
-    variable assignment</span>
-
-cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
-        <p class="term-cap">Two genuine findings in a real workflow file, from a recorded model
-          call that ships with the tool. One line about the age of that recording is elided.</p>
+        <p class="term-cap">Read off the bound adapter, so this is what a run would be sent. No key,
+          no network, no spend. <a href="governance.html">How the fragments compose, and what an
+          organization can put ahead of yours.</a></p>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="col" style="margin-top:26px">
-      <p><a href="walkthrough.html">See the whole thing end to end →</a> — one bug report going
-        from filed to merged without anyone leaving GitHub: what the developer types, what the
-        framework does, how a comment changes what the agent is told, and what stops an agent that
-        gets stuck.</p>
-    </div>
-  </section>
 
-  <hr class="rule">
-
-  <section id="receipts">
-    <div class="col">
-      <p class="eyebrow">It works on real work</p>
-      <h2>A bug that filed itself, fixed itself, and waited to be let in.</h2>
-      <p class="lede">This happened in the framework's own repository, with nobody watching, and
-        every number is from the record that run wrote.</p>
-    </div>
-
-    <div class="proof" style="margin-top:32px">
-      <div><b>#109</b><span>an issue filed automatically by an earlier run that failed</span></div>
-      <div><b>$9.62</b><span>one unattended fix, inside a ceiling set in advance</span></div>
-      <div><b>#112</b><span>the pull request it opened: +55 / −5, merged</span></div>
-      <div><b>2</b><span>files written — the fix, and a test to stop it coming back</span></div>
-    </div>
-
-    <div class="col" style="margin-top:32px">
-      <p>A run failed and filed its own bug report. A person put a label on it. An agent fixed it and
-        opened a pull request. A person merged it. <strong>Neither side did the other's job</strong>
-        — which is where the name comes from.</p>
-    </div>
-  </section>
-
-  <hr class="rule">
-
-  <section class="final">
-    <h2 style="max-width:20ch;margin-left:auto;margin-right:auto">Stop guessing whether it is
-      working.</h2>
-    <p class="lede mid" style="margin-bottom:26px">Standardise how your organisation uses AI, record
-      what happens, and measure the changes you make to it.</p>
-    <div class="install">
-<span class="p">$</span> uv tool install 'in-lockstep[anthropic]'<br>
-<span class="p">$</span> in-lockstep init
-    </div>
-    <p><a href="https://github.com/in-lockstep/lockstep">github.com/in-lockstep/lockstep</a> ·
-       <a href="walkthrough.html">See it work</a> ·
-       <a href="governance.html">Governance</a> ·
-       <a href="extensions.html">Extensions</a> ·
-       <a href="https://github.com/in-lockstep/lockstep/blob/main/docs/getting-started.md">Docs</a></p>
-  </section>
-</div>
-
-<footer>
+<!-- ============================================================ 4. THE STEP A PROMPT CANNOT FAKE
+     The whole thesis in four frames. A rule stated in a prompt is a request. A rule enforced by
+     running the suite and reading the exit code is a control. -->
+<section class="band band-alt">
   <div class="wrap">
-    <p><strong>in-lockstep</strong> · Apache-2.0 · a Python framework for using AI the same way across a team</p>
-    <p>Terminal output on this site is captured verbatim from the commands shown, run against
-      this framework's own repository and the worked examples in it.</p>
+    <div class="hed">
+      <h2>Test first, checked by running the tests.</h2>
+      <p class="lede">Asking a model to write the test first is a request. Running the suite and
+        reading the exit code makes it a requirement.</p>
+    </div>
+
+    <figure class="fig fig-wide">
+<svg viewBox="0 0 1000 130" role="img" aria-labelledby="tdd-t tdd-d" class="dia dia-tdd">
+  <title id="tdd-t">Red, green, revert, red</title>
+  <desc id="tdd-d">Four panels. First, a failing suite with only the new test present. Second, a
+    passing suite with the test and the implementation. Third, the same pair with the implementation
+    struck out. Fourth, a failing suite again, marked t d d dot fix underscore verified.</desc>
+
+  <g class="tdd-panel">
+    <rect class="blk on"  x="0" y="0"  width="232" height="9" rx="2"/>
+    <rect class="blk off" x="0" y="15" width="232" height="9" rx="2"/>
+    <rect class="bar red" x="0" y="42" width="232" height="10" rx="5"/>
+    <text x="0" y="78" class="t-panel">Write the test.</text>
+    <text x="0" y="100" class="t-sub">1 failed</text>
+  </g>
+
+  <g class="tdd-panel" transform="translate(256,0)">
+    <rect class="blk on" x="0" y="0"  width="232" height="9" rx="2"/>
+    <rect class="blk on" x="0" y="15" width="232" height="9" rx="2"/>
+    <rect class="bar green" x="0" y="42" width="232" height="10" rx="5"/>
+    <text x="0" y="78" class="t-panel">Write the code.</text>
+    <text x="0" y="100" class="t-sub">1 passed</text>
+  </g>
+
+  <g class="tdd-panel" transform="translate(512,0)">
+    <rect class="blk on" x="0" y="0" width="232" height="9" rx="2"/>
+    <rect class="blk struck" x="0" y="15" width="232" height="9" rx="2"/>
+    <line class="strike" x1="-5" y1="19.5" x2="237" y2="19.5"/>
+    <rect class="bar idle" x="0" y="42" width="232" height="10" rx="5"/>
+    <text x="0" y="78" class="t-panel">Take the code back out.</text>
+    <text x="0" y="100" class="t-sub">in a throwaway worktree</text>
+  </g>
+
+  <g class="tdd-panel" transform="translate(768,0)">
+    <rect class="blk on"  x="0" y="0"  width="232" height="9" rx="2"/>
+    <rect class="blk off" x="0" y="15" width="232" height="9" rx="2"/>
+    <rect class="bar red" x="0" y="42" width="232" height="10" rx="5"/>
+    <text x="0" y="78" class="t-panel t-panel-key">It has to go red again.</text>
+    <text x="0" y="100" class="t-sub t-sub-key">tdd.fix_verified</text>
+  </g>
+</svg>
+    </figure>
+
+    <div class="two-col after-fig">
+      <p><strong>The fourth panel is the one nobody else draws.</strong> After red and then green,
+        the framework computes the inverse of the change the model wrote, applies it in a throwaway
+        worktree, and requires the suite to fail again.</p>
+      <p>If it stays green with the code removed, the run is refused and the record says
+        <code>tdd.fix_not_load_bearing</code>. The test was weakened, not satisfied. That is mutation
+        testing, sitting inside a coding agent, decided by an exit code rather than by good
+        intentions.</p>
+    </div>
+
+    <div class="term term-slim after-fig">
+      <div class="term-bar"><b>the finding that step wrote</b><span>from the run in the next section</span></div>
+<pre><span class="g">tdd.fix_verified</span>   reverting the implementation returns the suite
+                   to red, so the change is load-bearing for its test.</pre>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 5. THREE JOBS
+     The first question a security lead asks, answered with something they can check against a file
+     in the repository in under a minute. -->
+<section class="band">
+  <div class="wrap">
+    <div class="hed">
+      <h2>What stops it pushing to your main branch?</h2>
+      <p class="lede">Nothing inside one process could. So there are three, and the credential that
+        can talk to a model is never in the same process as the one that can write.</p>
+    </div>
+
+    <figure class="fig fig-wide">
+<svg viewBox="0 0 1000 232" role="img" aria-labelledby="job-t job-d" class="dia dia-jobs">
+  <title id="job-t">Three jobs, three credentials</title>
+  <desc id="job-d">Three boxes, left to right. Gate holds no credential and no write token, and asks
+    whether this person may ask for a run. Work holds the model key with read-only repository
+    access, and writes the change and runs the suite. Propose holds a write token, never installs a
+    provider SDK, and opens the pull request. A change set artifact passes from work to propose and
+    is checked again on arrival.</desc>
+
+  <g class="job job-human">
+    <rect x="1" y="24" width="278" height="146" rx="8"/>
+    <text x="18" y="52" class="t-job">gate</text>
+    <text x="18" y="82"  class="t-kv">credential<tspan class="t-kvv" x="132">none</tspan></text>
+    <text x="18" y="104" class="t-kv">write token<tspan class="t-kvv" x="132">none</tspan></text>
+    <text x="18" y="136" class="t-kw">may this person ask</text>
+    <text x="18" y="154" class="t-kw">for a run at all?</text>
+    <text x="1" y="196" class="t-note">exit 0 if yes, 3 if no</text>
+  </g>
+
+  <g class="job job-machine" transform="translate(340,0)">
+    <rect x="1" y="24" width="278" height="146" rx="8"/>
+    <text x="18" y="52" class="t-job">work</text>
+    <text x="18" y="82"  class="t-kv">credential<tspan class="t-kvv" x="132">model key</tspan></text>
+    <text x="18" y="104" class="t-kv">repo access<tspan class="t-kvv" x="132">contents:read</tspan></text>
+    <text x="18" y="136" class="t-kw">reads the ticket, writes</text>
+    <text x="18" y="154" class="t-kw">the change, runs your suite</text>
+    <text x="1" y="196" class="t-note">cannot write to the repository</text>
+  </g>
+
+  <g class="hand" transform="translate(620,0)">
+    <path d="M8,97 L92,97" stroke="var(--line-2)" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+    <rect x="30" y="84" width="40" height="26" rx="3"/>
+    <path d="M31,86 L50,100 L69,86" fill="none"/>
+    <text x="50" y="132" class="t-hand">ChangeSet</text>
+    <text x="50" y="148" class="t-hand">untrusted</text>
+  </g>
+
+  <g class="job job-human" transform="translate(720,0)">
+    <rect x="1" y="24" width="278" height="146" rx="8"/>
+    <text x="18" y="52" class="t-job">propose</text>
+    <text x="18" y="82"  class="t-kv">credential<tspan class="t-kvv" x="132">write token</tspan></text>
+    <text x="18" y="104" class="t-kv">model SDK<tspan class="t-kvv" x="132">never installed</tspan></text>
+    <text x="18" y="136" class="t-kw">checks the artifact again,</text>
+    <text x="18" y="154" class="t-kw">then opens the pull request</text>
+    <text x="1" y="196" class="t-note">cannot reach a model</text>
+  </g>
+</svg>
+      <figcaption class="fig-say">The job that can talk to a model cannot write. The job that can
+        write cannot import an SDK.</figcaption>
+      <p class="legend">
+        <span class="chip m">green is the machine working</span>
+        <span class="chip h">amber is a person deciding</span>
+      </p>
+    </figure>
+
+    <div class="jobs-after">
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep run selfcheck</b><span>exit 1</span></div>
+<pre>config    local working tree
+validate  <span class="r">failed</span>
+          .lockstep/lockstep.py:645 validate.f821:
+          Undefined name `issue`
+test      <span class="y">blocked</span>  (approval.required)
+          approval.required: ActionCall(test) grants
+          executes_code and no approval was granted.
+          Locally, `--approve` says you are the human
+          watching this run.
+
+spend     $0.0000, 0.06s
+ledger    lockstep-history:records/selfcheck-...json</pre>
+        <p class="term-cap">The framework running its own lifecycle: it finds a real undefined name
+          in its own config file, then <strong>stops dead</strong> because nobody approved running
+          code. A control stopping a run is the control working, so it is never counted as a
+          failure.</p>
+      </div>
+      <div class="jobs-note">
+        <p>The workflow file driving all of this is thirteen shell statements long, every one of
+          them a bare call to the tool. A test rejects the fourteenth, because lifecycle logic that
+          leaks into YAML is lifecycle logic nobody can run on their laptop.</p>
+        <p>Your configuration is also loaded from the base branch, never the branch under review. A
+          change cannot rewrite the rules that decide whether to accept it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 6. THE RECEIPT
+     The practice: you cannot improve what you did not measure, and you cannot measure what you
+     did not record. So every run writes a record, and this section is the published ledger with
+     the bad runs left in, because a ledger that only shows the good ones is a brochure. -->
+<section class="band band-alt" id="ledger">
+  <div class="wrap">
+    <div class="hed">
+      <h2>You cannot improve what you did not record.</h2>
+      <p class="lede">So every run writes one: which commit, which model, what it cost, what it
+        decided. This is the whole published ledger, failures included.</p>
+    </div>
+
+    <div class="ledger">
+      <div class="ledger-hero">
+        <p class="lg-lead">One unattended run of <code>implement</code> wrote
+          <code>src/in_lockstep/metrics.py</code> and its test, from ticket #146.
+          That module produces the <code>report</code> output further down this page, and it is
+          merged in <code>main</code> today.</p>
+        <dl class="lg-stats">
+          <div><dt>cost</dt><dd>$41.59</dd></div>
+          <div><dt>tokens</dt><dd>2,598,882</dd></div>
+          <div><dt>suite</dt><dd>1,631 passed</dd></div>
+          <div><dt>wall time</dt><dd>654.9s</dd></div>
+        </dl>
+      </div>
+
+      <div class="ledger-rows">
+        <h3 class="lg-h">Every write-verb run on the published ledger: 8 runs, all of them real model calls</h3>
+        <div class="tbl-scroll">
+        <table class="tbl">
+          <caption class="vh">Eight unattended runs, with outcome, reason and cost</caption>
+          <thead><tr><th scope="col">Outcome</th><th scope="col">What happened</th><th scope="col" class="num">Cost, tokens at list price</th></tr></thead>
+          <tbody>
+            <tr><td><span class="dot m"></span>succeeded</td><td>wrote the metrics module; merged after its lost pull request was recovered by hand</td><td class="num">$41.59</td></tr>
+            <tr><td><span class="dot m"></span>succeeded</td><td>fixed issue #109, unattended, after a person labeled it</td><td class="num">$9.62</td></tr>
+            <tr><td><span class="dot h"></span>blocked</td><td>refused at turn 73 by a $100 ceiling set in advance</td><td class="num">$97.54</td></tr>
+            <tr><td><span class="dot h"></span>blocked</td><td>refused at turn 15 by a $25 ceiling set in advance</td><td class="num">$24.23</td></tr>
+            <tr><td><span class="dot h"></span>blocked</td><td>refused at turn 10 by a $25 ceiling set in advance</td><td class="num">$23.07</td></tr>
+            <tr><td><span class="dot r"></span>errored</td><td>2.1M tokens in, then the short-lived credential failed to renew</td><td class="num">$33.80</td></tr>
+            <tr><td><span class="dot r"></span>failed</td><td><code>tdd.not_red</code>, the test never failed</td><td class="num">$31.53</td></tr>
+            <tr><td><span class="dot r"></span>failed</td><td><code>tdd.not_green</code>, the fix did not land</td><td class="num">$13.84</td></tr>
+          </tbody>
+          <tfoot><tr><th scope="row" colspan="2">Eight runs, summed before rounding</th><td class="num">$275.23</td></tr></tfoot>
+        </table>
+        </div>
+        <p class="lg-note">The $31.53 run failed because this repository names test classes
+          <code>*Tests</code> rather than <code>Test*</code>, so a file full of tests collected
+          nothing and a green suite meant nothing had run. That cost real money twice before anyone
+          noticed. It is in the record because that is what the record is for.</p>
+        <p class="lg-note">The $41.59 run has an asterisk too. It staged the change and passed the
+          revert check, then failed to open its pull request, because the title it sent was a
+          thousand characters of the model's own commentary and GitHub caps titles at 256. The work
+          survived only because it was already in the run's artifact, which is the reason the
+          artifact exists. Three defects came out of that one failure and all three are fixed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 7. NUMBERS IT WILL NOT PRINT
+     The trust turn: an internal codebase rule, sold as the product's most valuable property. -->
+<section class="band" id="report">
+  <div class="wrap">
+    <div class="hed">
+      <h2>It will not print a number it has not earned.</h2>
+      <p class="lede">Every AI dashboard you have been shown averages over whatever happened to be
+        present. These figures carry their denominator, and one nobody measured stays a dash. Every
+        number below is read back from the same nine published records as the table above.</p>
+    </div>
+
+    <figure class="shot">
+      <div class="term-bar"><b>$ in-lockstep report --html report.html</b><span>the published ledger: 9 records, $275.25 billed</span></div>
+      <img src="img/report.png" width="980" height="1764" loading="lazy" decoding="async"
+           alt="The report page in-lockstep writes, titled What the ledger says, for nine published runs: 33 percent failed, 3 stopped by a control, $275.25 total, $30.58 per run, a median run of 589 seconds, 36 findings. A runs-per-week line, a where-the-runs-go bar, an attempts-per-ticket bar with ticket 139 at five runs, a what-it-keeps-finding bar, a by-kind-of-work table, a note that 16 injection signals were caught in text people wrote at it, and a footer: a dash is a number nobody measured.">
+      <figcaption class="term-cap">One self-contained file, inline style and inline SVG, nothing to
+        fetch. The same numbers the terminal prints, with the same rule under them: a chart it
+        cannot draw yet says so in a box, and a run a control stopped is listed as working as
+        intended, not as a failure.</figcaption>
+    </figure>
+
+    <div class="two-up">
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep report</b><span>excerpt, the published ledger</span></div>
+<pre>records   9  2026-08-30 → 2026-09-02
+
+<span class="d">outcomes</span>
+  failed        <span class="r">33%  (3 of 9)</span>
+  <span class="y">blocked       3  (a control stopping a run is the control
+                   working)</span>
+    cost.budget_exceeded         3
+    tdd.not_red                  1
+    provider.authentication      1
+
+<span class="d">spend</span>
+  total         $275.2549
+  per run       $30.5839
+  tokens        19,210,214
+
+<span class="d">attempts per ticket</span>
+  #139               5 run(s)   <span class="y">$210.1739</span>
+
+<span class="d">who and how</span>
+  unattended    89% of runs, with nobody watching
+
+<b>A dash is a number nobody measured. It is not a zero.</b>
+history   <span class="g">append-only across the retained chain</span></pre>
+        <p class="term-cap">Three of nine failed, and it says so. Five attempts at one ticket cost
+          $210, and it says that too. The last line is the ledger checking itself: <strong>no record
+          on the published branch was rewritten after it was appended.</strong></p>
+      </div>
+
+      <div class="term">
+        <div class="term-bar"><b>$ in-lockstep eval report</b></div>
+<pre>  fix          5 case(s)
+  implement    5 case(s)
+  retro        4 case(s)
+  review       9 case(s)
+  triage       4 case(s)
+
+cases        27
+decided      0
+outstanding  <span class="y">27  (need a judge)</span>
+pass rate    <span class="y">n/a — nothing decided</span>
+
+<b>A rubric nobody judged is outstanding, not passed.</b></pre>
+        <p class="term-cap">Twenty-seven evaluation cases ship with the package and not one has been
+          judged, so there is no score to show. <strong>A tool that will not print a score it has not
+          earned is a tool whose scores mean something when it does.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 8. THE EDGES
+     Buy trust by spending it. Say what is missing before the reader finds out on their own. -->
+<section class="band band-alt" id="limits">
+  <div class="wrap">
+    <div class="edges">
+      <div class="edges-copy">
+        <h2>Where it does not reach.</h2>
+        <p class="lede">A page like this usually stops before here. These are the limits, unhedged,
+          and they are the same list the tool checks itself against.</p>
+
+        <ul class="limits">
+          <li><b>Build and run are not bound for you yet.</b> Detection finds your Makefile and
+            lists every target in it, and binds test and lint from what it finds. Wiring the build
+            and run verbs to those targets is
+            <a href="https://github.com/in-lockstep/lockstep/issues/162">issue 162</a>, and until it
+            lands you bind those two yourself.</li>
+          <li><b>It does not yet improve its own prompts.</b> Every run is recorded and any run
+            replays for nothing, but nothing reads the ledger back, measures a prompt change, and
+            proposes it. That loop, ending in a pull request a person reads, is
+            <a href="https://github.com/in-lockstep/lockstep/issues/163">issue 163</a>.</li>
+          <li><b>The report does not yet compare people.</b> Every record names who asked for the
+            run, but nothing groups by it, so a team cannot see whether two engineers get the same
+            results from the same setup. That comparison, with the denominators and without the
+            names, is <a href="https://github.com/in-lockstep/lockstep/issues/164">issue 164</a>.</li>
+          <li><b>One ledger per clone, not one per organization.</b> A shared store is declared
+            and refused on purpose until it can be made trustworthy, so there is no rollup across
+            repositories yet.</li>
+          <li><b>Two bugs the first outside users hit, both open.</b> A workflow whose test step
+            failed can be recorded as completed, so <code>report</code> under-counts failures
+            (<a href="https://github.com/in-lockstep/lockstep/issues/166">issue 166</a>), and an
+            installed copy runs the test runner from its own interpreter rather than your
+            repository's (<a href="https://github.com/in-lockstep/lockstep/issues/167">issue 167</a>).</li>
+          <li><b>No flaky-test handling.</b> The adapter is not built, and a test in the repository
+            asserts that it has not shipped.</li>
+          <li><b>GitLab is partial.</b> The protocols and host-aware setup ship. Nobody has run a
+            merge-request pipeline end to end, so nobody should say one works.</li>
+          <li><b>The spend ceiling runs in-process.</b> It lives inside the process holding the API
+            key, so a bug there is a bug in the ceiling. Your provider account limit is the real
+            backstop, and the tool refuses to pass its own checks until you attest that you set one.</li>
+          <li><b>It does not enforce where a run connects.</b> It prints the list of hosts a run may
+            dial and verifies that something outside the process is enforcing it. That is a manifest
+            for a proxy, not a firewall.</li>
+          <li><b>Some policy fields are carried, not enforced.</b> Turn limits, denied tools and input
+            scanning reach the loop. Several others are merged and printed and read by nothing else,
+            and the project's own gate ledger says so in writing.</li>
+          <li><b>No adoption to point at.</b> No users, no logos, no case studies. It is new, and the
+            runs on this page are its own.</li>
+        </ul>
+      </div>
+
+      <div class="edges-proof">
+        <div class="term">
+          <div class="term-bar"><b>$ in-lockstep doctor</b><span>this project, today</span></div>
+<pre><span class="r">ERROR</span>   DOC101  no provider-side organisation spend
+                limit is attested
+                Set a hard monthly cap in the provider
+                console and record it. A per-run budget
+                cannot bound a runaway trigger.
+<span class="r">ERROR</span>   DOC167  lockstep-history is not append-only:
+                3 record(s) rewritten
+                records/triage-412.json was modified after
+                being appended (commit 8ad29707b1fc). Note
+                the check reads the retained chain only: a
+                force-push that replaced the chain discards
+                the contradiction.
+<span class="y">WARNING</span> DOC130  no egress enforcement is declared
+
+3 finding(s), <span class="r">2 error(s)</span></pre>
+          <p class="term-cap">Twenty-seven checks, run against its own repository, exiting non-zero.
+            It names the rewritten records with their commit hashes, and then tells you the limit of
+            its own tamper check.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 9. WHAT RUNS
+     The capability list, which is a test in the repository rather than a marketing table. -->
+<section class="band">
+  <div class="wrap">
+    <div class="hed">
+      <h2>What runs today.</h2>
+      <p class="lede">This list is held by a test. A capability that claims to run must name a
+        command that exists, and one marked as missing must name nothing, so overclaiming and stale
+        claims both turn CI red.</p>
+    </div>
+
+    <div class="ships">
+      <div class="ships-col">
+        <h3 class="lg-h">Six lifecycle verbs</h3>
+        <dl class="verbs">
+          <div><dt>review</dt><dd>one lens at a time, replayable offline for nothing</dd></div>
+          <div><dt>implement</dt><dd>one-shot or test-first, from a ticket</dd></div>
+          <div><dt>fix</dt><dd>a failed run files the bug that an agent then picks up</dd></div>
+          <div><dt>triage</dt><dd>place a ticket, cheap enough for a local model</dd></div>
+          <div><dt>backport</dt><dd>plain cherry-pick, a model only on conflict</dd></div>
+          <div><dt>rfe</dt><dd>draft a ticket from an idea, a person files it</dd></div>
+        </dl>
+        <p class="ships-link"><a href="https://github.com/in-lockstep/lockstep#what-ships-today">Read
+          the full table, and the test that holds it</a></p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ 10. START -->
+<section class="band close">
+  <div class="wrap">
+    <div class="mid center">
+    <h2>Find out in an afternoon, for nothing.</h2>
+    <p class="lede center-p">No key, no account, no platform team. <code>--offline</code> and
+      <code>--dry-run</code> prove the whole path before you spend anything.</p>
+
+    <div class="install install-lg">
+      <code><span class="p">$</span> uv tool install 'in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep' &amp;&amp; in-lockstep init</code>
+      <button class="copy" type="button" data-copy="uv tool install 'in-lockstep[anthropic] @ git+https://github.com/in-lockstep/lockstep' &amp;&amp; in-lockstep init" aria-label="Copy install command">
+        <svg class="clip" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5v1"/>
+        </svg>
+        <svg class="tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4.5 12.5l5 5 10-11"/>
+        </svg>
+      </button>
+    </div>
+    </div>
+
+    <div class="doors">
+      <a class="door" href="walkthrough.html">
+        <h3>One bug, filed to merged</h3>
+        <p>What a person types, what the framework does, and what stops an agent that gets stuck.</p>
+      </a>
+      <a class="door" href="governance.html">
+        <h3>Rules that only tighten</h3>
+        <p>How one package reaches every repository, and what a team can still decide for itself.</p>
+      </a>
+      <a class="door" href="extensions.html">
+        <h3>Share what one team worked out</h3>
+        <p>Packaging a strategy so forty other teams get it, and checking one before you trust it.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-about">
+      <a class="brand" href="index.html" aria-label="in-lockstep, home">
+        <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+          <rect x="0" y="1"  width="20" height="3" rx="1.5" fill="var(--machine)"/>
+          <rect x="0" y="10" width="20" height="3" rx="1.5" fill="var(--human)"/>
+          <rect x="5"  y="4" width="1.5" height="6" fill="var(--line-2)"/>
+          <rect x="13" y="4" width="1.5" height="6" fill="var(--line-2)"/>
+        </svg>
+        in-lockstep
+      </a>
+      <p class="foot-p">An agentic SDLC framework, written in Python, for a repository in any language. Apache 2.0.</p>
+      <p class="foot-p">Every block of terminal output on this page is the verbatim output of the
+        command in its title bar, run against this framework's own repository. Nothing here is a
+        mock-up, and nothing has been tidied.</p>
+    </div>
+    <nav aria-label="Product">
+      <h4>Product</h4>
+      <a href="walkthrough.html">Walkthrough</a>
+      <a href="governance.html">Governance</a>
+      <a href="extensions.html">Extensions</a>
+    </nav>
+    <nav aria-label="Documentation">
+      <h4>Docs</h4>
+      <a href="docs/getting-started.html">Getting started</a>
+      <a href="docs/cookbook.html">Cookbook</a>
+      <a href="docs/extending.html">Extending</a>
+    </nav>
+    <nav aria-label="Project">
+      <h4>Project</h4>
+      <a href="https://github.com/in-lockstep/lockstep">Source</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/design/gates.md">Exit gates</a>
+      <a href="https://github.com/in-lockstep/lockstep/blob/main/CONTRIBUTING.md">Contributing</a>
+    </nav>
   </div>
 </footer>
 
