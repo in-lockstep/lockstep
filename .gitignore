@@ -43,3 +43,8 @@ build/
 .claude/scheduled_tasks.lock
 .claude/.cc-writes
 .claude/settings.local.json
+.claude/skills/
+
+.agents/
+
+skills-lock.json
