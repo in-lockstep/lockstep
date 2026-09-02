@@ -304,7 +304,7 @@ in-lockstep apply-inline --from-artifact .lockstep/change</code></pre>
 </tr></thead><tbody>
 <tr><td><code>ApprovalGate</code> … <code>UngatedAgency</code></td><td>A model that can write and spend needs a human in the loop.</td><td>Add <code>ApprovalGate()</code> to your middleware, or pass <code>--approve</code> for an attended local run.</td></tr>
 <tr><td><code>egress.unenforced</code></td><td>The tool set declares <code>EXECUTES_CODE</code>, which makes egress enforcement mandatory.</td><td>Run under a host that constrains egress with <code>IN_LOCKSTEP_EGRESS=enforced</code>, or <code>lockstep.bind(EgressPolicy, UnsandboxedEgress())</code>.</td></tr>
-<tr><td><code>UndeclaredBudget</code></td><td>Something bound spends money and no ceiling was declared.</td><td><code>lockstep.budget = Budget(usd=2.00)</code>, or <code>--budget</code>.</td></tr>
+<tr><td><code>UndeclaredBudget</code></td><td>Something bound spends money and no ceiling was declared. A replay cannot spend, so <code>--offline</code> and <code>--dry-run</code> state a ceiling of zero for you.</td><td><code>lockstep.budget = Budget(usd=2.00)</code>, or <code>--budget</code>.</td></tr>
 </tbody></table></div>
 <p>The egress one is the surprise on a laptop, and the opt-out is a binding rather than a flag on purpose: <code>UnsandboxedEgress</code> is named after what it does, so it greps and it reviews.</p>
 <p>**<code>run_script</code> executes; it does not shell.** Commands arrive as an argv array, with no pipes, no globs and no <code>&amp;&amp;</code>, and <code>argv[0]</code> must be in an allowlist (<code>ALLOWED_COMMANDS</code>).</p>

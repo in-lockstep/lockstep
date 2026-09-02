@@ -93,7 +93,8 @@
     <div class="hero-proof" id="try">
       <div class="term">
         <div class="term-bar"><b>$ in-lockstep review --offline</b></div>
-<pre>config    local working tree
+<pre>config    none (no .lockstep/lockstep.py at local working tree. Running on
+          detected defaults; `in-lockstep init` scaffolds one.)
 replaying the shipped fixture: in-lockstep/lockstep#48, security lens
   note: the system prompt moved since this fixture was recorded, so what
         follows is the model's answer to the prompt as recorded — not to
@@ -109,8 +110,8 @@ replaying the shipped fixture: in-lockstep/lockstep#48, security lens
 
 tokens    5361 in, 443 out
 cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
-        <p class="term-cap">Two real security findings in a real workflow file, on a clean install
-          after <code>in-lockstep init</code>, with <strong>no API key, no network and no bill</strong>.
+        <p class="term-cap">Two real security findings in a real workflow file, from a clean PyPI
+          install in an empty directory, with <strong>no API key, no network and no bill</strong>.
           A recording made against a real merged pull request ships inside the package. Note that
           the tool tells you its own recording has gone stale rather than hiding it.</p>
       </div>
@@ -695,10 +696,6 @@ pass rate    <span class="y">n/a — nothing decided</span>
             (<a href="https://github.com/in-lockstep/lockstep/issues/166">issue 166</a>), and an
             installed copy runs the test runner from its own interpreter rather than your
             repository's (<a href="https://github.com/in-lockstep/lockstep/issues/167">issue 167</a>).</li>
-          <li><b>The offline review needs <code>init</code> first.</b> Run it in an empty directory
-            and the budget gate refuses the replay before it starts, because nothing has declared a
-            ceiling yet. The replay cannot spend, so the gate is wrong to ask; that is
-            <a href="https://github.com/in-lockstep/lockstep/issues/174">issue 174</a>.</li>
           <li><b>No flaky-test handling.</b> The adapter is not built, and a test in the repository
             asserts that it has not shipped.</li>
           <li><b>GitLab is partial.</b> The protocols and host-aware setup ship. Nobody has run a
