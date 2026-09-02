@@ -482,7 +482,21 @@ def _write_workflow_ledger(
             "status": getattr(getattr(result, "status", None), "value", "completed"),
             "reason": getattr(result, "reason", None),
             "decided": getattr(result, "decided", True),
+            # `total_tokens` is input plus output and EXCLUDES the cache, which is exactly the
+            # number that stops making sense once caching is on. Run 33582850420 recorded 62,190
+            # tokens for $13.84 — a thirty-three-fold drop against the run before it, and no way to
+            # tell from the record whether that was a cheaper task or a working cache. The
+            # breakdown is what answers it, and the ledger already had every field.
             "tokens": ctx.spend.charged.total_tokens,
+            "input_tokens": ctx.spend.charged.input_tokens,
+            "output_tokens": ctx.spend.charged.output_tokens,
+            "cache_read_tokens": ctx.spend.charged.cache_read_tokens,
+            "cache_write_tokens": ctx.spend.charged.cache_write_tokens,
+            # Both are `None` when nothing was billable, and both stay `None` here rather than
+            # being coerced — a run that spent nothing has no coverage to report, and a `1.0`
+            # computed from an empty denominator is the reassuring number this ledger refuses.
+            "billed_fraction": ctx.spend.charged.billed_fraction,
+            "priced_fraction": ctx.spend.charged.priced_fraction,
             "cost_usd": round(ctx.spend.charged.usd, 6),
             "wall_seconds": round(ctx.spend.charged.wall_seconds, 3),
             **({"outcome_cost_usd": round(cost.usd, 6)} if cost is not None else {}),

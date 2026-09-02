@@ -140,8 +140,13 @@ jobs:
         if: always()
         with:
           name: fix-${{ github.event.issue.number }}
+          # `attempt/` is a FAILED run's change, kept as evidence. `propose` never reads it —
+          # it reads `changeset/` and nothing else — so a red change still cannot become a pull
+          # request. What it buys is that a run which got to "13 tests failing" leaves a diff
+          # behind instead of a history bundle and a bill.
           path: |
             fix-changeset/
+            attempt/
             history.bundle
           if-no-files-found: ignore
 
