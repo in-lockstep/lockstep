@@ -188,6 +188,29 @@ def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
         raise SystemExit(EXIT_BLOCKED) from None
 
 
+def _declare_zero_ceiling(lockstep: Lockstep) -> None:
+    """A run that cannot spend says so, as a ceiling of zero.
+
+    GATE-BUDGET-1 refuses a lifecycle that binds a spender and declares no ceiling, and for a
+    real model call that refusal is the point. But `--offline` and `--dry-run` bind providers
+    that declare `transmits = False`: no byte reaches a network and no cent reaches a bill, which
+    is why the egress and residency checks already lift their triggers for them. The budget gate
+    had no such scoping, so the first command a stranger ran after installing was refused for
+    spend that could not happen (#174: five clean installs, five refusals, zero findings).
+
+    A ceiling rather than an exemption, because the difference is enforced. "Absent is not zero"
+    runs the other way too: zero is the true amount this run can spend, so stating it is a fact
+    and not a budget the CLI invented, and `Spend` holds the run to it. A flag that lifted the
+    gate would be trusted; a zero ceiling refuses a provider that transmitted anyway at its first
+    projected dollar. A ceiling the module or `--budget` declared is left alone, since a replay
+    under $2.00 spends nothing under it.
+    """
+    from .core.spend import Budget
+
+    if not lockstep.declared_ceiling().declared:
+        lockstep.budget = Budget(usd=0.0)
+
+
 def _run_id(base: str) -> str:
     """One id per invocation: the base names what ran, the suffix stamps this particular run.
 
@@ -1440,7 +1463,6 @@ def apply_cmd(
     unless it is run-scoped. That refusal matters because the token here is ambient and can write
     any branch: branch protection is the host's half, and this is ours.
     """
-    from .core.spend import Budget
     from .platform.scm import DirectPushRefused, GuardRefused, Scm
 
     changeset = _load_changeset(artifact)
@@ -1460,10 +1482,8 @@ def apply_cmd(
     # provider — and "we did not pass the flag" is a convention, where an empty registry at the
     # moment of writing is a fact.
     _refuse_provider_credential()
-    # A budget is not needed here: nothing in this command spends. Stating it keeps GATE-BUDGET-1
-    # from refusing a run that genuinely cannot spend a cent.
-    if not lockstep.declared_ceiling().declared:
-        lockstep.budget = Budget(usd=0.0)
+    # Nothing in this command spends, and it says so the way a replay does: as a ceiling of zero.
+    _declare_zero_ceiling(lockstep)
 
     scm: Any
     if lockstep.container.has(Scm):
@@ -1656,6 +1676,10 @@ def review_cmd(
     # never fire. Declaring it in lockstep.py or typing it are the two ways to mean it.
     if budget is not None:
         lockstep.budget = Budget(usd=budget)
+    elif offline or dry_run:
+        # A replay or a canned answer bills nothing, and states that as a ceiling of zero rather
+        # than asking GATE-BUDGET-1 for an exemption. `_declare_zero_ceiling` says why.
+        _declare_zero_ceiling(lockstep)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("review", model)
 
@@ -1863,6 +1887,9 @@ def triage_cmd(
     source = click.get_current_context().get_parameter_source
     if budget is not None:
         lockstep.budget = Budget(usd=budget)
+    elif offline or dry_run:
+        # As `review` does: a run that cannot spend states a zero ceiling.
+        _declare_zero_ceiling(lockstep)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("triage", model)
 
@@ -2130,6 +2157,9 @@ def rfe_cmd(
         from .core.spend import Budget
 
         lockstep.budget = Budget(usd=budget)
+    elif offline or dry_run:
+        # As `review` does: a run that cannot spend states a zero ceiling.
+        _declare_zero_ceiling(lockstep)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("rfe", model)
 
@@ -2365,6 +2395,10 @@ def backport_cmd(
     param_source = click.get_current_context().get_parameter_source
     if budget is not None:
         lockstep.budget = Budget(usd=budget)
+    elif offline or dry_run:
+        # As `review` does: a run that cannot spend states a zero ceiling. Only a `--resolve` run
+        # binds a spender, but zero is true of a deterministic backport too.
+        _declare_zero_ceiling(lockstep)
     if param_source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("backport", model)
 
@@ -2796,6 +2830,9 @@ def implement_cmd(
     source = click.get_current_context().get_parameter_source
     if budget is not None:
         lockstep.budget = Budget(usd=budget)
+    elif offline or dry_run:
+        # As `review` does: a run that cannot spend states a zero ceiling.
+        _declare_zero_ceiling(lockstep)
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("implement", model)
 

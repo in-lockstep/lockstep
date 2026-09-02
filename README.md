@@ -116,9 +116,9 @@ in-lockstep apply --from-artifact # the privileged half of the two-job trampolin
 ## Working without keys or spend
 
 `--dry-run` proves the wiring. `in-lockstep review --offline` works on a clean install with no
-key and no recording of your own, once `in-lockstep init` has scaffolded a budget (until #174,
-the budget gate refuses the replay before that): a cassette ships, recorded from a real model
-call against a real merged pull request. Replays are deterministic and free.
+key, no module and no recording of your own: a cassette ships, recorded from a real model call
+against a real merged pull request. Replays are deterministic and free, and neither needs a
+budget. A run that cannot spend states a ceiling of zero rather than being asked for one.
 
 Cassettes sit at the `LLMInput`/`LLMOutput` seam, so one recorded against a provider replays against
 a different one, and they capture tool IO as well as model IO. This is the debugging story, the

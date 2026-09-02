@@ -96,6 +96,13 @@ jobs:
           # And the eval corpus, the same way.
           corpus=$(/tmp/proof/bin/in-lockstep eval report)
           grep -q "27" <<<"$corpus"
+          # The site's first promise, kept from site-packages alone: the shipped replay runs in
+          # an empty directory with no module, no key and no budget. Five clean installs of 0.2.0
+          # were refused here (#174); this step would have caught that on the first tag.
+          mkdir -p /tmp/proof-empty && cd /tmp/proof-empty
+          replay=$(/tmp/proof/bin/in-lockstep review --offline)
+          test "$(grep -c 'review.security:' <<<"$replay")" = 2
+          grep -q '\$0.0000' <<<"$replay"
           mkdir -p /tmp/proof-repo && cd /tmp/proof-repo
           /tmp/proof/bin/in-lockstep init
           test -f .lockstep/lockstep.py
