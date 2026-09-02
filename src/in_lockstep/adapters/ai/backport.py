@@ -34,6 +34,7 @@ from ...prompts.backport import (
     backport_layers,
 )
 from ..backport import Conflict
+from .strategy import blocked, errored, failure_outcome, resolve_invoker
 
 DEFAULT_MAX_TOKENS = 16_384
 
@@ -89,10 +90,15 @@ class AiBackportResolver:
         system = prompt.system(layers) + "\n\n" + schema_instruction(BACKPORT_SCHEMA)
         params = BackportParams(commit=conflict.commit, subject=conflict.subject, paths=conflict.paths)
 
-        from ...ai.bootstrap import routed_invoker
-
-        factory = self.invoker_factory or routed_invoker(type(self).verb)
-        invoker: AiInvoker = factory(ctx)
+        # The shared seam, not a second spelling of it: `resolve_invoker` is what `_session` uses,
+        # and this is the injection point a repository substitutes for a gateway or a cassette.
+        #
+        # NO tools and NO run_tool are passed, and that is deliberate rather than an omission. This
+        # adapter returns merged file contents through its schema, and `GitBackport` is what writes
+        # them — a resolver that could also call `write_file` would route the merge around the thing
+        # that applies it. It is single-turn for the matching reason, stated on `self.policy`: it is
+        # handed everything it may see, so a second turn has no tool result to react to.
+        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         try:
             invocation = await invoker.run(
                 system=system,
@@ -100,12 +106,11 @@ class AiBackportResolver:
                 context=package,
                 policy=self.policy,
             )
-        except InvocationBlocked as e:
-            return _blocked(e.reason, str(e))
-        except EgressRefused as e:
-            return _blocked(e.reason, str(e))
-        except InvocationFailed as e:
-            return _errored(e.reason, str(e), None)
+        except (InvocationBlocked, EgressRefused, InvocationFailed) as e:
+            # One mapping, shared with `run_phase`. Written out here it had already drifted into
+            # three `except` clauses doing what two lines do, and the drift that matters is whether
+            # a refused control is BLOCKED or FAILED — a control working, or the framework broken.
+            return failure_outcome(e)
 
         if invocation.truncated:
             return _errored(
@@ -224,18 +229,11 @@ def _package(conflict: Conflict) -> ContextPackage:
 
 
 def _blocked(reason: str, message: str) -> Outcome[tuple[FileChange, ...]]:
-    return Outcome.blocked_by(
-        reason,
-        findings=(Finding(id=reason, message=message, severity=Severity.ERROR, blocking=True),),
-    )
+    """Kept as a name, delegating to the shared builder. The refusals here are not model-call
+    failures — an unknown prompt id is a lifecycle mistake — so they do not go through
+    `failure_outcome`, but they must still produce the same shape."""
+    return blocked(reason, message)
 
 
 def _errored(reason: str, message: str, cost: Any) -> Outcome[tuple[FileChange, ...]]:
-    from ...core.outcome import Cost
-
-    return Outcome(
-        status=Status.ERRORED,
-        reason=reason,
-        cost=cost if cost is not None else Cost(),
-        findings=(Finding(id=reason, message=message, severity=Severity.ERROR, blocking=True),),
-    )
+    return errored(reason, message, cost)

@@ -281,22 +281,11 @@ async def run_phase(session: Any, system: str, messages: Any, package: Any, *, p
             run_tool=session.run_tool,
             policy=session.policy,
         )
-    except (InvocationBlocked, EgressRefused) as e:
-        raise PhaseError(
-            Outcome(
-                status=Status.BLOCKED,
-                reason=e.reason,
-                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
-            )
-        ) from e
-    except InvocationFailed as e:
-        raise PhaseError(
-            Outcome(
-                status=Status.ERRORED,
-                reason=e.reason,
-                findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
-            )
-        ) from e
+    except (InvocationBlocked, EgressRefused, InvocationFailed) as e:
+        # `failure_outcome` rather than two inline constructions, so this and the backport resolver
+        # cannot come to disagree about whether a refused control is BLOCKED or FAILED.
+        raise PhaseError(failure_outcome(e)) from e
+
     if invocation.truncated:
         raise PhaseError(
             Outcome(
@@ -463,3 +452,52 @@ def _rendered(outcome: Any) -> str:
     ]
     listed = "\n".join(names[:50]) or "  (the report named no individual failures)"
     return f"{head}\n\nfailed:\n{listed}"
+
+
+def blocked(reason: str, message: str) -> Outcome[Any]:
+    """A control said no. BLOCKED, never FAILED — a run a ceiling or a gate stopped is the control
+    working, and folding it into a failure rate makes every control look like a defect."""
+    return Outcome.blocked_by(
+        reason,
+        findings=(Finding(id=reason, message=message, severity=Severity.ERROR, blocking=True),),
+    )
+
+
+def errored(reason: str, message: str, cost: Any = None) -> Outcome[Any]:
+    """Infrastructure, not a verdict. ERRORED is the class `Retry` targets."""
+    from ...core.outcome import Cost
+
+    return Outcome(
+        status=Status.ERRORED,
+        reason=reason,
+        cost=cost if cost is not None else Cost(),
+        findings=(Finding(id=reason, message=message, severity=Severity.ERROR, blocking=True),),
+    )
+
+
+def failure_outcome(error: Exception, *, cost: Any = None) -> Outcome[Any]:
+    """The three ways a model call fails, mapped in one place.
+
+    `InvocationBlocked` and `EgressRefused` are a control refusing; `InvocationFailed` is the
+    provider or the transport breaking. Every model-backed adapter needs exactly this mapping —
+    three of them got it from `run_phase` and the fourth, `AiBackportResolver`, wrote it out again
+    with its own local helpers. Two spellings of one decision is one of them drifting, and the
+    drift here would be a control refusal recorded as a failure.
+    """
+    reason = getattr(error, "reason", "") or type(error).__name__
+    if isinstance(error, (InvocationBlocked, EgressRefused)):
+        return blocked(reason, str(error))
+    return errored(reason, str(error), cost)
+
+
+def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any) -> Any:
+    """The run's invoker: an injected factory, or the one routed from `lockstep.models.route`.
+
+    Written twice — once in `_session`, once in the backport resolver — and it is the seam a
+    repository substitutes for a gateway or a cassette provider, so both spellings have to agree
+    about what "no factory given" means.
+    """
+    from ...ai.bootstrap import routed_invoker
+
+    factory = invoker_factory or routed_invoker(verb)
+    return factory(ctx)

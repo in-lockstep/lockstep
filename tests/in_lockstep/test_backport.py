@@ -450,3 +450,53 @@ def test_cli_requires_commits_or_a_ticket(repo: Path) -> None:
     result = CliRunner().invoke(main, ["backport", "--target", "release-1.0"])
     assert result.exit_code != 0
     assert "--commit" in result.output
+
+
+# -- the resolver reuses the shared machinery, and keeps what it deliberately lacks --------------
+
+
+def test_a_refused_control_is_blocked_and_not_a_failure() -> None:
+    """One mapping, shared with `run_phase`. It was written out here in three `except` clauses
+    doing what two lines do, and the drift that matters is whether a refused control reads as the
+    control working or as the framework broken."""
+    from in_lockstep.adapters.ai.strategy import failure_outcome
+    from in_lockstep.ai.invoker import InvocationBlocked, InvocationFailed
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.privileged.egress import EgressRefused
+
+    assert failure_outcome(InvocationBlocked("cost.budget_exceeded", "no")).status is Status.BLOCKED
+    assert failure_outcome(EgressRefused("egress.unverified", "no")).status is Status.BLOCKED
+    assert failure_outcome(InvocationFailed("provider.timeout", "no")).status is Status.ERRORED
+
+
+def test_the_mapping_keeps_the_reason_the_control_gave() -> None:
+    """A generic reason would make every refusal look the same in the ledger, which is where
+    somebody later asks how often a budget stopped a run."""
+    from in_lockstep.adapters.ai.strategy import failure_outcome
+    from in_lockstep.ai.invoker import InvocationBlocked
+
+    outcome = failure_outcome(InvocationBlocked("cost.budget_exceeded", "turn 10 would cross"))
+    assert outcome.reason == "cost.budget_exceeded"
+    assert "turn 10" in outcome.findings[0].message
+
+
+def test_the_resolver_still_runs_exactly_one_turn() -> None:
+    """Its own comment gives the reason: it is handed everything it may see, so a second turn has
+    no tool result to react to. Inheriting a default of forty would turn a bounded one-shot into a
+    loop paying per turn to react to nothing."""
+    from in_lockstep.adapters.ai.backport import AiBackportResolver
+
+    assert AiBackportResolver().policy.max_turns == 1
+
+
+def test_the_resolver_still_holds_no_tools() -> None:
+    """It returns merged contents through its schema and `GitBackport` writes them. A resolver that
+    could also call `write_file` would route the merge around the thing that applies it — which is
+    exactly what it would have gained by subclassing the strategy base for its plumbing."""
+    import inspect
+
+    from in_lockstep.adapters.ai.backport import AiBackportResolver
+
+    source = inspect.getsource(AiBackportResolver.resolve)
+    assert "tools=" not in source and "run_tool=" not in source
+    assert not hasattr(AiBackportResolver, "_session_cls"), "it is not a strategy and must not become one"
