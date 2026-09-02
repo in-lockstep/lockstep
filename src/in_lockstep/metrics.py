@@ -113,6 +113,10 @@ class Report:
     unattended: Measured = Measured(None)
     against_dirty_tree: Measured = Measured(None)
 
+    #: How many runs each ticket took and what they cost. Answers "this one ticket took four
+    #: attempts and $110", which per-run averages actively hide.
+    attempts_by_ticket: list[tuple[str, int, Measured]] = field(default_factory=list)
+
     #: Only present when `--scm` asked the host, because it is the one section here that is not
     #: computed from evidence this framework wrote. Kept as its own object rather than folded in
     #: beside the ledger numbers: what we recorded and what we asked somebody else for should not
@@ -273,6 +277,37 @@ def _people(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
     return who.most_common(TOP_N)
 
 
+def _ticket_of(record: dict[str, Any]) -> str:
+    """The ticket a record is about, using the same two-spelling lookup `cli.py` uses.
+
+    `args.ticket` is written by `@workflow`-dispatched runs; top-level `ticket` by the implementing
+    verbs. Empty string means neither was present — the caller decides whether to skip it.
+    """
+    return str((record.get("args") or {}).get("ticket", record.get("ticket", "")))
+
+
+def _attempts(records: list[dict[str, Any]]) -> list[tuple[str, int, Measured]]:
+    """(ticket, runs, total cost), most-attempted first.
+
+    Groups records by ticket and sums their cost. A record with no ticket in either place is
+    skipped entirely — it is not a ticket named "". Cost is a `Measured` built the same way
+    `_group` builds it, so a ticket whose runs never recorded a cost renders as a dash with its
+    denominator rather than as `$0.0000`.
+    """
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        ticket = _ticket_of(record)
+        if not ticket:
+            continue
+        buckets.setdefault(ticket, []).append(record)
+    rows = [
+        (ticket, len(group), _measure(_numbers(group, "cost_usd"), len(group)))
+        for ticket, group in buckets.items()
+    ]
+    rows.sort(key=lambda r: (-r[1], r[0]))
+    return rows
+
+
 def build(records: list[dict[str, Any]]) -> Report:
     """Everything above, over one list of ledger records."""
     total = len(records)
@@ -317,6 +352,7 @@ def build(records: list[dict[str, Any]]) -> Report:
             records, lambda r: isinstance(r.get("approval"), dict) and r["approval"].get("attended") is False
         ),
         against_dirty_tree=_share(records, lambda r: r.get("dirty") is True),
+        attempts_by_ticket=_attempts(records),
     )
 
 
@@ -441,6 +477,12 @@ def as_text(report: Report) -> list[str]:
             f"{group.seconds.render('s')} median"
         ]
 
+    out += ["", "attempts per ticket"]
+    for ticket, runs, cost in report.attempts_by_ticket:
+        out += [f"  {ticket:<18} {runs} run(s)   {_amount(cost)}"]
+    if not report.attempts_by_ticket:
+        out += ["  —  (no record carries a ticket)"]
+
     hygiene: list[str] = []
     for name, count in report.people:
         hygiene += [f"  {name:<24} {count} run(s)"]
@@ -501,6 +543,12 @@ def as_html(report: Report, *, title: str = "in-lockstep — what the ledger say
         _cards(report),
         _weeks_chart(report),
         _bars("Where the runs go", [(g.name, g.runs) for g in report.runs_by_kind], MINT, "run"),
+        _bars(
+            "Attempts per ticket",
+            [(ticket, runs) for ticket, runs, _ in report.attempts_by_ticket],
+            GOLD,
+            "run",
+        ),
         _bars("Turns per piece of work", [(n, m.value or 0) for n, m in report.turns_by_strategy], GOLD, ""),
         _bars("What it keeps finding", report.top_findings, MINT, ""),
         _kinds_table(report),

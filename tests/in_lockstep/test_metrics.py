@@ -247,3 +247,111 @@ def test_the_delivery_section_appears_only_when_the_host_was_asked() -> None:
     page = as_html(asked)
     assert "Delivery" in page
     assert "Asked of the host" in page, "labelled as somebody else's evidence"
+
+
+# -- attempts per ticket ------------------------------------------------------------------------
+
+
+def test_a_ticket_in_four_records_shows_four_runs_and_summed_cost() -> None:
+    """The core metric: how many runs one ticket actually took and what they cost."""
+    records = [
+        _record(ticket="#139", cost_usd=30.0),
+        _record(ticket="#139", cost_usd=25.0),
+        _record(ticket="#139", cost_usd=30.0),
+        _record(ticket="#139", cost_usd=24.73),
+    ]
+    report = build(records)
+    assert len(report.attempts_by_ticket) == 1
+    name, runs, cost = report.attempts_by_ticket[0]
+    assert name == "#139"
+    assert runs == 4
+    assert cost.value == pytest.approx(109.73)
+
+
+def test_both_ticket_spellings_count_as_the_same_ticket() -> None:
+    """A record carrying `args: {"ticket": "#7"}` and one carrying `ticket: "#7"` are the same
+    ticket, not two rows."""
+    records = [
+        _record(args={"ticket": "#7"}, cost_usd=1.0),
+        _record(ticket="#7", cost_usd=2.0),
+    ]
+    report = build(records)
+    assert len(report.attempts_by_ticket) == 1
+    name, runs, cost = report.attempts_by_ticket[0]
+    assert name == "#7"
+    assert runs == 2
+    assert cost.value == pytest.approx(3.0)
+
+
+def test_a_record_with_no_ticket_is_skipped_not_a_row_named_empty() -> None:
+    """A record with no ticket in either place is not about a ticket and must not become a row
+    named `""`."""
+    records = [_record(), _record(ticket="#10", cost_usd=1.0)]
+    report = build(records)
+    assert len(report.attempts_by_ticket) == 1
+    assert report.attempts_by_ticket[0][0] == "#10"
+    # No row for the ticketless record
+    assert all(name != "" for name, _, _ in report.attempts_by_ticket)
+
+
+def test_a_ticket_with_no_cost_renders_as_a_dash_with_denominator() -> None:
+    """A ticket whose runs never recorded a cost renders as a dash carrying its denominator, never
+    $0.0000 — the rule the whole module exists for."""
+    records = [
+        _record(ticket="#42", cost_usd=None),
+        _record(ticket="#42", cost_usd=None),
+    ]
+    report = build(records)
+    assert len(report.attempts_by_ticket) == 1
+    name, runs, cost = report.attempts_by_ticket[0]
+    assert name == "#42"
+    assert runs == 2
+    assert cost.value is None
+    assert cost.total == 2
+    # When rendered through _amount, should be a bare dash, not $0.0000
+    rendered = "\n".join(as_text(report))
+    assert "$0.0000" not in rendered
+
+
+def test_attempts_ordered_most_attempted_first_then_by_ticket_name() -> None:
+    """Rows are ordered most-attempted first, ties broken by ticket name, so the output is stable."""
+    records = [
+        _record(ticket="#B", cost_usd=1.0),
+        _record(ticket="#A", cost_usd=1.0),
+        _record(ticket="#C", cost_usd=1.0),
+        _record(ticket="#C", cost_usd=1.0),
+        _record(ticket="#A", cost_usd=1.0),
+    ]
+    report = build(records)
+    names = [name for name, _, _ in report.attempts_by_ticket]
+    # #A and #C both have 2 runs; #A sorts before #C alphabetically. #B has 1 run.
+    assert names == ["#A", "#C", "#B"]
+
+
+def test_attempts_empty_on_empty_ledger_and_report_still_renders() -> None:
+    """An empty ledger should yield an empty list and the report should still render."""
+    report = build([])
+    assert report.attempts_by_ticket == []
+    text = as_text(report)
+    assert len(text) > 0  # "no records yet" message
+
+
+def test_attempts_section_appears_in_text_output() -> None:
+    """The 'attempts per ticket' section must appear in as_text() output."""
+    records = [_record(ticket="#99", cost_usd=5.0)]
+    rendered = "\n".join(as_text(build(records)))
+    assert "attempts per ticket" in rendered
+    assert "#99" in rendered
+    assert "1 run(s)" in rendered
+
+
+def test_attempts_bar_row_appears_in_html_output() -> None:
+    """A bar row for attempts must appear in as_html() output."""
+    records = [
+        _record(ticket="#50", cost_usd=5.0),
+        _record(ticket="#50", cost_usd=5.0),
+    ]
+    html = as_html(build(records))
+    assert "#50" in html
+    # The _bars helper creates <div class=bar> elements
+    assert "Attempts per ticket" in html or "attempts per ticket" in html.lower()
