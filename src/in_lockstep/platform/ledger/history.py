@@ -5,9 +5,10 @@ it into the working tree makes it either untracked — which is what happened, s
 record was lost and CI's survived ninety days as an artifact — or a commit on the branch under
 review, which puts framework output into the diff a human is trying to read.
 
-An orphan branch is the answer the compiler-era pipeline already used (`origin/pipeline-history`),
-and it is the right one: the records share a repository with the code they describe, travel with a
-clone, and are reachable forever, while touching no branch anybody works on.
+An orphan branch is the answer the compiler-era pipeline already used (its `pipeline-history`
+branch, deleted on 2026-09-02 once this ledger had replaced it), and it is the right one: the
+records share a repository with the code they describe, travel with a clone, and are reachable for
+as long as the branch is, while touching no branch anybody works on.
 
 **Nothing is checked out.** Every write goes through plumbing — `hash-object`, a temporary index,
 `write-tree`, `commit-tree`, `update-ref` — with `GIT_INDEX_FILE` pointed at a scratch file. The

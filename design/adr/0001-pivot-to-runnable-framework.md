@@ -15,7 +15,8 @@ Three facts decided this, and all three are unusual:
    adopters yet."* The published artifacts were never exercised.
 2. **The whole product was built in three days** (95 commits, 2026-08-22 → 2026-08-24). Sunk cost is
    days of AI-assisted work.
-3. **The ledger holds no evidence.** `origin/pipeline-history`: 11 records, 0 eval records, every one
+3. **The ledger holds no evidence.** `origin/pipeline-history` (deleted 2026-09-02; these numbers
+   are what it held): 11 records, 0 eval records, every one
    `tokens: 0`, `cost_usd: 0.0`, `models: {}`.
 
 So compatibility is worth nothing and unproven mechanisms are worth less than nothing. What is
@@ -37,7 +38,8 @@ loose `>=0.1` constraint silently swaps products. Mitigated only by the fact tha
 constraint exists in the wild.
 
 `actions-v0.1.4` tags are permanent and are never retagged. The GHCR image stops receiving
-`:latest`; a final `exec-v0.1.x` is cut. Neither is deleted.
+`:latest`; a final `exec-v0.1.x` is cut. Neither is deleted (until 2026-09-02; the amendments below
+say what went and why).
 
 #### Amendment (post-1.0): `in-lockstep-exec` is deleted, not folded in
 
@@ -65,7 +67,9 @@ What goes with it, stated rather than discovered later:
 | 478 tests, and `GATE-TEST-5`/`GATE-TEST-6` with them | Both gates are marked retired-with-subject in `design/gates.md` rather than removed, so the count they defended does not read as having silently eroded. |
 
 Recoverable from git history and from `in-lockstep-exec` on PyPI, both of which are permanent. The
-GHCR image and the `exec-v0.1.x` tag are still not deleted.
+GHCR image and the `exec-v0.1.0` tag were deleted on 2026-09-02, and the workflow that built the
+image is disabled in the repository's Actions settings, because a re-pushed tag rebuilt it once
+that same day.
 
 #### Amendment (2026-09-02): the framework ships as 0.2.0, not 1.0
 
