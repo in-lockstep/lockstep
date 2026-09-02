@@ -67,6 +67,17 @@ What goes with it, stated rather than discovered later:
 Recoverable from git history and from `in-lockstep-exec` on PyPI, both of which are permanent. The
 GHCR image and the `exec-v0.1.x` tag are still not deleted.
 
+#### Amendment (2026-09-02): the framework ships as 0.2.0, not 1.0
+
+"1.0 is the framework" above was a statement about the product line, and it was written before
+anything had been published. Read as a version it promises a stable public API, and the API is
+still moving: verbs are open to extension, the build and run adapters are not bound by detection
+yet (#162), the learning loop in section 8 does not exist (#163), and the report does not group
+by actor (#164). So the first published version of this line is **0.2.0**. It has to sort above
+the compiler's 0.1.0 so an unpinned install resolves forward, and the rest of 0.x is left for the
+API to move in. Nothing else in this decision changes: the compiler's tags and its 0.1.0 on PyPI
+stay exactly where they are.
+
 ### The AI layer
 
 `LLMProvider.generate(LLMInput) -> LLMOutput` is the transport seam: one method, one input type,
