@@ -210,7 +210,12 @@ class ChangeSet:
 
 @dataclass(frozen=True)
 class Build:
-    """The Build request. No shipped adapter serves it yet; the type reserves the shape."""
+    """The Build request. `CommandBuild` serves it over whatever command a repository builds with,
+    and detection binds one from a Makefile `build` target or a package.json `build` script.
+
+    `target` is passed to the command as a positional argument (`make build release`), and `args`
+    verbatim after it. A runner that takes targets some other way is bound with the argv it needs.
+    """
 
     target: str = ""
     args: tuple[str, ...] = ()
@@ -224,7 +229,13 @@ class BuildResult:
 
 @dataclass(frozen=True)
 class Run:
-    """The Run request. No shipped adapter serves it yet; the type reserves the shape."""
+    """The Run request. `CommandRun` serves it over whatever a repository runs itself with, and
+    detection binds one from a Makefile `run` target or a package.json `start` script.
+
+    Run to completion: the exit code is the verdict and the output is the result. `command` is
+    appended to the bound argv, `cwd` overrides the bound working directory, and `env` is carried
+    into the sandbox beside the variables it already allows through.
+    """
 
     command: tuple[str, ...] = ()
     cwd: str = ""

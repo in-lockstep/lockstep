@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import signal
 from dataclasses import dataclass, field
 
 # Passed through to a sandboxed child. Everything else — every credential — is dropped.
@@ -59,6 +60,8 @@ class Sandbox:
     image: str = ""
     allow_network: bool = False
     memory: str = "2g"
+    #: Variables the command sees beside the pass-through set: joined to it for a subprocess,
+    #: forwarded as `-e` flags into a container. `CommandRun` fills this from `Run.env`.
     extra_env: dict[str, str] = field(default_factory=dict)
     #: Refuse rather than fall back to a bare subprocess when no container runtime is available.
     #:
@@ -71,9 +74,14 @@ class Sandbox:
     require_container: bool = False
 
     def clean_env(self) -> dict[str, str]:
-        env = {k: os.environ[k] for k in SAFE_ENV if k in os.environ}
+        """What a subprocess sees: the pass-through set plus `extra_env`. Not what a container
+        runtime's client sees; `_container` keeps `extra_env` off the client on purpose."""
+        env = self._passthrough()
         env.update(self.extra_env)
         return env
+
+    def _passthrough(self) -> dict[str, str]:
+        return {k: os.environ[k] for k in SAFE_ENV if k in os.environ}
 
     def runtime(self) -> str | None:
         """The container runtime available here, or None. Named so `doctor` can ask."""
@@ -116,12 +124,21 @@ class Sandbox:
         # its cause.
         mount = os.path.abspath(cwd or os.getcwd())
         flags = [f for f in DOCKER_FLAGS if not (f == "--network=none" and self.allow_network)]
+        # `extra_env` reaches the command as `-e` flags and reaches the runtime's client not at
+        # all. A container inherits nothing from the client's environment, so putting the
+        # variables there (which is what this did before anything populated `extra_env`) meant a
+        # `Run.env` was honoured by the subprocess fallback and silently dropped by the stronger
+        # path. And the client is the wrong place for a request's variables for a second reason:
+        # `DOCKER_HOST` or `CONTAINER_HOST` there points the whole "sandboxed" run at another
+        # daemon. The client gets the same pass-through set a subprocess would, and nothing else.
+        env_flags = [item for key, value in self.extra_env.items() for item in ("-e", f"{key}={value}")]
         argv = [
             runtime,
             "run",
             "--rm",
             *flags,
             f"--memory={self.memory}",
+            *env_flags,
             "-v",
             f"{mount}:/work",
             "-w",
@@ -129,7 +146,7 @@ class Sandbox:
             self.image,
             *command,
         ]
-        code, out, err = await _exec(argv, cwd=mount, env=self.clean_env(), timeout=timeout)
+        code, out, err = await _exec(argv, cwd=mount, env=self._passthrough(), timeout=timeout)
         # The runtime is named in `how` rather than hardcoded as "docker": a result that says
         # which thing ran it is the difference between reading a transcript and guessing at one.
         name = os.path.basename(runtime)
@@ -160,18 +177,41 @@ async def _exec(
     argv: list[str], *, cwd: str | None, env: dict[str, str], timeout: float
 ) -> tuple[int, str, str]:
     try:
+        # Its own session, so that a timeout can kill everything the command started and not only
+        # the command. `npm start` is `sh -c "node server.js"`: killing npm alone left the server
+        # bound to its port after the run had reported 124, and the next run on the same host met
+        # it. The cost is that a terminal's Ctrl-C no longer reaches the child directly, which is
+        # why cancellation below kills the group too.
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=cwd,
             env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
     except FileNotFoundError as e:
         return 127, "", str(e)
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except TimeoutError:
-        proc.kill()
+        _kill_group(proc)
+        await proc.wait()
         return 124, "", f"timed out after {timeout}s"
+    except asyncio.CancelledError:
+        _kill_group(proc)
+        raise
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
+
+
+def _kill_group(proc: asyncio.subprocess.Process) -> None:
+    """SIGKILL the child's whole process group; the child alone when there is no such thing."""
+    killpg = getattr(os, "killpg", None)
+    try:
+        if killpg is not None:
+            # The child is a session leader (`start_new_session`), so its group id is its pid.
+            killpg(proc.pid, signal.SIGKILL)
+        else:  # pragma: no cover - not a platform this runs on
+            proc.kill()
+    except ProcessLookupError:
+        pass

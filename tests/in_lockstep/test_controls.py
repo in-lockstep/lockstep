@@ -237,6 +237,55 @@ def test_a_sandboxed_command_that_hangs_is_killed() -> None:
     assert result.exit_code == 124
 
 
+def test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started(tmp_path) -> None:
+    """`npm start` is `sh -c "node server.js"`. Killing npm alone left the server bound to its
+    port after the run had reported 124, so the child runs in its own session and the whole
+    group is killed."""
+    import os
+    import signal
+    import time
+
+    pidfile = tmp_path / "pid"
+    result = asyncio.run(Sandbox().run(["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"], timeout=0.5))
+    assert result.exit_code == 124
+    grandchild = int(pidfile.read_text())
+    for _ in range(60):
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        os.kill(grandchild, signal.SIGKILL)
+        raise AssertionError("the sleep the shell started outlived the run")
+
+
+def test_a_containers_variables_travel_as_flags_and_never_reach_the_runtimes_client(monkeypatch) -> None:
+    """`extra_env` used to land on the docker/podman client's environment, which a container does
+    not inherit, so a `Run.env` was honoured by the subprocess fallback and dropped by the
+    stronger path. Worse, `DOCKER_HOST` there would have pointed the whole run at another daemon.
+    The variables go in as `-e` flags; the client sees only the pass-through set."""
+    from in_lockstep.adapters import sandbox as sandbox_module
+
+    seen: dict = {}
+
+    async def fake_exec(argv, *, cwd, env, timeout):  # noqa: ANN001
+        seen["argv"], seen["env"] = list(argv), dict(env)
+        return 0, "", ""
+
+    monkeypatch.setattr(sandbox_module, "_exec", fake_exec)
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: "/usr/bin/docker")
+    monkeypatch.setenv("DOCKER_HOST", "tcp://elsewhere:2375")
+    box = Sandbox(image="python:3.12", extra_env={"PORT": "8080", "DOCKER_HOST": "tcp://evil:2375"})
+    result = asyncio.run(box.run(["make", "run"], cwd=None))
+    argv = seen["argv"]
+    assert result.how == "docker:python:3.12"
+    assert "-e" in argv and "PORT=8080" in argv and "DOCKER_HOST=tcp://evil:2375" in argv
+    assert argv.index("PORT=8080") < argv.index("python:3.12"), "flags precede the image"
+    assert "PORT" not in seen["env"], "and never reach the client"
+    assert seen["env"].get("DOCKER_HOST") != "tcp://evil:2375"
+
+
 # -- GATE-GUARD-2 --------------------------------------------------------------------
 
 

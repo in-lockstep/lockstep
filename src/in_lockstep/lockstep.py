@@ -363,7 +363,8 @@ def _detect_facts(root: Path) -> RepoFacts:
     node = bool(package)
     stack = "python" if python else ("node" if node else "")
 
-    scripts = package.get("scripts") if isinstance(package.get("scripts"), dict) else {}
+    raw_scripts = package.get("scripts")
+    scripts: dict[str, Any] = raw_scripts if isinstance(raw_scripts, dict) else {}
     # A pytest-specific marker only, never a bare `tests/` directory: a Django or stdlib-unittest
     # repository keeps its tests in `tests/` and does not run pytest, so binding PytestTest from
     # the directory name is the guess this function's docstring says it will not make — and a wrong
@@ -372,9 +373,26 @@ def _detect_facts(root: Path) -> RepoFacts:
     pytest = python and (
         has("pytest.ini", "conftest.py") or "[tool.pytest" in pyproject or "[pytest]" in read("tox.ini")
     )
+    make_targets: tuple[str, ...] = ()
+    makefile = has("Makefile", "makefile")
+    if makefile:
+        make_targets = _make_targets(read("Makefile") or read("makefile"))
+
+    # One rule for all four deterministic verbs. A tool with structured output wins the verb
+    # where that structure matters: pytest's per-test cases are what a fix loop reproduces from,
+    # and ruff's per-rule findings are what a review reads. Where no such tool was found, the
+    # Makefile serves the verb before package.json does, because a Makefile is a repository's own
+    # statement of how it is tested, built and run whatever language it is in and whatever its
+    # targets wrap, and package.json is the same statement for a Node repository without one.
+    # Only a target or script that is actually in the file is bound. Inventing `make build` for a
+    # Makefile without a `build` target produces a binding that fails at run time, which is worse
+    # than an honest absence.
     test_command: tuple[str, ...] = ()
-    if not pytest and isinstance(scripts, dict) and "test" in scripts:
-        test_command = ("npm", "test")
+    if not pytest:
+        if "test" in make_targets:
+            test_command = ("make", "test")
+        elif "test" in scripts:
+            test_command = ("npm", "test")
 
     ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
     eslint = (
@@ -383,12 +401,23 @@ def _detect_facts(root: Path) -> RepoFacts:
         or has("eslint.config.js", "eslint.config.mjs", "eslint.config.cjs")
         or isinstance(package.get("eslintConfig"), dict)
     )
-    lint_command: tuple[str, ...] = ("npx", "eslint", ".") if (eslint and not ruff) else ()
+    lint_command: tuple[str, ...] = ()
+    if not ruff:
+        if "lint" in make_targets:
+            lint_command = ("make", "lint")
+        elif eslint:
+            lint_command = ("npx", "eslint", ".")
 
-    make_targets: tuple[str, ...] = ()
-    makefile = has("Makefile", "makefile")
-    if makefile:
-        make_targets = _make_targets(read("Makefile") or read("makefile"))
+    build_command: tuple[str, ...] = ()
+    if "build" in make_targets:
+        build_command = ("make", "build")
+    elif "build" in scripts:
+        build_command = ("npm", "run", "build")
+    run_command: tuple[str, ...] = ()
+    if "run" in make_targets:
+        run_command = ("make", "run")
+    elif "start" in scripts:
+        run_command = ("npm", "start")
 
     coverage = (
         has(".coveragerc", ".coverage-floor")
@@ -409,6 +438,8 @@ def _detect_facts(root: Path) -> RepoFacts:
         ruff=ruff,
         eslint=eslint,
         lint_command=lint_command,
+        build_command=build_command,
+        run_command=run_command,
         dockerfile=has("Dockerfile", "Containerfile"),
         makefile=makefile,
         make_targets=make_targets,
@@ -421,18 +452,41 @@ def _detect_facts(root: Path) -> RepoFacts:
 
 
 def _make_targets(text: str) -> tuple[str, ...]:
-    """The named targets in a Makefile, first few, ignoring pattern rules and `.PHONY`.
+    """Every named target in a Makefile, in file order.
 
-    The `::?(?!=)` is what keeps a simply-expanded variable assignment out: `CC:=gcc` and the
-    double-colon `X::=y` both put an `=` right after the colon(s), where a real target
-    (`check:` or a double-colon rule `x::`) does not, so the lookahead excludes the assignments a
-    bare `:` would have captured as targets.
+    All of them, not the first few: this list decides whether `test`, `lint`, `build` and `run`
+    get bound, and a target does not stop existing because eight others precede it.
+    `RepoFacts.summary()` does the shortening for the line a person reads.
+
+    A rule line starts at column zero with one or more names and a colon. What is excluded, each
+    because it produced a target that was not one: a simply-expanded assignment, both `CC:=gcc`
+    and the POSIX spelling `X::=y` (an earlier `::?(?!=)` let the second through, because `::?`
+    backtracks to one colon and the lookahead then sees a colon rather than the `=`; the
+    lookahead now refuses `=` and `:=` after the first colon, and a double-colon rule `x::`
+    still passes); pattern and variable targets (`%.o`, `$(BIN)`), which do not start with a
+    letter; `.PHONY` and its kin, which start with a dot; recipe lines, which start with a tab;
+    and the body of a `define ... endef`, where help text of the form `build:   build the image`
+    scans exactly like a rule and bound a `make build` that did not exist. Several names on one
+    line (`build run: deps`) are each a target, and whitespace before the colon (`build : deps`)
+    is legal and common.
     """
     import re
 
+    rule = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_-]*)*)[ \t]*:(?!:?=)")
     seen: list[str] = []
-    for match in re.finditer(r"(?m)^([A-Za-z][A-Za-z0-9_-]*)::?(?!=)", text):
-        name = match.group(1)
-        if name not in seen and not name.startswith("."):
-            seen.append(name)
-    return tuple(seen[:8])
+    in_define = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if in_define:
+            in_define = not stripped.startswith("endef")
+            continue
+        if stripped == "define" or stripped.startswith("define "):
+            in_define = True
+            continue
+        match = rule.match(line)
+        if not match:
+            continue
+        for name in match.group(1).split():
+            if name not in seen:
+                seen.append(name)
+    return tuple(seen)
