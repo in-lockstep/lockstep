@@ -2,8 +2,8 @@
 #
 # It used to build two. `in-lockstep-exec` was the deterministic-executor runtime a compiled
 # pipeline invoked by name, and it was deleted along with the last thing that invoked it — see
-# ADR 0001. The `exec-v0.1.x` tag and everything already on PyPI stay where they are; nothing here
-# republishes them.
+# ADR 0001. Its 0.1.0 stays on PyPI, yanked; its image and its `exec-v0.1.0` tag went on
+# 2026-09-02. Nothing here republishes any of it.
 #
 # **No API token exists anywhere in this.** Publication is by Trusted Publishing: PyPI verifies a
 # short-lived OIDC credential minted by Actions for this repository, this workflow and this
@@ -142,3 +142,52 @@ jobs:
           # PyPI is then not a failure.
           skip-existing: true
           print-hash: true
+
+  release:
+    name: Create the GitHub release
+    needs: publish
+    # Tags only. A `workflow_dispatch` publish has no tag to hang a page on, and a release page
+    # without a tag would name a version nobody can check out.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    # `contents: write` is what creating a release costs, and it is the one grant the publish job
+    # must never hold: a job that can mint the PyPI credential and also write the repository is
+    # the combination the trampoline's two-job split exists to refuse. So this is a third job,
+    # holding no OIDC grant in return, and neither of the other two can do what it does.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: distributions
+          path: dist
+      - name: The release page names the version and carries the files PyPI got
+        # Exists because "Latest" drifted: until 2026-09-02 the repository's latest release was
+        # `actions-v0.1.1`, a compiler-line tag, because nothing made a page for 0.2.0 or 0.2.1
+        # and the pre-pivot pages were still there. Notes are generated from the merged pull
+        # requests, which Conventional Commits make readable, under an install line that does not
+        # change. Re-running a tag that already has its page is normal and not a failure, for the
+        # same reason `skip-existing` is set above.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists; leaving it as it is"
+            exit 0
+          fi
+          notes=$(cat <<'NOTES'
+          ```
+          uv tool install 'in-lockstep[anthropic]'
+          ```
+
+          Provider extras: `anthropic`, `openai`, `google`, `bedrock`, `all`. Python 3.11 or newer.
+          NOTES
+          )
+          gh release create "$tag" dist/in-lockstep/* \
+            --verify-tag \
+            --title "in-lockstep ${tag#v}" \
+            --notes "$notes" \
+            --generate-notes

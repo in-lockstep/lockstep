@@ -160,6 +160,30 @@ def test_the_release_publishes_one_distribution() -> None:
     assert "matrix" not in text, "a one-element matrix is a fan-out over nothing"
 
 
+def test_the_release_page_is_created_by_a_job_that_cannot_publish() -> None:
+    """The workflow creates the GitHub Release, and the job that does so holds no PyPI grant.
+
+    Two reasons, one per half. The page: until 2026-09-02 the repository's "Latest" release was
+    `actions-v0.1.1`, a compiler-line tag, because nothing made a page for 0.2.0 or 0.2.1 and the
+    pre-pivot pages were still there. The split: `contents: write` is what a release costs and
+    `id-token: write` is what PyPI costs, and a job holding both could rewrite the repository
+    under the identity that publishes it. The trampoline refuses that combination; so does this
+    file.
+    """
+    import yaml
+
+    text = (ROOT / ".github" / "workflows" / "release-python.yml").read_text()
+    jobs = yaml.safe_load(text)["jobs"]
+    release, publish = jobs["release"], jobs["publish"]
+    assert release["needs"] == "publish", "no page for a version PyPI refused"
+    assert release["permissions"] == {"contents": "write"}
+    assert publish["permissions"] == {"id-token": "write"}
+    steps = "\n".join(str(step.get("run", "")) for step in release["steps"])
+    assert "gh release create" in steps
+    assert "--generate-notes" in steps and "--verify-tag" in steps
+    assert "dist/in-lockstep/*" in steps, "the page carries the files PyPI got"
+
+
 def test_the_trampoline_installs_the_provider_extra() -> None:
     """The one job that calls a model has to ask for the SDK that calls it.
 
