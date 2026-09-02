@@ -27,6 +27,7 @@ from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
 from ...core.verbs import Capability, Verb
 from ...prompts.implement import PROMPTS, ImplementPrompt, implement_layers
+from .attempts import attempt_items
 from .strategy import AGENCY, AiStrategy
 
 
@@ -43,6 +44,13 @@ class Implement:
     #: into this prompt. `Ticket.as_context` is what tags it, and it is the only route in.
     ticket: Any
     token_budget: int = 60_000
+    #: What earlier runs on this ticket produced, oldest first, when the caller asked to resume.
+    #:
+    #: Empty is the default and the ordinary case: resuming is opt-in, because a model handed its
+    #: own wrong diff will defend it, and sometimes the right answer is to start clean. Each entry
+    #: is `(changeset, verdict)` — and the verdict is the half that makes this work rather than
+    #: anchor, because it is precisely the feedback the green phase never gets.
+    attempts: tuple[tuple[Any, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,8 +94,10 @@ class ImplementSession:
     repo_root: str = "."
 
     def context(self, request: Implement) -> ContextPackage:
-        """The ticket, curated. Provenance comes from `Ticket.as_context`, not from here."""
-        items: list[ContextItem] = list(request.ticket.as_context())
+        """Earlier attempts, then the ticket, curated. Provenance comes from `Ticket.as_context`
+        for the ticket and from `attempt_items` for the rest."""
+        items: list[ContextItem] = [*attempt_items(request.attempts, key=str(request.ticket.key))]
+        items += list(request.ticket.as_context())
         return self.curator.curate(items, ContextNeed(token_budget=request.token_budget))
 
 

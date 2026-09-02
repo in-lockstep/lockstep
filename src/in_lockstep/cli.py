@@ -1161,6 +1161,30 @@ def _explain_run(run_id: str) -> None:
         click.echo(f"{'session':<10}{transcript}  (per-turn transcript)")
 
 
+def _attempts_from(artifact: str) -> tuple[tuple[Any, Any], ...]:
+    """Earlier attempts to resume from, or none.
+
+    A path that does not exist is a REFUSAL rather than a silent fresh start. Somebody who typed
+    `--resume` and got a clean run would be paying for the restart they asked to avoid, and would
+    have no way to tell from the output that it had happened.
+    """
+    if not artifact:
+        return ()
+    from .platform.artifacts import read_changeset, read_verdict
+
+    try:
+        changeset = read_changeset(artifact)
+    except Exception as e:  # noqa: BLE001 - the message names the path, which is what a user needs
+        raise click.ClickException(f"--resume {artifact}: could not read an attempt there ({e})") from e
+    # A verdict is optional and its absence is reported to the model as "never tested", never as a
+    # pass — `attempts._verdict` is where that distinction is written down.
+    try:
+        verdict = read_verdict(artifact)
+    except Exception:  # noqa: BLE001 - an attempt without a verdict is a real, ordinary case
+        verdict = None
+    return ((changeset, verdict),)
+
+
 def _history_line(verify: Any, tampered: list[Any]) -> str:
     """Whether the numbers just printed came from a history that is still append-only.
 
@@ -2705,6 +2729,15 @@ def _ticket_from_file(path: str) -> Any:
 @click.option("--cassette", default="", help="Where to read or write a recording.")
 @click.option("--budget", type=float, default=None, help="Hard ceiling, in USD.")
 @click.option(
+    "--resume",
+    "resume",
+    default="",
+    help=(
+        "Reuse what earlier attempts on this ticket staged: a changeset artifact path. Opt-in, "
+        "because a model handed its own wrong diff will defend it."
+    ),
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help="Canned answer. Proves everything up to the model; stages nothing, so it exits non-zero.",
@@ -2724,6 +2757,7 @@ def implement_cmd(
     record: bool,
     cassette: str,
     budget: float | None,
+    resume: str,
     dry_run: bool,
 ) -> None:
     """Implement one ticket, in-process, staging the change rather than writing it.
@@ -2871,7 +2905,7 @@ def implement_cmd(
 
     ctx = _context(lockstep, _run_id(f"implement-{resolved.key.lstrip('#')}"), approval)
     try:
-        outcome = asyncio.run(ctx.do(Implement(ticket=resolved)))
+        outcome = asyncio.run(ctx.do(Implement(ticket=resolved, attempts=_attempts_from(resume))))
     except LookupError as e:
         raise click.ClickException(f"{e} (a cassette replays only the prompt it was recorded on)") from None
     except (ImportError, MissingCredential) as e:
