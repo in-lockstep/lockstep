@@ -355,3 +355,41 @@ def test_attempts_bar_row_appears_in_html_output() -> None:
     assert "#50" in html
     # The _bars helper creates <div class=bar> elements
     assert "Attempts per ticket" in html or "attempts per ticket" in html.lower()
+
+
+# -- whether the cache is working ---------------------------------------------------------------
+
+
+def test_cache_reads_are_visible_as_a_share_of_input() -> None:
+    """`tokens` counts input plus output and EXCLUDES the cache, so a working cache looks exactly
+    like a smaller task. Run 33582850420 recorded 62,190 tokens against the previous run's
+    2,049,146 and nothing in the record said which of those two things had happened."""
+    report = build(
+        [
+            _record(cache_read_tokens=90_000, input_tokens=10_000),
+            _record(cache_read_tokens=0, input_tokens=10_000),
+        ]
+    )
+    assert report.cached_share.value == pytest.approx(0.45), "mean of 90% and 0%"
+    assert "from cache" in "\n".join(as_text(report))
+
+
+def test_a_record_written_before_the_breakdown_is_not_counted_as_uncached() -> None:
+    """The rule this module exists for, in its most tempting violation. Every record before this
+    change lacks `cache_read_tokens`, and treating those as zero would drag the share toward
+    "caching is not working" using evidence that says nothing either way."""
+    report = build([_record(cache_read_tokens=90_000, input_tokens=10_000), _record(), _record()])
+    assert report.cached_share.value == pytest.approx(0.9), "only the record that measured it"
+    assert report.cached_share.of == 1
+    assert report.cached_share.total == 3, "and it says so: 1 of 3"
+
+
+def test_no_record_carrying_the_breakdown_reports_no_share_at_all() -> None:
+    report = build([_record(), _record()])
+    assert report.cached_share.value is None
+    assert "from cache" not in "\n".join(as_text(report))
+
+
+def test_a_bool_is_not_a_token_count_here_either() -> None:
+    report = build([_record(cache_read_tokens=True, input_tokens=True)])
+    assert report.cached_share.value is None

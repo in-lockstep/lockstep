@@ -30,7 +30,7 @@ import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeGuard
 
 #: Statuses the ledger writes for a run that did not produce what it was asked for. `blocked` is
 #: deliberately not one of them: a run a control stopped is the control working, and counting it as
@@ -99,6 +99,11 @@ class Report:
     cost_per_run: Measured = Measured(None)
     tokens_total: Measured = Measured(None)
     billed_share: Measured = Measured(None)
+    #: What share of the input a run sent was served from cache rather than paid for at full rate.
+    #: The number that says whether prompt caching is working, which `tokens` alone cannot: it
+    #: counts input plus output and excludes the cache entirely, so a working cache looks exactly
+    #: like a smaller task.
+    cached_share: Measured = Measured(None)
 
     seconds_median: Measured = Measured(None)
     seconds_p90: Measured = Measured(None)
@@ -261,6 +266,37 @@ def _findings(records: list[dict[str, Any]]) -> tuple[int, list[tuple[str, int]]
     return total, ids.most_common(TOP_N), injections
 
 
+def _cached(records: list[dict[str, Any]]) -> Measured:
+    """Cache reads as a share of all input, over the records that carry the breakdown.
+
+    Per record rather than as one ratio of two sums, so a single enormous run cannot speak for the
+    rest — the same reason `_measure` takes a mean of measurements rather than dividing totals.
+
+    A record with no `cache_read_tokens` field is not a record with zero of them: it was written
+    before the breakdown was recorded, and counting it as an uncached run would drag the number
+    toward "caching is not working" using evidence that says nothing either way.
+    """
+    shares: list[float] = []
+    for record in records:
+        read, fresh = record.get("cache_read_tokens"), record.get("input_tokens")
+        if not _is_number(read) or not _is_number(fresh):
+            continue
+        total = float(read) + float(fresh)
+        if total:
+            shares.append(float(read) / total)
+    return _measure(shares, len(records), "mean")
+
+
+def _is_number(value: Any) -> TypeGuard[float]:
+    """Numeric and not a bool, the trap `_numbers` documents at length.
+
+    A `TypeGuard` rather than a plain predicate so a caller's `float(value)` narrows — otherwise
+    the choice is between repeating the bool check at every call site and silencing the type
+    checker, and the repeated version is how one of the copies eventually loses the `bool` clause.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _people(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
     """Who asked for runs. `approval.by` is what a person claimed; `ci_actor` is what the host
     said. Both are counted, and a run carrying neither is nobody's rather than anonymous."""
@@ -332,6 +368,7 @@ def build(records: list[dict[str, Any]]) -> Report:
         cost_per_run=_measure(_numbers(records, "cost_usd"), total, "mean"),
         tokens_total=_measure(_numbers(records, "tokens"), total),
         billed_share=_measure(_numbers(records, "billed_fraction"), total, "mean"),
+        cached_share=_cached(records),
         seconds_median=_measure(_numbers(records, "wall_seconds"), total, "median"),
         seconds_p90=_measure(_numbers(records, "wall_seconds"), total, "p90"),
         turns_by_strategy=_turns(records),
@@ -461,6 +498,11 @@ def as_text(report: Report) -> list[str]:
     out += [f"  tokens        {report.tokens_total.render(places=0)}"]
     if report.billed_share.value is not None:
         out += [f"  actually billed {report.billed_share.value:.0%} of runs' tokens (the rest replayed)"]
+    if report.cached_share.value is not None:
+        out += [
+            f"  from cache    {report.cached_share.value:.0%} of input, "
+            f"at a tenth of the price  ({report.cached_share.of} of {report.cached_share.total} runs)"
+        ]
 
     out += ["", "what it found"]
     out += [f"  findings      {report.findings_total}  ({report.findings_per_run.render(places=1)} per run)"]

@@ -168,3 +168,46 @@ def test_reporting_a_failure_is_not_itself_a_failure(verb: str, workflows, tmp_p
     monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
     outcome = _run(get(f"{verb}/report"), ticket="#139", tickets=_Tracker(), scm=_Host())
     assert outcome.status is Status.SUCCEEDED
+
+
+# -- a failed run leaves its work behind ---------------------------------------------------------
+
+
+def test_the_evidence_path_is_not_the_one_propose_reads(workflows) -> None:
+    """`tdd.not_green` returns the change deliberately — `test_implement_tdd.py` asserts it, in
+    those words: "the change is still carried so a person can see what it tried".
+
+    The workflow threw it away. Run 33582850420 reached that state on #150 — 13 failing tests of
+    1644, $13.84 spent, a diagnosable near-miss — and its artifact held a history bundle and
+    nothing else, because staging was guarded on SUCCEEDED. The strategy handed the work over and
+    the workflow dropped it.
+
+    A failed run now writes to `ATTEMPT`, which is a DIFFERENT path from the two `propose` reads.
+    That is what makes "a red change never becomes a pull request" a fact about the filesystem
+    rather than a condition somebody can relax later.
+    """
+    module, _ref = load(str(ROOT))
+    assert module.ATTEMPT not in (module.CHANGESET, module.FIX_CHANGESET)
+
+
+def test_reading_the_proposable_path_does_not_find_an_attempt(workflows, tmp_path, monkeypatch) -> None:
+    """The separation, exercised rather than asserted about the source. A change written as
+    evidence must be invisible to the reader `propose` uses, or the separate constant is decoration.
+    """
+    from in_lockstep.core.types import ChangeSet, FileChange
+    from in_lockstep.platform.artifacts import MalformedArtifact, read_changeset, write_changeset
+
+    module, _ref = load(str(ROOT))
+    monkeypatch.chdir(tmp_path)
+    write_changeset(module.ATTEMPT, ChangeSet(changes=(FileChange(path="a.py", contents="x"),)))
+
+    with pytest.raises((MalformedArtifact, FileNotFoundError, OSError)):
+        read_changeset(module.CHANGESET)
+
+
+def test_the_evidence_path_is_uploaded_by_both_workflows(workflows) -> None:
+    """Written and then not collected would be the same loss with more steps."""
+    module, _ref = load(str(ROOT))
+    for name in ("implement.yml", "fix.yml"):
+        text = (ROOT / ".github" / "workflows" / name).read_text()
+        assert f"{module.ATTEMPT}/" in text, f"{name} does not upload the evidence path"

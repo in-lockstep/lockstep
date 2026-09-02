@@ -313,6 +313,10 @@ lockstep.middleware += [
 
 #: Where the unprivileged half leaves its answer for the privileged half to pick up.
 CHANGESET = "changeset"
+#: Where a FAILED run's change is kept. Deliberately not `CHANGESET`: `propose` reads that one, so
+#: a separate path is what makes "a red change never becomes a pull request" a fact about the
+#: filesystem rather than a condition somebody can loosen.
+ATTEMPT = "attempt"
 
 
 @workflow(id="implement/from-ticket")
@@ -349,6 +353,23 @@ async def implement_from_ticket(
     # the test it staged, so `changeset.changes` is truthy on precisely the outcome that must not
     # travel. The fixing verb's own half has always guarded on the status; this now matches it.
     report = outcome.value
+    # A run that FAILED still wrote something worth keeping, and this used to throw it away.
+    #
+    # `tdd.not_green` returns the change deliberately — `test_implement_tdd.py` asserts it, in
+    # those words: "the change is still carried so a person can see what it tried". Run
+    # 33582850420 reached that state on #150 (13 failing tests of 1644, $13.84 spent, a
+    # diagnosable near-miss) and the artifact came back holding nothing but a history bundle,
+    # because the guard below stages only on SUCCEEDED. The strategy handed the work over and the
+    # workflow dropped it.
+    #
+    # So it is written to a DIFFERENT path. `propose` reads `changeset/` and nothing else, so a
+    # red change still cannot become a pull request — that rule is untouched, and it is enforced by
+    # the path rather than by a condition somebody could relax later. `attempt/` is evidence: CI
+    # uploads it, a person downloads it, and the next run starts from a diff instead of from
+    # nothing.
+    if outcome.status is not Status.SUCCEEDED and report is not None and report.changeset.changes:
+        written = write_changeset(ATTEMPT, report.changeset)
+        print(f"attempt   {len(report.changeset.changes)} change(s) -> {written}  (not proposed)")
     if outcome.status is Status.SUCCEEDED and report is not None and report.changeset.changes:
         # The suite, run against a throwaway worktree of HEAD plus the staged change, before any
         # of it travels. The verdict rides the artifact so the privileged half can decide what to
@@ -537,6 +558,12 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
     outcome = await ctx.do(Fix(ticket=source), via=fix)
 
     report = outcome.value
+    # The same evidence path as the implementing verb: a failed fix still wrote a reproducer, and
+    # sometimes an attempt at the fix, and both are worth more than a bill. `propose` reads
+    # `FIX_CHANGESET` and nothing else, so its "no changeset means escalate" hinge is untouched.
+    if outcome.status is not Status.SUCCEEDED and report is not None and not report.empty:
+        written = write_changeset(ATTEMPT, report.changeset)
+        print(f"attempt   {len(report.changeset.changes)} change(s) -> {written}  (not proposed)")
     if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
         # `report.changeset` is the reproducer and the fix merged. They are kept apart inside the
         # report so a reader can see which is which; what gets applied is both.
