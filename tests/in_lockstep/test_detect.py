@@ -10,10 +10,22 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from in_lockstep.adapters import CommandTest, CommandValidate, detected_bindings, parse_junit
+from in_lockstep.adapters import (
+    Build,
+    CommandBuild,
+    CommandRun,
+    CommandTest,
+    CommandValidate,
+    Run,
+    detected_bindings,
+    parse_junit,
+)
 from in_lockstep.adapters.command import Test, Validate
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.ruff_adapter import RuffValidate
+from in_lockstep.adapters.sandbox import Sandbox, SandboxResult
+from in_lockstep.core.context import MAKE_TARGETS_SHOWN
+from in_lockstep.core.types import RunResult
 from in_lockstep.lockstep import _detect_facts
 
 
@@ -124,9 +136,11 @@ class _FakeSandbox:
     def __init__(self, exit_code: int, stdout: str = "", stderr: str = "") -> None:
         self._result = type("R", (), {"exit_code": exit_code, "stdout": stdout, "stderr": stderr})()
         self.commands: list[list[str]] = []
+        self.cwds: list[str | None] = []
 
     async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
         self.commands.append(command)
+        self.cwds.append(cwd)
         return self._result
 
 
@@ -240,3 +254,169 @@ def test_an_empty_command_is_refused() -> None:
         CommandTest([])
     with pytest.raises(ValueError, match="needs a command"):
         CommandValidate([])
+
+
+# -- build and run, bound to what the repository already has (issue 162) ----------------------
+#
+# Detection found `make build` and `make run`, printed them in the summary, and bound neither.
+# The rule these tests state: the Makefile and package.json serve the verbs where an exit code is
+# the whole answer, and a target that is not in the file is not guessed.
+
+
+def test_a_makefile_build_and_run_target_bind_the_two_verbs_nothing_else_serves(tmp_path: Path) -> None:
+    _write(tmp_path, {"Makefile": "build:\n\tgo build ./...\nrun:\n\t./app\ntest:\n\tgo test ./...\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.build_command == ("make", "build")
+    assert facts.run_command == ("make", "run")
+    kinds = {i: type(x) for i, x in detected_bindings(facts)}
+    assert kinds[Build] is CommandBuild and kinds[Run] is CommandRun
+    assert Test not in kinds, "`make test` is not bound: it would trade per-test cases for an exit code"
+
+
+def test_a_makefile_without_those_targets_binds_neither(tmp_path: Path) -> None:
+    """Absent is not guessed. An invented `make build` is a binding that fails at run time."""
+    _write(tmp_path, {"Makefile": "check: fmt lint\n\tdo\nfmt:\n\tdo\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.build_command == () and facts.run_command == ()
+    bound = {i for i, _ in detected_bindings(facts)}
+    assert Build not in bound and Run not in bound
+
+
+def test_package_json_build_and_start_scripts_bind_build_and_run(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        {"package.json": '{"scripts": {"test": "jest", "build": "tsc", "start": "node dist/main.js"}}'},
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.build_command == ("npm", "run", "build")
+    assert facts.run_command == ("npm", "start")
+    kinds = {i: type(x) for i, x in detected_bindings(facts)}
+    assert kinds[Build] is CommandBuild and kinds[Run] is CommandRun and kinds[Test] is CommandTest
+
+
+def test_a_makefile_target_beats_a_package_json_script_for_the_same_verb(tmp_path: Path) -> None:
+    """The Makefile is the repository's own statement of how it is built, whatever it wraps; and
+    package.json still serves the verb the Makefile says nothing about."""
+    _write(
+        tmp_path,
+        {
+            "Makefile": "build:\n\tnpm run build\n",
+            "package.json": '{"scripts": {"build": "tsc", "start": "node ."}}',
+        },
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.build_command == ("make", "build")
+    assert facts.run_command == ("npm", "start")
+
+
+def test_pytest_still_beats_a_makefile_test_target(tmp_path: Path) -> None:
+    """The precedence, stated: structured output wins the verb where the structure matters. A fix
+    loop reproduces from pytest's per-test cases, which `make test` would replace with an exit
+    code; build has nothing to trade, so the Makefile serves it."""
+    _write(
+        tmp_path,
+        {
+            "pyproject.toml": "[tool.pytest.ini_options]\n",
+            "Makefile": "test:\n\tpytest\nbuild:\n\tpython -m build\n",
+        },
+    )
+    kinds = {i: type(x) for i, x in detected_bindings(_detect_facts(tmp_path))}
+    assert kinds[Test] is PytestTest
+    assert kinds[Build] is CommandBuild
+
+
+def test_a_build_target_past_the_summary_cap_is_still_found(tmp_path: Path) -> None:
+    """The fact is the whole target list; only the line a person reads is shortened. The old cap
+    lived in the parser, so a `build` target ninth in the file was not a build target."""
+    targets = [f"t{i}" for i in range(MAKE_TARGETS_SHOWN + 1)] + ["build"]
+    _write(tmp_path, {"Makefile": "".join(f"{name}:\n\tdo\n" for name in targets)})
+    facts = _detect_facts(tmp_path)
+    assert facts.build_command == ("make", "build")
+    assert len(facts.make_targets) == MAKE_TARGETS_SHOWN + 2
+    line = next(s for s in facts.summary() if s.startswith("Makefile"))
+    assert "+2 more" in line and "build" not in line
+
+
+def test_the_facts_summary_names_the_build_and_run_commands(tmp_path: Path) -> None:
+    _write(tmp_path, {"Makefile": "build:\n\tdo\nrun:\n\tdo\n"})
+    summary = _detect_facts(tmp_path).summary()
+    assert "build: make build" in summary and "run: make run" in summary
+
+
+def test_command_build_passes_the_target_and_args_and_does_not_guess_artifacts() -> None:
+    sandbox = _FakeSandbox(0, stdout="ok\n")
+    outcome = asyncio.run(
+        CommandBuild(["make", "build"], sandbox=sandbox).invoke(
+            None, Build(target="release", args=("-j", "2"))
+        )
+    )
+    assert sandbox.commands == [["make", "build", "release", "-j", "2"]]
+    assert outcome.succeeded and outcome.decided
+    assert outcome.value.artifacts == (), "what a build produced is not guessed from the tree"
+    assert outcome.value.log == "ok"
+
+
+def test_command_build_maps_a_nonzero_exit_to_a_blocking_finding_with_the_output_tail() -> None:
+    sandbox = _FakeSandbox(2, stderr="\n".join(f"line {i}" for i in range(30)))
+    outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=sandbox).invoke(None, Build()))
+    assert outcome.failed
+    (finding,) = outcome.findings
+    assert finding.id == "build.command_failed" and finding.blocking
+    assert "make build exited 2" in finding.message
+    assert "line 29" in finding.message and "line 5\n" not in finding.message
+
+
+def test_command_run_returns_what_the_command_produced_where_it_was_asked_to_run() -> None:
+    sandbox = _FakeSandbox(0, stdout="hello\n", stderr="warn\n")
+    outcome = asyncio.run(
+        CommandRun(["make", "run"], cwd="/bound", sandbox=sandbox).invoke(
+            None, Run(command=("--once",), cwd="/asked")
+        )
+    )
+    assert sandbox.commands == [["make", "run", "--once"]]
+    assert sandbox.cwds == ["/asked"], "the request's cwd wins over the bound one"
+    assert outcome.succeeded
+    assert outcome.value == RunResult(exit_code=0, stdout="hello\n", stderr="warn\n")
+
+
+def test_command_run_maps_a_nonzero_exit_to_a_blocking_finding_and_keeps_the_exit_code() -> None:
+    sandbox = _FakeSandbox(3, stderr="boom")
+    outcome = asyncio.run(CommandRun(["npm", "start"], sandbox=sandbox).invoke(None, Run()))
+    assert outcome.failed
+    assert outcome.value.exit_code == 3 and outcome.value.stderr == "boom"
+    assert outcome.findings[0].id == "run.command_failed" and outcome.findings[0].blocking
+
+
+class _RecordingSandbox(Sandbox):
+    """A real `Sandbox`, so `dataclasses.replace` keeps its fields, that records instead of runs."""
+
+    seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+        type(self).seen.append((tuple(command), dict(self.extra_env)))
+        return SandboxResult(exit_code=0, stdout="", stderr="", sandboxed=False, how="recorded")
+
+
+def test_command_run_carries_the_requests_env_into_the_sandbox_beside_its_own() -> None:
+    """The credential drop still holds: the request's variables join the sandbox's allowed set
+    for one run, and the bound sandbox is not mutated for it."""
+    _RecordingSandbox.seen.clear()
+    sandbox = _RecordingSandbox(extra_env={"KEEP": "1"})
+    outcome = asyncio.run(
+        CommandRun(["make", "run"], sandbox=sandbox).invoke(None, Run(env=(("PORT", "8080"),)))
+    )
+    assert outcome.succeeded
+    assert _RecordingSandbox.seen == [(("make", "run"), {"KEEP": "1", "PORT": "8080"})]
+    assert sandbox.extra_env == {"KEEP": "1"}
+
+
+def test_command_run_refuses_an_env_its_runner_cannot_carry_rather_than_dropping_it() -> None:
+    """Run without the variables asked for is a different command from the one the workflow
+    asked for, so a runner that cannot carry them gets a refusal and runs nothing."""
+    sandbox = _FakeSandbox(0)
+    outcome = asyncio.run(
+        CommandRun(["make", "run"], sandbox=sandbox).invoke(None, Run(env=(("PORT", "8080"),)))
+    )
+    assert outcome.failed and outcome.value is None
+    assert outcome.findings[0].id == "run.env_unsupported"
+    assert sandbox.commands == []

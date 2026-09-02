@@ -134,6 +134,13 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,
         "RFE": "rfe" in SHIPPED_VERBS and "rfe" in commands,
         "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,
+        # All four deterministic verbs from what the tree declares, so the claim is pinned to the
+        # two adapters issue 162 added as well as to the function that binds them.
+        "Detected lifecycle": (
+            _importable("in_lockstep.adapters", "detected_bindings")
+            and _importable("in_lockstep.adapters", "CommandBuild")
+            and _importable("in_lockstep.adapters", "CommandRun")
+        ),
         "GitHub": "gate" in commands,
         "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),
         "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),

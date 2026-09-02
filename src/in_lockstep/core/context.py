@@ -74,6 +74,9 @@ class Approval:
 #: what somebody wrote down.
 AGENT_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", ".cursorrules")
 
+#: How many Makefile targets `RepoFacts.summary()` names before saying "+N more".
+MAKE_TARGETS_SHOWN = 8
+
 
 @dataclass(frozen=True)
 class RepoFacts:
@@ -92,6 +95,8 @@ class RepoFacts:
     ruff: bool = False
     eslint: bool = False
     lint_command: tuple[str, ...] = ()  # a generic linter argv, e.g. ("npx", "eslint", ".")
+    build_command: tuple[str, ...] = ()  # e.g. ("make", "build") or ("npm", "run", "build")
+    run_command: tuple[str, ...] = ()  # e.g. ("make", "run") or ("npm", "start")
     dockerfile: bool = False
     makefile: bool = False
     make_targets: tuple[str, ...] = ()
@@ -114,12 +119,22 @@ class RepoFacts:
             out.append("lint: ruff")
         elif self.lint_command:
             out.append(f"lint: {' '.join(self.lint_command)}")
+        if self.build_command:
+            out.append(f"build: {' '.join(self.build_command)}")
+        if self.run_command:
+            out.append(f"run: {' '.join(self.run_command)}")
         if self.coverage:
             out.append("coverage config")
         if self.dockerfile:
             out.append("Dockerfile")
         if self.makefile:
-            targets = f" ({', '.join(self.make_targets)})" if self.make_targets else ""
+            # The first few, for a line a person reads. The fact itself is the whole list, because
+            # a `build` target that happens to be ninth in the file is still a build target.
+            shown = list(self.make_targets[:MAKE_TARGETS_SHOWN])
+            more = len(self.make_targets) - len(shown)
+            if more > 0:
+                shown.append(f"+{more} more")
+            targets = f" ({', '.join(shown)})" if shown else ""
             out.append(f"Makefile{targets}")
         if self.ci_host:
             out.append(f"ci: {self.ci_host}")

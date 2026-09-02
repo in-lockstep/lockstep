@@ -363,7 +363,8 @@ def _detect_facts(root: Path) -> RepoFacts:
     node = bool(package)
     stack = "python" if python else ("node" if node else "")
 
-    scripts = package.get("scripts") if isinstance(package.get("scripts"), dict) else {}
+    raw_scripts = package.get("scripts")
+    scripts: dict[str, Any] = raw_scripts if isinstance(raw_scripts, dict) else {}
     # A pytest-specific marker only, never a bare `tests/` directory: a Django or stdlib-unittest
     # repository keeps its tests in `tests/` and does not run pytest, so binding PytestTest from
     # the directory name is the guess this function's docstring says it will not make — and a wrong
@@ -373,7 +374,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         has("pytest.ini", "conftest.py") or "[tool.pytest" in pyproject or "[pytest]" in read("tox.ini")
     )
     test_command: tuple[str, ...] = ()
-    if not pytest and isinstance(scripts, dict) and "test" in scripts:
+    if not pytest and "test" in scripts:
         test_command = ("npm", "test")
 
     ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
@@ -389,6 +390,22 @@ def _detect_facts(root: Path) -> RepoFacts:
     makefile = has("Makefile", "makefile")
     if makefile:
         make_targets = _make_targets(read("Makefile") or read("makefile"))
+
+    # Build and run: the Makefile first, package.json second. A Makefile is a repository's own
+    # statement of how it is built and run whatever language it is in, and package.json is the
+    # same statement for a Node repository that has no Makefile. Only a target or script that is
+    # actually in the file is bound. Inventing `make build` for a Makefile without a `build`
+    # target produces a binding that fails at run time, which is worse than an honest absence.
+    build_command: tuple[str, ...] = ()
+    if "build" in make_targets:
+        build_command = ("make", "build")
+    elif "build" in scripts:
+        build_command = ("npm", "run", "build")
+    run_command: tuple[str, ...] = ()
+    if "run" in make_targets:
+        run_command = ("make", "run")
+    elif "start" in scripts:
+        run_command = ("npm", "start")
 
     coverage = (
         has(".coveragerc", ".coverage-floor")
@@ -409,6 +426,8 @@ def _detect_facts(root: Path) -> RepoFacts:
         ruff=ruff,
         eslint=eslint,
         lint_command=lint_command,
+        build_command=build_command,
+        run_command=run_command,
         dockerfile=has("Dockerfile", "Containerfile"),
         makefile=makefile,
         make_targets=make_targets,
@@ -421,7 +440,11 @@ def _detect_facts(root: Path) -> RepoFacts:
 
 
 def _make_targets(text: str) -> tuple[str, ...]:
-    """The named targets in a Makefile, first few, ignoring pattern rules and `.PHONY`.
+    """Every named target in a Makefile, in file order, ignoring pattern rules and `.PHONY`.
+
+    All of them, not the first few: this list decides whether `build` and `run` get bound, and a
+    target does not stop existing because eight others precede it. `RepoFacts.summary()` does the
+    shortening for the line a person reads.
 
     The `::?(?!=)` is what keeps a simply-expanded variable assignment out: `CC:=gcc` and the
     double-colon `X::=y` both put an `=` right after the colon(s), where a real target
@@ -435,4 +458,4 @@ def _make_targets(text: str) -> tuple[str, ...]:
         name = match.group(1)
         if name not in seen and not name.startswith("."):
             seen.append(name)
-    return tuple(seen[:8])
+    return tuple(seen)

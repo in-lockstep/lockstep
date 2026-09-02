@@ -4066,16 +4066,30 @@ def _scaffold_module(facts: Any) -> str:
     """The lifecycle scaffold, reflecting what detection found in the tree.
 
     The deterministic-verb binds are generated from the facts, the same way `detected_bindings`
-    binds the drop-in defaults: a Node repository gets `CommandTest(["npm", "test"])`, and a part
-    detection could not place is a commented stub — with its own import — rather than a wrong
-    default that runs. Only the adapters actually bound are imported, so a generated module never
-    ships an unused import. Everything else — the egress opt-out and the middleware — is identical
-    in every scaffold; the trampoline is byte-identical across repos, and this file is the one
-    `init` fits to the stack.
+    binds the drop-in defaults: a Node repository gets `CommandTest(["npm", "test"])`, a Makefile
+    with a `build` target gets `CommandBuild(["make", "build"])`, and a part detection could not
+    place is a commented stub — with its own import — rather than a wrong default that runs. Only
+    the adapters actually bound are imported, so a generated module never ships an unused import.
+    Everything else — the egress opt-out and the middleware — is identical in every scaffold; the
+    trampoline is byte-identical across repos, and this file is the one `init` fits to the stack.
     """
     imports: list[str] = ["Test", "Validate"]
     test_bind = _bind_line(facts, "Test", imports)
     validate_bind = _bind_line(facts, "Validate", imports)
+    # Build and run get a line only when detection found one. No stub when it did not: the
+    # selfcheck needs Test and Validate, so their absence is worth a comment that says how to bind
+    # them, and build and run are the verbs a repository adds the day a workflow of its own needs
+    # them, when it will know what to bind.
+    extra: list[str] = []
+    if getattr(facts, "build_command", ()):
+        imports += ["Build", "CommandBuild"]
+        extra.append(f"lockstep.bind(Build, CommandBuild({list(facts.build_command)!r}))")
+    if getattr(facts, "run_command", ()):
+        imports += ["Run", "CommandRun"]
+        extra.append(f"lockstep.bind(Run, CommandRun({list(facts.run_command)!r}))")
+    # Set off by a blank line, because the line above them may be a commented stub whose last
+    # line is an example bind, and a real bind directly under it reads as part of the example.
+    extra_binds = ("\n" + "".join(f"\n{line}" for line in extra)) if extra else ""
     # Nothing detected for a verb → its interface is referenced only in a comment, so drop it from
     # the import to avoid an unused name; the stub carries its own commented import instead. If
     # nothing was placed at all, there is no adapter import line — an empty one is a syntax error.
@@ -4086,7 +4100,10 @@ def _scaffold_module(facts: Any) -> str:
         else "# No adapters detected yet — bind them in the stubs below."
     )
     return _SCAFFOLD_MODULE.format(
-        adapter_import=adapter_import, test_bind=test_bind, validate_bind=validate_bind
+        adapter_import=adapter_import,
+        test_bind=test_bind,
+        validate_bind=validate_bind,
+        extra_binds=extra_binds,
     )
 
 
@@ -4136,7 +4153,7 @@ lockstep = Lockstep.detect()
 
 # Deterministic verbs bind adapters over real tools. `in-lockstep ls` prints what detection found.
 {test_bind}
-{validate_bind}
+{validate_bind}{extra_binds}
 
 # THIS IS AN OPT-OUT FROM A CONTROL, and it is a visible line on purpose. A review reads a diff
 # authored by whoever opened the change, so the model is sent UNTRUSTED_EXTERNAL content, and

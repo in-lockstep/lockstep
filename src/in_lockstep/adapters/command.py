@@ -1,4 +1,4 @@
-"""Test and Validate over an arbitrary command.
+"""Test, Validate, Build and Run over an arbitrary command.
 
 The deterministic verbs are interfaces, and pytest/ruff are one implementation each. A repository
 that is not Python needs the same verbs served by `npm test` or `eslint`, and these are that: a
@@ -6,19 +6,51 @@ command runs, its exit code maps to an `Outcome` the same way `PytestTest` maps 
 when the runner writes one — a JUnit report is read so `TestReport.cases` carries per-test results
 instead of only an exit code. Without that last part a non-pytest suite could say red or green but
 never which test failed, which is exactly what a fix loop needs to reproduce.
+
+Build and Run have no pytest or ruff of their own: an exit code is the whole answer, so the command
+adapters are the only shipped implementations, and detection binds them to the `make build`,
+`make run`, `npm run build` or `npm start` a repository already has.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import Test, TestCase, TestReport, Validate, ValidationReport
+from ..core.types import (
+    Build,
+    BuildResult,
+    Run,
+    RunResult,
+    Test,
+    TestCase,
+    TestReport,
+    Validate,
+    ValidationReport,
+)
 from ..core.verbs import Capability, Verb
 from .sandbox import Sandbox
 
-__all__ = ["CommandTest", "CommandValidate", "Test", "Validate", "parse_junit"]
+__all__ = [
+    "Build",
+    "CommandBuild",
+    "CommandRun",
+    "CommandTest",
+    "CommandValidate",
+    "Run",
+    "Test",
+    "Validate",
+    "parse_junit",
+]
+
+# How much of a failed command's output travels in the finding. Enough to see why, not the log.
+_TAIL_LINES = 20
+
+
+def _tail(stdout: str, stderr: str) -> str:
+    return "\n".join((stdout + stderr).strip().splitlines()[-_TAIL_LINES:])
 
 
 class CommandTest:
@@ -145,11 +177,11 @@ class CommandValidate:
         # per-rule findings binds an adapter that parses its linter's format, as `RuffValidate` does.
         findings: tuple[Finding, ...] = ()
         if not clean:
-            tail = (result.stdout + result.stderr).strip().splitlines()[-20:]
             findings = (
                 Finding(
                     id="validate.command_failed",
-                    message=f"{' '.join(self.command)} exited {result.exit_code}\n" + "\n".join(tail),
+                    message=f"{' '.join(self.command)} exited {result.exit_code}\n"
+                    + _tail(result.stdout, result.stderr),
                     severity=Severity.ERROR,
                     blocking=True,
                 ),
@@ -157,6 +189,130 @@ class CommandValidate:
         return Outcome(
             status=Status.SUCCEEDED if clean else Status.FAILED,
             value=ValidationReport(),
+            findings=findings,
+            cost=Cost(),
+        )
+
+
+class CommandBuild:
+    """`Build` over any build command. `command` is the argv prefix, e.g. `("make", "build")`.
+
+    What a build produced is not something a generic command can know, so `BuildResult.artifacts`
+    is empty rather than guessed from the tree, and `log` carries the tail of what the command
+    printed. A repository whose build writes to a known place binds an adapter that names it.
+    """
+
+    verb: ClassVar[Verb] = Verb.BUILD
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {Capability.EXECUTES_CODE, Capability.READS_REPO}
+    )
+
+    def __init__(
+        self,
+        command: list[str] | tuple[str, ...],
+        *,
+        cwd: str | None = None,
+        sandbox: Sandbox | None = None,
+    ) -> None:
+        if not command:
+            raise ValueError("CommandBuild needs a command to run")
+        self.command = tuple(command)
+        self.cwd = cwd
+        # Out of process, like CommandTest: a build runs repository-authored code (a setup.py, a
+        # postinstall script), and dropping the ambient credentials is the point.
+        self.sandbox = sandbox or Sandbox()
+
+    async def invoke(self, ctx: object, inp: Build) -> Outcome[BuildResult]:
+        cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        cmd = [*self.command, *([inp.target] if inp.target else []), *inp.args]
+        result = await self.sandbox.run(cmd, cwd=cwd)
+        ok = result.exit_code == 0
+        log = _tail(result.stdout, result.stderr)
+        findings: tuple[Finding, ...] = ()
+        if not ok:
+            findings = (
+                Finding(
+                    id="build.command_failed",
+                    message=f"{' '.join(cmd)} exited {result.exit_code}\n" + log,
+                    severity=Severity.ERROR,
+                    blocking=True,
+                ),
+            )
+        return Outcome(
+            status=Status.SUCCEEDED if ok else Status.FAILED,
+            value=BuildResult(artifacts=(), log=log),
+            findings=findings,
+            cost=Cost(),
+        )
+
+
+class CommandRun:
+    """`Run` over any command. `command` is the argv prefix, e.g. `("make", "run")`.
+
+    Run to completion: the exit code is the verdict and the output is the result. A server that
+    never exits is not what this verb means, and one ends at the sandbox's timeout rather than
+    holding the run open.
+    """
+
+    verb: ClassVar[Verb] = Verb.RUN
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {Capability.EXECUTES_CODE, Capability.READS_REPO}
+    )
+
+    def __init__(
+        self,
+        command: list[str] | tuple[str, ...],
+        *,
+        cwd: str | None = None,
+        sandbox: Sandbox | None = None,
+    ) -> None:
+        if not command:
+            raise ValueError("CommandRun needs a command to run")
+        self.command = tuple(command)
+        self.cwd = cwd
+        self.sandbox = sandbox or Sandbox()
+
+    async def invoke(self, ctx: object, inp: Run) -> Outcome[RunResult]:
+        cwd = inp.cwd or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        cmd = [*self.command, *inp.command]
+        runner = self.sandbox
+        if inp.env:
+            # The sandbox allows a fixed set of variables through and adds its own; a request's
+            # variables join those rather than replacing them, so the credential drop still holds.
+            # A runner that cannot carry variables gets a refusal rather than the command run
+            # without them: that would be a different command from the one the workflow asked for.
+            if not isinstance(runner, Sandbox):
+                return Outcome(
+                    status=Status.FAILED,
+                    value=None,
+                    findings=(
+                        Finding(
+                            id="run.env_unsupported",
+                            message=f"{type(runner).__name__} cannot carry environment variables; "
+                            f"bind CommandRun with a Sandbox, or drop `env` from the request",
+                            severity=Severity.ERROR,
+                            blocking=True,
+                        ),
+                    ),
+                    cost=Cost(),
+                )
+            runner = replace(runner, extra_env={**runner.extra_env, **dict(inp.env)})
+        result = await runner.run(cmd, cwd=cwd)
+        ok = result.exit_code == 0
+        findings: tuple[Finding, ...] = ()
+        if not ok:
+            findings = (
+                Finding(
+                    id="run.command_failed",
+                    message=f"{' '.join(cmd)} exited {result.exit_code}\n"
+                    + _tail(result.stdout, result.stderr),
+                    severity=Severity.ERROR,
+                    blocking=True,
+                ),
+            )
+        return Outcome(
+            status=Status.SUCCEEDED if ok else Status.FAILED,
+            value=RunResult(exit_code=result.exit_code, stdout=result.stdout, stderr=result.stderr),
             findings=findings,
             cost=Cost(),
         )

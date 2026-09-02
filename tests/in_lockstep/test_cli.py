@@ -433,8 +433,35 @@ def test_init_leaves_a_commented_stub_for_an_undetected_verb(repo: Path) -> None
     assert "No test runner was detected" in module
     assert "No linter was detected" in module
     assert "lockstep.bind(Test," not in module.replace("#   lockstep.bind(Test,", "")
+    # No stub for build or run either: the selfcheck does not need them, and a repository binds
+    # them the day a workflow of its own does, when it knows what to bind.
+    assert "CommandBuild" not in module and "CommandRun" not in module
     compile(module, "lockstep.py", "exec")
     assert result.exit_code == 0
+
+
+def test_init_binds_build_and_run_when_the_repository_declares_them(repo: Path) -> None:
+    """Issue 162: the scaffold binds what detection found for all four deterministic verbs."""
+    (repo / "package.json").write_text('{"scripts": {"test": "jest", "build": "tsc", "start": "node ."}}')
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "lockstep.bind(Build, CommandBuild(['npm', 'run', 'build']))" in module
+    assert "lockstep.bind(Run, CommandRun(['npm', 'start']))" in module
+    assert (
+        "from in_lockstep.adapters import Build, CommandBuild, CommandRun, CommandTest, Run, Test" in module
+    )
+    compile(module, "lockstep.py", "exec")
+
+
+def test_ls_shows_build_and_run_bound_from_the_makefile(repo: Path) -> None:
+    """The whole of issue 162 through the command a person reads: detection names the targets, and
+    the bindings block shows the two verbs they serve, without a module binding anything."""
+    (repo / "Makefile").write_text("build:\n\tgo build ./...\nrun:\n\t./app\n")
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "build: make build; run: make run" in result.output
+    assert "CommandBuild" in result.output and "CommandRun" in result.output
 
 
 def test_ls_reports_what_detection_found(repo: Path) -> None:
