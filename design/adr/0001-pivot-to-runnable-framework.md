@@ -85,6 +85,14 @@ anyone. Its GitHub publisher environment, `pypi-in-lockstep-exec`, is removed, s
 repository can publish under that name again. Nothing on this line builds it, and
 `test_decommission.py` holds that.
 
+The archive this decision promised did not exist until 2026-09-02. "Archived behind tag
+`compiler-v0.1.x` with a README notice" was written at the pivot and the ref was never created,
+so for five days the README pointed at nothing. It is a branch rather than a tag, because a
+notice is a commit and a maintenance-line name reads as one: `compiler-v0.1.x` is the last
+compiler commit (`cc725b5`) plus a single commit that prepends the notice, and it takes nothing
+further. The compiler's own tags (`v0.1.0`, `actions-v0.1.0` through `actions-v0.1.4`) stay,
+because the archived workflows pin them; `exec-v0.1.0` is the runtime's and goes with its image.
+
 ### The AI layer
 
 `LLMProvider.generate(LLMInput) -> LLMOutput` is the transport seam: one method, one input type,

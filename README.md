@@ -173,9 +173,9 @@ One distribution. Provider SDKs are extras: `in-lockstep[anthropic]`, `[openai]`
 
 Through `0.1.x` this project was a compiler that lowered a markdown spec into GitHub Agentic
 Workflows. From `0.2.0` it is a different product under the same name: the framework this page
-describes. It ships below 1.0 because the API is still moving. The compiler line is archived at
-`compiler-v0.1.x`. [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md) records why, and
-what the change cost.
+describes. It ships below 1.0 because the API is still moving. The compiler line is archived on
+the [`compiler-v0.1.x`](https://github.com/in-lockstep/lockstep/tree/compiler-v0.1.x) branch.
+[ADR 0001](design/adr/0001-pivot-to-runnable-framework.md) records why, and what the change cost.
 
 ## Development
 
