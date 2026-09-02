@@ -1,0 +1,37 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.021924,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 71,
+        "message": "Unvalidated ticket key written into escalation ticket description",
+        "path": "src/in_lockstep/platform/propose.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f4b1d9c01e0fd410f08bc1ae591f70623fbf9efc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 308,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T074255Z-1b51",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 311,
+  "ts": "2026-09-02T07:43:09+00:00",
+  "wall_seconds": 13.394
+}
