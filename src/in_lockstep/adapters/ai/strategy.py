@@ -227,7 +227,15 @@ class AiStrategy:
 
         root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
         workspace = Workspace(root=Path(root), guard=self.guard, workflow_id=self.workflow_id)
-        tools, runner = read_write_execute(workspace, commands=self.commands)
+        tools, runner = read_write_execute(
+            workspace,
+            commands=self.commands,
+            # THE one place this is wired, and every code-writing verb goes through it. Implement
+            # and fix both reach `_session`, so neither has to opt in and neither can forget to —
+            # the same argument `AGENCY` makes about a frozenset that was hand-copied three times.
+            tests=_test_runner(ctx, root, workspace),
+            max_test_runs=self.policy.max_test_runs,
+        )
         factory = self.invoker_factory or routed_invoker(type(self).verb)
         layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
         if type(self).reads_house_rules:
@@ -389,3 +397,69 @@ def reported(
         for f in inv.findings
     ]
     return findings
+
+
+def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
+    """A `TestRunner` over HEAD plus whatever this session has staged so far.
+
+    Lives here rather than in `ai/builtins.py` because materialising a change set is
+    `adapters/worktree.py`, which `ai` may not import. That is not an inconvenience being worked
+    around — it is why `TestRunner` is a Protocol and this is the composition root filling it.
+
+    The staged set is read at CALL time, not at session build time. A model runs the suite after
+    writing, so binding the changeset earlier would test the tree as it was before the edit it is
+    asking about — which is exactly the confusion `run_script` already causes by running against
+    HEAD, and the reason this tool exists at all.
+    """
+    from ...core.types import Test
+    from ..worktree import materialize
+
+    async def run(paths: tuple[str, ...] = ()) -> str:
+        container = getattr(ctx, "container", None)
+        if container is None or not container.has(Test):
+            return "refused: no Test verb is bound, so there is nothing to run."
+        staged = workspace.changeset()
+        if not staged.changes:
+            return (
+                "refused: nothing is staged yet, so this would test the code exactly as it already "
+                "is. Write your change first, then run."
+            )
+        async with materialize(root, staged) as tree:
+            outcome = await ctx.do(Test(root=tree, paths=paths))
+        return _rendered(outcome)
+
+    return run
+
+
+def _rendered(outcome: Any) -> str:
+    """What the model is told about a suite run.
+
+    A suite that COLLECTED NOTHING is reported as having decided nothing, never as passing. That
+    distinction has cost this repository two runs already — a green suite that ran none of the new
+    tests looks exactly like a green suite that ran them — and a tool that blurred it here would
+    hand the model the same lie in a friendlier format.
+    """
+    report = getattr(outcome, "value", None)
+    if report is None:
+        return f"the suite did not produce a report ({getattr(outcome, 'reason', None) or 'no reason given'})"
+    total = getattr(report, "total", 0)
+    if not total:
+        return (
+            "NOTHING WAS COLLECTED, so nothing was decided. This is not a pass. Check that your "
+            "test file and class names match what this repository collects before assuming the "
+            "code is right."
+        )
+    failed = getattr(report, "failed", 0)
+    passed, skipped = getattr(report, "passed", 0), getattr(report, "skipped", 0)
+    head = f"{passed} passed, {failed} failed, {skipped} skipped of {total}"
+    if not failed:
+        return f"{head}\n\nEverything that ran, passed."
+    # Failures first and passes never: the failing tests are the entire reason to have run this,
+    # and a result truncated by `max_tool_result_chars` must not lose them to a list of passes.
+    names = [
+        f"  {getattr(case, 'id', '?')}"
+        for case in getattr(report, "cases", ())
+        if getattr(case, "outcome", "") in ("failed", "error")
+    ]
+    listed = "\n".join(names[:50]) or "  (the report named no individual failures)"
+    return f"{head}\n\nfailed:\n{listed}"

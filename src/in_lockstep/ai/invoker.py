@@ -44,6 +44,7 @@ from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
 from ..privileged.egress import EgressPolicy
 from ..privileged.redact import Redact
 from . import injection
+from .builtins import DEFAULT_TEST_RUNS
 from .context import ContextPackage, Provenance
 from .pricing import CostTable
 from .retry import RetryPolicy
@@ -87,6 +88,10 @@ class InvokePolicy:
     max_tokens: int = 16384
     temperature: float = 0.0
     deadline_seconds: float | None = None
+    # How many times a session may run the suite. Beside `max_turns` because it is the same kind of
+    # ceiling — a bound on what one invocation may consume — and because a repository that wants a
+    # model to iterate harder should raise it in the same place it raises the turn cap.
+    max_test_runs: int = DEFAULT_TEST_RUNS
     # A tool result is model input. An unbounded one is an unbounded prompt next turn.
     max_tool_result_chars: int = 20_000
     scan_tool_results: bool = True
