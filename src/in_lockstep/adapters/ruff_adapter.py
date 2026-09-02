@@ -6,8 +6,9 @@ import json
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import Validate, ValidationFinding, ValidationReport
+from ..core.types import Resolution, Validate, ValidationFinding, ValidationReport
 from ..core.verbs import Capability, Verb
+from . import tooling
 from .sandbox import Sandbox
 
 __all__ = ["RuffValidate", "Validate"]
@@ -28,8 +29,24 @@ class RuffValidate:
         # ruff loads repository configuration, so this runs out of process too.
         self.sandbox = sandbox or Sandbox()
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        """Where ruff will run from, for `ls` and `doctor`: the repository's, not this process's."""
+        return (self._ruff(self.cwd or root),)
+
+    def _ruff(self, root: str | None) -> Resolution:
+        # Beside the interpreter the suite runs on, before PATH: a repository whose environment is
+        # not at `.venv` still has ruff next to its python, and PATH may hold a different one.
+        python = tooling.interpreter(root, self.sandbox)
+        return tooling.binary("ruff", root, self.sandbox, beside=python.path, probe=("--version",))
+
     async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
-        cmd = ["ruff", "check", "--output-format", "json", *(inp.paths or ("."))]
+        repo_root = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        resolved = self._ruff(repo_root)
+        if resolved.path is None:
+            return Outcome.errored(
+                f"ruff is not installed for the repository; looked for {', '.join(resolved.tried)}"
+            )
+        cmd = [resolved.path, "check", "--output-format", "json", *(inp.paths or ("."))]
         rules = [*self.select, *inp.rules]
         if rules:
             cmd += ["--select", ",".join(rules)]
@@ -40,7 +57,7 @@ class RuffValidate:
             cmd, cwd=self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
         )
         if result.exit_code == 127:
-            return Outcome.errored("ruff is not installed")
+            return Outcome.errored(f"ruff at {resolved.path} could not be run ({resolved.how})")
 
         raw = result.stdout.strip()
         try:

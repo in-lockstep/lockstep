@@ -12,14 +12,14 @@ declared so policy can see it.
 from __future__ import annotations
 
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import Test, TestReport
+from ..core.types import Resolution, Test, TestReport
 from ..core.verbs import Capability, Verb
+from . import tooling
 from .sandbox import Sandbox
 
 __all__ = ["PytestTest", "Test"]
@@ -46,10 +46,21 @@ class PytestTest:
         # in-process run hands repository-authored Python the credentials this process holds.
         self.sandbox = sandbox or Sandbox()
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        """Where the suite will run from, for `ls` and `doctor`. The repository's, not this
+        process's: see `tooling`."""
+        return (tooling.interpreter(self.cwd or root, self.sandbox),)
+
     async def invoke(self, ctx: object, inp: Test) -> Outcome[TestReport]:
-        interpreter = _interpreter(self.sandbox)
-        if interpreter is None:  # pragma: no cover - defensive
-            return Outcome.errored("no python interpreter on PATH")
+        # Resolved against the repository's root, not `inp.root`: a materialized worktree is a
+        # copy of HEAD, and the environment (`.venv` is ignored by git) lives in the real tree.
+        repo_root = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        resolved = tooling.interpreter(repo_root, self.sandbox)
+        if resolved.path is None:
+            return Outcome.errored(
+                f"no python interpreter for the repository; looked for {', '.join(resolved.tried)}"
+            )
+        interpreter = resolved.path
 
         report_dir = Path(tempfile.mkdtemp(prefix="in-lockstep-test-"))
         cmd = [
@@ -75,6 +86,13 @@ class PytestTest:
         exit_code = result.exit_code
         text = result.stdout + result.stderr
         report = _parse(text)
+        # An interpreter without pytest is not a red suite. Reading it as one blamed the change
+        # for the environment, which is the wrong number that gets acted on. The shape, not the
+        # substring: `python -m pytest` with no pytest prints exactly one line and no summary,
+        # where a red suite whose own output mentions the phrase still ends in a summary line.
+        last = text.strip().splitlines()[-1] if text.strip() else ""
+        if exit_code != 0 and report.total == 0 and last.endswith("No module named pytest"):
+            return Outcome.errored(f"pytest is not installed in {interpreter} ({resolved.how})")
 
         # pytest exits 5 for "no tests collected". That is not a red suite and it is not a green
         # one either: nothing was decided. Reporting it as SUCCEEDED with decided=True would be
@@ -117,42 +135,6 @@ class PytestTest:
             findings=findings,
             cost=Cost(wall_seconds=report.duration_seconds),
         )
-
-
-def _interpreter(sandbox: object) -> str | None:
-    """What to invoke pytest with, resolved for the runner that will execute it.
-
-    A containerized run resolves the name inside the image, where this host's PATH says nothing
-    about what exists — so the probe is skipped entirely and the plain name travels, as it always
-    has.
-
-    A host subprocess takes `sys.executable`: the interpreter running this process is the one
-    whose environment was set up to run this repository's tooling, which is what `uv run
-    in-lockstep` hands us and precisely what the old `python`-on-PATH lookup already resolved to
-    under CI. Preferring it changes nothing there and fixes two cases where the name lookup was
-    actively wrong:
-
-      * `python` is not a given. Debian, Ubuntu and most slim images ship `python3` with no
-        alias, and an unactivated virtualenv puts neither on PATH. The old check asked for
-        `python` alone and returned ERRORED when it was absent — which a propose step then read
-        as a red suite, because a verdict could only answer `green`. "Your change broke the
-        build" when what happened is "this machine spells it python3" is a wrong number that
-        gets acted on.
-      * The first `python3` on PATH is often the wrong one. On a Mac with homebrew it is the
-        system interpreter, which has no pytest installed, so the suite exits 1 with nothing
-        collected — a red verdict earned by the wrong environment rather than by the change.
-
-    The name lookup stays as a fallback for an embedding where `sys.executable` is empty.
-    """
-    if getattr(sandbox, "image", "") and getattr(sandbox, "runtime", lambda: None)():
-        return "python"
-    if sys.executable:
-        return sys.executable
-    for name in ("python", "python3"):
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
 
 
 def _parse(text: str) -> TestReport:

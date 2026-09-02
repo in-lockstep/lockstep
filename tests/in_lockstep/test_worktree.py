@@ -437,42 +437,126 @@ class _CommandRecordingSandbox(_CwdRecordingSandbox):
         return await super().run(command, cwd=cwd, timeout=timeout)
 
 
-def test_the_suite_runs_on_the_interpreter_that_is_running_us(monkeypatch) -> None:  # noqa: ANN001
-    """Not the first `python3` on PATH, which is frequently the wrong environment.
+def _ctx(root: Path) -> object:
+    return type("C", (), {"repo": type("R", (), {"root": str(root)})})()
 
-    The adapter asked `shutil.which("python")` and returned ERRORED when it came back None — and a
-    propose step read that as a red suite, because a verdict could only answer `green`. Resolving
-    the name instead is not enough either: on a Mac the first `python3` on PATH is the system
-    interpreter, which has no pytest, so the suite exits 1 having collected nothing and the change
-    is blamed for the environment. The interpreter running this process is the one whose
-    environment was set up to run this repository's tooling.
+
+def _executable(path: Path, body: str = "#!/bin/sh\nexit 0\n") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body)
+    path.chmod(0o755)
+    return path
+
+
+def test_gate_tooling_1_the_repositorys_venv_runs_the_suite_not_the_interpreter_running_us(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """GATE-TOOLING-1. `sys.executable` was the rule, on the reasoning that the interpreter running
+    this process is the one set up for the repository. Under `uv tool install` it is the tool's
+    own isolated interpreter, with no pytest in it, and two first-time users got a red suite for
+    a repository whose `.venv` had one (#167). The repository's environment comes first, and the
+    materialized worktree (`Test.root`) is where the suite runs, not where the venv is looked for.
     """
-    import in_lockstep.adapters.pytest_adapter as adapter_mod
+    import in_lockstep.adapters.tooling as tooling
 
-    monkeypatch.setattr(
-        adapter_mod.shutil, "which", lambda name: "/opt/homebrew/bin/python3" if name == "python3" else None
-    )
+    venv_python = _executable(tmp_path / ".venv" / "bin" / "python")
+    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/opt/homebrew/bin/python3")
     sandbox = _CommandRecordingSandbox()
 
-    outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
+    outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test(root="/materialized")))
 
     assert outcome.status is not Status.ERRORED
-    assert sandbox.command[0] == sys.executable
+    assert sandbox.command[0] == str(venv_python)
+    assert sandbox.cwd == "/materialized"
 
 
-def test_a_name_on_path_is_the_fallback_when_there_is_no_sys_executable(monkeypatch) -> None:  # noqa: ANN001
-    """An embedding with no `sys.executable` still has whatever PATH offers."""
-    import in_lockstep.adapters.pytest_adapter as adapter_mod
+def test_this_process_runs_the_suite_only_when_it_lives_inside_the_repository(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """`uv run` in the checkout, tox, a virtualenv under the tree: the process is the repository's
+    (GATE-TOOLING-1). An installed tool's interpreter is not, and PATH is the fallback then."""
+    import in_lockstep.adapters.tooling as tooling
 
-    monkeypatch.setattr(adapter_mod.sys, "executable", "")
+    inside = _executable(tmp_path / ".tox" / "py" / "bin" / "python")
+    monkeypatch.setattr(tooling.sys, "executable", str(inside))
     monkeypatch.setattr(
-        adapter_mod.shutil, "which", lambda name: "/usr/bin/python3" if name == "python3" else None
+        tooling.shutil, "which", lambda name: "/usr/bin/python3" if name == "python3" else None
     )
     sandbox = _CommandRecordingSandbox()
+    asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
+    assert sandbox.command[0] == str(inside)
 
-    asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
+    monkeypatch.setattr(tooling.sys, "executable", "/opt/tool/bin/python")
+    asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
+    assert sandbox.command[0] == "/usr/bin/python3", "outside the repository, PATH is what is left"
 
-    assert sandbox.command[0] == "/usr/bin/python3"
+
+def test_nothing_found_is_a_refusal_that_names_every_place_it_looked(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """Absent is not guessed, and it is not a red suite either (GATE-TOOLING-1)."""
+    import in_lockstep.adapters.tooling as tooling
+
+    monkeypatch.setattr(tooling.sys, "executable", "")
+    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    sandbox = _CommandRecordingSandbox()
+
+    outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
+
+    assert outcome.status is Status.ERRORED
+    assert ".venv/bin/python" in outcome.reason and "python3 on PATH" in outcome.reason
+    assert sandbox.command == [], "nothing ran"
+
+
+def test_this_process_is_the_last_resort_when_path_has_no_python_at_all(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """Better than nothing only when PATH has nothing: the tool's own interpreter, named as such."""
+    import in_lockstep.adapters.tooling as tooling
+
+    monkeypatch.setattr(tooling.sys, "executable", "/opt/tool/bin/python")
+    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    (found,) = PytestTest().locations(str(tmp_path))
+    assert found.path == "/opt/tool/bin/python"
+    assert "PATH has no python" in found.how
+    assert any("this process, outside the repository" in t for t in found.tried)
+
+
+def test_a_symlinked_venv_interpreter_inside_the_repository_counts_as_inside(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """A venv's python is a symlink to the base interpreter outside the tree. Resolving it said
+    every venv lived outside the repository and the branch never fired for a real one; the
+    interpreter's directory is what places it (GATE-TOOLING-1)."""
+    import in_lockstep.adapters.tooling as tooling
+
+    link = tmp_path / "venv" / "bin" / "python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(sys.executable)
+    monkeypatch.setattr(tooling.sys, "executable", str(link))
+    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/usr/bin/python3")
+    sandbox = _CommandRecordingSandbox()
+
+    asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
+    assert sandbox.command[0] == str(link)
+
+
+def test_pytest_missing_from_the_resolved_interpreter_is_an_error_not_a_red_suite(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """The interpreter exists and has no pytest. Reading `No module named pytest` as a failed
+    suite blamed the change for the environment (GATE-TOOLING-1)."""
+    import in_lockstep.adapters.tooling as tooling
+
+    venv_python = _executable(tmp_path / ".venv" / "bin" / "python")
+
+    class _NoPytest(_CommandRecordingSandbox):
+        async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+            await super().run(command, cwd=cwd, timeout=timeout)
+            return type(
+                "R", (), {"exit_code": 1, "stdout": "", "stderr": "python: No module named pytest\n"}
+            )()
+
+    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    outcome = asyncio.run(PytestTest(sandbox=_NoPytest()).invoke(_ctx(tmp_path), Test()))
+    assert outcome.status is Status.ERRORED
+    assert outcome.reason == f"pytest is not installed in {venv_python} (the repository's .venv)"
 
 
 def test_a_containerized_run_does_not_probe_this_host(monkeypatch) -> None:  # noqa: ANN001

@@ -25,6 +25,12 @@ lockstep.bind(Test, ToxTest())
 binding serves, so the same `Test` names both what a workflow asks for and what your adapter
 receives.
 
+An adapter that runs a tool can also say where it found it, by implementing `locations(root)`
+and returning `Resolution` values (`in_lockstep.core.types`). That is what puts the indented line
+under a binding in `ls` and lets `doctor` refuse before a run when the tool is nowhere. The shipped
+adapters resolve the repository's own `.venv` first; yours can use `in_lockstep.adapters.tooling`
+to do the same.
+
 `capabilities` is the part people skip and should not. Policy keys off it without knowing anything
 about your adapter: whether egress enforcement is mandatory, whether an approval gate applies,
 whether retry may re-invoke it. Declaring `EXECUTES_CODE` is how the framework knows to run you
