@@ -99,6 +99,42 @@ def test_blocked_is_counted_apart_and_is_never_a_failure() -> None:
     assert report.failure_rate.value == pytest.approx(1 / 3), "only the failed one"
 
 
+def test_a_record_with_no_verdict_is_counted_apart_and_never_as_not_failed() -> None:
+    """GATE-LEDGER-9's reading half. Schema-4 workflow records say `"completed"`, which is not a
+    status; eleven of them over red selfchecks read as `failed 0% (0 of 11)`. A record with no
+    verdict is named as such and leaves the failure rate's denominator."""
+    from in_lockstep.metrics import as_text
+
+    report = build([_record(status="completed"), _record(status="failed"), _record()])
+    assert report.unclassified == 1
+    assert report.failure_rate.value == pytest.approx(0.5), "one failed, of the two with a verdict"
+    assert report.failure_rate.total == 2
+    text = "\n".join(as_text(report))
+    assert "no verdict    1" in text
+    assert "failed        50%  (1 of 2)" in text
+
+
+def test_a_breakdown_row_divides_by_the_runs_that_carry_a_verdict() -> None:
+    """The #166 number moved one section down when only the headline was fixed: `by kind` still
+    printed `0% failed` over records with no verdict. Every view divides by the judged ones."""
+    from in_lockstep.metrics import as_text
+
+    report = build(
+        [
+            _record(kind="workflow", status="completed"),
+            _record(kind="workflow", status="completed"),
+            _record(kind="workflow", status="failed"),
+        ]
+    )
+    (row,) = report.runs_by_kind
+    assert row.runs == 3 and row.judged == 1 and row.failure_rate == 1.0
+    text = "\n".join(as_text(report))
+    assert "100% failed" in text and "(2 with no verdict)" in text
+    only_unjudged = build([_record(status="completed")])
+    assert only_unjudged.runs_by_kind[0].failure_rate is None
+    assert only_unjudged.undecided_rate.value is None, "a defaulted `decided` is not a measurement"
+
+
 def test_a_run_that_settled_nothing_is_its_own_number() -> None:
     """`decided` is separate from `status` on purpose — a run can succeed and settle nothing — so
     the honesty metric has to be separate too."""

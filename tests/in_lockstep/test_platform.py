@@ -561,6 +561,21 @@ def test_gate_ledger_2_comparing_across_epochs_raises(tmp_path: Path) -> None:
         compare(before, after)
 
 
+def test_summarize_counts_a_record_with_no_verdict_apart_and_leaves_it_out_of_the_rate() -> None:
+    """`report --format json` and `--by-kind` read this. Eleven schema-4 `"completed"` records gave
+    `failure_rate: 0.0`; a record with no verdict is not evidence of success (GATE-LEDGER-9)."""
+    stats = summarize(
+        [
+            {"epoch": "in-process", "kind": "workflow", "status": "completed"},
+            {"epoch": "in-process", "kind": "workflow", "status": "failed"},
+        ]
+    )
+    stat = stats["workflow"]
+    assert stat.runs == 2 and stat.unclassified == 1 and stat.judged == 1
+    assert stat.failure_rate == 1.0
+    assert summarize([{"epoch": "in-process", "kind": "w", "status": "completed"}])["w"].failure_rate is None
+
+
 def test_gate_ledger_3_an_absent_measurement_is_none_not_zero() -> None:
     """The fabrication: coercing an absent key to 0.0 produced a clean -100% nothing earned."""
     stats = summarize([{"epoch": "in-process", "kind": "review", "status": "succeeded"}])

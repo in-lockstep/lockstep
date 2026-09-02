@@ -19,7 +19,13 @@ from ...privileged import sink
 # tree). Additive, so a schema-3 reader still parses a schema-4 record; bumped anyway because
 # "since when do records carry timestamps" deserves one answer, not a per-field dig through
 # history. `summarize`/`compare` are unchanged: none of the new fields is a number to aggregate.
-SCHEMA = 4
+#
+# 5: a workflow record's `status` is always a member of the status set, derived from its steps
+# when the workflow returned no `Outcome` of its own, and `steps` carries each step's verb,
+# status, reason and findings. Schema-4 records from a workflow that returned a dict say
+# `"completed"`, which no reader can count; `report` names how many of those it holds rather than
+# folding them into "not failed", which is how eleven red selfchecks read as 0% failed (#166).
+SCHEMA = 5
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 
@@ -94,19 +100,32 @@ class InRepoLedger:
         )
 
 
+#: Every status a record can honestly carry. Duplicated in `metrics.py`, which is a leaf and may
+#: import nothing of ours; the two must agree.
+VERDICTS = ("succeeded", "failed", "errored", "blocked")
+
+
 @dataclass
 class Stat:
     """Absent is not zero. `None` means unmeasured, `0` means measured as none."""
 
     runs: int = 0
     failures: int = 0
+    #: Runs whose status is not a verdict (schema-4 workflow records say `"completed"`). They are
+    #: in `runs` and out of the failure rate, because a record with no verdict is not evidence of
+    #: success and folding it into "not failed" is how #166 read as 0% failed.
+    unclassified: int = 0
     tokens: int | None = None
     cost_usd: float | None = None
     seconds: float | None = None
 
     @property
+    def judged(self) -> int:
+        return self.runs - self.unclassified
+
+    @property
     def failure_rate(self) -> float | None:
-        return self.failures / self.runs if self.runs else None
+        return self.failures / self.judged if self.judged else None
 
     @property
     def mean_cost(self) -> float | None:
@@ -136,6 +155,8 @@ def _accumulate(stat: Stat, record: dict[str, object]) -> None:
     stat.runs += 1
     if record.get("status") in ("failed", "errored"):
         stat.failures += 1
+    elif record.get("status") not in VERDICTS:
+        stat.unclassified += 1
     # Accumulate ONLY when the key is present and numeric. Coercing an absent key to zero is what
     # produced a clean -100% reduction that nothing earned.
     for key, attr in (("tokens", "tokens"), ("cost_usd", "cost_usd"), ("wall_seconds", "seconds")):

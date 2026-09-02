@@ -849,3 +849,111 @@ def test_re_importing_a_module_is_not_a_duplicate_workflow() -> None:
                 return None
     finally:
         restore(state)
+
+
+# -- the run's verdict, derived from its steps (GATE-LEDGER-9) --------------------------------
+
+
+def _context_with(*statuses, decided=True, reason=None):
+    from in_lockstep.core.container import Container
+    from in_lockstep.core.context import RepoInfo, RunContext, StepOutcome
+    from in_lockstep.core.outcome import Outcome
+
+    ctx = RunContext(run_id="r", repo=RepoInfo(root="."), container=Container())
+    for i, status in enumerate(statuses):
+        ctx.steps.append(
+            StepOutcome(
+                step=f"s{i}",
+                verb="test",
+                outcome=Outcome(
+                    status=status, reason=reason if status is not Status.SUCCEEDED else None, decided=decided
+                ),
+            )
+        )
+    return ctx
+
+
+def test_a_runs_verdict_is_blocked_over_errored_over_failed_over_succeeded() -> None:
+    """GATE-LEDGER-9: the deciding step's status, in the order a reader would want to know."""
+    from in_lockstep.core.outcome import Status as S
+
+    assert _context_with(S.FAILED, S.BLOCKED, S.ERRORED).verdict()[0] is S.BLOCKED
+    assert _context_with(S.FAILED, S.ERRORED).verdict()[0] is S.ERRORED
+    assert _context_with(S.SUCCEEDED, S.FAILED).verdict()[0] is S.FAILED
+    assert _context_with(S.SUCCEEDED, S.SUCCEEDED).verdict()[0] is S.SUCCEEDED
+    assert _context_with().verdict() == (S.SUCCEEDED, None, True), "no steps: nothing failed"
+
+
+def test_a_runs_verdict_carries_the_deciding_steps_reason_and_decides_only_if_every_step_did() -> None:
+    from in_lockstep.core.outcome import Status as S
+
+    status, reason, decided = _context_with(S.SUCCEEDED, S.FAILED, reason="test.red").verdict()
+    assert (status, reason) == (S.FAILED, "test.red")
+    assert decided
+    assert _context_with(S.SUCCEEDED, decided=False).verdict()[2] is False
+
+
+def test_every_completed_step_is_kept_on_the_context() -> None:
+    """The steps are the evidence the record is derived from; a step that ran and left no trace
+    is a verdict to take on trust."""
+    import asyncio
+
+    from in_lockstep.core.verbs import Capability, Verb
+    from in_lockstep.lockstep import Lockstep
+
+    class Ping: ...
+
+    class Pong:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.READS_REPO})
+
+        async def invoke(self, ctx, inp):
+            return Outcome(status=Status.FAILED, reason="pong.red")
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Ping, Pong())
+    ctx = lockstep.context(run_id="r")
+    asyncio.run(ctx.do(Ping()))
+    asyncio.run(ctx.do(Ping()))
+    assert [s.step for s in ctx.steps] == ["test", "test.1"]
+    assert ctx.verdict()[:2] == (Status.FAILED, "pong.red")
+    record = ctx.steps[0].as_record()
+    assert record["verb"] == "test" and record["status"] == "failed" and record["reason"] == "pong.red"
+
+
+def test_a_step_an_adapter_runs_inside_its_own_does_not_decide_the_run() -> None:
+    """A strategy's mid-loop test probe or a reproducer expected to fail is the adapter's business;
+    its own outcome is its statement about it. Counting the inner step failed a run whose
+    implementing step had succeeded, exited 1, and recorded it, for a workflow that returned a
+    dict (GATE-LEDGER-9)."""
+    import asyncio
+
+    from in_lockstep.core.verbs import Capability, Verb
+    from in_lockstep.lockstep import Lockstep
+
+    class Outer: ...
+
+    class Inner: ...
+
+    class RedProbe:
+        verb = Verb.TEST
+        capabilities = frozenset({Capability.READS_REPO})
+
+        async def invoke(self, ctx, inp):
+            return Outcome(status=Status.FAILED, reason="probe.red")
+
+    class Implementer:
+        verb = Verb.IMPLEMENT
+        capabilities = frozenset({Capability.READS_REPO})
+
+        async def invoke(self, ctx, inp):
+            await ctx.do(Inner())
+            return Outcome(status=Status.SUCCEEDED)
+
+    lockstep = Lockstep.detect()
+    lockstep.bind(Inner, RedProbe())
+    lockstep.bind(Outer, Implementer())
+    ctx = lockstep.context(run_id="r")
+    asyncio.run(ctx.do(Outer()))
+    assert [s.verb for s in ctx.steps] == ["implement"], "the inner probe is not a step of the run"
+    assert ctx.verdict()[0] is Status.SUCCEEDED
