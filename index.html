@@ -695,6 +695,10 @@ pass rate    <span class="y">n/a — nothing decided</span>
             (<a href="https://github.com/in-lockstep/lockstep/issues/166">issue 166</a>), and an
             installed copy runs the test runner from its own interpreter rather than your
             repository's (<a href="https://github.com/in-lockstep/lockstep/issues/167">issue 167</a>).</li>
+          <li><b>The offline review needs <code>init</code> first.</b> Run it in an empty directory
+            and the budget gate refuses the replay before it starts, because nothing has declared a
+            ceiling yet. The replay cannot spend, so the gate is wrong to ask; that is
+            <a href="https://github.com/in-lockstep/lockstep/issues/174">issue 174</a>.</li>
           <li><b>No flaky-test handling.</b> The adapter is not built, and a test in the repository
             asserts that it has not shipped.</li>
           <li><b>GitLab is partial.</b> The protocols and host-aware setup ship. Nobody has run a
