@@ -6,7 +6,11 @@ name: CI
 on:
   push:
     branches: [main]
+  # Pull requests into main only. The site lives on the orphan gh-pages branch and has no
+  # pyproject.toml, so running the Python suite against a pull request into it can only fail,
+  # and a red check that means nothing teaches people to ignore red checks.
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
