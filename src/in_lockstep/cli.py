@@ -794,7 +794,7 @@ def ls_cmd() -> None:
     # Verbs are open, so a verb can exist that the `bindings` block below will never mention.
     # That is exactly the shape a typo takes: `Verb("reviwe")` is a perfectly legitimate verb
     # that nothing serves. Shipped verbs with no binding are ordinary and would only be noise
-    # here — seven of nine are unbound in a default install — so only the anomaly is printed.
+    # here — most are unbound in a default install — so only the anomaly is printed.
     served = {verb_of(b.impl) for b in lockstep.container.resolved() if not isinstance(b.impl, type)}
     orphans = [v for v in Verb.known() if v not in served and v.value not in SHIPPED_VERBS]
     if orphans:
@@ -1458,6 +1458,67 @@ def doctor_cmd(strict: bool, fmt: str) -> None:
     report = doctor_module.run(".", strict=strict)
     click.echo(doctor_module.as_json(report) if fmt == "json" else doctor_module.render(report))
     if not report.ok:
+        raise SystemExit(EXIT_FAILED)
+
+
+@main.command(name="provision")
+def provision_cmd() -> None:
+    """Build the repository's own environment, from what is bound to Provision.
+
+    The step a scaffolded work job runs first (#185): an installed in-lockstep runs from an
+    interpreter with nothing of the repository's in it, and the suite a strategy runs to prove a
+    change needs the repository's. `uv sync --locked`, `npm ci`, whatever detection bound or the
+    module says; `ls` shows which, and where each tool came from. Nothing bound is `not bound`
+    and exit 0, never a success: absent is reported as absent. A step that fails, or a tool that
+    is nowhere, fails here by name rather than twenty minutes later as a red suite.
+
+    Invoked directly, outside the middleware chain, and deliberately: `ApprovalGate` keys on
+    `EXECUTES_CODE`, and this runs before any actor has been verified. What it executes came from
+    the trusted ref's module or from detection over the trusted checkout, never from the change
+    under review, and `Sandbox` is the control for a deterministic adapter that executes code
+    (`Lockstep._refuse_ungated_agency` makes the same argument). Nothing is decided, so nothing
+    is recorded. A workflow that must provision mid-run still does `ctx.do(Provision())` through
+    the chain, under the run's grant.
+    """
+    import asyncio
+    from types import SimpleNamespace
+
+    from .core.types import Provision
+
+    if os.environ.get(DISABLE_ENV):
+        # Before the module is loaded: loading it executes it, and "nothing executes" has to be
+        # true of the module's import-time code as well as of the adapter.
+        click.echo(f"provision  DISABLED  ({DISABLE_ENV} is set; nothing executes)")
+        raise SystemExit(EXIT_BLOCKED)
+    lockstep, _ = _default_lockstep()
+    if not lockstep.container.has(Provision):
+        # Which absence it is. A module is the truth when there is one and detection was not
+        # consulted, so a uv.lock beside a module scaffolded before Provision existed is not
+        # "detection found no uv.lock".
+        source = str(getattr(lockstep, "config_source", "") or "")
+        why = (
+            "detection found no uv.lock, requirements.txt, package-lock.json or Makefile `deps` "
+            "target; bind Provision in .lockstep/lockstep.py to say how"
+            if source.startswith("none")
+            else f"the module ({source}) binds nothing to Provision; add "
+            "lockstep.bind(Provision, CommandProvision([...])) to .lockstep/lockstep.py to say how"
+        )
+        click.echo(f"provision  not bound  ({why})")
+        return
+    adapter: Any = lockstep.container.resolve(Provision)
+    if isinstance(adapter, Locatable):
+        for resolution in adapter.locations(lockstep.repo.root):
+            click.echo(f"           {resolution.render()}")
+    outcome = asyncio.run(adapter.invoke(SimpleNamespace(repo=lockstep.repo), Provision()))
+    for step in getattr(outcome.value, "steps", ()) or ():
+        click.echo(f"           ran {step}")
+    reason = f"  ({outcome.reason})" if outcome.reason else ""
+    click.echo(f"provision  {outcome.status.value}{reason}")
+    for finding in outcome.findings[:5]:
+        click.echo(f"  {finding.id}: {finding.message}")
+    if outcome.blocked:
+        raise SystemExit(EXIT_BLOCKED)
+    if not outcome.succeeded:
         raise SystemExit(EXIT_FAILED)
 
 
@@ -4135,20 +4196,26 @@ def _scaffold_module(facts: Any) -> str:
     binds the drop-in defaults: a Node repository gets `CommandTest(["npm", "test"])`, a Makefile
     with a `build` target gets `CommandBuild(["make", "build"])`. A Test or Validate that detection
     could not place is a commented stub — with its own import — rather than a wrong default that
-    runs; Build and Run get a line only when something was found, for the reason the inline
-    comment below gives. Only the adapters actually bound are imported, so a generated module never
-    ships an unused import.
+    runs; Provision, Build and Run get a line only when something was found, for the reason the
+    inline comment below gives. Only the adapters actually bound are imported, so a generated
+    module never ships an unused import.
     Everything else — the egress opt-out and the middleware — is identical in every scaffold; the
     trampoline is byte-identical across repos, and this file is the one `init` fits to the stack.
     """
     imports: list[str] = ["Test", "Validate"]
     test_bind = _bind_line(facts, "Test", imports)
     validate_bind = _bind_line(facts, "Validate", imports)
-    # Build and run get a line only when detection found one. No stub when it did not: the
-    # selfcheck needs Test and Validate, so their absence is worth a comment that says how to bind
-    # them, and build and run are the verbs a repository adds the day a workflow of its own needs
-    # them, when it will know what to bind.
+    # Provision, build and run get a line only when detection found one. No stub when it did not:
+    # the selfcheck needs Test and Validate, so their absence is worth a comment that says how to
+    # bind them, and build and run are the verbs a repository adds the day a workflow of its own
+    # needs them, when it will know what to bind. Provision unbound is not silent either: the
+    # scaffolded work job runs `in-lockstep provision` first, and that prints `not bound` with the
+    # files detection looked for.
     extra: list[str] = []
+    if getattr(facts, "provision_commands", ()):
+        imports += ["Provision", "CommandProvision"]
+        steps = [list(step) for step in facts.provision_commands]
+        extra.append(f"lockstep.bind(Provision, CommandProvision({steps!r}))")
     if getattr(facts, "build_command", ()):
         imports += ["Build", "CommandBuild"]
         extra.append(f"lockstep.bind(Build, CommandBuild({list(facts.build_command)!r}))")
@@ -4162,8 +4229,15 @@ def _scaffold_module(facts: Any) -> str:
     # the import to avoid an unused name; the stub carries its own commented import instead. If
     # nothing was placed at all, there is no adapter import line — an empty one is a syntax error.
     used = sorted(set(imports))
+    # One line while it fits ruff's default width, else one name per line with a trailing comma,
+    # which ruff's isort keeps multi-line under any width. The repository's own `Validate` checks
+    # this file on its first selfcheck against a configuration the scaffold cannot read, and an
+    # import block that needs reformatting is a red first run (found by the #185 proof, when a
+    # Provision bind pushed a Python repository's import past 100 columns).
+    one_line = f"from in_lockstep.adapters import {', '.join(used)}"
+    wrapped = "from in_lockstep.adapters import (\n" + "".join(f"    {name},\n" for name in used) + ")"
     adapter_import = (
-        f"from in_lockstep.adapters import {', '.join(used)}"
+        (one_line if len(one_line) <= _SCAFFOLD_WIDTH else wrapped)
         if used
         else "# No adapters detected yet — bind them in the stubs below."
     )
@@ -4173,6 +4247,10 @@ def _scaffold_module(facts: Any) -> str:
         validate_bind=validate_bind,
         extra_binds=extra_binds,
     )
+
+
+#: ruff's default `line-length`, the narrowest width a scaffolded module is likely to be checked at.
+_SCAFFOLD_WIDTH = 88
 
 
 def _bind_line(facts: Any, verb: str, imports: list[str]) -> str:
@@ -4408,7 +4486,10 @@ review:
 #
 #work:
 #  stage: work
-#  image: python:3.11-slim
+#  # uv's image rather than python:3.11-slim: the same slim Python plus the `uv` a uv.lock
+#  # repository's Provision binding runs. A Node repository names an image that carries node
+#  # too, or `provision` refuses naming every place it looked. Pin by digest as a reviewed change.
+#  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 #  timeout: 30m
 #  environment: lockstep-work
 #  rules:
@@ -4417,6 +4498,10 @@ review:
 #    GIT_DEPTH: "0"
 #  script:
 #    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+#    # The repository's own environment, before anything runs in it; docs/trampoline.md says why
+#    # this runs here and never in review. Not `|| true`: an environment that could not be built
+#    # is this job's failure, named.
+#    - in-lockstep provision
 #    - in-lockstep doctor || true
 #    - |
 #      in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
@@ -4542,7 +4627,23 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
+          # The framework's interpreter, not the repository's. A uv-driven `provision` below
+          # builds that one inside a sandbox that passes PATH and HOME through and nothing that
+          # pins an interpreter, so a repository that requires another Python gets it. The
+          # requirements.txt shape is the exception: its `python -m venv` runs on the `python`
+          # PATH resolves to, which under uvx is this one.
           python-version: '3.11'
+      # The repository's own environment, from its own lockfile: `uv sync --locked`, `npm ci`,
+      # whatever detection bound to Provision (`in-lockstep ls` shows which, and where the tool
+      # came from). The framework runs from uvx's isolated interpreter; the suite the strategy
+      # runs to prove a change cannot, and this is the step that gives it one. No provider extra,
+      # because this calls no model. No `continue-on-error`, because an environment that could
+      # not be built is this job's failure and belongs here, named, not in a red suite twenty
+      # minutes later. A repository with nothing to provision prints `not bound` and goes on.
+      # Only here: this checkout is the default branch, the same trust as lockstep.py. Never in
+      # lockstep.yml, whose checkout is the change under review and whose install hooks must not
+      # run beside a token; never in propose, whose commit would sweep in what an install wrote.
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
       - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
         continue-on-error: true
       # The same command a developer runs, with `--approved-by` where they would type
@@ -4896,7 +4997,23 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
+          # The framework's interpreter, not the repository's. A uv-driven `provision` below
+          # builds that one inside a sandbox that passes PATH and HOME through and nothing that
+          # pins an interpreter, so a repository that requires another Python gets it. The
+          # requirements.txt shape is the exception: its `python -m venv` runs on the `python`
+          # PATH resolves to, which under uvx is this one.
           python-version: '3.11'
+      # The repository's own environment, from its own lockfile: `uv sync --locked`, `npm ci`,
+      # whatever detection bound to Provision (`in-lockstep ls` shows which, and where the tool
+      # came from). The framework runs from uvx's isolated interpreter; the suite the strategy
+      # runs to prove a change cannot, and this is the step that gives it one. No provider extra,
+      # because this calls no model. No `continue-on-error`, because an environment that could
+      # not be built is this job's failure and belongs here, named, not in a red suite twenty
+      # minutes later. A repository with nothing to provision prints `not bound` and goes on.
+      # Only here: this checkout is the default branch, the same trust as lockstep.py. Never in
+      # lockstep.yml, whose checkout is the change under review and whose install hooks must not
+      # run beside a token; never in propose, whose commit would sweep in what an install wrote.
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
       - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
         continue-on-error: true
       - run: |
@@ -5003,7 +5120,23 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
+          # The framework's interpreter, not the repository's. A uv-driven `provision` below
+          # builds that one inside a sandbox that passes PATH and HOME through and nothing that
+          # pins an interpreter, so a repository that requires another Python gets it. The
+          # requirements.txt shape is the exception: its `python -m venv` runs on the `python`
+          # PATH resolves to, which under uvx is this one.
           python-version: '3.11'
+      # The repository's own environment, from its own lockfile: `uv sync --locked`, `npm ci`,
+      # whatever detection bound to Provision (`in-lockstep ls` shows which, and where the tool
+      # came from). The framework runs from uvx's isolated interpreter; the suite the strategy
+      # runs to prove a change cannot, and this is the step that gives it one. No provider extra,
+      # because this calls no model. No `continue-on-error`, because an environment that could
+      # not be built is this job's failure and belongs here, named, not in a red suite twenty
+      # minutes later. A repository with nothing to provision prints `not bound` and goes on.
+      # Only here: this checkout is the default branch, the same trust as lockstep.py. Never in
+      # lockstep.yml, whose checkout is the change under review and whose install hooks must not
+      # run beside a token; never in propose, whose commit would sweep in what an install wrote.
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
       - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
         continue-on-error: true
       # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when the

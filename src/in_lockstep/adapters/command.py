@@ -10,10 +10,15 @@ never which test failed, which is exactly what a fix loop needs to reproduce.
 Build and Run have no pytest or ruff of their own: an exit code is the whole answer, so the command
 adapters are the only shipped implementations, and detection binds them to the `make build`,
 `make run`, `npm run build` or `npm start` a repository already has.
+
+Provision is the same shape with one difference that matters: it is the step that builds the
+environment every other adapter's tool comes from, so it runs first, and it is the one
+deterministic adapter whose job is to reach a registry.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar
@@ -22,6 +27,8 @@ from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..core.types import (
     Build,
     BuildResult,
+    Provision,
+    ProvisionResult,
     Resolution,
     Run,
     RunResult,
@@ -38,9 +45,11 @@ from .sandbox import Sandbox
 __all__ = [
     "Build",
     "CommandBuild",
+    "CommandProvision",
     "CommandRun",
     "CommandTest",
     "CommandValidate",
+    "Provision",
     "Run",
     "Test",
     "Validate",
@@ -384,6 +393,130 @@ class CommandRun:
             status=Status.SUCCEEDED if ok else Status.FAILED,
             value=RunResult(exit_code=result.exit_code, stdout=result.stdout, stderr=result.stderr),
             findings=findings,
+            cost=Cost(),
+        )
+
+
+class CommandProvision:
+    """`Provision` over the steps that build the repository's own environment, in order.
+
+    `steps` is a sequence of argvs (`[["uv", "sync", "--locked"], ["npm", "ci"]]`) because a
+    repository can have more than one lockfile, and each is its own install. They run in order
+    and stop at the first that fails: an install that half-happened is not an environment, and
+    the step that failed is the one to name.
+
+    The one deterministic adapter whose job is to reach a registry, so its default sandbox allows
+    the network. It still drops the ambient credentials: a lockfile's install hooks (a `setup.py`,
+    a `postinstall` script) are repository-authored code, and the provider key must not be in
+    their environment. A `Sandbox` that names an image and denies the network is refused as
+    `blocked` rather than run: with a runtime present the install would fail in a way that reads
+    as the registry's, and without one `Sandbox` would run the steps on the host, with the network
+    it has, which is the binding quietly doing less than it said. Either way the fix is to write
+    `Sandbox(image=..., allow_network=True)` deliberately, or `Sandbox()` to provision on the host.
+    An environment provisioned inside an image lands in the bind mount and serves the adapters
+    that run on the host; a containerized suite resolves its tools inside the image (`tooling`
+    returns the bare name there), so an image is expected to carry its own.
+    """
+
+    verb: ClassVar[Verb] = Verb.PROVISION
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.EXECUTES_CODE,
+            Capability.READS_REPO,
+            Capability.WRITES_FILES,
+            Capability.REACHES_NETWORK,
+        }
+    )
+
+    def __init__(
+        self,
+        steps: Sequence[Sequence[str]],
+        *,
+        cwd: str | None = None,
+        sandbox: Sandbox | None = None,
+    ) -> None:
+        self.steps = tuple(tuple(step) for step in steps)
+        if not self.steps or any(not step for step in self.steps):
+            raise ValueError("CommandProvision needs at least one step, and no empty one")
+        self.cwd = cwd
+        self.sandbox = sandbox or Sandbox(allow_network=True)
+
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        """One line per distinct tool the steps run, for `ls` and `doctor`."""
+        seen: list[str] = []
+        out: list[Resolution] = []
+        for step in self.steps:
+            if step[0] in seen:
+                continue
+            seen.append(step[0])
+            out.append(self._resolve(step[0], self.cwd or root)[1])
+        return tuple(out)
+
+    def _resolve(self, name: str, root: str | None) -> tuple[str, Resolution]:
+        """What runs as a step's first word, and where it came from.
+
+        `python` resolves the way the suite's interpreter does (the venv, then this process when
+        it lives inside the repository, then PATH's `python` or `python3`), minus the
+        `import pytest` probe: the interpreter that creates a venv need not have pytest in it. It
+        runs by the path found in every case, because `python3` on PATH is not `python`, and the
+        bare name would be a different command from the one `ls` showed. Everything else follows
+        `_argv0`: the venv's copy by path, a PATH tool by its bare name.
+        """
+        if name == "python":
+            found = replace(tooling.interpreter(root, self.sandbox), probe=())
+            return (found.path or name), found
+        resolved = tooling.binary(name, root, self.sandbox)
+        if resolved.path is not None and resolved.how == tooling.REPOSITORY_VENV:
+            return resolved.path, resolved
+        return name, resolved
+
+    async def invoke(self, ctx: object, inp: Provision) -> Outcome[ProvisionResult]:
+        cwd = inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        # `isinstance`, not attribute reads: `UnsandboxedRun` and a test's fake runner have only
+        # `run`, and the sibling adapters accept them (`CommandRun` refuses one by name).
+        sandbox = self.sandbox
+        if isinstance(sandbox, Sandbox) and sandbox.image and not sandbox.allow_network:
+            return Outcome.blocked_by(
+                "provisioning reaches a registry and the bound sandbox names an image and denies the "
+                "network; bind CommandProvision with Sandbox(image=..., allow_network=True) to allow it "
+                "deliberately, or with Sandbox() to provision on the host"
+            )
+        ran: list[str] = []
+        log = ""
+        for step in self.steps:
+            # Resolved per step rather than once up front, because the first step may be what
+            # creates the venv the second one runs from.
+            argv0, resolved = self._resolve(step[0], cwd)
+            cmd = [argv0, *step[1:]]
+            result = await self.sandbox.run(cmd, cwd=cwd)
+            if getattr(result, "how", "") == "refused:no-container":
+                # A sandbox told to require a container found none: the control working, not
+                # the install failing.
+                return Outcome.blocked_by(result.stderr.strip() or "refused to run outside a container")
+            if result.exit_code == 127 and resolved.path is None:
+                # 127 is "no such command" only when nothing was found. Provisioning is where a
+                # lockfile's hooks run, and a `preinstall` that names a missing command exits 127
+                # through npm: that is the install failing, with its tail, not npm absent.
+                return _could_not_run(argv0, resolved)
+            log = _tail(result.stdout, result.stderr)
+            ran.append(" ".join(cmd))
+            if result.exit_code != 0:
+                return Outcome(
+                    status=Status.FAILED,
+                    value=ProvisionResult(steps=tuple(ran), log=log),
+                    findings=(
+                        Finding(
+                            id="provision.command_failed",
+                            message=_exited(cmd, result.exit_code, log),
+                            severity=Severity.ERROR,
+                            blocking=True,
+                        ),
+                    ),
+                    cost=Cost(),
+                )
+        return Outcome(
+            status=Status.SUCCEEDED,
+            value=ProvisionResult(steps=tuple(ran), log=log),
             cost=Cost(),
         )
 

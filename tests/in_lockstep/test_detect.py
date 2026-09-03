@@ -8,14 +8,17 @@ non-pytest runner report which test failed rather than only an exit code.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from in_lockstep.adapters import (
     Build,
     CommandBuild,
+    CommandProvision,
     CommandRun,
     CommandTest,
     CommandValidate,
+    Provision,
     Run,
     detected_bindings,
     parse_junit,
@@ -25,7 +28,7 @@ from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.ruff_adapter import RuffValidate
 from in_lockstep.adapters.sandbox import Sandbox, SandboxResult
 from in_lockstep.core.context import MAKE_TARGETS_SHOWN
-from in_lockstep.core.types import RunResult
+from in_lockstep.core.types import VENV_BIN, RunResult
 from in_lockstep.lockstep import _detect_facts
 
 
@@ -512,3 +515,79 @@ def test_a_failure_tail_keeps_stdout_and_stderr_apart_and_ends_where_the_text_do
     outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=silent).invoke(None, Build()))
     assert outcome.findings[0].message == "make build exited 2"
     assert outcome.value.log == ""
+
+
+# -- provisioning the repository's own environment (issue 185) ---------------------------------
+
+
+def test_a_uv_lockfile_binds_a_locked_sync_and_a_project_table_without_one_binds_nothing(
+    tmp_path: Path,
+) -> None:
+    """A lockfile with a frozen install mode: `--locked` refuses to rewrite the lock it installs
+    from. A `[project]` pyproject with no uv.lock may be setuptools', PDM's or an uncommitted
+    lock's; `uv sync` there is a guess that also writes a uv.lock into the tree, so it binds
+    nothing, and a requirements.txt beside it is the layout that binds."""
+    _write(tmp_path, {"pyproject.toml": "[project]\nname = 'x'\n", "uv.lock": "version = 1\n"})
+    assert _detect_facts(tmp_path).provision_commands == (("uv", "sync", "--locked"),)
+    (tmp_path / "uv.lock").unlink()
+    assert _detect_facts(tmp_path).provision_commands == ()
+    _write(tmp_path, {"requirements.txt": "pytest\n"})
+    assert _detect_facts(tmp_path).provision_commands[0] == ("python", "-m", "venv", ".venv")
+
+
+def test_a_foreign_lockfile_binds_no_provisioner(tmp_path: Path) -> None:
+    """`uv sync` on a Poetry project "succeeds" with an empty venv, the wrong default that runs.
+    Each of these is one `lockstep.bind(Provision, ...)` line in the module instead, and a
+    requirements.txt beside a foreign lock is that tool's export, not a second layout."""
+    for lock in ("poetry.lock", "pdm.lock", "Pipfile.lock"):
+        root = tmp_path / lock.split(".")[0]
+        _write(root, {"pyproject.toml": "[project]\nname = 'x'\n", lock: "", "requirements.txt": "six\n"})
+        assert _detect_facts(root).provision_commands == (), lock
+    _write(tmp_path / "poetry-only", {"pyproject.toml": "[tool.poetry]\nname = 'x'\n"})
+    assert _detect_facts(tmp_path / "poetry-only").provision_commands == ()
+
+
+def test_requirements_txt_provisions_a_venv_of_its_own_and_installs_into_it(tmp_path: Path) -> None:
+    """Two steps, and the second names the interpreter the first creates, spelled from the same
+    layout the adapters look in (`VENV_BIN`), so what `ls` prints is what runs. A
+    requirements-dev.txt rides along, because that is where such a repository keeps pytest."""
+    _write(tmp_path, {"requirements.txt": "six\n"})
+    venv_python = os.path.join(*VENV_BIN, "python")
+    assert _detect_facts(tmp_path).provision_commands == (
+        ("python", "-m", "venv", ".venv"),
+        (venv_python, "-m", "pip", "install", "-r", "requirements.txt"),
+    )
+    _write(tmp_path, {"requirements-dev.txt": "pytest\n"})
+    assert _detect_facts(tmp_path).provision_commands[1][-2:] == ("-r", "requirements-dev.txt")
+
+
+def test_a_package_lock_binds_npm_ci_and_a_package_json_alone_binds_nothing(tmp_path: Path) -> None:
+    """`npm ci` refuses without a lock, and `npm install` beside a credential is unpinned."""
+    _write(tmp_path, {"package.json": '{"scripts": {"test": "jest"}}'})
+    assert _detect_facts(tmp_path).provision_commands == ()
+    _write(tmp_path, {"package-lock.json": "{}"})
+    assert _detect_facts(tmp_path).provision_commands == (("npm", "ci"),)
+
+
+def test_a_python_service_with_a_node_front_end_provisions_both_in_order(tmp_path: Path) -> None:
+    _write(tmp_path, {"pyproject.toml": "[project]\nname = 'x'\n", "uv.lock": "", "package-lock.json": "{}"})
+    assert _detect_facts(tmp_path).provision_commands == (("uv", "sync", "--locked"), ("npm", "ci"))
+
+
+def test_a_makefile_deps_target_speaks_for_the_repository_and_install_is_never_read(tmp_path: Path) -> None:
+    """The repository's own statement wins alone, as `make build` does for Build. `install` is
+    not that statement: by GNU convention it copies the built software onto the system."""
+    _write(tmp_path, {"Makefile": "deps:\n\tgo mod download\n", "uv.lock": "", "package-lock.json": "{}"})
+    assert _detect_facts(tmp_path).provision_commands == (("make", "deps"),)
+    _write(tmp_path / "gnu", {"Makefile": "install:\n\tcp app /usr/local/bin\n"})
+    assert _detect_facts(tmp_path / "gnu").provision_commands == ()
+
+
+def test_the_facts_summary_names_the_steps_and_detection_binds_provision_first(tmp_path: Path) -> None:
+    """First, because it is where the other bindings' tools come from."""
+    _write(tmp_path, {"pyproject.toml": "[project]\nname = 'x'\n", "uv.lock": "", "package-lock.json": "{}"})
+    facts = _detect_facts(tmp_path)
+    assert "provision: uv sync --locked then npm ci" in facts.summary()
+    bound = detected_bindings(facts)
+    assert bound[0][0] is Provision and isinstance(bound[0][1], CommandProvision)
+    assert bound[0][1].steps == facts.provision_commands

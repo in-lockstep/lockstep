@@ -518,6 +518,33 @@ def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(tmp_path: Path, 
     assert "docs/trampoline.md" in text, "the YAML points at the contract it implements"
 
 
+def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_uv(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Issue 185 on GitLab. The commented work job runs `in-lockstep provision` before `doctor`,
+    not `|| true`, on uv's image so the constant line finds a provisioner for the most common
+    Python layout. The active review job stays on python:3.11-slim and never provisions; neither
+    do gate and propose (GATE-PROVISION-1)."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.chdir(tmp_path)
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    text = (tmp_path / ".gitlab-ci.yml").read_text()
+
+    work = text.split("#work:")[1].split("#propose:")[0]
+    assert "#    - in-lockstep provision\n#    - in-lockstep doctor || true\n" in work
+    assert "#  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim" in work
+    review = text.split("\nreview:\n")[1].split("\n#gate:")[0]
+    assert "image: python:3.11-slim" in review and "provision" not in review
+    gate = text.split("#gate:")[1].split("#work:")[0]
+    propose = text.split("#propose:")[1]
+    assert "provision" not in gate and "provision" not in propose
+
+
 def test_init_on_gitlab_writes_no_github_workflow_files(tmp_path: Path, monkeypatch) -> None:
     """`--implement`/`--fix` on a GitLab repository must not scaffold GitHub YAML the host would
     silently ignore: the Python halves are appended, and the output points at the gate/work/

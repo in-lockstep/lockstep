@@ -14,7 +14,16 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.context import RepoFacts
-from .command import Build, CommandBuild, CommandRun, CommandTest, CommandValidate, Run
+from .command import (
+    Build,
+    CommandBuild,
+    CommandProvision,
+    CommandRun,
+    CommandTest,
+    CommandValidate,
+    Provision,
+    Run,
+)
 from .pytest_adapter import PytestTest, Test
 from .ruff_adapter import RuffValidate, Validate
 
@@ -32,6 +41,12 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     the first choice rather than the fallback.
     """
     out: list[tuple[type[Any], Any]] = []
+
+    # First, because it is where the other bindings' tools come from: the environment
+    # `uv sync --locked` or `npm ci` builds is the first place `tooling` looks (#185). Only from a
+    # lockfile that exists; `_detect_facts` says what qualifies and what deliberately does not.
+    if facts.provision_commands:
+        out.append((Provision, CommandProvision(facts.provision_commands)))
 
     if facts.pytest:
         out.append((Test, PytestTest(args=["-q", "--no-header"])))

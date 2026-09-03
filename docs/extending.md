@@ -31,6 +31,16 @@ under a binding in `ls` and lets `doctor` refuse before a run when the tool is n
 adapters resolve the repository's own `.venv` first; yours can use `in_lockstep.adapters.tooling`
 to do the same.
 
+`Provision` is the verb that builds the environment those resolutions look in first, and the
+scaffolded work jobs run `in-lockstep provision` before `doctor`. Detection binds it only from a
+lockfile that exists; a layout it does not read is one line in the module,
+`lockstep.bind(Provision, CommandProvision([["poetry", "install"]]))`. `CommandProvision` runs its
+steps in order and stops at the first that fails. It is the one shipped adapter whose sandbox
+allows the network, because reaching a registry is its job; it still drops every credential,
+because a lockfile's install hooks are repository-authored code. The shipped binding installs
+a lockfile's default groups and nothing more; a layout that keeps its test dependencies in an
+extra binds `CommandProvision([["uv", "sync", "--locked", "--all-extras"]])`.
+
 `capabilities` is the part people skip and should not. Policy keys off it without knowing anything
 about your adapter: whether egress enforcement is mandatory, whether an approval gate applies,
 whether retry may re-invoke it. Declaring `EXECUTES_CODE` is how the framework knows to run you
