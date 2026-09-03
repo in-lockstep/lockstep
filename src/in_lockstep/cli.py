@@ -16,7 +16,7 @@ from . import __version__
 from .ai.prompt import Composition, Inspectable
 from .core.context import DISABLE_ENV, RunContext
 from .core.outcome import Status
-from .core.types import Test, Validate
+from .core.types import Locatable, Test, Validate
 from .core.verbs import SHIPPED_VERBS, Verb, verb_of
 from .core.workflow import inject_ports, injectable_parameters, registered, workflow
 from .lockstep import Lockstep
@@ -814,6 +814,14 @@ def ls_cmd() -> None:
         click.echo(
             f"  {label:<22} -> {impl.__name__:<16}({binding.scope.value}, {binding.tier.name.lower()})"
         )
+        # Where a deterministic adapter found its tool, or that it did not. Printed here because
+        # a wrong answer (#167: the tool's own interpreter instead of the repository's) is
+        # something to see before a run, not to infer from a red suite afterwards.
+        if not isinstance(binding.impl, type) and isinstance(binding.impl, Locatable):
+            # Under the impl column, wherever the label's width put it.
+            indent = 2 + max(22, len(label)) + len(" -> ")
+            for resolution in binding.impl.locations(lockstep.repo.root):
+                click.echo(f"{'':<{indent}}{resolution.render()}")
 
     # What each AI binding would actually compose. `bindings` above says which adapter serves a
     # verb; this says what that adapter will tell the model, which is the other half of the same

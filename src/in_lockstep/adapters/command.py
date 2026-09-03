@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..core.types import (
     Build,
     BuildResult,
+    Resolution,
     Run,
     RunResult,
     Test,
@@ -31,6 +32,7 @@ from ..core.types import (
     ValidationReport,
 )
 from ..core.verbs import Capability, Verb
+from . import tooling
 from .sandbox import Sandbox
 
 __all__ = [
@@ -62,6 +64,39 @@ def _tail(stdout: str, stderr: str) -> str:
 
 def _exited(cmd: list[str] | tuple[str, ...], code: int, tail: str) -> str:
     return f"{' '.join(cmd)} exited {code}" + (f"\n{tail}" if tail else "")
+
+
+def _locations(
+    command: tuple[str, ...], cwd: str | None, root: str, sandbox: object
+) -> tuple[Resolution, ...]:
+    """Where the command's own binary (`npm`, `make`, `mypy`) comes from, for `ls` and `doctor`.
+
+    No probe: a repository script or a build tool may not answer `--version` at all, and a
+    `doctor` that runs an arbitrary command to see is not a diagnostic.
+    """
+    return (tooling.binary(command[0], cwd or root, sandbox),)
+
+
+def _argv0(command: tuple[str, ...], cwd: str | None, ctx: object, sandbox: object) -> tuple[str, Resolution]:
+    """What actually runs as the command's first word, and where it came from.
+
+    The repository's own `.venv` is on nobody's PATH unless it is activated, so a tool found there
+    is substituted by its path; a tool found on PATH keeps its bare name, since the sandbox passes
+    PATH through and would find the same one. What `ls` prints is then what the run execs, and a
+    `mypy` that lives only in the repository's environment runs from an installed copy.
+    """
+    root = cwd or getattr(getattr(ctx, "repo", None), "root", None)
+    resolved = tooling.binary(command[0], root, sandbox)
+    if resolved.path is not None and resolved.how == tooling.REPOSITORY_VENV:
+        return resolved.path, resolved
+    return command[0], resolved
+
+
+def _could_not_run(argv0: str, resolved: Resolution) -> Outcome[Any]:
+    """Exit 127 is the shell's "no such command". It is an environment fact, not a verdict on the
+    change, and it names every place the tool was looked for."""
+    looked = f"; looked for {', '.join(resolved.tried)}" if resolved.tried else ""
+    return Outcome.errored(f"{argv0} could not be run{looked}")
 
 
 class CommandTest:
@@ -98,14 +133,20 @@ class CommandTest:
         # needs one test isolated must supply this, or the narrowing is lost.
         self.selector_arg = tuple(selector_arg)
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        return _locations(self.command, self.cwd, root, self.sandbox)
+
     async def invoke(self, ctx: object, inp: Test) -> Outcome[TestReport]:
         # A per-call `root` (a materialized worktree) wins over the bound `cwd` wins over the
         # repo's root: the spec is how a workflow points one bound adapter at a staged change
         # without rebinding it.
         cwd = inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
         selector = [*self.selector_arg, inp.selector] if (inp.selector and self.selector_arg) else []
-        cmd = [*self.command, *selector, *inp.args, *(inp.paths or ())]
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
+        cmd = [argv0, *self.command[1:], *selector, *inp.args, *(inp.paths or ())]
         result = await self.sandbox.run(cmd, cwd=cwd)
+        if result.exit_code == 127:
+            return _could_not_run(argv0, resolved)
 
         report = self._report(cwd)
         # A red run is always decided: a nonzero exit is a verdict, and marking it undecided would
@@ -179,9 +220,15 @@ class CommandValidate:
         self.cwd = cwd
         self.sandbox = sandbox or Sandbox()
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        return _locations(self.command, self.cwd, root, self.sandbox)
+
     async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        result = await self.sandbox.run([*self.command, *(inp.paths or ())], cwd=cwd)
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
+        result = await self.sandbox.run([argv0, *self.command[1:], *(inp.paths or ())], cwd=cwd)
+        if result.exit_code == 127:
+            return _could_not_run(argv0, resolved)
         clean = result.exit_code == 0
         # A generic linter has no structured output this can rely on, so the whole run is one
         # finding rather than one per rule — honest about what it knows. A repository that wants
@@ -232,10 +279,16 @@ class CommandBuild:
         # postinstall script), and dropping the ambient credentials is the point.
         self.sandbox = sandbox or Sandbox()
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        return _locations(self.command, self.cwd, root, self.sandbox)
+
     async def invoke(self, ctx: object, inp: Build) -> Outcome[BuildResult]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        cmd = [*self.command, *([inp.target] if inp.target else []), *inp.args]
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
+        cmd = [argv0, *self.command[1:], *([inp.target] if inp.target else []), *inp.args]
         result = await self.sandbox.run(cmd, cwd=cwd)
+        if result.exit_code == 127:
+            return _could_not_run(argv0, resolved)
         ok = result.exit_code == 0
         log = _tail(result.stdout, result.stderr)
         findings: tuple[Finding, ...] = ()
@@ -282,9 +335,13 @@ class CommandRun:
         self.cwd = cwd
         self.sandbox = sandbox or Sandbox()
 
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        return _locations(self.command, self.cwd, root, self.sandbox)
+
     async def invoke(self, ctx: object, inp: Run) -> Outcome[RunResult]:
         cwd = inp.cwd or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        cmd = [*self.command, *inp.command]
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
+        cmd = [argv0, *self.command[1:], *inp.command]
         runner = self.sandbox
         if inp.env:
             # The sandbox allows a fixed set of variables through and adds its own; a request's
@@ -310,6 +367,8 @@ class CommandRun:
                 )
             runner = replace(runner, extra_env={**runner.extra_env, **dict(inp.env)})
         result = await runner.run(cmd, cwd=cwd)
+        if result.exit_code == 127:
+            return _could_not_run(argv0, resolved)
         ok = result.exit_code == 0
         findings: tuple[Finding, ...] = ()
         if not ok:

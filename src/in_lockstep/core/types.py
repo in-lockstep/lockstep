@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -255,3 +256,35 @@ class SelfCheckReport:
 
     validate: ValidationReport = field(default_factory=ValidationReport)
     tests: TestReport = field(default_factory=TestReport)
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """Where a deterministic adapter found the tool it runs, or that it did not.
+
+    A detected binding promises to run the repository's own tooling. An installed copy of this
+    framework has an interpreter of its own with nothing of the repository's in it, and running
+    pytest from there told two first-time users "ruff is not installed" and "test failed" about
+    repositories that had both (#167). `ls` prints one of these per tool so a wrong answer is
+    visible before a run, and `doctor` refuses on one that found nothing.
+    """
+
+    tool: str
+    path: str | None
+    how: str
+    tried: tuple[str, ...] = ()
+    #: An argv that proves the tool is usable from `path`, for `doctor` to run. Empty when there
+    #: is nothing cheap to prove.
+    probe: tuple[str, ...] = ()
+
+    def render(self) -> str:
+        if self.path is None:
+            return f"{self.tool}  not found  (looked for {', '.join(self.tried)})"
+        return f"{self.tool}  {self.path}  ({self.how})"
+
+
+@runtime_checkable
+class Locatable(Protocol):
+    """An adapter that can say where the tools it runs come from. `ls` and `doctor` ask."""
+
+    def locations(self, root: str) -> tuple[Resolution, ...]: ...

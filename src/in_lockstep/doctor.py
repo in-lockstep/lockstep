@@ -67,6 +67,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     if lockstep is not None:
         _model_routes(report, lockstep)
         _pack_guardrails(report, lockstep)
+        _tooling(report, lockstep, path)
     if strict:
         _strict_policy(report, path)
         if lockstep is not None:
@@ -431,6 +432,74 @@ def _prompt_bodies(
             lens().body_text()
         except BodyNotFound as e:
             report.add("DOC140", Severity.ERROR, f"prompt body missing for {aspect}: {e}")
+
+
+def _tooling(report: Report, lockstep: Any, root: Path) -> None:
+    """The bound deterministic adapters can run the repository's tools from the repository.
+
+    Two first-time users installed the tool as the site says, ran `selfcheck`, and got
+    "ruff is not installed" and a red suite for repositories that had both in their own `.venv`:
+    the adapters ran the tool's isolated interpreter (#167). An adapter that says where it found
+    its tool (`Locatable`) is asked here, before any run, and a tool that is nowhere or that
+    cannot be run from where it was found is an error naming the path tried.
+    """
+    import tempfile
+
+    from .core.types import Locatable
+
+    # The probe runs the repository's interpreter, which is the change under review's, so it gets
+    # what a sandboxed adapter would get and no more: the pass-through variables, never this
+    # process's credentials, and a working directory that is not the repository, so nothing under
+    # review is on the import path. `doctor` loads configuration from the trusted ref for the
+    # same reason, and a probe that undid that would be the hole.
+    probe_env = {
+        k: os.environ[k]
+        for k in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT")
+        if k in os.environ
+    }
+    probe_cwd = tempfile.gettempdir()
+
+    # The detected root, absolute, rather than the `.` doctor was invoked in: it is what `ls`
+    # resolves against, and a path in an error message should be one a person can open.
+    repo_root = str(getattr(getattr(lockstep, "repo", None), "root", "") or Path(root).resolve())
+    for binding in lockstep.container.resolved():
+        impl = binding.impl
+        if isinstance(impl, type) or not isinstance(impl, Locatable):
+            continue
+        who = f"{binding.iface.__name__} -> {type(impl).__name__}"
+        for resolution in impl.locations(repo_root):
+            if resolution.path is None:
+                report.add(
+                    "DOC180",
+                    Severity.ERROR,
+                    f"{who} found no {resolution.tool}; looked for {', '.join(resolution.tried)}",
+                    "Give the repository its own environment (`uv sync`, or `python -m venv .venv` and "
+                    "install the tool into it), or put the tool on PATH. An installed in-lockstep carries "
+                    "neither pytest nor ruff and must not run yours from its own interpreter.",
+                )
+                continue
+            if not resolution.probe:
+                continue
+            try:
+                probe = subprocess.run(
+                    resolution.probe, capture_output=True, text=True, timeout=30, env=probe_env, cwd=probe_cwd
+                )
+            except (OSError, subprocess.SubprocessError) as e:
+                report.add(
+                    "DOC181",
+                    Severity.ERROR,
+                    f"{who}: {resolution.tool} at {resolution.path} could not be run: {e}",
+                )
+                continue
+            if probe.returncode != 0:
+                tail = (probe.stderr or probe.stdout).strip().splitlines()[-1:] or [""]
+                report.add(
+                    "DOC181",
+                    Severity.ERROR,
+                    f"{who}: {resolution.tool} at {resolution.path} ({resolution.how}) cannot do what the "
+                    f"adapter needs: `{' '.join(resolution.probe[1:])}` exited {probe.returncode}: {tail[0]}",
+                    "Install the tool into that environment, or bind the adapter with the path that has it.",
+                )
 
 
 def _model_routes(report: Report, lockstep: Any) -> None:

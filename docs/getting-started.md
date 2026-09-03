@@ -99,7 +99,9 @@ detected  stack: python; tests: pytest; lint: ruff; ci: github
 bindings
   EgressPolicy           -> UnsandboxedEgress(singleton, explicit)
   Test                   -> PytestTest      (singleton, explicit)
+                            python  /home/dev/code/demo/.venv/bin/python  (the repository's .venv)
   Validate               -> RuffValidate    (singleton, explicit)
+                            ruff  /home/dev/code/demo/.venv/bin/ruff  (the repository's .venv)
 
 middleware  (privileged tier runs outside this chain and is not listed)
   OtelMiddleware
@@ -117,6 +119,12 @@ workflows
 
 Config-as-code has one genuine disadvantage over a manifest: you can read a YAML file, but you
 cannot read a container. `ls` is the answer to it.
+
+The indented line under `Test` and `Validate` says where each adapter found its tool: the
+repository's own `.venv`, then the interpreter running `in-lockstep` when it lives inside the
+repository (`uv run` in the checkout does), then PATH. An installed copy's own interpreter is
+never it: that one has no pytest and no ruff in it. A tool found nowhere shows as `not found`
+with every place looked, and `doctor` reports it as `DOC180` before any run.
 
 The `standards` line is where an organisation's installed policy package would appear
 ([cookbook recipe 6](cookbook.md#6-ship-your-organisations-standards-as-a-package)). The `config`

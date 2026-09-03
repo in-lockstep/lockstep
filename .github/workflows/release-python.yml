@@ -107,7 +107,23 @@ jobs:
           /tmp/proof/bin/in-lockstep init
           test -f .lockstep/lockstep.py
           test -f .github/workflows/lockstep.yml
-          echo "the shipped prompts and corpus survived packaging"
+          # The two first-time users' repositories (#167): pytest and ruff in the repository's
+          # own .venv and neither in the tool's. The installed tool ran its own interpreter and
+          # reported "ruff is not installed" and a red suite. selfcheck has to run theirs.
+          mkdir -p /tmp/proof-theirs/tests && cd /tmp/proof-theirs
+          python3 -m venv .venv && .venv/bin/pip install -q pytest ruff
+          printf '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n[tool.ruff]\n' > pyproject.toml
+          printf 'def test_ok():\n    assert True\n' > tests/test_ok.py
+          # `env -u GITHUB_WORKSPACE`: detect() prefers that variable to the working directory,
+          # and on a runner it names this checkout, not the fixture.
+          git init -q && env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep init >/dev/null
+          listing=$(env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep ls)
+          grep -q '/tmp/proof-theirs/.venv/bin/python' <<<"$listing"
+          grep -q '/tmp/proof-theirs/.venv/bin/ruff' <<<"$listing"
+          env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep run selfcheck --paths . > selfcheck.txt
+          grep -q 'validate  succeeded' selfcheck.txt
+          grep -q 'test      succeeded' selfcheck.txt
+          echo "the shipped prompts and corpus survived packaging, and selfcheck ran the repository's tools"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
