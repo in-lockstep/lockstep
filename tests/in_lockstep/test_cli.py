@@ -433,11 +433,73 @@ def test_init_leaves_a_commented_stub_for_an_undetected_verb(repo: Path) -> None
     assert "No test runner was detected" in module
     assert "No linter was detected" in module
     assert "lockstep.bind(Test," not in module.replace("#   lockstep.bind(Test,", "")
-    # No stub for build or run either: the selfcheck does not need them, and a repository binds
-    # them the day a workflow of its own does, when it knows what to bind.
+    # No stub for provision, build or run either: the selfcheck does not need them, and a
+    # repository binds them the day a workflow of its own does, when it knows what to bind.
     assert "CommandBuild" not in module and "CommandRun" not in module
+    assert "CommandProvision" not in module
     compile(module, "lockstep.py", "exec")
     assert result.exit_code == 0
+
+
+def test_init_binds_provision_when_the_repository_has_a_lockfile(repo: Path) -> None:
+    """Issue 185: the scaffold binds what detection found for the environment too, and the line
+    it writes loads (the module `doctor` and every run read from the trusted ref)."""
+    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\n[tool.pytest.ini_options]\n")
+    (repo / "uv.lock").write_text("version = 1\n")
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "lockstep.bind(Provision, CommandProvision([['uv', 'sync', '--locked']]))" in module
+    import_line = next(line for line in module.splitlines() if line.startswith("from in_lockstep.adapters"))
+    assert "CommandProvision" in import_line and "Provision" in import_line
+    compile(module, "lockstep.py", "exec")
+    assert "provision: uv sync --locked" in result.output
+
+
+def test_the_scaffolded_module_passes_the_repositorys_own_validate_however_much_was_detected(
+    repo: Path,
+) -> None:
+    """Found by the #185 proof: a Python repository with a lockfile got an import line past 100
+    columns, and its first selfcheck's `Validate` (ruff) flagged the module `init` had just
+    written. Checked at ruff's default width with its default rules plus import sorting, for the
+    short shape and the longest one detection can produce. Not E501: the scaffold's prose lines
+    run past 88 columns and always have, which is a separate question from an import block ruff
+    would rewrite."""
+    import subprocess
+    import sys
+
+    def ruff_clean(path: Path) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                "--isolated",
+                "--select",
+                "I,E4,E7,E9,F",
+                "--line-length",
+                "88",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    short = (repo / ".lockstep/lockstep.py").read_text()
+    assert "from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate\n" in short
+    ruff_clean(repo / ".lockstep/lockstep.py")
+
+    (repo / "uv.lock").write_text("version = 1\n")
+    (repo / "Makefile").write_text("build:\n\tmake it\nrun:\n\trun it\n")
+    assert CliRunner().invoke(main, ["init", "--force"]).exit_code == 0
+    long = (repo / ".lockstep/lockstep.py").read_text()
+    assert "from in_lockstep.adapters import (\n    Build,\n" in long and "    Validate,\n)\n" in long
+    ruff_clean(repo / ".lockstep/lockstep.py")
+    compile(long, "lockstep.py", "exec")
 
 
 def test_init_binds_build_and_run_when_the_repository_declares_them(repo: Path) -> None:
@@ -701,23 +763,101 @@ def test_init_implement_invokes_only_commands_that_exist(repo: Path) -> None:
     assert invoked <= known, f"scaffold invokes {sorted(invoked - known)}, which do not exist"
 
 
-def test_the_trampoline_is_independent_of_the_repository(tmp_path: Path, monkeypatch) -> None:
-    """Q4's condition: byte-identical in an empty directory and a full repository.
+def test_gate_provision_1_the_work_jobs_provision_before_doctor_without_a_credential(repo: Path) -> None:
+    """Issue 185. The job that holds the provider key runs the suite to prove a change, and an
+    installed in-lockstep has no environment to run it from. `in-lockstep provision` is its own
+    step before `doctor`: no provider extra (it calls no model), no `env` (a lockfile's install
+    hooks run beside no credential), and no `continue-on-error` (an environment that could not be
+    built is this job's failure, named here rather than as a red suite later). One line, the same
+    in every repository, so the trampoline stays byte-identical."""
+    import yaml
 
-    A compiler cannot pass this. It binds the workflow file only — `init`'s lockstep.py scaffold
+    result = CliRunner().invoke(main, ["init", "--implement", "--fix"])
+    assert result.exit_code == 0, result.output
+    work_jobs = 0
+    for name in ("implement.yml", "fix.yml", "ai-generated.yml"):
+        workflow = yaml.safe_load((repo / ".github/workflows" / name).read_text())
+        for job_name, job in workflow["jobs"].items():
+            steps = job["steps"]
+            holds_key = any("ANTHROPIC_API_KEY" in str(s.get("env", {})) for s in steps)
+            provision = [i for i, s in enumerate(steps) if "in-lockstep provision" in (s.get("run") or "")]
+            doctor = [i for i, s in enumerate(steps) if "in-lockstep doctor" in (s.get("run") or "")]
+            if not holds_key:
+                continue
+            work_jobs += 1
+            assert len(provision) == 1 and doctor and provision[0] < doctor[0], (name, job_name)
+            step = steps[provision[0]]
+            assert "[anthropic]" not in step["run"], "provisioning calls no model"
+            assert "continue-on-error" not in step, "an environment that could not be built fails here"
+            assert "env" not in step, "no credential beside an install hook"
+    assert work_jobs == 3
+
+
+def test_the_review_gate_and_propose_jobs_never_provision(repo: Path) -> None:
+    """Review never runs the suite, and on a pull request its checkout is the change under
+    review, whose install hooks must not run beside a token. Gate holds nothing and decides only
+    who asked. Propose commits what is in its tree (`open_change` does `git add -A`), and an
+    install writes into it."""
+    import yaml
+
+    CliRunner().invoke(main, ["init", "--implement", "--fix"])
+    for name in ("lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml"):
+        workflow = yaml.safe_load((repo / ".github/workflows" / name).read_text())
+        for job_name, job in workflow["jobs"].items():
+            if name == "lockstep.yml" or job_name in ("gate", "propose"):
+                runs = [s.get("run") or "" for s in job["steps"]]
+                assert not any("in-lockstep provision" in r for r in runs), (name, job_name)
+
+
+def test_every_scaffolded_invocation_runs_the_pinned_framework_under_uvx(repo: Path) -> None:
+    """Nothing pinned the install line before this. Every `in-lockstep` invocation in every
+    scaffolded workflow is `uvx --from 'in-lockstep[...]==<the version that wrote it>'`, and
+    `uv run` appears nowhere: it would sync whatever project it found and write a lockfile into
+    the checkout, which in propose is the tree `open_change` commits from."""
+    import re
+
+    from in_lockstep import __version__
+
+    CliRunner().invoke(main, ["init", "--implement", "--fix"])
+    pinned = re.compile(rf"uvx --from 'in-lockstep(\[anthropic\])?=={re.escape(__version__)}' in-lockstep ")
+    checked = 0
+    for path in sorted((repo / ".github/workflows").glob("*.yml")):
+        text = path.read_text()
+        assert "uv run" not in text, path.name
+        for line in text.splitlines():
+            if line.lstrip().startswith("#") or not re.search(r"in-lockstep [a-z]", line):
+                continue
+            assert pinned.search(line), f"{path.name}: {line.strip()}"
+            checked += 1
+    assert checked >= 12, checked
+
+
+def test_the_trampoline_is_independent_of_the_repository(tmp_path: Path, monkeypatch) -> None:
+    """Q4's condition: byte-identical in an empty directory and a full repository, for every
+    workflow `init` writes. GATE-PROVISION-1 keeps it so: the provision line is constant, and
+    what varies with the stack is the binding behind it in lockstep.py.
+
+    A compiler cannot pass this. It binds the workflow files only — `init`'s lockstep.py scaffold
     may detect the stack freely.
     """
+    files = ("lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml")
     outputs = []
     for name, populate in (("empty", False), ("full", True)):
         target = tmp_path / name
         target.mkdir()
         if populate:
-            (target / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+            (target / "pyproject.toml").write_text(
+                "[project]\nname='x'\nversion='0'\n[tool.pytest.ini_options]\n[tool.ruff]\n"
+            )
+            (target / "uv.lock").write_text("version = 1\n")
+            (target / "package-lock.json").write_text("{}")
+            (target / "Makefile").write_text("build:\n\tmake it\nrun:\n\trun it\n")
             (target / "tests").mkdir()
         monkeypatch.chdir(target)
-        CliRunner().invoke(main, ["init"])
-        outputs.append((target / ".github/workflows/lockstep.yml").read_text())
+        assert CliRunner().invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
+        outputs.append({f: (target / ".github/workflows" / f).read_text() for f in files})
     assert outputs[0] == outputs[1]
+    assert "in-lockstep provision" in outputs[0]["implement.yml"]
 
 
 def _git_repo(root: Path) -> None:
@@ -860,7 +1000,7 @@ def test_ls_flags_a_route_to_a_verb_that_does_not_exist(repo: Path) -> None:
 
 
 def test_ls_stays_quiet_about_unbound_shipped_verbs(repo: Path) -> None:
-    """Seven of nine ship unbound in a default install. Printing them buries the signal."""
+    """Most shipped verbs are unbound in a default install. Printing them buries the signal."""
     _write(repo)
     result = CliRunner().invoke(main, ["ls"])
     assert "verbs defined but unbound" not in result.output

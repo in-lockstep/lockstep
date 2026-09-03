@@ -10,6 +10,7 @@ A verb request (`Test`, `Validate`, ...) is both the payload and the dispatch ke
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
@@ -207,6 +208,36 @@ class ChangeSet:
             summary=f"revert: {self.summary}" if self.summary else "revert",
             ticket=self.ticket,
         )
+
+
+#: Where this platform's virtual environments keep their executables, relative to the
+#: environment's root. In `core` rather than beside the adapters that look there, because
+#: detection (the `lockstep` layer, which may not import `adapters`) names the same path when it
+#: binds a `requirements.txt` repository's second provisioning step: the interpreter the first step
+#: creates is the one the install must run from, and two spellings of one layout is how what `ls`
+#: prints and what runs stop agreeing.
+VENV_BIN: tuple[str, ...] = (".venv", "Scripts") if os.name == "nt" else (".venv", "bin")
+
+
+@dataclass(frozen=True)
+class Provision:
+    """The Provision request: build the repository's own environment, from its own lockfile.
+
+    `CommandProvision` serves it over the steps detection bound (`uv sync --locked`, `npm ci`, a
+    Makefile `deps` target) or a module bound by hand. The scaffolded work jobs run it first,
+    before `doctor`, because an installed `in-lockstep` runs from an interpreter with nothing of
+    the repository's in it, and the suite a strategy runs to prove a change needs the
+    repository's (#185). `root` overrides where the steps run, as `Test.root` does.
+    """
+
+    root: str = ""
+
+
+@dataclass(frozen=True)
+class ProvisionResult:
+    #: Each step as it ran, argv joined, in order: what a record says was provisioned.
+    steps: tuple[str, ...] = ()
+    log: str = ""
 
 
 @dataclass(frozen=True)

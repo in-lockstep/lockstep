@@ -16,7 +16,7 @@ in-lockstep init
 
 ```text
 wrote .lockstep/lockstep.py
-  detected stack: python; tests: pytest; lint: ruff
+  detected stack: python; tests: pytest; lint: ruff; provision: uv sync --locked
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged `apply` job the
@@ -63,11 +63,18 @@ job that made it.
 
 ## The module is the configuration
 
-`init` detected pytest and ruff above, so the scaffold it wrote already binds them:
+`init` detected pytest, ruff and a `uv.lock` above, so the scaffold it wrote already binds them:
 
 ```python
 from in_lockstep import Lockstep
-from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
+from in_lockstep.adapters import (
+    CommandProvision,
+    Provision,
+    PytestTest,
+    RuffValidate,
+    Test,
+    Validate,
+)
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
@@ -75,6 +82,8 @@ lockstep = Lockstep.detect()
 
 lockstep.bind(Test, PytestTest(args=["-q"]))
 lockstep.bind(Validate, RuffValidate())
+
+lockstep.bind(Provision, CommandProvision([['uv', 'sync', '--locked']]))
 
 # The scaffold's one opt-out, with a long comment in the real file saying exactly why it is
 # defensible for read-only review and must be re-decided before any verb that writes.
@@ -94,10 +103,12 @@ in-lockstep ls
 config    local working tree
 repo      /home/dev/code/demo
 head      8b822684ed7a  branch main
-detected  stack: python; tests: pytest; lint: ruff; ci: github
+detected  stack: python; tests: pytest; lint: ruff; provision: uv sync --locked; ci: github
 
 bindings
   EgressPolicy           -> UnsandboxedEgress(singleton, explicit)
+  Provision              -> CommandProvision(singleton, explicit)
+                            uv  /home/dev/.local/bin/uv  (uv on PATH)
   Test                   -> PytestTest      (singleton, explicit)
                             python  /home/dev/code/demo/.venv/bin/python  (the repository's .venv)
   Validate               -> RuffValidate    (singleton, explicit)
@@ -120,11 +131,14 @@ workflows
 Config-as-code has one genuine disadvantage over a manifest: you can read a YAML file, but you
 cannot read a container. `ls` is the answer to it.
 
-The indented line under `Test` and `Validate` says where each adapter found its tool: the
+The indented line under `Provision`, `Test` and `Validate` says where each adapter found its tool: the
 repository's own `.venv`, then the interpreter running `in-lockstep` when it lives inside the
 repository (`uv run` in the checkout does), then PATH. An installed copy's own interpreter is
 never it: that one has no pytest and no ruff in it. A tool found nowhere shows as `not found`
-with every place looked, and `doctor` reports it as `DOC180` before any run.
+with every place looked, and `doctor` reports it as `DOC180` before any run. In the pipeline `init`
+writes, the work jobs build that environment first: `in-lockstep provision` runs whatever detection
+bound from a lockfile that exists (`uv sync --locked` for a `uv.lock`, `npm ci` for a
+`package-lock.json`) and says `not bound` when there is nothing to build, before `doctor` looks.
 
 The `standards` line is where an organisation's installed policy package would appear
 ([cookbook recipe 6](cookbook.md#6-ship-your-organisations-standards-as-a-package)). The `config`

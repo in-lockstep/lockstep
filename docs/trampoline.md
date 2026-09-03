@@ -57,7 +57,7 @@ write-capable verb (implement, fix) needs **three**:
 | Job | Credential | Access | Does |
 |---|---|---|---|
 | gate | none | read | `in-lockstep gate`: may this person ask? |
-| work | provider key (+ tracker read) | read | `in-lockstep run <verb>/from-ticket`: stages an artifact |
+| work | provider key (+ tracker read) | read | `in-lockstep provision`, then `in-lockstep run <verb>/from-ticket`: builds the repository's environment, stages an artifact |
 | propose | write token | write | `in-lockstep run <verb>/propose`: opens the change request |
 
 Backport sits between the two shapes. Its default is deterministic: `git cherry-pick` stages the
@@ -69,6 +69,23 @@ The work job needs to *read* the tracker, because `from-ticket` fetches the tick
 read is the workflow token with `issues: read`; on GitLab it is a read-only (`read_api`) project
 access token scoped to the work environment. A read credential beside the provider key is inside
 the contract; a *write* credential beside it is what clause 3 exists to prevent.
+
+The work job also runs `in-lockstep provision` before anything else, as its own step, before
+any credential is used. The framework runs from an installed interpreter with nothing of the repository's
+in it, and the suite a strategy runs to prove a change needs the repository's own environment:
+`uv sync --locked`, `npm ci`, whatever detection bound from a lockfile that exists
+(`in-lockstep ls` shows which, and where the tool came from). The step is not `|| true`. An
+environment that could not be built is the work job's failure, and it is named there rather than
+as a red suite twenty minutes later; a repository with nothing to provision prints `not bound`
+and the job goes on. It runs only in the work job, whose checkout is the default branch. The
+review job never runs the suite, and on a pull request its checkout is the change under review,
+whose install hooks must not run beside a token. The propose job commits what is in its tree,
+and an install writes into it. On GitHub the step holds no credential at all; on GitLab the
+job's variables are in scope for every script line, and on both hosts it is the sandbox's
+environment allowlist that keeps the key out of a lockfile's install hook. A repository that
+runs the framework from its own checkout, `uv sync` then `uv run in-lockstep` as this
+repository's own workflows do, has provisioned with that sync; the scaffold's separate step
+exists because `uvx`'s interpreter holds nothing of the repository's.
 
 Human approval slots between work and propose where the host can express it: a GitHub
 `environment` with required reviewers, a GitLab protected environment with required approvers.
@@ -89,6 +106,7 @@ human's queue either way.
 | Approval gate | `environment:` with required reviewers | protected environment with required approvers |
 | Artifact between halves | `upload-artifact`/`download-artifact`, downloaded to `$RUNNER_TEMP` (outside the workspace) | `artifacts:` between stages, `mv`d out of the workspace before propose runs |
 | Pinning | `==version` + action SHAs | `==version` (images may additionally be pinned by digest) |
+| Repository environment | `in-lockstep provision` as its own step in the work job, before `doctor` | the same line in the work job's `script`, on an image that carries `uv` |
 | Fork safety | step `if: secrets.X != ''` skips with a message | protected variables are absent on fork MRs; the script branch says so and exits 0 |
 
 `.github/workflows/implement.yml` is the GitHub worked example. A test holds every shell statement
@@ -104,7 +122,8 @@ environments and credentials are provisioned.
 
 Jenkins, Tekton, Buildkite: anything that can run a shell command and pass a file between two
 isolated executions can carry this contract. The port is one credential-less execution running
-`in-lockstep gate`, one holding only the provider key running `<verb>/from-ticket`, one holding
+`in-lockstep gate`, one holding only the provider key running `in-lockstep provision` and then
+`<verb>/from-ticket`, one holding
 only a write token running `<verb>/propose`, an artifact handed between them that stays out of
 the working tree, a pinned install, a timeout, and a graceful skip when the key is absent.
 

@@ -123,7 +123,24 @@ jobs:
           env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep run selfcheck --paths . > selfcheck.txt
           grep -q 'validate  succeeded' selfcheck.txt
           grep -q 'test      succeeded' selfcheck.txt
-          echo "the shipped prompts and corpus survived packaging, and selfcheck ran the repository's tools"
+          # The CI form of the same bug (#185): a scaffolded work job starts with no environment
+          # at all, and `provision` is the step that builds one. A uv fixture with nothing
+          # installed: the lockfile's install makes .venv, the same `ls` that showed PATH now
+          # shows the fixture's own interpreter, and selfcheck runs there.
+          mkdir -p /tmp/proof-provision/tests && cd /tmp/proof-provision
+          printf '[project]\nname = "demo"\nversion = "0"\nrequires-python = ">=3.11"\ndependencies = []\n\n[dependency-groups]\ndev = ["pytest", "ruff"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.ruff]\n' > pyproject.toml
+          printf 'def test_ok():\n    assert True\n' > tests/test_ok.py
+          uv lock -q && git init -q
+          env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep init >/dev/null
+          env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep provision > provision.txt
+          grep -q 'ran uv sync --locked' provision.txt
+          grep -q 'provision  succeeded' provision.txt
+          listing=$(env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep ls)
+          grep -q '/tmp/proof-provision/.venv/bin/python' <<<"$listing"
+          env -u GITHUB_WORKSPACE /tmp/proof/bin/in-lockstep run selfcheck --paths . > selfcheck.txt
+          grep -q 'validate  succeeded' selfcheck.txt
+          grep -q 'test      succeeded' selfcheck.txt
+          echo "the shipped prompts and corpus survived packaging, selfcheck ran the repository's tools, and provision built them"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:

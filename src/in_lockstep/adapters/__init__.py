@@ -5,7 +5,17 @@ binds one to the other — `lockstep.bind(Test, PytestTest())` — and should no
 implementation module happens to declare the interface it is binding.
 """
 
-from .command import Build, CommandBuild, CommandRun, CommandTest, CommandValidate, Run, parse_junit
+from .command import (
+    Build,
+    CommandBuild,
+    CommandProvision,
+    CommandRun,
+    CommandTest,
+    CommandValidate,
+    Provision,
+    Run,
+    parse_junit,
+)
 from .detected import detected_bindings
 from .pytest_adapter import PytestTest, Test
 from .ruff_adapter import RuffValidate, Validate
@@ -13,9 +23,11 @@ from .ruff_adapter import RuffValidate, Validate
 __all__ = [
     "Build",
     "CommandBuild",
+    "CommandProvision",
     "CommandRun",
     "CommandTest",
     "CommandValidate",
+    "Provision",
     "PytestTest",
     "Run",
     "RuffValidate",

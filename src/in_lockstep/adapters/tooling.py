@@ -22,9 +22,9 @@ import shutil
 import sys
 from pathlib import Path
 
-from ..core.types import Resolution
+from ..core.types import VENV_BIN, Resolution
 
-__all__ = ["REPOSITORY_VENV", "binary", "interpreter"]
+__all__ = ["REPOSITORY_VENV", "VENV_BIN", "binary", "interpreter"]
 
 #: The `how` of a tool found in the repository's own environment, which is the one answer an
 #: adapter substitutes for a bare name at run time: PATH would find the same binary the sandbox's
@@ -32,10 +32,9 @@ __all__ = ["REPOSITORY_VENV", "binary", "interpreter"]
 REPOSITORY_VENV = "the repository's .venv"
 
 _WINDOWS = os.name == "nt"
-#: Where this platform's virtual environments keep their executables. One layout, so the list of
-#: places looked names only places this machine could have.
-VENV_BIN = (".venv", "Scripts") if _WINDOWS else (".venv", "bin")
 _EXE = ".exe" if _WINDOWS else ""
+# `VENV_BIN` lives in `core.types`, where detection can name the same layout; it is re-exported
+# here because this is the module that looks there.
 
 
 def interpreter(root: str | None, sandbox: object) -> Resolution:

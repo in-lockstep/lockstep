@@ -35,6 +35,7 @@ still advertises.
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
 | Detected lifecycle | runs | `Lockstep.detect()` reads pyproject, package.json and the Makefile, and `detected_bindings` serves Test, Validate, Build and Run from what is actually there: pytest and ruff where they exist, then Makefile targets (`make test`, `make lint`, `make build`, `make run`), then package.json scripts. A repository with no `lockstep.py` runs on those bindings; `init` writes the same ones into the module it scaffolds. A target that is not in the file is not guessed |
+| Provisioned environment | runs | `provision` builds the repository's own environment from a file that exists (`uv sync --locked` for a `uv.lock`, `npm ci` for a `package-lock.json`, a requirements.txt into a venv of its own, or the Makefile's own `deps` target); `detected_bindings` binds it first and the scaffolded work jobs run it before `doctor`, with one line that is the same in every repository. A pyproject without a lock binds no Python provisioner, and nothing to provision is `not bound`, never a success |
 | Harvesting history into cases | runs | `eval harvest` turns a recording into cases (real requests, real answers, expectations derived from them); `eval run` replays and settles them for nothing. Measures everything below the model; re-testing a changed prompt is a real call |
 | Review conversation as context | runs | what a reviewer said on the pull request (the thread, the verdicts, the notes pinned to a line) reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
@@ -98,6 +99,7 @@ in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local m
 in-lockstep rfe --idea "..."     # draft a ticket from a rough idea; --create files it
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
+in-lockstep provision            # the repository's own environment, from its lockfile; CI runs it first
 in-lockstep pack ls              # installed extension packs — offered, not yet in force
 in-lockstep market add <url>     # register a catalog; https only, and committed
 in-lockstep search <query>       # packs across the catalogs this repository reads

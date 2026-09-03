@@ -141,6 +141,13 @@ def test_a_runs_row_names_something_that_ships() -> None:
             and _importable("in_lockstep.adapters", "CommandBuild")
             and _importable("in_lockstep.adapters", "CommandRun")
         ),
+        # Both halves: the verb and its adapter, and the command the scaffolded work jobs run
+        # before anything else.
+        "Provisioned environment": (
+            "provision" in SHIPPED_VERBS
+            and "provision" in commands
+            and _importable("in_lockstep.adapters", "CommandProvision")
+        ),
         "GitHub": "gate" in commands,
         "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),
         "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),

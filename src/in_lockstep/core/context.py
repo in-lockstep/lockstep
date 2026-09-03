@@ -97,6 +97,10 @@ class RepoFacts:
     lint_command: tuple[str, ...] = ()  # a generic linter argv, e.g. ("npx", "eslint", ".")
     build_command: tuple[str, ...] = ()  # e.g. ("make", "build") or ("npm", "run", "build")
     run_command: tuple[str, ...] = ()  # e.g. ("make", "run") or ("npm", "start")
+    #: The steps that build the repository's own environment, in order, e.g.
+    #: (("uv", "sync", "--locked"), ("npm", "ci")). Plural because a Python service with a Node
+    #: front end has both, and each is one lockfile's own install.
+    provision_commands: tuple[tuple[str, ...], ...] = ()
     dockerfile: bool = False
     makefile: bool = False
     make_targets: tuple[str, ...] = ()
@@ -123,6 +127,10 @@ class RepoFacts:
             out.append(f"build: {' '.join(self.build_command)}")
         if self.run_command:
             out.append(f"run: {' '.join(self.run_command)}")
+        if self.provision_commands:
+            # `then`, because the line `ls` prints joins these facts with semicolons.
+            steps = " then ".join(" ".join(step) for step in self.provision_commands)
+            out.append(f"provision: {steps}")
         if self.coverage:
             out.append("coverage config")
         if self.dockerfile:

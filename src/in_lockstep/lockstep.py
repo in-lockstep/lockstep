@@ -19,6 +19,7 @@ from .core.context import AGENT_INSTRUCTION_FILES, Approval, RepoFacts, RepoInfo
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, DailySpendExceeded, Spend, UndeclaredBudget
+from .core.types import VENV_BIN
 from .core.verbs import NEEDS_APPROVAL, Capability, UngatedAgency, capabilities_of
 
 
@@ -419,6 +420,43 @@ def _detect_facts(root: Path) -> RepoFacts:
     elif "start" in scripts:
         run_command = ("npm", "start")
 
+    # How the repository's own environment is built, for the `provision` step a scaffolded work
+    # job runs before anything else (#185). The rule is narrower than the four verbs' above,
+    # because this is the one binding that writes into the tree and reaches a registry. What
+    # binds: a lockfile with a frozen install mode (`uv sync --locked` and `npm ci` each refuse to
+    # rewrite the lock they install from); a requirements.txt, into a venv of its own; or the
+    # Makefile's own `deps` target, which then speaks for the whole repository. What deliberately
+    # does not: a `[project]` pyproject with no uv.lock (it may be setuptools', PDM's, or a uv
+    # project that never committed its lock; `uv sync` there is a guess, and one that writes a
+    # uv.lock into the tree so every record the job makes afterwards says `dirty`); a
+    # poetry.lock, pdm.lock or Pipfile.lock (`uv sync` on a `[tool.poetry]`-only pyproject
+    # "succeeds" with an empty venv, the wrong default that runs); a package.json without a lock
+    # (`npm ci` refuses, and `npm install` beside a credential is unpinned); and an `install`
+    # target (by GNU convention it copies the built software onto the system). Each of those is
+    # one `lockstep.bind(Provision, CommandProvision([...]))` line in the module, as is a layout
+    # that keeps its test dependencies in an extra (`uv sync --locked --all-extras`): the shipped
+    # line installs a lockfile's default groups and nothing more. Two honest costs of what does
+    # bind: `npm ci`, and a `python -m venv` older than 3.13, write nothing that ignores itself,
+    # so a repository that does not ignore node_modules or .venv sees its run record marked
+    # dirty; and that venv is built on whatever `python` resolves to, which under uvx is the
+    # framework's own interpreter.
+    provision: list[tuple[str, ...]] = []
+    if "deps" in make_targets:
+        provision.append(("make", "deps"))
+    else:
+        foreign_lock = has("poetry.lock", "pdm.lock", "Pipfile.lock")
+        if has("uv.lock"):
+            provision.append(("uv", "sync", "--locked"))
+        elif has("requirements.txt") and not foreign_lock:
+            # The venv's own interpreter, spelled from the layout `tooling` looks in, so the line
+            # `ls` prints for the second step is the command that runs it.
+            install = [os.path.join(*VENV_BIN, "python"), "-m", "pip", "install", "-r", "requirements.txt"]
+            if has("requirements-dev.txt"):
+                install += ["-r", "requirements-dev.txt"]
+            provision += [("python", "-m", "venv", ".venv"), tuple(install)]
+        if has("package-lock.json"):
+            provision.append(("npm", "ci"))
+
     coverage = (
         has(".coveragerc", ".coverage-floor")
         or "[tool.coverage" in pyproject
@@ -440,6 +478,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         lint_command=lint_command,
         build_command=build_command,
         run_command=run_command,
+        provision_commands=tuple(provision),
         dockerfile=has("Dockerfile", "Containerfile"),
         makefile=makefile,
         make_targets=make_targets,

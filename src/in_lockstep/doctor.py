@@ -446,6 +446,7 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
     import tempfile
 
     from .core.types import Locatable
+    from .core.verbs import Verb, verb_of
 
     # The probe runs the repository's interpreter, which is the change under review's, so it gets
     # what a sandboxed adapter would get and no more: the pass-through variables, never this
@@ -469,13 +470,21 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
         who = f"{binding.iface.__name__} -> {type(impl).__name__}"
         for resolution in impl.locations(repo_root):
             if resolution.path is None:
+                # The remedy for a missing pytest or ruff is to provision; the remedy for a
+                # missing provisioner cannot be, because it is what provisioning runs.
+                remedy = (
+                    "Put the provisioner on PATH or on the job's image. This binding is what builds "
+                    "the repository's environment, so nothing else can supply it."
+                    if verb_of(impl) is Verb.PROVISION
+                    else "Give the repository its own environment (`uv sync`, or `python -m venv .venv` "
+                    "and install the tool into it), or put the tool on PATH. An installed in-lockstep "
+                    "carries neither pytest nor ruff and must not run yours from its own interpreter."
+                )
                 report.add(
                     "DOC180",
                     Severity.ERROR,
                     f"{who} found no {resolution.tool}; looked for {', '.join(resolution.tried)}",
-                    "Give the repository its own environment (`uv sync`, or `python -m venv .venv` and "
-                    "install the tool into it), or put the tool on PATH. An installed in-lockstep carries "
-                    "neither pytest nor ruff and must not run yours from its own interpreter.",
+                    remedy,
                 )
                 continue
             if not resolution.probe:

@@ -44,6 +44,7 @@ class Verb:
 
     # Shipped verbs, assigned below the class body. Declared here so type checkers and readers see
     # the full set in one place.
+    PROVISION: ClassVar[Verb]
     BUILD: ClassVar[Verb]
     TEST: ClassVar[Verb]
     VALIDATE: ClassVar[Verb]
@@ -105,6 +106,9 @@ class Verb:
 #: callers sometimes need to ask the narrower question — `ls` prints user-defined verbs that
 #: nothing serves, and an unbound *shipped* verb is ordinary rather than a mistake.
 SHIPPED_VERBS = (
+    # First, because it runs first: the environment every other deterministic verb's tool comes
+    # from. Bound only from a lockfile that exists (#185).
+    "provision",
     "build",
     "test",
     "validate",
