@@ -456,6 +456,102 @@ def test_init_binds_provision_when_the_repository_has_a_lockfile(repo: Path) -> 
     assert "provision: uv sync --locked" in result.output
 
 
+def test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves(repo: Path) -> None:
+    """Issue 189. `init --implement` binds `ApprovalGate`, and `selfcheck` dispatches Test, which
+    declares EXECUTES_CODE. The gate is right to block; what was wrong is that `run selfcheck`
+    declared `--approve` and never put it on the context, so no flag could open it. The message
+    the run printed named two flags, and neither worked on this path."""
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
+    assert CliRunner().invoke(main, ["init", "--implement"]).exit_code == 0
+
+    blocked = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo)])
+    assert "test      blocked  (approval.required)" in blocked.output, blocked.output
+    assert blocked.exit_code == 3
+
+    # The run has to reach a verdict, not merely stop printing the finding: asserting the absence
+    # of a string would pass for a run that never dispatched anything at all.
+    (repo / "tests").mkdir(exist_ok=True)
+    (repo / "tests" / "test_ok.py").write_text("def test_ok():\n    assert True\n")
+
+    granted = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo), "--approve"])
+    assert "approval.required" not in granted.output, granted.output
+    assert "test      succeeded" in granted.output, granted.output
+    assert granted.exit_code == 0, granted.output
+
+    # And unattended, which is the form a verified trigger uses.
+    named = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(repo), "--approved-by", "someone"])
+    assert "test      succeeded" in named.output, named.output
+    assert named.exit_code == 0, named.output
+
+
+def test_the_fix_scaffold_composes_with_implement_without_importing_a_name_twice(repo: Path) -> None:
+    """Issue 190, the half that only appears when both blocks are present. Each stands alone, so
+    each imports everything it uses; with both, the second re-imported seven names the first had
+    brought in, which is F811 in the file `init` just wrote.
+
+    One invocation and then two, because only the second can put the implement block last:
+    `init --implement --fix` appends implement first whatever order the flags are written in, so
+    running the flags the other way round would test the same thing twice."""
+    import ast
+
+    runs = ([["--implement", "--fix"]], [["--fix"], ["--implement"]])
+    for index, invocations in enumerate(runs):
+        target = repo / f"compose{index}"
+        target.mkdir()
+        with CliRunner().isolated_filesystem(temp_dir=target) as work:
+            here = Path(work)
+            (here / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
+            for flags in invocations:
+                assert CliRunner().invoke(main, ["init", *flags]).exit_code == 0, flags
+            module = (here / ".lockstep/lockstep.py").read_text()
+
+        tree = ast.parse(module)
+        # Module scope only: a block may legitimately import inside a function as well, and that
+        # is a different name in a different scope rather than a redefinition.
+        pairs = [
+            (node.module or "", alias.asname or alias.name)
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        ]
+        duplicated = {p for p in pairs if pairs.count(p) > 1}
+        assert not duplicated, f"{invocations} re-imports {sorted(duplicated)}"
+        # Both flows still register: the deduplication must not have taken a name a block needs.
+        assert "implement/from-ticket" in module and "fix/from-ticket" in module
+
+
+def test_a_repositorys_own_import_of_the_same_name_is_not_swallowed(repo: Path) -> None:
+    """The deduplication matches on module AND name. A repository that imports its own `Status`
+    from somewhere else has a different object, so the block keeps its import and binds what it
+    means to; only an import of exactly what is already there is dropped."""
+    from in_lockstep.cli import _SCAFFOLD_FIX_MODULE, _without_duplicate_imports
+
+    mine = "from myapp.results import Status\nlockstep = 1\n"
+    kept = _without_duplicate_imports(mine, _SCAFFOLD_FIX_MODULE)
+    assert "from in_lockstep.core.outcome import Outcome, Status" in kept
+
+    theirs = "from in_lockstep.core.outcome import Outcome, Status\nlockstep = 1\n"
+    dropped = _without_duplicate_imports(theirs, _SCAFFOLD_FIX_MODULE)
+    assert "from in_lockstep.core.outcome import Outcome, Status" not in dropped
+    # A partial overlap keeps the names that are genuinely new.
+    partial = "from in_lockstep.core.outcome import Status\nlockstep = 1\n"
+    trimmed = _without_duplicate_imports(partial, _SCAFFOLD_FIX_MODULE)
+    assert "from in_lockstep.core.outcome import Outcome\n" in trimmed
+
+    # An alias is the case where module and bound name agree and the object does not, so the key
+    # carries the imported name too. Both directions, and the identical line still goes.
+    block = "from in_lockstep.core.outcome import Outcome as Status\n"
+    assert block in _without_duplicate_imports(partial, block), "a different object was dropped"
+    aliased = "from in_lockstep.core.outcome import Outcome as Status\nlockstep = 1\n"
+    assert block not in _without_duplicate_imports(aliased, block), "an identical line was kept"
+    plain = "from in_lockstep.core.outcome import Status\n"
+    assert plain in _without_duplicate_imports(aliased, plain), "a different object was dropped"
+
+    # A local import does not put the name where a module-level use could see it.
+    local = "def f():\n    from in_lockstep.core.outcome import Status\n\nlockstep = 1\n"
+    assert plain in _without_duplicate_imports(local, plain)
+
+
 def test_the_scaffolded_module_passes_the_repositorys_own_validate_however_much_was_detected(
     repo: Path,
 ) -> None:
@@ -468,7 +564,7 @@ def test_the_scaffolded_module_passes_the_repositorys_own_validate_however_much_
     import subprocess
     import sys
 
-    def ruff_clean(path: Path) -> None:
+    def ruff_clean(path: Path, *, select: str = "I,E4,E7,E9,F") -> None:
         result = subprocess.run(
             [
                 sys.executable,
@@ -477,7 +573,7 @@ def test_the_scaffolded_module_passes_the_repositorys_own_validate_however_much_
                 "check",
                 "--isolated",
                 "--select",
-                "I,E4,E7,E9,F",
+                select,
                 "--line-length",
                 "88",
                 str(path),
@@ -499,6 +595,31 @@ def test_the_scaffolded_module_passes_the_repositorys_own_validate_however_much_
     long = (repo / ".lockstep/lockstep.py").read_text()
     assert "from in_lockstep.adapters import (\n    Build,\n" in long and "    Validate,\n)\n" in long
     ruff_clean(repo / ".lockstep/lockstep.py")
+
+    # Issue 190: the blocks `--implement` and `--fix` append are generated code too, and a new
+    # adopter's first selfcheck ran ruff over them. They carried an unsorted import block, two
+    # imports nothing uses (`Lockstep.use` does the `WorktreeRunner` wrap and the `InvokePolicy`
+    # application itself) and two f-strings with no placeholder.
+    #
+    # Without E4 here, and deliberately: a block appended below `lockstep = Lockstep.detect()`
+    # puts its imports after a statement, which is E402. That is what appending means, it was
+    # true before this fix, and it is not what issue 190 is about. Ruff's own defaults do not
+    # select it; a repository that selects all of E will see it.
+    for flags in (["--implement"], ["--fix"], ["--implement", "--fix"]):
+        with CliRunner().isolated_filesystem() as work:
+            here = Path(work)
+            (here / "pyproject.toml").write_text("[tool.pytest.ini_options]\n[tool.ruff]\n")
+            assert CliRunner().invoke(main, ["init", *flags]).exit_code == 0, flags
+            ruff_clean(here / ".lockstep/lockstep.py", select="I,E7,E9,F")
+
+    # And the shape with nothing to bind at all, which takes a different path through the scaffold:
+    # the note standing in for the adapter import sat between two imports, so the module `init`
+    # wrote was I001 in an empty directory.
+    with CliRunner().isolated_filesystem() as work:
+        assert CliRunner().invoke(main, ["init"]).exit_code == 0
+        undetected = Path(work) / ".lockstep/lockstep.py"
+        assert "No test runner was detected" in undetected.read_text()
+        ruff_clean(undetected)
     compile(long, "lockstep.py", "exec")
 
 

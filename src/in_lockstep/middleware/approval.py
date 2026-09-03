@@ -31,7 +31,20 @@ class ApprovalRequired(Exception):
 
 @dataclass
 class ApprovalGate:
-    """Blocks until a grant exists. The grant is external; this only refuses without one."""
+    """Blocks until a grant exists. The grant is external; this only refuses without one.
+
+    Deliberately broader than the startup refusal it shares a gate id with.
+    `Lockstep._refuse_ungated_agency` fires only on the CONJUNCTION of spending and
+    write-or-execute, because a repository that merely runs its own tests must not be refused at
+    import time for having bound `PytestTest`. This runs per call, where the question is different:
+    the run is already under way, an approval either accompanies it or does not, and a deterministic
+    adapter that executes code is exactly the thing a person may want to hold. So the two answer
+    different questions and the wider predicate here is not an oversight.
+
+    What that costs, and it is worth saying: every `ctx.do(Test(...))` in a module that binds this
+    needs a grant, so the command dispatching it has to pass one through. `run selfcheck` did not,
+    which made this gate unopenable there rather than strict (#189).
+    """
 
     #: Read by `core.middleware.provides_approval`. Declared rather than inferred from the class,
     #: so a house gate routing approvals elsewhere satisfies the startup check by saying so.
