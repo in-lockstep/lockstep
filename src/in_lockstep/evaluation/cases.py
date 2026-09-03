@@ -24,6 +24,11 @@ from typing import Any
 DETERMINISTIC_KEYS = ("schema", "equals", "contains", "absent", "count")
 EXPECT_KEYS = (*DETERMINISTIC_KEYS, "rubric")
 
+#: What a `count` may say beyond an exact number. Closed, and validated at parse, for the same
+#: reason `EXPECT_KEYS` is: an unrecognised comparator reads like it means something and settles
+#: nothing. `{"at_least": 1}` looked fine in twelve shipped cases and meant "fails forever".
+COUNT_COMPARATORS = ("min", "max")
+
 
 class CaseError(ValueError):
     """A case that cannot mean what it says."""
@@ -73,6 +78,7 @@ class Case:
             )
         if not expect:
             raise CaseError(f"{name}: a case with no expectation cannot fail")
+        _refuse_unsatisfiable_counts(expect, name=name)
         harvested = raw.get("harvested") or {}
         return cls(
             name=name,
@@ -87,9 +93,75 @@ class Case:
         return cls.parse(json.loads(path.read_text()), name=path.stem, path=path)
 
 
+def _refuse_unsatisfiable_counts(expect: dict[str, Any], *, name: str) -> None:
+    """The unknown-key refusal above, from the other side.
+
+    That one refuses a case that always passes. This refuses a case that always fails: a comparator
+    nothing implements, a bound that is not a number, or a range with no integer in it. Both are
+    cases whose result does not depend on the answer, and a corpus full of those reports a rate
+    against a comparison that was never made.
+    """
+    counts = expect.get("count")
+    if counts is None:
+        return
+    if not isinstance(counts, dict):
+        raise CaseError(f"{name}: `count` maps a field name to a number or a range, not {counts!r}")
+
+    for field_name, want in counts.items():
+        where = f"{name}: count.{field_name}"
+        # bool is an int, and `{"findings": True}` would otherwise quietly mean "exactly one".
+        if isinstance(want, bool) or not isinstance(want, (int, dict)):
+            raise CaseError(
+                f"{where} is {want!r}; a count is a number, or a range of {list(COUNT_COMPARATORS)}"
+            )
+        if not isinstance(want, dict):
+            continue
+        unknown = sorted(set(want) - set(COUNT_COMPARATORS))
+        if unknown or not want:
+            raise CaseError(
+                f"{where} says {unknown or 'nothing'}; a range is {list(COUNT_COMPARATORS)}, and a "
+                f"comparator nothing implements is a case no answer can pass"
+            )
+        if any(isinstance(bound, bool) or not isinstance(bound, int) for bound in want.values()):
+            raise CaseError(f"{where} bounds must be numbers, not {sorted(want.values(), key=repr)!r}")
+        low, high = want.get("min"), want.get("max")
+        if low is not None and high is not None and low > high:
+            raise CaseError(f"{where} wants at least {low} and at most {high}, which no answer satisfies")
+
+
 def load_cases(directory: str | Path) -> list[Case]:
     root = Path(directory)
     return [Case.load(p) for p in sorted(root.rglob("*.json"))]
+
+
+def _count_holds(actual: int | None, want: Any) -> bool:
+    """Whether a length satisfies a count expectation.
+
+    An exact number means exactly that many, because several cases count zero and mean it: a
+    reviewer that invents a finding on `nothing-to-find` is the failure that case exists to catch,
+    and reading the exact form as a floor would let it through. A mapping is a range, which is what
+    "found at least one" needs -- an answer reporting two real findings where one was expected is
+    right, and comparing a length to `{"min": 1}` with `==` called it wrong for every answer any
+    model could give (#194).
+    """
+    if actual is None:
+        return False
+    if isinstance(want, dict):
+        low, high = want.get("min"), want.get("max")
+        return bool((low is None or actual >= low) and (high is None or actual <= high))
+    return bool(actual == want)
+
+
+def _count_says(want: Any) -> str:
+    """The expectation in words. `expected {'min': 1}, got 1` is a true sentence that reads as a
+    contradiction, and it is what a person sees at the moment they are trying to tell a real
+    failure from a broken check."""
+    if not isinstance(want, dict):
+        return f"exactly {want}"
+    bounds = [
+        f"at least {want[k]}" if k == "min" else f"at most {want[k]}" for k in COUNT_COMPARATORS if k in want
+    ]
+    return " and ".join(bounds)
 
 
 def grade(case: Case, output: Any) -> dict[str, Any]:
@@ -113,8 +185,8 @@ def grade(case: Case, output: Any) -> dict[str, Any]:
                 checks.append(
                     {
                         "check": f"count.{field_name}",
-                        "passed": actual == want,
-                        "detail": f"expected {want}, got {actual}",
+                        "passed": _count_holds(actual, want),
+                        "detail": f"expected {_count_says(want)}, got {actual}",
                     }
                 )
         elif key == "contains":
