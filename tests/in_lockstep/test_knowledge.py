@@ -44,6 +44,72 @@ def test_a_case_with_no_expectation_is_refused() -> None:
         Case.parse({"expect": {}}, name="empty")
 
 
+# -- GATE-EVAL-2 / #194: a count expectation no answer could satisfy ------------------
+
+
+def test_a_case_expecting_at_least_one_passes_on_an_answer_that_found_one() -> None:
+    """What twelve shipped cases already mean by "found something". The check compared a length to
+    the expectation with `==`, so an int met a dict, and every one of them was pinned at failed
+    whatever the model answered (#194)."""
+    case = Case(name="c", expect={"count": {"findings": {"min": 1}}})
+    assert grade(case, {"findings": [{"path": "a"}]})["deterministic_passed"] is True
+
+
+def test_at_least_one_is_still_refused_by_an_answer_that_found_nothing() -> None:
+    """The negative control. A comparator satisfied by every answer is the same defect wearing the
+    other face, and it is the one a careless fix produces."""
+    case = Case(name="c", expect={"count": {"findings": {"min": 1}}})
+    assert grade(case, {"findings": []})["deterministic_passed"] is False
+
+
+def test_at_most_n_refuses_the_answer_that_exceeds_it() -> None:
+    case = Case(name="c", expect={"count": {"findings": {"max": 2}}})
+    assert grade(case, {"findings": [1, 2]})["deterministic_passed"] is True
+    assert grade(case, {"findings": [1, 2, 3]})["deterministic_passed"] is False
+
+
+def test_a_plain_number_still_means_exactly_that_many() -> None:
+    """Eight shipped cases count exactly, and several of them count zero: `a-window-too-thin-to-read`
+    expects `findings: 0` and means it. Reading the exact form as a floor would turn those into the
+    cases that cannot fail."""
+    case = Case(name="c", expect={"count": {"findings": 0}})
+    assert grade(case, {"findings": []})["deterministic_passed"] is True
+    assert grade(case, {"findings": [{"path": "a"}]})["deterministic_passed"] is False
+
+
+def test_no_shipped_case_states_a_count_that_no_answer_could_satisfy() -> None:
+    """GATE-EVAL-2, over the corpus that broke it. `Case.parse` already refuses an expectation
+    nothing checks, on the grounds that it always passes; a comparator no length satisfies is that
+    hole from the other side, and it held five of the nine review cases -- the only family `trial`
+    drives -- at failed for every possible answer.
+
+    Checked by search rather than by reading: an expectation is satisfiable if some length passes
+    it, so a comparator added later that nothing implements fails here even if nobody thought to
+    write a case for it."""
+    for case in load_cases(CORPUS):
+        for field, want in (case.deterministic.get("count") or {}).items():
+            satisfied_by = [
+                n
+                for n in range(0, 12)
+                if grade(Case(name=case.name, expect={"count": {field: want}}), {field: [None] * n})[
+                    "deterministic_passed"
+                ]
+            ]
+            assert satisfied_by, f"{case.name}: no answer satisfies count.{field} = {want!r}"
+
+
+def test_a_count_comparator_nothing_implements_is_refused() -> None:
+    """The shape check the key check already had. `{"at_least": 1}` reads like it means something,
+    and silently meant "this case fails forever"."""
+    with pytest.raises(CaseError, match="count"):
+        Case.parse({"expect": {"count": {"findings": {"at_least": 1}}}}, name="bad")
+
+
+def test_a_count_of_something_that_is_not_a_number_is_refused() -> None:
+    with pytest.raises(CaseError, match="count"):
+        Case.parse({"expect": {"count": {"findings": "several"}}}, name="bad")
+
+
 # -- GATE-OUT-2: outstanding is not passed -------------------------------------------
 
 
