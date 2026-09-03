@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -724,7 +725,14 @@ def run_cmd(
         lockstep.middleware = []
 
     run_id = recover_id or _run_id("selfcheck")
-    ctx = _context(lockstep, run_id)
+    # The grant travels with the run, exactly as it does for a registered workflow above. It was
+    # not passed here, and the flag this command declares therefore did nothing: `selfcheck`
+    # dispatches Test, `PytestTest` declares EXECUTES_CODE, and a module that binds `ApprovalGate`
+    # blocks on that. So a repository scaffolded by `init --implement` or `--fix` could not reach
+    # a green selfcheck by any flag, and the message it printed named two that do not work here
+    # (#189). `--no-middleware` was not the escape hatch either: it drops `CostBudget` with the
+    # gate, and startup then refuses the undeclared budget instead.
+    ctx = _context(lockstep, run_id, _approval(approve, approved_by))
     if checkpoint or recover_id:
         from .platform.state import StateStore
 
@@ -4104,6 +4112,59 @@ def _binds_lockstep(text: str) -> bool:
     return False
 
 
+def _import_names(clause: str) -> tuple[str, str]:
+    """`Outcome as Status` -> ("Outcome", "Status"); `Status` -> ("Status", "Status")."""
+    source, _, alias = clause.partition(" as ")
+    return source.strip(), (alias.strip() or source.strip())
+
+
+def _without_duplicate_imports(existing: str, block: str) -> str:
+    """The appended block, minus imports the module already has from the same module path.
+
+    `--implement` and `--fix` each append a block that stands alone, so each imports everything it
+    uses. Run both and the second block re-imports seven names the first already brought in, which
+    is `F811` in the file `init` has just written (#190) — a red `validate` on the adopter's first
+    selfcheck, in generated code.
+
+    Matched on the module path, the name imported, AND the name it is bound to. All three,
+    because any two of them can agree while the object differs: a repository importing its own
+    `Status` from somewhere else is a different module, and `Outcome as Status` beside a plain
+    `Status` is the same module and the same bound name and still a different object. The only
+    thing dropped is a line that would import exactly what is already there, which is the only
+    case where dropping cannot change what a name means.
+    """
+    import ast
+
+    try:
+        tree = ast.parse(existing)
+    except SyntaxError:  # pragma: no cover - the caller refuses an unparseable module first
+        return block
+    # Module scope only, on both sides. A block imports inside a function when it wants the cost
+    # paid per call, and a local import in the existing text does not put the name where a
+    # module-level use in the appended block could see it. Treating one as covering the other
+    # would drop an import the block needs.
+    have = {
+        (node.module or "", alias.name, alias.asname or alias.name)
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+
+    out: list[str] = []
+    for line in block.splitlines(keepends=True):
+        match = re.match(r"^from ([\w.]+) import ([^#]+)$", line.rstrip("\n"))
+        if match is None:
+            out.append(line)
+            continue
+        module = match.group(1)
+        names = [n.strip() for n in match.group(2).split(",") if n.strip()]
+        kept = [n for n in names if (module, *_import_names(n)) not in have]
+        if not kept:
+            continue
+        out.append(line if len(kept) == len(names) else f"from {module} import {', '.join(kept)}\n")
+    return "".join(out)
+
+
 def _scaffold_implement(module: Path, *, host: str = "") -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
@@ -4135,7 +4196,7 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         click.echo("Add the implement workflows by hand; the block to paste is in the docs, or run")
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")
     else:
-        merged = text + _SCAFFOLD_IMPLEMENT_MODULE
+        merged = text + _without_duplicate_imports(text, _SCAFFOLD_IMPLEMENT_MODULE)
         try:
             # Never leave a module that will not import: a bad append breaks every later command,
             # not just this one. Refuse before writing rather than after loading.
@@ -4179,7 +4240,7 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
     else:
-        merged = text + _SCAFFOLD_FIX_MODULE
+        merged = text + _without_duplicate_imports(text, _SCAFFOLD_FIX_MODULE)
         try:
             compile(merged, str(module), "exec")
         except SyntaxError as e:
@@ -4236,11 +4297,10 @@ def _scaffold_module(facts: Any) -> str:
     # Provision bind pushed a Python repository's import past 100 columns).
     one_line = f"from in_lockstep.adapters import {', '.join(used)}"
     wrapped = "from in_lockstep.adapters import (\n" + "".join(f"    {name},\n" for name in used) + ")"
-    adapter_import = (
-        (one_line if len(one_line) <= _SCAFFOLD_WIDTH else wrapped)
-        if used
-        else "# No adapters detected yet — bind them in the stubs below."
-    )
+    # The trailing newline belongs to the value, so an undetected stack leaves no line at all
+    # rather than a comment sitting between two imports, which is `I001` at ruff's own defaults in
+    # the file `init` has just written. The note it used to carry moved to the stubs it points at.
+    adapter_import = (one_line if len(one_line) <= _SCAFFOLD_WIDTH else wrapped) + "\n" if used else ""
     return _SCAFFOLD_MODULE.format(
         adapter_import=adapter_import,
         test_bind=test_bind,
@@ -4291,8 +4351,7 @@ you can express here — but keep it pure, because it is imported to be inspecte
 """
 
 from in_lockstep import Lockstep
-{adapter_import}
-from in_lockstep.middleware import CostBudget, otel
+{adapter_import}from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
 lockstep = Lockstep.detect()
@@ -4726,18 +4785,15 @@ _SCAFFOLD_FIX_MODULE = '''
 # comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
 from in_lockstep import RunContext, Workshop
-
 from in_lockstep.adapters.ai import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import WorktreeRunner
-from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, write_changeset
-from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.conversation import ticket_for, with_review
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
@@ -4882,8 +4938,8 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
 
     if record is None:
         body = (
-            f"`/fix` failed before it recorded anything. Nothing was staged and nothing was "
-            f"opened; the job log is the only account of it."
+            "`/fix` failed before it recorded anything. Nothing was staged and nothing was "
+            "opened; the job log is the only account of it."
         )
     else:
         reason = str(record.get("reason") or record.get("status") or "failed")
@@ -5210,18 +5266,16 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 #     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
 
 from in_lockstep import RunContext, Workshop
-
 from in_lockstep.adapters.ai import Implement, Oneshot
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import WorktreeRunner, verdict_over_staged
-from in_lockstep.ai.invoker import InvokePolicy
+from in_lockstep.adapters.worktree import verdict_over_staged
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
-from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.conversation import ticket_for, with_review
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.propose import escalate, open_reviewable
 from in_lockstep.platform.report import implement_body
 from in_lockstep.platform.scm import Scm
@@ -5415,8 +5469,8 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
 
     if record is None:
         body = (
-            f"`/implement` failed before it recorded anything. Nothing was staged and nothing was "
-            f"opened; the job log is the only account of it."
+            "`/implement` failed before it recorded anything. Nothing was staged and nothing was "
+            "opened; the job log is the only account of it."
         )
     else:
         reason = str(record.get("reason") or record.get("status") or "failed")
