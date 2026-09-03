@@ -1,6 +1,6 @@
 [project]
 name = "in-lockstep"
-version = "0.2.1"
+version = "0.2.2"
 description = "An agentic SDLC framework, written in Python, for a repository in any language. Your lifecycle is executable code, not a manifest."
 readme = "README.md"
 requires-python = ">=3.11"
