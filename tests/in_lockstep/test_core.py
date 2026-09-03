@@ -16,6 +16,7 @@ from in_lockstep.core import (
     Container,
     Cost,
     FileChange,
+    Improvable,
     Outcome,
     PathPolicy,
     Policy,
@@ -957,3 +958,31 @@ def test_a_step_an_adapter_runs_inside_its_own_does_not_decide_the_run() -> None
     asyncio.run(ctx.do(Outer()))
     assert [s.verb for s in ctx.steps] == ["implement"], "the inner probe is not a step of the run"
     assert ctx.verdict()[0] is Status.SUCCEEDED
+
+
+# -- Improvable: a trend is attributed, never inferred ---------------------------------
+
+
+def test_an_improvable_answers_only_the_finding_ids_it_names() -> None:
+    """Exact membership, not a prefix. `review.` would claim `review.security` and every other
+    review finding at once, and an attribution that wide points a future prompt change at a body
+    that had nothing to do with the trend."""
+    body = Improvable(
+        body="src/in_lockstep/prompts/review/security.md",
+        verb="review",
+        label="review/security",
+        answers=("review.security",),
+    )
+    assert body.answers_for("review.security")
+    assert not body.answers_for("review.security.extra")
+    assert not body.answers_for("review")
+    assert not body.answers_for("cost.budget_exceeded")
+
+
+def test_an_improvable_that_names_no_finding_answers_nothing() -> None:
+    """The default. A repository that declares a body without saying what it answers has told us
+    where the text is and nothing about the evidence, so every trend stays unattributed."""
+    body = Improvable(body="prompts/x.md", verb="review", label="x")
+    assert body.answers == ()
+    assert not body.answers_for("review.security")
+    assert not body.answers_for("")
