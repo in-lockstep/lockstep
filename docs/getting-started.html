@@ -72,7 +72,7 @@
 <pre data-lang="bash"><code>uv tool install 'in-lockstep[anthropic]'
 in-lockstep init</code></pre>
 <pre data-lang="text"><code>wrote .lockstep/lockstep.py
-  detected stack: python; tests: pytest; lint: ruff
+  detected stack: python; tests: pytest; lint: ruff; provision: uv sync --locked
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged `apply` job the
@@ -91,9 +91,16 @@ lockstep-history          an orphan branch    (run records)</code></pre>
 in-lockstep history --push     # publish it; needs push access, never automatic</code></pre>
 <p>Local runs append to a local ref and stop. Reaching a remote needs credentials and is a side effect nobody asked for by typing a command in a terminal, so publishing is a separate act. In practice that act is CI, where the job that can push carries the record out as a bundle from the job that made it.</p>
 <h2 id="the-module-is-the-configuration">The module is the configuration</h2>
-<p><code>init</code> detected pytest and ruff above, so the scaffold it wrote already binds them:</p>
+<p><code>init</code> detected pytest, ruff and a <code>uv.lock</code> above, so the scaffold it wrote already binds them:</p>
 <pre data-lang="python"><code>from in_lockstep import Lockstep
-from in_lockstep.adapters import PytestTest, RuffValidate, Test, Validate
+from in_lockstep.adapters import (
+    CommandProvision,
+    Provision,
+    PytestTest,
+    RuffValidate,
+    Test,
+    Validate,
+)
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
@@ -101,6 +108,8 @@ lockstep = Lockstep.detect()
 
 lockstep.bind(Test, PytestTest(args=["-q"]))
 lockstep.bind(Validate, RuffValidate())
+
+lockstep.bind(Provision, CommandProvision([['uv', 'sync', '--locked']]))
 
 # The scaffold's one opt-out, with a long comment in the real file saying exactly why it is
 # defensible for read-only review and must be re-decided before any verb that writes.
@@ -112,12 +121,16 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]</code></pre>
 <pre data-lang="text"><code>config    local working tree
 repo      /home/dev/code/demo
 head      8b822684ed7a  branch main
-detected  stack: python; tests: pytest; lint: ruff; ci: github
+detected  stack: python; tests: pytest; lint: ruff; provision: uv sync --locked; ci: github
 
 bindings
   EgressPolicy           -&gt; UnsandboxedEgress(singleton, explicit)
+  Provision              -&gt; CommandProvision(singleton, explicit)
+                            uv  /home/dev/.local/bin/uv  (uv on PATH)
   Test                   -&gt; PytestTest      (singleton, explicit)
+                            python  /home/dev/code/demo/.venv/bin/python  (the repository's .venv)
   Validate               -&gt; RuffValidate    (singleton, explicit)
+                            ruff  /home/dev/code/demo/.venv/bin/ruff  (the repository's .venv)
 
 middleware  (privileged tier runs outside this chain and is not listed)
   OtelMiddleware
@@ -132,7 +145,9 @@ policy
 workflows
   selfcheck  (in_lockstep.cli)</code></pre>
 <p>Config-as-code has one genuine disadvantage over a manifest: you can read a YAML file, but you cannot read a container. <code>ls</code> is the answer to it.</p>
+<p>The indented line under <code>Provision</code>, <code>Test</code> and <code>Validate</code> says where each adapter found its tool: the repository's own <code>.venv</code>, then the interpreter running <code>in-lockstep</code> when it lives inside the repository (<code>uv run</code> in the checkout does), then PATH. An installed copy's own interpreter is never it: that one has no pytest and no ruff in it. A tool found nowhere shows as <code>not found</code> with every place looked, and <code>doctor</code> reports it as <code>DOC180</code> before any run. In the pipeline <code>init</code> writes, the work jobs build that environment first: <code>in-lockstep provision</code> runs whatever detection bound from a lockfile that exists (<code>uv sync --locked</code> for a <code>uv.lock</code>, <code>npm ci</code> for a <code>package-lock.json</code>) and says <code>not bound</code> when there is nothing to build, before <code>doctor</code> looks.</p>
 <p>The <code>standards</code> line is where an organisation's installed policy package would appear (<a href="cookbook.html#6-ship-your-organisations-standards-as-a-package">cookbook recipe 6</a>). The <code>config</code> line says which <code>lockstep.py</code> constrained this invocation, which matters the day it is a trusted ref rather than your working tree.</p>
+<p>The <code>detected</code> line reads the Makefile and package.json as well as pyproject. Where no pytest or ruff was found, a <code>test</code> or <code>lint</code> target serves <code>Test</code> or <code>Validate</code> with an exit code, and a <code>build</code> or <code>run</code> target (or a <code>build</code> or <code>start</code> script) serves <code>Build</code> and <code>Run</code> the same way, to the command that is already there. <code>init</code> writes those bindings into the module, and a repository with no module runs on them directly. A target that is not in the file is not guessed: <code>build: make build</code> appears only when the Makefile has one.</p>
 <h2 id="verbs-and-outcomes">Verbs and outcomes</h2>
 <p>A workflow asks for a verb; a binding decides what serves it.</p>
 <pre data-lang="python"><code>from in_lockstep import RunContext, Test, Validate, workflow

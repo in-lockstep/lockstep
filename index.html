@@ -225,8 +225,8 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
   <desc id="loop-d">Four boxes in a row, joined left to right and closed by a return arrow across
     the top, forming a loop: change, build, run, test. Under each box is the command that already
     does it in a repository: you or a model for change, and make build, make run and pytest for
-    the rest. Under that is what in-lockstep did with each: it bound a strategy to change, it found
-    and bound the test runner, and build and run are left for you to wire.</desc>
+    the rest. Under that is the verb each step serves: Implement for the change, then Build, Run and
+    Test, which detection binds to the commands already in the repository.</desc>
 
   <defs>
     <marker id="lt" viewBox="0 0 9 9" refX="7.2" refY="4.5" markerWidth="6" markerHeight="6" orient="auto">
@@ -271,7 +271,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
       <figcaption class="loop-note"><strong>It does not bring its own tooling.</strong>
         <code>in-lockstep init</code> reads the repository and binds these verbs to what is already
         there: pytest and ruff here, <code>npm test</code> and eslint in a Node repository. It reads
-        your Makefile as well, and lists every target it finds.</figcaption>
+        your Makefile as well, and binds build and run to the targets that are in it.</figcaption>
     </figure>
 
     <div class="two-up">
@@ -279,6 +279,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
         <div class="term-bar"><b>.lockstep/lockstep.py</b><span>the whole configuration</span></div>
 <pre><span class="k">from</span> <span class="n">in_lockstep</span> <span class="k">import</span> <span class="n">Lockstep</span>
 <span class="k">from</span> <span class="n">in_lockstep.adapters</span> <span class="k">import</span> (
+    <span class="n">CommandProvision</span>, <span class="n">Provision</span>,
     <span class="n">PytestTest</span>, <span class="n">RuffValidate</span>, <span class="n">Test</span>, <span class="n">Validate</span>,
 )
 <span class="k">from</span> <span class="n">in_lockstep.adapters.ai</span> <span class="k">import</span> <span class="n">TDD</span>, <span class="n">Implement</span>
@@ -292,6 +293,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
 <span class="c"># deterministic work stays deterministic</span>
 <span class="n">lockstep</span>.bind(<span class="n">Test</span>, <span class="n">PytestTest</span>(args=[<span class="s">"-q"</span>]))
 <span class="n">lockstep</span>.bind(<span class="n">Validate</span>, <span class="n">RuffValidate</span>())
+<span class="n">lockstep</span>.bind(<span class="n">Provision</span>, <span class="n">CommandProvision</span>([[<span class="s">"uv"</span>, <span class="s">"sync"</span>, <span class="s">"--locked"</span>]]))
 
 <span class="c"># the scaffold's one opt-out: fine for read-only review;</span>
 <span class="c"># re-decide it before any verb of yours writes</span>
@@ -312,16 +314,18 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
       <div class="term">
         <div class="term-bar"><b>$ in-lockstep init</b><span>on a Node repository</span></div>
 <pre>wrote .lockstep/lockstep.py
-  detected stack: node; tests: npm test; lint: npx eslint .
+  detected stack: node; tests: npm test; lint: npx eslint .; provision: npm ci
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged
 `apply` job the day a verb of yours produces a change to
 write; the file says where.</pre>
         <p class="term-cap"><strong>It found <code>npm test</code> and eslint and bound them.</strong>
-          The two lines it wrote: <code>lockstep.bind(Test, CommandTest(['npm', 'test']))</code>
-          and <code>lockstep.bind(Validate, CommandValidate(['npx', 'eslint', '.']))</code>. The file
-          on the left is what it writes for a Python repository; the shape is the same.</p>
+          Three lines it wrote: <code>lockstep.bind(Test, CommandTest(['npm', 'test']))</code>,
+          <code>lockstep.bind(Validate, CommandValidate(['npx', 'eslint', '.']))</code> and
+          <code>lockstep.bind(Provision, CommandProvision([['npm', 'ci']]))</code>. The file on the
+          left is the same scaffold for a Python repository, plus the strategy and the model
+          routing a person adds afterwards.</p>
       </div>
     </div>
   </div>
@@ -499,16 +503,16 @@ skill:review/review-revision</pre>
 
     <div class="jobs-after">
       <div class="term">
-        <div class="term-bar"><b>$ in-lockstep run selfcheck</b><span>exit 1</span></div>
+        <div class="term-bar"><b>$ in-lockstep run selfcheck</b><span>exit 3</span></div>
 <pre>config    local working tree
 validate  <span class="r">failed</span>
           .lockstep/lockstep.py:645 validate.f821:
           Undefined name `issue`
 test      <span class="y">blocked</span>  (approval.required)
-          approval.required: ActionCall(test) grants
-          executes_code and no approval was granted.
-          Locally, `--approve` says you are the human
-          watching this run.
+          approval.required: ActionCall(test, step=None)
+          grants executes_code and no approval was
+          granted. Locally, `--approve` says you are
+          the human watching this run.
 
 spend     $0.0000, 0.06s
 ledger    lockstep-history:records/selfcheck-...json</pre>
@@ -518,9 +522,10 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
           failure.</p>
       </div>
       <div class="jobs-note">
-        <p>The workflow file driving all of this is thirteen shell statements long, every one of
-          them a bare call to the tool. A test rejects the fourteenth, because lifecycle logic that
-          leaks into YAML is lifecycle logic nobody can run on their laptop.</p>
+        <p>The workflow file driving all of this is thirteen shell statements long: eight bare calls
+          to the tool, and five that install it or hand one job's answer to the next. A test rejects
+          the fourteenth, because lifecycle logic that leaks into YAML is lifecycle logic nobody can
+          run on their laptop.</p>
         <p>Your configuration is also loaded from the base branch, never the branch under review. A
           change cannot rewrite the rules that decide whether to accept it.</p>
       </div>
@@ -597,13 +602,13 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
       <h2>It will not print a number it has not earned.</h2>
       <p class="lede">Every AI dashboard you have been shown averages over whatever happened to be
         present. These figures carry their denominator, and one nobody measured stays a dash. Every
-        number below is read back from the same nine published records as the table above.</p>
+        number below is read back from the same twenty-six published records as the table above.</p>
     </div>
 
     <figure class="shot">
-      <div class="term-bar"><b>$ in-lockstep report --html report.html</b><span>the published ledger: 9 records, $275.25 billed</span></div>
-      <img src="img/report.png" width="980" height="1764" loading="lazy" decoding="async"
-           alt="The report page in-lockstep writes, titled What the ledger says, for nine published runs: 33 percent failed, 3 stopped by a control, $275.25 total, $30.58 per run, a median run of 589 seconds, 36 findings. A runs-per-week line, a where-the-runs-go bar, an attempts-per-ticket bar with ticket 139 at five runs, a what-it-keeps-finding bar, a by-kind-of-work table, a note that 16 injection signals were caught in text people wrote at it, and a footer: a dash is a number nobody measured.">
+      <div class="term-bar"><b>$ in-lockstep report --html report.html</b><span>the published ledger: 26 records, $275.23 billed</span></div>
+      <img src="img/report.png" width="980" height="1955" loading="lazy" decoding="async"
+           alt="The report page in-lockstep writes, titled What the ledger says, for twenty-six published runs: 12 percent failed, 4 stopped by a control, 2 with no verdict, $275.2322 total, $10.5859 per run, 64 findings. A runs-per-week line, a where-the-runs-go bar, an attempts-per-ticket bar with ticket 139 at five runs, a what-it-keeps-finding bar, a by-kind-of-work table, a note that 16 injection signals were caught in text people wrote at it, and a footer: a dash is a number nobody measured.">
       <figcaption class="term-cap">One self-contained file, inline style and inline SVG, nothing to
         fetch. The same numbers the terminal prints, with the same rule under them: a chart it
         cannot draw yet says so in a box, and a run a control stopped is listed as working as
@@ -613,32 +618,42 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
     <div class="two-up">
       <div class="term">
         <div class="term-bar"><b>$ in-lockstep report</b><span>excerpt, the published ledger</span></div>
-<pre>records   9  2026-08-30 → 2026-09-02
+<pre><span class="r">TAMPERED  records/review-security.json was modified
+          after being appended (commit adca58e73a2b)</span>
+records   26  2026-08-30 → 2026-09-02
 
 <span class="d">outcomes</span>
-  failed        <span class="r">33%  (3 of 9)</span>
-  <span class="y">blocked       3  (a control stopping a run is the control
+  failed        <span class="r">12%  (3 of 24)</span>
+  decided none  0%  (0 of 24)
+  <span class="y">blocked       4  (a control stopping a run is the control
                    working)</span>
+  no verdict    2  (written before schema 5 by a workflow
+                   that returned no Outcome; not counted
+                   as anything)
     cost.budget_exceeded         3
     tdd.not_red                  1
     provider.authentication      1
+    tdd.not_green                1
+    wayfinder.not_on_frontier    1
 
 <span class="d">spend</span>
-  total         $275.2549
-  per run       $30.5839
-  tokens        19,210,214
+  total         $275.2322
+  per run       $10.5859
+  tokens        19,279,877
 
 <span class="d">attempts per ticket</span>
   #139               5 run(s)   <span class="y">$210.1739</span>
 
 <span class="d">who and how</span>
-  unattended    89% of runs, with nobody watching
+  unattended    31% of runs, with nobody watching
 
 <b>A dash is a number nobody measured. It is not a zero.</b>
-history   <span class="g">append-only across the retained chain</span></pre>
-        <p class="term-cap">Three of nine failed, and it says so. Five attempts at one ticket cost
-          $210, and it says that too. The last line is the ledger checking itself: <strong>no record
-          on the published branch was rewritten after it was appended.</strong></p>
+history   <span class="r">NOT APPEND-ONLY: 1 record(s) rewritten (see above)</span></pre>
+        <p class="term-cap">Three of twenty-four failed, and it says so. Two records are older than the
+          schema that carries a verdict, so they are counted as neither passed nor failed. Five
+          attempts at one ticket cost $210, and it says that too. The first line and the last are the
+          ledger checking itself, and this time it found something: <strong>one published record was
+          rewritten after it was appended, and the report names it.</strong></p>
       </div>
 
       <div class="term">
@@ -675,11 +690,12 @@ pass rate    <span class="y">n/a — nothing decided</span>
           and they are the same list the tool checks itself against.</p>
 
         <ul class="limits">
-          <li><b>Build and run are not bound for you yet.</b> Detection finds your Makefile and
-            lists every target in it, and binds test and lint from what it finds. Wiring the build
-            and run verbs to those targets is
-            <a href="https://github.com/in-lockstep/lockstep/issues/162">issue 162</a>, and until it
-            lands you bind those two yourself.</li>
+          <li><b>The environment is built only from a layout it already knows.</b>
+            <code>provision</code> runs <code>uv sync --locked</code> from a uv.lock,
+            <code>npm ci</code> from a package-lock.json, a requirements.txt into a virtual
+            environment of its own, or the Makefile's own <code>deps</code> target. A pyproject
+            carrying a Poetry, PDM or Pipfile lock and nothing else binds nothing, and says
+            <code>not bound</code> rather than guessing at it.</li>
           <li><b>It does not yet improve its own prompts.</b> Every run is recorded and any run
             replays for nothing, but nothing reads the ledger back, measures a prompt change, and
             proposes it. That loop, ending in a pull request a person reads, is
@@ -691,11 +707,23 @@ pass rate    <span class="y">n/a — nothing decided</span>
           <li><b>One ledger per clone, not one per organization.</b> A shared store is declared
             and refused on purpose until it can be made trustworthy, so there is no rollup across
             repositories yet.</li>
-          <li><b>Two bugs the first outside users hit, both open.</b> A workflow whose test step
-            failed can be recorded as completed, so <code>report</code> under-counts failures
-            (<a href="https://github.com/in-lockstep/lockstep/issues/166">issue 166</a>), and an
-            installed copy runs the test runner from its own interpreter rather than your
-            repository's (<a href="https://github.com/in-lockstep/lockstep/issues/167">issue 167</a>).</li>
+          <li><b>The two bugs the first outside users hit are fixed. Two more are open.</b> A
+            record now takes its status from its steps, and an installed copy now runs your
+            repository's tools rather than its own interpreter. Since then:
+            <code>run selfcheck</code> drops <code>--approve</code>, so a repository scaffolded with
+            <code>init --implement</code> cannot reach a green selfcheck by any flag
+            (<a href="https://github.com/in-lockstep/lockstep/issues/189">issue 189</a>), and the
+            module those flags write does not pass ruff, with an unsorted import block, two unused
+            imports and two f-strings with nothing in them
+            (<a href="https://github.com/in-lockstep/lockstep/issues/190">issue 190</a>).</li>
+          <li><b>The implement scaffold rebinds your test verb to pytest.</b> Detection binds Test
+            to what it found, and the block <code>init --implement</code> appends then binds pytest
+            over it, whatever the repository runs. A repository that is not Python deletes that
+            line.</li>
+          <li><b>A red doctor does not fail the pipeline it writes.</b> Every workflow the scaffold
+            writes runs <code>doctor</code> as <code>continue-on-error</code>, so a repository whose
+            own controls are red still goes green. The work jobs run <code>provision</code> before
+            it without that flag, so an environment that cannot be built does fail, by name.</li>
           <li><b>No flaky-test handling.</b> The adapter is not built, and a test in the repository
             asserts that it has not shipped.</li>
           <li><b>GitLab is partial.</b> The protocols and host-aware setup ship. Nobody has run a
@@ -720,20 +748,22 @@ pass rate    <span class="y">n/a — nothing decided</span>
 <pre><span class="r">ERROR</span>   DOC101  no provider-side organisation spend
                 limit is attested
                 Set a hard monthly cap in the provider
-                console and record it. A per-run budget
-                cannot bound a runaway trigger.
+                console and record it as
+                IN_LOCKSTEP_ORG_SPEND_LIMIT=&lt;amount&gt;. A
+                per-run budget cannot bound a runaway
+                trigger.
 <span class="r">ERROR</span>   DOC167  lockstep-history is not append-only:
-                3 record(s) rewritten
-                records/triage-412.json was modified after
-                being appended (commit 8ad29707b1fc). Note
-                the check reads the retained chain only: a
-                force-push that replaced the chain discards
-                the contradiction.
+                1 record(s) rewritten
+                records/review-security.json was modified
+                after being appended (commit adca58e73a2b).
+                Note the check reads the retained chain
+                only: a force-push that replaced the chain
+                discards the contradiction.
 <span class="y">WARNING</span> DOC130  no egress enforcement is declared
 
 3 finding(s), <span class="r">2 error(s)</span></pre>
-          <p class="term-cap">Twenty-seven checks, run against its own repository, exiting non-zero.
-            It names the rewritten records with their commit hashes, and then tells you the limit of
+          <p class="term-cap">Twenty-nine checks, run against its own repository, exiting non-zero.
+            It names the rewritten record with its commit hash, and then tells you the limit of
             its own tamper check.</p>
         </div>
       </div>
@@ -764,6 +794,11 @@ pass rate    <span class="y">n/a — nothing decided</span>
           <div><dt>backport</dt><dd>plain cherry-pick, a model only on conflict</dd></div>
           <div><dt>rfe</dt><dd>draft a ticket from an idea, a person files it</dd></div>
         </dl>
+        <h3 class="lg-h lg-h-2">And the environment they run in</h3>
+        <p class="ships-p"><code>provision</code> builds the repository's own environment before
+          anything runs in it: <code>uv sync --locked</code> from a uv.lock, <code>npm ci</code>
+          from a package-lock.json, the Makefile's own <code>deps</code> target. Nothing to
+          provision reports <code>not bound</code>, never a success.</p>
         <p class="ships-link"><a href="https://github.com/in-lockstep/lockstep#what-ships-today">Read
           the full table, and the test that holds it</a></p>
       </div>
