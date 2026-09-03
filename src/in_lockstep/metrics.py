@@ -46,6 +46,14 @@ VERDICTS = ("succeeded", "failed", "errored", "blocked")
 #: enough that the tail does not read as though it mattered.
 TOP_N = 8
 
+#: Below this, a finding that came back is a coincidence. Five distinct runs, not five
+#: occurrences: one review that reports the same thing five times is one review.
+MIN_TREND_RUNS = 5
+
+#: And below this it is a week, not a trend. A finding confined to one week is usually a fact
+#: about that week — a branch everybody was working on, a dependency that was briefly broken.
+MIN_TREND_WEEKS = 2
+
 
 @dataclass(frozen=True)
 class Measured:
@@ -162,6 +170,43 @@ class Delivery:
 
 
 # -- reading one field off many records -------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Trend:
+    """One finding id, and everything the ledger can honestly say about how often it comes back.
+
+    Every count here has a denominator beside it, and two of them are separate on purpose.
+    `occurrences` and `runs` differ whenever one run reports the same thing twice, which is the
+    normal case for a review: this repository's own ledger holds `review.security` 26 times across
+    13 runs, and reporting 26 as the recurrence would say it came back twice as often as it did.
+
+    `weeks` is counted over `dated_runs` only. Records written before `ts` existed cannot be placed
+    in any week, and there is no honest way to place them: week zero is a week nobody ran in, and
+    dropping them silently reports a ledger with fewer runs than it has. So they are counted as
+    `undated_runs` and travel beside the number they are missing from.
+    """
+
+    finding: str
+    #: Items, the number a "what it keeps finding" list already counts.
+    occurrences: int
+    #: Distinct runs. The number a threshold should read.
+    runs: int
+    #: Distinct ISO weeks among the dated runs. Zero means nobody could place any of them.
+    weeks: int
+    #: The denominator for `weeks`.
+    dated_runs: int
+    #: Runs carrying no `ts`. Absent, not week zero.
+    undated_runs: int
+    #: Runs where at least one occurrence stopped the run. Per run, because two ceilings hit in one
+    #: run is one run stopped.
+    blocking_runs: int
+    #: The workflows it was found under, so a reader can see whether it is one lens or several.
+    workflows: tuple[str, ...]
+    #: Records walked to produce this. The denominator the whole census shares.
+    considered: int
+    #: Whether it cleared both thresholds. Carried rather than filtered on — see `recurring`.
+    qualifies: bool
 
 
 def _numbers(records: list[dict[str, Any]], key: str) -> list[float]:
@@ -483,6 +528,143 @@ def _turns(records: list[dict[str, Any]]) -> list[tuple[str, Measured]]:
 #
 # Both renderers live here rather than in `cli`, and neither writes a file. A report is a string;
 # putting it on disk is a redaction sink and belongs to a layer that may reach `privileged`.
+
+
+def _iso_week(record: dict[str, Any]) -> str:
+    """The ISO week a record falls in, or "" if it carries no usable stamp.
+
+    The same recipe `_weeks` uses, including the absence of any timezone normalisation: the stamp's
+    own offset decides its week. Spelled twice rather than shared because `_weeks` returns buckets
+    and this returns a label, and a helper that did both would take a flag.
+    """
+    stamp = record.get("ts")
+    if not isinstance(stamp, str):
+        return ""
+    try:
+        when = datetime.fromisoformat(stamp)
+    except ValueError:
+        return ""
+    year, week, _ = when.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def recurring(
+    records: list[dict[str, Any]],
+    *,
+    min_runs: int = MIN_TREND_RUNS,
+    min_weeks: int = MIN_TREND_WEEKS,
+) -> list[Trend]:
+    """Every finding the ledger has seen, with what recurrence can be claimed for it.
+
+    The whole census, with `qualifies` on each row, rather than the rows that cleared the
+    thresholds. A filtered list that comes back empty says "nothing recurs" in exactly the same
+    shape as "there is no ledger", and that conflation is the one this module exists to refuse. On
+    this repository the filtered form returns nothing at all: 17 finding ids over 27 records, and
+    not one of them spans two ISO weeks.
+
+    Injection signals are counted apart the way `_findings` counts them apart, and for a sharper
+    reason here: one run on this ledger carries 16 of them, so a census that mixed them in would be
+    led by an id that is one run pretending to be eleven — and it is a fact about somebody trying
+    to talk to the model, not about the prompt text a proposal would change.
+    """
+    occurrences: Counter[str] = Counter()
+    runs: dict[str, set[str]] = {}
+    weeks: dict[str, set[str]] = {}
+    dated: dict[str, set[str]] = {}
+    blocking: dict[str, set[str]] = {}
+    workflows: dict[str, set[str]] = {}
+
+    for index, record in enumerate(records):
+        found = record.get("findings")
+        if not isinstance(found, dict):
+            continue
+        # The top-level list only. Since schema 5 a record mirrors its steps' findings up here, so
+        # walking `steps[].findings` as well would double every count on every record written
+        # since — invisibly, because the ratio between ids would not change.
+        items = found.get("items") or []
+        # A record with no `run_id` is still one run. Falling back to its position keeps it from
+        # merging with every other unidentified record into a single phantom run.
+        run = str(record.get("run_id") or f"#{index}")
+        week = _iso_week(record)
+        where = str(record.get("workflow") or record.get("kind") or "")
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("id", ""))
+            if not name or name.startswith("injection."):
+                continue
+            occurrences[name] += 1
+            runs.setdefault(name, set()).add(run)
+            if week:
+                weeks.setdefault(name, set()).add(week)
+                dated.setdefault(name, set()).add(run)
+            if where:
+                workflows.setdefault(name, set()).add(where)
+            if item.get("blocking") is True:
+                blocking.setdefault(name, set()).add(run)
+
+    considered = len(records)
+    trends = [
+        Trend(
+            finding=name,
+            occurrences=count,
+            runs=len(runs[name]),
+            weeks=len(weeks.get(name, ())),
+            dated_runs=len(dated.get(name, ())),
+            undated_runs=len(runs[name]) - len(dated.get(name, ())),
+            blocking_runs=len(blocking.get(name, ())),
+            workflows=tuple(sorted(workflows.get(name, ()))),
+            considered=considered,
+            qualifies=len(runs[name]) >= min_runs and len(weeks.get(name, ())) >= min_weeks,
+        )
+        for name, count in occurrences.items()
+    ]
+    # Runs first, because runs is what a threshold reads; occurrences breaks the tie, and the id
+    # breaks that, so the order is stable over a dict whose insertion order is the ledger's.
+    return sorted(trends, key=lambda t: (-t.runs, -t.occurrences, t.finding))
+
+
+def as_trend_text(
+    trends: list[Trend],
+    *,
+    min_runs: int = MIN_TREND_RUNS,
+    min_weeks: int = MIN_TREND_WEEKS,
+    limit: int = TOP_N,
+) -> list[str]:
+    """The census as lines. Returns them; writing is the caller's, because this is a leaf layer
+    that may not reach the redaction sink."""
+    if not trends:
+        return ["trend     no finding recorded yet; a run that finds nothing writes no id"]
+
+    qualified = [t for t in trends if t.qualifies]
+    if qualified:
+        head = f"trend     {len(qualified)} of {len(trends)} finding id(s) recur across {min_weeks}+ weeks"
+    else:
+        head = (
+            f"trend     nothing recurs yet — no finding id clears both thresholds "
+            f"(min_runs {min_runs}, min_weeks {min_weeks})"
+        )
+
+    out = [head]
+    for trend in trends[:limit]:
+        if trend.weeks:
+            span = f"{trend.weeks} week(s)"
+            if trend.undated_runs:
+                span += f"  ({trend.dated_runs} of {trend.runs} dated)"
+        else:
+            # Not `0 weeks`: that reads as "measured, and it does not recur". Nobody could place
+            # any of these runs in a week at all.
+            span = f"—  (0 of {trend.runs} dated)"
+        mark = "*" if trend.qualifies else " "
+        out += [
+            f"  {mark} {trend.finding:<28}{trend.runs:>3} run(s)  {trend.occurrences:>3} occurrence(s)"
+            f"   {span:<28}{trend.blocking_runs:>3} blocking   {', '.join(trend.workflows)}"
+        ]
+    if len(trends) > limit:
+        out += [f"          {len(trends) - limit} more not shown"]
+
+    out += ["", "A dash is a number nobody measured. It is not a zero."]
+    return out
 
 
 def as_text(report: Report) -> list[str]:
