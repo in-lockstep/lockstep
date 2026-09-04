@@ -131,6 +131,14 @@ def test_a_runs_row_names_something_that_ships() -> None:
         "Code Review": "review" in SHIPPED_VERBS and "review" in commands,
         "Implement": "implement" in SHIPPED_VERBS and "implement" in commands,
         "Bug Fix": "fix" in SHIPPED_VERBS,
+        # Three halves, because the claim has three: the vocabulary a repository declares in,
+        # the arithmetic over the ledger, and the command that prints it. Any one alone would
+        # be a row that survives the other two being deleted.
+        "Improvement trend": (
+            _importable("in_lockstep.core.improve", "Improvable")
+            and _importable("in_lockstep.metrics", "recurring")
+            and "improve" in commands
+        ),
         "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,
         "RFE": "rfe" in SHIPPED_VERBS and "rfe" in commands,
         "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,
