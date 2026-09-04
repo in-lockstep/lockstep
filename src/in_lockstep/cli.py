@@ -1449,6 +1449,114 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
     click.echo(_history_line(verify, tampered))
 
 
+@main.command(name="improve")
+@click.option(
+    "--explain",
+    is_flag=True,
+    help="Read the ledger and say what would stop a proposal. Opens nothing, spends nothing.",
+)
+def improve_cmd(explain: bool) -> None:
+    """Would a prompt change be worth proposing, and what would stop it?
+
+    `--explain` is the whole command today. It reads the ledger this repository already wrote,
+    names the body a recurring finding is attributed to, asks the guard whether that path is even
+    writable, and lists the ceilings a proposal run would meet. It reaches no model, holds no key,
+    writes no ledger record and opens nothing.
+
+    Without `--explain` it refuses, exit 3. Nothing drafts a prompt change yet, and a command that
+    printed a summary for work it had not done is the failure this framework exists to refuse.
+    """
+    from . import metrics
+
+    if not explain:
+        click.echo("improve   refused: nothing drafts a prompt change yet.")
+        click.echo("          `--explain` reads the ledger and names the ceiling that would stop a")
+        click.echo("          proposal. It opens nothing and spends nothing.")
+        raise SystemExit(EXIT_BLOCKED)
+
+    lockstep, _recorder = _default_lockstep()
+    # WITH the lockstep, unlike `report` and `_explain_run`, which call `_ledger()` bare. Every
+    # writer passes the bound store, so a reader that does not is reading a different ledger than
+    # the one the runs went into. Not fixed for those two here; this one is new and starts right.
+    ledger = _ledger(lockstep)
+    reader = getattr(ledger, "records", None)
+    if reader is None:
+        raise click.ClickException(
+            f"{type(ledger).__name__} cannot list records; improve needs a store that can"
+        )
+    records = reader()
+    if not records:
+        # Not a census in which nothing recurs, which is a different and far more reassuring
+        # sentence than "there is no evidence here at all".
+        click.echo("no records yet; the first run that writes a ledger record creates them")
+        return
+
+    trends = metrics.recurring(records)
+    for line in metrics.as_trend_text(trends):
+        click.echo(line)
+    click.echo("")
+
+    # The join between a finding id and the text that might answer it. Done here rather than in
+    # `metrics`, which is a leaf that may not know what an `Improvable` is — and done by exact
+    # membership, never by the shape of the id.
+    declared = tuple(getattr(lockstep, "improve", ()) or ())
+    guard = lockstep.guard
+    claimed: set[str] = set()
+    for body in declared:
+        mine = [t for t in trends if body.answers_for(t.finding)]
+        claimed.update(t.finding for t in mine)
+        click.echo(f"body      {body.body}")
+        click.echo(f"          {body.label}, verb {body.verb}, answers {', '.join(body.answers) or '—'}")
+        if mine:
+            lead = max(mine, key=lambda t: t.runs)
+            click.echo(
+                f"          attributed: {lead.finding}  ({lead.runs} run(s) of {lead.considered} records)"
+            )
+        else:
+            click.echo("          attributed: —  (no recorded finding matches what it answers)")
+        refusal = guard.check_path(body.body)
+        if refusal is not None:
+            click.echo(f"guard     refused — tier {refusal.tier}, rule {refusal.rule}")
+        else:
+            # Said this way on purpose. `prompts/` in tier 2 is anchored at the repository root, so
+            # a body under `src/in_lockstep/prompts/` matches neither tier and is writable because
+            # nothing names it — not because anything granted it. Printing a bare "permitted" here
+            # is how the next change comes to believe the loop has permission to write there.
+            click.echo("guard     permitted by omission — no tier names this path, so nothing granted it")
+
+    unclaimed = [t for t in trends if t.finding not in claimed]
+    if not declared:
+        click.echo("body      —  (this lifecycle declares no Improvable, so nothing is attributed)")
+    if unclaimed:
+        click.echo(f"          {len(unclaimed)} finding id(s) answer to no declared body; attributed to —")
+    click.echo("")
+
+    ceiling = lockstep.declared_ceiling()
+    daily = os.environ.get("IN_LOCKSTEP_DAILY_LIMIT", "")
+    click.echo("ceilings  what a proposal run would meet, in the order it would meet them")
+    # A dash, because nothing here counted it. An unmeasured ceiling is one that could stop a run;
+    # rendering it as 0 would turn "nobody asked the host" into "there is nothing open".
+    click.echo(
+        f"  open proposals  max {getattr(lockstep, 'max_open_proposals', 1)}, open now —  "
+        f"(not counted here; `in-lockstep gate --open-proposals <workflow>` asks the host)"
+    )
+    # A dimension nobody set is left off rather than printed as `None`, and a Budget with nothing
+    # set at all is a dash. `Budget()` is four `None`s, and rendering that as `$0.0000` would say
+    # this run is capped at nothing when it is capped at nothing in the other sense.
+    dimensions = [
+        f"${ceiling.usd:.4f} usd" if ceiling.usd is not None else "",
+        f"{ceiling.tokens:,} tokens" if ceiling.tokens is not None else "",
+        f"{ceiling.wall_seconds:.0f}s wall" if ceiling.wall_seconds is not None else "",
+        f"{ceiling.turns} turns" if ceiling.turns is not None else "",
+    ]
+    stated = ", ".join(d for d in dimensions if d)
+    click.echo(f"  budget          {stated or '—  (this lifecycle declares no ceiling)'}")
+    click.echo(f"  daily           {daily or '—  (IN_LOCKSTEP_DAILY_LIMIT is not set)'}")
+    click.echo("")
+    click.echo("opens     nothing. `in-lockstep improve` without --explain exits 3: no mechanism")
+    click.echo("          drafts a prompt change yet.")
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 @click.option(
