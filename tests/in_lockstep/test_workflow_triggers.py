@@ -321,3 +321,49 @@ def test_a_run_that_did_the_work_and_could_not_publish_it_still_answers() -> Non
         condition = str(report["if"])
         assert f"needs.{work}.result == 'failure'" in condition
         assert "needs.propose.result == 'failure'" in condition
+
+
+class _StrictLoader(_Loader):
+    """A loader that refuses a duplicate key rather than keeping the last one."""
+
+
+def _no_duplicate_keys(loader: yaml.Loader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    mapping: dict = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise AssertionError(f"duplicate key {key!r} at line {key_node.start_mark.line + 1}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLoader.add_constructor("tag:yaml.org,2002:map", _no_duplicate_keys)
+
+
+@pytest.mark.parametrize("path", ALL_WORKFLOWS, ids=lambda p: p.name)
+def test_no_workflow_repeats_a_key(path: Path) -> None:
+    """YAML keeps the LAST of two identical keys and says nothing, and neither does `safe_load` —
+    so a step with two `env:` blocks silently loses the first one's variables.
+
+    Written after exactly that: a `review.yml` step carried `env: {ISSUE: ...}` and then
+    `env: {GH_TOKEN: ...}`, and every other assertion in this file passed over a workflow whose
+    job would have run without the number it was about. A file nothing type-checks needs the
+    checks it can get.
+    """
+    yaml.load(path.read_text(), Loader=_StrictLoader)  # noqa: S506 - a SafeLoader subclass
+
+
+@pytest.mark.parametrize("path", ALL_WORKFLOWS, ids=lambda p: p.name)
+def test_a_comment_body_never_reaches_a_shell(path: Path) -> None:
+    """`${{ github.event.comment.body }}` inside a `run:` is shell injection, written by anyone who
+    can comment, into whichever job holds that step's credentials.
+
+    It travels as an environment variable and the script quotes it. The distinction is invisible on
+    a screen and total in effect, which is what makes it worth a test rather than a review.
+    """
+    for job, spec in (_load(path.name).get("jobs") or {}).items():
+        for step in spec.get("steps") or []:
+            assert "github.event.comment.body" not in (step.get("run") or ""), (
+                f"{path.name}:{job} interpolates a comment body into a shell script; pass it "
+                f"through `env:` and quote it"
+            )

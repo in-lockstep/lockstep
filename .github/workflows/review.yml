@@ -1,0 +1,158 @@
+# `/review <lens>` on a pull request. Hand-written and permanent; nothing generates or checks it.
+#
+# THIS FILE CONTAINS NO LIFECYCLE LOGIC. Which lens the comment asked for is resolved by
+# `chatops.aspect_from` against the lenses the bound adapter actually has, and which change the
+# comment is about is resolved by `Scm.change_refs` — both in Python, where they have tests.
+# GitHub's expression language has twelve functions and none of them splits a string, so a
+# trampoline could not parse the argument even if this repository wanted it to. GATE-REVIEW-3.
+#
+# WHY A SEPARATE FILE FROM lockstep.yml. That one runs on `pull_request` and reviews every change
+# once, unattended. This is somebody asking, on the thread, for a specific lens — usually one that
+# did not run automatically. Different trigger, different authorization, different job split.
+#
+# WHO MAY FIRE IT. Anyone who can see a repository can comment on it, so the comment is not the
+# authorization. `gate` is, and it runs first and alone: an unauthorized comment costs one job that
+# calls nothing and reaches no host.
+#
+# THE THREE JOBS ARE A CREDENTIAL SPLIT, NOT A PIPELINE. `review` holds the provider credential and
+# `contents: read`. `post` holds `pull-requests: write` and no provider SDK at all — it cannot call
+# a model because the extra is not installed, which is a fact about the environment rather than a
+# property of the code path taken. No amount of Python makes one process hold two token scopes.
+#
+# WHAT BOUNDS THE SPEND. One lens, one run, and the ceiling `.lockstep/lockstep.py` declares. NO
+# `--budget` here, and its absence is load-bearing: `run --budget` REPLACES the module's ceiling
+# rather than merging with it, so a literal in this file would outrank the module silently and
+# permanently — and `Budget(usd=X)` also drops the `wall_seconds` the module set. `lockstep.yml`
+# does state one, and that is not an inconsistency: it runs on `pull_request`, which is the
+# workflow an adopter gets before they have written a lockstep.py at all. This trigger cannot be
+# in that position — it resolves the lens against the adapter the module binds, so the module
+# exists by the time this runs.
+#
+# WHAT THIS DOES NOT DO. A fork's pull request has no head commit in this checkout — `fetch-depth: 0`
+# fetches this repository's refs, not a fork's — so `/review` on one refuses rather than reviewing
+# the wrong thing. That refusal is the honest outcome and `change_refs` is where it happens.
+name: review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  # Per issue, and NOT cancel-in-progress: a cancelled model call may still be billed, and throws
+  # away what was paid for.
+  group: review-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # `startsWith` rather than `contains`, which would fire on every comment that merely mentions
+    # `/review` — including one explaining why not to run it. A pull-request comment fires
+    # `issue_comment` too and is deliberately not filtered out; that filter was a bug in the two
+    # triggers that had it, and a reviewer asking for a lens is standing on the pull request when
+    # they ask.
+    if: startsWith(github.event.comment.body, '/review')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      actor: ${{ steps.check.outputs.actor }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      # CODEOWNERS comes from this checkout, which is the default branch. Reading it from anywhere
+      # a contributor can write would let someone add themselves to the list that decides whether
+      # they may add themselves.
+      - id: check
+        run: |
+          uv run in-lockstep gate --actor "$ACTOR" --association "$ASSOCIATION"
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+        env:
+          ACTOR: ${{ github.event.comment.user.login }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+
+  review:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Read-only, and needed: `change_refs` asks the host what the pull request points at, because
+      # an `issue_comment` event carries neither ref — GITHUB_BASE_REF is empty and GITHUB_SHA is
+      # the default branch's tip. A run built from those would diff the default branch against
+      # itself and report a clean bill of health for a change it never read.
+      pull-requests: read
+      # Federation only. This job may mint the runner's identity token, which the framework
+      # exchanges for the run's credential; it is not repository write access. `post` below holds
+      # the write token and no identity token, which is the whole split.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # The base ref has to be a commit this checkout has. Without it, configuration cannot be
+          # loaded from the trusted ref and the diff cannot be taken.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # With the provider extra: model SDKs are optional dependencies, so the job that calls a
+      # model has to ask for one. `post` deliberately does not.
+      - run: uv sync --extra anthropic
+      # BODY travels as an environment variable and is never interpolated into this script. A
+      # `${{ github.event.comment.body }}` inside a `run:` is shell injection into the one job
+      # holding a provider credential, written by anyone who can comment.
+      - run: |
+          uv run in-lockstep review --ask "$BODY" --pr "$ISSUE" --comment-out findings.md
+        env:
+          BODY: ${{ github.event.comment.body }}
+          ISSUE: ${{ github.event.issue.number }}
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      - run: uv run in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: review-${{ github.event.issue.number }}
+          path: |
+            findings.md
+            history.bundle
+            .lockstep/
+          if-no-files-found: ignore
+
+  post:
+    needs: review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # The write token, alone. No `id-token`, and `uv sync` below installs no provider extra, so
+      # this process cannot call a model even if something asked it to.
+      pull-requests: write
+      contents: read
+      # Reading this run's own artifact.
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: review-${{ github.event.issue.number }}
+      # The marker that anchors the comment is INSIDE the body `review` composed, so nothing here
+      # names a lens. That is not economy: the lens came out of an untrusted comment and was
+      # resolved in the other job, and naming it here would put it back in YAML.
+      - run: uv run in-lockstep comment --pr "$ISSUE" --body-file findings.md
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          # `gh` reads this; the adapter shells out to it rather than holding an API client.
+          GH_TOKEN: ${{ github.token }}
