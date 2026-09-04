@@ -2661,3 +2661,28 @@ def test_egress_manifest_without_routes_prints_every_registered_endpoint(repo: P
     result = CliRunner().invoke(main, ["egress-manifest"])
     assert result.exit_code == 0, result.output
     assert "api.anthropic.com" in result.output
+
+
+def test_a_declared_improvable_survives_the_loader(repo: Path) -> None:
+    """The declaration is only worth anything if it arrives. `improve` is read off the lifecycle
+    the same way `max_attempts` is, so a module that names a body has to hand it over intact —
+    including `answers`, which is the half that decides whether a trend is attributed at all."""
+    from in_lockstep.loader import load, lockstep_from
+
+    (repo / ".lockstep").mkdir(exist_ok=True)
+    (repo / ".lockstep/lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (\n"
+        "    Improvable(body='prompts/review/security.md', verb='review',\n"
+        "               label='review/security', answers=('review.security',)),\n"
+        ")\n"
+        "lockstep.max_open_proposals = 2\n"
+    )
+    module, _ref = load(str(repo))
+    lockstep = lockstep_from(module)
+    (only,) = lockstep.improve
+    assert only.body == "prompts/review/security.md"
+    assert only.answers_for("review.security")
+    assert lockstep.max_open_proposals == 2
