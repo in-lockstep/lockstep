@@ -1003,6 +1003,11 @@ def _eval_run(cases: list[Any]) -> None:
     was recorded, so what is exercised is everything between a model's reply and an outcome. A case
     with no recorded request cannot be settled this way, and is reported as such rather than
     counted against anything.
+
+    "Replay" is now mostly a figure of speech: a harvested case carries the answer it was derived
+    from, so settling it opens nothing. The cassette path is a fallback for cases written before
+    that field existed, and it is the weaker of the two — a tape is scratch, and the ones worth
+    harvesting from are made in CI and destroyed with the runner.
     """
     from .ai.replay import Cassette, key_of, request_from
     from .evaluation import summarize
@@ -1014,9 +1019,30 @@ def _eval_run(cases: list[Any]) -> None:
 
     for case in cases:
         request = (case.input or {}).get("request")
-        where = str((case.harvested or {}).get("cassette", ""))
-        if not isinstance(request, dict) or not where:
+        if not isinstance(request, dict):
             unplayable.append((case.name, "no recorded request — written by hand, not harvested"))
+            continue
+
+        # The case's own answer first. A case that carries one needs nothing else on disk, which
+        # is the point: it travels out of a runner in an artifact and into a repository, while the
+        # cassette it was harvested from was deleted with the job that made it.
+        if case.recorded:
+            declared = str((case.harvested or {}).get("key", ""))
+            actual = key_of(request_from(request))
+            if declared and declared != actual:
+                # The pair does not hash together, so one of the two was edited after recording.
+                # Grading anyway would settle a question against the answer to a different one,
+                # which is the fabrication the whole corpus exists to refuse.
+                unplayable.append(
+                    (case.name, f"its request and its answer are not the pair recorded as {declared[:12]}")
+                )
+                continue
+            results.append(grade(case, _as_answer(str(case.recorded.get("content", "")))))
+            continue
+
+        where = str((case.harvested or {}).get("cassette", ""))
+        if not where:
+            unplayable.append((case.name, "no recorded answer, and no cassette to find one in"))
             continue
         if where not in tapes:
             tapes[where] = Cassette.load(where)
