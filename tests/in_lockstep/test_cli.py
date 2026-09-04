@@ -3135,3 +3135,112 @@ def test_a_default_cassette_lands_under_the_root_not_the_working_directory(repo:
         assert _cassette_default(_Lockstep(), "review") == str(repo / ".lockstep/cassettes/review.json")
     finally:
         os.chdir(repo)
+
+
+# -- GATE-LEDGER-4 / GATE-EVAL-1: the subject a run was measured under -------------------------
+#
+# Both gates were `held` from the day they were written, over `EvalSubject`, which nothing called.
+# The hash was right; no run had ever computed one, so the assertion -- which is about whether two
+# runs are comparable -- had never been made about any two runs. PR #215 corrected them to
+# `unit only`. These are what makes them `held`, and every one of them goes through the CLI's own
+# join rather than through `subject_for`, because a test calling the hash directly would pass with
+# the join wired to the wrong text.
+
+
+def _subject(guardrails: tuple[tuple[str, str], ...] = (), skills: tuple[tuple[str, str], ...] = ()):  # noqa: ANN202
+    """What a `review` run would record, with the bound composition optionally extended.
+
+    Extended through `AiReview(layers=...)`, which is the documented way an adopter adds a
+    guardrail or a skill of their own — so this varies the thing a repository actually varies.
+    """
+    from in_lockstep.adapters.ai import AiReview, Review
+    from in_lockstep.cli import _eval_subject
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep()
+    base = AiReview().compositions()["review/security"].layers
+    lockstep.bind(Review, AiReview(layers=base.plus(guardrails=guardrails, skills=skills)))
+    return _eval_subject(lockstep, kind="review", aspect="security", model_id="anthropic:claude-sonnet-4-6")
+
+
+def test_gate_ledger_4_a_review_run_records_the_subject_it_was_measured_under(repo: Path) -> None:
+    """GATE-LEDGER-4 and GATE-EVAL-1, the live half: a run computes a subject and keeps it.
+
+    Read back off a record an actual `review --offline` run wrote, because the whole defect these
+    two gates carried was that nothing produced one. A constructed record would restate it.
+    """
+    import json
+
+    _write(repo)
+    result = CliRunner().invoke(main, ["review", "--offline"])
+    assert result.exit_code == 0, result.output
+
+    record = json.loads(_ledger_record(repo, "review-security").read_text())
+    assert len(str(record.get("subject", ""))) == 32, f"no subject key on the record: {sorted(record)}"
+    assert "review/security" in str(record.get("subject_label", "")), record.get("subject_label")
+    assert record["schema"] >= 6, "the record predates the field"
+
+
+def test_gate_ledger_4_a_guardrail_change_moves_the_subject_a_run_would_record() -> None:
+    """GATE-LEDGER-4's own assertion, on the path a run takes.
+
+    `prompt_id` and `prompt_version` do not move, which is the point: identity is a content hash
+    precisely because editing a prompt without bumping a version is the normal way a prompt gets
+    edited, and a declared version would have called these two runs comparable.
+    """
+    before = _subject()
+    after = _subject(guardrails=(("acme/house", "Never approve a change that adds a dependency."),))
+    assert before is not None and after is not None
+    assert before.key != after.key, "a guardrail change left the subject unmoved"
+    assert before.composed_prompt_sha256 != after.composed_prompt_sha256
+    assert (before.prompt_id, before.prompt_version) == (after.prompt_id, after.prompt_version)
+    # Both halves populated, or the comparison above is `("", "") == ("", "")` and the contrast the
+    # gate rests on — content hash moved, declared version did not — is being asserted by nothing.
+    assert before.prompt_id and before.prompt_version, (before.prompt_id, before.prompt_version)
+
+
+def test_gate_eval_1_a_skill_body_change_moves_the_subject_a_run_would_record() -> None:
+    """GATE-EVAL-1's own assertion, on the path a run takes.
+
+    Twice over, and the row used to say once for the WRONG reason: it claimed skill bodies load by
+    progressive disclosure and are therefore absent from the composed text.
+    `PromptLayers.trailing_texts` inlines every one of them verbatim.
+
+    So both halves are asserted separately, and the second is the one that matters. Asserting only
+    that the key moved would pass on `skillset_hash` alone -- which it does: reducing the composed
+    text to the body left this green while the guardrail test went red, and that is how a docstring
+    claiming "it holds either way" turned out to be claiming something nothing checked.
+    """
+    before = _subject()
+    after = _subject(skills=(("acme/how-we-review", "Quote the line, then the consequence."),))
+    assert before is not None and after is not None
+    assert before.key != after.key, "a skill body change left the subject unmoved"
+    assert before.composed_prompt_sha256 != after.composed_prompt_sha256, (
+        "the skill body is not in the composed text after all, which would make `skillset_hash` "
+        "the only thing holding this gate up -- check what `trailing_texts` emits before editing "
+        "this test"
+    )
+
+
+def test_a_run_whose_model_was_never_consulted_records_no_subject() -> None:
+    """Absent is not zero. The record already withholds `model` when the repository bound its own
+    adapter and chose its own route, because this command's `--model` was not consulted. A subject
+    keyed on a model that was not called is worse than none: it is a comparison somebody could act
+    on."""
+    from in_lockstep.adapters.ai import AiReview, Review
+    from in_lockstep.cli import _eval_subject
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep()
+    lockstep.bind(Review, AiReview())
+    assert _eval_subject(lockstep, kind="review", aspect="security", model_id="") is None
+
+
+def test_a_verb_with_no_bound_composition_records_no_subject() -> None:
+    """Nothing to hash, so nothing is written. `implement` and `fix` are the standing case: their
+    strategies append the repository's house rules at run time, so the static flatten is not what
+    ran and a subject computed from it would hash a prompt nobody sent."""
+    from in_lockstep.cli import _eval_subject
+    from in_lockstep.lockstep import Lockstep
+
+    assert _eval_subject(Lockstep(), kind="review", aspect="security", model_id="m") is None

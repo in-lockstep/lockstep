@@ -317,8 +317,29 @@ head      309a05d0553d6ea7258317bb674e17eb2f2ac537
 branch    main
 config    local working tree
 model     anthropic:claude-sonnet-4-6
+subject   review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6
 spend     $0.0000  (15 tokens, 0.038s)
 ```
+
+`subject` is which runs this one is comparable with — the verb, the lens, the prompt and the model,
+identified by a **hash of the composed prompt** rather than by the declared version, because editing
+a prompt without bumping its version is the normal way a prompt gets edited. The `@1` is that
+declared version, carried for you to read and never for identity, so a measurement is right whether
+or not anybody remembered to bump it.
+
+This line prints the subject in words. To group runs by it:
+
+```bash
+in-lockstep report --by subject --by-kind
+```
+
+`--by` selects what one row aggregates over, and it applies to that grouped table and to
+`--format json` — not to the full report, which always groups by kind. Pass it without either and
+the report says so rather than dropping your question.
+
+A run whose model the framework did not choose carries no subject at all rather than a partial one,
+and `implement` and `fix` carry none either: those strategies append the repository's house rules at
+run time, so the prompt they composed up front is not the prompt they sent.
 
 ## Local models
 

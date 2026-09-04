@@ -1287,6 +1287,10 @@ def _explain_run(run_id: str) -> None:
     line("base", "base")
     line("config", "config")
     line("model", "model")
+    # The label, not the key. `--by subject` groups on the 32-hex identity, because two runs that
+    # composed different prompts must not merge into one row however alike they read; a person
+    # asking what one run measured wants the sentence.
+    line("subject", "subject_label")
     approval = record.get("approval")
     if isinstance(approval, dict) and approval.get("by"):
         watched = "attended" if approval.get("attended") else "unattended"
@@ -1416,7 +1420,7 @@ def _with_delivery(report: Any) -> Any:
     "--by",
     "group_by",
     default="kind",
-    type=click.Choice(["kind", "workflow", "model", "strategy", "aspect", "status"]),
+    type=click.Choice(["kind", "workflow", "model", "strategy", "aspect", "status", "subject"]),
     show_default=True,
     help="What one row aggregates over.",
 )
@@ -1477,6 +1481,15 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
     if fmt == "table" and not grouped:
         from . import metrics
 
+        # `--by` reaches `summarize` below and nothing on this path, so a person who passed one and
+        # got the full report was reading a page that had silently discarded their question. Said
+        # rather than fixed by making `--by` change this report: the two outputs answer different
+        # questions, and quietly turning one into the other would be a worse surprise than a line.
+        if click.get_current_context().get_parameter_source("group_by") is not ParameterSource.DEFAULT:
+            click.echo(
+                f"note      --by {group_by} applies to `--by-kind` and `--format json`, not this report"
+            )
+            click.echo("")
         report = metrics.build(records)
         if with_scm:
             report = _with_delivery(report)
@@ -3050,6 +3063,78 @@ def _write_backport_ledger(
     )
 
 
+def _eval_subject(lockstep: Any, *, kind: str, aspect: str, model_id: str) -> Any | None:
+    """Which runs this one is comparable with, or `None` when that cannot be known.
+
+    `EvalSubject` is this project's answer to that question and it had no caller: the hash was
+    right and nothing had ever computed one, so `GATE-LEDGER-4` and `GATE-EVAL-1` sat `unit only`
+    over a mechanism no run had been through. This is the call site.
+
+    Built here rather than in the adapter that owns the composition, because `evaluation` is a leaf
+    that may import nothing of ours — so the layer holding both the composition and the ledger is
+    the one that can join them, and that layer is this one.
+
+    Hashes the STATIC flatten (`Composition.text()`), which is guardrails, body, skills and
+    contexts with no per-run diff in it. Hashing the rendered prompt would make every subject N=1
+    and no baseline could ever accumulate, which is the failure `subject.py` opens by describing.
+
+    Returns `None` rather than a partial subject in three cases, and each is "absent is not zero"
+    rather than defensive coding:
+
+      * **No model id.** The record already withholds `model` when the repository bound its own
+        adapter and chose its own route, because this command's `--model` was never consulted. A
+        subject keyed on a model that was not called would be worse than no subject: it is a
+        comparison somebody could act on.
+      * **No composition for the label**, or more than one candidate for a verb that names no
+        aspect. Guessing which of two ran is the fabrication this file's neighbours refuse.
+      * **The body will not resolve.** A missing prompt body is a real failure and it is the run's
+        to report, not the ledger writer's to raise inside a record write.
+
+    Not called for `implement` or `fix`. `AiStrategy._session` appends `house_rules(root)` at run
+    time for `reads_house_rules` strategies, so their static flatten is NOT what ran, and a subject
+    computed from it would be a hash of a prompt nobody sent. That is a measurement against a
+    comparison that was never made, which is this repository's own named failure mode. When those
+    verbs expose the layers a session actually used, they can carry one too.
+    """
+    if not model_id:
+        return None
+
+    from .evaluation import subject_for
+
+    bound = _bound_compositions(lockstep)
+    label = f"{kind}/{aspect}" if aspect else ""
+    if not label:
+        candidates = sorted(name for name in bound if name.startswith(f"{kind}/"))
+        if len(candidates) != 1:
+            return None
+        label = candidates[0]
+    composition = bound.get(label)
+    if composition is None:
+        return None
+    try:
+        composed = composition.text()
+    except Exception:  # noqa: BLE001 - see docstring: a body that will not resolve is the run's to report
+        return None
+    layers = composition.layers
+    return subject_for(
+        verb=kind,
+        strategy_id=label,
+        composed_prompt=composed,
+        # Bodies, not names. A skill renamed is the same instructions and should compare equal; a
+        # skill rewritten under the same name is different instructions and must not.
+        skills=tuple(text for _, text in layers.skills),
+        context_recipe=tuple(text for _, text in layers.contexts),
+        model_id=model_id,
+        # Both halves of the display pair, the way `receipt.py` emits them. Carrying the class name
+        # alone left `label()`'s version branch unreachable on every path a run can take, which made
+        # `docs/extending.md`'s promise to adopters — declared `version` is "the human label that
+        # travels alongside" a content hash — travel nowhere. Neither reaches `key`: identity stays
+        # the hash precisely so a measurement is right whether or not somebody remembered to bump.
+        prompt_id=type(composition.prompt).__name__,
+        prompt_version=composition.prompt.version,
+    )
+
+
 def _write_ledger(
     lockstep: Any, ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review"
 ) -> None:
@@ -3064,6 +3149,7 @@ def _write_ledger(
     `kind` names the verb; `aspect` is the review lens and is omitted for verbs that have none, so
     a triage record does not carry an empty lens field that reads as a missing one.
     """
+    subject = _eval_subject(lockstep, kind=kind, aspect=aspect, model_id=model_id)
     _record(
         _ledger(lockstep),
         ctx.run_id,
@@ -3071,6 +3157,12 @@ def _write_ledger(
             "kind": kind,
             **_provenance(lockstep),
             **({"aspect": aspect} if aspect else {}),
+            # What this run is comparable WITH. A flat string on purpose: `summarize` groups on
+            # `str(record.get(by))`, so a nested object would stringify its own repr into the row
+            # label and every record would be its own group — a slice that looks like a slice and
+            # aggregates nothing. Omitted rather than defaulted when the subject cannot be known;
+            # `_eval_subject` says when and why.
+            **({"subject": subject.key, "subject_label": subject.label()} if subject else {}),
             # Omitted when the repository bound its own Review adapter and therefore chose its
             # own model: this command's `--model` was never consulted, and writing it down
             # would put a model that was not called into a permanent record.
