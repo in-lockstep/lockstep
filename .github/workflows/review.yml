@@ -106,8 +106,11 @@ jobs:
       # BODY travels as an environment variable and is never interpolated into this script. A
       # `${{ github.event.comment.body }}` inside a `run:` is shell injection into the one job
       # holding a provider credential, written by anyone who can comment.
+      # The cassette name is built from $ISSUE, an environment variable holding a number, for the
+      # same reason BODY is one: nothing a commenter writes is interpolated into this script.
       - run: |
-          uv run in-lockstep review --ask "$BODY" --pr "$ISSUE" --comment-out findings.md
+          uv run in-lockstep review --ask "$BODY" --pr "$ISSUE" --comment-out findings.md \
+            --record --cassette "${RUNNER_TEMP}/review-${ISSUE}.json"
         env:
           BODY: ${{ github.event.comment.body }}
           ISSUE: ${{ github.event.issue.number }}
@@ -115,6 +118,16 @@ jobs:
           ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
           ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      # The tape stays in RUNNER_TEMP and dies with the runner; the cases ride the artifact.
+      - name: Harvest what the review recorded
+        continue-on-error: true
+        run: |
+          uv run in-lockstep eval harvest \
+            --from "${RUNNER_TEMP}/review-${ISSUE}.json" \
+            --into .lockstep/cases \
+            --family review
+        env:
+          ISSUE: ${{ github.event.issue.number }}
       - run: uv run in-lockstep history --bundle history.bundle
         if: always()
         continue-on-error: true
@@ -127,6 +140,12 @@ jobs:
             history.bundle
             .lockstep/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path, and upload-artifact@v4 excludes hidden files by
+          # DEFAULT. This line was missing, so the directory named above was silently dropped
+          # and the artifact carried the history bundle alone -- 1115 bytes, no cases, no
+          # warning, and a `path:` that reads as though it were working.
+          include-hidden-files: true
+          retention-days: 30
 
   post:
     needs: review

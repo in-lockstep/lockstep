@@ -367,3 +367,165 @@ def test_a_comment_body_never_reaches_a_shell(path: Path) -> None:
                 f"{path.name}:{job} interpolates a comment body into a shell script; pass it "
                 f"through `env:` and quote it"
             )
+
+
+# -- GATE-RECORD-1: every CI review records, and the recording does not leave the runner --------
+
+
+def _steps(spec: dict) -> list[dict]:
+    return [s for job in (spec.get("jobs") or {}).values() for s in (job.get("steps") or [])]
+
+
+def _scaffolds() -> dict[str, str]:
+    """The two trampolines `init` writes, rendered. An adopter gets these, not the files above."""
+    from in_lockstep.cli import _SCAFFOLD_GITLAB_TRAMPOLINE, _SCAFFOLD_TRAMPOLINE
+
+    return {
+        "scaffold: .github/workflows/lockstep.yml": _SCAFFOLD_TRAMPOLINE,
+        "scaffold: .gitlab-ci.yml": _SCAFFOLD_GITLAB_TRAMPOLINE,
+    }
+
+
+def _replays(line: str) -> bool:
+    """A review that reaches no provider. `--offline` and `--dry-run` cannot also record.
+
+    `_one_provider` refuses the combination by name, so this is not a stylistic exemption: the
+    release smoke check replays the shipped fixture to prove a clean install works, and asking it
+    to record would be asking it to overwrite the cassette it is replaying.
+    """
+    return "--offline" in line or "--dry-run" in line
+
+
+def _artifact_paths(name: str, text: str) -> list[str]:
+    """Every path an artifact carries, in whichever word the host uses for it."""
+    spec = yaml.load(text.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)
+    found: list[str] = []
+    for step in _steps(spec):
+        if "upload-artifact" in str(step.get("uses", "")):
+            found += str((step.get("with") or {}).get("path", "")).split()
+    for job in spec.values():
+        if isinstance(job, dict) and isinstance(job.get("artifacts"), dict):
+            found += [str(p) for p in (job["artifacts"].get("paths") or [])]
+    return [p for p in found if p]
+
+
+def _review_scripts(text: str) -> list[str]:
+    """Every shell statement that invokes `review`, from a workflow's source rather than its tree.
+
+    Source, because the GitLab scaffold puts the invocation inside a `|` block that YAML hands
+    back as one string, and because this must see the file an adopter reads.
+    """
+    joined = re.sub(r"\\\s*\n\s*", " ", text)
+    return [line for line in joined.splitlines() if re.search(r"\bin-lockstep review\b", line)]
+
+
+def test_gate_record_1_every_ci_review_records_its_inference() -> None:
+    """O4: an inference nobody kept is an opportunity spent and discarded.
+
+    Every review this repository paid for was being discarded, and so was every review in what
+    `init` scaffolds. Asserted over the scaffolds too, because the adopter's file is the one this
+    framework is actually making a claim about.
+    """
+    sources = {p.name: p.read_text() for p in ALL_WORKFLOWS} | _scaffolds()
+    paid = {
+        name: [line for line in _review_scripts(text) if not _replays(line)] for name, text in sources.items()
+    }
+    paid = {name: lines for name, lines in paid.items() if lines}
+    assert len(paid) >= 4, f"only {sorted(paid)} pay for a review; the scan stopped matching"
+    for name, lines in paid.items():
+        for line in lines:
+            assert "--record" in line, f"{name} pays for a review and keeps nothing: {line.strip()}"
+
+
+def test_gate_record_1_the_recording_never_leaves_the_runner() -> None:
+    """The tape is written outside the checkout, and no artifact path reaches it.
+
+    Enforced by where the bytes land rather than promised by a `path:` line, which is the whole
+    reason for the temp directory: a recording holds the request verbatim -- the whole composed
+    prompt and the whole diff -- and redaction masks credentials, not source. What is uploaded is
+    the cases harvested from it, which carry the same request but arrive somewhere a person chose.
+    """
+    outside = ("${RUNNER_TEMP}", "/tmp/")
+    sources = {p.name: p.read_text() for p in ALL_WORKFLOWS} | _scaffolds()
+    for name, text in sources.items():
+        for line in _review_scripts(text):
+            if "--record" not in line:
+                continue
+            written = re.search(r'--cassette "?([^\s"]+)', line)
+            assert written, f"{name} records without saying where: {line.strip()}"
+            where = written.group(1)
+            assert where.startswith(outside), (
+                f"{name} records to {where}, which is inside the checkout. An artifact that "
+                f"uploads a directory would then carry the tape as well as the cases."
+            )
+            for uploaded in _artifact_paths(name, text):
+                assert not uploaded.startswith(outside) and not uploaded.startswith("/"), (
+                    f"{name} uploads {uploaded}, which is outside the checkout and is where the "
+                    f"recording lives. The tape is meant to die with the runner."
+                )
+
+
+def test_gate_record_1_an_artifact_holding_run_evidence_declares_a_retention() -> None:
+    """A vendor default is a retention policy nobody in this repository chose.
+
+    Scoped to the artifacts that carry run evidence -- anything naming `.lockstep/` or a history
+    bundle. The release build's `dist/` handoff is deliberately not in scope: it is a step between
+    two jobs of one run, not a record of what a model was sent.
+    """
+    for path in ALL_WORKFLOWS:
+        for step in _steps(_load(path.name)):
+            if "upload-artifact" not in str(step.get("uses", "")):
+                continue
+            with_ = step.get("with") or {}
+            carried = str(with_.get("path", ""))
+            if ".lockstep/" not in carried and "history.bundle" not in carried:
+                continue
+            assert with_.get("retention-days"), (
+                f"{path.name} uploads run evidence with no retention-days, so how long it is kept "
+                f"is whatever the vendor default happens to be"
+            )
+
+
+def test_gate_record_1_both_scaffolds_declare_a_retention() -> None:
+    """The adopter's copy, in each host's own word for the same thing."""
+    github, gitlab = _scaffolds().values()
+    assert "retention-days:" in github, "the scaffolded GitHub trampoline states no retention"
+    assert "expire_in:" in gitlab, "the scaffolded GitLab trampoline states no retention"
+
+
+def test_gate_record_1_an_upload_naming_a_dotted_path_asks_for_hidden_files() -> None:
+    """`upload-artifact@v4` excludes hidden files by DEFAULT, and `.lockstep/` is a dotted path.
+
+    This is not hypothetical and it is not a style rule. The `path:` block in `lockstep.yml` named
+    `.lockstep/` for months; the artifact it produced was 1115 bytes, holding the history bundle
+    and nothing else. No warning, no red step, and a `path:` line that reads as though it were
+    working -- which is why the recording work in this pull request appeared to succeed and
+    delivered nothing until somebody downloaded the artifact and looked.
+
+    Asserted for the scaffolds too, in `test_gate_record_1_both_scaffolds_declare_a_retention`'s
+    company: an adopter's copy has the same trap in it.
+    """
+    for path in ALL_WORKFLOWS:
+        for step in _steps(_load(path.name)):
+            if "upload-artifact" not in str(step.get("uses", "")):
+                continue
+            with_ = step.get("with") or {}
+            dotted = [p for p in str(with_.get("path", "")).split() if p.startswith(".")]
+            if not dotted:
+                continue
+            assert with_.get("include-hidden-files") is True, (
+                f"{path.name} uploads {dotted}, which upload-artifact drops by default. The step "
+                f"goes green and the artifact arrives without them."
+            )
+
+
+def test_gate_record_1_the_scaffolded_upload_asks_for_hidden_files() -> None:
+    """The adopter's copy of the same trap. Its only path is `.lockstep/`, so without this the
+    artifact it produces is empty rather than merely short."""
+    from in_lockstep.cli import _SCAFFOLD_TRAMPOLINE
+
+    spec = yaml.load(_SCAFFOLD_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)
+    uploads = [s for s in _steps(spec) if "upload-artifact" in str(s.get("uses", ""))]
+    assert uploads, "the scaffold uploads nothing at all"
+    for step in uploads:
+        assert (step.get("with") or {}).get("include-hidden-files") is True

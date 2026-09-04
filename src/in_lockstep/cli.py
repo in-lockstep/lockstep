@@ -15,6 +15,7 @@ from click.core import ParameterSource
 
 from . import __version__
 from .ai.prompt import Composition, Inspectable
+from .ai.replay import CASSETTE_DIR
 from .core.context import DISABLE_ENV, RunContext
 from .core.outcome import Status
 from .core.types import Locatable, Test, Validate
@@ -670,6 +671,23 @@ def main() -> None:
     # Env scraping is the fallback source, not the mechanism: `Auth` registers what it mints. But
     # a key already in the environment before a run starts is real, and this is where it is seen.
     redact_registry.seed_from_environment()
+
+
+def _cassette_default(lockstep: Any, verb: str) -> str:
+    """Where a verb's recording goes when nobody passed `--cassette`.
+
+    Joined to the repository root rather than left relative, which is the whole point of the
+    helper. A bare `.lockstep/cassettes/review.json` resolves against the process working
+    directory, so `in-lockstep review --record` run from a subdirectory wrote
+    `<subdir>/.lockstep/cassettes/review.json` — a real recording, in a directory no `.gitignore`
+    line matches, holding the whole composed prompt and the whole diff. The ignore lines are
+    anchored (`.lockstep/cassettes/`, not `**/.lockstep/cassettes/`) and anchoring them is right;
+    what was wrong was writing outside them.
+
+    Only the default is joined. A path a person passed is theirs, and resolving it against a root
+    they did not name would be the same surprise in the other direction.
+    """
+    return str(Path(lockstep.repo.root) / Path(CASSETTE_DIR) / f"{verb}.json")
 
 
 def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
@@ -2149,7 +2167,7 @@ def review_cmd(
             demo_diff = ""
     else:
         demo_diff = ""
-    cassette = cassette or ".lockstep/cassettes/review.json"
+    cassette = cassette or _cassette_default(lockstep, "review")
 
     auth = Auth()
     try:
@@ -2348,7 +2366,7 @@ def triage_cmd(
         raise click.ClickException(str(e)) from None
     selected = Model(model)
     table = table_for(registry, selected, _bound_cost_table(lockstep))
-    tape = Cassette.load(cassette or ".lockstep/cassettes/triage.json")
+    tape = Cassette.load(cassette or _cassette_default(lockstep, "triage"))
 
     def build_invoker(_ctx: Any) -> AiInvoker:
         provider: LLMProvider
@@ -2630,7 +2648,7 @@ def rfe_cmd(
         raise click.ClickException(str(e)) from None
     selected = Model(model)
     table = table_for(registry, selected, _bound_cost_table(lockstep))
-    tape = Cassette.load(cassette or ".lockstep/cassettes/rfe.json")
+    tape = Cassette.load(cassette or _cassette_default(lockstep, "rfe"))
 
     def build_invoker(_ctx: Any) -> AiInvoker:
         provider: LLMProvider
@@ -2871,7 +2889,7 @@ def backport_cmd(
         except MissingCredential as e:
             raise click.ClickException(str(e)) from None
         table = table_for(registry, selected, _bound_cost_table(lockstep))
-        tape = Cassette.load(cassette or ".lockstep/cassettes/backport.json")
+        tape = Cassette.load(cassette or _cassette_default(lockstep, "backport"))
 
         def build_invoker(_ctx: Any) -> AiInvoker:
             provider: LLMProvider
@@ -3376,7 +3394,7 @@ def implement_cmd(
         raise click.ClickException(str(e)) from None
     selected = Model(model)
     table = table_for(providers, selected, _bound_cost_table(lockstep))
-    tape = Cassette.load(cassette or ".lockstep/cassettes/implement.json")
+    tape = Cassette.load(cassette or _cassette_default(lockstep, "implement"))
 
     def build_invoker(_ctx: Any) -> AiInvoker:
         provider: LLMProvider
@@ -4451,6 +4469,12 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         if found:
             click.echo(f"  detected {'; '.join(found)}")
 
+    # Relative like every other path this command writes, and unlike the cassette default, which
+    # is joined to the repository root. Different commands, different failure modes: `init` is run
+    # once, by a person, at the root, and prints every path it touched. `--record` is a flag on a
+    # run that happens anywhere, including from a subdirectory in CI, and writes silently.
+    _write_gitignore(Path(".gitignore"))
+
     # The trampoline the detected host can actually run: a GitLab repository gets
     # `.gitlab-ci.yml`, not a `.github/workflows/` file it would silently ignore.
     from .platform.hosted import detect_host
@@ -4471,6 +4495,83 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         _scaffold_implement(module, host=host)
     if with_fix:
         _scaffold_fix(module, host=host)
+
+    _disclose_what_a_run_keeps()
+
+
+#: What `init` adds to a repository's `.gitignore`. Named individually rather than ignoring
+#: `.lockstep/` and negating `lockstep.py` back in: a negation is one `!` away from silently
+#: untracking the lifecycle definition, and a repository then runs on detected defaults with
+#: nobody noticing. This is the same shape as this repository's own, for the same reason.
+_SCAFFOLD_IGNORE = """\
+# in-lockstep. `.lockstep/` holds two kinds of thing and only one of them is yours to commit.
+#
+# COMMITTED: `.lockstep/lockstep.py` is the lifecycle definition. It is executed, not parsed, so
+# it belongs in review like any other code and is deliberately absent from the list below.
+#
+# SCRATCH: everything here belongs to one machine's attempt at one run. A cassette holds the
+# request verbatim -- the whole composed prompt and the whole diff that was sent. A transcript
+# holds every message and every tool result. Those two are the files most likely to be committed
+# by a `git add .` after a run that went badly, which is when nobody is reading the diff.
+#
+# Run records are not here, because they are meant to survive a machine: they go to an orphan
+# branch, append-only and tamper-checked.
+.lockstep/runs/
+.lockstep/cassettes/
+.lockstep/cases/
+.lockstep/ledger/
+.lockstep/transcripts/
+.lockstep/__pycache__/
+"""
+
+
+def _write_gitignore(path: Path) -> None:
+    """Ignore what a run writes, appending rather than replacing.
+
+    `init` wrote none at all, while `docs/getting-started.md` told adopters `.lockstep/cassettes/`
+    was gitignored and three module docstrings asserted it in prose. The property held in exactly
+    one repository -- this one, where a person typed the lines by hand.
+
+    Appended, never overwritten, and only the entries that are missing. An adopter's `.gitignore`
+    is theirs, `--force` is scoped to the lifecycle module on purpose, and running `init` twice
+    should not stack the block.
+    """
+    wanted = _SCAFFOLD_IGNORE.splitlines()
+    if not path.exists():
+        sink.write_text_atomic(path, _SCAFFOLD_IGNORE)
+        click.echo(f"wrote {path}")
+        return
+    have = {line.strip() for line in path.read_text().splitlines()}
+    missing = [line for line in wanted if line.startswith(".lockstep/") and line not in have]
+    if not missing:
+        click.echo(f"{path} already ignores what a run writes")
+        return
+    sink.append_text(
+        path,
+        "\n# in-lockstep: what a run writes. `.lockstep/lockstep.py` is not here on purpose.\n"
+        + "\n".join(missing)
+        + "\n",
+    )
+    click.echo(f"appended {len(missing)} line(s) to {path}")
+
+
+def _disclose_what_a_run_keeps() -> None:
+    """Say what a recording holds, where it goes and for how long, at the moment somebody opts in.
+
+    Recording is on by default in what this scaffolds, which is the right default -- an inference
+    nobody kept is an opportunity spent and discarded -- and it is exactly the kind of default that
+    has to be said out loud rather than discovered. What follows is the whole disclosure: a person
+    who reads only this knows what leaves their machine and what stays.
+    """
+    click.echo("")
+    click.echo("What a run keeps:")
+    click.echo("  A recording holds the request verbatim -- the whole composed prompt and the")
+    click.echo("  whole diff that was sent. Redaction masks credentials; it does not mask source.")
+    click.echo(f"  Locally, only under --record: {CASSETTE_DIR}/<verb>.json, now gitignored.")
+    click.echo("  In CI, the recording is written to the runner's temporary directory and dies")
+    click.echo("  with the runner. What survives is the cases harvested from it, in the run")
+    click.echo("  artifact, which says how many days it is kept.")
+    click.echo("  Run records are the exception and are meant to survive: an orphan branch.")
 
 
 def _write_trampoline(path: Path, template: str) -> bool:
@@ -4836,12 +4937,34 @@ jobs:
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
             --aspect security \
-            --budget 0.75
+            --budget 0.75 \
+            --record \
+            --cassette "${RUNNER_TEMP}/review.json"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.
           # Leave it unset unless your key is identity-linked; empty sends no header.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      # Recording is ON, and here is what that means, in the file rather than in a doc somebody
+      # has to find. `--record` above writes the request that was really sent — the whole composed
+      # prompt and the whole diff — to RUNNER_TEMP, which the runner destroys when the job ends.
+      # No path below reaches it, so the tape itself never leaves the runner.
+      #
+      # What survives is what this step makes of it: cases under `.lockstep/cases/`, each a real
+      # request with expectations derived from the answer that really came back. `in-lockstep init`
+      # gitignores that directory, and the artifact below says how long a copy is kept.
+      #
+      # Delete both steps if you would rather keep nothing. Nothing else depends on them.
+      - name: Harvest what the review recorded
+        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        # Harvest refuses rather than inventing, so a recording it cannot build a case from exits
+        # non-zero. That is right for harvest and the wrong reason to fail somebody's review.
+        continue-on-error: true
+        run: |
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \
+            --from "${RUNNER_TEMP}/review.json" \
+            --into .lockstep/cases \
+            --family review
       - name: No provider credential
         if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
         run: echo "no ANTHROPIC_API_KEY (fork pull request?) — review skipped, nothing failed"
@@ -4851,6 +4974,13 @@ jobs:
           name: lockstep-run
           path: .lockstep/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 excludes hidden files by DEFAULT,
+          # so without this the directory above is silently dropped and the artifact arrives empty.
+          include-hidden-files: true
+          # Stated rather than inherited. The vendor default is 90 days, and this artifact can
+          # hold prompts and diffs. Two weeks is long enough to notice a run and download it, and
+          # short enough that inaction deletes rather than accumulates.
+          retention-days: 14
 """
 
 _SCAFFOLD_GITLAB_TRAMPOLINE = """\
@@ -4893,19 +5023,38 @@ review:
     # Skipped without a credential rather than failed: a merge request from a fork gets no
     # protected variables, and a red check the contributor cannot fix teaches everyone to
     # ignore red.
+    # Recording is ON. `--record` writes the request that was really sent — the whole composed
+    # prompt and the whole diff — to /tmp, outside the checkout, in a container this job does
+    # not share. `paths:` below names `.lockstep/` and nothing else, so the tape never leaves.
+    # What survives is the cases harvested from it, under `.lockstep/cases/`, which `init`
+    # gitignores and the artifact keeps for the stated number of days. Delete the two lines if
+    # you would rather keep nothing; nothing else depends on them.
+    #
+    # `|| true` on the harvest for the reason `doctor` has it: harvest refuses rather than
+    # inventing, so a recording it cannot build a case from exits non-zero, and that is the wrong
+    # reason to fail somebody's review.
     - |
       if [ -n "$ANTHROPIC_API_KEY" ]; then
         in-lockstep review \\
           --base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \\
           --head "${CI_COMMIT_SHA}" \\
           --aspect security \\
-          --budget 0.75
+          --budget 0.75 \\
+          --record \\
+          --cassette /tmp/review.json
+        in-lockstep eval harvest \\
+          --from /tmp/review.json \\
+          --into .lockstep/cases \\
+          --family review || true
       else
         echo "no ANTHROPIC_API_KEY (fork merge request?) — review skipped, nothing failed"
       fi
   artifacts:
     when: always
     paths: [.lockstep/]
+    # Said out loud rather than inherited: the instance default is measured in weeks or forever
+    # depending on how this GitLab is configured, and this artifact can hold prompts and diffs.
+    expire_in: 14 days
 
 # -- write-capable verbs: the gate/work/propose credential split --------------------------------
 #

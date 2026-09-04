@@ -17,15 +17,32 @@ in-lockstep init
 ```text
 wrote .lockstep/lockstep.py
   detected stack: python; tests: pytest; lint: ruff; provision: uv sync --locked
+wrote .gitignore
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged `apply` job the
 day a verb of yours produces a change to write; the file says where.
+
+What a run keeps:
+  A recording holds the request verbatim -- the whole composed prompt and the
+  whole diff that was sent. Redaction masks credentials; it does not mask source.
+  Locally, only under --record: .lockstep/cassettes/<verb>.json, now gitignored.
+  In CI, the recording is written to the runner's temporary directory and dies
+  with the runner. What survives is the cases harvested from it, in the run
+  artifact, which says how many days it is kept.
+  Run records are the exception and are meant to survive: an orphan branch.
 ```
 
-That writes two files. `.lockstep/lockstep.py` is your lifecycle. `.github/workflows/lockstep.yml` is a
+That writes three files. `.lockstep/lockstep.py` is your lifecycle. `.github/workflows/lockstep.yml` is a
 trampoline: it invokes the CLI and contains no lifecycle logic, because a CI host requires its own
-YAML and that YAML belongs to the host.
+YAML and that YAML belongs to the host. The `.gitignore` covers what a run writes — appended to
+yours if you have one, and only the lines it is missing.
+
+The closing paragraph is the whole disclosure, and it is printed rather than filed because the
+default it describes is on: the trampoline records every review it pays for. An inference nobody
+kept is an opportunity spent and discarded, which is why recording is not a flag you remember to
+pass. Delete the two steps in the trampoline if you would rather keep nothing; they are commented
+where they sit and nothing else depends on them.
 
 ## Where things live
 
@@ -33,6 +50,7 @@ YAML and that YAML belongs to the host.
 .lockstep/lockstep.py     your lifecycle, committed and reviewed
 .lockstep/runs/           checkpoints         (gitignored)
 .lockstep/cassettes/      recordings          (gitignored)
+.lockstep/cases/          harvested cases     (gitignored)
 lockstep-history          an orphan branch    (run records)
 ```
 

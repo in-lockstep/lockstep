@@ -149,6 +149,7 @@ jobs:
             attempt/
             history.bundle
           if-no-files-found: ignore
+          retention-days: 30
 
   propose:
     needs: [gate, fix]
