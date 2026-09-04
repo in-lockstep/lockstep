@@ -19,6 +19,8 @@ from .base import (
     Ref,
     Scm,
     branch_for,
+    is_run_branch_of,
+    workflow_slug,
 )
 from .github import GitHubScm
 from .gitlab import GitLabScm
@@ -36,4 +38,6 @@ __all__ = [
     "Ref",
     "Scm",
     "branch_for",
+    "is_run_branch_of",
+    "workflow_slug",
 ]

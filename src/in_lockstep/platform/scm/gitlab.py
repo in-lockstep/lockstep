@@ -38,6 +38,7 @@ from .base import (
     change_body,
     conventional_subject,
     is_run_branch_for,
+    is_run_branch_of,
     ticket_from_branch,
     title_line,
     trailers_from,
@@ -321,6 +322,55 @@ class GitLabScm:
                 draft=bool(row.get("draft") or str(row.get("title") or "").startswith("Draft:")),
             )
             for row in mine[:MAX_CHANGES_READ]
+        )
+
+    def open_changes_by_workflow(self, workflow: str, *, limit: int = 200) -> tuple[ChangeRequest, ...]:
+        """Every OPEN merge request this framework has on `workflow`'s branches, newest first.
+
+        Paginated, unlike `changes_for`, which asks for one page of 60 and never noticed. GitLab
+        caps `per_page` at 100 whatever you ask for, so a single request is a count with a silent
+        ceiling on it — and a ceiling whose own count is capped is not a ceiling. This walks pages
+        until one comes back short, and raises if it would pass `limit` first, because an
+        undercount here lets a run through and that is the failure the number exists to prevent.
+
+        Draft is spelled differently on the two hosts: GitLab writes it as a title prefix as well
+        as a field, which `changes_for` already handles, and the prefix is stripped from the title
+        the same way rather than a second time in a second style.
+        """
+        page, rows = 1, []
+        while True:
+            got = self._request(
+                "GET",
+                f"/projects/{self._project_path()}/merge_requests",
+                params={
+                    "state": "opened",
+                    "per_page": 100,
+                    "page": page,
+                    "order_by": "created_at",
+                    "sort": "desc",
+                },
+            )
+            batch = [row for row in (got if isinstance(got, list) else []) if isinstance(row, dict)]
+            rows += batch
+            if len(batch) < 100:
+                break
+            if len(rows) >= limit:
+                raise RuntimeError(
+                    f"merge request listing truncated at {limit}; the count would be a floor, not a ceiling"
+                )
+            page += 1
+
+        mine = [row for row in rows if is_run_branch_of(str(row.get("source_branch") or ""), workflow)]
+        return tuple(
+            ChangeRequest(
+                id=str(row.get("web_url") or ""),
+                url=str(row.get("web_url") or ""),
+                branch=str(row.get("source_branch") or ""),
+                title=str(row.get("title") or "").removeprefix("Draft:").strip(),
+                number=int(row.get("iid") or 0) or None,
+                draft=bool(row.get("draft") or str(row.get("title") or "").startswith("Draft:")),
+            )
+            for row in sorted(mine, key=lambda r: int(r.get("iid") or 0), reverse=True)
         )
 
     async def ticket_of(self, number: int) -> str | None:
