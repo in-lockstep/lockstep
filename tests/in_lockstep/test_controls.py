@@ -1076,3 +1076,57 @@ def test_gate_guard_1_tightening_the_path_policy_cannot_weaken_it() -> None:
     assert tightened.check_path("infra/main.tf") is not None, "the added prefix does apply"
     assert shipped.check_path("infra/main.tf") is None, "and it is genuinely an addition"
     assert tightened.check_path("src/app.py") is None, "an ordinary path is still writable"
+
+
+# -- DOC168: what is recorded, and whether git would commit it ---------------------------------
+
+
+def _repo_holding_a_recording(root, *, ignored: bool):  # noqa: ANN001, ANN202
+    """A git repository with one cassette on disk, ignored or not as asked."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    (root / ".lockstep" / "cassettes").mkdir(parents=True)
+    (root / ".lockstep" / "cassettes" / "review.json").write_text('{"provider_calls": {}}')
+    if ignored:
+        (root / ".gitignore").write_text(".lockstep/cassettes/\n")
+    return root
+
+
+def test_doc168_says_what_is_recorded_when_git_is_ignoring_it(tmp_path) -> None:  # noqa: ANN001
+    """A note, not a finding: recordings in the directory the CLI writes to, out of git's way."""
+    from in_lockstep import doctor
+
+    report = doctor.run(str(_repo_holding_a_recording(tmp_path, ignored=True)))
+    found = [c for c in report.checks if c.code == "DOC168"]
+    assert found, "doctor said nothing about a recording on disk"
+    assert found[0].severity is doctor.Severity.NOTE
+    assert "1 recording" in found[0].message
+
+
+def test_doc168_warns_when_a_recording_is_not_ignored(tmp_path) -> None:  # noqa: ANN001
+    """The case worth catching. A cassette holds the whole composed prompt and the whole diff, so
+    a commit from that tree publishes both -- and redaction masks credentials, not source."""
+    from in_lockstep import doctor
+
+    report = doctor.run(str(_repo_holding_a_recording(tmp_path, ignored=False)))
+    found = [c for c in report.checks if c.code == "DOC168"]
+    assert found, "doctor said nothing about a recording git would commit"
+    assert found[0].severity is doctor.Severity.WARNING
+    assert "NOT ignoring" in found[0].message
+
+
+def test_doc168_never_fails_a_run(tmp_path) -> None:  # noqa: ANN001
+    """Recording is on by default now, and a default must not turn every doctor exit non-zero."""
+    from in_lockstep import doctor
+
+    report = doctor.run(str(_repo_holding_a_recording(tmp_path, ignored=False)))
+    assert not [c for c in report.errors if c.code == "DOC168"]
+
+
+def test_doc168_is_silent_when_nothing_was_recorded(tmp_path) -> None:  # noqa: ANN001
+    """A note about an empty directory is noise, and noise is how a report stops being read."""
+    from in_lockstep import doctor
+
+    (tmp_path / ".lockstep" / "cassettes").mkdir(parents=True)
+    assert not [c for c in doctor.run(str(tmp_path)).checks if c.code == "DOC168"]

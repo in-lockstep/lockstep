@@ -3062,3 +3062,76 @@ def test_the_implement_block_still_binds_a_runner_when_detection_found_none(repo
         assert type(bound).__name__ == "PytestTest", type(bound).__name__
     finally:
         restore(state)
+
+
+# -- what a run keeps: the ignore lines, the disclosure, and where a recording lands ------------
+#
+# GATE-RECORD-1's local half. The CI half is in test_workflow_triggers.py, because it is a
+# property of every workflow this repository ships rather than of one command.
+
+
+def test_init_writes_a_gitignore_when_there_is_none(repo: Path) -> None:
+    """It wrote none at all, while the docs told adopters `.lockstep/cassettes/` was ignored."""
+    CliRunner().invoke(main, ["init"])
+    text = (repo / ".gitignore").read_text()
+    for scratch in (".lockstep/cassettes/", ".lockstep/cases/", ".lockstep/transcripts/"):
+        assert scratch in text, f"{scratch} is not ignored"
+
+
+def test_the_scaffolded_ignore_never_untracks_the_lifecycle_module(repo: Path) -> None:
+    """Named individually rather than ignoring `.lockstep/` and negating the module back in.
+
+    A negation is one `!` away from silently untracking the configuration, and a repository then
+    runs on detected defaults with nobody noticing. Both halves are asserted: no bare directory
+    line, and no negation to depend on.
+    """
+    CliRunner().invoke(main, ["init"])
+    lines = [line.strip() for line in (repo / ".gitignore").read_text().splitlines()]
+    assert ".lockstep/" not in lines, "ignoring the whole directory takes lockstep.py with it"
+    assert not [line for line in lines if line.startswith("!")], "the ignore block relies on a negation"
+
+
+def test_init_appends_only_what_an_existing_gitignore_is_missing(repo: Path) -> None:
+    """An adopter's `.gitignore` is theirs. Running init twice must not stack the block either."""
+    (repo / ".gitignore").write_text("node_modules/\n.lockstep/cassettes/\n")
+    CliRunner().invoke(main, ["init"])
+    once = (repo / ".gitignore").read_text()
+    assert "node_modules/" in once, "it replaced what was already there"
+    assert once.count(".lockstep/cassettes/") == 1, "it appended a line that was already present"
+    assert ".lockstep/transcripts/" in once
+
+    CliRunner().invoke(main, ["init", "--force"])
+    assert (repo / ".gitignore").read_text() == once, "a second init stacked the block"
+
+
+def test_init_says_what_a_run_keeps(repo: Path) -> None:
+    """Recording is on by default in what this scaffolds, which is the kind of default that has to
+    be said out loud rather than discovered."""
+    out = CliRunner().invoke(main, ["init"]).output
+    assert "What a run keeps" in out
+    assert "masks credentials" in out, "the disclosure does not say what redaction does not cover"
+    assert "runner" in out, "the disclosure does not say what happens to a recording in CI"
+
+
+def test_a_default_cassette_lands_under_the_root_not_the_working_directory(repo: Path) -> None:
+    """`--record` from a subdirectory wrote a recording no anchored ignore line matched.
+
+    The recording is real either way — the whole composed prompt and the whole diff — so the
+    failure was not a missing file. It was a file holding a prompt and a diff, in a directory
+    `.gitignore` does not cover, put there by a flag the person passed on purpose.
+    """
+    from in_lockstep.cli import _cassette_default
+
+    class _Repo:
+        root = str(repo)
+
+    class _Lockstep:
+        repo = _Repo()
+
+    inner = repo / "packages" / "api"
+    inner.mkdir(parents=True)
+    os.chdir(inner)
+    try:
+        assert _cassette_default(_Lockstep(), "review") == str(repo / ".lockstep/cassettes/review.json")
+    finally:
+        os.chdir(repo)

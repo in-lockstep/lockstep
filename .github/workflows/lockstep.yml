@@ -73,7 +73,9 @@ jobs:
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
             --aspect security \
-            --budget 0.75
+            --budget 0.75 \
+            --record \
+            --cassette "${RUNNER_TEMP}/review.json"
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
@@ -93,6 +95,22 @@ jobs:
           # variable — so setting it here did nothing while reading as though a control were in
           # place. A line that looks like a control and is not is worse than its absence.
           IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      # The tape itself never leaves the runner: `--cassette` above points at RUNNER_TEMP, which
+      # the runner destroys, and no path below reaches it. What survives is the cases harvested
+      # from it — a request that was really sent, with expectations derived from the answer that
+      # really came back. Every review this repository pays for was being discarded.
+      #
+      # `continue-on-error` because harvest REFUSES rather than inventing: a recording it cannot
+      # back a case from is a non-zero exit, and that is the right behaviour for harvest and the
+      # wrong reason to fail a review somebody is waiting on.
+      - name: Harvest what the review recorded
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        continue-on-error: true
+        run: |
+          uv run in-lockstep eval harvest \
+            --from "${RUNNER_TEMP}/review.json" \
+            --into .lockstep/cases \
+            --family review
       # `review` is read-only and this job has `contents: read`, so it cannot publish its own
       # record. The bundle carries it out; a person or the implement trampoline pushes it.
       - run: uv run in-lockstep history --bundle history.bundle
@@ -106,3 +124,8 @@ jobs:
             history.bundle
             .lockstep/
           if-no-files-found: ignore
+          # Stated rather than inherited. The vendor default is 90 days, which is a retention
+          # policy nobody in this repository chose for prompts and diffs; N9 in docs/needs.md
+          # asks how long a repository keeps them and this is half the answer. Deletion is
+          # automatic here, so inaction deletes rather than accumulating.
+          retention-days: 30

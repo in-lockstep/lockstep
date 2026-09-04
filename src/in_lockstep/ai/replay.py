@@ -79,6 +79,13 @@ def _request_record(request: LLMInput, redact: Redact) -> dict[str, Any]:
     }
 
 
+#: Where a `--record` run puts its tape when nobody said. Relative on purpose — the caller joins it
+#: to the repository root, because the CLI's own default used to be resolved against the process
+#: working directory and a run started from a subdirectory wrote a recording that the repository's
+#: anchored ignore line did not match. One constant, so `doctor` looks where the CLI writes.
+CASSETTE_DIR = ".lockstep/cassettes"
+
+
 def _tool_key(server: str, name: str, args: dict[str, object]) -> str:
     return hashlib.sha256(
         json.dumps({"server": server, "name": name, "args": args}, sort_keys=True, default=str).encode()

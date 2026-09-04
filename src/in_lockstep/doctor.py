@@ -64,6 +64,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _egress(report)
     _prompt_bodies(report)
     _packs(report, path)
+    _cassettes(report, path)
     if lockstep is not None:
         _model_routes(report, lockstep)
         _pack_guardrails(report, lockstep)
@@ -169,6 +170,60 @@ def _config_provenance(report: Report) -> None:
             "check out fork code",
             "Prefer pull_request, and let the two-job trampoline hold write access separately.",
         )
+
+
+def _cassettes(report: Report, root: Path) -> None:
+    """Say what recordings are on disk, and whether git is ignoring them.
+
+    The first diagnostic about cassettes at all, which is why it exists: recording is on by default
+    in what `init` scaffolds, and a control with no diagnostic is one nobody can check. A recording
+    holds the request verbatim -- the whole composed prompt and the whole diff -- and redaction
+    masks credentials rather than source. So the question worth asking of a repository is not
+    whether recording is on. It is whether the directory it writes to is one git would commit.
+
+    Asked of git rather than by reading `.gitignore` here. `check-ignore` is the only thing that
+    gets precedence, negation and a nested pattern right, it is installed wherever this runs, and
+    reimplementing it would be this framework guessing at something the repository already states.
+
+    Silent when there is nothing recorded, because a note about an empty directory is noise, and
+    noise is how a report stops being read.
+    """
+    from .ai.replay import CASSETTE_DIR
+
+    directory = root / CASSETTE_DIR
+    tapes = sorted(directory.glob("*.json")) if directory.is_dir() else []
+    if not tapes:
+        return
+    try:
+        ignored = (
+            subprocess.run(
+                ["git", "check-ignore", "-q", str(directory)],
+                cwd=root,
+                capture_output=True,
+                timeout=15,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.SubprocessError):
+        report.add("DOC169", Severity.NOTE, f"{len(tapes)} recording(s) in {CASSETTE_DIR}/ (git unavailable)")
+        return
+    if ignored:
+        report.add(
+            "DOC168",
+            Severity.NOTE,
+            f"{len(tapes)} recording(s) in {CASSETTE_DIR}/, ignored by git",
+            "Each holds a whole composed prompt and the diff it was sent with. They are replay "
+            "input and harvest input; nothing else reads them, and deleting one costs a real call.",
+        )
+        return
+    report.add(
+        "DOC168",
+        Severity.WARNING,
+        f"{len(tapes)} recording(s) in {CASSETTE_DIR}/, and git is NOT ignoring them",
+        f"A commit from this tree publishes the prompts and diffs they hold. Add "
+        f"`{CASSETTE_DIR}/` to .gitignore -- `in-lockstep init` writes that line, and will "
+        f"append it to a .gitignore you already have.",
+    )
 
 
 def _branch_protection(report: Report, root: Path) -> None:
