@@ -2820,3 +2820,123 @@ def test_explain_works_in_a_repository_with_no_lifecycle_module_at_all(repo: Pat
     result = CliRunner().invoke(main, ["improve", "--explain"])
     assert result.exit_code == 0, result.output
     assert "review.security" in result.stdout
+
+
+# -- gate --open-proposals: an uncounted ceiling is not an empty one -------------------------
+
+
+class _Host:
+    """A stand-in for whatever `hosted_scm` returns. `answer` is what listing does."""
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.asked: list[str] = []
+
+    def open_changes_by_workflow(self, workflow: str, *, limit: int = 200) -> Any:
+        self.asked.append(workflow)
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+def _host(monkeypatch: pytest.MonkeyPatch, answer: Any) -> None:
+    """Stand a host in that CAN list, and answers with `answer` (or raises it)."""
+    _raw_host(monkeypatch, _Host(answer))
+
+
+def _raw_host(monkeypatch: pytest.MonkeyPatch, host: Any) -> None:
+    """Stand `host` in exactly as given — for the case where it cannot list at all."""
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: host)
+
+
+def test_an_actor_the_gate_refuses_never_reaches_the_host(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ordering property, and the one that keeps the existing gate honest. Authorization is
+    decided before anything reaches the network, so an unauthorized login cannot make this
+    repository talk to its host at all."""
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("the host was reached for an actor the gate had already refused")
+
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", _boom)
+    (repo / "CODEOWNERS").write_text("*  @alice\n")
+    result = CliRunner().invoke(
+        main,
+        ["gate", "--actor", "mallory", "--association", "CONTRIBUTOR", "--codeowners", "CODEOWNERS",
+         "--open-proposals", "improve"],
+    )  # fmt: skip
+    assert result.exit_code == 3
+    assert "codeowner=no" in result.output
+
+
+def test_a_host_that_cannot_count_open_proposals_refuses_rather_than_reading_as_zero(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-IMPROVE-7. `report --scm` degrades and prints why, because a missing column costs a
+    reader a column. A ceiling cannot do that: an unread ceiling that lets the run through is not
+    a ceiling at all."""
+    _raw_host(monkeypatch, object())
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "—" in result.output, result.output
+    assert "uncounted" in result.output, result.output
+
+
+def test_a_host_that_raises_while_counting_refuses(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GATE-IMPROVE-7. Not logged in, rate limited, listing truncated — all the same answer: the
+    number was not obtained, so the ceiling holds."""
+    _host(monkeypatch, RuntimeError("gh: not logged in"))
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "gh: not logged in" in result.output, result.output
+
+
+def test_the_ceiling_allows_the_first_proposal_and_refuses_the_second(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What the number is for. Nothing open is a run that may proceed; one open at `--max 1` is a
+    reviewer who already has one edit to judge, and the refusal names it."""
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    _host(monkeypatch, ())
+    allowed = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert allowed.exit_code == 0, allowed.output
+    assert "0 open" in allowed.output
+
+    already = ChangeRequest(
+        id="u", url="https://example.test/pull/9", branch="in-lockstep/improve/r", title="t"
+    )
+    _host(monkeypatch, (already,))
+    refused = CliRunner().invoke(
+        main,
+        ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve", "--max", "1"],
+    )  # fmt: skip
+    assert refused.exit_code == 3, refused.output
+    assert "https://example.test/pull/9" in refused.output
+
+
+def test_the_gate_without_open_proposals_asks_no_host_at_all(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag is opt-in. Every pipeline already calling `gate` must keep working with no host,
+    no credential and no network."""
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("a plain gate reached the host")
+
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", _boom)
+    result = CliRunner().invoke(main, ["gate", "--actor", "dana", "--association", "MEMBER"])
+    assert result.exit_code == 0, result.output

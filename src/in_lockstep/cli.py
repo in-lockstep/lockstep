@@ -2874,7 +2874,22 @@ def _write_ledger(
     type=click.Path(),
     help="Read from the TRUSTED ref, never from a change under review.",
 )
-def gate_cmd(actor: str, association: str, codeowners: str) -> None:
+@click.option(
+    "--open-proposals",
+    "open_proposals",
+    default="",
+    metavar="WORKFLOW",
+    help="Also refuse when this workflow already has change requests open. Asks the host.",
+)
+@click.option(
+    "--max",
+    "max_open",
+    type=int,
+    default=1,
+    show_default=True,
+    help="How many open change requests that workflow may have.",
+)
+def gate_cmd(actor: str, association: str, codeowners: str, open_proposals: str, max_open: int) -> None:
     """May this person ask for a run? Exit 0 if yes, 3 if no.
 
     A chat-ops trigger is an unauthenticated entry point wearing a familiar interface, and the
@@ -2899,6 +2914,43 @@ def gate_cmd(actor: str, association: str, codeowners: str) -> None:
         click.echo(f"          {item}")
     click.echo(f"{'allowed' if decision.allowed else 'refused'}   {decision.reason}")
     if not decision.allowed:
+        raise SystemExit(EXIT_BLOCKED)
+
+    if not open_proposals:
+        return
+
+    # `hosted_scm` rather than `_bound_scm`: this command decides who may fire a run, and loading
+    # `.lockstep/lockstep.py` to answer it would execute repository code inside the authorization
+    # gate. The cost is that a repository binding its own `Scm` is not consulted here, which is the
+    # right trade for a gate. Reached only after the actor is allowed, so a login this refuses
+    # never causes a host call at all.
+    from .platform.hosted import hosted_scm
+    from .platform.scm import RUN_BRANCH_PREFIX, workflow_slug
+
+    host: Any = hosted_scm(".")
+    listing = getattr(host, "open_changes_by_workflow", None)
+    reason = "" if listing is not None else f"{type(host).__name__} cannot list change requests"
+    open_now: tuple[Any, ...] = ()
+    if listing is not None:
+        try:
+            open_now = tuple(listing(open_proposals))
+        except Exception as error:  # noqa: BLE001 - every failure to count is the same answer
+            reason = str(error) or type(error).__name__
+
+    if reason:
+        # `report --scm` degrades and says why, because a missing column costs a reader a column.
+        # A ceiling cannot do that: one that lets the run through because nobody could read it is
+        # not a ceiling. So the two invert here on purpose, and the message says which this is.
+        click.echo(f"proposals —  ({reason})")
+        click.echo("refused   an uncounted ceiling is not an empty one")
+        raise SystemExit(EXIT_BLOCKED)
+
+    where = f"{RUN_BRANCH_PREFIX}/{workflow_slug(open_proposals)}/"
+    click.echo(f"proposals {len(open_now)} open on {where}  (max {max_open})")
+    if len(open_now) >= max_open:
+        for change in open_now:
+            click.echo(f"          {getattr(change, 'url', '') or getattr(change, 'branch', '')}")
+        click.echo("refused   the ceiling this repository declared is already spent")
         raise SystemExit(EXIT_BLOCKED)
 
 
