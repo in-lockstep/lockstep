@@ -150,7 +150,18 @@ def _expect(answer: Any) -> dict[str, Any]:
         keys = sorted(answer)
         if keys:
             expect["schema"] = keys
-        counts = {k: len(v) for k, v in answer.items() if isinstance(v, list)}
+        # A FLOOR, not the exact number the old answer happened to reach. These cases are the
+        # baseline a prompt change is measured against, and a prompt improved to catch one more
+        # real vulnerability used to fail the corpus that existed to measure the improvement — the
+        # metric was an inverse of its purpose. Same shape as #194/#195, which fixed it in the
+        # hand-written corpus; the lesson never reached the harvester that writes the cases.
+        #
+        # Zero stays exact. "Found nothing" is a claim a single finding violates, and a floor of
+        # zero would make `nothing-to-find` a case that cannot fail, which is the defect
+        # `Case.parse` refuses by name at the other end.
+        counts: dict[str, Any] = {
+            k: ({"min": len(v)} if v else 0) for k, v in answer.items() if isinstance(v, list)
+        }
         if counts:
             expect["count"] = counts
     needles = _needles(answer)

@@ -212,3 +212,71 @@ def test_every_harvested_case_survives_the_parser_that_guards_the_corpus(tmp_pat
     for harvested in harvest(_record(tmp_path)):
         parsed = Case.parse(harvested.case, name=harvested.name)
         assert parsed.expect and parsed.input["request"]["model"]
+
+
+# -- a harvested case can pass, and can reward a better answer ------------------------------
+
+
+def test_a_harvested_case_passes_against_the_answer_it_came_from() -> None:
+    """The claim `eval harvest` prints: "Expectations were derived from the answers that were
+    recorded, so these pass against those answers today."
+
+    It was false for any answer containing a quote. `_needles` lifts a raw substring out of the
+    answer, and `grade`'s `contains` searches `json.dumps(output)` — where that quote is escaped.
+    So the needle never matched, and the case failed against the exact answer it was derived from.
+    """
+    from in_lockstep.evaluation.cases import Case, grade
+    from in_lockstep.evaluation.harvest import _expect
+
+    answer = {"findings": [{"summary": 'Unquoted "path" allows word-splitting', "severity": "high"}]}
+    case = Case(name="c", expect=_expect(answer))
+    assert grade(case, answer)["deterministic_passed"] is True, grade(case, answer)["checks"]
+
+
+def test_a_harvested_case_passes_against_an_answer_carrying_a_newline_or_a_backslash() -> None:
+    """The same bug, in the other two characters `json.dumps` escapes."""
+    from in_lockstep.evaluation.cases import Case, grade
+    from in_lockstep.evaluation.harvest import _expect
+
+    answer = {"findings": [{"summary": "reads C:\\Users\\x", "detail": "line one\nline two"}]}
+    case = Case(name="c", expect=_expect(answer))
+    assert grade(case, answer)["deterministic_passed"] is True, grade(case, answer)["checks"]
+
+
+def test_a_better_answer_that_finds_one_more_thing_is_not_a_regression() -> None:
+    """The property #163 needs and did not have. A harvested case demanded the OLD answer's exact
+    finding count, so a prompt improved to catch one more real vulnerability failed the corpus that
+    was supposed to be measuring the improvement. The metric was an inverse of its purpose.
+
+    Same shape as #194/#195, which fixed it in the hand-written corpus; the lesson never reached
+    the harvester that writes the cases."""
+    from in_lockstep.evaluation.cases import Case, grade
+    from in_lockstep.evaluation.harvest import _expect
+
+    before = {"findings": [{"summary": "session scope"}]}
+    after = {"findings": [{"summary": "session scope"}, {"summary": "and an unquoted path"}]}
+    case = Case(name="c", expect=_expect(before))
+    assert grade(case, after)["deterministic_passed"] is True, grade(case, after)["checks"]
+
+
+def test_an_answer_that_found_less_than_before_is_still_a_regression() -> None:
+    """The negative control. A floor that anything clears is not a floor, and the deterministic half
+    has to keep failing the case where a prompt change lost something."""
+    from in_lockstep.evaluation.cases import Case, grade
+    from in_lockstep.evaluation.harvest import _expect
+
+    before = {"findings": [{"summary": "session scope"}, {"summary": "unquoted path"}]}
+    case = Case(name="c", expect=_expect(before))
+    assert grade(case, {"findings": [{"summary": "session scope"}]})["deterministic_passed"] is False
+
+
+def test_an_answer_that_found_nothing_still_means_nothing() -> None:
+    """Zero stays exact. `nothing-to-find` exists to catch a reviewer inventing a concern, and a
+    floor of zero would make it a case that cannot fail — which is the defect `Case.parse` refuses
+    by name at the other end."""
+    from in_lockstep.evaluation.cases import Case, grade
+    from in_lockstep.evaluation.harvest import _expect
+
+    case = Case(name="c", expect=_expect({"findings": []}))
+    assert grade(case, {"findings": []})["deterministic_passed"] is True
+    assert grade(case, {"findings": [{"summary": "invented"}]})["deterministic_passed"] is False
