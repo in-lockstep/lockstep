@@ -25,6 +25,10 @@ from .middleware.otel import Recorder, otel
 from .privileged import sink
 from .privileged.redact import Redact, redact_registry
 
+#: The hidden anchor `platform.report.marker` writes. Matched rather than reconstructed, so the
+#: posting command never has to be told what kind of comment it is carrying.
+_MARKER = re.compile(r"<!-- in-lockstep:[^->]+ -->")
+
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_BLOCKED = 3
@@ -1576,6 +1580,49 @@ def improve_cmd(explain: bool) -> None:
     click.echo("          drafts a prompt change yet.")
 
 
+@main.command(name="comment")
+@click.option("--pr", "number", required=True, type=int, help="The change request to comment on.")
+@click.option(
+    "--body-file",
+    required=True,
+    type=click.Path(exists=True),
+    help="The comment body, carrying the marker that anchors it.",
+)
+def comment_cmd(number: int, body_file: str) -> None:
+    """Post a body somebody else composed, as a sticky comment.
+
+    Its own command, and its own job, because of the one split this framework's trampoline design
+    rests on: the process that calls a model must not also hold the token that writes the
+    repository. `review --comment` posts from inside the reviewing command, which is fine on a
+    laptop and impossible in CI — `test_no_job_holds_a_provider_key_and_write_access` refuses a job
+    with both. So the reviewing job writes what it composed and this posts it, with no provider SDK
+    installed at all.
+
+    The marker is read out of the body rather than passed as a flag. That is not economy: the lens
+    a chat-ops review ran came out of an untrusted comment and was resolved in the OTHER job, so
+    naming it here would mean putting it in a workflow file — the one place `GATE-REVIEW-3` says it
+    must never be. `review_comment` already ends with its marker, so the body knows what it is.
+    """
+    from pathlib import Path as _Path
+
+    from .platform.hosted import hosted_scm
+
+    body = _Path(body_file).read_text()
+    found = _MARKER.search(body)
+    if found is None:
+        raise click.ClickException(
+            f"{body_file} carries no in-lockstep marker, so a later run could not find this comment "
+            f"to edit and would post a second one beside it. Two comments that disagree is worse "
+            f"than one that is out of date."
+        )
+
+    scm: Any = hosted_scm(".")
+    if not hasattr(scm, "upsert_comment"):
+        raise click.ClickException(f"{type(scm).__name__} cannot post comments")
+    asyncio.run(scm.upsert_comment(number, body, found.group(0)))
+    click.echo(f"comment   posted to #{number} under {found.group(0)}")
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 @click.option(
@@ -1908,6 +1955,13 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...]:
 @click.option("--dry-run", is_flag=True, help="Canned answer; proves the wiring, not the prompt.")
 @click.option("--comment", "post_comment", is_flag=True, help="Upsert the findings as one sticky PR comment.")
 @click.option(
+    "--comment-out",
+    "comment_out",
+    default="",
+    type=click.Path(),
+    help="Write the comment body for another job to post. The CI form of --comment.",
+)
+@click.option(
     "--pr", "pr_number", type=int, default=None, help="The PR to comment on (else detected from CI)."
 )
 def review_cmd(
@@ -1923,6 +1977,7 @@ def review_cmd(
     diff_file: str,
     dry_run: bool,
     post_comment: bool,
+    comment_out: str,
     pr_number: int | None,
 ) -> None:
     """Review a change with one lens, in-process.
@@ -2147,6 +2202,22 @@ def review_cmd(
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
     # money and produced nothing is exactly the run worth having a record of.
     _write_ledger(lockstep, ctx, outcome, aspect, selected.id if review_model_is_ours else "")
+
+    if comment_out:
+        # Written, not posted. The job that called the model must not also hold the token that
+        # writes the repository, so in CI the reviewing job composes and a job with no provider SDK
+        # posts — `in-lockstep comment --body-file`. Through the sink like every escaping write: a
+        # review body carries a model's words about the diff it was given.
+        #
+        # Atomic, like every other sanctioned write here. A comment body is read by a later job, so
+        # a run cancelled mid-write would hand it half a file — and `write_text` is a primitive the
+        # sinks scan refuses by name anyway, which is the rule pointing at the better call.
+        from pathlib import Path as _Path
+
+        from .platform.report import review_comment
+
+        sink.write_text_atomic(_Path(comment_out), review_comment(aspect, outcome))
+        click.echo(f"comment   wrote {comment_out}")
 
     if post_comment:
         _post_review_comment(lockstep, aspect, outcome, pr_number)
