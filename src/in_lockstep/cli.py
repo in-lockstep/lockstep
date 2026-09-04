@@ -5502,8 +5502,15 @@ lockstep.use(Oneshot)
 # enough that repository (and staged) test code cannot read the provider key out of this job. It
 # does not cut network the way run_script's container does; a host that can enforce egress should
 # pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
-# for run_script. On a non-Python repo, swap `PytestTest()` for `CommandTest(["npm", "test"])`.
-lockstep.bind(Test, PytestTest())
+# for run_script.
+#
+# Guarded, like every binding the /fix block appends. The section above this one binds whatever
+# detection found — `CommandTest(["npm", "test"])` on a Node repository — and an unguarded bind
+# here replaced it without a word, so `ls` printed `Test -> PytestTest` and the implement flow ran
+# pytest against a repository that has none. Pytest is the fallback for the case detection placed
+# nothing, so the flow still has a runner; a repository with a runner keeps the one it has.
+if not lockstep.container.has(Test):
+    lockstep.bind(Test, PytestTest())
 
 # EGRESS, and read this before shipping the implement verb. The review scaffold above already
 # bound `UnsandboxedEgress`, and that binding is global — so this implementing verb inherits it,
