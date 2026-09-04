@@ -207,6 +207,12 @@ class Trend:
     considered: int
     #: Whether it cleared both thresholds. Carried rather than filtered on — see `recurring`.
     qualifies: bool
+    #: The thresholds `qualifies` was decided under, carried so a renderer cannot print one number
+    #: while the flag beside it was computed from another. They were two unlinked parameters, and
+    #: a caller passing `recurring(records, min_runs=2)` then rendering with the defaults produced
+    #: a header naming a threshold nothing had applied.
+    min_runs: int = MIN_TREND_RUNS
+    min_weeks: int = MIN_TREND_WEEKS
 
 
 def _numbers(records: list[dict[str, Any]], key: str) -> list[float]:
@@ -578,9 +584,17 @@ def recurring(
         found = record.get("findings")
         if not isinstance(found, dict):
             continue
-        # The top-level list only. Since schema 5 a record mirrors its steps' findings up here, so
-        # walking `steps[].findings` as well would double every count on every record written
-        # since — invisibly, because the ratio between ids would not change.
+        # The top-level list only, and NOT `steps[].findings`.
+        #
+        # Not because the two are guaranteed to mirror each other — they are not. `cli` writes the
+        # top level as the workflow's OWN findings when it returned an Outcome, and as the union of
+        # its steps' findings otherwise. So walking both would double-count in the second case and
+        # mix two different populations in the first, and the damage would be invisible either way:
+        # the ratio between ids barely moves, so only the absolute numbers lie.
+        #
+        # The top level is the population `report` already counts, which is the point — a census
+        # that disagreed with the report about how often something happened would be worse than
+        # either number alone.
         items = found.get("items") or []
         # A record with no `run_id` is still one run. Falling back to its position keeps it from
         # merging with every other unidentified record into a single phantom run.
@@ -616,6 +630,8 @@ def recurring(
             workflows=tuple(sorted(workflows.get(name, ()))),
             considered=considered,
             qualifies=len(runs[name]) >= min_runs and len(weeks.get(name, ())) >= min_weeks,
+            min_runs=min_runs,
+            min_weeks=min_weeks,
         )
         for name, count in occurrences.items()
     ]
@@ -624,29 +640,40 @@ def recurring(
     return sorted(trends, key=lambda t: (-t.runs, -t.occurrences, t.finding))
 
 
-def as_trend_text(
-    trends: list[Trend],
-    *,
-    min_runs: int = MIN_TREND_RUNS,
-    min_weeks: int = MIN_TREND_WEEKS,
-    limit: int = TOP_N,
-) -> list[str]:
+def as_trend_text(trends: list[Trend], *, limit: int = TOP_N) -> list[str]:
     """The census as lines. Returns them; writing is the caller's, because this is a leaf layer
-    that may not reach the redaction sink."""
+    that may not reach the redaction sink.
+
+    The thresholds are read off the census rather than taken as parameters. They were parameters,
+    and nothing linked them to the ones `recurring` actually applied, so a caller could render a
+    header naming `min_runs 5` over rows whose `qualifies` had been decided at 2.
+    """
     if not trends:
         return ["trend     no finding recorded yet; a run that finds nothing writes no id"]
 
+    min_runs, min_weeks = trends[0].min_runs, trends[0].min_weeks
+    considered = trends[0].considered
     qualified = [t for t in trends if t.qualifies]
     if qualified:
-        head = f"trend     {len(qualified)} of {len(trends)} finding id(s) recur across {min_weeks}+ weeks"
+        head = (
+            f"trend     {len(qualified)} of {len(trends)} finding id(s) recur across {min_weeks}+ "
+            f"weeks, over {considered} record(s)"
+        )
     else:
         head = (
             f"trend     nothing recurs yet — no finding id clears both thresholds "
-            f"(min_runs {min_runs}, min_weeks {min_weeks})"
+            f"(min_runs {min_runs}, min_weeks {min_weeks}), over {considered} record(s)"
         )
 
+    # A: qualifying rows first, and never truncated away. The sort `recurring` returns is by runs,
+    # which is only half of what qualifying means — an id with many runs inside one week outranks
+    # the one id that actually spans two — so the header could announce a qualifying trend that no
+    # printed row carried, and the "more not shown" line would not say so.
+    rest = [t for t in trends if not t.qualifies]
+    shown = qualified + rest[: max(0, limit - len(qualified))]
+
     out = [head]
-    for trend in trends[:limit]:
+    for trend in shown:
         if trend.weeks:
             span = f"{trend.weeks} week(s)"
             if trend.undated_runs:
@@ -656,12 +683,19 @@ def as_trend_text(
             # any of these runs in a week at all.
             span = f"—  (0 of {trend.runs} dated)"
         mark = "*" if trend.qualifies else " "
+        # `runs` carries the records it was counted over, and `blocking` carries the runs it was
+        # counted over. Both were bare, which made the gate row claiming every count has its
+        # denominator an overclaim rather than a description.
         out += [
-            f"  {mark} {trend.finding:<28}{trend.runs:>3} run(s)  {trend.occurrences:>3} occurrence(s)"
-            f"   {span:<28}{trend.blocking_runs:>3} blocking   {', '.join(trend.workflows)}"
+            f"  {mark} {trend.finding:<28}{trend.runs:>3} of {trend.considered} run(s)"
+            f"  {trend.occurrences:>3} occurrence(s)   {span:<28}"
+            f"{trend.blocking_runs} of {trend.runs} blocking   {', '.join(trend.workflows)}"
         ]
-    if len(trends) > limit:
-        out += [f"          {len(trends) - limit} more not shown"]
+    hidden = len(trends) - len(shown)
+    if hidden:
+        # True by construction: every qualifying row is in `shown`. Said out loud so a reader does
+        # not have to reconstruct the ordering rule to know nothing actionable is behind the cut.
+        out += [f"          {hidden} more not shown, none of them qualifying"]
 
     out += ["", "A dash is a number nobody measured. It is not a zero."]
     return out

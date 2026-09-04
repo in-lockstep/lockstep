@@ -554,3 +554,56 @@ def test_a_finding_that_spans_two_weeks_with_enough_runs_qualifies() -> None:
     assert (security.runs, security.weeks) == (6, 2)
     assert security.qualifies is True
     assert "nothing recurs" not in "\n".join(metrics.as_trend_text([security]))
+
+
+def test_the_one_qualifying_trend_is_never_hidden_behind_the_top_n_cut() -> None:
+    """The census is sorted by runs, which is only half of what qualifying means: an id with many
+    runs inside one week outranks the one id that actually spans two. So the header could announce
+    a qualifying trend that no printed row carried, and the reader could not learn which id it
+    was — the only actionable row in the whole census, behind the cut."""
+    busy = [
+        _found(_finding(f"noise.{n}"), run_id=f"n{n}-{r}", ts="2026-09-02T00:00:00+00:00")
+        for n in range(10)
+        for r in range(20)
+    ]
+    spread = [
+        _found(
+            _finding("review.security"),
+            run_id=f"s{n}",
+            ts=("2026-08-26" if n % 2 else "2026-09-02") + "T00:00:00+00:00",
+        )
+        for n in range(6)
+    ]
+    trends = metrics.recurring(busy + spread)
+    assert [t.finding for t in trends if t.qualifies] == ["review.security"]
+    assert [t.finding for t in trends].index("review.security") > metrics.TOP_N, (
+        "the fixture must put the qualifying id below the cut, or this proves nothing"
+    )
+
+    rendered = metrics.as_trend_text(trends)
+    assert any("review.security" in line for line in rendered), "\n".join(rendered)
+    assert any("none of them qualifying" in line for line in rendered), "\n".join(rendered)
+
+
+def test_the_header_cannot_name_a_threshold_the_census_was_not_computed_under() -> None:
+    """The thresholds were two unlinked parameters — one on `recurring`, one on the renderer — so
+    a caller could compute `qualifies` at 2 and print a header claiming 5."""
+    week = [_found(_finding("x"), run_id=f"r{n}", ts="2026-09-01T00:00:00+00:00") for n in range(3)]
+    trends = metrics.recurring(week, min_runs=2, min_weeks=1)
+    assert trends[0].qualifies is True
+    rendered = "\n".join(metrics.as_trend_text(trends))
+    assert "1+ weeks" in rendered, rendered
+    assert "min_runs 5" not in rendered, rendered
+
+
+def test_every_count_the_census_prints_carries_the_population_it_came_from() -> None:
+    """GATE-IMPROVE-5. `runs` was printed bare, so the row said 13 without saying 13 of what, and
+    `blocking` said 3 without saying 3 of how many runs."""
+    records = [
+        _found(_finding("x", blocking=True), run_id="a", ts="2026-09-01T00:00:00+00:00"),
+        _found(_finding("x"), run_id="b", ts="2026-09-01T00:00:00+00:00"),
+        _record(run_id="c", ts="2026-09-01T00:00:00+00:00"),
+    ]
+    line = next(ln for ln in metrics.as_trend_text(metrics.recurring(records)) if " x " in ln)
+    assert "2 of 3 run(s)" in line, line
+    assert "1 of 2 blocking" in line, line

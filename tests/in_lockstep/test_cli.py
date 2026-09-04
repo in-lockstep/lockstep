@@ -2791,6 +2791,12 @@ def test_the_body_a_trend_is_attributed_to_is_checked_against_the_guard(repo: Pa
     assert "tier 1" in out and ".lockstep/" in out, out
     assert "by omission" in out, out
 
+    # GATE-IMPROVE-6's POSITIVE half, which every other assertion here demands a dash for. Without
+    # it the whole row is discharged by tests that pass for an implementation attributing nothing
+    # to anything, which is a ratchet that holds nothing.
+    assert "attributed: review.security  (1 of 2 run(s))" in out, out
+    assert "attributed: cost.budget_exceeded  (1 of 2 run(s))" in out, out
+
 
 def test_the_ceiling_nobody_counted_renders_as_a_dash_and_names_what_would_count_it(repo: Path) -> None:
     """An unmeasured ceiling is a ceiling that could stop a run, never a finding that it would
@@ -2940,3 +2946,74 @@ def test_the_gate_without_open_proposals_asks_no_host_at_all(
     monkeypatch.setattr(hosted, "hosted_scm", _boom)
     result = CliRunner().invoke(main, ["gate", "--actor", "dana", "--association", "MEMBER"])
     assert result.exit_code == 0, result.output
+
+
+def test_the_ceiling_line_hands_the_reader_the_flag_that_enforces_the_declared_number(
+    repo: Path,
+) -> None:
+    """`gate` takes its ceiling from `--max` and never loads the lifecycle, so a reader told only
+    to run `gate --open-proposals improve` would silently enforce 1 against a repository that
+    declared 3. The command printed has to carry the number."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\nlockstep.max_open_proposals = 3\n"
+    )
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "--max 3" in out, out
+
+
+def test_a_daily_limit_that_is_not_a_number_is_not_shown_as_a_ceiling_in_force(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_refuse_exhausted_daily_ceiling` treats an unparseable value as no ceiling at all. Echoing
+    it under "what a proposal run would meet" would show an unenforced variable as a control."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "twenty dollars")
+    bad = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    daily = next(ln for ln in bad.splitlines() if ln.strip().startswith("daily"))
+    assert "—" in daily and "not enforced" in daily, daily
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "20")
+    good = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "$20.00 usd" in good, good
+
+
+def test_every_finding_a_body_answers_is_named_not_only_the_loudest(repo: Path) -> None:
+    """The attributed lines and the unattributed count have to sum to the census. Printing only the
+    highest-run match removes the others from the unattributed tally while naming them nowhere."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (Improvable(body='prompts/x.md', verb='review', label='x',\n"
+        "                               answers=('review.security', 'fix.staged')),)\n"
+    )
+    _seed_ledger(
+        repo,
+        _seed_record("review.security", run="r1"),
+        _seed_record("review.security", run="r2"),
+        _seed_record("fix.staged", run="r3"),
+    )
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "attributed: review.security" in out, out
+    assert "attributed: fix.staged" in out, out
+    assert "answer to no declared body" not in out, out
+
+
+def test_the_gate_refusal_names_the_flag_its_number_came_from(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`gate` never reads `.lockstep/lockstep.py`, so a refusal saying "the ceiling this repository
+    declared" would credit a file it did not open."""
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    _host(monkeypatch, (ChangeRequest(id="u", url="u", branch="in-lockstep/improve/r", title="t"),))
+    out = (
+        CliRunner()
+        .invoke(main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"])
+        .output
+    )
+    assert "--max 1" in out, out
+    assert "this repository declared" not in out, out

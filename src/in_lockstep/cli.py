@@ -1508,10 +1508,13 @@ def improve_cmd(explain: bool) -> None:
         click.echo(f"body      {body.body}")
         click.echo(f"          {body.label}, verb {body.verb}, answers {', '.join(body.answers) or '—'}")
         if mine:
-            lead = max(mine, key=lambda t: t.runs)
-            click.echo(
-                f"          attributed: {lead.finding}  ({lead.runs} run(s) of {lead.considered} records)"
-            )
+            # Every match, not the loudest one. `claimed` removes all of them from the
+            # unattributed count below, so printing one would leave the two halves not summing
+            # to the census — a finding silently attributed to a body nothing showed it against.
+            for trend in sorted(mine, key=lambda t: -t.runs):
+                click.echo(
+                    f"          attributed: {trend.finding}  ({trend.runs} of {trend.considered} run(s))"
+                )
         else:
             click.echo("          attributed: —  (no recorded finding matches what it answers)")
         refusal = guard.check_path(body.body)
@@ -1532,13 +1535,29 @@ def improve_cmd(explain: bool) -> None:
     click.echo("")
 
     ceiling = lockstep.declared_ceiling()
-    daily = os.environ.get("IN_LOCKSTEP_DAILY_LIMIT", "")
+    # Parsed the way `_refuse_exhausted_daily_ceiling` parses it, not echoed. That function treats
+    # a non-numeric value as no ceiling at all, so printing the raw string under a heading that says
+    # "what a proposal run would meet" would show an unenforced variable as a control in force,
+    # which is the one thing this screen must never do.
+    raw_daily = os.environ.get("IN_LOCKSTEP_DAILY_LIMIT", "").strip()
+    if not raw_daily:
+        daily = "—  (IN_LOCKSTEP_DAILY_LIMIT is not set)"
+    else:
+        try:
+            daily = f"${float(raw_daily):.2f} usd"
+        except ValueError:
+            daily = f"—  ({raw_daily!r} is not a number; not enforced)"
+
     click.echo("ceilings  what a proposal run would meet, in the order it would meet them")
-    # A dash, because nothing here counted it. An unmeasured ceiling is one that could stop a run;
-    # rendering it as 0 would turn "nobody asked the host" into "there is nothing open".
+    # Two things at once. The count is a dash because nothing here asked the host, and an unmeasured
+    # ceiling is one that could stop a run — rendering it 0 would turn "nobody counted" into "there
+    # is nothing open". And the declared number is printed INSIDE the command that enforces it:
+    # `gate` takes its ceiling from `--max` and deliberately never loads `.lockstep/lockstep.py`,
+    # so the two can only agree if the reader is handed the flag rather than left to supply it.
+    max_open = getattr(lockstep, "max_open_proposals", 1)
     click.echo(
-        f"  open proposals  max {getattr(lockstep, 'max_open_proposals', 1)}, open now —  "
-        f"(not counted here; `in-lockstep gate --open-proposals <workflow>` asks the host)"
+        f"  open proposals  max {max_open}, open now —  (not counted here; "
+        f"`in-lockstep gate --open-proposals <workflow> --max {max_open}` asks the host)"
     )
     # A dimension nobody set is left off rather than printed as `None`, and a Budget with nothing
     # set at all is a dash. `Budget()` is four `None`s, and rendering that as `$0.0000` would say
@@ -1551,7 +1570,7 @@ def improve_cmd(explain: bool) -> None:
     ]
     stated = ", ".join(d for d in dimensions if d)
     click.echo(f"  budget          {stated or '—  (this lifecycle declares no ceiling)'}")
-    click.echo(f"  daily           {daily or '—  (IN_LOCKSTEP_DAILY_LIMIT is not set)'}")
+    click.echo(f"  daily           {daily}")
     click.echo("")
     click.echo("opens     nothing. `in-lockstep improve` without --explain exits 3: no mechanism")
     click.echo("          drafts a prompt change yet.")
@@ -2950,7 +2969,10 @@ def gate_cmd(actor: str, association: str, codeowners: str, open_proposals: str,
     if len(open_now) >= max_open:
         for change in open_now:
             click.echo(f"          {getattr(change, 'url', '') or getattr(change, 'branch', '')}")
-        click.echo("refused   the ceiling this repository declared is already spent")
+        # Names its own source. This number came from `--max`, not from `lockstep.py`, because
+        # this command does not load the lifecycle — so calling it "the ceiling this repository
+        # declared" would credit a file it never read.
+        click.echo(f"refused   --max {max_open} already open")
         raise SystemExit(EXIT_BLOCKED)
 
 

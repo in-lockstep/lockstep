@@ -20,9 +20,9 @@ from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import verdict_over_staged
+from in_lockstep.core.improve import Improvable
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
-from in_lockstep.core.improve import Improvable
 from in_lockstep.core.spend import Budget
 from in_lockstep.core.workflow import workflow
 from in_lockstep.middleware import CostBudget, otel
