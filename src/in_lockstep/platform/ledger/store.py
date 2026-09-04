@@ -25,7 +25,17 @@ from ...privileged import sink
 # status, reason and findings. Schema-4 records from a workflow that returned a dict say
 # `"completed"`, which no reader can count; `report` names how many of those it holds rather than
 # folding them into "not failed", which is how eleven red selfchecks read as 0% failed (#166).
-SCHEMA = 5
+#
+# 6: a `review`, `triage` or `rfe` record carries `subject` — the `EvalSubject` key the run was
+# measured under — and `subject_label`, the same thing in words. A flat string, because
+# `summarize` groups on `str(record.get(by))` and a nested object would make every record its own
+# group. Additive again, and bumped for the reason 4 gives: "since when do records say which runs
+# they are comparable with" deserves one answer. OMITTED rather than defaulted when the subject
+# cannot be known — no model id, no single composition for the verb, or a body that will not
+# resolve — because a subject key computed from a guess is a comparison somebody could act on.
+# `implement` and `fix` records carry none at all: those strategies append the repository's house
+# rules at run time, so their static flatten is not what ran.
+SCHEMA = 6
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 

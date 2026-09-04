@@ -11,10 +11,17 @@ The composed hash covers the *static* layer flatten — guardrails, body, skills
 the rendered prompt with the diff in it. Hashing the rendered prompt makes every subject N=1 and
 no baseline can ever accumulate.
 
-Skills are hashed separately because skill bodies load by progressive disclosure and are therefore
-not in the composed text. Without that, editing a skill leaves the subject key unchanged and its
-effect is measured as noise — the same failure the content hash was chosen to prevent, arriving
-from the other side.
+Skills are hashed separately, and the reason written here was wrong for as long as nothing called
+this. It said skill bodies load by progressive disclosure and are therefore not in the composed
+text. They are: `PromptLayers.trailing_texts` inlines every skill body verbatim, so editing one
+already moves `composed_prompt_sha256`. The separate hash is belt and braces rather than the only
+thing standing between a skill edit and a subject that does not notice it.
+
+Kept anyway, and not as a hedge. It is what makes the property survive a composition that stops
+inlining them — progressive disclosure is a real design this framework may yet adopt for large
+skills, and on the day it does, the identity does not quietly get worse. What changed is the
+claim, not the code: a comment asserting a mechanism that is not in force is the failure this
+repository's gate ledger exists to catch, and this one sat in the module the ledger cites.
 """
 
 from __future__ import annotations
@@ -55,9 +62,20 @@ class EvalSubject:
         )[:32]
 
     def label(self) -> str:
-        """What a human reads in a report."""
+        """What a human reads in a report.
+
+        `strategy_id` already carries the verb — the composition labels are `review/security`,
+        `triage/analyst` — so joining the two rendered `review/review/security`. It read as a typo
+        rather than as a bug for as long as nothing produced one, which is what a display-only
+        field with no caller looks like.
+        """
         version = f"@{self.prompt_version}" if self.prompt_version else ""
-        return f"{self.verb}/{self.strategy_id} {self.prompt_id}{version} on {self.model_id}"
+        strategy = (
+            self.strategy_id
+            if self.strategy_id.startswith(f"{self.verb}/")
+            else (f"{self.verb}/{self.strategy_id}")
+        )
+        return f"{strategy} {self.prompt_id}{version} on {self.model_id}".replace("  ", " ").strip()
 
 
 def subject_for(
