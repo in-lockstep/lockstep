@@ -73,8 +73,8 @@ def _record(tmp_path: Path, *, content: str = ANSWER, redact: Redact | None = No
 # -- the recording ---------------------------------------------------------------------------
 
 
-def test_gate_eval_1_a_stored_request_hashes_back_to_the_key_it_is_filed_under(tmp_path: Path) -> None:
-    """GATE-EVAL-1. The property everything else here rests on.
+def test_gate_eval_3_a_stored_request_hashes_back_to_the_key_it_is_filed_under(tmp_path: Path) -> None:
+    """GATE-EVAL-3. The property everything else here rests on.
 
     A stored request that hashed differently from the one recorded would be a recording that cannot
     find itself: harvest would build a case, `eval run` would replay it, the lookup would miss, and
