@@ -4036,23 +4036,56 @@ def pack_try_cmd(name: str, extra: str, model: str, record: bool, as_json_out: b
 
 
 def _trial_lenses(subject: Any) -> dict[str, Any]:
-    """The lens map a trial composes: shipped lenses, with the pack's own bodies substituted.
+    """The lens map a trial composes: shipped lenses, plus the pack's own.
 
-    Substituted by convention — `prompts/<aspect>.md` pairs with `corpus/review/<aspect>-reviewer/`
-    — and composed inside the SHIPPED layer stack rather than a repository's. Measuring a pack
-    through your own guardrails would measure your configuration, and two repositories would then
-    get different numbers for the same pack and have no way to tell why.
+    Composed inside the SHIPPED layer stack rather than a repository's. Measuring a pack through
+    your own guardrails would measure your configuration, and two repositories would then get
+    different numbers for the same pack and have no way to tell why.
+
+    The walk is over the PACK's prompts, not the shipped names. It was the other way round, which
+    meant a pack could only be measured on a lens it OVERRODE: one shipping `prompts/a11y.md` was
+    never looked at, its cases resolved an aspect the adapter had never heard of, and `pack try`
+    reported a working pack as broken — for exactly the pack kind the extension story is about
+    (#202). `aspect_of` already reads the pairing from the other side, so the convention was
+    honoured on the read and not on the build.
+
+    A fragment is only a lens when `corpus/review/<stem>-reviewer/` exists beside it. `guardrails()`
+    reads its fragments out of the same `prompts/` directory — `examples/acme-review-prompts` ships
+    `house.md` there as house rules — so admitting every `.md` would turn those into a phantom lens
+    emitting `review.house`. Cases are what make a lens measurable, and this function only exists to
+    measure.
+
+    Existence is checked with `is_dir()` and not by asking `Pack.file` for a truthy answer: `file()`
+    has no existence check and returns a live path whenever the pack root resolves, so a guard
+    written against it never fires.
     """
-    from .prompts.review import LENSES
+    from .prompts.review import LENSES, ReviewPrompt
 
-    lenses = dict(LENSES)
-    for aspect, shipped in LENSES.items():
-        if subject.read(f"prompts/{aspect}.md") is None:
-            continue
+    lenses: dict[str, Any] = dict(LENSES)
+    prompts = subject.file("prompts")
+    if prompts is None or not prompts.is_dir():
+        return lenses
+
+    for path in sorted(prompts.glob("*.md")):
+        aspect = path.stem
+        base = LENSES.get(aspect)
+        if base is None:
+            cases = subject.file(f"corpus/review/{aspect}-reviewer")
+            if cases is None or not cases.is_dir():
+                continue
+            base = ReviewPrompt
         lenses[aspect] = type(
             f"Pack{aspect.title()}Prompt",
-            (shipped,),
-            {"version": f"{subject.name}", "body": subject.body(f"prompts/{aspect}.md")},
+            (base,),
+            {
+                "version": f"{subject.name}",
+                # Stated rather than inherited. A lens the pack invented subclasses `ReviewPrompt`,
+                # whose `aspect` is the generic "review", and the aspect is what a finding id is
+                # built from — so inheriting it would file every invented lens's findings under
+                # `review.review`.
+                "aspect": aspect,
+                "body": subject.body(f"prompts/{aspect}.md"),
+            },
         )
     return lenses
 
