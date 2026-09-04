@@ -373,6 +373,19 @@ class GitLabScm:
             for row in sorted(mine, key=lambda r: int(r.get("iid") or 0), reverse=True)
         )
 
+    async def change_refs(self, number: int) -> tuple[str, str] | None:
+        """The target branch and the source commit of one merge request. `None` when it is not one.
+
+        GitLab numbers merge requests and issues separately, so unlike GitHub an iid can be both;
+        this asks the merge-request endpoint and reports what it finds, exactly as `ticket_of` does.
+        `sha` rather than `source_branch` for the head, so the subject cannot move between the
+        comment and the checkout.
+        """
+        rows = self._request("GET", f"/projects/{self._project_path()}/merge_requests/{number}")
+        row = rows if isinstance(rows, dict) else {}
+        base, head = str(row.get("target_branch") or ""), str(row.get("sha") or "")
+        return (base, head) if base and head else None
+
     async def ticket_of(self, number: int) -> str | None:
         """The ticket a merge request was opened for. `None` when `number` is not one at all.
 

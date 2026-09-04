@@ -333,6 +333,33 @@ class GitHubScm:
         ticket = trailers_from(str(data.get("body") or "")).get("Ticket", "")
         return ticket or ticket_from_branch(str(data.get("headRefName") or ""))
 
+    async def change_refs(self, number: int) -> tuple[str, str] | None:
+        """The base branch and the head commit of one change request. `None` when it is not one.
+
+        Needed because a comment event does not carry them. On `issue_comment` GitHub sets
+        `GITHUB_BASE_REF` empty and `GITHUB_SHA` to the default branch's tip, so a workflow reacting
+        to `/review` on a pull request has the number and nothing else — a review run from those
+        variables would diff the default branch against itself and report a clean bill of health for
+        a change it never read. That is the failure worth naming: not an error, an all-clear.
+
+        `headRefOid` and not `headRefName`: a branch name resolves to whatever the branch points at
+        when the job runs, and a review whose subject moved between the comment and the checkout has
+        reviewed something nobody asked about. The base stays a NAME because that is what it is —
+        the caller resolves it against whatever it actually fetched.
+
+        Not on the `Scm` port, like `delivery_rows` and for the same reason: the local git host has
+        no change requests to have refs for.
+        """
+        try:
+            raw = self._gh_json("pr", "view", str(number), "--json", "baseRefName,headRefOid")
+        except RuntimeError:
+            # `gh pr view` on an issue number fails, which is the answer rather than an error —
+            # the same three-way reading `ticket_of` above documents.
+            return None
+        data = raw if isinstance(raw, dict) else {}
+        base, head = str(data.get("baseRefName") or ""), str(data.get("headRefOid") or "")
+        return (base, head) if base and head else None
+
     async def remarks(self, number: int) -> tuple[Remark, ...]:
         """Everything said on one pull request: the thread, the review verdicts, the line notes.
 
