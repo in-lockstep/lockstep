@@ -54,7 +54,7 @@ def _request_record(request: LLMInput, redact: Redact) -> dict[str, Any]:
 
     Deliberately the same field set as the key rather than a friendlier summary. A stored request
     that hashed differently from the one recorded would be a recording that cannot find itself,
-    and `GATE-EVAL-1` is the assertion that it does not.
+    and `GATE-EVAL-3` is the assertion that it does not.
     """
     return {
         "model": request.model,
