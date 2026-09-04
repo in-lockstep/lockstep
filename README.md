@@ -50,6 +50,7 @@ still advertises.
 | Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
 | Metrics report | runs | `report` reads the ledger back: outcomes, effort, spend, turns per strategy, what it keeps finding. `--html` writes one self-contained page, `--scm` adds merge and issue timings. Every number carries its denominator, and a field nobody measured is a dash |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
+| Improvement trend | runs | `improve --explain` reads the ledger for a finding that keeps coming back, per run and per week with the denominator on both, attributes it to a declared `Improvable` body or to a dash, and prints the guard's verdict on that path. It opens nothing, spends nothing and writes no record; `improve` without the flag refuses, because nothing drafts a prompt change yet. `gate --open-proposals <workflow> --max N` asks the host how many are already open and refuses when it cannot count |
 | Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
 
 ## Why code rather than configuration

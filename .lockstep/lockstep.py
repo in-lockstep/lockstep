@@ -20,6 +20,7 @@ from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import verdict_over_staged
+from in_lockstep.core.improve import Improvable
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
@@ -182,6 +183,28 @@ lockstep.bind(EgressPolicy, egress)
 # `usd` is the ceiling that bounds all of it, and it is the one checked against a projection
 # before each turn.
 lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
+
+# -- what a recurring finding could be about ----------------------------------------
+#
+# `in-lockstep improve --explain` reads the ledger for findings that keep coming back and needs to
+# know which prompt text, if any, could answer one. Nothing infers that: `review.security` names a
+# lens and `prompts/review/security.md` is a file, and the word they share is not evidence. So the
+# join is declared, here, by a person who knows both halves.
+#
+# One entry, because one is what this repository has evidence about. `review.security` is 13 of
+# the 27 recorded runs; every other id is three runs or fewer. Adding the rest would be declaring
+# attributions nobody could act on.
+#
+# It changes nothing on its own. `improve` opens nothing and spends nothing today, and the body
+# named here is not writable by any grant — `improve --explain` prints that verdict beside it.
+lockstep.improve = (
+    Improvable(
+        body="src/in_lockstep/prompts/review/security.md",
+        verb="review",
+        label="review/security",
+        answers=("review.security",),
+    ),
+)
 
 # -- the ports those workflows receive ----------------------------------------------
 #

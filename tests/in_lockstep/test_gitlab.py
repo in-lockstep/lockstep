@@ -13,6 +13,7 @@ import asyncio
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -679,3 +680,41 @@ def test_gitlab_ticket_of_reads_the_record_it_wrote(tmp_path: Path) -> None:
 
     assert asyncio.run(_scm(root, handler).ticket_of(7)) == "#218"
     assert GitLabScm.shared_numbering is False
+
+
+def test_gitlab_counts_open_proposals_past_the_hosts_page_cap(tmp_path: Path) -> None:
+    """GitLab caps `per_page` at 100 whatever is asked for, so one request is a count with a
+    silent ceiling on it. `changes_for` asks for 60 and never noticed; a ceiling cannot afford
+    not to."""
+    pages: list[dict[str, Any]] = []
+    seen: list[Any] = []
+
+    def _request(method: str, path: str, *, json: Any = None, params: Any = None) -> Any:
+        seen.append(params)
+        page = int((params or {}).get("page") or 1)
+        return pages[page - 1] if page <= len(pages) else []
+
+    scm = _scm(_repo(tmp_path), lambda r: httpx.Response(200, json=[]))
+    scm._request = _request  # type: ignore[method-assign]
+    pages = [
+        [
+            {"iid": n, "web_url": f"u{n}", "source_branch": "in-lockstep/improve/run", "title": "t"}
+            for n in range(100)
+        ],
+        [{"iid": 100, "web_url": "u100", "source_branch": "in-lockstep/improve/run", "title": "t"}],
+    ]
+    assert len(scm.open_changes_by_workflow("improve")) == 101
+    assert [p["page"] for p in seen] == [1, 2], seen
+    assert all(p["per_page"] == 100 for p in seen)
+
+
+def test_gitlab_reports_a_draft_merge_request_by_its_title_prefix_as_well(tmp_path: Path) -> None:
+    """GitLab spells draft as a title prefix as well as a field, and a proposal opened as a draft
+    still occupies the ceiling."""
+    scm = _scm(_repo(tmp_path), lambda r: httpx.Response(200, json=[]))
+    scm._request = lambda *a, **k: [  # type: ignore[method-assign]
+        {"iid": 7, "web_url": "u", "source_branch": "in-lockstep/improve/r1", "title": "Draft: a change"}
+    ]
+    (only,) = scm.open_changes_by_workflow("improve")
+    assert only.draft is True
+    assert only.title == "a change"

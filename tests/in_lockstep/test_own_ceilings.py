@@ -132,3 +132,13 @@ def test_the_run_still_declares_a_ceiling_in_dollars(lockstep) -> None:
     which is the more expensive place to find out."""
     assert lockstep.budget.declared
     assert lockstep.budget.usd is not None
+
+
+def test_a_lifecycle_that_declares_no_improvable_attributes_nothing() -> None:
+    """The default has to be empty rather than helpful. A framework that shipped a guess about
+    which body answers which finding would be making a claim about evidence it never saw."""
+    from in_lockstep.lockstep import Lockstep
+
+    bare = Lockstep()
+    assert bare.improve == ()
+    assert bare.max_open_proposals == 1

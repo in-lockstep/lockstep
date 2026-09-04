@@ -23,6 +23,7 @@ from .base import (
     conventional_subject,
     is_run_branch,
     is_run_branch_for,
+    is_run_branch_of,
     ticket_from_branch,
     title_line,
     trailers_from,
@@ -207,6 +208,48 @@ class GitHubScm:
                 draft=bool(r.get("isDraft")),
             )
             for r in mine[:MAX_CHANGES_READ]
+        )
+
+    def open_changes_by_workflow(self, workflow: str, *, limit: int = 200) -> tuple[ChangeRequest, ...]:
+        """Every OPEN pull request this framework has on `workflow`'s branches, newest first.
+
+        Not on the `Scm` port, for the reason `delivery_rows` writes down: the local git host has
+        no pull requests at all, and a caller asks for this with `getattr` and says why it could
+        not when the answer is no.
+
+        Not `changes_for` either, which looks close enough to reuse and is not. That one is keyed
+        on a TICKET, and it stops at `MAX_CHANGES_READ` because its output goes into a prompt. A
+        count capped at three is a ceiling that stops counting before it stops anything.
+
+        Raises when the host returned exactly as many rows as it was asked for, because there may
+        be more and this number is a ceiling: an undercount lets a run through, which is the single
+        failure it exists to prevent. Refusing on a listing that might be short is the same posture
+        as refusing when the host cannot list at all.
+        """
+        raw = self._gh_json(
+            "pr", "list", "--state", "open", "--limit", str(limit),
+            "--json", "number,url,title,headRefName,isDraft",
+        )  # fmt: skip
+        rows = raw if isinstance(raw, list) else []
+        if len(rows) >= limit:
+            raise RuntimeError(
+                f"pull request listing truncated at {limit}; the count would be a floor, not a ceiling"
+            )
+        mine = [
+            row
+            for row in rows
+            if isinstance(row, dict) and is_run_branch_of(str(row.get("headRefName") or ""), workflow)
+        ]
+        return tuple(
+            ChangeRequest(
+                id=str(r.get("url") or ""),
+                url=str(r.get("url") or ""),
+                branch=str(r.get("headRefName") or ""),
+                title=str(r.get("title") or ""),
+                number=int(r.get("number") or 0) or None,
+                draft=bool(r.get("isDraft")),
+            )
+            for r in sorted(mine, key=lambda r: int(r.get("number") or 0), reverse=True)
         )
 
     def delivery_rows(self, *, limit: int = 200) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

@@ -1449,6 +1449,133 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
     click.echo(_history_line(verify, tampered))
 
 
+@main.command(name="improve")
+@click.option(
+    "--explain",
+    is_flag=True,
+    help="Read the ledger and say what would stop a proposal. Opens nothing, spends nothing.",
+)
+def improve_cmd(explain: bool) -> None:
+    """Would a prompt change be worth proposing, and what would stop it?
+
+    `--explain` is the whole command today. It reads the ledger this repository already wrote,
+    names the body a recurring finding is attributed to, asks the guard whether that path is even
+    writable, and lists the ceilings a proposal run would meet. It reaches no model, holds no key,
+    writes no ledger record and opens nothing.
+
+    Without `--explain` it refuses, exit 3. Nothing drafts a prompt change yet, and a command that
+    printed a summary for work it had not done is the failure this framework exists to refuse.
+    """
+    from . import metrics
+
+    if not explain:
+        click.echo("improve   refused: nothing drafts a prompt change yet.")
+        click.echo("          `--explain` reads the ledger and names the ceiling that would stop a")
+        click.echo("          proposal. It opens nothing and spends nothing.")
+        raise SystemExit(EXIT_BLOCKED)
+
+    lockstep, _recorder = _default_lockstep()
+    # WITH the lockstep, unlike `report` and `_explain_run`, which call `_ledger()` bare. Every
+    # writer passes the bound store, so a reader that does not is reading a different ledger than
+    # the one the runs went into. Not fixed for those two here; this one is new and starts right.
+    ledger = _ledger(lockstep)
+    reader = getattr(ledger, "records", None)
+    if reader is None:
+        raise click.ClickException(
+            f"{type(ledger).__name__} cannot list records; improve needs a store that can"
+        )
+    records = reader()
+    if not records:
+        # Not a census in which nothing recurs, which is a different and far more reassuring
+        # sentence than "there is no evidence here at all".
+        click.echo("no records yet; the first run that writes a ledger record creates them")
+        return
+
+    trends = metrics.recurring(records)
+    for line in metrics.as_trend_text(trends):
+        click.echo(line)
+    click.echo("")
+
+    # The join between a finding id and the text that might answer it. Done here rather than in
+    # `metrics`, which is a leaf that may not know what an `Improvable` is — and done by exact
+    # membership, never by the shape of the id.
+    declared = tuple(getattr(lockstep, "improve", ()) or ())
+    guard = lockstep.guard
+    claimed: set[str] = set()
+    for body in declared:
+        mine = [t for t in trends if body.answers_for(t.finding)]
+        claimed.update(t.finding for t in mine)
+        click.echo(f"body      {body.body}")
+        click.echo(f"          {body.label}, verb {body.verb}, answers {', '.join(body.answers) or '—'}")
+        if mine:
+            # Every match, not the loudest one. `claimed` removes all of them from the
+            # unattributed count below, so printing one would leave the two halves not summing
+            # to the census — a finding silently attributed to a body nothing showed it against.
+            for trend in sorted(mine, key=lambda t: -t.runs):
+                click.echo(
+                    f"          attributed: {trend.finding}  ({trend.runs} of {trend.considered} run(s))"
+                )
+        else:
+            click.echo("          attributed: —  (no recorded finding matches what it answers)")
+        refusal = guard.check_path(body.body)
+        if refusal is not None:
+            click.echo(f"guard     refused — tier {refusal.tier}, rule {refusal.rule}")
+        else:
+            # Said this way on purpose. `prompts/` in tier 2 is anchored at the repository root, so
+            # a body under `src/in_lockstep/prompts/` matches neither tier and is writable because
+            # nothing names it — not because anything granted it. Printing a bare "permitted" here
+            # is how the next change comes to believe the loop has permission to write there.
+            click.echo("guard     permitted by omission — no tier names this path, so nothing granted it")
+
+    unclaimed = [t for t in trends if t.finding not in claimed]
+    if not declared:
+        click.echo("body      —  (this lifecycle declares no Improvable, so nothing is attributed)")
+    if unclaimed:
+        click.echo(f"          {len(unclaimed)} finding id(s) answer to no declared body; attributed to —")
+    click.echo("")
+
+    ceiling = lockstep.declared_ceiling()
+    # Parsed the way `_refuse_exhausted_daily_ceiling` parses it, not echoed. That function treats
+    # a non-numeric value as no ceiling at all, so printing the raw string under a heading that says
+    # "what a proposal run would meet" would show an unenforced variable as a control in force,
+    # which is the one thing this screen must never do.
+    raw_daily = os.environ.get("IN_LOCKSTEP_DAILY_LIMIT", "").strip()
+    if not raw_daily:
+        daily = "—  (IN_LOCKSTEP_DAILY_LIMIT is not set)"
+    else:
+        try:
+            daily = f"${float(raw_daily):.2f} usd"
+        except ValueError:
+            daily = f"—  ({raw_daily!r} is not a number; not enforced)"
+
+    click.echo("ceilings  what a proposal run would meet, in the order it would meet them")
+    # Two things at once. The count is a dash because nothing here asked the host, and an unmeasured
+    # ceiling is one that could stop a run — rendering it 0 would turn "nobody counted" into "there
+    # is nothing open". And the declared number is printed INSIDE the command that enforces it:
+    # `gate` takes its ceiling from `--max` and deliberately never loads `.lockstep/lockstep.py`,
+    # so the two can only agree if the reader is handed the flag rather than left to supply it.
+    max_open = getattr(lockstep, "max_open_proposals", 1)
+    click.echo(
+        f"  open proposals  max {max_open}, open now —  (not counted here; "
+        f"`in-lockstep gate --open-proposals <workflow> --max {max_open}` asks the host)"
+    )
+    # A dimension nobody set is left off rather than printed as `None`, and a Budget with nothing
+    # set at all is a dash. `Budget()` is four `None`s, and rendering that as `$0.0000` would say
+    # this run is capped at nothing when it is capped at nothing in the other sense.
+    dimensions = [
+        f"${ceiling.usd:.4f} usd" if ceiling.usd is not None else "",
+        f"{ceiling.tokens:,} tokens" if ceiling.tokens is not None else "",
+        f"{ceiling.wall_seconds:.0f}s wall" if ceiling.wall_seconds is not None else "",
+        f"{ceiling.turns} turns" if ceiling.turns is not None else "",
+    ]
+    stated = ", ".join(d for d in dimensions if d)
+    click.echo(f"  budget          {stated or '—  (this lifecycle declares no ceiling)'}")
+    click.echo(f"  daily           {daily}")
+    click.echo("")
+    click.echo("opens     nothing. `in-lockstep improve` without --explain exits 3: no mechanism")
+    click.echo("          drafts a prompt change yet.")
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 @click.option(
@@ -2766,7 +2893,22 @@ def _write_ledger(
     type=click.Path(),
     help="Read from the TRUSTED ref, never from a change under review.",
 )
-def gate_cmd(actor: str, association: str, codeowners: str) -> None:
+@click.option(
+    "--open-proposals",
+    "open_proposals",
+    default="",
+    metavar="WORKFLOW",
+    help="Also refuse when this workflow already has change requests open. Asks the host.",
+)
+@click.option(
+    "--max",
+    "max_open",
+    type=int,
+    default=1,
+    show_default=True,
+    help="How many open change requests that workflow may have.",
+)
+def gate_cmd(actor: str, association: str, codeowners: str, open_proposals: str, max_open: int) -> None:
     """May this person ask for a run? Exit 0 if yes, 3 if no.
 
     A chat-ops trigger is an unauthenticated entry point wearing a familiar interface, and the
@@ -2791,6 +2933,46 @@ def gate_cmd(actor: str, association: str, codeowners: str) -> None:
         click.echo(f"          {item}")
     click.echo(f"{'allowed' if decision.allowed else 'refused'}   {decision.reason}")
     if not decision.allowed:
+        raise SystemExit(EXIT_BLOCKED)
+
+    if not open_proposals:
+        return
+
+    # `hosted_scm` rather than `_bound_scm`: this command decides who may fire a run, and loading
+    # `.lockstep/lockstep.py` to answer it would execute repository code inside the authorization
+    # gate. The cost is that a repository binding its own `Scm` is not consulted here, which is the
+    # right trade for a gate. Reached only after the actor is allowed, so a login this refuses
+    # never causes a host call at all.
+    from .platform.hosted import hosted_scm
+    from .platform.scm import RUN_BRANCH_PREFIX, workflow_slug
+
+    host: Any = hosted_scm(".")
+    listing = getattr(host, "open_changes_by_workflow", None)
+    reason = "" if listing is not None else f"{type(host).__name__} cannot list change requests"
+    open_now: tuple[Any, ...] = ()
+    if listing is not None:
+        try:
+            open_now = tuple(listing(open_proposals))
+        except Exception as error:  # noqa: BLE001 - every failure to count is the same answer
+            reason = str(error) or type(error).__name__
+
+    if reason:
+        # `report --scm` degrades and says why, because a missing column costs a reader a column.
+        # A ceiling cannot do that: one that lets the run through because nobody could read it is
+        # not a ceiling. So the two invert here on purpose, and the message says which this is.
+        click.echo(f"proposals —  ({reason})")
+        click.echo("refused   an uncounted ceiling is not an empty one")
+        raise SystemExit(EXIT_BLOCKED)
+
+    where = f"{RUN_BRANCH_PREFIX}/{workflow_slug(open_proposals)}/"
+    click.echo(f"proposals {len(open_now)} open on {where}  (max {max_open})")
+    if len(open_now) >= max_open:
+        for change in open_now:
+            click.echo(f"          {getattr(change, 'url', '') or getattr(change, 'branch', '')}")
+        # Names its own source. This number came from `--max`, not from `lockstep.py`, because
+        # this command does not load the lifecycle — so calling it "the ceiling this repository
+        # declared" would credit a file it never read.
+        click.echo(f"refused   --max {max_open} already open")
         raise SystemExit(EXIT_BLOCKED)
 
 

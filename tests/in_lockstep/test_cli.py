@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -2661,3 +2662,358 @@ def test_egress_manifest_without_routes_prints_every_registered_endpoint(repo: P
     result = CliRunner().invoke(main, ["egress-manifest"])
     assert result.exit_code == 0, result.output
     assert "api.anthropic.com" in result.output
+
+
+def test_a_declared_improvable_survives_the_loader(repo: Path) -> None:
+    """The declaration is only worth anything if it arrives. `improve` is read off the lifecycle
+    the same way `max_attempts` is, so a module that names a body has to hand it over intact —
+    including `answers`, which is the half that decides whether a trend is attributed at all."""
+    from in_lockstep.loader import load, lockstep_from
+
+    (repo / ".lockstep").mkdir(exist_ok=True)
+    (repo / ".lockstep/lockstep.py").write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (\n"
+        "    Improvable(body='prompts/review/security.md', verb='review',\n"
+        "               label='review/security', answers=('review.security',)),\n"
+        ")\n"
+        "lockstep.max_open_proposals = 2\n"
+    )
+    module, _ref = load(str(repo))
+    lockstep = lockstep_from(module)
+    (only,) = lockstep.improve
+    assert only.body == "prompts/review/security.md"
+    assert only.answers_for("review.security")
+    assert lockstep.max_open_proposals == 2
+
+
+# -- improve: read the ledger, name the ceilings, open nothing ------------------------------
+
+
+def _seed_ledger(repo: Path, *records: dict[str, Any]) -> None:
+    """Write records where `InRepoLedger` reads them. Every one carries `"epoch": "in-process"`,
+    because `read_ledger` filters on it and a seeded record without one is invisible."""
+    import json
+
+    where = repo / ".lockstep" / "ledger"
+    where.mkdir(parents=True, exist_ok=True)
+    for n, record in enumerate(records):
+        (where / f"seed-{n}.json").write_text(json.dumps({"epoch": "in-process", **record}))
+
+
+def _seed_record(fid: str, *, run: str, ts: str | None = "2026-09-01T00:00:00+00:00") -> dict[str, Any]:
+    return {
+        "run_id": run,
+        "kind": "review",
+        "workflow": "review",
+        "status": "succeeded",
+        "decided": True,
+        "ts": ts,
+        "findings": {"count": 1, "items": [{"id": fid, "blocking": False}]},
+    }
+
+
+def test_improve_refuses_to_propose_and_says_nothing_drafts_a_change_yet(repo: Path) -> None:
+    """GATE-IMPROVE-1. The bare command has to refuse rather than do the nearest available thing.
+    Nothing drafts a prompt change, and a command that printed a cheerful summary for work it did
+    not do is the failure this framework exists to refuse."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+    before = sorted((repo / ".lockstep/ledger").glob("*.json"))
+
+    result = CliRunner().invoke(main, ["improve"])
+    assert result.exit_code == 3, result.output
+    assert "refused" in result.output, result.output
+    assert sorted((repo / ".lockstep/ledger").glob("*.json")) == before
+
+
+def test_explain_writes_no_record_and_opens_nothing(repo: Path) -> None:
+    """GATE-IMPROVE-1, the other half. Reading the ledger to decide whether a proposal is worth
+    making must not itself become a run in the ledger the next tick reads."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+    before = sorted(p.name for p in (repo / ".lockstep/ledger").glob("*.json"))
+
+    result = CliRunner().invoke(main, ["improve", "--explain"])
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in (repo / ".lockstep/ledger").glob("*.json")) == before
+    assert "review.security" in result.stdout
+
+
+def test_a_trend_no_improvable_claims_is_attributed_to_a_dash_not_to_a_guess(repo: Path) -> None:
+    """GATE-IMPROVE-6. The declaration answers `implement.staged` and the ledger's trend is
+    `review.security`. Nothing may bridge that gap — not the shared word, not the file name."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (Improvable(body='prompts/review/security.md', verb='review',\n"
+        "                               label='review/security', answers=('implement.staged',)),)\n"
+    )
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+
+    result = CliRunner().invoke(main, ["improve", "--explain"])
+    assert result.exit_code == 0, result.output
+
+    # The declared body is still shown -- hiding a declaration would be its own dishonesty -- but
+    # its attribution is a dash, and the trend is counted among the ids nothing claims. What must
+    # not happen is the shared word `security` in the id and the path bridging the two.
+    attributed = [ln for ln in result.stdout.splitlines() if "attributed" in ln]
+    assert attributed and all("—" in ln for ln in attributed), result.stdout
+    assert "review.security" not in "\n".join(attributed), result.stdout
+    assert "1 finding id(s) answer to no declared body" in result.stdout, result.stdout
+
+
+def test_the_body_a_trend_is_attributed_to_is_checked_against_the_guard(repo: Path) -> None:
+    """GATE-IMPROVE-6. A tier-1 body is refused by name and tier; the shipped prompts tree is
+    permitted, and the output has to say that it is permitted because nothing matches it rather
+    than because something granted it."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (\n"
+        "    Improvable(body='.lockstep/prompts/x.md', verb='review', label='x',\n"
+        "               answers=('review.security',)),\n"
+        "    Improvable(body='src/in_lockstep/prompts/review/security.md', verb='review',\n"
+        "               label='review/security', answers=('cost.budget_exceeded',)),\n"
+        ")\n"
+    )
+    _seed_ledger(
+        repo,
+        _seed_record("review.security", run="r1"),
+        _seed_record("cost.budget_exceeded", run="r2"),
+    )
+
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "tier 1" in out and ".lockstep/" in out, out
+    assert "by omission" in out, out
+
+    # GATE-IMPROVE-6's POSITIVE half, which every other assertion here demands a dash for. Without
+    # it the whole row is discharged by tests that pass for an implementation attributing nothing
+    # to anything, which is a ratchet that holds nothing.
+    assert "attributed: review.security  (1 of 2 run(s))" in out, out
+    assert "attributed: cost.budget_exceeded  (1 of 2 run(s))" in out, out
+
+
+def test_the_ceiling_nobody_counted_renders_as_a_dash_and_names_what_would_count_it(repo: Path) -> None:
+    """An unmeasured ceiling is a ceiling that could stop a run, never a finding that it would
+    not. So it prints a dash and names the command that would ask the host."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    ceiling = next(ln for ln in out.splitlines() if "open proposals" in ln)
+    assert "—" in ceiling, ceiling
+    assert "gate --open-proposals" in out, out
+
+
+def test_an_empty_ledger_is_not_a_trend_of_zero(repo: Path) -> None:
+    """No records is no evidence. It must not render as a census in which nothing recurs, which
+    is a different and much more reassuring sentence."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    result = CliRunner().invoke(main, ["improve", "--explain"])
+    assert result.exit_code == 0, result.output
+    assert "no records yet" in result.stdout, result.stdout
+
+
+def test_explain_works_in_a_repository_with_no_lifecycle_module_at_all(repo: Path) -> None:
+    """The drop-in case. Detected defaults declare no `Improvable`, so every attribution is a
+    dash and the command still explains what it found rather than raising."""
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+    result = CliRunner().invoke(main, ["improve", "--explain"])
+    assert result.exit_code == 0, result.output
+    assert "review.security" in result.stdout
+
+
+# -- gate --open-proposals: an uncounted ceiling is not an empty one -------------------------
+
+
+class _Host:
+    """A stand-in for whatever `hosted_scm` returns. `answer` is what listing does."""
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.asked: list[str] = []
+
+    def open_changes_by_workflow(self, workflow: str, *, limit: int = 200) -> Any:
+        self.asked.append(workflow)
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+def _host(monkeypatch: pytest.MonkeyPatch, answer: Any) -> None:
+    """Stand a host in that CAN list, and answers with `answer` (or raises it)."""
+    _raw_host(monkeypatch, _Host(answer))
+
+
+def _raw_host(monkeypatch: pytest.MonkeyPatch, host: Any) -> None:
+    """Stand `host` in exactly as given — for the case where it cannot list at all."""
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: host)
+
+
+def test_an_actor_the_gate_refuses_never_reaches_the_host(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ordering property, and the one that keeps the existing gate honest. Authorization is
+    decided before anything reaches the network, so an unauthorized login cannot make this
+    repository talk to its host at all."""
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("the host was reached for an actor the gate had already refused")
+
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", _boom)
+    (repo / "CODEOWNERS").write_text("*  @alice\n")
+    result = CliRunner().invoke(
+        main,
+        ["gate", "--actor", "mallory", "--association", "CONTRIBUTOR", "--codeowners", "CODEOWNERS",
+         "--open-proposals", "improve"],
+    )  # fmt: skip
+    assert result.exit_code == 3
+    assert "codeowner=no" in result.output
+
+
+def test_a_host_that_cannot_count_open_proposals_refuses_rather_than_reading_as_zero(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-IMPROVE-7. `report --scm` degrades and prints why, because a missing column costs a
+    reader a column. A ceiling cannot do that: an unread ceiling that lets the run through is not
+    a ceiling at all."""
+    _raw_host(monkeypatch, object())
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "—" in result.output, result.output
+    assert "uncounted" in result.output, result.output
+
+
+def test_a_host_that_raises_while_counting_refuses(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GATE-IMPROVE-7. Not logged in, rate limited, listing truncated — all the same answer: the
+    number was not obtained, so the ceiling holds."""
+    _host(monkeypatch, RuntimeError("gh: not logged in"))
+    result = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "gh: not logged in" in result.output, result.output
+
+
+def test_the_ceiling_allows_the_first_proposal_and_refuses_the_second(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What the number is for. Nothing open is a run that may proceed; one open at `--max 1` is a
+    reviewer who already has one edit to judge, and the refusal names it."""
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    _host(monkeypatch, ())
+    allowed = CliRunner().invoke(
+        main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"]
+    )
+    assert allowed.exit_code == 0, allowed.output
+    assert "0 open" in allowed.output
+
+    already = ChangeRequest(
+        id="u", url="https://example.test/pull/9", branch="in-lockstep/improve/r", title="t"
+    )
+    _host(monkeypatch, (already,))
+    refused = CliRunner().invoke(
+        main,
+        ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve", "--max", "1"],
+    )  # fmt: skip
+    assert refused.exit_code == 3, refused.output
+    assert "https://example.test/pull/9" in refused.output
+
+
+def test_the_gate_without_open_proposals_asks_no_host_at_all(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag is opt-in. Every pipeline already calling `gate` must keep working with no host,
+    no credential and no network."""
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("a plain gate reached the host")
+
+    import in_lockstep.platform.hosted as hosted
+
+    monkeypatch.setattr(hosted, "hosted_scm", _boom)
+    result = CliRunner().invoke(main, ["gate", "--actor", "dana", "--association", "MEMBER"])
+    assert result.exit_code == 0, result.output
+
+
+def test_the_ceiling_line_hands_the_reader_the_flag_that_enforces_the_declared_number(
+    repo: Path,
+) -> None:
+    """`gate` takes its ceiling from `--max` and never loads the lifecycle, so a reader told only
+    to run `gate --open-proposals improve` would silently enforce 1 against a repository that
+    declared 3. The command printed has to carry the number."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\nlockstep.max_open_proposals = 3\n"
+    )
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "--max 3" in out, out
+
+
+def test_a_daily_limit_that_is_not_a_number_is_not_shown_as_a_ceiling_in_force(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_refuse_exhausted_daily_ceiling` treats an unparseable value as no ceiling at all. Echoing
+    it under "what a proposal run would meet" would show an unenforced variable as a control."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, _seed_record("review.security", run="r1"))
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "twenty dollars")
+    bad = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    daily = next(ln for ln in bad.splitlines() if ln.strip().startswith("daily"))
+    assert "—" in daily and "not enforced" in daily, daily
+
+    monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "20")
+    good = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "$20.00 usd" in good, good
+
+
+def test_every_finding_a_body_answers_is_named_not_only_the_loudest(repo: Path) -> None:
+    """The attributed lines and the unattributed count have to sum to the census. Printing only the
+    highest-run match removes the others from the unattributed tally while naming them nowhere."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.improve import Improvable\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.improve = (Improvable(body='prompts/x.md', verb='review', label='x',\n"
+        "                               answers=('review.security', 'fix.staged')),)\n"
+    )
+    _seed_ledger(
+        repo,
+        _seed_record("review.security", run="r1"),
+        _seed_record("review.security", run="r2"),
+        _seed_record("fix.staged", run="r3"),
+    )
+    out = CliRunner().invoke(main, ["improve", "--explain"]).stdout
+    assert "attributed: review.security" in out, out
+    assert "attributed: fix.staged" in out, out
+    assert "answer to no declared body" not in out, out
+
+
+def test_the_gate_refusal_names_the_flag_its_number_came_from(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`gate` never reads `.lockstep/lockstep.py`, so a refusal saying "the ceiling this repository
+    declared" would credit a file it did not open."""
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    _host(monkeypatch, (ChangeRequest(id="u", url="u", branch="in-lockstep/improve/r", title="t"),))
+    out = (
+        CliRunner()
+        .invoke(main, ["gate", "--actor", "dana", "--association", "MEMBER", "--open-proposals", "improve"])
+        .output
+    )
+    assert "--max 1" in out, out
+    assert "this repository declared" not in out, out

@@ -176,6 +176,18 @@ def branch_key(ticket: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "-" for c in ticket.lstrip("#")).strip("-")
 
 
+def workflow_slug(workflow: str) -> str:
+    """A workflow name as it appears in a run branch.
+
+    Its own function for exactly the reason `branch_key` is: `branch_for` writes this and
+    `is_run_branch_of` reads it back, and two spellings of one sanitisation is one of them
+    drifting. The failure would be silent in the worst way here — a ceiling that counts the open
+    proposals of a workflow whose branches it can no longer recognise, and therefore always
+    counts zero.
+    """
+    return "".join(c if c.isalnum() or c in "-_/" else "-" for c in workflow)
+
+
 def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     """`in-lockstep/<workflow>/<ticket>/<run-id>`, the ticket segment omitted when there is none.
 
@@ -185,7 +197,7 @@ def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     it. The ticket is a hierarchy segment of its own so that glob works; a leading `#` is
     stripped because shells treat it as a comment even though git would accept it.
     """
-    safe = "".join(c if c.isalnum() or c in "-_/" else "-" for c in workflow)
+    safe = workflow_slug(workflow)
     key = branch_key(ticket)
     middle = f"{safe}/{key}" if key else safe
     return f"{RUN_BRANCH_PREFIX}/{middle}/{run_id}"
@@ -214,6 +226,25 @@ def is_run_branch_for(branch: str, ticket: str) -> bool:
     if not key or not is_run_branch(branch):
         return False
     return f"/{key}/" in branch[len(RUN_BRANCH_PREFIX) :]
+
+
+def is_run_branch_of(branch: str, workflow: str) -> bool:
+    """Whether `branch` is one this framework opened FOR `workflow`.
+
+    A prefix test rather than a positional read, and `ticket_from_branch` above says why: the
+    workflow segment may itself contain a slash, so `parts[1]` is not the workflow.
+
+    One direction is exact and the other cannot be. `implement/from-ticket` never matches a branch
+    `implement` opened, which is the direction that matters — one workflow's ceiling must not be
+    spent by another's work. But `implement` DOES match `implement/from-ticket`'s branches, because
+    `in-lockstep/implement/218/run-2` and `in-lockstep/implement/from-ticket/run-2` are the same
+    shape and no rule can separate them. Given that, a shallower name counts the family, which is
+    the safe side for a ceiling: refusing a run that could have proceeded costs a person one
+    command, and letting one through because a branch went unrecognised is the failure the number
+    exists to prevent.
+    """
+    slug = workflow_slug(workflow)
+    return bool(slug) and branch.startswith(f"{RUN_BRANCH_PREFIX}/{slug}/")
 
 
 @dataclass(frozen=True)

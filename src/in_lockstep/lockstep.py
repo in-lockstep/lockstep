@@ -16,6 +16,7 @@ from typing import Any
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
 from .core.context import AGENT_INSTRUCTION_FILES, Approval, RepoFacts, RepoInfo, RunContext
+from .core.improve import Improvable
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
 from .core.spend import Budget, DailySpendExceeded, Spend, UndeclaredBudget
@@ -76,6 +77,17 @@ class Lockstep:
         # fails its tests it opens an `ai-generated` bug issue, which an agent may pick up and try
         # again; this bounds that loop. The repo owner raises or lowers it in `lockstep.py`.
         self.max_attempts = 3
+        # Which prompt bodies a recurring finding may be attributed to. Empty by default, and
+        # deliberately so: guessing a body from a finding id would attribute `review.security` to
+        # whatever fragment happened to be named similarly, and a wrong attribution is worse than
+        # none, because it points the next prompt change at text that had nothing to do with the
+        # evidence. Declared here, or the trend is attributed to a dash.
+        self.improve: tuple[Improvable, ...] = ()
+        # How many change requests this framework may have open for one workflow at a time. One,
+        # because a second proposal against the same body asks a reviewer to judge two edits to one
+        # file with no way to say which of them they accepted. Raised in `lockstep.py` like
+        # `max_attempts` above, and counted from the host rather than from this clone's ledger.
+        self.max_open_proposals = 1
         # What `use()` completes a strategy from. Inert until a module names a runner.
         self.workshop = Workshop()
         # Where this configuration came from, in the loader's words — "trusted ref X", "local

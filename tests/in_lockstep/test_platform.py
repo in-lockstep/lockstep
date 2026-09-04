@@ -6,6 +6,7 @@ import asyncio
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from in_lockstep.platform.ledger import (
     read_ledger,
     summarize,
 )
-from in_lockstep.platform.scm import DirectPushRefused, GitLocal, branch_for
+from in_lockstep.platform.scm import DirectPushRefused, GitHubScm, GitLocal, branch_for
 from in_lockstep.platform.scm.base import GuardRefused
 from in_lockstep.platform.tickets import (
     GitHubIssues,
@@ -919,3 +920,80 @@ def test_interior_whitespace_is_collapsed_rather_than_carried() -> None:
     from in_lockstep.platform.scm.base import title_line
 
     assert title_line("feat:   count   attempts") == "feat: count attempts"
+
+
+# -- counting what one workflow has open ----------------------------------------------------
+
+
+def _pr(branch: str, number: int, *, title: str = "t", draft: bool = False) -> dict[str, Any]:
+    return {
+        "number": number,
+        "url": f"https://github.com/o/r/pull/{number}",
+        "title": title,
+        "headRefName": branch,
+        "isDraft": draft,
+    }
+
+
+def test_open_proposals_are_matched_on_the_branch_the_framework_wrote_not_on_the_title() -> None:
+    """A ceiling counted from titles is a ceiling anybody can raise by naming a branch well. The
+    only evidence that a change request is ours is the branch layout `branch_for` wrote."""
+    scm = GitHubScm(".")
+    scm._gh_json = lambda *a: [  # type: ignore[method-assign]
+        _pr("in-lockstep/improve/run-1", 1),
+        _pr("in-lockstep/implement/from-ticket/218/run-2", 2),
+        _pr("feature/improve-things", 3, title="improve the prompts"),
+    ]
+    open_now = scm.open_changes_by_workflow("improve")
+    assert [c.number for c in open_now] == [1]
+
+
+def test_a_named_workflow_does_not_claim_a_shallower_ones_branches() -> None:
+    """The strict direction, and the only one the branch layout can actually give. Asking for
+    `implement/from-ticket` must not count a branch that `implement` opened, or one workflow's
+    ceiling would be spent by another's work."""
+    scm = GitHubScm(".")
+    scm._gh_json = lambda *a: [  # type: ignore[method-assign]
+        _pr("in-lockstep/implement/from-ticket/218/run-2", 2),
+        _pr("in-lockstep/implement/run-3", 3),
+    ]
+    assert [c.number for c in scm.open_changes_by_workflow("implement/from-ticket")] == [2]
+
+
+def test_a_family_prefix_counts_the_workflows_nested_under_it() -> None:
+    """The other direction over-counts, and that is deliberate rather than sloppy.
+
+    `in-lockstep/implement/218/run-2` (workflow `implement`, ticket 218) and
+    `in-lockstep/implement/from-ticket/run-2` (workflow `implement/from-ticket`, no ticket) are the
+    same shape — `ticket_from_branch` already records that the layout cannot be read positionally.
+    So a shallower name cannot be made to exclude the deeper ones, and given the choice, a ceiling
+    over-counts: refusing a run that could have proceeded costs a person one command, and letting
+    one through because a branch went unrecognised is the failure the ceiling exists to prevent."""
+    scm = GitHubScm(".")
+    scm._gh_json = lambda *a: [  # type: ignore[method-assign]
+        _pr("in-lockstep/implement/from-ticket/218/run-2", 2),
+        _pr("in-lockstep/implement/run-3", 3),
+    ]
+    assert [c.number for c in scm.open_changes_by_workflow("implement")] == [3, 2]
+
+
+def test_counting_open_proposals_is_not_capped_at_the_prompt_context_limit() -> None:
+    """`changes_for` stops at MAX_CHANGES_READ because its output goes into a prompt. A count
+    capped at three is a ceiling that stops counting before it stops anything."""
+    scm = GitHubScm(".")
+    scm._gh_json = lambda *a: [  # type: ignore[method-assign]
+        _pr(f"in-lockstep/improve/run-{n}", n) for n in range(5)
+    ]
+    assert len(scm.open_changes_by_workflow("improve")) == 5
+
+
+def test_a_listing_that_may_have_been_truncated_is_refused_rather_than_undercounted() -> None:
+    """The host returned exactly as many rows as it was asked for, so there may be more. An
+    undercounted ceiling lets a run through, which is the one failure this number exists to
+    prevent, so it raises and the caller refuses instead of counting."""
+    scm = GitHubScm(".")
+    scm._gh_json = lambda *a: [  # type: ignore[method-assign]
+        _pr(f"in-lockstep/improve/run-{n}", n) for n in range(4)
+    ]
+    with pytest.raises(RuntimeError, match="truncated"):
+        scm.open_changes_by_workflow("improve", limit=4)

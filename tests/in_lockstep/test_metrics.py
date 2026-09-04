@@ -429,3 +429,181 @@ def test_no_record_carrying_the_breakdown_reports_no_share_at_all() -> None:
 def test_a_bool_is_not_a_token_count_here_either() -> None:
     report = build([_record(cache_read_tokens=True, input_tokens=True)])
     assert report.cached_share.value is None
+
+
+# -- what the ledger keeps finding, per run and per week ------------------------------------
+
+
+def _finding(fid: str, *, blocking: bool = False) -> dict[str, Any]:
+    return {"id": fid, "blocking": blocking, "severity": "medium", "detail": ""}
+
+
+def _found(*items: dict[str, Any], **over: Any) -> dict[str, Any]:
+    return _record(findings={"count": len(items), "items": list(items)}, **over)
+
+
+def test_a_finding_in_two_records_counts_as_two_runs_not_as_its_occurrences() -> None:
+    """The shape this repository's own ledger has: `review.security` is 26 occurrences over 13
+    runs. Reporting 26 as though it were the recurrence would say the finding came back twice as
+    often as it did, and the threshold that decides whether to act on it reads that number."""
+    twice = [_finding("review.security"), _finding("review.security")]
+    trends = metrics.recurring(
+        [
+            _found(*twice, run_id="a", ts="2026-09-01T00:00:00+00:00"),
+            _found(*twice, run_id="b", ts="2026-09-01T00:00:00+00:00"),
+        ]
+    )
+    security = next(t for t in trends if t.finding == "review.security")
+    assert security.occurrences == 4
+    assert security.runs == 2
+    assert security.considered == 2
+
+
+def test_a_run_with_no_timestamp_is_undated_rather_than_placed_in_week_zero() -> None:
+    """Four of this repository's 27 records predate `ts`. They are runs that happened; they are
+    just runs nobody can place in a week. Counting them as week zero would invent a week, and
+    dropping them silently would report a ledger with fewer runs than it has."""
+    trends = metrics.recurring(
+        [
+            _found(_finding("x"), run_id="a", ts="2026-09-01T00:00:00+00:00"),
+            _found(_finding("x"), run_id="b", ts=None),
+        ]
+    )
+    trend = next(t for t in trends if t.finding == "x")
+    assert (trend.runs, trend.weeks, trend.dated_runs, trend.undated_runs) == (2, 1, 1, 1)
+    rendered = "\n".join(metrics.as_trend_text(trends))
+    assert "(1 of 2 dated)" in rendered, rendered
+    assert "0 week" not in rendered, rendered
+
+
+def test_a_finding_no_record_dated_renders_as_a_dash_and_not_as_zero_weeks() -> None:
+    """GATE-IMPROVE-5. Four ids on this repository's ledger (`wayfinder.*`) are in exactly this
+    state, and `0 weeks` would read as "measured, and it does not recur" rather than as "nobody
+    can say"."""
+    trends = metrics.recurring([_found(_finding("wayfinder.fog"), run_id="a", ts=None)])
+    trend = next(t for t in trends if t.finding == "wayfinder.fog")
+    assert (trend.weeks, trend.dated_runs, trend.undated_runs) == (0, 0, 1)
+    line = next(ln for ln in metrics.as_trend_text(trends) if "wayfinder.fog" in ln)
+    assert "—  (0 of 1 dated)" in line, line
+
+
+def test_an_injection_signal_is_not_a_recurring_finding() -> None:
+    """One run on this ledger carries 16 of them. Counted in, `injection.exfil_token_names` would
+    lead the census on 11 occurrences from a single run — and it is a fact about somebody talking
+    to the model, not about the prompt this loop would change."""
+    items = [_finding("injection.exfil_token_names") for _ in range(11)]
+    trends = metrics.recurring([_found(*items, _finding("review.security"), run_id="a")])
+    assert [t.finding for t in trends] == ["review.security"]
+
+
+def test_a_blocking_item_is_counted_per_run_not_per_item() -> None:
+    """Two ceilings hit in one run is one run stopped, and the census is about how often a thing
+    happens rather than how loudly it happened once."""
+    trends = metrics.recurring(
+        [
+            _found(
+                _finding("cost.budget_exceeded", blocking=True),
+                _finding("cost.budget_exceeded", blocking=True),
+                run_id="a",
+            )
+        ]
+    )
+    assert next(t for t in trends).blocking_runs == 1
+
+
+def test_a_step_finding_is_not_counted_twice_when_the_record_also_lists_it() -> None:
+    """Since schema 5 a record mirrors its steps' findings at the top level. Walking both would
+    double every count on every record written since, and the doubling would be invisible: the
+    ratio between ids stays the same, so only the absolute numbers lie."""
+    once = _found(_finding("validate.f821"), run_id="a")
+    once["steps"] = [{"verb": "validate", "findings": {"count": 1, "items": [_finding("validate.f821")]}}]
+    assert next(t for t in metrics.recurring([once])).occurrences == 1
+
+
+def test_nothing_qualifies_until_it_spans_two_weeks() -> None:
+    """Why this returns the whole census rather than a filtered list. On this repository nothing
+    clears the thresholds, and an empty list would say "nothing recurs" in the same breath it says
+    "there is no ledger" — the conflation `Measured` exists to prevent."""
+    week = [
+        _found(_finding("review.security"), run_id=f"r{n}", ts="2026-09-01T00:00:00+00:00") for n in range(6)
+    ]
+    trends = metrics.recurring(week)
+    security = next(t for t in trends if t.finding == "review.security")
+    assert security.runs == 6 and security.weeks == 1
+    assert security.qualifies is False, "six runs inside one week is a busy week, not a trend"
+    rendered = "\n".join(metrics.as_trend_text(trends))
+    assert "nothing recurs" in rendered, rendered
+    assert "A dash is a number nobody measured. It is not a zero." in rendered
+
+
+def test_a_finding_that_spans_two_weeks_with_enough_runs_qualifies() -> None:
+    """The positive control. Without it every assertion above is satisfied by a function that
+    always returns `qualifies=False`."""
+    # 2026-08-26 is ISO week 35 and 2026-09-02 is week 36. Spelled as two literal dates rather
+    # than computed, because an arithmetic fixture that lands both in one week passes every
+    # assertion below except this one, and silently.
+    spread = [
+        _found(
+            _finding("review.security"),
+            run_id=f"r{n}",
+            ts=("2026-08-26" if n % 2 else "2026-09-02") + "T00:00:00+00:00",
+        )
+        for n in range(6)
+    ]
+    security = next(t for t in metrics.recurring(spread) if t.finding == "review.security")
+    assert (security.runs, security.weeks) == (6, 2)
+    assert security.qualifies is True
+    assert "nothing recurs" not in "\n".join(metrics.as_trend_text([security]))
+
+
+def test_the_one_qualifying_trend_is_never_hidden_behind_the_top_n_cut() -> None:
+    """The census is sorted by runs, which is only half of what qualifying means: an id with many
+    runs inside one week outranks the one id that actually spans two. So the header could announce
+    a qualifying trend that no printed row carried, and the reader could not learn which id it
+    was — the only actionable row in the whole census, behind the cut."""
+    busy = [
+        _found(_finding(f"noise.{n}"), run_id=f"n{n}-{r}", ts="2026-09-02T00:00:00+00:00")
+        for n in range(10)
+        for r in range(20)
+    ]
+    spread = [
+        _found(
+            _finding("review.security"),
+            run_id=f"s{n}",
+            ts=("2026-08-26" if n % 2 else "2026-09-02") + "T00:00:00+00:00",
+        )
+        for n in range(6)
+    ]
+    trends = metrics.recurring(busy + spread)
+    assert [t.finding for t in trends if t.qualifies] == ["review.security"]
+    assert [t.finding for t in trends].index("review.security") > metrics.TOP_N, (
+        "the fixture must put the qualifying id below the cut, or this proves nothing"
+    )
+
+    rendered = metrics.as_trend_text(trends)
+    assert any("review.security" in line for line in rendered), "\n".join(rendered)
+    assert any("none of them qualifying" in line for line in rendered), "\n".join(rendered)
+
+
+def test_the_header_cannot_name_a_threshold_the_census_was_not_computed_under() -> None:
+    """The thresholds were two unlinked parameters — one on `recurring`, one on the renderer — so
+    a caller could compute `qualifies` at 2 and print a header claiming 5."""
+    week = [_found(_finding("x"), run_id=f"r{n}", ts="2026-09-01T00:00:00+00:00") for n in range(3)]
+    trends = metrics.recurring(week, min_runs=2, min_weeks=1)
+    assert trends[0].qualifies is True
+    rendered = "\n".join(metrics.as_trend_text(trends))
+    assert "1+ weeks" in rendered, rendered
+    assert "min_runs 5" not in rendered, rendered
+
+
+def test_every_count_the_census_prints_carries_the_population_it_came_from() -> None:
+    """GATE-IMPROVE-5. `runs` was printed bare, so the row said 13 without saying 13 of what, and
+    `blocking` said 3 without saying 3 of how many runs."""
+    records = [
+        _found(_finding("x", blocking=True), run_id="a", ts="2026-09-01T00:00:00+00:00"),
+        _found(_finding("x"), run_id="b", ts="2026-09-01T00:00:00+00:00"),
+        _record(run_id="c", ts="2026-09-01T00:00:00+00:00"),
+    ]
+    line = next(ln for ln in metrics.as_trend_text(metrics.recurring(records)) if " x " in ln)
+    assert "2 of 3 run(s)" in line, line
+    assert "1 of 2 blocking" in line, line
