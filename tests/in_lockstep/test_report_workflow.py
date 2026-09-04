@@ -50,6 +50,25 @@ class _Host:
     shared_numbering = False
 
 
+class _OpeningHost(_Host):
+    """`_Host` plus the two calls `open_reviewable` makes, so a propose workflow runs to the end."""
+
+    def __init__(self) -> None:
+        self.opened: list[dict[str, Any]] = []
+        self.ready: list[Any] = []
+
+    async def open_change(self, changeset: Any, **kwargs: Any) -> Any:
+        from in_lockstep.platform.scm.base import ChangeRequest
+
+        self.opened.append(kwargs)
+        return ChangeRequest(
+            id="1", url="https://example.test/pull/1", branch="in-lockstep/fix/139/test", title="t", number=1
+        )
+
+    async def mark_ready(self, change: Any) -> None:
+        self.ready.append(change)
+
+
 def _ledger_with(tmp_path: Path, *records: dict[str, Any]) -> Any:
     """A file-backed store holding exactly these records."""
     from in_lockstep.platform.ledger.store import InRepoLedger
@@ -211,3 +230,41 @@ def test_the_evidence_path_is_uploaded_by_both_workflows(workflows) -> None:
     for name in ("implement.yml", "fix.yml"):
         text = (ROOT / ".github" / "workflows" / name).read_text()
         assert f"{module.ATTEMPT}/" in text, f"{name} does not upload the evidence path"
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_the_propose_workflow_says_on_the_ticket_that_it_opened_the_change(
+    verb: str, workflows, tmp_path
+) -> None:
+    """Issue 196. The success path — the one that runs whenever the work actually worked.
+
+    `fix/propose` opened the change request and then died on an undefined name before it could say
+    so, which recorded a succeeding run as errored and left the person who typed `/fix` watching a
+    thread that never replied. Exactly the silence `*/report` exists to prevent, on the branch
+    nobody thought needed it, because the failure was in the half that succeeds.
+
+    Parametrised over both verbs: the two propose workflows are near-identical and only one of them
+    was wrong, which is how it survived — a reader comparing them saw two paragraphs of prose and a
+    name that looked plausible in both."""
+    from in_lockstep.core.types import ChangeAuthor, ChangeSet, FileChange, TestVerdict
+    from in_lockstep.platform.artifacts import write_changeset
+
+    artifact = tmp_path / "changeset.json"
+    write_changeset(
+        artifact,
+        ChangeSet(
+            changes=(FileChange(path="src/thing.py", contents="ok\n", author=ChangeAuthor.AGENT),),
+            summary=f"{verb} the thing",
+            ticket="#139",
+        ),
+        verdict=TestVerdict(status="succeeded", decided=True, total=3, passed=3),
+    )
+
+    tracker, host = _Tracker(), _OpeningHost()
+    outcome = _run(get(f"{verb}/propose"), ticket="#139", tickets=tracker, scm=host, artifact=str(artifact))
+
+    assert outcome.status.value == "succeeded", outcome.reason
+    (said,) = tracker.said
+    assert "https://example.test/pull/1" in said, said
+    assert "ready for review" in said, said
+    assert host.ready, "a green verdict opens ready, not as a draft"
