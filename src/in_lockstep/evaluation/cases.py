@@ -53,6 +53,12 @@ class Case:
     #: kept out of `input` on purpose: a grader that could see it might come to depend on it, and
     #: then a case would mean something different depending on how it was made.
     harvested: dict[str, Any] = field(default_factory=dict)
+    #: The answer this case's expectations were derived from, so the case can be settled without
+    #: the cassette it came from. A case outlives its recording: the tape is scratch, deleted with
+    #: the runner that made it, while the case travels in an artifact and into a repository. Kept
+    #: out of `input` for the same reason `harvested` is — a grader that could see the answer it is
+    #: grading would stop being a grader.
+    recorded: dict[str, Any] = field(default_factory=dict)
 
     @property
     def rubric(self) -> Rubric | None:
@@ -80,12 +86,14 @@ class Case:
             raise CaseError(f"{name}: a case with no expectation cannot fail")
         _refuse_unsatisfiable_counts(expect, name=name)
         harvested = raw.get("harvested") or {}
+        recorded = raw.get("recorded") or {}
         return cls(
             name=name,
             input=raw.get("input") or {},
             expect=expect,
             path=path,
             harvested=harvested if isinstance(harvested, dict) else {},
+            recorded=recorded if isinstance(recorded, dict) else {},
         )
 
     @classmethod

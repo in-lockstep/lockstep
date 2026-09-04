@@ -108,6 +108,14 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
                 case={
                     "input": {"request": request},
                     "expect": expect,
+                    # The answer, in the case. Without this a case is a pointer at a cassette, and
+                    # a pointer is worth what the thing it points at is still there: a case that
+                    # travels — out of a CI runner in an artifact, into a repository, between two
+                    # machines — arrives beside a path that no longer exists, and `eval run`
+                    # reports it unplayable for a reason nobody can act on. The tape is the
+                    # scratch; the case is the thing meant to last, so the case carries what it
+                    # needs. `harvested.cassette` stays as provenance, not as a dependency.
+                    "recorded": _recorded(entry),
                     # Not read by the grader. Read by a person asking "where did this come from,
                     # and is it still the kind of work we do?" — which is the question that decides
                     # whether a case is worth keeping.
@@ -127,6 +135,21 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
             f"`--record` to harvest from it."
         )
     return out
+
+
+def _recorded(entry: dict[str, Any]) -> dict[str, Any]:
+    """The recorded answer, exactly as the cassette holds it.
+
+    The same field set `Cassette.replay_provider` reconstructs an `LLMOutput` from, so a case can
+    be settled without the cassette and settled identically. Copied rather than reshaped: a
+    friendlier summary here would be a second format for the same thing, and the two would drift.
+    """
+    return {
+        "content": str(entry.get("content", "")),
+        "tool_calls": list(entry.get("tool_calls") or []),
+        "usage": dict(entry.get("usage") or {}),
+        "stop_reason": str(entry.get("stop_reason", "")),
+    }
 
 
 def _answer(entry: dict[str, Any]) -> Any:

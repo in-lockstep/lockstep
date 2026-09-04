@@ -280,3 +280,78 @@ def test_an_answer_that_found_nothing_still_means_nothing() -> None:
     case = Case(name="c", expect=_expect({"findings": []}))
     assert grade(case, {"findings": []})["deterministic_passed"] is True
     assert grade(case, {"findings": [{"summary": "invented"}]})["deterministic_passed"] is False
+
+
+# -- a case outlives the recording it came from ------------------------------------------------
+
+
+def test_a_harvested_case_carries_the_answer_it_was_derived_from(tmp_path: Path) -> None:
+    """A case that only points at a cassette is worth what that cassette is still there.
+
+    Which, for the case that matters most, is nothing: a CI recording is written to the runner's
+    temporary directory and destroyed with the runner, so the case arrives in an artifact beside a
+    path that no longer exists on any machine.
+    """
+    (case,) = harvest(_record(tmp_path), family="review")
+    recorded = case.case["recorded"]
+    assert json.loads(recorded["content"])["findings"], "the answer did not travel with the case"
+    assert recorded["stop_reason"] == "end_turn"
+    assert recorded["usage"]["input_tokens"] == 9
+
+
+def test_gate_eval_4_a_case_settles_after_its_cassette_is_gone(tmp_path: Path) -> None:
+    """GATE-EVAL-4, first half. The property the `recorded` field exists for, asserted by
+    deleting the tape rather than by trusting that nothing reopens it."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    tape = _record(tmp_path)
+    corpus = tmp_path / "corpus"
+    CliRunner().invoke(main, ["eval", "harvest", "--from", str(tape), "--into", str(corpus)])
+    tape.unlink()
+
+    result = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert "1 replayed, 0 skipped" in result.output, result.output
+    assert "SKIP" not in result.output, result.output
+
+
+def test_a_case_whose_request_and_answer_were_never_a_pair_is_refused(tmp_path: Path) -> None:
+    """GATE-EVAL-4, second half. Self-contained means editable, so the pair is checked.
+
+    `harvested.key` is the hash of the request as recorded. If the request no longer hashes to it,
+    the answer beside it belongs to a different question, and grading would settle one question
+    against the answer to another -- the fabrication this whole corpus exists to refuse.
+    """
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    corpus = tmp_path / "corpus"
+    CliRunner().invoke(main, ["eval", "harvest", "--from", str(_record(tmp_path)), "--into", str(corpus)])
+    (path,) = sorted(corpus.rglob("*.json"))
+    raw = json.loads(path.read_text())
+    raw["input"]["request"]["system"] = "A different question entirely."
+    path.write_text(json.dumps(raw))
+
+    result = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert "not the pair recorded" in result.output, result.output
+    assert "0 replayed, 1 skipped" in result.output, result.output
+
+
+def test_a_case_with_no_answer_still_falls_back_to_its_cassette(tmp_path: Path) -> None:
+    """Every case harvested before this field existed, and every one somebody wrote by hand."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    tape = _record(tmp_path)
+    corpus = tmp_path / "corpus"
+    CliRunner().invoke(main, ["eval", "harvest", "--from", str(tape), "--into", str(corpus)])
+    (path,) = sorted(corpus.rglob("*.json"))
+    raw = json.loads(path.read_text())
+    del raw["recorded"]
+    path.write_text(json.dumps(raw))
+
+    result = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert "1 replayed, 0 skipped" in result.output, result.output
