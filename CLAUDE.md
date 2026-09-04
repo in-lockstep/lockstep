@@ -1,7 +1,60 @@
 # Working in this repository
 
-Repo-local facts an agent cannot infer from the file it happens to have open. Everything here has
-already cost somebody a failed run.
+Two kinds of thing. First, what this framework is FOR — the objectives every change is measured
+against. Then the repo-local facts an agent cannot infer from the file it happens to have open,
+every one of which has already cost somebody a failed run.
+
+Read the objectives before deciding what to build. Read the rest before deciding how.
+
+## What this framework is for
+
+Ten objectives, numbered so a change can cite one. They are the direction; everything below this
+section is detail about how to work here without breaking something.
+
+**Every change is measured against these.** A feature, a fix, a refactor or a deletion either moves
+the framework toward an objective or it does not, and a change that moves it away is one to not
+make — or, if it is already here, one to remove. Say which objective a change serves in its pull
+request. "It seemed useful" is how a framework acquires surface nobody wants and cannot remove.
+
+**O1 — Drop in, and reuse what the repository already has.** A repository that builds code already
+says how it compiles, lints, validates, runs and tests itself. The framework discovers those parts
+and calls them; it does not ask for them to be restated, and it does not ship its own. Detection
+that guesses is worse than detection that declines: a target that is not in the file is not
+invented.
+
+**O2 — Onboarding is light.** Getting this running in a repository must not be a configuration
+project. What a person has to write by hand is the thing nobody could have discovered for them.
+
+**O3 — The same process at a terminal and in CI.** Every workflow runs locally and under the
+repository's own SCM, GitHub or GitLab. A capability that exists only in a hosted pipeline is one
+nobody can test on a laptop, and a pipeline that carries logic is logic with no tests.
+
+**O4 — Every model call is recorded.** An inference nobody kept is an opportunity spent and
+discarded. We cannot improve what we did not record, so recording is not an option a run turns on;
+it is what a run does.
+
+**O5 — The record is what teaches it.** The framework reads its own recorded inferences and proposes
+improvements to the prompts that produced them — the shipped ones and an adopter's own alike — with
+the evidence attached. Suggestions only: the output is a pull request a person reads.
+
+**O6 — The model never holds a secret.** Everything a run needs is gathered before the model
+container starts and handed in. Keys, tokens and credentials are not in scope where a model can
+reach them, so a successful injection has nothing to take.
+
+**O7 — Determinism first.** Anything a script can decide is decided by a script. A model is invoked
+only where a judgment is genuinely required and no deterministic rule would do. Every verb should be
+asked: what part of this is arithmetic wearing a prompt?
+
+**O8 — Extended without forking.** An adopter enhances the shipped prompts, guardrails, skills and
+context, or adds a verb the framework does not ship, without editing the framework. The path to do
+it is discoverable from the docs and does not require reading our source.
+
+**O9 — New aspects on a verb that already exists.** Adding a review lens of one's own is the same
+kind of act as adding a verb, and must be as easy. The four shipped lenses are examples, not the set.
+
+**O10 — It runs on itself.** This repository uses the framework for its own reviews, fixes,
+implementations and measurement. A capability that cannot be dogfooded here is one we are asking
+adopters to trust on our word.
 
 ## Tests
 
