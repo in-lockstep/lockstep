@@ -4974,6 +4974,9 @@ jobs:
           name: lockstep-run
           path: .lockstep/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 excludes hidden files by DEFAULT,
+          # so without this the directory above is silently dropped and the artifact arrives empty.
+          include-hidden-files: true
           # Stated rather than inherited. The vendor default is 90 days, and this artifact can
           # hold prompts and diffs. Two weeks is long enough to notice a run and download it, and
           # short enough that inaction deletes rather than accumulates.

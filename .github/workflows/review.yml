@@ -140,6 +140,11 @@ jobs:
             history.bundle
             .lockstep/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path, and upload-artifact@v4 excludes hidden files by
+          # DEFAULT. This line was missing, so the directory named above was silently dropped
+          # and the artifact carried the history bundle alone -- 1115 bytes, no cases, no
+          # warning, and a `path:` that reads as though it were working.
+          include-hidden-files: true
           retention-days: 30
 
   post:

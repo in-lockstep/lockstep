@@ -491,3 +491,41 @@ def test_gate_record_1_both_scaffolds_declare_a_retention() -> None:
     github, gitlab = _scaffolds().values()
     assert "retention-days:" in github, "the scaffolded GitHub trampoline states no retention"
     assert "expire_in:" in gitlab, "the scaffolded GitLab trampoline states no retention"
+
+
+def test_gate_record_1_an_upload_naming_a_dotted_path_asks_for_hidden_files() -> None:
+    """`upload-artifact@v4` excludes hidden files by DEFAULT, and `.lockstep/` is a dotted path.
+
+    This is not hypothetical and it is not a style rule. The `path:` block in `lockstep.yml` named
+    `.lockstep/` for months; the artifact it produced was 1115 bytes, holding the history bundle
+    and nothing else. No warning, no red step, and a `path:` line that reads as though it were
+    working -- which is why the recording work in this pull request appeared to succeed and
+    delivered nothing until somebody downloaded the artifact and looked.
+
+    Asserted for the scaffolds too, in `test_gate_record_1_both_scaffolds_declare_a_retention`'s
+    company: an adopter's copy has the same trap in it.
+    """
+    for path in ALL_WORKFLOWS:
+        for step in _steps(_load(path.name)):
+            if "upload-artifact" not in str(step.get("uses", "")):
+                continue
+            with_ = step.get("with") or {}
+            dotted = [p for p in str(with_.get("path", "")).split() if p.startswith(".")]
+            if not dotted:
+                continue
+            assert with_.get("include-hidden-files") is True, (
+                f"{path.name} uploads {dotted}, which upload-artifact drops by default. The step "
+                f"goes green and the artifact arrives without them."
+            )
+
+
+def test_gate_record_1_the_scaffolded_upload_asks_for_hidden_files() -> None:
+    """The adopter's copy of the same trap. Its only path is `.lockstep/`, so without this the
+    artifact it produces is empty rather than merely short."""
+    from in_lockstep.cli import _SCAFFOLD_TRAMPOLINE
+
+    spec = yaml.load(_SCAFFOLD_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)
+    uploads = [s for s in _steps(spec) if "upload-artifact" in str(s.get("uses", ""))]
+    assert uploads, "the scaffold uploads nothing at all"
+    for step in uploads:
+        assert (step.get("with") or {}).get("include-hidden-files") is True
