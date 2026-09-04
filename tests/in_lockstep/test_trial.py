@@ -288,3 +288,112 @@ def test_the_example_pack_cannot_be_measured_yet_and_says_so(
     assert result.exit_code != 0
     assert "ships no cassette" in result.output
     assert "fault in it" in result.output, "a missing recording is a fact about the pack, not a verdict"
+
+
+# -- which lenses a trial composes (issue 202) ----------------------------------------------
+
+
+def _with_prompts(pack: Pack, **bodies: str) -> Pack:
+    """Write `prompts/<name>.md` into a pack, the way a pack author ships one."""
+    prompts = pack.file("prompts")
+    assert prompts is not None
+    prompts.mkdir(exist_ok=True)
+    for name, text in bodies.items():
+        (prompts / f"{name}.md").write_text(f"---\nname: {name}\ndescription: a lens\n---\n\n{text}\n")
+    return pack
+
+
+def test_a_pack_is_measured_on_a_lens_it_invented(tmp_path: Path) -> None:
+    """Issue 202. The loop walked the SHIPPED lens names, so a pack could only be measured on a
+    lens it overrode. A pack shipping `prompts/a11y.md` was ignored, its cases resolved an aspect
+    the adapter had never heard of, and `pack try` reported a working pack as broken — for exactly
+    the pack kind the extension story is about."""
+    from in_lockstep.cli import _trial_lenses
+
+    pack = _with_prompts(
+        _pack(tmp_path, cases={"finds-it": CASE_DETERMINISTIC}, lens="a11y-reviewer"),
+        a11y="Read for contrast and focus order.",
+    )
+    lenses = _trial_lenses(pack)
+    assert "a11y" in lenses, sorted(lenses)
+    assert lenses["a11y"].aspect == "a11y", "a finding has to come back as review.a11y"
+
+
+def test_a_prompt_fragment_with_no_cases_is_not_a_lens(tmp_path: Path) -> None:
+    """The negative control, and not hypothetical: `examples/acme-review-prompts` ships
+    `prompts/house.md` as a guardrail fragment beside `prompts/security.md` as a lens override.
+    `guardrails()` reads fragments out of the same directory, so admitting every `.md` under
+    `prompts/` would turn that pack's house rules into a phantom lens emitting `review.house`.
+
+    The pairing with `corpus/review/<stem>-reviewer/` is what separates them, and `aspect_of`
+    already documents it as a convention a pack author satisfies deliberately."""
+    from in_lockstep.cli import _trial_lenses
+
+    pack = _with_prompts(
+        _pack(tmp_path, cases={"finds-it": CASE_DETERMINISTIC}),
+        house="Prefer the boring option.",
+    )
+    lenses = _trial_lenses(pack)
+    assert "house" not in lenses, sorted(lenses)
+
+
+def test_a_pack_overriding_a_shipped_lens_still_substitutes_its_body(tmp_path: Path) -> None:
+    """The behaviour that already worked, kept. A pack shipping `prompts/security.md` is measured
+    through its own body inside the SHIPPED layer stack."""
+    from in_lockstep.cli import _trial_lenses
+    from in_lockstep.prompts.review import LENSES
+
+    pack = _with_prompts(
+        _pack(tmp_path, cases={"finds-it": CASE_DETERMINISTIC}),
+        security="Look for session scope.",
+    )
+    lenses = _trial_lenses(pack)
+    assert lenses["security"] is not LENSES["security"], "the pack's body must replace the shipped one"
+    assert issubclass(lenses["security"], LENSES["security"])
+    assert lenses["security"].aspect == "security"
+
+
+def test_a_pack_with_no_prompts_at_all_measures_against_the_shipped_lenses(tmp_path: Path) -> None:
+    """A corpus-only pack is a real pack: it says "here are cases, measure the framework's own
+    lenses against them". Walking the pack's prompts must not lose that."""
+    from in_lockstep.cli import _trial_lenses
+    from in_lockstep.prompts.review import LENSES
+
+    lenses = _trial_lenses(_pack(tmp_path, cases={"finds-it": CASE_DETERMINISTIC}))
+    assert sorted(lenses) == sorted(LENSES)
+
+
+def test_a_lens_a_pack_invented_is_measured_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-PACK-5. The property `_trial_lenses` exists to serve, driven through `run` rather than
+    asserted on the map it returns. Before the fix this case came back `errored` with `review.unknown_aspect`;
+    the pack was fine and the harness could not see it.
+
+    `pack try`'s whole argument is that a pack is measured before it is trusted, so a pack kind that
+    cannot produce a number is a pack kind nobody should install."""
+    pack = _with_prompts(
+        _pack(tmp_path, cases={"finds-it": CASE_DETERMINISTIC}, lens="a11y-reviewer"),
+        a11y="Read for contrast and focus order.",
+    )
+    # A pack's body is resolved through `importlib.resources` on its own module, which is how a
+    # pip-installed pack works and what a tmpdir has to stand in for.
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    from in_lockstep.cli import _trial_lenses
+
+    lenses = _trial_lenses(pack)
+    tape = Cassette.load(pack.file("cassettes/trial.json"))
+    run(
+        pack,
+        invoker_factory=_invoker_factory(
+            RecordingProvider(Scripted([FOUND]), tape, Redact()), egress=UnsandboxedEgress()
+        ),
+        lenses=lenses,
+    )
+    tape.save()
+
+    trial = run(pack, invoker_factory=_invoker_factory(ReplayProvider(tape)), lenses=lenses)
+    assert [r.state for r in trial.results] == [DECIDED], [(r.state, r.notes) for r in trial.results]
+    assert trial.results[0].passed is True
+    assert trial.summary()["pass_rate"] == 1.0
