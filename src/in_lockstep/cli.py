@@ -659,6 +659,32 @@ def main() -> None:
     redact_registry.seed_from_environment()
 
 
+def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
+    """Refuse two flags that each choose a provider, rather than ordering them.
+
+    They used to be ordered, and the order was invisible: `dry_run`, then the shipped fixture, then
+    `offline`, then a real provider wrapped in a recorder. So `--offline --record` recorded nothing
+    and reported success — the person got a replay of the cassette they were trying to overwrite,
+    a green run, and no cassette, and found out when `eval harvest` gave them nothing.
+
+    A contradiction, not a precedence question. Each of these says where answers come from, and two
+    answers is a question about what somebody meant. Guessing is how a tool teaches people not to
+    trust it, and `ReplayProvider` already refuses a key miss loudly for the same reason.
+
+    Called first in every command that takes them, so the refusal arrives before any credential
+    work: a person who typed a contradiction should not be told about a missing key.
+    """
+    chosen = [
+        name for name, on in (("--dry-run", dry_run), ("--offline", offline), ("--record", record)) if on
+    ]
+    if len(chosen) > 1:
+        raise click.ClickException(
+            f"{' and '.join(chosen)} each say where this run's answers come from, and it cannot be "
+            f"both. Nothing here guesses which you meant: `--record` calls the provider and writes "
+            f"a cassette, and the other two never reach one."
+        )
+
+
 @main.command(name="run")
 @click.argument("target")
 @click.option("--paths", multiple=True, help="Restrict to these paths.")
@@ -1987,6 +2013,7 @@ def review_cmd(
     this command testable without constructing a repository with a history in it.
     """
 
+    _one_provider(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.review import AiReview, Review
     from .ai.auth import Auth
     from .ai.bootstrap import (
@@ -2269,6 +2296,7 @@ def triage_cmd(
     a duplicate link — is a separate step the caller takes through `TicketSource`, which is why
     the `triage` guardrail denies the issue-writing tools.
     """
+    _one_provider(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.triage import AiTriage, Triage
     from .ai.auth import Auth
     from .ai.bootstrap import (
@@ -2539,6 +2567,7 @@ def rfe_cmd(
     issue-writing tools and `--create` is the human step that takes the printed draft to
     `TicketSource.create`. Without `--create` this reads, drafts and stops.
     """
+    _one_provider(dry_run=dry_run, offline=offline, record=record)
     from pathlib import Path as _Path
 
     from .adapters.ai.rfe import AiRfe, Rfe
@@ -2771,6 +2800,7 @@ def backport_cmd(
     `--out` serializes it, and `apply --from-artifact X --base <target>` opens it against the
     release line through the guard.
     """
+    _one_provider(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.backport import AiBackportResolver
     from .adapters.backport import Backport, GitBackport
     from .ai.auth import Auth
@@ -3262,6 +3292,7 @@ def implement_cmd(
     ticket written by anybody is not the thing that should also hold the ability to write.
     """
 
+    _one_provider(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai import TDD, Implement, Oneshot
     from .adapters.sandbox import Sandbox
     from .adapters.worktree import WorktreeRunner
