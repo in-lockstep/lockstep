@@ -3017,3 +3017,48 @@ def test_the_gate_refusal_names_the_flag_its_number_came_from(
     )
     assert "--max 1" in out, out
     assert "this repository declared" not in out, out
+
+
+def test_the_implement_block_keeps_the_test_runner_detection_already_bound(repo: Path) -> None:
+    """Issue 192. The appended block bound pytest over whatever was already bound, so a Node
+    repository whose base scaffold had bound `CommandTest(["npm", "test"])` resolved `Test ->
+    PytestTest` and ran pytest against a repository that has none.
+
+    The fix block already guarded the same key, so the two shipped blocks disagreed about one
+    binding and the unguarded one won by arriving first."""
+    from in_lockstep.adapters.pytest_adapter import Test
+    from in_lockstep.core.workflow import restore, snapshot
+    from in_lockstep.loader import load, lockstep_from
+
+    (repo / "package.json").write_text('{"name":"demo","scripts":{"test":"jest"}}')
+    (repo / "package-lock.json").write_text('{"lockfileVersion":3}')
+    assert CliRunner().invoke(main, ["init", "--implement"]).exit_code == 0
+
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    assert "CommandTest(['npm', 'test'])" in module, module
+
+    state = snapshot()
+    try:
+        lockstep = lockstep_from(load(str(repo))[0])
+        bound = lockstep.container.resolve(Test)
+        assert type(bound).__name__ == "CommandTest", type(bound).__name__
+    finally:
+        restore(state)
+
+
+def test_the_implement_block_still_binds_a_runner_when_detection_found_none(repo: Path) -> None:
+    """The other half, and the reason the bind cannot simply be deleted. With nothing detected the
+    base scaffold writes a commented stub and binds nothing, so the implement flow would dispatch
+    Test against an empty container."""
+    from in_lockstep.adapters.pytest_adapter import Test
+    from in_lockstep.core.workflow import restore, snapshot
+    from in_lockstep.loader import load, lockstep_from
+
+    assert CliRunner().invoke(main, ["init", "--implement"]).exit_code == 0
+    state = snapshot()
+    try:
+        lockstep = lockstep_from(load(str(repo))[0])
+        bound = lockstep.container.resolve(Test)
+        assert type(bound).__name__ == "PytestTest", type(bound).__name__
+    finally:
+        restore(state)
