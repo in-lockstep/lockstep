@@ -1850,10 +1850,40 @@ def _refuse_provider_credential() -> None:
     )
 
 
+def _review_lenses(lockstep: Any) -> tuple[str, ...]:
+    """The lens names a review run would actually have.
+
+    The BOUND adapter's, when the module bound one — a repository that replaced its lens map gets
+    exactly its own set, which is what carries `AiReview(lenses=...)` through to chat-ops. Read off
+    `compositions()`, the declared inspection surface, rather than by reaching for a `lenses`
+    attribute: that method exists because attribute sniffing across adapters is inference whose
+    failure mode is silence. Its labels are qualified (`review/security`) and the lens is the last
+    segment, which is the spelling `--aspect` takes.
+
+    Otherwise the shipped map, because that is precisely what this command binds a few lines below.
+    Not a guess about the default: the same source, read early.
+    """
+    from .adapters.ai.review import Review
+    from .prompts.review import LENSES
+
+    if lockstep.container.has(Review):
+        adapter: Any = lockstep.container.resolve(Review)
+        labels = adapter.compositions() if hasattr(adapter, "compositions") else {}
+        if labels:
+            return tuple(sorted(str(label).rsplit("/", 1)[-1] for label in labels))
+    return tuple(sorted(LENSES))
+
+
 @main.command(name="review")
 @click.option("--base", default="origin/main", help="What to diff against.")
 @click.option("--head", default="HEAD")
 @click.option("--aspect", default="security", help="Which lens.")
+@click.option(
+    "--ask",
+    default="",
+    metavar="COMMENT",
+    help="A chat-ops comment body. The lens it names is resolved here, not in a workflow.",
+)
 @click.option("--model", default="anthropic:claude-sonnet-4-6")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
 @click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
@@ -1884,6 +1914,7 @@ def review_cmd(
     base: str,
     head: str,
     aspect: str,
+    ask: str,
     model: str,
     offline: bool,
     record: bool,
@@ -1942,6 +1973,47 @@ def review_cmd(
         # A replay or a canned answer bills nothing, and states that as a ceiling of zero rather
         # than asking GATE-BUDGET-1 for an exemption. `_declare_zero_ceiling` says why.
         _declare_zero_ceiling(lockstep)
+    if ask:
+        # Resolved here, and here is the point. A workflow cannot do it — GitHub's expression
+        # language has twelve functions and none of them splits a string — and it must not, because
+        # `platform/chatops.py` records the rule: a comment is a command selector, never a command.
+        #
+        # Before `Auth()`, the registry, the cassette and the bind below, so a comment naming a lens
+        # nobody declared costs nothing at all. That ordering is the fix, not a tidiness: the
+        # adapter's own refusal arrives after `_run_id`, so an unrecognised aspect reaching the run
+        # earns a ledger record — and `blocked` sits inside `failure_rate`'s denominator, so anyone
+        # who could comment could deflate this repository's failure rate one typo at a time (#203).
+        from .platform.chatops import AspectRefused, aspect_from
+
+        try:
+            aspect = aspect_from(ask, known=_review_lenses(lockstep))
+        except AspectRefused as refused:
+            # A message, not a traceback — the treatment this command already gives a missing
+            # credential or a malformed provider. Exit 1 rather than 3: BLOCKED means a control
+            # stopped a run that was otherwise going to happen, and a comment naming no lens is not
+            # a run somebody may not have. Nothing is recorded either way, so no rate moves.
+            raise click.ClickException(str(refused)) from None
+
+    if pr_number and source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
+        # `--pr` already meant "the change request this review is about" — it is what `--comment`
+        # posts to. Reused rather than joined by a second flag, because two numbers that must agree
+        # is a way for them to disagree.
+        #
+        # Only when neither ref was given. A comment event carries the number and nothing else:
+        # `GITHUB_BASE_REF` is empty and `GITHUB_SHA` is the default branch's tip, so a run built
+        # from those would diff the default branch against itself and report a clean bill of health
+        # for a change it never read. An explicit `--base`/`--head` still wins, so nothing that
+        # works today changes.
+        scm: Any = _bound_scm(lockstep)
+        refs = asyncio.run(scm.change_refs(pr_number)) if hasattr(scm, "change_refs") else None
+        if refs is None:
+            raise click.ClickException(
+                f"{type(scm).__name__} could not say what change request {pr_number} points at. "
+                f"Refused rather than guessed: an unreviewed change reported as clean is worse "
+                f"than an error."
+            )
+        base, head = refs
+
     if source("model") is ParameterSource.DEFAULT:
         model = lockstep.models.routes.get("review", model)
 
