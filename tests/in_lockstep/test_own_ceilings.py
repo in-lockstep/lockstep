@@ -142,3 +142,23 @@ def test_a_lifecycle_that_declares_no_improvable_attributes_nothing() -> None:
     bare = Lockstep()
     assert bare.improve == ()
     assert bare.max_open_proposals == 1
+
+
+def test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_runs() -> None:
+    """Issue 196. `make lint` targets `src tests`, so the one file that can rebind any adapter,
+    remove any middleware and grant any tool is the one file CI does not lint — and an undefined
+    name sat on `fix/propose`'s success path for a release because of it.
+
+    Linted here rather than by widening the Makefile target, so the check travels with the suite
+    and runs wherever the tests do. `F` is the rule set that matters: this file is executed, not
+    imported for its symbols, so an undefined name is a runtime failure in a workflow rather than
+    an import error anyone would see first."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--select", "I,E4,E7,E9,F", str(ROOT / ".lockstep")],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

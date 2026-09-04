@@ -664,8 +664,12 @@ async def fix_propose(
         workflow="fix",
         run_id=ctx.run_id,
     )
+    # Fetched at the call, the way `implement/propose`'s empty-changeset branch does. `comment`
+    # takes a `Ticket`, and the name that used to be here was never bound in this function — so
+    # every successful fix opened its pull request and then died with a NameError before saying so
+    # on the ticket, recording the run as errored (#196).
     await tickets.comment(
-        issue,
+        await tickets.get(ticket),
         f"`/fix` opened {change.url or change.branch} as "
         f"{'ready for review' if ready else 'a draft — the suite has not confirmed it'}. "
         "Nobody has read it yet.",
