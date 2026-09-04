@@ -197,7 +197,11 @@ def _cassettes(report: Report, root: Path) -> None:
     try:
         ignored = (
             subprocess.run(
-                ["git", "check-ignore", "-q", str(directory)],
+                # `--` because a root beginning with a dash would otherwise be read as an
+                # option. No shell is involved, so this is not injection; it is git parsing
+                # a path as a flag and answering a question nobody asked. Raised by this
+                # repository's own review of the change that added this check.
+                ["git", "check-ignore", "-q", "--", str(directory)],
                 cwd=root,
                 capture_output=True,
                 timeout=15,
