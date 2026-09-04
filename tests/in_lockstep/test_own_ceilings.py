@@ -162,3 +162,36 @@ def test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_run
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# -- GATE-EVIDENCE-1: the promoted corpus is not a path an agent of ours can write --------------
+
+
+def test_gate_evidence_1_this_repositorys_guard_refuses_the_promoted_corpus(lockstep) -> None:  # noqa: ANN001
+    """`evidence/README.md` says no agent here can write there. Asserted, because it once did not.
+
+    The prose made the claim while `evidence/` appeared in neither deny tier, so `check_path`
+    returned `None` for it. A `fix` run given a ticket that mentioned the eval corpus could have
+    staged `evidence/cases/review/<name>.json` -- a whole composed prompt and a whole diff -- and
+    the `propose` job, which holds `contents: write`, would have committed it. That is the decay
+    `design/gates.md` opens by describing: a control that reads as though it were in force.
+
+    Read off this repository's own lifecycle rather than a constructed `PathPolicy`, because the
+    claim is about what THIS repository denies, and a default nobody bound proves nothing.
+    """
+    refusal = lockstep.guard.check_path("evidence/cases/review/anything.json")
+    assert refusal is not None, "an agent of this repository can write to the promoted corpus"
+    assert refusal.tier == 1, f"a grant could lift it: {refusal}"
+
+
+def test_extending_the_deny_list_did_not_drop_what_it_already_protected(lockstep) -> None:
+    """The trap `_matches` documents, checked on the repository that walked into its invitation.
+
+    Adding a path means constructing a new tuple, and the tier-1 basename and suffix rules used to
+    be reached by an IDENTITY test against the shipped one -- so extending the list silently
+    stopped protecting `conftest.py`, `CODEOWNERS`, `*.pem` and `.env*`. That is fixed in
+    `_matches`, and this is the test that would notice if it regressed here, where the extension
+    actually happens.
+    """
+    for path in (".lockstep/lockstep.py", "src/conftest.py", "keys/deploy.pem", ".env.local"):
+        assert lockstep.guard.check_path(path) is not None, f"{path} lost its protection"

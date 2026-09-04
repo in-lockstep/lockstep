@@ -20,6 +20,7 @@ from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.adapters.worktree import verdict_over_staged
+from in_lockstep.core.changes import DENY_ALWAYS, ChangeGuard, PathPolicy
 from in_lockstep.core.improve import Improvable
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.policy import Policy
@@ -36,6 +37,25 @@ from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
 
 lockstep = Lockstep.detect()
+
+# `evidence/` holds cases promoted out of real runs, and promotion is publication rather than
+# storage: a case carries a whole composed prompt and a whole diff, `git rm` does not unpublish a
+# git object, and a promoted case stays reachable in every clone forever. So the decision to
+# publish one is a person's, made in a pull request they read — which means no agent of ours may
+# stage a write there, and saying so in prose was not enough. `evidence/README.md` claimed no job
+# could write here while `ChangeGuard.check_path("evidence/cases/x.json")` returned None, so a
+# `fix` run given a ticket that mentioned the eval corpus could have staged one and the `propose`
+# job, which holds `contents: write`, would have committed it.
+#
+# Tier 1 rather than tier 2. A grant is for a capability somebody might legitimately want a named
+# workflow to have, and there is no version of "an agent promotes its own evidence" that is the
+# thing we want. An adopter who disagrees simply does not write this line: `evidence/` is this
+# repository's convention, not the framework's, and it is not in the shipped deny lists.
+#
+# Built by extension rather than by editing the framework's tuple, which is what `PathPolicy`
+# is for (O8) — and `_matches` takes an explicit `always=` flag precisely so that a repository
+# constructing a new tuple here does not silently lose the basename and suffix rules.
+lockstep.guard = ChangeGuard(PathPolicy(deny_always=(*DENY_ALWAYS, "evidence/")))
 
 # -- deterministic verbs ------------------------------------------------------------
 #
