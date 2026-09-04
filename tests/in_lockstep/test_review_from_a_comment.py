@@ -13,11 +13,32 @@ can comment would deflate the repository's failure rate (#203).
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 from in_lockstep.platform.chatops import AspectRefused, aspect_from
 
 KNOWN = ("security", "intent", "performance", "tests")
+
+
+@pytest.fixture
+def bare(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty directory with no GitHub environment around it.
+
+    The scrubbing is the point and `test_cli.py`'s `repo` fixture has the same paragraph. Without
+    it these tests pass on a laptop and fail on a runner: `ci.detect()` reads the runner's
+    variables, `_default_lockstep` then tries to resolve the trusted ref `main`, and a shallow
+    `actions/checkout` does not have it — so the command raises `UnresolvableConfigRef` before it
+    ever reaches the code under test. A test that can see the surrounding checkout is testing the
+    surrounding checkout.
+    """
+    monkeypatch.chdir(tmp_path)
+    for name in [k for k in os.environ if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    return tmp_path
 
 
 def test_a_comment_naming_a_lens_asks_for_that_lens() -> None:
@@ -147,7 +168,7 @@ def test_a_change_request_missing_either_ref_is_not_half_an_answer() -> None:
 # -- the live path: a comment reaching the command ------------------------------------------
 
 
-def test_a_comment_naming_no_lens_costs_nothing_and_writes_no_record(tmp_path, monkeypatch) -> None:
+def test_a_comment_naming_no_lens_costs_nothing_and_writes_no_record(bare: Path) -> None:
     """GATE-REVIEW-3. The ordering is the whole fix.
 
     The adapter's own unknown-aspect refusal arrives after `_run_id`, so an unrecognised aspect
@@ -158,9 +179,7 @@ def test_a_comment_naming_no_lens_costs_nothing_and_writes_no_record(tmp_path, m
 
     from in_lockstep.cli import main
 
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    ledger = tmp_path / ".lockstep" / "ledger"
+    ledger = bare / ".lockstep" / "ledger"
     ledger.mkdir(parents=True)
 
     result = CliRunner().invoke(main, ["review", "--ask", "/review sekurity", "--diff", "x"])
@@ -170,21 +189,22 @@ def test_a_comment_naming_no_lens_costs_nothing_and_writes_no_record(tmp_path, m
     assert list(ledger.glob("*.json")) == [], "a typo must not append a ledger record"
 
 
-def test_a_comment_naming_a_shipped_lens_selects_it(tmp_path, monkeypatch) -> None:
+def test_a_comment_naming_a_shipped_lens_selects_it(bare: Path) -> None:
     """The positive control. Without it every assertion above is satisfied by a command that
     refuses everything."""
     from click.testing import CliRunner
 
     from in_lockstep.cli import main
 
-    monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(main, ["review", "--ask", "/review intent", "--offline", "--diff", "x"])
     # It gets past resolution — whatever the replay then does, the lens was accepted.
     assert "no lens named" not in result.output, result.output
     assert "needs a lens" not in result.output, result.output
 
 
-def test_an_explicit_base_and_head_still_win_over_the_change_request(tmp_path, monkeypatch) -> None:
+def test_an_explicit_base_and_head_still_win_over_the_change_request(
+    bare: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`--pr` already meant "the change request this review is about" — it is what `--comment` posts
     to — so reusing it must not change what a command that passes refs explicitly does. The host is
     never asked in that case, which is the assertion: a stub that would explode proves it."""
@@ -192,8 +212,6 @@ def test_an_explicit_base_and_head_still_win_over_the_change_request(tmp_path, m
 
     import in_lockstep.cli as cli
     from in_lockstep.cli import main
-
-    monkeypatch.chdir(tmp_path)
 
     def _boom(_lockstep):
         raise AssertionError("the host was asked for refs that were given explicitly")
