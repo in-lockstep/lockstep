@@ -134,6 +134,37 @@ def load_cases(directory: str | Path) -> list[Case]:
     return [Case.load(p) for p in sorted(root.rglob("*.json"))]
 
 
+def _searchable(output: Any) -> str:
+    """An answer as text a needle can be looked for in.
+
+    `json.dumps` was what this searched, and it made a whole class of expectation unsatisfiable: a
+    quote, a backslash or a newline in the answer is ESCAPED in the JSON encoding, so a needle
+    lifted from the answer's own prose never matched the answer it came from. `eval harvest` prints
+    "these pass against those answers today" and it was not true of any answer containing a quote.
+
+    Keys are included as well as values, so an `absent` expectation naming a field still finds it.
+    Nothing shipped relied on the JSON punctuation — checked before changing this — so a needle now
+    means what a person reading the answer would think it means.
+    """
+    parts: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, str):
+            parts.append(node)
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                parts.append(str(key))
+                walk(value)
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                walk(value)
+        elif node is not None:
+            parts.append(str(node))
+
+    walk(output)
+    return "\n".join(parts)
+
+
 def _count_holds(actual: int | None, want: Any) -> bool:
     """Whether a length satisfies a count expectation.
 
@@ -190,7 +221,7 @@ def grade(case: Case, output: Any) -> dict[str, Any]:
                     }
                 )
         elif key == "contains":
-            text = json.dumps(output, default=str)
+            text = _searchable(output)
             for needle in expected or []:
                 checks.append(
                     {
@@ -200,7 +231,7 @@ def grade(case: Case, output: Any) -> dict[str, Any]:
                     }
                 )
         elif key == "absent":
-            text = json.dumps(output, default=str)
+            text = _searchable(output)
             for needle in expected or []:
                 checks.append(
                     {
