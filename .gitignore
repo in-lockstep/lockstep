@@ -24,6 +24,12 @@ build/
 # The ledger is not here at all: run records go to an orphan branch, so they survive a machine.
 .lockstep/runs/
 .lockstep/cassettes/
+# Candidate cases, which `lockstep.yml` harvests into after every review. Ignored because a
+# candidate is a proposal: it holds a whole prompt and a whole diff, and it becomes durable
+# only when somebody promotes it into `evidence/cases/` in a pull request. That directory is
+# deliberately NOT here. The distinction is the whole point of the pair -- one expires with an
+# artifact and nobody has to act; the other is published and cannot be unpublished.
+.lockstep/cases/
 .lockstep/ledger/
 # Transcripts hold the full message history of a run, including tool results. `transcript.py`'s
 # docstring already claimed they were ignored "like the rest of a run's working state" and they

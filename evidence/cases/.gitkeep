@@ -1,0 +1,8 @@
+Nothing promoted yet, and that is a real number rather than a placeholder for one.
+
+This file exists because git does not track an empty directory, and the directory has to exist
+before `make check` can settle what is in it -- which is the point of wiring the target before the
+first promotion: the day somebody promotes a case, it is measured on the same commit, and the row
+in design/gates.md moves from `partial` to `held` because something finally has a subject.
+
+See ../README.md. `load_cases` reads `*.json` only, so this file is inert.

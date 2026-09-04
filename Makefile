@@ -1,8 +1,8 @@
-.PHONY: check ci fmt lint typecheck test cov
+.PHONY: check ci fmt lint typecheck test cov evidence
 
-check: fmt lint typecheck test
+check: fmt lint typecheck test evidence
 
-ci: lint typecheck cov
+ci: lint typecheck cov evidence
 
 fmt:
 	uv run ruff format src tests
@@ -15,6 +15,20 @@ typecheck:
 
 test:
 	uv run pytest -q
+
+# The promoted corpus, settled on every commit. Offline, no key, nothing billed: a harvested case
+# carries the answer its expectations came from, so this replays nothing over a network.
+#
+# It runs while `evidence/cases/` is empty, and that is deliberate rather than an oversight. The
+# wiring is what makes the first promotion measured on the commit that makes it, instead of being
+# a file somebody has to remember to point a command at. `eval run` over nothing says `pass rate
+# n/a -- nothing decided`, which is the honest reading and not a green tick.
+#
+# Not folded into `test`: pytest asserts things about the framework, and this settles the
+# framework's own recorded work against what a model actually said. Different subject, and worth
+# seeing separately in the output.
+evidence:
+	uv run in-lockstep eval run --corpus evidence/cases
 
 # One gate now. The compiler's separate gate went with the compiler, and so did the reason the two
 # were split: `ci-framework` existed so the new package was never blocked on the old one being
