@@ -156,3 +156,58 @@ def test_an_already_qualified_ref_is_taken_as_written() -> None:
     assert _candidates("main") == ("main", "origin/main")
     assert _candidates("origin/main") == ("origin/main",)
     assert _candidates("refs/heads/main") == ("refs/heads/main",)
+
+
+# -- the refusal a person can act on (issue 206) --------------------------------------------
+
+
+def test_an_unfetched_base_ref_is_a_message_and_not_a_traceback(tmp_path: Path, monkeypatch) -> None:
+    """Serves O2. `UnresolvableConfigRef` was written to be read: it names the cause and gives the
+    exact remedy for both hosts. Nothing caught it, so it arrived as an uncaught exception and the
+    remedy reached nobody.
+
+    `review` catches `ImportError` and `MissingCredential` a few lines away and says why — "forty
+    lines of traceback around the one line that helps is how a fixable problem reads as a broken
+    tool". An unfetched base ref is exactly that kind of problem.
+    """
+    import os
+
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.chdir(_repo(tmp_path))
+    for name in [k for k in os.environ if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(name, raising=False)
+    # The shape a shallow `actions/checkout` of a pull request produces: reviewing is true, so
+    # configuration must come from the base ref, and the base ref is not in this checkout.
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_BASE_REF", "no-such-branch")
+
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code != 0, result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit), (
+        f"an uncaught {type(result.exception).__name__} is the traceback this test exists to remove"
+    )
+    assert "no-such-branch" in result.output, result.output
+    assert "fetch-depth" in result.output, "the remedy is the whole point of the message"
+
+
+def test_a_repository_with_no_module_still_runs_on_detected_defaults(tmp_path: Path, monkeypatch) -> None:
+    """The negative control, and the distinction the refusal must not swallow. `NoLifecycle` is
+    legitimate — a repository with no lockstep.py is every adopter's first run — and it must stay a
+    note on stderr rather than becoming a refusal alongside the unreadable ref."""
+    import os
+
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    for name in [k for k in os.environ if k.startswith("GITHUB_")]:
+        monkeypatch.delenv(name, raising=False)
+
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "detected defaults" in result.output, result.output

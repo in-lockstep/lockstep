@@ -44,6 +44,7 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
     somebody else's exporter is a wrong number rather than a missing one — which is the same
     reason `Outcome` carries `decided` instead of reporting an unjudged suite as passing.
     """
+    from .config_ref import UnresolvableConfigRef, UntrustedConfig
     from .loader import NoLifecycle, load, lockstep_from
     from .platform.ci import detect as detect_ci
 
@@ -83,8 +84,20 @@ def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
     except NoLifecycle as e:
         # Legitimate: a repository with no lockstep.py runs on detected defaults, and the first
         # pull request of any adopter is exactly that. Distinct from the ref being unreadable,
-        # which is now a refusal rather than this.
+        # which is a refusal — the branch below.
         click.echo(f"config    none ({e})", err=True)
+    except (UnresolvableConfigRef, UntrustedConfig) as e:
+        # Both were written to be read, and neither was caught, so both arrived as an uncaught
+        # exception and the remedy inside them reached nobody. `UnresolvableConfigRef` names the
+        # cause and gives the exact fix for either host; on a shallow `actions/checkout` of a pull
+        # request it is the first thing every command hits.
+        #
+        # A refusal, and deliberately NOT a fallback to detected defaults. Configuration comes from
+        # the base ref precisely so a change under review cannot supply the file that constrains
+        # reviewing it, and running on defaults instead would drop every binding, ceiling and policy
+        # the repository declared — on the one code path where that matters most. That is the
+        # degradation the exception's own docstring was written about.
+        raise click.ClickException(str(e)) from None
 
     lockstep = Lockstep.detect()
     lockstep.config_source = "none (detected defaults)"
