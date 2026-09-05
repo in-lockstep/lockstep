@@ -978,10 +978,22 @@ def _eval_harvest(from_cassette: str, into: str, family: str) -> None:
     except NothingToHarvest as e:
         raise click.ClickException(str(e)) from None
 
+    from .ai.replay import key_of, request_from
     from .privileged import sink
 
     target = _Path(into)
     for item in found:
+        # Stamped here rather than in `harvest`, which may not import the hash: `evaluation` is a
+        # leaf. This is the same join `_eval_subject` makes for a different reason — the layer that
+        # can see both halves is the one that puts them together.
+        #
+        # The hash is of the request as the CASE carries it, so `eval run` re-hashing that same
+        # request agrees with it. It is not the key the tape filed the entry under; those differ
+        # whenever redaction masked anything, and using the tape's key made a redacted case fail
+        # its own integrity check.
+        stored = (item.case.get("input") or {}).get("request")
+        if isinstance(stored, dict):
+            item.case["harvested"]["key"] = key_of(request_from(stored))
         path = item.path_in(target)
         # Through the sink like every other write: a harvested case carries a whole request and a
         # whole answer, which is the pair most likely to have a credential in it.

@@ -52,9 +52,15 @@ def _key(request: LLMInput) -> str:
 def _request_record(request: LLMInput, redact: Redact) -> dict[str, Any]:
     """A request as a cassette stores it: everything `_key` hashes, so it round-trips exactly.
 
-    Deliberately the same field set as the key rather than a friendlier summary. A stored request
-    that hashed differently from the one recorded would be a recording that cannot find itself,
-    and `GATE-EVAL-3` is the assertion that it does not.
+    Deliberately the same field set as the key rather than a friendlier summary, so a reader can
+    reconstruct the request and hash it.
+
+    It does NOT round-trip to the key it is filed under, and the sentence that used to claim it did
+    was wrong for as long as nothing recorded a secret. The filing key hashes the request that was
+    SENT; this stores the one that was WRITTEN, and `redact.text` sits between them. Both are
+    right — a live lookup needs the raw hash, and a file on disk must not hold a credential — so
+    the two hashes are simply not the same number and `Cassette.as_stored` is the index that
+    reconciles them. `GATE-EVAL-3` is the assertion that a recording can be found either way.
     """
     return {
         "model": request.model,
@@ -150,8 +156,35 @@ class Cassette:
         }
         self.order.append(key)
 
+    def as_stored(self) -> dict[str, str]:
+        """Hash of each entry's request AS STORED, mapped to the key it is filed under.
+
+        A recording is filed under a hash of the request that was SENT and holds a request that
+        was REDACTED, and those are the same bytes only when nothing was masked. So a caller
+        holding a stored request — `eval run` replaying a harvested case, anyone re-reading a tape
+        — computed a hash the tape had never heard of, and got "its recording is gone" about a
+        recording sitting in front of it. `GATE-EVAL-3` asserts a recording can always find
+        itself; the fixture that asserted it had nothing in it to redact.
+
+        Derived rather than stored, so no tape on disk changes and nothing has to migrate: the
+        stored form is right there, and hashing it is what the reader was going to do anyway. The
+        filing key stays a hash of the raw request, because a LIVE request is raw and lookup by a
+        redacted hash would make replay depend on which secrets this machine happens to know.
+        """
+        index: dict[str, str] = {}
+        for key, entry in self.provider_calls.items():
+            stored = entry.get("request") if isinstance(entry, dict) else None
+            if isinstance(stored, dict):
+                index[_key(request_from(stored))] = key
+        return index
+
     def replay_provider(self, request: LLMInput) -> LLMOutput | None:
-        entry: Any = self.provider_calls.get(_key(request))
+        key = _key(request)
+        entry: Any = self.provider_calls.get(key)
+        if entry is None:
+            # Handed a request as it was stored rather than as it was sent. One extra pass over
+            # the tape, only on a miss, and only when a miss is what would otherwise be reported.
+            entry = self.provider_calls.get(self.as_stored().get(key, ""))
         if entry is None:
             return None
         usage = entry.get("usage", {})

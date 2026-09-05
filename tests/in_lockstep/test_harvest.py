@@ -54,19 +54,26 @@ ANSWER = json.dumps(
 )
 
 
-def _record(tmp_path: Path, *, content: str = ANSWER, redact: Redact | None = None) -> Path:
+def _request(*, text: str = "Review this diff for security problems.") -> LLMInput:
+    """The request `_record` sends, so a test can build the same one to look up."""
+    return LLMInput(
+        model="claude-sonnet-4-6",
+        system="You review one pull request for security.",
+        messages=[Message(role="user", content=text)],
+        max_tokens=4096,
+    )
+
+
+def _record(
+    tmp_path: Path,
+    *,
+    content: str = ANSWER,
+    redact: Redact | None = None,
+    request_text: str = "Review this diff for security problems.",
+) -> Path:
     tape = Cassette(path=tmp_path / "c.json")
     provider = RecordingProvider(_Model(content), tape, redact or Redact(SecretRegistry()))
-    asyncio.run(
-        provider.generate(
-            LLMInput(
-                model="claude-sonnet-4-6",
-                system="You review one pull request for security.",
-                messages=[Message(role="user", content="Review this diff for security problems.")],
-                max_tokens=4096,
-            )
-        )
-    )
+    asyncio.run(provider.generate(_request(text=request_text)))
     return tape.path
 
 
@@ -151,7 +158,10 @@ def test_provenance_is_kept_and_is_not_graded(tmp_path: Path) -> None:
     might come to depend on it."""
     (harvested,) = harvest(_record(tmp_path))
     case = Case.parse(harvested.case, name=harvested.name)
-    assert case.harvested["key"] and case.harvested["model"] == "claude-sonnet-4-6"
+    assert case.harvested["filed_under"] and case.harvested["model"] == "claude-sonnet-4-6"
+    # `key` is stamped by the caller, not here: hashing a request is `ai.replay`'s job and
+    # `evaluation` is a leaf that may not import it. See `_eval_harvest`.
+    assert "key" not in case.harvested
     assert "harvested" not in case.input
     assert "harvested" not in case.expect
 
@@ -355,3 +365,46 @@ def test_a_case_with_no_answer_still_falls_back_to_its_cassette(tmp_path: Path) 
 
     result = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
     assert "1 replayed, 0 skipped" in result.output, result.output
+
+
+# -- GATE-EVAL-3: a recording can find itself, including once redaction has fired ---------------
+
+
+def _secret_tape(tmp_path: Path) -> Path:
+    """A recording whose request contains something the redactor actually masks.
+
+    The distinction this section is about. Every fixture asserting GATE-EVAL-3 before this recorded
+    through a `Redact(SecretRegistry())` with nothing registered and no structural pattern in the
+    text, so the redactor was a no-op and the property could not fail however wrong it was.
+    """
+    registry = SecretRegistry()
+    registry.add("supersecretvalue123")
+    return _record(tmp_path, redact=Redact(registry), request_text="the key is supersecretvalue123")
+
+
+def test_gate_eval_3_a_redacted_recording_still_finds_itself(tmp_path: Path) -> None:
+    """GATE-EVAL-3. The filing key hashes what was SENT; the entry holds what was WRITTEN.
+
+    Both are right and they are different numbers, so a caller holding the stored request — which
+    is every caller reading a tape back, including `eval run`'s cassette fallback — asked for a
+    hash the tape had never heard of and was told its recording was gone.
+    """
+    tape = Cassette.load(_secret_tape(tmp_path))
+    ((filed_under, entry),) = tape.provider_calls.items()
+    stored = request_from(entry["request"])
+
+    assert "supersecretvalue123" not in json.dumps(entry), "the fixture cannot exercise the property"
+    assert key_of(stored) != filed_under, "nothing was redacted, so this proves nothing"
+    assert tape.replay_provider(stored) is not None, "a recording could not find itself"
+
+
+def test_a_live_request_is_still_found_by_its_own_hash(tmp_path: Path) -> None:
+    """The other direction, which the index must not cost.
+
+    A replay looks up the request it is about to send, and that one is raw. Keying the tape on the
+    redacted form instead would make replay depend on which secrets the machine doing the replaying
+    happens to know — so the shipped fixture would stop replaying the day somebody exported a
+    variable whose name ends in `_TOKEN`.
+    """
+    tape = Cassette.load(_secret_tape(tmp_path))
+    assert tape.replay_provider(_request(text="the key is supersecretvalue123")) is not None
