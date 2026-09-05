@@ -16,6 +16,7 @@ type-check. So the assertions below are about what `init` actually writes, not a
 from __future__ import annotations
 
 import ast
+import inspect
 import subprocess
 import sys
 import tomllib
@@ -97,15 +98,16 @@ def test_the_scaffold_still_registers_every_workflow_it_advertises(tmp_path):
     """The control for the test above. Dropping a duplicate definition must not drop a workflow,
     and the cheap way to satisfy a de-duplicator is to delete more than it should."""
     source = _scaffolded(tmp_path, "--implement", "--fix")
-    for workflow in ("implement/from-ticket", "implement/propose", "fix/from-ticket", "fix/propose"):
-        assert f'@workflow(id="{workflow}")' in source
-    # And the surviving helper is still reachable from both halves that call it — each naming its
-    # own family, which is what stops a `/fix` report quoting an `implement/` run (#251). The two
-    # calls differing while the two DEFINITIONS stay byte-identical is exactly the arrangement the
-    # de-duplicator requires, so asserting both together is asserting that they can coexist.
-    assert source.count("def _last_unsuccessful(") == 1
-    assert source.count('_last_unsuccessful(key, "implement/")') == 1
-    assert source.count('_last_unsuccessful(key, "fix/")') == 1
+    # What `init` writes REGISTERS the workflows now; it does not define them. The de-duplicator
+    # still runs over the configuration half, and dropping too much there would take a
+    # registration with it — which is the property this control is for.
+    for family in ("implement", "fix"):
+        assert f"from in_lockstep.workflows import {family} as {family}_workflows" in source
+        assert f"{family}_workflows.register()" in source
+    # And the helper the two blocks used to carry twice is one definition in the framework, so
+    # there is no second copy for a de-duplicator to have to delete.
+    assert "def _last_unsuccessful(" not in source
+    assert "def last_unsuccessful(" not in source
 
 
 @pytest.mark.parametrize("flags", [(), ("--implement", "--fix")])
@@ -127,3 +129,39 @@ def test_what_init_writes_survives_strict_mypy(tmp_path, flags):
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_what_init_writes_carries_no_workflow_bodies(tmp_path):
+    """`GATE-PLUGIN-3`. The point of the change: an adopter gets a reference, not a copy.
+
+    `init --implement --fix` used to append ~560 lines of workflow source. Two copies of a process
+    is two places to fix it, and the two had drifted 96 lines of real code apart by the time anybody
+    measured — with only this repository's copy under test. Worse, a fix could never reach a tree
+    that had already run `init`.
+
+    Asserted as an absence of BODIES rather than a line count, because a line count is satisfied by
+    reformatting. What must not be there is the code that decides what a run does.
+    """
+    source = _scaffolded(tmp_path, "--implement", "--fix")
+    for body in ("async def implement_from_ticket", "async def fix_from_ticket", "await ctx.do("):
+        assert body not in source, f"init still writes a workflow body: {body}"
+    assert "from in_lockstep.workflows import" in source
+
+
+def test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs(tmp_path):
+    """The other half. Owning your process is a real position -- ADR 0001 deleted a compiler over
+    generated output nobody could read -- so `--eject` writes the bodies into the module.
+
+    The text comes from `inspect.getsource` on the installed package, so there is exactly one copy
+    of it and it is the code that runs. That is the whole difference from the string literals this
+    replaced: those were a second copy, and they drifted.
+    """
+    source = _scaffolded(tmp_path, "--implement", "--eject")
+    assert "async def implement_from_ticket" in source
+    assert "from in_lockstep.workflows import" not in source, "an ejected module owns its process"
+    # And it is the shipped text, not a paraphrase of it: a line only the framework module carries.
+    from in_lockstep.workflows import implement
+
+    marker = "the ticket that pull request was opened for"
+    if marker in inspect.getsource(implement):
+        assert marker in source

@@ -527,19 +527,19 @@ def test_a_repositorys_own_import_of_the_same_name_is_not_swallowed(repo: Path) 
     """The deduplication matches on module AND name. A repository that imports its own `Status`
     from somewhere else has a different object, so the block keeps its import and binds what it
     means to; only an import of exactly what is already there is dropped."""
-    from in_lockstep.cli import _SCAFFOLD_FIX_MODULE, _without_duplicate_imports
+    from in_lockstep.cli import _SCAFFOLD_FIX_CONFIG, _without_duplicate_imports
 
-    mine = "from myapp.results import Status\nlockstep = 1\n"
-    kept = _without_duplicate_imports(mine, _SCAFFOLD_FIX_MODULE)
-    assert "from in_lockstep.core.outcome import Outcome, Status" in kept
+    mine = "from myapp.adapters import Test\nlockstep = 1\n"
+    kept = _without_duplicate_imports(mine, _SCAFFOLD_FIX_CONFIG)
+    assert "from in_lockstep.adapters.pytest_adapter import PytestTest, Test" in kept
 
-    theirs = "from in_lockstep.core.outcome import Outcome, Status\nlockstep = 1\n"
-    dropped = _without_duplicate_imports(theirs, _SCAFFOLD_FIX_MODULE)
-    assert "from in_lockstep.core.outcome import Outcome, Status" not in dropped
+    theirs = "from in_lockstep.adapters.pytest_adapter import PytestTest, Test\nlockstep = 1\n"
+    dropped = _without_duplicate_imports(theirs, _SCAFFOLD_FIX_CONFIG)
+    assert "from in_lockstep.adapters.pytest_adapter import PytestTest, Test" not in dropped
     # A partial overlap keeps the names that are genuinely new.
-    partial = "from in_lockstep.core.outcome import Status\nlockstep = 1\n"
-    trimmed = _without_duplicate_imports(partial, _SCAFFOLD_FIX_MODULE)
-    assert "from in_lockstep.core.outcome import Outcome\n" in trimmed
+    partial = "from in_lockstep.adapters.pytest_adapter import Test\nlockstep = 1\n"
+    trimmed = _without_duplicate_imports(partial, _SCAFFOLD_FIX_CONFIG)
+    assert "from in_lockstep.adapters.pytest_adapter import PytestTest\n" in trimmed
 
     # An alias is the case where module and bound name agree and the object does not, so the key
     # carries the imported name too. Both directions, and the identical line still goes.
@@ -773,7 +773,11 @@ def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
 
     CliRunner().invoke(main, ["init", "--fix"])
     text = (repo / ".lockstep/lockstep.py").read_text()
-    assert "fix/from-ticket" in text and "fix/propose" in text
+    # The ids are no longer literals in the module: it registers the framework's implementations
+    # rather than carrying a copy of them. What must be in the text is the line that puts them in
+    # force, and `get(...)` below is what proves they actually are.
+    assert "from in_lockstep.workflows import fix as fix_workflows" in text
+    assert "fix_workflows.register()" in text
 
     state = snapshot()
     try:

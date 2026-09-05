@@ -257,6 +257,11 @@ class RunContext:
     #: happens after the whole module executed, so a `models.route(...)` line may appear before
     #: or after the bind that relies on it.
     models: dict[str, str] = field(default_factory=dict)
+    #: How many times a workflow may re-attempt a ticket before it stops asking. Snapshotted from
+    #: the facade at `context()` time for the same reason `models` is: a workflow shipped BY the
+    #: framework cannot reach a module-level `lockstep`, and the alternative — resolving the facade
+    #: out of the container — would let a workflow reach every binding when it needs one number.
+    max_attempts: int = 3
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()
