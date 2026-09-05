@@ -377,13 +377,48 @@ def _steps(spec: dict) -> list[dict]:
 
 
 def _scaffolds() -> dict[str, str]:
-    """The two trampolines `init` writes, rendered. An adopter gets these, not the files above."""
-    from in_lockstep.cli import _SCAFFOLD_GITLAB_TRAMPOLINE, _SCAFFOLD_TRAMPOLINE
+    """EVERY trampoline `init` writes, rendered. An adopter gets these, not the files above.
+
+    The three write-verb ones were missing here, and the omission cost exactly what an omission
+    from a gate's scope costs: they uploaded `history.bundle` — run evidence by this gate's own
+    definition — with no declared retention and no `include-hidden-files`, and nothing said so
+    while the two review scaffolds were checked in both.
+    """
+    from in_lockstep.cli import (
+        _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        _SCAFFOLD_FIX_TRAMPOLINE,
+        _SCAFFOLD_GITLAB_TRAMPOLINE,
+        _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        _SCAFFOLD_TRAMPOLINE,
+    )
 
     return {
         "scaffold: .github/workflows/lockstep.yml": _SCAFFOLD_TRAMPOLINE,
         "scaffold: .gitlab-ci.yml": _SCAFFOLD_GITLAB_TRAMPOLINE,
+        "scaffold: implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "scaffold: fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "scaffold: ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
     }
+
+
+def test_gate_record_1_every_scaffolded_upload_declares_what_it_keeps() -> None:
+    """Retention and hidden files, on every trampoline an adopter is given rather than two of five.
+
+    `history.bundle` is run evidence by clause (3)'s own words, and all five carry it. Checked over
+    the rendered scaffolds because that is what an adopter runs — the files in `.github/` here are
+    this repository's, and a gate that reads only its own is a gate about one repository.
+    """
+    for name, text in _scaffolds().items():
+        if "upload-artifact" not in text and "artifacts:" not in text:
+            continue
+        assert "retention-days:" in text or "expire_in:" in text, f"{name} states no retention"
+        for step in _steps(yaml.load(text.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)):
+            if "upload-artifact" not in str(step.get("uses", "")):
+                continue
+            with_ = step.get("with") or {}
+            dotted = [p for p in str(with_.get("path", "")).split() if p.startswith(".")]
+            if dotted:
+                assert with_.get("include-hidden-files") is True, f"{name} uploads {dotted} and drops them"
 
 
 def _replays(line: str) -> bool:
@@ -488,9 +523,9 @@ def test_gate_record_1_an_artifact_holding_run_evidence_declares_a_retention() -
 
 def test_gate_record_1_both_scaffolds_declare_a_retention() -> None:
     """The adopter's copy, in each host's own word for the same thing."""
-    github, gitlab = _scaffolds().values()
-    assert "retention-days:" in github, "the scaffolded GitHub trampoline states no retention"
-    assert "expire_in:" in gitlab, "the scaffolded GitLab trampoline states no retention"
+    scaffolds = _scaffolds()
+    assert "retention-days:" in scaffolds["scaffold: .github/workflows/lockstep.yml"]
+    assert "expire_in:" in scaffolds["scaffold: .gitlab-ci.yml"]
 
 
 def test_gate_record_1_an_upload_naming_a_dotted_path_asks_for_hidden_files() -> None:

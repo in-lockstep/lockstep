@@ -24,13 +24,19 @@ One job, because reviewing is read-only. Add the privileged `apply` job the
 day a verb of yours produces a change to write; the file says where.
 
 What a run keeps:
-  A recording holds the request verbatim -- the whole composed prompt and the
-  whole diff that was sent. Redaction masks the credential shapes it knows;
-  it never masks source.
-  Locally, only under --record: .lockstep/cassettes/<verb>.json, now gitignored.
-  In CI, the recording is written to the runner's temporary directory and dies
-  with the runner. What survives is the cases harvested from it, in the run
-  artifact, which says how many days it is kept.
+  A recording holds the request verbatim. For `review` that is the composed
+  prompt and the diff. For `implement` and `fix` it is more: every file the
+  model chose to open, every command's output, and a whole copy of each file
+  it wrote -- because a session re-sends its history every turn.
+  Redaction masks the credential shapes it knows; it never masks source.
+
+  Locally, only under --record: .lockstep/cassettes/<verb>.json, gitignored.
+  In CI the recording is written OUTSIDE the checkout, and dies with the runner.
+  What survives is the cases harvested from it: the question that was asked, and
+  which files and commands the session reached for -- addresses, not contents.
+  Each case says what it left out, with a count, a size and a digest, so the
+  omission can be checked rather than taken on trust. They ride the run artifact,
+  which says how many days it is kept.
   Run records are the exception and are meant to survive: an orphan branch.
 ```
 
