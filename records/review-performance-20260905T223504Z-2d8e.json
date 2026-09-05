@@ -1,0 +1,47 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058288,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 296,
+        "message": "Diff.hunks parses the full text on every call with no caching",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 405,
+        "message": "Inner loop over `package.items` rebuilds touched/hunks from scratch for every call",
+        "path": "src/in_lockstep/adapters/ai/review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6885e7bb7d159b274db6835eb094be1e47587b17",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 547,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260905T223504Z-2d8e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "b67d9b23e6b52ff09aa7acdc96f8844e",
+  "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 550,
+  "ts": "2026-09-05T22:35:20+00:00",
+  "wall_seconds": 15.784
+}
