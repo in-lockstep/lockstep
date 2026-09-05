@@ -332,10 +332,10 @@ class AiReview:
         )
 
     def _invoker(self, ctx: Any) -> AiInvoker:
-        from ...ai.bootstrap import routed_invoker
+        from .strategy import resolve_invoker
 
-        factory = self.invoker_factory or routed_invoker(type(self).verb)
-        return factory(ctx)
+        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        return invoker
 
     def _gather(self, inp: Review, root: str) -> ContextPackage:
         diff = inp.diff or _git_diff(root, inp.base, inp.head, inp.paths)

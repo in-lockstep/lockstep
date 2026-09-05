@@ -167,10 +167,9 @@ class AiTriage:
         system = prompt.system(layers) + "\n\n" + schema_instruction(TRIAGE_SCHEMA)
         messages = prompt.render(TriageParams(key=inp.key), package)
 
-        from ...ai.bootstrap import routed_invoker
+        from .strategy import resolve_invoker
 
-        factory = self.invoker_factory or routed_invoker(type(self).verb)
-        invoker: AiInvoker = factory(ctx)
+        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         try:
             invocation = await invoker.run(
                 system=system,

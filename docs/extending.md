@@ -484,6 +484,14 @@ lockstep.bind(Review, AiReview(invoker_factory("house:acme-7b", registry=registr
 provider nothing registered or a model nothing prices. The failure happens where it costs nothing,
 not at the first call.
 
+**Your provider is still recorded.** The framework cannot reach inside your factory, but it holds
+the invoker your factory returns, and it wraps the provider on that — so an adapter bound this way
+keeps what it pays for without you doing anything, and O4's *every model call is recorded* means
+every. Recording is what a run does; `--no-record` is how a run declines it. The one shape past
+that boundary is an adapter that takes no factory at all and constructs `AiInvoker` inside its own
+`invoke`: nothing can wrap that, and rather than report a reassuring zero the run compares what
+the tape kept against what it spent and tells you a model was called that the recorder never saw.
+
 ## A strategy
 
 The strategy IS the adapter. A binding does not choose a dispatcher configured by a string; it

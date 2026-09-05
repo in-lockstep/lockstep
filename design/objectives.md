@@ -84,7 +84,7 @@ to move without somebody standing in front of this table.
 | `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2` | — | — |
 | `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2` | `GATE-TOOLING-3` | The same gap as before, one ecosystem-family narrower. #237 taught detection to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, so a Rust, Go or JVM adopter no longer hand-writes what was in their tree. A Ruby, PHP, Elixir, .NET, C++ or Swift adopter still does. This row did not move with O1's, and the reason is the difference between the two sentences: O1 sanctions declining in its own text -- *detection that guesses is worse than detection that declines* -- so a stack that is read or else named is O1 satisfied. O2's standard has no such clause. It is that what a person writes by hand is the thing nobody could have discovered for them, and a `Rakefile` sitting in the tree is discoverable. `GATE-TOOLING-3` is where the remainder is recorded. |
 | `O3` | The same process at a terminal and in CI | partial | `GATE-CI-1`, `GATE-RECORD-1` | `GATE-CI-2` | Every verb runs at a terminal, and on GitHub five trampolines carry the triggers and none of the logic. GitLab gets one active `review` job; the gate/work/propose split for the write verbs ships commented out, and there is no OIDC federation path, so keyless CI is GitHub-only. The scaffold says both plainly, which is the right way to ship a partial. It is still a partial. |
-| `O4` | Every model call is recorded | partial | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4` | `GATE-RECORD-5` | The default is fixed. Recording is what a run does now rather than a flag it is handed, so the path a person meets first keeps what it pays for and `--no-record` is how they decline. What is left is the word *every*: an adapter constructed with its own `invoker_factory=` builds its provider inside a lambda nothing can reach, so the seam never sees it. That is detected rather than prevented -- the run compares what the tape holds against what it spent and names the bypass instead of reporting a reassuring zero -- and a hole somebody is told about is still a hole. |
+| `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5` | — | — |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
 | `O6` | The model never holds a secret | partial | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1` | `GATE-POLICY-2` | The best-executed objective here, and not `held`. Credentials are dropped from every child environment, a container is preferred and refused rather than silently downgraded when the caller asked for one, `run_script` refuses outright until a runner is bound, and the opt-out is a differently-named class somebody can grep for. What is unmet is a second surface: `Policy.network` and `Policy.permissions` are merged, printed by `ls` and reported in the receipt, and read by nothing. The ground is covered by the sandbox and the egress policy. A security field that reads as in force while enforcing nothing is still an O6 defect, because the receipt is what a reviewer believes — and the mission names *the policy of their choice* directly, so those five fields are not a duplicate surface but a choice an adopter is invited to make and nothing honours. |
 | `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3` | — | — |
@@ -92,7 +92,7 @@ to move without somebody standing in front of this table.
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
 
-5 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+6 of 10 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -145,6 +145,22 @@ measurement, which are the four things the objective names. `backport`, `triage`
 and `market` are not exercised here, and that is not a gap this row is hiding — this repository
 has no maintenance line to backport to and is not an adopter of packs, and a gate demanding
 otherwise would be demanding a fiction rather than evidence.
+
+Six, when #243 and #264 closed `GATE-RECORD-5` together — and *together* is the whole of it. Each
+was a hole the other hid. The seam wraps the provider the framework builds and fires on the tape
+the run carries; the five direct verbs never gave the run a tape, so a repository binding its own
+adapter recorded nothing **and** heard nothing, because the bypass detection is reached from the
+same reporting path that was missing. Closing either alone would have moved this row on a claim
+the other half falsified, which is why the two issues were done as one change.
+
+What `every` means here is worth stating, because O4's word is absolute and the row is now
+`held`. Every provider the framework builds is wrapped, and every provider handed to it by an
+adopter's own `invoker_factory=` is wrapped after the fact — the framework cannot reach inside the
+lambda, but it holds what the lambda returned. Past that is a bespoke adapter that takes no
+factory and constructs the invoker inside `invoke`: nothing can wrap it, and the framework should
+not pretend otherwise. What it does instead is refuse to report a reassuring zero. That run is
+compared against its own spend and told a model was called the recorder never saw, and there is a
+test standing on that boundary rather than a sentence promising it.
 
 ## Claimed by no objective
 

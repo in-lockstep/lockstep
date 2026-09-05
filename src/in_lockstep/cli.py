@@ -757,6 +757,20 @@ def _report_what_was_kept(tape: Any, ctx: Any, *, asked: bool) -> bool:
     return True
 
 
+def _asked_to_record(click_ctx: Any) -> bool:
+    """Whether the person typed `--record`, as against getting it by default.
+
+    The difference decides whether silence is an answer. Recording is what a run does, so a run
+    that kept nothing and was never asked says nothing about it; a person who typed the flag asked
+    a question, and answering that with silence tells them neither where the tape went nor whether
+    one exists.
+    """
+    try:
+        return click_ctx.get_parameter_source("record") is not ParameterSource.DEFAULT
+    except (AttributeError, KeyError):  # pragma: no cover - a hand-built context in a test
+        return False
+
+
 def _warn_if_calls_went_unrecorded(tape: Any, ctx: Any) -> None:
     """A run that spent tokens and kept nothing has a model call the recorder never saw.
 
@@ -2599,7 +2613,13 @@ def review_cmd(
             ),
         )
 
-    ctx = _context(lockstep, _run_id(f"review-{aspect}"))
+    # The tape reaches the run, which is what makes the seam in `ai.bootstrap` fire. Without it
+    # `ctx.recording` was None and a module-bound adapter recorded nothing, so the documented
+    # extension recipe in `docs/extending.md` -- bind your own Review -- spent money and kept
+    # nothing, silently (#264). `run` and `selfcheck` passed a tape from the beginning; these five
+    # did not, and the difference was invisible because the CLI's own `build_invoker` wraps for
+    # the case where the module binds nothing, which is the case everybody tested.
+    ctx = _context(lockstep, _run_id(f"review-{aspect}"), recording=tape if record else None)
     try:
         outcome = asyncio.run(ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff)))
     except LookupError as e:
@@ -2625,6 +2645,11 @@ def review_cmd(
     click.echo("")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is
+    # one nobody goes back to. `_report_what_was_kept` holds the rule about when to speak, so
+    # these five and `run` cannot drift the way two writers of one decision always do.
+    if record:
+        _report_what_was_kept(tape, ctx, asked=_asked_to_record(click.get_current_context()))
     _echo_telemetry(recorder)
 
     # The ledger line the first-value assertion checks. Written even on failure: a run that cost
@@ -2781,7 +2806,15 @@ def triage_cmd(
             ),
         )
 
-    ctx = _context(lockstep, _run_id(f"triage-{spec.key.lstrip('#') or 'issue'}"))
+    # The tape reaches the run, which is what makes the seam in `ai.bootstrap` fire. Without it
+    # `ctx.recording` was None and a module-bound adapter recorded nothing, so the documented
+    # extension recipe in `docs/extending.md` -- bind your own Review -- spent money and kept
+    # nothing, silently (#264). `run` and `selfcheck` passed a tape from the beginning; these five
+    # did not, and the difference was invisible because the CLI's own `build_invoker` wraps for
+    # the case where the module binds nothing, which is the case everybody tested.
+    ctx = _context(
+        lockstep, _run_id(f"triage-{spec.key.lstrip('#') or 'issue'}"), recording=tape if record else None
+    )
     try:
         outcome = asyncio.run(ctx.do(spec))
     except LookupError as e:
@@ -2812,6 +2845,11 @@ def triage_cmd(
     click.echo("")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is
+    # one nobody goes back to. `_report_what_was_kept` holds the rule about when to speak, so
+    # these five and `run` cannot drift the way two writers of one decision always do.
+    if record:
+        _report_what_was_kept(tape, ctx, asked=_asked_to_record(click.get_current_context()))
     _echo_telemetry(recorder)
 
     _write_ledger(lockstep, ctx, outcome, "", selected.id if triage_model_is_ours else "", kind="triage")
@@ -3065,7 +3103,15 @@ def rfe_cmd(
             ),
         )
 
-    ctx = _context(lockstep, _run_id(f"rfe-{spec.key.lstrip('#') or 'idea'}"))
+    # The tape reaches the run, which is what makes the seam in `ai.bootstrap` fire. Without it
+    # `ctx.recording` was None and a module-bound adapter recorded nothing, so the documented
+    # extension recipe in `docs/extending.md` -- bind your own Review -- spent money and kept
+    # nothing, silently (#264). `run` and `selfcheck` passed a tape from the beginning; these five
+    # did not, and the difference was invisible because the CLI's own `build_invoker` wraps for
+    # the case where the module binds nothing, which is the case everybody tested.
+    ctx = _context(
+        lockstep, _run_id(f"rfe-{spec.key.lstrip('#') or 'idea'}"), recording=tape if record else None
+    )
     try:
         outcome = asyncio.run(ctx.do(spec))
     except LookupError as e:
@@ -3098,6 +3144,11 @@ def rfe_cmd(
     click.echo("")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is
+    # one nobody goes back to. `_report_what_was_kept` holds the rule about when to speak, so
+    # these five and `run` cannot drift the way two writers of one decision always do.
+    if record:
+        _report_what_was_kept(tape, ctx, asked=_asked_to_record(click.get_current_context()))
     _echo_telemetry(recorder)
 
     _write_ledger(lockstep, ctx, outcome, "", selected.id if rfe_model_is_ours else "", kind="rfe")
@@ -3310,7 +3361,20 @@ def backport_cmd(
         lockstep.bind(Backport, GitBackport(lockstep.repo.root, resolver=resolver))
 
     key = str(getattr(resolved_ticket, "key", "") or "").lstrip("#")
-    ctx = _context(lockstep, _run_id(f"backport-{key or target}"), approval)
+    # The tape reaches the run, which is what makes the seam in `ai.bootstrap` fire. Without it
+    # `ctx.recording` was None and a module-bound adapter recorded nothing, so the documented
+    # extension recipe in `docs/extending.md` -- bind your own Review -- spent money and kept
+    # nothing, silently (#264). `run` and `selfcheck` passed a tape from the beginning; these five
+    # did not, and the difference was invisible because the CLI's own `build_invoker` wraps for
+    # the case where the module binds nothing, which is the case everybody tested.
+    # `tape` exists only where a resolver was asked for; a deterministic cherry-pick calls no
+    # model, so there is nothing to keep and nothing to say about it.
+    ctx = _context(
+        lockstep,
+        _run_id(f"backport-{key or target}"),
+        approval,
+        recording=tape if (resolve and record) else None,
+    )
     spec = Backport(target=target, commits=tuple(commits), ticket=resolved_ticket, source=source)
     try:
         outcome = asyncio.run(ctx.do(spec))
@@ -3341,6 +3405,11 @@ def backport_cmd(
         click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
     else:
         click.echo("cost      $0.0000  (deterministic; no model was consulted)")
+    # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is
+    # one nobody goes back to. `_report_what_was_kept` holds the rule about when to speak, so
+    # these five and `run` cannot drift the way two writers of one decision always do.
+    if resolve and record:
+        _report_what_was_kept(tape, ctx, asked=_asked_to_record(click.get_current_context()))
     _echo_telemetry(recorder)
 
     if out and report is not None and report.changeset.changes:
@@ -3927,7 +3996,18 @@ def implement_cmd(
             ),
         )
 
-    ctx = _context(lockstep, _run_id(f"implement-{resolved.key.lstrip('#')}"), approval)
+    # The tape reaches the run, which is what makes the seam in `ai.bootstrap` fire. Without it
+    # `ctx.recording` was None and a module-bound adapter recorded nothing, so the documented
+    # extension recipe in `docs/extending.md` -- bind your own Review -- spent money and kept
+    # nothing, silently (#264). `run` and `selfcheck` passed a tape from the beginning; these five
+    # did not, and the difference was invisible because the CLI's own `build_invoker` wraps for
+    # the case where the module binds nothing, which is the case everybody tested.
+    ctx = _context(
+        lockstep,
+        _run_id(f"implement-{resolved.key.lstrip('#')}"),
+        approval,
+        recording=tape if record else None,
+    )
     try:
         outcome = asyncio.run(ctx.do(Implement(ticket=resolved, attempts=_attempts_from(resume))))
     except LookupError as e:
@@ -3953,6 +4033,11 @@ def implement_cmd(
     click.echo(f"turns     {report.turns if report is not None else 0}")
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
+    # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is
+    # one nobody goes back to. `_report_what_was_kept` holds the rule about when to speak, so
+    # these five and `run` cannot drift the way two writers of one decision always do.
+    if record:
+        _report_what_was_kept(tape, ctx, asked=_asked_to_record(click.get_current_context()))
     _echo_telemetry(recorder)
 
     if out and report is not None and report.changeset.changes:

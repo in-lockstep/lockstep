@@ -1641,3 +1641,84 @@ def test_a_pure_deletion_hunk_claims_no_new_side_line() -> None:
 
     text = "--- a/f.py\n+++ b/f.py\n@@ -7,2 +7,0 @@\n-a\n-b\n"
     assert Diff(text=text, base="", head="").hunks == {"f.py": ()}
+
+
+# -- one wrap, not two (GATE-RECORD-5) ---------------------------------------------------------
+#
+# `recorded` is called from two places on purpose: `ai.bootstrap` covers a provider the framework
+# built, `resolve_invoker` covers one an adapter built for itself. Both are on the path for the
+# commonest run of all — the CLI hands `review` a factory that already wrapped, and the tape is on
+# the context — so without the guard every inference would be written to the tape twice and the
+# ledger would report a run that made double the calls it made.
+
+
+def test_wrapping_a_recorder_in_a_recorder_is_refused(tmp_path) -> None:
+    from in_lockstep.ai.bootstrap import recorded
+    from in_lockstep.ai.replay import Cassette, RecordingProvider
+
+    tape = Cassette.load(str(tmp_path / "t.json"))
+    once = recorded(Stub(), tape)
+    assert isinstance(once, RecordingProvider)
+    assert recorded(once, tape) is once, "a second wrap would write every call to the tape twice"
+
+
+def test_a_run_that_keeps_nothing_leaves_the_provider_alone(tmp_path) -> None:
+    """The control. `recorded` must be a no-op when there is no tape, or `--no-record` would be
+    a flag that records."""
+    from in_lockstep.ai.bootstrap import recorded
+
+    provider = Stub()
+    assert recorded(provider, None) is provider
+
+
+def test_a_replay_provider_cannot_be_recorded(tmp_path) -> None:
+    """Recording a replay writes a tape identical to the one being read, and tells the ledger
+    inferences were kept when none were made."""
+    import pytest as _pytest
+
+    from in_lockstep.ai.bootstrap import recorded
+    from in_lockstep.ai.replay import Cassette
+
+    class Replay(Stub):
+        transmits = False
+
+    tape = Cassette.load(str(tmp_path / "t.json"))
+    with _pytest.raises(ValueError, match="nothing to record"):
+        recorded(Replay(), tape)
+
+
+def test_resolve_invoker_does_not_re_wrap_a_factory_that_already_recorded(tmp_path) -> None:
+    """The path this actually protects: the CLI's own `build_invoker` wraps, and the tape is on
+    the context too, so both wrap sites are live on one run."""
+    from types import SimpleNamespace
+
+    from in_lockstep.adapters.ai.strategy import resolve_invoker
+    from in_lockstep.ai.replay import Cassette, RecordingProvider
+
+    tape = Cassette.load(str(tmp_path / "t.json"))
+    inner = Stub()
+
+    def factory(_ctx):
+        return SimpleNamespace(provider=RecordingProvider(inner, tape))
+
+    ctx = SimpleNamespace(recording=tape)
+    invoker = resolve_invoker(factory, "review", ctx)
+    assert isinstance(invoker.provider, RecordingProvider)
+    assert invoker.provider.inner is inner, "the recorder was wrapped in a second recorder"
+
+
+def test_resolve_invoker_wraps_a_factory_that_did_not(tmp_path) -> None:
+    """The other direction, which is #243 itself: a custom factory builds its provider inside a
+    lambda nothing can reach — but the framework holds what the lambda returned."""
+    from types import SimpleNamespace
+
+    from in_lockstep.adapters.ai.strategy import resolve_invoker
+    from in_lockstep.ai.replay import Cassette, RecordingProvider
+
+    tape = Cassette.load(str(tmp_path / "t.json"))
+    inner = Stub()
+    invoker = resolve_invoker(
+        lambda _ctx: SimpleNamespace(provider=inner), "review", SimpleNamespace(recording=tape)
+    )
+    assert isinstance(invoker.provider, RecordingProvider)
+    assert invoker.provider.inner is inner
