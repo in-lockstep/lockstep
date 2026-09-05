@@ -5947,8 +5947,12 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
     record = _last_unsuccessful(key, "fix/")
 
     if record is None:
+        # "ended", not "failed". With no record there is nothing to say what happened -- the run
+        # may have been stopped by the killswitch or an approval gate before it wrote anything,
+        # and calling that a failure is an alarming claim computed from no evidence, which is the
+        # same defect as a reassuring one. The next sentence already says where to look.
         body = (
-            "`/fix` failed before it recorded anything. Nothing was staged and nothing was "
+            "`/fix` ended before it recorded anything. Nothing was staged and nothing was "
             "opened; the job log is the only account of it."
         )
     else:
@@ -6531,8 +6535,12 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     record = _last_unsuccessful(key, "implement/")
 
     if record is None:
+        # "ended", not "failed". With no record there is nothing to say what happened -- the run
+        # may have been stopped by the killswitch or an approval gate before it wrote anything,
+        # and calling that a failure is an alarming claim computed from no evidence, which is the
+        # same defect as a reassuring one. The next sentence already says where to look.
         body = (
-            "`/implement` failed before it recorded anything. Nothing was staged and nothing was "
+            "`/implement` ended before it recorded anything. Nothing was staged and nothing was "
             "opened; the job log is the only account of it."
         )
     else:

@@ -141,7 +141,7 @@ def test_it_still_answers_when_the_run_recorded_nothing(verb: str, workflows, tm
     _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
 
     (said,) = tracker.said
-    assert "failed before it recorded anything" in said
+    assert "ended before it recorded anything" in said
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -165,7 +165,7 @@ def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp
     _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
 
     (said,) = tracker.said
-    assert "failed before it recorded anything" in said, "a succeeded run is not a failure to report"
+    assert "ended before it recorded anything" in said, "a succeeded run is not a failure to report"
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -190,7 +190,7 @@ def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path,
 
     (said,) = tracker.said
     assert "budget" not in said
-    assert "failed before it recorded anything" in said
+    assert "ended before it recorded anything" in said
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -352,7 +352,7 @@ def test_the_other_verbs_run_is_not_borrowed(verb, other, workflows, tmp_path, m
 
     (said,) = tracker.said
     assert f"{other}.went_wrong" not in said, f"/{verb} quoted a {other}/ run: {said}"
-    assert "failed before it recorded anything" in said
+    assert "ended before it recorded anything" in said
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -378,3 +378,23 @@ def test_its_own_family_is_still_found(verb: str, workflows, tmp_path, monkeypat
 
     (said,) = tracker.said
     assert f"{verb}.no_changes" in said, said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_run_that_recorded_nothing_is_not_called_a_failure(verb, workflows, tmp_path, monkeypatch):
+    """With no record there is nothing to say what happened.
+
+    The run may have been stopped by the killswitch or an approval gate before it wrote anything —
+    `lockstep-history` carries blocked records with `killswitch` and `approval.required` — so
+    "failed" is an alarming claim computed from no evidence, which is the same defect as a
+    reassuring one and the reason this repository renders an unmeasured number as a dash.
+    """
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "failed" not in said, f"nothing here knows that it failed: {said}"
+    assert "ended before it recorded anything" in said
+    assert "the job log is the only account of it" in said, "and it still says where to look"

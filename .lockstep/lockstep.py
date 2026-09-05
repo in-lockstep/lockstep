@@ -537,7 +537,7 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
 
     if record is None:
         body = (
-            "`/implement` failed before it recorded anything. Nothing was staged and nothing was "
+            "`/implement` ended before it recorded anything. Nothing was staged and nothing was "
             "opened; the job log is the only account of it."
         )
     else:
@@ -746,7 +746,7 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
 
     if record is None:
         body = (
-            "`/fix` failed before it recorded anything. Nothing was staged and nothing was "
+            "`/fix` ended before it recorded anything. Nothing was staged and nothing was "
             "opened; the job log is the only account of it."
         )
     else:
