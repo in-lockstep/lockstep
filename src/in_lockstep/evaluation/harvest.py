@@ -119,9 +119,20 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
                     # Not read by the grader. Read by a person asking "where did this come from,
                     # and is it still the kind of work we do?" — which is the question that decides
                     # whether a case is worth keeping.
+                    # `key` is deliberately absent here and stamped by the caller. It is the hash
+                    # of the request as this case carries it, and hashing a request is
+                    # `ai.replay._key`'s job -- which this layer may not import, because
+                    # `evaluation` is a leaf. Reimplementing the hash to avoid the import would be
+                    # two writers of one format, and the one that drifted would drift silently.
+                    #
+                    # `filed_under` is what this layer DOES know: the key the tape filed the entry
+                    # under. It is provenance, not integrity -- the two differ whenever redaction
+                    # masked anything, because a tape is keyed on the request that was sent and
+                    # holds the one that was written. Filing that key as `key` made a redacted case
+                    # accuse itself of carrying somebody else's answer.
                     "harvested": {
                         "cassette": str(path),
-                        "key": key,
+                        "filed_under": key,
                         "model": str(request.get("model", "")),
                     },
                 },
