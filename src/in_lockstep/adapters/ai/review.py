@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
@@ -251,6 +251,7 @@ class AiReview:
             )
 
         report = _to_report(parsed.value, inp.aspect)
+        report, unreachable, unplaced = _in_the_change(report, package)
         findings = tuple(
             Finding(
                 id=f"review.{inp.aspect}",
@@ -262,6 +263,38 @@ class AiReview:
             )
             for f in report.findings
         )
+        # Counted, never silent. A lens that quietly drops half its output reads as a lens that
+        # found half as much, and "the reviewer said little" is the reading a person acts on.
+        if unreachable:
+            shown = ", ".join(sorted(set(unreachable))[:_PATHS_NAMED])
+            more = len(set(unreachable)) - _PATHS_NAMED
+            findings += (
+                Finding(
+                    id="review.path_not_in_diff",
+                    message=(
+                        f"{len(unreachable)} finding(s) dropped: named {shown}"
+                        f"{f' and {more} more' if more > 0 else ''}, which this change does not "
+                        f"touch. A finding's path is the location a reviewer is sent to, and one "
+                        f"the diff does not contain sends them nowhere."
+                    ),
+                    severity=Severity.WARNING,
+                    blocking=False,
+                ),
+            )
+        if unplaced:
+            shown = ", ".join(sorted(set(unplaced))[:_PATHS_NAMED])
+            findings += (
+                Finding(
+                    id="review.line_not_in_hunk",
+                    message=(
+                        f"{len(unplaced)} finding(s) kept without a line: {shown} points outside "
+                        f"every hunk this change produced in that file. The claim may still be "
+                        f"right, so it is reported; the coordinate is not, so it is not."
+                    ),
+                    severity=Severity.WARNING,
+                    blocking=False,
+                ),
+            )
         # Anything the injection scanner saw in the diff travels with the outcome: a review of a
         # change that tried to talk to the reviewer is a fact about the change.
         injection_findings = tuple(
@@ -335,6 +368,99 @@ def _git_diff(root: str, base: str, head: str, paths: tuple[str, ...]) -> str:
     except (OSError, subprocess.SubprocessError):  # pragma: no cover - defensive
         return ""
     return result.stdout
+
+
+#: How many unreachable paths the refusal names before saying "and N more". A refusal is a
+#: pointer to a problem, not a transcript of it.
+_PATHS_NAMED = 3
+
+
+def _in_the_change(
+    report: ReviewReport, package: ContextPackage
+) -> tuple[ReviewReport, tuple[str, ...], tuple[str, ...]]:
+    """Check each finding's coordinates against the change. Returns the report, the findings
+    dropped for naming an untouched file, and the lines dropped for pointing outside every hunk.
+
+    O7 asks which part of a verb is arithmetic wearing a prompt. This is that part: `path` arrived
+    from the model and was compared against nothing, while the diff answering it was already in
+    hand. It is not cosmetic: the path is the location column of the review comment, so a
+    hallucinated one sends a reviewer to a file this change never touched — and it is the value
+    any per-finding inline placement would be posted at, which is the sharper form of the same
+    problem and the reason to fix it before that exists rather than after.
+
+    Checked against the diff **as sent**, not against a fresh `git diff`. Three reasons, and the
+    first is the one that matters: a model cannot name a file it was not shown, so the context is
+    the tighter test. It also costs no subprocess, and it does not make this verb depend on a ref
+    resolving — a review that reached the model and produced findings must not then fail on git.
+
+    Per finding, because one unreachable path is not a reason to discard three real findings
+    beside it.
+    """
+    from ...platform.scm import Diff
+
+    touched: set[str] = set()
+    hunks: dict[str, tuple[tuple[int, int], ...]] = {}
+    for item in package.items:
+        if item.kind == "diff":
+            diff = Diff(text=item.content, base="", head="")
+            touched |= set(diff.paths)
+            hunks.update(diff.hunks)
+
+    if not touched:
+        # A diff with no `---`/`+++` lines at all — a pure mode change, or a binary file summarised
+        # rather than shown. Nothing here can be checked, and refusing every finding on the
+        # strength of a parse that found nothing would drop real output to enforce a rule this
+        # input cannot answer. Fail open and leave the report alone: skipping the check drops
+        # nothing, where applying it blindly would drop everything.
+        return report, (), ()
+
+    kept, unreachable, unplaced = [], [], []
+    for finding in report.findings:
+        path = _normalised(finding.path)
+        if path not in touched:
+            unreachable.append(finding.path or "(no path)")
+            continue
+        if _outside_every_hunk(path, finding.line, hunks):
+            # The finding survives, the line does not. A model that noticed something real about
+            # this file and pointed one line off is worth reading; a reviewer sent to a line the
+            # change never touched is not. So the honest treatment is to keep the claim and drop
+            # the coordinate, which is a different act from refusing the finding and is counted
+            # under its own id.
+            unplaced.append(f"{path}:{finding.line}")
+            kept.append(replace(finding, line=None))
+            continue
+        kept.append(finding)
+    return replace(report, findings=tuple(kept)), tuple(unreachable), tuple(unplaced)
+
+
+def _outside_every_hunk(path: str, line: int | None, hunks: dict[str, tuple[tuple[int, int], ...]]) -> bool:
+    """Whether `line` points outside every range this change produced in `path`.
+
+    False for a finding with no line, which claims no coordinate and so cannot be wrong about one.
+    False for a path with no hunk entry at all — a deleted file, or a diff whose header this could
+    not parse — because *no new side* is not the same fact as *this line is wrong*, and treating
+    them alike would strip the line off every finding on a deleted file to enforce a rule that
+    input cannot answer.
+    """
+    if line is None:
+        return False
+    spans = hunks.get(path)
+    if not spans:
+        return False
+    return not any(start <= line <= end for start, end in spans)
+
+
+def _normalised(path: str) -> str:
+    """A model's spelling of a path, as the diff would spell it.
+
+    Deliberately minimal: whitespace and a leading `./`, and nothing more. Stripping a leading
+    `a/` or `b/` was tempting and is wrong — `a/` is a legal directory name, and a rule that
+    rewrites a real path to make it match is the guessing O1 refuses in the neighbouring case.
+    Anything else that does not match exactly is refused **and counted**, so a systematic
+    mismatch shows up as a number rather than as a lens that went quiet.
+    """
+    cleaned = path.strip()
+    return cleaned[2:] if cleaned.startswith("./") else cleaned
 
 
 def _to_report(value: object, aspect: str) -> ReviewReport:
