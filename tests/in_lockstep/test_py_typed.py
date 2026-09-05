@@ -99,9 +99,13 @@ def test_the_scaffold_still_registers_every_workflow_it_advertises(tmp_path):
     source = _scaffolded(tmp_path, "--implement", "--fix")
     for workflow in ("implement/from-ticket", "implement/propose", "fix/from-ticket", "fix/propose"):
         assert f'@workflow(id="{workflow}")' in source
-    # And the surviving helper is still reachable from both halves that call it.
-    assert source.count("_last_unsuccessful(key)") == 2
+    # And the surviving helper is still reachable from both halves that call it — each naming its
+    # own family, which is what stops a `/fix` report quoting an `implement/` run (#251). The two
+    # calls differing while the two DEFINITIONS stay byte-identical is exactly the arrangement the
+    # de-duplicator requires, so asserting both together is asserting that they can coexist.
     assert source.count("def _last_unsuccessful(") == 1
+    assert source.count('_last_unsuccessful(key, "implement/")') == 1
+    assert source.count('_last_unsuccessful(key, "fix/")') == 1
 
 
 @pytest.mark.parametrize("flags", [(), ("--implement", "--fix")])

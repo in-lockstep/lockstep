@@ -107,7 +107,8 @@ def test_a_failed_run_says_so_on_the_ticket(verb: str, workflows, tmp_path, monk
         tmp_path,
         {
             "run_id": f"{verb}-from-ticket-1",
-            "kind": verb,
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
             "args": {"ticket": "#139"},
             "status": "failed",
             "reason": "tdd.not_red",
@@ -140,7 +141,7 @@ def test_it_still_answers_when_the_run_recorded_nothing(verb: str, workflows, tm
     _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
 
     (said,) = tracker.said
-    assert "failed before it recorded anything" in said
+    assert "no run for this ticket reached the ledger" in said
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -149,7 +150,14 @@ def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp
     — so a ticket whose only runs succeeded must not have one of them described as the failure."""
     ledger = _ledger_with(
         tmp_path,
-        {"run_id": "ok", "args": {"ticket": "#139"}, "status": "succeeded", "reason": None},
+        {
+            "run_id": "ok",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": "succeeded",
+            "reason": None,
+        },
     )
     monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
 
@@ -157,7 +165,7 @@ def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp
     _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
 
     (said,) = tracker.said
-    assert "failed before it recorded anything" in said, "a succeeded run is not a failure to report"
+    assert "no run for this ticket reached the ledger" in said, "a succeeded run is not a failure to report"
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -166,7 +174,14 @@ def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path,
     confident, specific, wrong answer — worse than the silence this replaced."""
     ledger = _ledger_with(
         tmp_path,
-        {"run_id": "other", "args": {"ticket": "#7"}, "status": "failed", "reason": "budget"},
+        {
+            "run_id": "other",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#7"},
+            "status": "failed",
+            "reason": "budget",
+        },
     )
     monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
 
@@ -175,7 +190,7 @@ def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path,
 
     (said,) = tracker.said
     assert "budget" not in said
-    assert "failed before it recorded anything" in said
+    assert "no run for this ticket reached the ledger" in said
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
@@ -268,3 +283,216 @@ def test_the_propose_workflow_says_on_the_ticket_that_it_opened_the_change(
     assert "https://example.test/pull/1" in said, said
     assert "ready for review" in said, said
     assert host.ready, "a green verdict opens ready, not as a draft"
+
+
+# -- a control that stopped a run is not a failure ------------------------------------------------
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_blocked_run_is_not_announced_as_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """CLAUDE.md forbids folding `blocked` into a failure, and this is where it was folded.
+
+    Not hypothetical. `lockstep-history` carries three real `implement/from-ticket` records on
+    #139 with `status: blocked` and `reason: cost.budget_exceeded`, one of them at $97.54 — the
+    ceiling doing exactly its job. The sentence this workflow posts is public, on the ticket, so
+    calling a working control a failure states something untrue in the place a person reads it.
+
+    The reason and the cost still have to appear: the point is not to hide that the run stopped,
+    it is to say why it stopped in words that are true.
+    """
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-2",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": "blocked",
+            "reason": "cost.budget_exceeded",
+            "cost_usd": 97.5401,
+            "ts": "2026-09-01T22:09:46+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "was stopped by `cost.budget_exceeded`" in said, said
+    assert "failed with" not in said, f"a blocked run is the control working, not a failure: {said}"
+    assert "$97.54" in said, "what it cost is still the thing a person needs"
+
+
+@pytest.mark.parametrize("status", ["failed", "blocked"])
+@pytest.mark.parametrize(("verb", "other"), [("implement", "fix"), ("fix", "implement")])
+def test_the_other_verbs_run_is_not_borrowed(verb, other, status, workflows, tmp_path, monkeypatch):
+    """Both verbs answer on the same ticket, so their records sit side by side.
+
+    Matching on ticket and status alone let `/fix` find an `implement/` run and quote its reason as
+    though it were the fix attempt — a confident, specific, wrong answer, which
+    `test_another_tickets_failure_is_not_borrowed` already calls worse than silence. The same
+    argument, one axis over.
+
+    Parametrised over `blocked` as well as `failed` because the two now take different branches of
+    the sentence, so a filter leaking only one of them would be invisible to the other. Raised by
+    this repository's own `review/tests` lens on the change that added this test.
+    """
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": "theirs",
+            "kind": "workflow",
+            "workflow": f"{other}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": status,
+            "reason": f"{other}.went_wrong",
+            "ts": "2026-09-01T19:54:34+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert f"{other}.went_wrong" not in said, f"/{verb} quoted a {other}/ run: {said}"
+    assert "no run for this ticket reached the ledger" in said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_its_own_family_is_still_found(verb: str, workflows, tmp_path, monkeypatch) -> None:
+    """The control for the test above. A filter that matched nothing would satisfy it perfectly,
+    and every report would quietly become "the job log is the only account of it"."""
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": "mine",
+            "kind": "workflow",
+            "workflow": f"{verb}/propose",
+            "args": {"ticket": "#139"},
+            "status": "failed",
+            "reason": f"{verb}.no_changes",
+            "ts": "2026-09-01T19:54:34+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert f"{verb}.no_changes" in said, said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_run_that_recorded_nothing_is_not_called_a_failure(verb, workflows, tmp_path, monkeypatch):
+    """With no record there is nothing to say what happened.
+
+    The run may have been stopped by the killswitch or an approval gate before it wrote anything —
+    `lockstep-history` carries blocked records with `killswitch` and `approval.required` — so
+    "failed" is an alarming claim computed from no evidence, which is the same defect as a
+    reassuring one and the reason this repository renders an unmeasured number as a dash.
+    """
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "failed" not in said, f"nothing here knows that it failed: {said}"
+    assert "no run for this ticket reached the ledger" in said
+    assert "the job log is the only account of it" in said, "and it still says where to look"
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_blocked_run_that_recorded_no_cost_still_reads_as_stopped(verb, workflows, tmp_path, monkeypatch):
+    """The cost is optional and the verdict is not.
+
+    `killswitch` and `approval.required` both stop a run before it spends anything, and
+    `lockstep-history` carries four such records — so a blocked run with no cost is the common
+    shape, not an edge. `spent` renders as an empty string there and the sentence around it still
+    has to be true. Raised by this repository's own `review/tests` lens.
+    """
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-3",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": "blocked",
+            "reason": "approval.required",
+            "ts": "2026-09-01T22:09:46+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "was stopped by `approval.required`" in said, said
+    assert "failed" not in said
+    # No cost recorded, so none is claimed — not "$0.00 spent", which reads as a run that reached
+    # a provider and was given nothing.
+    assert "spent" not in said, said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_run_that_broke_is_not_called_a_failure_either(verb, workflows, tmp_path, monkeypatch):
+    """`errored` is infrastructure breaking, which `Status` keeps apart from `failed` on purpose:
+    one is the class `Retry` targets, the other is the domain saying no. Telling a person their
+    change failed when a provider timed out points them at the wrong thing to fix.
+
+    Raised by a sweep of this repository for other places the same rule is broken — the first fix
+    here was a two-way branch, and a boolean over a six-member enum is how the next status gets
+    lumped in silently.
+    """
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-4",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": "errored",
+            "reason": "provider.timeout",
+            "ts": "2026-09-01T22:09:46+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "could not run — `provider.timeout`" in said, said
+    assert "failed" not in said
+
+
+@pytest.mark.parametrize("status", ["blocked", "errored", "failed"])
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_run_with_no_reason_does_not_say_the_status_twice(verb, status, workflows, tmp_path, monkeypatch):
+    """`Outcome(status=Status.BLOCKED)` with no reason is legal, and the reason used to fall back
+    to the status — rendering "was stopped by `blocked`", a sentence that says nothing twice."""
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-5",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": status,
+            "reason": None,
+            "ts": "2026-09-01T22:09:46+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert f"`{status}`" not in said, f"the status is not a reason: {said}"
+    assert "``" not in said, f"an empty reason was rendered: {said}"
