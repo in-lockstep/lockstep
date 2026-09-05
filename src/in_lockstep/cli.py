@@ -5367,6 +5367,13 @@ jobs:
         # The `secrets` context reads in a step `if`, which keeps the key scoped to this one step
         # instead of every step in the job.
         if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        # `security` is one of four shipped lenses; `intent`, `performance` and `tests` are the
+        # others, and `--aspect <name>` runs any of them. One is scaffolded rather than four
+        # because each is a real model call against the ceiling below, so four lenses is four
+        # times the bill -- your decision rather than ours. Adding one is another invocation
+        # here, and `in-lockstep ls` prints the lenses your module actually has -- including
+        # any your own `AiReview(lenses=...)` added, which is the same list `/review <aspect>`
+        # resolves against.
         run: |
           uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep review \
             --base "origin/${GITHUB_BASE_REF}" \
@@ -5469,6 +5476,10 @@ review:
     # inventing, so a recording it cannot build a case from exits non-zero, and that is the wrong
     # reason to fail somebody's review.
     - |
+      # `security` is one of four shipped lenses; `intent`, `performance` and `tests` are the
+      # others, and `--aspect <name>` runs any of them. One is scaffolded rather than four
+      # because each is a real model call against the ceiling below. `in-lockstep ls` prints the
+      # lenses your module actually has, including any of your own.
       if [ -n "$ANTHROPIC_API_KEY" ]; then
         in-lockstep review \\
           --base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \\

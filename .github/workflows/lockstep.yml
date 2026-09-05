@@ -20,6 +20,13 @@
 # full-context review ($0.189 at ~600 output tokens). Far enough above normal that it never fires
 # on a good run; close enough that a loop going wrong stops in cents.
 #
+# It is PER LENS, and this job now runs four of them, so the number to reason about for a push is
+# four times the one above: roughly $0.76 observed and $0.97 against the worst-case projection,
+# with $3.00 the ceiling all four could reach before anything refused. Said out loud because a
+# per-run ceiling that quietly became a per-push bill four times its size is exactly the kind of
+# number nobody recomputes. `IN_LOCKSTEP_DAILY_LIMIT` is the control that bounds the day rather
+# than the run, and it is not set here.
+#
 # `--budget` is stated here rather than left to lockstep.py, because of the adoption case.
 # Configuration loads from the trusted ref — the base branch — so a repository's very first pull
 # request, the one that ADDS lockstep.py, has no config to load and therefore no declared ceiling,
@@ -68,14 +75,43 @@ jobs:
         # skipped rather than failed — a red check the contributor cannot fix teaches everyone
         # to ignore red. Same-repo pull requests always run: federation needs no secret.
         if: ${{ !github.event.pull_request.head.repo.fork }}
+        # EVERY shipped lens, not only security. `review` is a required status check here, so
+        # every pull request into this repository was already gated on a model reading the diff —
+        # through one lens of four. `intent`, `performance` and `tests` had never run on a real
+        # pull request in the repository that exists to dogfood them (#241), which made them
+        # things we ask adopters to trust on our word. That is what O10 exists to refuse.
+        #
+        # The list is written here rather than resolved by a flag, and that is deliberate. Each
+        # lens is a real model call against a real ceiling, so a fifth one is a decision about
+        # money and belongs in the file that spends it, where a reviewer meets it in the diff.
+        # `GATE-REVIEW-5` compares this list against the lenses the BOUND adapter declares, so a
+        # lens added to the framework turns this file red rather than going quietly unexercised.
+        #
+        # Findings do not fail this step, which is what makes four lenses defensible on a
+        # REQUIRED check. `AiReview` emits them as non-blocking warnings, so a lens that finds
+        # something still exits 0 and the step goes red only when a lens is genuinely refused or
+        # errored — a budget ceiling, an egress refusal, a schema mismatch. Nothing here can turn
+        # a note about performance into a merge block, which is how a team learns to ignore red.
+        #
+        # Every lens runs even after one fails, and the step exits with the worst status. Failing
+        # fast would let one transient refusal cost the recordings of the three lenses behind it,
+        # and this check is where most of the eval corpus comes from.
+        #
+        # One tape for all four. A cassette is keyed on the whole composed prompt and each lens
+        # composes a different one, so they accumulate into the same file rather than overwrite
+        # each other — and one harvest at the end covers the lot.
         run: |
-          uv run in-lockstep review \
-            --base "origin/${GITHUB_BASE_REF}" \
-            --head "${GITHUB_SHA}" \
-            --aspect security \
-            --budget 0.75 \
-            --record \
-            --cassette "${RUNNER_TEMP}/review.json"
+          status=0
+          for aspect in security intent performance tests; do
+            uv run in-lockstep review \
+              --base "origin/${GITHUB_BASE_REF}" \
+              --head "${GITHUB_SHA}" \
+              --aspect "$aspect" \
+              --budget 0.75 \
+              --record \
+              --cassette "${RUNNER_TEMP}/review.json" || status=$?
+          done
+          exit $status
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
