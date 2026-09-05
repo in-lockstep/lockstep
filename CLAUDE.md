@@ -1,15 +1,33 @@
 # Working in this repository
 
-Two kinds of thing. First, what this framework is FOR — the objectives every change is measured
-against. Then the repo-local facts an agent cannot infer from the file it happens to have open,
-every one of which has already cost somebody a failed run.
+Three kinds of thing. First the mission, then what this framework is FOR — the objectives every
+change is measured against. Then the repo-local facts an agent cannot infer from the file it
+happens to have open, every one of which has already cost somebody a failed run.
 
-Read the objectives before deciding what to build. Read the rest before deciding how.
+Read the mission and the objectives before deciding what to build. Read the rest before deciding
+how.
+
+## The mission
+
+> Enable teams of software engineers to work together using a framework to keep AI usage
+> disciplined and structural enabling collaborative development work to proceed on the hosted SCM
+> of their choice using the provider(s) and model(s) of their choice constrained by the
+> process(s) of their choice.
+
+Everything below is that sentence made checkable. The mission is wider than the ten objectives
+are — it names collaboration between engineers, and choice of provider and model, which no
+objective yet carries — and `design/objectives.md` records that gap rather than papering over it.
 
 ## What this framework is for
 
 Ten objectives, numbered so a change can cite one. They are the direction; everything below this
 section is detail about how to work here without breaking something.
+
+Their status is not a matter of opinion. `design/objectives.md` is the ledger over them, joined to
+`design/gates.md` and ratcheted the same way: an objective is `held` only when gates that hold
+carry it, every gap it states is anchored in a named gate, and closing one of those gates fails
+the build until somebody re-reads the row. Two of ten are `held` today. Read it before claiming a
+change serves an objective, because the row will tell you what is already carrying it.
 
 **Every change is measured against these.** A feature, a fix, a refactor or a deletion either moves
 the framework toward an objective or it does not, and a change that moves it away is one to not

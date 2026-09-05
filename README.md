@@ -21,6 +21,17 @@ lockstep.bind(Validate, RuffValidate())
 lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ```
 
+## The mission
+
+> Enable teams of software engineers to work together using a framework to keep AI usage
+> disciplined and structural enabling collaborative development work to proceed on the hosted SCM
+> of their choice using the provider(s) and model(s) of their choice constrained by the
+> process(s) of their choice.
+
+The ten objectives in [CLAUDE.md](CLAUDE.md) are that sentence made measurable, and
+[design/objectives.md](design/objectives.md) is the ledger over them — joined to the gate ledger,
+so an objective cannot read as met while a gate carrying it does not hold.
+
 ## What ships today
 
 Six core workflows are the goal. This table is what actually runs, kept honest by a test that
