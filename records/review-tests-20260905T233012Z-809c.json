@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.088321,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 3538,
+        "message": "The bespoke-adapter test asserts the bypass warning fires but does not assert the tape is empty (or absent), meaning a regression where the bespoke adapter accidentally recorded would pass this test.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 3462,
+        "message": "`test_a_repository_that_binds_its_own_review_adapter_still_records` asserts the tape exists and has provider_calls, but does not assert that the call count is exactly 1, so double-wrapping would pass the test.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1683,
+        "message": "`test_resolve_invoker_does_not_re_wrap_a_factory_that_already_recorded` asserts the outer provider is a `RecordingProvider` and `invoker.provider.inner is inner`, but does not verify that there is exactly one layer of wrapping rather than two.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7d5576370c51948ad65f1eece323affc4d5b1eb4",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 655,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T233012Z-809c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 658,
+  "ts": "2026-09-05T23:30:30+00:00",
+  "wall_seconds": 18.198
+}
