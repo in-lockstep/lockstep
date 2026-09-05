@@ -24,7 +24,7 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 ## The mission
 
 > Enable teams of software engineers to work together using a framework to keep AI usage
-> disciplined and structured enabling collaborative development work to proceed on the hosted SCM
+> disciplined and structured, enabling collaborative development work to proceed on the hosted SCM
 > of their choice using the provider(s) and model(s) of their choice constrained by the
 > process(es) and policy of their choice.
 
