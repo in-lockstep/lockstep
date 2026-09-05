@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -92,7 +93,19 @@ def workflows():
 
 def _run(entry: Any, **kwargs: Any) -> Any:
     class _Ctx:
+        """Enough `RunContext` for a report workflow.
+
+        `container`, `repo` and `max_attempts` are here because the workflows now reach the RUN
+        CONTEXT for them instead of a module-level `lockstep`. The old stub could be one attribute
+        wide precisely because the dependency was hidden in a global — a fixture that did not have
+        to supply what the code used is a fixture that was not testing the same thing the run does.
+        `store_for` is monkeypatched in every test below, so the container only has to exist.
+        """
+
         run_id = "test"
+        container = object()
+        repo = SimpleNamespace(root=".")
+        max_attempts = 3
 
     return asyncio.run(entry.fn(_Ctx(), **kwargs))
 
@@ -220,8 +233,12 @@ def test_the_evidence_path_is_not_the_one_propose_reads(workflows) -> None:
     That is what makes "a red change never becomes a pull request" a fact about the filesystem
     rather than a condition somebody can relax later.
     """
-    module, _ref = load(str(ROOT))
-    assert module.ATTEMPT not in (module.CHANGESET, module.FIX_CHANGESET)
+    from in_lockstep.platform.artifacts import ATTEMPT, CHANGESET, FIX_CHANGESET
+
+    # Read off the framework, not off this repository's module. The names used to be declared in
+    # every scaffolded `lockstep.py`, so the trampoline YAML and the workflow agreed by
+    # coincidence and a rename in one was a silent break in the other. One definition now.
+    assert ATTEMPT not in (CHANGESET, FIX_CHANGESET)
 
 
 def test_reading_the_proposable_path_does_not_find_an_attempt(workflows, tmp_path, monkeypatch) -> None:
@@ -229,22 +246,30 @@ def test_reading_the_proposable_path_does_not_find_an_attempt(workflows, tmp_pat
     evidence must be invisible to the reader `propose` uses, or the separate constant is decoration.
     """
     from in_lockstep.core.types import ChangeSet, FileChange
-    from in_lockstep.platform.artifacts import MalformedArtifact, read_changeset, write_changeset
+    from in_lockstep.platform.artifacts import (
+        ATTEMPT,
+        CHANGESET,
+        MalformedArtifact,
+        read_changeset,
+        write_changeset,
+    )
 
     module, _ref = load(str(ROOT))
     monkeypatch.chdir(tmp_path)
-    write_changeset(module.ATTEMPT, ChangeSet(changes=(FileChange(path="a.py", contents="x"),)))
+    write_changeset(ATTEMPT, ChangeSet(changes=(FileChange(path="a.py", contents="x"),)))
 
     with pytest.raises((MalformedArtifact, FileNotFoundError, OSError)):
-        read_changeset(module.CHANGESET)
+        read_changeset(CHANGESET)
 
 
 def test_the_evidence_path_is_uploaded_by_both_workflows(workflows) -> None:
     """Written and then not collected would be the same loss with more steps."""
+    from in_lockstep.platform.artifacts import ATTEMPT
+
     module, _ref = load(str(ROOT))
     for name in ("implement.yml", "fix.yml"):
         text = (ROOT / ".github" / "workflows" / name).read_text()
-        assert f"{module.ATTEMPT}/" in text, f"{name} does not upload the evidence path"
+        assert f"{ATTEMPT}/" in text, f"{name} does not upload the evidence path"
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])

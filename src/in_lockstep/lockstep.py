@@ -187,6 +187,7 @@ class Lockstep:
             middleware=list(self.middleware),
             approval=approval or Approval(),
             models=dict(self.models.routes),
+            max_attempts=self.max_attempts,
             recording=recording,
         )
 

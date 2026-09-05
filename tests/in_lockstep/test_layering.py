@@ -101,7 +101,12 @@ ALLOWED: dict[str, set[str]] = {
     # composition root that may not import one can only ever register strings, which is what this
     # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
     # never imports `strategies` back.
-    "strategies": {"ai", "core", "adapters", "strategies"},
+    # The processes the framework ships for an adopter to register. It names implementations —
+    # `Implement`, `Fix`, the artifact readers, the proposal helpers — because a process that could
+    # only reference strings would not be a process. Acyclic: none of those imports `workflows`,
+    # and nothing inside the framework does either. Only an adopter's own module and `cli` (for
+    # `--eject`, which reads the source) reach it.
+    "workflows": {"core", "adapters", "platform", "workflows"},
     # `platform` was added for exactly one edge: the pre-run daily spend ceiling reads the
     # ledger, and the ledger is platform's. The facade composes what the layers provide, and a
     # startup refusal that lived anywhere shallower (the CLI) would not cover a programmatic
@@ -138,6 +143,9 @@ ALLOWED: dict[str, set[str]] = {
         "packs",
         "market",
         "trial",
+        # `--eject` reads the shipped workflow source out of the installed package, so the CLI
+        # imports the modules it is about to copy. One direction: `workflows` never imports `cli`.
+        "workflows",
         "cli",
     },
 }

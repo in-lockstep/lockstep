@@ -4806,7 +4806,12 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
     is_flag=True,
     help="Also scaffold the /fix chat-ops trampoline and its two workflows (the ai-generated-issue target).",
 )
-def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
+@click.option(
+    "--eject",
+    is_flag=True,
+    help="Write the workflow source into the module instead of registering the shipped one.",
+)
+def init_cmd(force: bool, with_implement: bool, with_fix: bool, eject: bool) -> None:
     """Scaffold a lifecycle definition and a CI trampoline.
 
     The trampoline is written once and never read back: there is no drift check on it, and no
@@ -4860,9 +4865,9 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         click.echo("day a verb of yours produces a change to write; the file says where.")
 
     if with_implement:
-        _scaffold_implement(module, host=host)
+        _scaffold_implement(module, host=host, eject=eject)
     if with_fix:
-        _scaffold_fix(module, host=host)
+        _scaffold_fix(module, host=host, eject=eject)
 
     _disclose_what_a_run_keeps()
 
@@ -5099,7 +5104,246 @@ def _without_duplicate_definitions(existing: str, block: str) -> str:
     return "".join(line for i, line in enumerate(lines) if i not in drop)
 
 
-def _scaffold_implement(module: Path, *, host: str = "") -> None:
+_SCAFFOLD_IMPLEMENT_CONFIG = """from in_lockstep import Workshop
+from in_lockstep.adapters.ai import Oneshot
+from in_lockstep.adapters.pytest_adapter import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.middleware.approval import ApprovalGate
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
+from in_lockstep.platform.scm import Scm
+from in_lockstep.platform.tickets import TicketSource
+
+# -- /implement: the chat-ops implementing verb -------------------------------------------------
+#
+# Two workflows rather than one, because they must not be one process. `implement/from-ticket`
+# runs unprivileged with the provider key and stages a change into an artifact;
+# `implement/propose` runs privileged with a write token and no provider key. The trampoline in
+# .github/workflows/implement.yml holds the trigger, the job split and the credentials — and
+# nothing else. Run the first half locally with:
+#
+#     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
+
+
+
+# Bound here rather than constructed inside the workflows, so `in-lockstep ls` can print what
+# will actually run and a test can substitute either one. `hosted_*` bind the detected host's
+# adapters — GitHub or GitLab — so this block runs unedited on either.
+lockstep.bind(TicketSource, hosted_tickets())
+lockstep.bind(Scm, hosted_scm())
+
+lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
+
+# An adapter that both spends money and writes files needs an approval path, or the run refuses
+# to start. The grant itself arrives on the run context — `--approve` from a person at a
+# terminal, `--approved-by` from a verified trigger — which is what lets the SAME command serve
+# both without a rewrite.
+lockstep.middleware += [ApprovalGate()]
+
+# `run_script` executes inside a container with no network and no credentials in its
+# environment; the absence of a container runtime is a refusal, never a fall back to this host.
+# The image is named because `require_container=True` with no image refuses every command — it
+# has nothing to run them in — so leaving it blank would make run_script permanently inert.
+#
+# Wrapped in `WorktreeRunner`, so a model's command runs in a throwaway worktree of HEAD rather
+# than the live tree: the container still bind-mounts read-write, but what it mounts is a copy that
+# is discarded, so a command cannot write `.git/hooks` or `.lockstep/lockstep.py` on the real
+# repository past ChangeGuard. It does mean git-dependent commands see a linked worktree's gitlink
+# (see docs/extending.md); pytest, ruff and mypy do not care.
+# The strategy IS the adapter: `ls` prints `Implement -> Oneshot`, and that line is the whole
+# answer to "how does implementing happen here". Swap `Oneshot` for `TDD` to require
+# red-then-green. The model comes from the `models.route("implement", ...)` line above; the
+# invoker is assembled per run, so no factory is threaded here.
+lockstep.workshop = Workshop(
+    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
+)
+lockstep.use(Oneshot)
+
+# Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
+# its verdict rides the artifact into the PR body, so a reviewer sees whether the change passed
+# before opening it. The default Sandbox runs the suite in a subprocess with credentials dropped,
+# enough that repository (and staged) test code cannot read the provider key out of this job. It
+# does not cut network the way run_script's container does; a host that can enforce egress should
+# pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
+# for run_script.
+#
+# Guarded, like every binding the /fix block appends. The section above this one binds whatever
+# detection found — `CommandTest(["npm", "test"])` on a Node repository — and an unguarded bind
+# here replaced it without a word, so `ls` printed `Test -> PytestTest` and the implement flow ran
+# pytest against a repository that has none. Pytest is the fallback for the case detection placed
+# nothing, so the flow still has a runner; a repository with a runner keeps the one it has.
+if not lockstep.container.has(Test):
+    lockstep.bind(Test, PytestTest())
+
+# EGRESS, and read this before shipping the implement verb. The review scaffold above already
+# bound `UnsandboxedEgress`, and that binding is global — so this implementing verb inherits it,
+# and a successful injection in the untrusted issue text has somewhere to send what it read. That
+# was a low-risk call for review (an empty tool set, nothing to exfiltrate through); it is a
+# larger one here, because implement holds write and execute tools.
+#
+# What still bounds an implementing session under that binding: writes are STAGED into a
+# ChangeSet and applied by nobody until a person runs `apply`, ChangeGuard stands at every write
+# path with `.lockstep/lockstep.py` first in its deny list, and `run_script` runs only inside a
+# no-network container (the Sandbox above) and refuses rather than falling back to this host. If
+# your host CAN enforce egress (a self-hosted runner, a constrained container), delete the
+# `UnsandboxedEgress` binding in the review section and set `IN_LOCKSTEP_EGRESS=enforced` there
+# instead — the probe has to pass, which on a hosted runner it will not.
+
+"""
+
+_SCAFFOLD_FIX_CONFIG = """from in_lockstep import Workshop
+from in_lockstep.adapters.ai import DiagnoseThenFix
+from in_lockstep.adapters.pytest_adapter import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.middleware.approval import ApprovalGate
+from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
+from in_lockstep.platform.scm import Scm
+from in_lockstep.platform.tickets import TicketSource
+
+# --- appended by `in-lockstep init --fix` --------------------------------------------------------
+# The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
+# comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
+# reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
+
+
+# Each binding is guarded, so this block works on its own and also composes with the implement
+# scaffold without binding TicketSource, Scm, Test or the approval gate a second time. `hosted_*`
+# bind the detected host's adapters — GitHub or GitLab — so the block runs unedited on either.
+if not lockstep.container.has(TicketSource):
+    lockstep.bind(TicketSource, hosted_tickets())
+if not lockstep.container.has(Scm):
+    lockstep.bind(Scm, hosted_scm())
+if not lockstep.container.has(Test):
+    lockstep.bind(Test, PytestTest())
+if not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
+    lockstep.middleware += [ApprovalGate()]
+
+lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
+
+# Fix writes and executes, like implement: a reproducer and a fix, each run in a throwaway worktree
+# inside a no-network container, so a model's command reaches neither the network nor the real
+# .git/.lockstep past ChangeGuard.
+# The strategy IS the adapter: `ls` prints `Fix -> DiagnoseThenFix`. The model comes from the
+# `models.route("fix", ...)` line above; the invoker is assembled per run.
+if lockstep.workshop.commands is None:
+    lockstep.workshop = Workshop(
+        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
+    )
+lockstep.use(DiagnoseThenFix)
+
+"""
+
+REGISTER_TAIL = """
+# -- the {family} process ----------------------------------------------------------
+#
+# Registered, not copied. These are framework code you can read at
+# `in_lockstep/workflows/{family}.py`; the bindings above are yours.
+#
+# That split is the point. What a repository decides -- which adapters, which model, what the
+# workshop grants, what the middleware chain is -- lives here. How the process runs is the
+# framework's, and a fix to it reaches you by upgrading rather than never.
+#
+# A call rather than an import side effect: `@workflow` refuses a repeated id, so a module that
+# defines its own `{family}/from-ticket` AND called this would be asking for two things under one
+# name, and should hear about it.
+#
+# `in-lockstep init --eject` writes the source here instead, for a repository that wants to own
+# its process -- at the cost that fixes to the shipped version stop arriving.
+from in_lockstep.workflows import {family} as {family}_workflows
+
+{family}_workflows.register()
+
+"""
+
+
+def _wrap_long_imports(text: str) -> str:
+    """Re-wrap an import line that outgrew the line length, after the merge rather than before.
+
+    `_ejected_source` flattens parenthesised imports to one line because
+    `_without_duplicate_imports` matches single-line imports only and cannot see a multi-line one —
+    a duplicate that survives the merge is `F811` in the module `init` has just written. Flattening
+    then produces the opposite complaint from `ruff`, which wants the parenthesised form back once
+    the line is long. So the flattening is for the merge and this puts it back afterwards, which is
+    the only order in which both tools are satisfied.
+    """
+    out = []
+    for line in text.splitlines(keepends=True):
+        match = re.match(r"^from ([\w.]+) import ([^(\n]+)$", line.rstrip("\n"))
+        if match is None or len(line.rstrip("\n")) <= 100:
+            out.append(line)
+            continue
+        names = [n.strip() for n in match.group(2).split(",") if n.strip()]
+        out.append(f"from {match.group(1)} import (\n")
+        out.extend(f"    {n},\n" for n in names)
+        out.append(")\n")
+    return "".join(out)
+
+
+def _ejected_source(family: str) -> str:
+    """The shipped workflow module's own source, read from the installed package.
+
+    There is exactly ONE copy of this text and it is the code that runs. That is the whole
+    difference from what `init` used to do: a string literal in this file was a second copy, and
+    the two had drifted 96 lines of real code apart by the time anybody measured them — with only
+    the other one under test.
+
+    Ejecting is a real choice rather than a fallback. A repository that wants to own its process
+    and edit it should have it, and ADR 0001 deleted a compiler over generated output nobody could
+    read. What it costs is stated where the choice is made: fixes to the shipped version stop
+    arriving, which is exactly what happened to every repository scaffolded before 0.3.0.
+
+    Imports are rewritten from relative to absolute, because the source is about to live outside
+    the package it was written in. `register()` is dropped: an ejected module defines the
+    workflows with the decorator, so nothing is left to register.
+    """
+    import ast
+    import inspect
+
+    from .workflows import fix as fix_workflows
+    from .workflows import implement as implement_workflows
+
+    module = {"implement": implement_workflows, "fix": fix_workflows}[family]
+    text = inspect.getsource(module)
+    # The module preamble belongs to the file it came from, not to a block appended to somebody
+    # else's. `from __future__` in particular must be the first statement, so leaving it in
+    # produces a module that will not parse — which the compile guard below catches, and which is
+    # a refusal rather than a feature.
+    tree = ast.parse(text)
+    first = next(
+        (
+            n
+            for n in tree.body
+            if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
+            and not (isinstance(n, ast.ImportFrom) and n.module == "__future__")
+        ),
+        None,
+    )
+    if first is not None:
+        text = "".join(text.splitlines(keepends=True)[first.lineno - 1 :])
+    # `from ..platform.x` -> `from in_lockstep.platform.x`, `from ._shared` -> the package path.
+    text = re.sub(r"^from \.\.", "from in_lockstep.", text, flags=re.M)
+    text = re.sub(r"^from \._shared import", "from in_lockstep.workflows._shared import", text, flags=re.M)
+    # The registrations become decorators, so the ejected copy owns the ids outright.
+    # One line per import. `_without_duplicate_imports` matches a single-line `from X import a, b`
+    # and cannot see a parenthesised one, so a multi-line import survives the merge and lands a
+    # second time when both verbs are ejected — F811 in the module `init` just wrote.
+    text = re.sub(
+        r"^from ([\w.]+) import \(\n((?:\s+\w+,\n)+)\)$",
+        lambda m: (
+            f"from {m.group(1)} import "
+            + ", ".join(n.strip().rstrip(",") for n in m.group(2).splitlines())
+            + "\n"
+        ),
+        text,
+        flags=re.M,
+    )
+    ids = dict(re.findall(r'workflow\(id="([^"]+)"\)\((\w+)\)', text))
+    text = re.sub(r"\n\ndef register\(\) -> None:.*", "\n", text, flags=re.S)
+    for wid, fn in ids.items():
+        text = re.sub(rf"^(async def {fn}\()", f'@workflow(id="{wid}")\n\\1', text, flags=re.M)
+    return "\n\n" + text
+
+
+def _scaffold_implement(module: Path, *, host: str = "", eject: bool = False) -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
     The headline feature used to require reverse-engineering this repository's own trampoline.
@@ -5130,8 +5374,12 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         click.echo("Add the implement workflows by hand; the block to paste is in the docs, or run")
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")
     else:
-        merged = text + _without_duplicate_definitions(
-            text, _without_duplicate_imports(text, _SCAFFOLD_IMPLEMENT_MODULE)
+        tail = _ejected_source("implement") if eject else REGISTER_TAIL.format(family="implement")
+        block = _wrap_long_imports(
+            _SCAFFOLD_IMPLEMENT_CONFIG + _without_duplicate_imports(_SCAFFOLD_IMPLEMENT_CONFIG, tail)
+        )
+        merged = _wrap_long_imports(
+            text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         )
         try:
             # Never leave a module that will not import: a bad append breaks every later command,
@@ -5153,7 +5401,7 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
 
-def _scaffold_fix(module: Path, *, host: str = "") -> None:
+def _scaffold_fix(module: Path, *, host: str = "", eject: bool = False) -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
     `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
@@ -5176,8 +5424,12 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
     else:
-        merged = text + _without_duplicate_definitions(
-            text, _without_duplicate_imports(text, _SCAFFOLD_FIX_MODULE)
+        tail = _ejected_source("fix") if eject else REGISTER_TAIL.format(family="fix")
+        block = _wrap_long_imports(
+            _SCAFFOLD_FIX_CONFIG + _without_duplicate_imports(_SCAFFOLD_FIX_CONFIG, tail)
+        )
+        merged = _wrap_long_imports(
+            text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         )
         try:
             compile(merged, str(module), "exec")
@@ -5786,258 +6038,6 @@ jobs:
 """
 
 
-_SCAFFOLD_FIX_MODULE = '''
-
-# --- appended by `in-lockstep init --fix` --------------------------------------------------------
-# The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
-# comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
-# reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
-from typing import Any
-
-from in_lockstep import RunContext, Workshop
-from in_lockstep.adapters.ai import DiagnoseThenFix, Fix
-from in_lockstep.adapters.pytest_adapter import PytestTest, Test
-from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.core.outcome import Outcome, Status
-from in_lockstep.core.workflow import workflow
-from in_lockstep.middleware.approval import ApprovalGate
-from in_lockstep.platform.artifacts import read_changeset, write_changeset
-from in_lockstep.platform.conversation import ticket_for, with_review
-from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
-from in_lockstep.platform.propose import escalate, open_reviewable
-from in_lockstep.platform.scm import Scm
-from in_lockstep.platform.tickets import TicketSource
-
-# Each binding is guarded, so this block works on its own and also composes with the implement
-# scaffold without binding TicketSource, Scm, Test or the approval gate a second time. `hosted_*`
-# bind the detected host's adapters — GitHub or GitLab — so the block runs unedited on either.
-if not lockstep.container.has(TicketSource):
-    lockstep.bind(TicketSource, hosted_tickets())
-if not lockstep.container.has(Scm):
-    lockstep.bind(Scm, hosted_scm())
-if not lockstep.container.has(Test):
-    lockstep.bind(Test, PytestTest())
-if not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
-    lockstep.middleware += [ApprovalGate()]
-
-lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
-
-# Fix writes and executes, like implement: a reproducer and a fix, each run in a throwaway worktree
-# inside a no-network container, so a model's command reaches neither the network nor the real
-# .git/.lockstep past ChangeGuard.
-# The strategy IS the adapter: `ls` prints `Fix -> DiagnoseThenFix`. The model comes from the
-# `models.route("fix", ...)` line above; the invoker is assembled per run.
-if lockstep.workshop.commands is None:
-    lockstep.workshop = Workshop(
-        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
-    )
-lockstep.use(DiagnoseThenFix)
-
-#: Where the unprivileged half leaves the fix for the privileged half to open.
-FIX_CHANGESET = "fix-changeset"
-
-
-@workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[Any]:
-    """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
-
-    `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
-    dispatcher fills them. Writes nothing to the tree. A fix that did not go green stages nothing —
-    a broken fix must not travel — and the propose half says so on the ticket rather than opening
-    a pull request.
-
-    `with_review` is why a second `/fix` is not a repeat of the first. It gathers what people said
-    on the open pull request this workflow opened last time — the thread, the verdicts, the notes
-    pinned to a line — and hands them over on the ticket, untrusted like the ticket body. Replying
-    to a reviewer is then just running the verb again, which is the point: the argument a developer
-    would have had with an AI on a laptop happens on the pull request instead, where the rest of
-    the team can read it afterwards.
-    """
-    key, where = await ticket_for(ticket, scm)
-    print(where)
-    source, note = await with_review(await tickets.get(key), scm)
-    print(note)
-    outcome = await ctx.do(Fix(ticket=source))
-
-    report = outcome.value
-    if outcome.status is Status.SUCCEEDED and report is not None and not report.empty:
-        written = write_changeset(FIX_CHANGESET, report.changeset)
-        print(f"staged    reproducer + fix -> {written}")
-    return outcome
-
-
-@workflow(id="fix/propose")
-async def fix_propose(
-    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
-) -> Outcome[Any]:
-    """Open the verified fix from the staged artifact, and say on the ticket what happened.
-
-    Runs in the job that holds a write token and no provider credential. What it reads came from
-    another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the set before
-    it writes a byte, and refuses any branch outside the run-scoped prefix.
-    """
-    # The same resolution the unprivileged half did, run again rather than threaded between jobs:
-    # both halves are handed the number the comment was left on, and a fact both can derive is not
-    # one to carry across an artifact boundary where it would arrive untrusted.
-    ticket, where = await ticket_for(ticket, scm)
-    print(where)
-    changeset = read_changeset(artifact)
-
-    if not changeset.changes:
-        # A fix stages a change only when its reproducer went red-then-green, so an empty artifact
-        # means the automated fix failed. Open the next `ai-generated` issue for an agent to retry,
-        # bounded by `lockstep.max_attempts`, rather than leaving the bug with nothing said.
-        failure = "The automated fix did not reproduce the bug and turn it green."
-        source = await tickets.get(ticket)
-        opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
-        reason = "fix.not_fixed" if opened is not None else "fix.attempts_exhausted"
-        if opened is not None:
-            print(f"escalated {opened.key}")
-        return Outcome(status=Status.FAILED, reason=reason, value=opened)
-
-    # Ready for review, not draft: a change only reaches here when from-ticket confirmed the fix
-    # green (a reproducer red before, passing after), so it is asking for the human sign-off.
-    # Fetched before the change is opened, because the title comes from it now.
-    issue = await tickets.get(ticket)
-    change = await open_reviewable(
-        scm,
-        changeset,
-        ready=True,
-        # The ticket's own title, not the model's `summary`. A summary is free prose: run
-        # 33578430422 put a thousand characters of the model's running commentary here, and the
-        # host refused the pull request after the work was done and green. The issue title is a
-        # person's one-line statement of the same thing, which is what a title wants.
-        title=issue.title or changeset.summary or f"Fix {ticket}",
-        body=(
-            "A reproducer for this bug was written, confirmed red, and this change makes it pass. "
-            "The ticket text is untrusted input to a model that held write tools, so review this as "
-            "you would a change from a stranger who had read your repository."
-        ),
-        ticket=ticket,
-        workflow="fix",
-        run_id=ctx.run_id,
-    )
-    await tickets.comment(
-        issue,
-        f"`/fix` opened {change.url or change.branch}, ready for review. Nobody has read it yet.",
-    )
-    print(f"change    {change.url or change.branch}")
-    return Outcome(status=Status.SUCCEEDED, value=change)
-
-@workflow(id="fix/report")
-async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
-    """Say on the ticket that the run failed, when the half that would have said so never ran.
-
-    `fix/propose` answers on every outcome it sees — a change opened, no change staged, tests
-    failed. It only sees the outcomes that reach it, and a strategy refusing in its first phase
-    never gets there: the work job exits non-zero, `needs:` skips propose, and the person who typed
-    `/fix` is left watching a thread that never replies.
-
-    Which is the one failure a chat-ops trigger cannot afford. The alternative to an answer is not
-    "no answer" — it is somebody assuming it worked, because the last thing the tool said was that
-    it had started.
-
-    Reads the record the run already wrote rather than being handed a reason by the CI file: the
-    reason, the cost and the findings are all in the ledger, and a workflow that took them as
-    arguments would be a workflow whose YAML had to know what happened.
-    """
-    key, where = await ticket_for(ticket, scm)
-    print(where)
-    source = await tickets.get(key)
-    record = _last_unsuccessful(key, "fix/")
-
-    if record is None:
-        # "ended", not "failed". With no record there is nothing to say what happened -- the run
-        # may have been stopped by the killswitch or an approval gate before it wrote anything,
-        # and calling that a failure is an alarming claim computed from no evidence, which is the
-        # same defect as a reassuring one. The next sentence already says where to look.
-        body = (
-            "`/fix`: no run for this ticket reached the ledger. Nothing was staged and "
-            "nothing was opened; the job log is the only account of it."
-        )
-    else:
-        reason = record.get("reason")
-        cost = record.get("cost_usd")
-        spent = f" ${float(cost):.2f} spent." if isinstance(cost, (int, float)) else ""
-        findings = [
-            f"- `{f.get('id')}`: {f.get('message')}"
-            for f in (record.get("findings") or {}).get("items", [])[:5]
-            if isinstance(f, dict)
-        ]
-        detail = ("\\n\\n" + "\\n".join(findings)) if findings else ""
-        # Three verbs, because `Status` keeps three things apart on purpose and this sentence is
-        # posted publicly on the ticket, where a wrong one is a false claim in the place a person
-        # reads it. `blocked` is a control working -- a budget ceiling or an approval gate --
-        # and calling it a failure teaches everyone the ceiling is a fault rather than a decision
-        # somebody made. `errored` is infrastructure breaking, which is the class `Retry` targets
-        # and not something the change under review did wrong.
-        #
-        # Written as a map rather than a two-way branch so the statuses this does NOT special-case
-        # are visible instead of implied: `Status` has six members and a boolean covers two.
-        #
-        # And the reason is no longer defaulted to the status. `Outcome(status=Status.BLOCKED)`
-        # with no reason is legal, and the old fallback rendered it "stopped by `blocked`" -- a
-        # sentence that says nothing twice.
-        told = {
-            "blocked": ("was stopped by", "was stopped by a control"),
-            "errored": ("could not run —", "could not run"),
-        }
-        with_reason, without = told.get(str(record.get("status") or ""), ("failed with", "failed"))
-        what = f"{with_reason} `{reason}`" if reason else without
-        body = (
-            f"`/fix` did not produce a change — the run {what}.{spent} "
-            f"Nothing was staged and no pull request was opened.{detail}"
-        )
-
-    await tickets.comment(source, body)
-    print(f"commented {key}")
-    # SUCCEEDED: this job's job was to say what happened, and it did. Failing here would put a
-    # second red mark on a run whose failure is already recorded, and hide whether the answer
-    # actually reached the ticket.
-    return Outcome(status=Status.SUCCEEDED, reason=None)
-
-
-def _last_unsuccessful(ticket: str, family: str) -> dict[str, Any] | None:
-    """The newest recorded run of THIS family, for this ticket, that did not succeed.
-
-    Matched on the `ticket` the record carries rather than on the run id, because a run id is a
-    string a person would have to parse and the field exists for exactly this.
-
-    `family` is the prefix of the record's `workflow` — "implement/" or "fix/". Without it this
-    matched on ticket and status alone, so a `/fix` report could find an `implement/` run and
-    quote its reason as though it were the fix attempt. Both verbs answer on the same ticket, so
-    the two are routinely present together.
-
-    Passed as an argument rather than defaulted per copy, and that is load-bearing rather than
-    stylistic: `init --implement --fix` appends both blocks, and the de-duplicator drops the
-    second copy of a shared definition only when it is byte-identical to the first. A per-copy
-    default would make them differ, so both would be emitted and the module would carry a
-    redefinition again.
-
-    A blocked run is included, deliberately. It did not succeed and a person waiting on the ticket
-    needs to know it stopped — what must not happen is calling it a failure, which is the caller's
-    job to get right.
-    """
-    from in_lockstep.platform.ledger import store_for
-
-    store = store_for(lockstep.container)
-    reader = getattr(store, "records", None)
-    if reader is None:
-        return None
-    wanted = {ticket, ticket.lstrip("#"), "#" + ticket.lstrip("#")}
-    mine = [
-        r
-        for r in reader()
-        if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
-        and r.get("status") != "succeeded"
-        and str(r.get("workflow") or r.get("kind") or "").startswith(family)
-    ]
-    mine.sort(key=lambda r: str(r.get("ts", "")))
-    return mine[-1] if mine else None
-
-'''
-
-
 _SCAFFOLD_FIX_TRAMPOLINE = """\
 # The /fix chat-ops flow: gate the asker, reproduce-and-fix under the provider key with no write
 # token, then open the pull request from the job that holds the token and no key. Same three-job
@@ -6323,319 +6323,6 @@ jobs:
         if: always()
         continue-on-error: true
 """
-
-_SCAFFOLD_IMPLEMENT_MODULE = '''
-
-# -- /implement: the chat-ops implementing verb -------------------------------------------------
-#
-# Two workflows rather than one, because they must not be one process. `implement/from-ticket`
-# runs unprivileged with the provider key and stages a change into an artifact;
-# `implement/propose` runs privileged with a write token and no provider key. The trampoline in
-# .github/workflows/implement.yml holds the trigger, the job split and the credentials — and
-# nothing else. Run the first half locally with:
-#
-#     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
-
-from typing import Any
-
-from in_lockstep import RunContext, Workshop
-from in_lockstep.adapters.ai import Implement, Oneshot
-from in_lockstep.adapters.pytest_adapter import PytestTest, Test
-from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.adapters.worktree import verdict_over_staged
-from in_lockstep.core.outcome import Outcome, Status
-from in_lockstep.core.workflow import workflow
-from in_lockstep.middleware.approval import ApprovalGate
-from in_lockstep.platform.artifacts import read_changeset, read_verdict, write_changeset
-from in_lockstep.platform.conversation import ticket_for, with_review
-from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
-from in_lockstep.platform.propose import escalate, open_reviewable
-from in_lockstep.platform.report import implement_body
-from in_lockstep.platform.scm import Scm
-from in_lockstep.platform.tickets import TicketSource
-
-# Bound here rather than constructed inside the workflows, so `in-lockstep ls` can print what
-# will actually run and a test can substitute either one. `hosted_*` bind the detected host's
-# adapters — GitHub or GitLab — so this block runs unedited on either.
-lockstep.bind(TicketSource, hosted_tickets())
-lockstep.bind(Scm, hosted_scm())
-
-lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
-
-# An adapter that both spends money and writes files needs an approval path, or the run refuses
-# to start. The grant itself arrives on the run context — `--approve` from a person at a
-# terminal, `--approved-by` from a verified trigger — which is what lets the SAME command serve
-# both without a rewrite.
-lockstep.middleware += [ApprovalGate()]
-
-# `run_script` executes inside a container with no network and no credentials in its
-# environment; the absence of a container runtime is a refusal, never a fall back to this host.
-# The image is named because `require_container=True` with no image refuses every command — it
-# has nothing to run them in — so leaving it blank would make run_script permanently inert.
-#
-# Wrapped in `WorktreeRunner`, so a model's command runs in a throwaway worktree of HEAD rather
-# than the live tree: the container still bind-mounts read-write, but what it mounts is a copy that
-# is discarded, so a command cannot write `.git/hooks` or `.lockstep/lockstep.py` on the real
-# repository past ChangeGuard. It does mean git-dependent commands see a linked worktree's gitlink
-# (see docs/extending.md); pytest, ruff and mypy do not care.
-# The strategy IS the adapter: `ls` prints `Implement -> Oneshot`, and that line is the whole
-# answer to "how does implementing happen here". Swap `Oneshot` for `TDD` to require
-# red-then-green. The model comes from the `models.route("implement", ...)` line above; the
-# invoker is assembled per run, so no factory is threaded here.
-lockstep.workshop = Workshop(
-    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
-)
-lockstep.use(Oneshot)
-
-# Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
-# its verdict rides the artifact into the PR body, so a reviewer sees whether the change passed
-# before opening it. The default Sandbox runs the suite in a subprocess with credentials dropped,
-# enough that repository (and staged) test code cannot read the provider key out of this job. It
-# does not cut network the way run_script's container does; a host that can enforce egress should
-# pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
-# for run_script.
-#
-# Guarded, like every binding the /fix block appends. The section above this one binds whatever
-# detection found — `CommandTest(["npm", "test"])` on a Node repository — and an unguarded bind
-# here replaced it without a word, so `ls` printed `Test -> PytestTest` and the implement flow ran
-# pytest against a repository that has none. Pytest is the fallback for the case detection placed
-# nothing, so the flow still has a runner; a repository with a runner keeps the one it has.
-if not lockstep.container.has(Test):
-    lockstep.bind(Test, PytestTest())
-
-# EGRESS, and read this before shipping the implement verb. The review scaffold above already
-# bound `UnsandboxedEgress`, and that binding is global — so this implementing verb inherits it,
-# and a successful injection in the untrusted issue text has somewhere to send what it read. That
-# was a low-risk call for review (an empty tool set, nothing to exfiltrate through); it is a
-# larger one here, because implement holds write and execute tools.
-#
-# What still bounds an implementing session under that binding: writes are STAGED into a
-# ChangeSet and applied by nobody until a person runs `apply`, ChangeGuard stands at every write
-# path with `.lockstep/lockstep.py` first in its deny list, and `run_script` runs only inside a
-# no-network container (the Sandbox above) and refuses rather than falling back to this host. If
-# your host CAN enforce egress (a self-hosted runner, a constrained container), delete the
-# `UnsandboxedEgress` binding in the review section and set `IN_LOCKSTEP_EGRESS=enforced` there
-# instead — the probe has to pass, which on a hosted runner it will not.
-
-#: Where the unprivileged half leaves its answer for the privileged half to pick up.
-CHANGESET = "changeset"
-
-
-
-@workflow(id="implement/from-ticket")
-async def implement_from_ticket(
-    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm
-) -> Outcome[Any]:
-    """Read the ticket and the review of the last attempt, implement it, test it, stage it.
-
-    `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
-    dispatcher fills them. Writes nothing to the tree. The change set — and the verdict of running
-    the suite against it — travel to the job that holds a write token, and cross the guard again
-    when they get there.
-
-    `with_review` is what makes a second `/implement` a reply rather than a retry: it gathers what
-    people said on the open pull request this workflow opened last time and hands it over on the
-    ticket, untrusted like the ticket body. A reviewer objecting on line 29 becomes context the
-    next attempt can act on, instead of a sentence nothing ever read.
-    """
-    key, where = await ticket_for(ticket, scm)
-    print(where)
-    source, note = await with_review(await tickets.get(key), scm)
-    print(note)
-    outcome = await ctx.do(Implement(ticket=source))
-
-    # `SUCCEEDED` and not merely "there are changes", which is what this used to check — and the
-    # difference is a real run that cost $21 and would have opened a pull request containing a
-    # test that tested nothing. A test-first strategy that refuses in its red phase still returns
-    # the test it staged, so `changeset.changes` is truthy on precisely the outcome that must not
-    # travel. The fixing verb's own half has always guarded on the status; this now matches it.
-    report = outcome.value
-    if outcome.status is Status.SUCCEEDED and report is not None and report.changeset.changes:
-        # Run the suite against the staged change (in a throwaway worktree) before it travels, so
-        # the reviewer sees a verdict on the PR rather than opening an untested change.
-        verdict = await verdict_over_staged(ctx, lockstep.repo.root, report.changeset)
-        written = write_changeset(CHANGESET, report.changeset, verdict=verdict)
-        print(f"staged    {len(report.changeset.changes)} change(s) -> {written}")
-    return outcome
-
-
-@workflow(id="implement/propose")
-async def implement_propose(
-    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
-) -> Outcome[Any]:
-    """Open a change from a staged artifact, and say on the ticket what happened.
-
-    Runs in the job that holds a write token and no provider credential. Everything it reads
-    came from another job, so none of it is trusted: `Scm.open_change` runs ChangeGuard over the
-    set before it writes a byte, and refuses any branch outside the run-scoped prefix.
-    """
-    # The same resolution the unprivileged half did, run again rather than threaded between jobs:
-    # both halves are handed the number the comment was left on, and a fact both can derive is not
-    # one to carry across an artifact boundary where it would arrive untrusted.
-    ticket, where = await ticket_for(ticket, scm)
-    print(where)
-    changeset = read_changeset(artifact)
-    verdict = read_verdict(artifact)
-
-    if not changeset.changes:
-        # Still a comment. "It found nothing to change" is an answer, and a trigger that answers
-        # only on success leaves somebody watching a thread that never replies.
-        await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
-        return Outcome(status=Status.FAILED, reason="implement.no_changes")
-
-    # Tests that ran and failed do not open a pull request: they open an `ai-generated` bug issue an
-    # agent may pick up, bounded by `lockstep.max_attempts`. An unverified change (no verdict) is
-    # not a failure — it opens a draft for a human, since its tests never ran. `verdict.red` rather
-    # than `not verdict.green` for that same reason: an errored suite learned nothing about the
-    # change, and escalating on it files a bug against code that was never tested.
-    if verdict is not None and verdict.red:
-        failure = f"Tests failed: {verdict.failed} of {verdict.total} against the staged change."
-        source = await tickets.get(ticket)
-        opened = await escalate(tickets, source, failure, max_attempts=lockstep.max_attempts)
-        reason = "implement.tests_failed" if opened is not None else "implement.attempts_exhausted"
-        if opened is not None:
-            print(f"escalated {opened.key}")
-        return Outcome(status=Status.FAILED, reason=reason, value=opened)
-
-    # Draft by default; ready only when the change passed its tests — a green change awaiting a
-    # human is what is asking for the sign-off.
-    ready = verdict is not None and verdict.green
-    # Fetched before the change is opened, because the title comes from it now.
-    issue = await tickets.get(ticket)
-    change = await open_reviewable(
-        scm,
-        changeset,
-        ready=ready,
-        # The ticket's own title, not the model's `summary`. A summary is free prose: run
-        # 33578430422 put a thousand characters of the model's running commentary here, and the
-        # host refused the pull request after the work was done and green. The issue title is a
-        # person's one-line statement of the same thing, which is what a title wants.
-        title=issue.title or changeset.summary or f"Implement {ticket}",
-        body=implement_body(changeset, verdict),
-        ticket=ticket,
-        workflow="implement",
-        run_id=ctx.run_id,
-    )
-    state = "ready for review" if ready else "a draft — its tests have not passed"
-    await tickets.comment(
-        issue,
-        f"`/implement` opened {change.url or change.branch} as {state}. Nobody has read it yet.",
-    )
-    print(f"change    {change.url or change.branch}")
-    return Outcome(status=Status.SUCCEEDED, value=change)
-
-
-@workflow(id="implement/report")
-async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
-    """Say on the ticket that the run failed, when the half that would have said so never ran.
-
-    `implement/propose` answers on every outcome it sees — a change opened, no change staged, tests
-    failed. It only sees the outcomes that reach it, and a strategy refusing in its first phase
-    never gets there: the work job exits non-zero, `needs:` skips propose, and the person who typed
-    `/implement` is left watching a thread that never replies.
-
-    Which is the one failure a chat-ops trigger cannot afford. The alternative to an answer is not
-    "no answer" — it is somebody assuming it worked, because the last thing the tool said was that
-    it had started.
-
-    Reads the record the run already wrote rather than being handed a reason by the CI file: the
-    reason, the cost and the findings are all in the ledger, and a workflow that took them as
-    arguments would be a workflow whose YAML had to know what happened.
-    """
-    key, where = await ticket_for(ticket, scm)
-    print(where)
-    source = await tickets.get(key)
-    record = _last_unsuccessful(key, "implement/")
-
-    if record is None:
-        # "ended", not "failed". With no record there is nothing to say what happened -- the run
-        # may have been stopped by the killswitch or an approval gate before it wrote anything,
-        # and calling that a failure is an alarming claim computed from no evidence, which is the
-        # same defect as a reassuring one. The next sentence already says where to look.
-        body = (
-            "`/implement`: no run for this ticket reached the ledger. Nothing was staged and "
-            "nothing was opened; the job log is the only account of it."
-        )
-    else:
-        reason = record.get("reason")
-        cost = record.get("cost_usd")
-        spent = f" ${float(cost):.2f} spent." if isinstance(cost, (int, float)) else ""
-        findings = [
-            f"- `{f.get('id')}`: {f.get('message')}"
-            for f in (record.get("findings") or {}).get("items", [])[:5]
-            if isinstance(f, dict)
-        ]
-        detail = ("\\n\\n" + "\\n".join(findings)) if findings else ""
-        # Three verbs, because `Status` keeps three things apart on purpose and this sentence is
-        # posted publicly on the ticket, where a wrong one is a false claim in the place a person
-        # reads it. `blocked` is a control working -- a budget ceiling or an approval gate --
-        # and calling it a failure teaches everyone the ceiling is a fault rather than a decision
-        # somebody made. `errored` is infrastructure breaking, which is the class `Retry` targets
-        # and not something the change under review did wrong.
-        #
-        # Written as a map rather than a two-way branch so the statuses this does NOT special-case
-        # are visible instead of implied: `Status` has six members and a boolean covers two.
-        #
-        # And the reason is no longer defaulted to the status. `Outcome(status=Status.BLOCKED)`
-        # with no reason is legal, and the old fallback rendered it "stopped by `blocked`" -- a
-        # sentence that says nothing twice.
-        told = {
-            "blocked": ("was stopped by", "was stopped by a control"),
-            "errored": ("could not run —", "could not run"),
-        }
-        with_reason, without = told.get(str(record.get("status") or ""), ("failed with", "failed"))
-        what = f"{with_reason} `{reason}`" if reason else without
-        body = (
-            f"`/implement` did not produce a change — the run {what}.{spent} "
-            f"Nothing was staged and no pull request was opened.{detail}"
-        )
-
-    await tickets.comment(source, body)
-    print(f"commented {key}")
-    # SUCCEEDED: this job's job was to say what happened, and it did. Failing here would put a
-    # second red mark on a run whose failure is already recorded, and hide whether the answer
-    # actually reached the ticket.
-    return Outcome(status=Status.SUCCEEDED, reason=None)
-
-
-def _last_unsuccessful(ticket: str, family: str) -> dict[str, Any] | None:
-    """The newest recorded run of THIS family, for this ticket, that did not succeed.
-
-    Matched on the `ticket` the record carries rather than on the run id, because a run id is a
-    string a person would have to parse and the field exists for exactly this.
-
-    `family` is the prefix of the record's `workflow` — "implement/" or "fix/". Without it this
-    matched on ticket and status alone, so a `/fix` report could find an `implement/` run and
-    quote its reason as though it were the fix attempt. Both verbs answer on the same ticket, so
-    the two are routinely present together.
-
-    Passed as an argument rather than defaulted per copy, and that is load-bearing rather than
-    stylistic: `init --implement --fix` appends both blocks, and the de-duplicator drops the
-    second copy of a shared definition only when it is byte-identical to the first. A per-copy
-    default would make them differ, so both would be emitted and the module would carry a
-    redefinition again.
-
-    A blocked run is included, deliberately. It did not succeed and a person waiting on the ticket
-    needs to know it stopped — what must not happen is calling it a failure, which is the caller's
-    job to get right.
-    """
-    from in_lockstep.platform.ledger import store_for
-
-    store = store_for(lockstep.container)
-    reader = getattr(store, "records", None)
-    if reader is None:
-        return None
-    wanted = {ticket, ticket.lstrip("#"), "#" + ticket.lstrip("#")}
-    mine = [
-        r
-        for r in reader()
-        if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
-        and r.get("status") != "succeeded"
-        and str(r.get("workflow") or r.get("kind") or "").startswith(family)
-    ]
-    mine.sort(key=lambda r: str(r.get("ts", "")))
-    return mine[-1] if mine else None
-'''
 
 
 if __name__ == "__main__":  # pragma: no cover

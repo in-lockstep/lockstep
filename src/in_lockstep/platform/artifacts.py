@@ -24,6 +24,14 @@ from ..privileged.redact import Redact
 
 FILENAME = "changeset.json"
 
+# The artifact DIRECTORY names. Scaffolded workflows declared these themselves and the trampoline
+# YAML names them again in `${RUNNER_TEMP}/implement/changeset`, so the two agreed by coincidence
+# and a rename in one place was a silent break in the other. Defined once, here, beside the reader
+# and writer that use them.
+CHANGESET = "changeset"
+ATTEMPT = "attempt"
+FIX_CHANGESET = "fix-changeset"
+
 #: The verdict fields carried in the artifact. Counts and a status — no model prose, no file
 #: contents — so unlike `summary` they need no redaction.
 _VERDICT_FIELDS = ("status", "decided", "total", "passed", "failed", "skipped")
