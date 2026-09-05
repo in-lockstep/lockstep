@@ -130,7 +130,11 @@ def test_open_change_branches_from_a_remote_only_base(tmp_path: Path) -> None:
     subprocess.run(["git", "config", "user.name", "t"], cwd=clone, capture_output=True, check=True)
     # A clone has origin/release-1.0 but no local release-1.0 branch — the CI state.
     scm = GitLocal(clone)
-    assert scm.start_point("release-1.0") == "origin/release-1.0"
+    # The full path, not the `origin/release-1.0` shorthand this asserted before #229. The value
+    # returned is now exactly the candidate that was verified, rather than a second spelling of
+    # it — probing one ref and handing back another is its own class of bug, and every consumer
+    # passes this straight to git.
+    assert scm.start_point("release-1.0") == "refs/remotes/origin/release-1.0"
     cs = ChangeSet(changes=(FileChange(path="fix.py", contents="y = 2\n"),))
     cr = asyncio.run(
         scm.open_change(cs, title="backport", workflow="backport", run_id="r9", base="release-1.0")
@@ -997,3 +1001,29 @@ def test_a_listing_that_may_have_been_truncated_is_refused_rather_than_undercoun
     ]
     with pytest.raises(RuntimeError, match="truncated"):
         scm.open_changes_by_workflow("improve", limit=4)
+
+
+def test_start_point_resolves_a_base_whose_name_contains_a_slash(tmp_path: Path) -> None:
+    """The backport half of #229: `release/1.0` is the ordinary GitFlow spelling.
+
+    `start_point` returned any ref containing a slash untouched, so in the detached CI checkout
+    the test above describes, `git checkout -b b release/1.0` exited 128 — while
+    `release-1.0`, the spelling that function's own docstring happened to pick, worked. The two
+    differed by a punctuation mark and nothing said so.
+    """
+    (tmp_path / "origin").mkdir()
+    origin = _repo(tmp_path / "origin")
+    subprocess.run(["git", "branch", "release/1.0"], cwd=origin, capture_output=True, check=True)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], capture_output=True, check=True)
+    for branch in ("main", "master"):
+        subprocess.run(["git", "branch", "-D", branch], cwd=clone, capture_output=True)
+
+    scm = GitLocal(clone)
+    resolved = scm.start_point("release/1.0")
+    assert resolved == "refs/remotes/origin/release/1.0"
+    # The property, not just the string: what comes back is something git can branch from.
+    made = subprocess.run(
+        ["git", "checkout", "-b", "probe", resolved], cwd=clone, capture_output=True, text=True
+    )
+    assert made.returncode == 0, made.stderr
