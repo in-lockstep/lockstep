@@ -13,6 +13,8 @@ first entry in the protected-path deny list, and why it is loaded from a trusted
 from whichever branch is under review.
 """
 
+from typing import Any
+
 from in_lockstep import Lockstep, RunContext, Workshop
 from in_lockstep.adapters import PytestTest, RuffValidate
 from in_lockstep.adapters.ai import TDD, DiagnoseThenFix, Fix, Implement
@@ -365,7 +367,7 @@ ATTEMPT = "attempt"
 @workflow(id="implement/from-ticket")
 async def implement_from_ticket(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, actor: str = ""
-) -> Outcome:
+) -> Outcome[Any]:
     """Read the ticket and the review of the last attempt, implement it, leave it staged.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
@@ -427,7 +429,7 @@ async def implement_from_ticket(
 @workflow(id="implement/propose")
 async def implement_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
-) -> Outcome:
+) -> Outcome[Any]:
     """Open a change from a staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. Everything it reads came
@@ -512,7 +514,7 @@ FIX_CHANGESET = "fix-changeset"
 
 
 @workflow(id="implement/report")
-async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
     """Say on the ticket that the run failed, when the half that would have said so never ran.
 
     `implement/propose` answers on every outcome it sees — a change opened, no change staged, tests
@@ -561,7 +563,7 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     return Outcome(status=Status.SUCCEEDED, reason=None)
 
 
-def _last_unsuccessful(ticket: str) -> dict | None:
+def _last_unsuccessful(ticket: str) -> dict[str, Any] | None:
     """The newest recorded run for this ticket that did not succeed.
 
     Matched on the `ticket` the record carries rather than on the run id, because a run id is a
@@ -585,7 +587,7 @@ def _last_unsuccessful(ticket: str) -> dict | None:
 
 
 @workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[Any]:
     """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
 
     Writes nothing to the tree. A fix that did not go green stages nothing — a broken fix must not
@@ -625,7 +627,7 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
 @workflow(id="fix/propose")
 async def fix_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
-) -> Outcome:
+) -> Outcome[Any]:
     """Open the verified fix from the staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. What it reads came from
@@ -699,7 +701,7 @@ async def fix_propose(
 
 
 @workflow(id="fix/report")
-async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
     """Say on the ticket that the run failed, when the half that would have said so never ran.
 
     `fix/propose` answers on every outcome it sees — a change opened, no change staged, tests
@@ -746,26 +748,3 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
     # second red mark on a run whose failure is already recorded, and hide whether the answer
     # actually reached the ticket.
     return Outcome(status=Status.SUCCEEDED, reason=None)
-
-
-def _last_unsuccessful(ticket: str) -> dict | None:
-    """The newest recorded run for this ticket that did not succeed.
-
-    Matched on the `ticket` the record carries rather than on the run id, because a run id is a
-    string a person would have to parse and the field exists for exactly this.
-    """
-    from in_lockstep.platform.ledger import store_for
-
-    store = store_for(lockstep.container)
-    reader = getattr(store, "records", None)
-    if reader is None:
-        return None
-    wanted = {ticket, ticket.lstrip("#"), "#" + ticket.lstrip("#")}
-    mine = [
-        r
-        for r in reader()
-        if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
-        and r.get("status") != "succeeded"
-    ]
-    mine.sort(key=lambda r: str(r.get("ts", "")))
-    return mine[-1] if mine else None
