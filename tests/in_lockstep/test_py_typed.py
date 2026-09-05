@@ -183,12 +183,36 @@ def test_the_shipped_process_can_be_read_without_being_copied(tmp_path):
     for fn in ("implement_from_ticket", "implement_propose", "implement_report"):
         assert f"async def {fn}" in whole.output, "a family prints the whole module"
 
-    mine = CliRunner().invoke(main, ["show-workflow", "--registered"])
-    assert mine.exit_code == 0
-    # What THIS repository has in force, which is the different question. It loads the lifecycle
-    # module to answer it; without that it reported `selfcheck` and nothing else.
-    assert "implement/propose  (in_lockstep.workflows.implement" in mine.output
-    assert "selfcheck" in mine.output
+
+def test_registered_reports_the_repository_it_is_standing_in(tmp_path):
+    """`--registered` answers what THIS repository has in force, so it is asserted inside a
+    repository this test made rather than whichever one the suite happens to be run from.
+
+    The first version read the ambient working directory: green on a laptop sitting in this
+    project, exit 1 in CI. A test whose subject is "the repository you are in" has to bring one.
+    """
+    from in_lockstep.core.workflow import restore, snapshot
+
+    runner = CliRunner()
+    state = snapshot()
+    try:
+        with runner.isolated_filesystem(temp_dir=tmp_path) as here:
+            root = Path(here)
+            (root / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.1.0"\n')
+            (root / "uv.lock").touch()
+            (root / "tests").mkdir()
+            subprocess.run(["git", "init", "-q", "."], cwd=root, check=True)
+            assert runner.invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
+
+            mine = runner.invoke(main, ["show-workflow", "--registered"])
+            assert mine.exit_code == 0, mine.output
+            # It loads the lifecycle module to answer; without that it reported `selfcheck` and
+            # nothing else, which is the opposite of what the flag says.
+            assert "implement/propose  (in_lockstep.workflows.implement" in mine.output
+            assert "fix/report  (in_lockstep.workflows.fix" in mine.output
+            assert "selfcheck" in mine.output
+    finally:
+        restore(state)
 
     unknown = CliRunner().invoke(main, ["show-workflow", "nope/x"])
     assert unknown.exit_code != 0
