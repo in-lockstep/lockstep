@@ -25,7 +25,8 @@ day a verb of yours produces a change to write; the file says where.
 
 What a run keeps:
   A recording holds the request verbatim -- the whole composed prompt and the
-  whole diff that was sent. Redaction masks credentials; it does not mask source.
+  whole diff that was sent. Redaction masks the credential shapes it knows;
+  it never masks source.
   Locally, only under --record: .lockstep/cassettes/<verb>.json, now gitignored.
   In CI, the recording is written to the runner's temporary directory and dies
   with the runner. What survives is the cases harvested from it, in the run

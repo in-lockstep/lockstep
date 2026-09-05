@@ -29,8 +29,26 @@ MASK = "***"
 # false positive costs a masked log line, a false negative costs a leaked credential.
 _STRUCTURAL: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]{12,}"),
-    re.compile(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*[\"']?([A-Za-z0-9._\-]{12,})"),
-    re.compile(r"\bsk-[A-Za-z0-9\-_]{16,}"),
+    # `(?<![A-Za-z0-9])` and NOT `\b`. Underscore is a word character, so `\b` cannot match
+    # between `SERVICE_` and `API_KEY` -- which meant the framework masked `api_key=` and passed
+    # `SERVICE_API_KEY=`, `DB_PASSWORD=` and `AWS_SECRET_ACCESS_KEY=` through whole. The prefixed
+    # spelling is the ordinary one in a `.env`, a tfvars, a compose file or a CI config, so the
+    # pattern recognised the rare form and missed the common one. An explicit lookbehind treats
+    # `_` as a boundary and leaves `notapi_key=` alone, because `t` is still alphanumeric.
+    #
+    # `[A-Za-z0-9_]*` after the keyword for the other half of the same problem: in
+    # `AWS_SECRET_ACCESS_KEY=` the keyword is not adjacent to the separator. Letting the
+    # rest of the NAME follow catches it, and is deliberately narrower than adding a bare
+    # `key` alternative -- that would mask `PRIMARY_KEY=` and `IDEMPOTENCY_KEY=`, which are
+    # not credentials, and a redactor that eats ordinary output teaches people to turn it off.
+    re.compile(
+        r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|token|secret|password)[A-Za-z0-9_]*"
+        r"\s*[:=]\s*[\"']?([A-Za-z0-9._\-]{12,})"
+    ),
+    # `sk-` OR `sk_`. Anthropic spells it `sk-ant-...` and Stripe spells its live secret key
+    # `sk_live_...`; the hyphen-only form caught ours and missed theirs. Deliberately not `pk_`:
+    # a publishable key is publishable, and masking it would be noise claiming to be safety.
+    re.compile(r"\bsk[-_][A-Za-z0-9\-_]{16,}"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     # A fine-grained GitHub token has its own prefix; the classic `gh?_` line above misses it.
@@ -48,6 +66,11 @@ _STRUCTURAL: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----([A-Za-z0-9+/=\s]+?)-----END [A-Z0-9 ]*PRIVATE KEY-----"
     ),
+    # A password in URL userinfo: `postgres://user:pass@host/db`, `https://svc:token@git/repo.git`.
+    # A connection string is how a database credential usually travels, and it matched nothing
+    # here -- no keyword precedes it and no vendor prefix marks it. The scheme, the user and the
+    # host are kept, so a log still says which system was being reached.
+    re.compile(r"[a-z][a-z0-9+.\-]*://[^\s:@/]+:([^\s@/]{6,})@"),
 )
 
 _ENV_SUFFIXES = ("PASSWORD", "TOKEN", "SECRET", "API_KEY", "CREDENTIALS", "PRIVATE_KEY")

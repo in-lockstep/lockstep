@@ -299,3 +299,61 @@ def test_pem_key_material_is_masked_but_the_armour_says_a_key_was_there() -> Non
     out = Redact().text(f"config dump:\n{pem}")
     assert body.splitlines()[0] not in out
     assert "BEGIN RSA PRIVATE KEY" in out, "a log should still say what kind of thing was there"
+
+
+# -- the spelling a credential actually arrives in ---------------------------------------------
+#
+# The table is the boundary, written down in both directions. Everything above tests a shape with
+# a vendor prefix; these are the ones with nothing but a NAME to go on, which is how a credential
+# reaches a run that reads a `.env.example`, a tfvars or a compose file. The framework masked
+# `api_key=` and passed `SERVICE_API_KEY=`, so it recognised the rare spelling and missed the
+# ordinary one — while `init`, `evidence/README.md` and `GATE-RECORD-1` all told an adopter
+# "redaction masks credentials".
+
+
+@pytest.mark.parametrize(
+    "spelling,text",
+    [
+        ("prefixed api key", "SERVICE_API_KEY=8f3a9c1d2e4b6a7c9d0e"),
+        ("prefixed password", "DB_PASSWORD=correcthorsebatterystaple"),
+        # The keyword is not adjacent to the separator here: `secret` then `_ACCESS_KEY` then `=`.
+        ("keyword mid-name", "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCY"),
+        # Stripe spells its live secret key with an underscore; the pattern required a hyphen.
+        ("underscore vendor prefix", "STRIPE_SECRET_KEY=sk_live_51H8x9aBcDeFgHiJkLmNoP"),
+        ("connection string", "postgres://admin:S3cr3tLongPassw0rd@db.internal:5432/prod"),
+        ("url userinfo", "https://svc:LongLivedValue123@git.internal/repo.git"),
+    ],
+)
+def test_a_credential_named_rather_than_prefixed_is_masked(spelling: str, text: str) -> None:
+    out = _unseeded().text(text)
+    assert out != text, f"{spelling} passed through whole"
+    assert "***" in out
+
+
+@pytest.mark.parametrize(
+    "why,text",
+    [
+        # A redactor that eats ordinary output teaches people to turn it off, so the widening is
+        # bounded by a keyword rather than by the word `key`.
+        ("a database key is not a credential", "PRIMARY_KEY=user_id_1234567890"),
+        ("an idempotency key is not a credential", "IDEMPOTENCY_KEY=order-2026-09-04-0001"),
+        # `t` is alphanumeric, so the lookbehind does not fire: the widening is to `_`, not to all.
+        ("a word merely ending in the keyword", "notapi_key=8f3a9c1d2e4b6a7c9d0e"),
+        # A URL path is not distinguishable from a non-secret path, and pretending otherwise is
+        # the over-promise this change exists to end. Stated, not silently hoped for.
+        ("a plain url path", "https://example.com/a/normal/path/here"),
+    ],
+)
+def test_what_is_deliberately_not_masked_is_written_down(why: str, text: str) -> None:
+    assert _unseeded().text(text) == text, f"masked {why!r}, which is noise claiming to be safety"
+
+
+def _unseeded():  # noqa: ANN202 - a redactor with an EMPTY registry, so this tests the patterns
+    """No seeded values, so these assert the structural half and nothing else.
+
+    With a seeded registry the literal would be masked whatever the patterns did, and the test
+    would pass while the shape it names went unrecognised — which is how the gap survived.
+    """
+    from in_lockstep.privileged.redact import Redact, SecretRegistry
+
+    return Redact(SecretRegistry())
