@@ -29,7 +29,7 @@ section is detail about how to work here without breaking something.
 Their status is not a matter of opinion. `design/objectives.md` is the ledger over them, joined to
 `design/gates.md` and ratcheted the same way: an objective is `held` only when gates that hold
 carry it, every gap it states is anchored in a named gate, and closing one of those gates fails
-the build until somebody re-reads the row. 1 of 10 are `held` today. Read it before claiming a
+the build until somebody re-reads the row. 2 of 10 are `held` today. Read it before claiming a
 change serves an objective, because the row will tell you what is already carrying it.
 
 **Every change is measured against these.** A feature, a fix, a refactor or a deletion either moves
