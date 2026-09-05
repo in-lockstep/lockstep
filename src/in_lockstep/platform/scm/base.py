@@ -406,7 +406,17 @@ class GitLocal:
         local branches — so `git checkout -b b release-1.0` exits 128 while `origin/release-1.0`
         works. The host branch name a pull request targets is the bare one, so the two spellings
         cannot be the same value: this resolves the git start-point, and `open_change` keeps the
-        bare name for the API. Same bare-then-remote fallback the trusted-config ref uses.
+        bare name for the API. Same full-path-then-as-written probe the trusted-config ref uses,
+        and it carried the same defect: a `"/" in ref` shortcut returned the ref untouched, so
+        `release/1.0` — the ordinary GitFlow spelling, as against the `release-1.0` this docstring
+        happened to pick — was never tried as `refs/remotes/origin/release/1.0` and
+        `git checkout -b b release/1.0` exited 128 in exactly the detached checkout the paragraph
+        above is about. A slash means *a branch with a slash in its name* at least as often as it
+        means *already qualified*, so the candidates name their full paths instead.
+
+        Duplicated from `config_ref._candidates` rather than shared: `config_ref` is a layer with
+        an empty import allowance, so neither can reach the other. The two must be changed
+        together, and `test_layering.py`'s `ALLOWED` is why they cannot simply be one function.
         """
         # Option-confusion guard: `base` becomes a git checkout start-point and a `gh --base` value,
         # and a backport can take it from a ticket's target — so a `-`-leading ref that git or gh
@@ -414,9 +424,7 @@ class GitLocal:
         # injection (no shell), but a ref never legitimately begins with a dash.
         if ref.startswith("-"):
             raise RuntimeError(f"refusing a base ref that looks like an option: {ref!r}")
-        if "/" in ref:
-            return ref
-        for candidate in (ref, f"origin/{ref}"):
+        for candidate in (f"refs/heads/{ref}", f"refs/remotes/origin/{ref}", ref):
             if self.git("rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}").strip():
                 return candidate
         return ref  # unresolvable: let the checkout fail with git's own message

@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.config_ref import ConfigRef, UntrustedConfig, read_config, resolve
+from in_lockstep.config_ref import (
+    ConfigRef,
+    UnresolvableConfigRef,
+    UntrustedConfig,
+    read_config,
+    resolve,
+)
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -149,13 +155,29 @@ def test_a_resolvable_ref_without_config_is_not_an_error(tmp_path: Path) -> None
     assert read_config(root, "lockstep.py", ConfigRef.base(head)) is None
 
 
-def test_an_already_qualified_ref_is_taken_as_written() -> None:
-    """`origin/origin/main` is not a spelling of anything."""
+def test_a_qualified_ref_is_never_given_a_second_remote_prefix() -> None:
+    """`origin/origin/main` is not a spelling of anything, and no candidate may be one.
+
+    This test used to pin the tuple itself -- `("main", "origin/main")` and, for anything with a
+    slash in it, `(ref,)`. That second clause was the defect #229 is about: a slash does not mean
+    *already qualified*, it also means *a branch named `feat/x`*, and pinning the tuple made the
+    bug look like the specification. So this asserts the property the shorthand existed to
+    protect, and `test_a_stacked_pull_requests_base_resolves_...` asserts the one it broke.
+
+    The property is stronger now than it was: `refs/heads/X` and `refs/remotes/origin/X` are exact
+    paths that either exist or do not, where `origin/X` went through git's own ref
+    disambiguation.
+    """
     from in_lockstep.config_ref import _candidates
 
-    assert _candidates("main") == ("main", "origin/main")
-    assert _candidates("origin/main") == ("origin/main",)
-    assert _candidates("refs/heads/main") == ("refs/heads/main",)
+    for ref in ("main", "feat/first", "origin/main", "refs/heads/main"):
+        assert ref in _candidates(ref), "the ref as written must always be tried"
+        assert f"origin/origin/{ref}" not in _candidates(ref)
+        assert not any(c.startswith("origin/origin/") for c in _candidates(ref))
+
+    # A branch name with a slash gets the remote-tracking path a bare name gets. This is the one
+    # line that would have failed before, and the whole of #229 is in it.
+    assert "refs/remotes/origin/feat/first" in _candidates("feat/first")
 
 
 # -- the refusal a person can act on (issue 206) --------------------------------------------
@@ -211,3 +233,141 @@ def test_a_repository_with_no_module_still_runs_on_detected_defaults(tmp_path: P
     result = CliRunner().invoke(main, ["ls"])
     assert result.exit_code == 0, result.output
     assert "detected defaults" in result.output, result.output
+
+
+# -- a stacked pull request's base (issue 229) ------------------------------------------------
+
+
+def _ci_clone(tmp_path: Path, origin: Path, at: str) -> Path:
+    """What `actions/checkout` leaves behind: a detached HEAD and remote-tracking refs only.
+
+    Built rather than simulated, because every wrong theory about #229 came from reasoning about
+    this state instead of standing in it. The `fetch-depth: 0` fetch is the real one, so the
+    fixture proves the base ref *is* present — which is what makes the old failure message ("fetch
+    enough history") demonstrably the wrong advice.
+    """
+    import subprocess
+
+    clone = tmp_path / "ci"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    subprocess.run(
+        ["git", "fetch", "-q", "origin", "+refs/heads/*:refs/remotes/origin/*"], cwd=clone, check=True
+    )
+    subprocess.run(["git", "checkout", "-q", "--detach", f"origin/{at}"], cwd=clone, check=True)
+    for branch in subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"], cwd=clone, capture_output=True, text=True
+    ).stdout.split():
+        subprocess.run(["git", "branch", "-D", branch], cwd=clone, capture_output=True)
+    return clone
+
+
+def _stacked_origin(tmp_path: Path) -> Path:
+    import subprocess
+
+    root = _origin_repo(tmp_path, "origin")
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", "-c", "user.email=t@e", "-c", "user.name=t", *args], cwd=root, check=True)
+
+    run("checkout", "-q", "-b", "feat/first")
+    (root / "lockstep.py").write_text("lockstep = 'from the trusted ref'  # first\n")
+    run("commit", "-qam", "first")
+    run("checkout", "-q", "-b", "feat/second")
+    (root / "f.txt").write_text("second\n")
+    run("add", "-A")
+    run("commit", "-qm", "second")
+    run("checkout", "-q", "main")
+    return root
+
+
+def test_a_stacked_pull_requests_base_resolves_in_a_ci_checkout(tmp_path: Path) -> None:
+    """GATE-CFG-1 on a pull request whose base is a branch, not the default branch.
+
+    `GITHUB_BASE_REF` for a stacked pull request is `feat/first`. The candidate list collapsed to
+    the bare name whenever a ref contained a slash, no local branch of that name exists in a
+    detached checkout, and the control failed closed with a message telling the operator to fetch
+    history that was already there. Deterministic: every stacked pull request, and every GitFlow
+    `release/x.y` base, on both hosts.
+    """
+    origin = _stacked_origin(tmp_path)
+    clone = _ci_clone(tmp_path, origin, "feat/second")
+
+    import subprocess
+
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/feat/first"],
+            cwd=clone,
+            capture_output=True,
+        ).returncode
+        == 0
+    ), "the fixture must have the base fetched, or it tests the wrong failure"
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "refs/heads/feat/first"],
+            cwd=clone,
+            capture_output=True,
+        ).returncode
+        != 0
+    ), "the fixture must have no local branch, or it is not the CI condition"
+
+    source = read_config(clone, "lockstep.py", ConfigRef.base("feat/first"))
+    assert source is not None and "first" in source
+
+
+def test_a_bare_base_ref_still_resolves_in_the_same_checkout(tmp_path: Path) -> None:
+    """The case that already worked, in the fixture that broke — so the fix is not a trade."""
+    origin = _stacked_origin(tmp_path)
+    clone = _ci_clone(tmp_path, origin, "feat/second")
+    source = read_config(clone, "lockstep.py", ConfigRef.base("main"))
+    assert source is not None and "#" not in source, "main predates the edit on feat/first"
+
+
+def test_a_sha_a_tag_and_a_remote_spelling_all_still_resolve(tmp_path: Path) -> None:
+    """The three things `<ref>` as written is for. Trying full paths first must not lose them."""
+    import subprocess
+
+    from in_lockstep.config_ref import _resolve_commit
+
+    origin = _stacked_origin(tmp_path)
+    clone = _ci_clone(tmp_path, origin, "feat/second")
+    subprocess.run(["git", "tag", "v1", "origin/main"], cwd=clone, check=True)
+    sha = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=clone, capture_output=True, text=True
+    ).stdout.strip()
+
+    assert _resolve_commit(clone, sha) == sha
+    assert _resolve_commit(clone, "v1") == sha
+    assert _resolve_commit(clone, "origin/main") == sha
+
+
+def test_a_branch_beats_a_tag_of_the_same_name(tmp_path: Path) -> None:
+    """A base ref means the branch, which is why the ref as written is tried last."""
+    import subprocess
+
+    from in_lockstep.config_ref import _resolve_commit
+
+    origin = _stacked_origin(tmp_path)
+    subprocess.run(["git", "checkout", "-q", "-b", "amb"], cwd=origin, check=True)
+    subprocess.run(["git", "tag", "amb", "feat/second"], cwd=origin, check=True)
+    branch = subprocess.run(
+        ["git", "rev-parse", "refs/heads/amb"], cwd=origin, capture_output=True, text=True
+    ).stdout.strip()
+    tag = subprocess.run(
+        ["git", "rev-parse", "refs/tags/amb^{commit}"], cwd=origin, capture_output=True, text=True
+    ).stdout.strip()
+    assert branch != tag, "the fixture only means something if the two disagree"
+    assert _resolve_commit(origin, "amb") == branch
+
+
+def test_a_base_that_genuinely_is_not_here_still_refuses(tmp_path: Path) -> None:
+    """The failure mode this fix must not introduce: resolving anything at all.
+
+    Widening a candidate list is one edit away from a control that always finds something, and
+    this one fails closed on purpose — `UnresolvableConfigRef` exists because falling through to
+    detected defaults ran a review with none of the repository's bindings.
+    """
+    origin = _stacked_origin(tmp_path)
+    clone = _ci_clone(tmp_path, origin, "feat/second")
+    with pytest.raises(UnresolvableConfigRef):
+        read_config(clone, "lockstep.py", ConfigRef.base("feat/never-pushed"))

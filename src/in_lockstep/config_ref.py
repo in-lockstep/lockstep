@@ -93,17 +93,33 @@ def read_config(repo_root: str | Path, path: str, ref: ConfigRef) -> str | None:
 
 
 def _candidates(ref: str) -> tuple[str, ...]:
-    """The ref as given, then as a remote-tracking ref.
+    """Full ref paths first, then the ref as written.
 
     A developer has a local `main`; a CI checkout usually does not — it is a detached HEAD with
     `origin/main` and nothing else. Trying only the bare name is what made this control silently
     inapplicable in CI, which is the only place it does any work.
+
+    The fix for that was `(ref, f"origin/{ref}")` guarded by `"/" not in ref`, and the guard was
+    the bug. It was there for a real reason — `origin/origin/main` is not a spelling of anything —
+    but a slash does not mean *already qualified*. It also means *a branch with a slash in its
+    name*, which is what every stacked pull request has: `GITHUB_BASE_REF` is `feat/first`, the
+    candidate list collapsed to `("feat/first",)`, no local branch of that name exists in a
+    detached checkout, and the run died claiming the base was not fetched. It was fetched. Nothing
+    ever looked at `refs/remotes/origin/feat/first`.
+
+    Naming the full paths says what each candidate means instead of inferring it from punctuation,
+    so a slash carries no meaning here at all:
+
+    - `refs/heads/<ref>` — a local branch, which is a developer's checkout.
+    - `refs/remotes/origin/<ref>` — the remote-tracking branch, which is CI's. `origin` because
+      that is what `actions/checkout` and GitLab's clone both name their remote; a repository
+      whose remote is called something else passes a ref that resolves as written.
+    - `<ref>` — as written, last: a SHA, a tag, an already-qualified `refs/...` path, or the
+      `origin/main` spelling somebody typed by hand.
+
+    Last rather than first, so a branch beats a same-named tag. A base ref means the branch.
     """
-    # A ref that already names a remote, a tag, or a full refs/ path is taken as written:
-    # `origin/origin/main` is not a spelling of anything.
-    if "/" in ref:
-        return (ref,)
-    return (ref, f"origin/{ref}")
+    return (f"refs/heads/{ref}", f"refs/remotes/origin/{ref}", ref)
 
 
 def _resolve_commit(repo_root: str | Path, ref: str) -> str | None:

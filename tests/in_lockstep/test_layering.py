@@ -45,7 +45,7 @@ ALLOWED: dict[str, set[str]] = {
     "ai": {"core", "ai", "llm", "privileged"},
     "prompts": {"ai", "prompts"},
     # `platform` was added for one edge: `adapters/backport.py` picks commits with the git surface
-    # `platform/scm` owns — `start_point`'s bare-then-remote fallback, `commits_between`'s trailer
+    # `platform/scm` owns — `start_point`'s full-path-then-as-written probe, `commits_between`'s trailer
     # parsing, `cherry_pick`'s provenance discipline. Duplicating those in adapters would be two
     # writers of the trailer format, which is the failure the ledger module documents at length.
     # Acyclic: nothing in `platform` imports `adapters` back.
