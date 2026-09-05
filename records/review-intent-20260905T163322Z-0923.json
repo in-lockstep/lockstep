@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04988,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5976,
+        "message": "The diff matches its description: `--eject` is removed, `show-workflow` is added, and REGISTER_TAIL's comment is updated to point to the new command. The change does less import-merging work than before (`_wrap_long_imports`, `_ejected_source`, `_without_duplicate_imports` path for eject all gone), which is consistent with the stated rationale.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1956,
+        "message": "The `_workflow_ids` helper extracts workflow ids by running a regex over `inspect.getsource(module.register)`. The PR description relies on this being reliable, and `test_the_id_discovery_is_not_vacuous` guards against the regex going silent \u2014 but the regex matches `workflow(id=\"...\")` only in its current single-line form. If `ruff format` or a future edit splits the call across lines, the regex returns an empty set silently. The test for vacuousness pins the exact current id set, so it would ca\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1960,
+        "message": "Undocumented behaviour: `show-workflow --registered` calls `_default_lockstep()` as a side effect to force registration. This is noted in an inline comment but not in the command's docstring. A user reading `--registered` will not know that `_default_lockstep()` must run for the flag to work, and if that function has side effects (file I/O, network, etc.) those are invisible at the CLI help level. This is minor but is a gap between what the flag says and what it does.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1,
+        "message": "The test `test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs` is replaced by `test_the_shipped_process_can_be_read_without_being_copied` and companions. The new tests cover listing, single-id, full-family, `--registered`, and error paths. No coverage gap is apparent for the paths added in this diff. The diff does not show whether `_wrap_long_imports` and `_ejected_source` have tests that are now dead \u2014 if they did, those would be removed silently. That code is deleted in this dif\u2026[truncated]",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "01c4ba584af863d463b82aa7d3059b45a9b4c3c9",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 965,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T163322Z-0923",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 968,
+  "ts": "2026-09-05T16:33:47+00:00",
+  "wall_seconds": 25.321
+}
