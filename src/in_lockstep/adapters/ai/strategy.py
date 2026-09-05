@@ -223,8 +223,6 @@ class AiStrategy:
     def _session(self, ctx: Any) -> Any:
         """The per-run bundle. Built fresh each invoke: the workspace accumulates staged writes,
         and the invoker's credential is resolved per call rather than at bind time."""
-        from ...ai.bootstrap import routed_invoker
-
         root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
         workspace = Workspace(root=Path(root), guard=self.guard, workflow_id=self.workflow_id)
         tools, runner = read_write_execute(
@@ -236,14 +234,13 @@ class AiStrategy:
             tests=_test_runner(ctx, root, workspace),
             max_test_runs=self.policy.max_test_runs,
         )
-        factory = self.invoker_factory or routed_invoker(type(self).verb)
         layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
         if type(self).reads_house_rules:
             # Appended, so the repository's conventions land after the framework's guardrails
             # and the strategy body. `plus` is the only spelling that guarantees that ordering.
             layers = layers.plus(contexts=house_rules(root))
         return type(self)._session_cls(
-            invoker=factory(ctx),
+            invoker=resolve_invoker(self.invoker_factory, type(self).verb, ctx),
             workspace=workspace,
             tools=tools,
             run_tool=runner,
@@ -493,11 +490,31 @@ def failure_outcome(error: Exception, *, cost: Any = None) -> Outcome[Any]:
 def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any) -> Any:
     """The run's invoker: an injected factory, or the one routed from `lockstep.models.route`.
 
-    Written twice — once in `_session`, once in the backport resolver — and it is the seam a
-    repository substitutes for a gateway or a cassette provider, so both spellings have to agree
-    about what "no factory given" means.
+    It is the seam a repository substitutes for a gateway or a cassette provider, so every AI
+    adapter goes through this one function rather than spelling it out — six had, and the
+    docstring here already warned that two spellings have to agree about what "no factory given"
+    means. They also have to agree about recording, which is why the count matters.
+
+    **The recording is attached here, to what the factory returned.** `ai.bootstrap` wraps the
+    provider it builds itself, which covers every adapter that lets the framework build the
+    invoker — and an adapter constructed with its own `invoker_factory=` builds the provider
+    inside a lambda nothing can reach, so for that repository a recording kept nothing (#243).
+    Nothing can reach inside the lambda; the framework holds the object the lambda returned, and
+    that object names its provider. So the wrap moves one step later and the hole closes without
+    touching the escape hatch.
+
+    That is the third answer to the choice the issue framed. Making the factory signature carry
+    the tape moves the obligation onto whoever takes the escape hatch, and an adapter that ignores
+    it is back where we started, silently; refusing a custom factory during a recording run
+    removes an extension point O8 exists to protect. Wrapping the return value gives up neither:
+    the factory keeps its signature and its freedom, and the recording is not something it can
+    decline. `recorded` is idempotent, so a factory that wrapped already is left alone.
     """
-    from ...ai.bootstrap import routed_invoker
+    from ...ai.bootstrap import recorded, routed_invoker
 
     factory = invoker_factory or routed_invoker(verb)
-    return factory(ctx)
+    invoker = factory(ctx)
+    log = getattr(ctx, "recording", None)
+    if log is not None and getattr(invoker, "provider", None) is not None:
+        invoker.provider = recorded(invoker.provider, log)
+    return invoker

@@ -67,7 +67,16 @@ lockstep.bind(Validate, RuffValidate(sandbox=Sandbox()))
 # `--locked` rather than a bare sync: it refuses to rewrite the lockfile it installs from, so a
 # stale `uv.lock` fails by name here instead of being silently updated inside a run and marking
 # every record that run writes as `dirty`.
-lockstep.bind(Provision, CommandProvision([["uv", "sync", "--locked"]], sandbox=Sandbox()))
+# `--extra anthropic` is part of the answer, not a flag on the side. Every job that provisions
+# here is a job that calls a model, and a bare `uv sync --locked` UNINSTALLS the extra the job
+# installed a step earlier -- which is exactly what happened the first time this binding reached a
+# real run: four lenses failed with "the anthropic provider needs its optional dependency" on the
+# PR after #280 merged, because that PR was the first whose base branch carried this binding at
+# all. The environment this repository needs is the one its own jobs need.
+lockstep.bind(
+    Provision,
+    CommandProvision([["uv", "sync", "--locked", "--extra", "anthropic"]], sandbox=Sandbox()),
+)
 
 # -- policy -------------------------------------------------------------------------
 #

@@ -3370,3 +3370,180 @@ def test_a_recorded_run_says_where_it_put_the_tape(repo: Path) -> None:
     assert "kept      0 inference(s)" in result.output, result.output
     kept = result.output.split(" in ")[-1].strip().splitlines()[0]
     assert str(repo) not in kept, f"the tape landed inside the repository: {kept}"
+
+
+# -- every model call is recorded, including through a binding we do not build (243, 264) -------
+#
+# Two holes with one symptom. `ai.bootstrap` wraps the provider the framework builds, and the CLI
+# wraps the one it builds itself — so every path anybody tested recorded, and the two paths an
+# adopter actually takes did not. A repository that binds its own `Review` (the recipe in
+# docs/extending.md) got neither: the direct verbs handed `_context` no tape, so the seam never
+# fired, and an adapter with its own `invoker_factory=` builds its provider inside a lambda the
+# seam cannot reach.
+
+_OWN_ADAPTER = '''
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai.review import AiReview, Review
+from in_lockstep.ai.invoker import AiInvoker
+from in_lockstep.ai.pricing import CostTable, Rate
+from in_lockstep.core.spend import Budget
+from in_lockstep.llm.interface import LLMOutput, LLMProvider
+from in_lockstep.llm.types import TokenUsage
+from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+lockstep.bind(EgressPolicy, UnsandboxedEgress())
+
+
+def _priced():
+    table = CostTable()
+    table.add("canned:1", Rate(input_per_m=0.0, output_per_m=0.0))
+    return table
+
+
+class Canned(LLMProvider):
+    """A provider that transmits, so a run through it is a run with something to keep."""
+
+    transmits = True
+
+    def name(self):
+        return "canned"
+
+    async def generate(self, input):
+        # With usage, because a run that reports zero tokens is a run that spent nothing, and the
+        # bypass detection keys on spend: "kept nothing" only means "the recorder was bypassed"
+        # when there was something to keep.
+        return LLMOutput(
+            content='{"findings": [], "verdict": "fine"}',
+            stop_reason="end_turn",
+            usage=TokenUsage(input_tokens=100, output_tokens=20),
+        )
+
+
+# The documented extension: this repository builds its own invoker, so nothing the framework
+# constructs is on the path.
+lockstep.bind(
+    Review,
+    AiReview(
+        # Egress passed explicitly, as a real hand-built factory must: `AiInvoker` defaults to the
+    # enforcing policy, and a review reads untrusted content, so an invoker that did not name one
+    # is refused before it sends. That refusal is the control working, not a fixture problem.
+    lambda ctx: AiInvoker(
+        Canned(),
+        model="canned:1",
+        # Priced, because an unpriced model is refused before it is invoked -- a run that cannot
+        # be budgeted would record a fabricated cost. One more control a hand-built factory has to
+        # satisfy, and each one it satisfies is a reason this fixture is a real adopter's path.
+        cost_table=_priced(),
+        spend=ctx.spend,
+        egress=UnsandboxedEgress(),
+    ),
+        repo_root=str(lockstep.repo.root),
+    ),
+)
+'''
+
+
+def _own_adapter_repo(repo: Path) -> None:
+    _lifecycle(repo).write_text(_OWN_ADAPTER)
+
+
+def test_a_repository_that_binds_its_own_review_adapter_still_records(repo: Path, tmp_path) -> None:
+    """GATE-RECORD-5 and #264 in one run, because one run is what exposed both.
+
+    Neither seam covers this: the module binds `Review`, so the CLI's own wrapping closure is
+    never handed to the adapter, and the adapter's `invoker_factory=` builds the provider itself.
+    Before this, `in-lockstep review` here spent tokens and kept nothing, and said nothing about
+    it — the bypass warning is reached from `run`, not from here.
+    """
+    _own_adapter_repo(repo)
+    tape = tmp_path / "own.json"
+    result = CliRunner().invoke(
+        main,
+        ["review", "--base", "HEAD", "--diff", _diff(repo), "--record", "--cassette", str(tape)],
+    )
+    assert result.exit_code == 0, result.output
+    assert tape.exists(), "the run kept nothing at all"
+
+    import json
+
+    kept = json.loads(tape.read_text())
+    assert kept.get("provider_calls"), f"the tape holds no calls: {kept}"
+
+
+def test_the_same_run_says_where_it_put_what_it_kept(repo: Path, tmp_path) -> None:
+    """A tape nobody is told about is one nobody goes back to. `run` said so; these did not."""
+    _own_adapter_repo(repo)
+    tape = tmp_path / "own.json"
+    result = CliRunner().invoke(
+        main,
+        ["review", "--base", "HEAD", "--diff", _diff(repo), "--record", "--cassette", str(tape)],
+    )
+    assert "kept" in result.output and str(tape) in result.output, result.output
+
+
+def test_declining_to_record_still_declines(repo: Path, tmp_path) -> None:
+    """The control. If the fix recorded unconditionally it would be recording, not obeying —
+    and `--no-record` is how O4's default is declined rather than a flag nobody reads."""
+    _own_adapter_repo(repo)
+    tape = tmp_path / "none.json"
+    result = CliRunner().invoke(
+        main,
+        ["review", "--base", "HEAD", "--diff", _diff(repo), "--no-record", "--cassette", str(tape)],
+    )
+    assert result.exit_code == 0, result.output
+    assert not tape.exists(), "a run told not to record kept something anyway"
+
+
+_BESPOKE = _OWN_ADAPTER.replace(
+    """lockstep.bind(
+    Review,
+    AiReview(""",
+    """class Bespoke:
+    \"\"\"A verb implementation that touches no framework seam at all: it does not take an
+    `invoker_factory`, it builds the invoker inside `invoke`, and nothing the framework
+    constructs is on the path.\"\"\"
+
+    verb = AiReview.verb
+    capabilities = AiReview.capabilities
+
+    async def invoke(self, ctx, inp):
+        from in_lockstep.core.outcome import Outcome, Status
+
+        invoker = AiInvoker(
+            Canned(),
+            model="canned:1",
+            cost_table=_priced(),
+            spend=ctx.spend,
+            egress=UnsandboxedEgress(),
+        )
+        from in_lockstep.llm.types import Message
+
+        await invoker.run(system="s", messages=[Message(role="user", content="hi")])
+        return Outcome(status=Status.SUCCEEDED, value=None)
+
+
+lockstep.bind(Review, Bespoke())
+_unused = (
+    AiReview(""",
+)
+
+
+def test_a_hand_written_adapter_that_bypasses_every_seam_is_named_not_hidden(repo: Path, tmp_path) -> None:
+    """The boundary of O4's `every`, stated by a test rather than by a promise.
+
+    A repository can write a verb implementation that takes no `invoker_factory`, builds the
+    invoker inside `invoke`, and never touches a seam the framework can reach. Nothing can wrap
+    that, and the framework should not pretend otherwise. What it can do is refuse to report a
+    reassuring zero: the run compares what the tape kept against what it spent and says a model
+    was called that the recorder never saw.
+    """
+    _lifecycle(repo).write_text(_BESPOKE)
+    tape = tmp_path / "bypassed.json"
+    result = CliRunner().invoke(
+        main,
+        ["review", "--base", "HEAD", "--diff", _diff(repo), "--record", "--cassette", str(tape)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "recorder never saw" in result.output, result.output

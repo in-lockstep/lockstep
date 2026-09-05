@@ -407,6 +407,38 @@ class MissingModelRoute(LookupError):
     """An AI adapter ran with no explicit invoker and no model routed for its verb."""
 
 
+def recorded(provider: Any, log: Any) -> Any:
+    """`provider`, wrapped to keep what it is paid for. Unchanged when the run keeps nothing.
+
+    O4's sentence is *every* model call, and this is the one function that makes a call kept. It
+    is called from two places for one reason: the seam below covers a provider the framework
+    built, and `resolve_invoker` covers the one an adapter built for itself with its own
+    `invoker_factory=`. Two wrap sites, one rule — a second spelling of the rule is how the first
+    hole got there.
+
+    Idempotent, because both callers can be on the path for one run: the CLI hands some verbs a
+    factory that already wrapped, and wrapping twice would write every inference to the tape
+    twice and tell the ledger a run made double the calls it made.
+    """
+    if log is None:
+        return provider
+    from .replay import Cassette, RecordingProvider
+
+    if isinstance(provider, RecordingProvider):
+        return provider
+    if getattr(provider, "transmits", True) is False:
+        # A replay has nothing to record. Recording one would write a tape identical to the tape
+        # being read and tell the ledger that inferences were kept when none were made -- the
+        # fabrication `_one_provider` refuses one layer up, at the flag.
+        raise ValueError(
+            f"{provider.name()} serves from a recording, so there is nothing to record. "
+            f"Drop --record, or drop the provider this module binds."
+        )
+    if not isinstance(log, Cassette):  # pragma: no cover - defensive, `run` builds it
+        raise TypeError(f"a recording must be a Cassette, not {type(log).__name__}")
+    return RecordingProvider(provider, log)
+
+
 def routed_invoker(verb: Any) -> Any:
     """A `Callable[[ctx], AiInvoker]` that reads the model route off the run context.
 
@@ -495,21 +527,7 @@ def invoker_factory(
         # The run context carries it for the same reason it carries the transcript writer four
         # lines down: one sink for the whole run, keyed on the run rather than on whichever
         # invoker happened to be built first.
-        log = getattr(ctx, "recording", None)
-        if log is not None:
-            if getattr(chosen, "transmits", True) is False:
-                # A replay has nothing to record. Recording one would write a tape identical to
-                # the tape being read and tell the ledger that inferences were kept when none were
-                # made -- the fabrication `_one_provider` refuses one layer up, at the flag.
-                raise ValueError(
-                    f"{chosen.name()} serves from a recording, so there is nothing to record. "
-                    f"Drop --record, or drop the provider this module binds."
-                )
-            from .replay import Cassette, RecordingProvider
-
-            if not isinstance(log, Cassette):  # pragma: no cover - defensive, `run` builds it
-                raise TypeError(f"a recording must be a Cassette, not {type(log).__name__}")
-            chosen = RecordingProvider(chosen, log)
+        chosen = recorded(chosen, getattr(ctx, "recording", None))
         # A per-turn transcript for every session this run makes. Keyed on the run id, so a
         # failed session's evidence is findable from its ledger record; absent when the context
         # has no run id, which is a test's hand-built context rather than a real run.
