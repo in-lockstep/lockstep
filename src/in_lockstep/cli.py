@@ -383,6 +383,7 @@ def _run_registered(
     approval: Any = None,
     *,
     record: bool = False,
+    asked: bool = False,
     cassette: str = "",
 ) -> None:
     """Dispatch a workflow the repository registered.
@@ -440,9 +441,10 @@ def _run_registered(
     if tape is not None:
         # Said, because a flag whose effect is a file in a directory nobody looks at is a flag
         # people stop passing. Zero is printed as zero and means it: the run made no model call.
-        click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
-        _warn_if_calls_went_unrecorded(tape, ctx)
-        _harvest_in_process(tape, entry.id, lockstep)
+        # Harvest only where something was kept: a tape with no calls has no case in it, and
+        # `_harvest_in_process` would print a refusal about a recording nobody made.
+        if _report_what_was_kept(tape, ctx, asked=asked):
+            _harvest_in_process(tape, entry.id, lockstep)
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
     _exit_for(result, ctx)
 
@@ -727,6 +729,34 @@ def _case_key(item: Any) -> str:
     return key_of(request_from(stored)) if isinstance(stored, dict) else ""
 
 
+def _report_what_was_kept(tape: Any, ctx: Any, *, asked: bool) -> bool:
+    """Say what the run kept, or say nothing. Returns whether it said anything.
+
+    One function because there are two dispatch paths -- `_run_registered` for a workflow the
+    repository declared, and the `selfcheck` branch beside it -- and the rule about when to speak
+    was written into one of them. `selfcheck` went on printing `kept 0 inference(s)` for a run
+    that dispatched Test and called no model at all, which is the exact drift this codebase
+    argues against everywhere else: two writers of one decision, agreeing until one is edited.
+
+    Silent when a run reached no provider, spent nothing, AND nobody asked. All three, and the
+    third is the one a first attempt at this got wrong. Staying quiet by default is right: `kept 0`
+    for `run selfcheck` reports on a thing that did not happen, and recording is what a run does
+    now rather than something it was asked for. But a person who typed `--record` asked a question,
+    and answering it with silence tells them neither where the tape went nor whether one exists --
+    which is how a flag becomes a thing people stop passing, the property
+    `test_a_recorded_run_says_where_it_put_the_tape` exists to hold.
+
+    Spend is consulted rather than the call count alone, because `kept 0` after real spend is not
+    the same sentence: it means the recorder was bypassed, and `_warn_if_calls_went_unrecorded`
+    has to get to say so.
+    """
+    if not (asked or tape.calls() or getattr(ctx.spend.charged, "total_tokens", 0)):
+        return False
+    click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
+    _warn_if_calls_went_unrecorded(tape, ctx)
+    return True
+
+
 def _warn_if_calls_went_unrecorded(tape: Any, ctx: Any) -> None:
     """A run that spent tokens and kept nothing has a model call the recorder never saw.
 
@@ -803,6 +833,32 @@ def _cassette_default(lockstep: Any, verb: str) -> str:
     return str(Path(lockstep.repo.root) / Path(CASSETTE_DIR) / f"{verb}.json")
 
 
+def _recording(*, dry_run: bool = False, offline: bool = False, record: bool | None) -> bool:
+    """Whether this run keeps what it pays for. The answer is yes unless somebody said otherwise.
+
+    O4 says an inference nobody kept is an opportunity spent and discarded, and that recording is
+    not an option a run turns on -- it is what a run does. It was a flag, and it was off, so
+    `in-lockstep review` at a terminal called a model, spent money and kept nothing. Every
+    trampoline this repository ships and every one `init` scaffolds passed the flag, which is why
+    this survived: the framework's own runs all satisfied O4 and the gap was exactly the path a
+    person meets first.
+
+    Tri-state rather than a flipped boolean, and that is the whole subtlety. `--offline` and
+    `--dry-run` each say answers come from somewhere that is not a provider, so a recording
+    default that was simply `True` would contradict them on every offline run and refuse it. What
+    `_one_provider` must keep refusing is a person who typed BOTH -- `--offline --record` is a
+    contradiction and guessing is how a tool teaches people not to trust it -- and what it must
+    not do is turn a default into a contradiction somebody never asked for. So `None` means
+    nobody chose, and only an explicit `--record` can collide.
+    """
+    _one_provider(dry_run=dry_run, offline=offline, record=record is True)
+    if record is not None:
+        return record
+    # Nobody chose. A run that reaches a provider keeps what it gets; one that was already told to
+    # answer from somewhere else has nothing to keep.
+    return not (dry_run or offline)
+
+
 def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
     """Refuse two flags that each choose a provider, rather than ordering them.
 
@@ -844,7 +900,11 @@ def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
 )
 @click.option("--approve", is_flag=True, help="You are the human watching this run.")
 @click.option("--approved-by", default="", help="Who asked, when nobody is watching. Recorded.")
-@click.option("--record", is_flag=True, help="Keep every model call this run makes.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option(
     "--cassette",
     default="",
@@ -861,7 +921,7 @@ def run_cmd(
     budget: float | None,
     approve: bool,
     approved_by: str,
-    record: bool,
+    record: bool | None,
     cassette: str,
 ) -> None:
     """Run a workflow, by the id it was registered under.
@@ -884,6 +944,15 @@ def run_cmd(
     instead and `ai.bootstrap` wraps at the seam every adapter already goes through.
     """
     lockstep, recorder = _default_lockstep()
+    # `run` declares neither `--offline` nor `--dry-run`, so nothing here can contradict the
+    # default -- but it resolves through the same function as the five verbs that do, because two
+    # places deciding what "nobody chose" means is how they come to disagree.
+    #
+    # Resolved into a new name rather than over the old one. `record` stays the raw tri-state,
+    # which is the only remaining record of whether a person TYPED the flag, and that is a
+    # different question from whether this run keeps anything: one decides behaviour, the other
+    # decides whether the run owes them an answer about it.
+    keeping = _recording(record=record)
 
     # A ceiling stated at the call site, exactly as `review` takes one. A budget is operational
     # rather than process — like a timeout — and one workflow in a module can be much more
@@ -910,7 +979,8 @@ def run_cmd(
             args,
             no_middleware,
             _approval(approve, approved_by),
-            record=record,
+            record=keeping,
+            asked=record is True,
             cassette=cassette,
         )
         return
@@ -927,7 +997,7 @@ def run_cmd(
     # a green selfcheck by any flag, and the message it printed named two that do not work here
     # (#189). `--no-middleware` was not the escape hatch either: it drops `CostBudget` with the
     # gate, and startup then refuses the undeclared budget instead.
-    tape = _run_cassette(lockstep, run_id, cassette) if record else None
+    tape = _run_cassette(lockstep, run_id, cassette) if keeping else None
     ctx = _context(lockstep, run_id, _approval(approve, approved_by), recording=tape)
     if checkpoint or recover_id:
         from .platform.state import StateStore
@@ -965,8 +1035,7 @@ def run_cmd(
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
 
     if tape is not None:
-        click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
-        _warn_if_calls_went_unrecorded(tape, ctx)
+        _report_what_was_kept(tape, ctx, asked=record is True)
     # The rule `_write_workflow_ledger` states — every dispatched run leaves a record — applied
     # to the one dispatch that predates it. Selfcheck is the first command an adopter runs, and
     # its record carrying schema-4 provenance is how they see what a record even is.
@@ -2190,7 +2259,11 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...]:
 )
 @click.option("--model", default="anthropic:claude-sonnet-4-6")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
-@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option(
     "--cassette",
     default="",
@@ -2228,7 +2301,7 @@ def review_cmd(
     ask: str,
     model: str,
     offline: bool,
-    record: bool,
+    record: bool | None,
     cassette: str,
     budget: float | None,
     diff_file: str,
@@ -2244,7 +2317,7 @@ def review_cmd(
     this command testable without constructing a repository with a history in it.
     """
 
-    _one_provider(dry_run=dry_run, offline=offline, record=record)
+    record = _recording(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.review import AiReview, Review
     from .ai.auth import Auth
     from .ai.bootstrap import (
@@ -2502,7 +2575,11 @@ _TRIAGE_DRY_RUN = (
 )
 @click.option("--model", default="anthropic:claude-haiku-4-5", help="Triage is a cheap reading task.")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
-@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option("--cassette", default="", help="Where to read or write a recording.")
 @click.option(
     "--budget",
@@ -2516,7 +2593,7 @@ def triage_cmd(
     ticket_file: str,
     model: str,
     offline: bool,
-    record: bool,
+    record: bool | None,
     cassette: str,
     budget: float | None,
     dry_run: bool,
@@ -2527,7 +2604,7 @@ def triage_cmd(
     a duplicate link — is a separate step the caller takes through `TicketSource`, which is why
     the `triage` guardrail denies the issue-writing tools.
     """
-    _one_provider(dry_run=dry_run, offline=offline, record=record)
+    record = _recording(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.triage import AiTriage, Triage
     from .ai.auth import Auth
     from .ai.bootstrap import (
@@ -2770,7 +2847,11 @@ _RFE_DRY_RUN = (
 )
 @click.option("--model", default="anthropic:claude-haiku-4-5", help="Drafting is a cheap reading task.")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
-@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option("--cassette", default="", help="Where to read or write a recording.")
 @click.option(
     "--budget",
@@ -2786,7 +2867,7 @@ def rfe_cmd(
     create: bool,
     model: str,
     offline: bool,
-    record: bool,
+    record: bool | None,
     cassette: str,
     budget: float | None,
     dry_run: bool,
@@ -2798,7 +2879,7 @@ def rfe_cmd(
     issue-writing tools and `--create` is the human step that takes the printed draft to
     `TicketSource.create`. Without `--create` this reads, drafts and stops.
     """
-    _one_provider(dry_run=dry_run, offline=offline, record=record)
+    record = _recording(dry_run=dry_run, offline=offline, record=record)
     from pathlib import Path as _Path
 
     from .adapters.ai.rfe import AiRfe, Rfe
@@ -2998,7 +3079,11 @@ _BACKPORT_DRY_RUN = '{"files": [], "summary": "canned dry-run answer; proves the
 )
 @click.option("--approved-by", default="", help="Who asked. The unattended form of --approve; recorded.")
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
-@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option("--cassette", default="", help="Where to read or write a recording.")
 @click.option("--budget", type=float, default=None, help="Hard ceiling, in USD, for a --resolve run.")
 @click.option("--dry-run", is_flag=True, help="Canned resolver answer; proves the wiring, not the merge.")
@@ -3014,7 +3099,7 @@ def backport_cmd(
     approve: bool,
     approved_by: str,
     offline: bool,
-    record: bool,
+    record: bool | None,
     cassette: str,
     budget: float | None,
     dry_run: bool,
@@ -3031,7 +3116,7 @@ def backport_cmd(
     `--out` serializes it, and `apply --from-artifact X --base <target>` opens it against the
     release line through the guard.
     """
-    _one_provider(dry_run=dry_run, offline=offline, record=record)
+    record = _recording(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai.backport import AiBackportResolver
     from .adapters.backport import Backport, GitBackport
     from .ai.auth import Auth
@@ -3559,7 +3644,11 @@ def _ticket_from_file(path: str) -> Any:
     help="Who asked for this run. The unattended form of --approve; recorded in the ledger.",
 )
 @click.option("--offline", is_flag=True, help="Serve model calls from a cassette. No keys, no spend.")
-@click.option("--record", is_flag=True, help="Call the provider and write a cassette.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
 @click.option("--cassette", default="", help="Where to read or write a recording.")
 @click.option("--budget", type=float, default=None, help="Hard ceiling, in USD.")
 @click.option(
@@ -3588,7 +3677,7 @@ def implement_cmd(
     approve: bool,
     approved_by: str,
     offline: bool,
-    record: bool,
+    record: bool | None,
     cassette: str,
     budget: float | None,
     resume: str,
@@ -3602,7 +3691,7 @@ def implement_cmd(
     ticket written by anybody is not the thing that should also hold the ability to write.
     """
 
-    _one_provider(dry_run=dry_run, offline=offline, record=record)
+    record = _recording(dry_run=dry_run, offline=offline, record=record)
     from .adapters.ai import TDD, Implement, Oneshot
     from .adapters.sandbox import Sandbox
     from .adapters.worktree import WorktreeRunner
@@ -4835,12 +4924,15 @@ def _write_gitignore(path: Path) -> None:
 
 
 def _disclose_what_a_run_keeps() -> None:
-    """Say what a recording holds, where it goes and for how long, at the moment somebody opts in.
+    """Say what a recording holds, where it goes and for how long, at the moment it starts.
 
-    Recording is on by default in what this scaffolds, which is the right default -- an inference
+    Recording is on by default everywhere now, not only in what this scaffolds -- an inference
     nobody kept is an opportunity spent and discarded -- and it is exactly the kind of default that
-    has to be said out loud rather than discovered. What follows is the whole disclosure: a person
-    who reads only this knows what leaves their machine and what stays.
+    has to be said out loud rather than discovered. That is what makes this the load-bearing half
+    of the change rather than a courtesy: a default nobody was told about is a surprise, and the
+    surprise here is a file on their disk holding a prompt and a diff. What follows is the whole
+    disclosure: a person who reads only this knows what leaves their machine and what stays, and
+    how to decline.
     """
     click.echo("")
     click.echo("What a run keeps:")
@@ -4850,7 +4942,8 @@ def _disclose_what_a_run_keeps() -> None:
     click.echo("  it wrote -- because a session re-sends its history every turn.")
     click.echo("  Redaction masks the credential shapes it knows; it never masks source.")
     click.echo("")
-    click.echo(f"  Locally, only under --record: {CASSETTE_DIR}/<verb>.json, gitignored.")
+    click.echo(f"  Locally: {CASSETTE_DIR}/<verb>.json, gitignored. `--no-record` declines,")
+    click.echo("  per run; nothing is kept for a run you decline, and nothing asks again.")
     click.echo("  In CI the recording is written OUTSIDE the checkout, and dies with the runner.")
     click.echo("  What survives is the cases harvested from it: the question that was asked, and")
     click.echo("  which files and commands the session reached for -- addresses, not contents.")
