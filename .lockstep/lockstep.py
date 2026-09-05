@@ -14,7 +14,7 @@ from whichever branch is under review.
 """
 
 from in_lockstep import Lockstep, Workshop
-from in_lockstep.adapters import PytestTest, RuffValidate
+from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
 from in_lockstep.adapters.ai import TDD, DiagnoseThenFix
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
@@ -57,6 +57,17 @@ lockstep.guard = ChangeGuard(PathPolicy(deny_always=(*DENY_ALWAYS, "evidence/"))
 # process holds.
 lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], sandbox=Sandbox()))
 lockstep.bind(Validate, RuffValidate(sandbox=Sandbox()))
+
+# The environment the two above run in. Detection would derive this same line from `uv.lock`, and
+# writing it down is what makes `in-lockstep provision` do something here: an explicit module wins
+# over detection, so a module that binds Test and Validate and stays silent about Provision leaves
+# the verb reporting `not bound` -- which is exactly what this repository did while telling
+# adopters their work jobs should run it (#249, GATE-CI-3).
+#
+# `--locked` rather than a bare sync: it refuses to rewrite the lockfile it installs from, so a
+# stale `uv.lock` fails by name here instead of being silently updated inside a run and marking
+# every record that run writes as `dirty`.
+lockstep.bind(Provision, CommandProvision([["uv", "sync", "--locked"]], sandbox=Sandbox()))
 
 # -- policy -------------------------------------------------------------------------
 #

@@ -1130,3 +1130,77 @@ def test_doc168_is_silent_when_nothing_was_recorded(tmp_path) -> None:  # noqa: 
 
     (tmp_path / ".lockstep" / "cassettes").mkdir(parents=True)
     assert not [c for c in doctor.run(str(tmp_path)).checks if c.code == "DOC168"]
+
+
+# -- doctor's verdict has to be worth acting on (GATE-CI-3, issue 249) --------------------------
+#
+# `continue-on-error: true` sat on all four of this repository's `doctor` steps, so no run had
+# ever been stopped by a control it reported missing. The reason it had to be there is this check:
+# a CI job's token cannot read the branch-protection API, every non-zero `gh` exit was an ERROR,
+# and so a fully protected `main` was reported as unprotected on every single run. A diagnostic
+# that cries wolf gets its verdict discarded, and then gates nothing at all.
+
+
+def _protection_says(monkeypatch, *, branch_rc: int = 0, branch_out: str = "", name: str = "main"):
+    """Drive `_branch_protection` with a stubbed `gh`, keyed on which subcommand is called."""
+    import subprocess
+
+    from in_lockstep import doctor
+
+    def fake_run(argv, **kwargs):
+        if argv[:2] == ["gh", "repo"]:
+            return subprocess.CompletedProcess(argv, 0 if name else 1, name, "")
+        return subprocess.CompletedProcess(argv, branch_rc, "", branch_out)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    report = doctor.Report()
+    doctor._branch_protection(report, doctor.Path("."))
+    return report
+
+
+def test_gate_ci_3_an_unprotected_default_branch_is_an_error(monkeypatch) -> None:
+    """The finding this check exists for, and the only answer that earns an ERROR."""
+    report = _protection_says(monkeypatch, branch_rc=1, branch_out="gh: Branch not protected (HTTP 404)")
+    assert any(c.code == "DOC121" for c in report.errors)
+
+
+def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(monkeypatch) -> None:
+    """Absent is not zero, in the check that made this repository discard doctor's verdict.
+
+    A job token gets `Resource not accessible by integration` for a branch that is fully
+    protected. Reporting that as "the default branch has no protection rule" is a control being
+    declared missing on the strength of not having looked.
+    """
+    report = _protection_says(
+        monkeypatch, branch_rc=1, branch_out="gh: Resource not accessible by integration (HTTP 403)"
+    )
+    assert not any(c.code == "DOC121" for c in report.checks), "an unreadable API is not a verdict"
+    note = next(c for c in report.checks if c.code == "DOC120")
+    assert note.severity is not __import__("in_lockstep").doctor.Severity.ERROR
+    assert "Resource not accessible" in note.hint, "what gh said is quoted, not paraphrased"
+
+
+def test_gate_ci_3_a_protected_default_branch_reports_nothing(monkeypatch) -> None:
+    """The control: a check that fired on success too would be noise on every green run."""
+    report = _protection_says(monkeypatch, branch_rc=0)
+    assert not [c for c in report.checks if c.code in ("DOC120", "DOC121")]
+
+
+def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch) -> None:
+    """This asked about `branches/main/protection` literally, so a repository whose default is
+    `master` got `Branch not found` — and, under the old reporting, an ERROR about a rule it may
+    well have had."""
+    asked: list[str] = []
+    import subprocess
+
+    from in_lockstep import doctor
+
+    def fake_run(argv, **kwargs):
+        asked.append(" ".join(argv))
+        if argv[:2] == ["gh", "repo"]:
+            return subprocess.CompletedProcess(argv, 0, "master", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    doctor._branch_protection(doctor.Report(), doctor.Path("."))
+    assert any("branches/master/protection" in a for a in asked), asked
