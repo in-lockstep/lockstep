@@ -92,10 +92,16 @@ to move without somebody standing in front of this table.
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5` | — | — |
 | `O10` | It runs on itself | partial | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3` | `GATE-CFG-3` | Five workflows are triggered on this repository and all of them record. What is not dogfooded is this repository's own lifecycle module. `make check` runs `ruff check src tests` and `mypy src`, so the 771 lines of `.lockstep/lockstep.py` — every adapter binding, the path tiers, the egress policy — are checked by neither. Pointing mypy at it finds a function defined twice, identically, the second shadowing the first. It is the file every adopter copies the shape of. |
 
-Two objectives of ten are `held`. That is the number this file exists to make visible, and it
-should be read the way the gate ledger's own census is read: `partial` against a stated gap is a
-better position than `held` against nothing, and the previous state of this repository was not
-`held` — it was unmeasured.
+1 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+the way the gate ledger's own census is read: `partial` against a stated gap is a better position
+than `held` against nothing, and the previous state of this repository was not `held` — it was
+unmeasured.
+
+Both sentences stating that count are checked against the table rather than trusted, because the
+first draft of this file said *two*. O1 was `held` while the sentence was written and `partial` by
+the time it was committed, and the prose one screen below the table went on saying the old number
+— a figure nobody recomputed, in the document about figures nobody recomputes. It is written
+`N of 10` in both files so that one pattern finds both.
 
 ## Claimed by no objective
 

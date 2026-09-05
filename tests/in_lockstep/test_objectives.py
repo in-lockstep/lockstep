@@ -292,3 +292,27 @@ def test_the_mission_is_actually_found_in_each_file():
     for path in STATES_THE_MISSION:
         assert _mission(path.read_text()).startswith("Enable teams of software engineers"), path.name
     assert _mission("# no mission here\n\n> a quote about something else\n") == ""
+
+
+# `1 of 10 are `held`` — written this way in both files so one pattern finds both.
+CENSUS = re.compile(r"\b(\d+) of (\d+) are `held`")
+
+
+def _claimed_census(text: str) -> list[tuple[int, int]]:
+    return [(int(a), int(b)) for a, b in CENSUS.findall(text)]
+
+
+def test_every_prose_census_matches_the_table():
+    """A count in prose that nobody recomputes is the failure this whole file is about, and the
+    first draft committed it: the ledger said two objectives were `held` because one of them was
+    when the sentence was written and `partial` by the time it was committed."""
+    rows = _ledger(OBJECTIVES_MD.read_text())
+    actual = (sum(1 for row in rows if row.status == "held"), len(rows))
+    claims = [
+        (path.name, claim)
+        for path in (CLAUDE_MD, OBJECTIVES_MD)
+        for claim in _claimed_census(path.read_text())
+    ]
+    assert claims, "no file states the census; the pattern that finds it has stopped matching"
+    for name, claim in claims:
+        assert claim == actual, f"{name} says {claim[0]} of {claim[1]} held; the table says {actual[0]}"
