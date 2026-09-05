@@ -1438,3 +1438,206 @@ def test_a_read_refusal_that_refused_everything_would_be_the_same_defect(tmp_pat
     runner = _tree_with_secrets(root)
     (root / ".lockstep" / "lockstep.py").write_text("lockstep = 1\n")
     assert not runner._read({"path": path}).startswith("refused:")
+
+
+# -- a finding's path is arithmetic, not a judgement (GATE-REVIEW-4, issue 234) -----------------
+#
+# `path` arrived from the model and was compared against nothing, while the diff answering it was
+# already in the prompt. O7 asks which part of a verb is arithmetic wearing a prompt; this is that
+# part, and it is not cosmetic — the path decides where an inline comment gets posted.
+
+_DIFF_TWO_FILES = (
+    "diff --git a/src/real.py b/src/real.py\n"
+    "--- a/src/real.py\n"
+    "+++ b/src/real.py\n"
+    "@@ -1 +1 @@\n-x = 1\n+x = 2\n"
+    "diff --git a/src/gone.py b/src/gone.py\n"
+    "--- a/src/gone.py\n"
+    "+++ /dev/null\n"
+    "@@ -1 +0,0 @@\n-y = 1\n"
+)
+
+
+def _review_returning(findings: list[dict], diff: str = _DIFF_TWO_FILES):
+    import json
+
+    from in_lockstep.adapters.ai.review import AiReview, Review
+
+    provider = Stub(replies=[LLMOutput(content=json.dumps({"findings": findings, "verdict": "ok"}))])
+    adapter = AiReview(lambda ctx: invoker(provider))
+    return asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff=diff)))
+
+
+def test_gate_review_4_a_finding_naming_a_file_the_change_does_not_touch_is_dropped() -> None:
+    """The headline. A hallucinated path either fails at the host or lands on an untouched file."""
+    from in_lockstep.core.outcome import Status
+
+    outcome = _review_returning(
+        [
+            {"path": "src/real.py", "line": 1, "summary": "real", "severity": "note"},
+            {"path": "src/invented.py", "line": 9, "summary": "invented", "severity": "note"},
+        ]
+    )
+    assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
+    kept = [f.path for f in outcome.value.findings]
+    assert kept == ["src/real.py"], "the invented path survived"
+
+
+def test_gate_review_4_one_bad_path_does_not_discard_the_findings_beside_it() -> None:
+    """Per finding, not per report. Three real findings are not collateral for one bad path."""
+    outcome = _review_returning(
+        [
+            {"path": "src/real.py", "summary": "one", "severity": "note"},
+            {"path": "nowhere/a.py", "summary": "two", "severity": "note"},
+            {"path": "src/gone.py", "summary": "three", "severity": "note"},
+        ]
+    )
+    assert outcome.value is not None
+    assert [f.summary for f in outcome.value.findings] == ["one", "three"]
+
+
+def test_gate_review_4_the_drop_is_counted_rather_than_silent() -> None:
+    """A lens that quietly drops half its output reads as a lens that found half as much, and
+    "the reviewer said little" is the reading a person acts on."""
+    outcome = _review_returning(
+        [
+            {"path": "src/real.py", "summary": "real", "severity": "note"},
+            {"path": "a/x.py", "summary": "no", "severity": "note"},
+            {"path": "b/y.py", "summary": "no", "severity": "note"},
+        ]
+    )
+    refusals = [f for f in outcome.findings if f.id == "review.path_not_in_diff"]
+    assert len(refusals) == 1, "the drop was silent"
+    assert "2 finding(s) dropped" in refusals[0].message
+    assert "a/x.py" in refusals[0].message and "b/y.py" in refusals[0].message
+
+
+def test_gate_review_4_a_deleted_file_is_a_path_the_change_touched() -> None:
+    """`src/gone.py` appears only on the `---` side. Deleting a file is a fine thing to have an
+    opinion about, and reading only `+++` answers a different question: what the tree looks like
+    afterwards, rather than what this change touched."""
+    outcome = _review_returning([{"path": "src/gone.py", "summary": "still referenced", "severity": "note"}])
+    assert outcome.value is not None
+    assert [f.path for f in outcome.value.findings] == ["src/gone.py"]
+    assert not [f for f in outcome.findings if f.id == "review.path_not_in_diff"]
+
+
+def test_gate_review_4_a_diff_with_no_parsable_paths_keeps_every_finding() -> None:
+    """A pure mode change has `diff --git` and no `---`/`+++` lines at all.
+
+    Refusing every finding on the strength of a parse that found nothing would drop real output to
+    enforce a rule this input cannot answer — so the check fails open, and the control is that it
+    stays open rather than quietly dropping everything.
+    """
+    mode_only = "diff --git a/src/real.py b/src/real.py\nold mode 100644\nnew mode 100755\n"
+    outcome = _review_returning(
+        [{"path": "src/real.py", "summary": "still a finding", "severity": "note"}], diff=mode_only
+    )
+    assert outcome.value is not None
+    assert len(outcome.value.findings) == 1
+    assert not [f for f in outcome.findings if f.id == "review.path_not_in_diff"]
+
+
+def test_gate_review_4_a_path_is_not_rewritten_to_make_it_match() -> None:
+    """`./src/real.py` is the same file; `a/src/real.py` is not.
+
+    Stripping a leading `a/` or `b/` was tempting and is wrong — `a/` is a legal directory name,
+    and a rule that rewrites a path until it matches is the guessing the neighbouring detection
+    code refuses. Anything that does not match exactly is refused and counted instead.
+    """
+    from in_lockstep.adapters.ai.review import _normalised
+
+    assert _normalised("  ./src/real.py ") == "src/real.py"
+    assert _normalised("a/src/real.py") == "a/src/real.py"
+
+    outcome = _review_returning([{"path": "./src/real.py", "summary": "same file", "severity": "note"}])
+    assert outcome.value is not None and len(outcome.value.findings) == 1
+
+    outcome = _review_returning([{"path": "a/src/real.py", "summary": "not that file", "severity": "note"}])
+    assert outcome.value is not None and not outcome.value.findings
+
+
+def test_gate_review_4_a_clean_review_reports_no_refusal() -> None:
+    """The other side of the ratchet: a refusal finding on a report with nothing to refuse would
+    be noise on every green review."""
+    outcome = _review_returning([{"path": "src/real.py", "summary": "fine", "severity": "note"}])
+    assert not [f for f in outcome.findings if f.id == "review.path_not_in_diff"]
+
+
+# The line half of the same rule. Whether a line is inside a hunk is arithmetic too — but a
+# finding one line outside the change is still worth reading, so the honest treatment is to keep
+# the claim and drop the coordinate rather than refuse the finding.
+
+_DIFF_WITH_HUNKS = (
+    "diff --git a/src/real.py b/src/real.py\n"
+    "--- a/src/real.py\n"
+    "+++ b/src/real.py\n"
+    "@@ -10,3 +10,3 @@\n-a\n+b\n"
+    "@@ -80,1 +80,1 @@\n-c\n+d\n"
+)
+
+
+def test_gate_review_4_a_line_outside_every_hunk_is_dropped_and_the_finding_kept() -> None:
+    outcome = _review_returning(
+        [{"path": "src/real.py", "line": 500, "summary": "real claim", "severity": "note"}],
+        diff=_DIFF_WITH_HUNKS,
+    )
+    assert outcome.value is not None
+    assert len(outcome.value.findings) == 1, "the finding was refused, not just its line"
+    assert outcome.value.findings[0].line is None
+    assert outcome.value.findings[0].summary == "real claim"
+    dropped = [f for f in outcome.findings if f.id == "review.line_not_in_hunk"]
+    assert len(dropped) == 1 and "src/real.py:500" in dropped[0].message
+
+
+def test_gate_review_4_a_line_inside_any_hunk_is_kept() -> None:
+    """Any hunk, not the first: a file's second hunk is as real as its first."""
+    for line in (10, 12, 80):
+        outcome = _review_returning(
+            [{"path": "src/real.py", "line": line, "summary": "in the change", "severity": "note"}],
+            diff=_DIFF_WITH_HUNKS,
+        )
+        assert outcome.value is not None
+        assert outcome.value.findings[0].line == line, f"line {line} was inside a hunk"
+        assert not [f for f in outcome.findings if f.id == "review.line_not_in_hunk"]
+
+
+def test_gate_review_4_a_finding_with_no_line_is_not_reported_as_misplaced() -> None:
+    """A finding claiming no coordinate cannot be wrong about one."""
+    outcome = _review_returning(
+        [{"path": "src/real.py", "summary": "file-level", "severity": "note"}], diff=_DIFF_WITH_HUNKS
+    )
+    assert outcome.value is not None and outcome.value.findings[0].line is None
+    assert not [f for f in outcome.findings if f.id == "review.line_not_in_hunk"]
+
+
+def test_gate_review_4_a_deleted_files_finding_keeps_its_line() -> None:
+    """`+++ /dev/null` has no new side, so there is no hunk to be outside of.
+
+    *No new side* and *this line is wrong* are different facts, and treating them alike would
+    strip the line off every finding on every deleted file.
+    """
+    outcome = _review_returning(
+        [{"path": "src/gone.py", "line": 3, "summary": "still referenced", "severity": "note"}]
+    )
+    assert outcome.value is not None
+    assert outcome.value.findings[0].line == 3
+    assert not [f for f in outcome.findings if f.id == "review.line_not_in_hunk"]
+
+
+def test_a_single_line_hunk_header_without_a_count_is_read() -> None:
+    """`@@ -5 +5 @@` is the spelling git uses for a one-line hunk, and `\\d+,\\d+` misses it."""
+    from in_lockstep.platform.scm import Diff
+
+    text = "--- a/f.py\n+++ b/f.py\n@@ -5 +5 @@\n-a\n+b\n"
+    assert Diff(text=text, base="", head="").hunks == {"f.py": ((5, 5),)}
+
+
+def test_a_pure_deletion_hunk_claims_no_new_side_line() -> None:
+    """`+7,0` occupies nothing. `(7, 6)` would be an empty range every comparison quietly gets
+    right and every reader quietly gets wrong."""
+    from in_lockstep.platform.scm import Diff
+
+    text = "--- a/f.py\n+++ b/f.py\n@@ -7,2 +7,0 @@\n-a\n-b\n"
+    assert Diff(text=text, base="", head="").hunks == {"f.py": ()}

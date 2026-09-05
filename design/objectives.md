@@ -87,12 +87,12 @@ to move without somebody standing in front of this table.
 | `O4` | Every model call is recorded | partial | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4` | `GATE-RECORD-5` | The default is fixed. Recording is what a run does now rather than a flag it is handed, so the path a person meets first keeps what it pays for and `--no-record` is how they decline. What is left is the word *every*: an adapter constructed with its own `invoker_factory=` builds its provider inside a lambda nothing can reach, so the seam never sees it. That is detected rather than prevented -- the run compares what the tape holds against what it spent and names the bypass instead of reporting a reassuring zero -- and a hole somebody is told about is still a hole. |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
 | `O6` | The model never holds a secret | partial | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1` | `GATE-POLICY-2` | The best-executed objective here, and not `held`. Credentials are dropped from every child environment, a container is preferred and refused rather than silently downgraded when the caller asked for one, `run_script` refuses outright until a runner is bound, and the opt-out is a differently-named class somebody can grep for. What is unmet is a second surface: `Policy.network` and `Policy.permissions` are merged, printed by `ls` and reported in the receipt, and read by nothing. The ground is covered by the sandbox and the egress policy. A security field that reads as in force while enforcing nothing is still an O6 defect, because the receipt is what a reviewer believes — and the mission names *the policy of their choice* directly, so those five fields are not a duplicate surface but a choice an adopter is invited to make and nothing honours. |
-| `O7` | Determinism first | partial | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-EVAL-4`, `GATE-COST-3` | `GATE-REVIEW-4` | Well served where it was argued for: a ticket number and a lens name are resolved in Python before any credential is read, backport cherry-picks deterministically and reaches a model only for a conflict, and harvest and eval settle without one. One leak, in the place the objective names. A review finding's `path` and `line` come from the model and are checked against nothing, though `git diff --name-only base...head` knows which files the change touched for free. That is arithmetic wearing a prompt, and it decides where an inline comment lands. |
+| `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3` | — | — |
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
 | `O10` | It runs on itself | partial | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3` | `GATE-CI-3` | This repository's own lifecycle module is checked by its own gates now, and every Python file in the tree is reached or exempt with a reason. What is left is narrower and more awkward: two things this repository tells adopters to do that it does not do. `in-lockstep provision` builds a repository's environment and the README says the scaffolded work jobs run it -- every job here runs `uv sync` instead, so the verb has never provisioned this tree. And `doctor` is `continue-on-error` at all four call sites, so a control it reports missing has never stopped a run. The diagnostic is dogfooded; its verdict is not. |
 
-3 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+4 of 10 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -118,6 +118,15 @@ discovered for them, and a Ruby team still hand-writes bindings out of a `Rakefi
 tree the whole time. Twice now, the first closure has exposed the row underneath rather than
 finishing it — which is the argument for splitting *carried by* from *blocked on* in the first
 place, made twice by the mechanism rather than by anyone's judgement.
+
+It moved to four when #234 closed `GATE-REVIEW-4`, and that row is worth reading for the opposite
+reason: nothing was exposed underneath, because the gap text had named the whole of it. It said a
+finding's `path` **and `line`** came from the model and were checked against nothing, and the
+issue filed against it proposed doing the path half and leaving the line. Doing only that would
+have left O7 `partial` against a gap the row already knew about — which is the ledger asking for a
+new gate to describe something it had described perfectly well the first time. So both halves
+landed, and O7 is the first objective here to close because somebody read the gap and finished it
+rather than because a gate happened to flip.
 
 ## Claimed by no objective
 

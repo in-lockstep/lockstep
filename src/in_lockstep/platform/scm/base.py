@@ -247,6 +247,24 @@ def is_run_branch_of(branch: str, workflow: str) -> bool:
     return bool(slug) and branch.startswith(f"{RUN_BRANCH_PREFIX}/{slug}/")
 
 
+#: `@@ -3,4 +5,6 @@` — the new-side start and count. The count is optional (`+5` means one line),
+#: which is the spelling a single-line hunk actually uses and the one a naive `\d+,\d+` misses.
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _new_side_span(header: str) -> tuple[int, int] | None:
+    """The inclusive line range a hunk header claims on the new side, or None if it claims none."""
+    m = _HUNK.match(header)
+    if m is None:
+        return None
+    start = int(m.group(1))
+    count = int(m.group(2)) if m.group(2) is not None else 1
+    # A pure deletion is `+7,0`: it occupies no line on the new side, so there is nothing to point
+    # at. Returning `(7, 6)` would be an empty range that every comparison silently gets right and
+    # every reader silently gets wrong.
+    return (start, start + count - 1) if count > 0 else None
+
+
 @dataclass(frozen=True)
 class Diff:
     text: str
@@ -255,11 +273,54 @@ class Diff:
 
     @property
     def paths(self) -> tuple[str, ...]:
+        """Every path this diff touches, both sides, in file order and without duplicates.
+
+        Both sides because a deleted file has `+++ /dev/null` and appears only on the `---` side,
+        and a rename appears under two different names. Reading only the `+++` side answered "what
+        does the tree look like afterwards", which is a different question from "what did this
+        change touch" — and the second is the one a caller checking a review finding's path is
+        asking, since deleting a file is a perfectly good thing to have an opinion about.
+
+        `/dev/null` is not a path. It is git's spelling of "this side does not exist".
+        """
         out: list[str] = []
         for line in self.text.splitlines():
-            if line.startswith("+++ b/"):
-                out.append(line[6:])
+            for marker in ("--- a/", "+++ b/"):
+                if line.startswith(marker):
+                    path = line[len(marker) :]
+                    if path not in out:
+                        out.append(path)
         return tuple(out)
+
+    @property
+    def hunks(self) -> dict[str, tuple[tuple[int, int], ...]]:
+        """Per file, the line ranges this diff produced on the **new** side.
+
+        The other half of "did this change touch that". `paths` answers which file; this answers
+        which lines of it, so a caller can tell a finding pointing into the change from one
+        pointing at a line that merely happens to exist in the same file.
+
+        New side only, and keyed on the `+++` name, because that is the side a reader is sent to.
+        A deleted file has `+++ /dev/null` and gets no entry at all rather than an empty one:
+        *no new side* and *no changed lines* are different facts, and a caller that cannot tell
+        them apart will report a deleted file's findings as pointing outside the change.
+
+        `@@ -3,4 +5,6 @@` means six lines starting at 5. A count of zero is a pure deletion, which
+        occupies no new-side line, so it contributes no range.
+        """
+        out: dict[str, list[tuple[int, int]]] = {}
+        current: str | None = None
+        for line in self.text.splitlines():
+            if line.startswith("+++ "):
+                name = line[4:]
+                current = name[2:] if name.startswith("b/") else None
+                if current is not None:
+                    out.setdefault(current, [])
+            elif line.startswith("@@") and current is not None:
+                span = _new_side_span(line)
+                if span is not None:
+                    out[current].append(span)
+        return {path: tuple(spans) for path, spans in out.items()}
 
 
 @dataclass(frozen=True)
