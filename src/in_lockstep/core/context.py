@@ -21,7 +21,7 @@ from typing import Any, TypeVar
 from .container import Container
 from .middleware import ActionCall, Middleware, Next, compose
 from .outcome import Outcome, Status
-from .ports import StepStore
+from .ports import InferenceLog, StepStore
 from .spend import Spend
 from .verbs import Verb, capabilities_of, verb_of
 
@@ -244,6 +244,11 @@ class RunContext:
     # Set to a StateStore to make steps resumable. Opt-out-able: without one the model is "just a
     # Python function", which is the simplicity the whole design trades on.
     state: StepStore | None = None
+    #: Where this run's model calls are kept, when `--record` asked for them to be. One object for
+    #: the whole run: a workflow's steps each build their own invoker, and two of them saving the
+    #: same tape would lose whichever wrote first. `None` is a run that records nothing, which is
+    #: every run that did not ask.
+    recording: InferenceLog | None = None
     recovering: bool = False
     #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
     approval: Approval = field(default_factory=Approval)

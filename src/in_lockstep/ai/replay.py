@@ -164,6 +164,15 @@ class Cassette:
         }
         self.order.append(key)
 
+    def calls(self) -> int:
+        """How many model calls this tape holds. Satisfies `core.ports.InferenceLog`.
+
+        Which is the whole of what `core` needs to know about a recording: `RunContext` carries one
+        so an adapter's own invoker can find it, and a run that recorded nothing is told so in a
+        number rather than by an empty file nobody opens.
+        """
+        return len(self.provider_calls)
+
     def as_stored(self) -> dict[str, str]:
         """Hash of each entry's request AS STORED, mapped to the key it is filed under.
 

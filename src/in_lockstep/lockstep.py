@@ -19,6 +19,7 @@ from .core.context import AGENT_INSTRUCTION_FILES, Approval, RepoFacts, RepoInfo
 from .core.improve import Improvable
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
+from .core.ports import InferenceLog
 from .core.spend import Budget, DailySpendExceeded, Spend, UndeclaredBudget
 from .core.types import VENV_BIN
 from .core.verbs import NEEDS_APPROVAL, Capability, UngatedAgency, capabilities_of
@@ -172,7 +173,9 @@ class Lockstep:
 
     # -- running -------------------------------------------------------------------
 
-    def context(self, run_id: str, *, approval: Approval | None = None) -> RunContext:
+    def context(
+        self, run_id: str, *, approval: Approval | None = None, recording: InferenceLog | None = None
+    ) -> RunContext:
         self._refuse_undeclared_budget()
         self._refuse_ungated_agency()
         self._refuse_exhausted_daily_ceiling()
@@ -184,6 +187,7 @@ class Lockstep:
             middleware=list(self.middleware),
             approval=approval or Approval(),
             models=dict(self.models.routes),
+            recording=recording,
         )
 
     def declared_ceiling(self) -> Budget:
