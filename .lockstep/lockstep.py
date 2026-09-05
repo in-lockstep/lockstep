@@ -533,7 +533,7 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     key, where = await ticket_for(ticket, scm)
     print(where)
     source = await tickets.get(key)
-    record = _last_unsuccessful(key)
+    record = _last_unsuccessful(key, "implement/")
 
     if record is None:
         body = (
@@ -550,8 +550,14 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
             if isinstance(f, dict)
         ]
         detail = ("\n\n" + "\n".join(findings)) if findings else ""
+        # `blocked` is not a failure. A run a budget ceiling or an approval gate stopped is
+        # the control working, and this sentence is posted on a public ticket — so calling one a
+        # failure states something untrue about the run in the place a person will read it, and
+        # teaches everyone that the ceiling is a fault rather than a decision somebody made.
+        stopped = record.get("status") == "blocked"
+        what = f"was stopped by `{reason}`" if stopped else f"failed with `{reason}`"
         body = (
-            f"`/implement` did not produce a change — the run failed with `{reason}`.{spent} "
+            f"`/implement` did not produce a change — the run {what}.{spent} "
             f"Nothing was staged and no pull request was opened.{detail}"
         )
 
@@ -563,11 +569,26 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     return Outcome(status=Status.SUCCEEDED, reason=None)
 
 
-def _last_unsuccessful(ticket: str) -> dict[str, Any] | None:
-    """The newest recorded run for this ticket that did not succeed.
+def _last_unsuccessful(ticket: str, family: str) -> dict[str, Any] | None:
+    """The newest recorded run of THIS family, for this ticket, that did not succeed.
 
     Matched on the `ticket` the record carries rather than on the run id, because a run id is a
     string a person would have to parse and the field exists for exactly this.
+
+    `family` is the prefix of the record's `workflow` — "implement/" or "fix/". Without it this
+    matched on ticket and status alone, so a `/fix` report could find an `implement/` run and
+    quote its reason as though it were the fix attempt. Both verbs answer on the same ticket, so
+    the two are routinely present together.
+
+    Passed as an argument rather than defaulted per copy, and that is load-bearing rather than
+    stylistic: `init --implement --fix` appends both blocks, and the de-duplicator drops the
+    second copy of a shared definition only when it is byte-identical to the first. A per-copy
+    default would make them differ, so both would be emitted and the module would carry a
+    redefinition again.
+
+    A blocked run is included, deliberately. It did not succeed and a person waiting on the ticket
+    needs to know it stopped — what must not happen is calling it a failure, which is the caller's
+    job to get right.
     """
     from in_lockstep.platform.ledger import store_for
 
@@ -581,6 +602,7 @@ def _last_unsuccessful(ticket: str) -> dict[str, Any] | None:
         for r in reader()
         if str((r.get("args") or {}).get("ticket", r.get("ticket", ""))) in wanted
         and r.get("status") != "succeeded"
+        and str(r.get("workflow", "")).startswith(family)
     ]
     mine.sort(key=lambda r: str(r.get("ts", "")))
     return mine[-1] if mine else None
@@ -720,7 +742,7 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
     key, where = await ticket_for(ticket, scm)
     print(where)
     source = await tickets.get(key)
-    record = _last_unsuccessful(key)
+    record = _last_unsuccessful(key, "fix/")
 
     if record is None:
         body = (
@@ -737,8 +759,14 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
             if isinstance(f, dict)
         ]
         detail = ("\n\n" + "\n".join(findings)) if findings else ""
+        # `blocked` is not a failure. A run a budget ceiling or an approval gate stopped is
+        # the control working, and this sentence is posted on a public ticket — so calling one a
+        # failure states something untrue about the run in the place a person will read it, and
+        # teaches everyone that the ceiling is a fault rather than a decision somebody made.
+        stopped = record.get("status") == "blocked"
+        what = f"was stopped by `{reason}`" if stopped else f"failed with `{reason}`"
         body = (
-            f"`/fix` did not produce a change — the run failed with `{reason}`.{spent} "
+            f"`/fix` did not produce a change — the run {what}.{spent} "
             f"Nothing was staged and no pull request was opened.{detail}"
         )
 
