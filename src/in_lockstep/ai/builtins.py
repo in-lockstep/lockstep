@@ -393,11 +393,16 @@ class ToolRunnerImpl:
 
     def _read(self, args: dict[str, object]) -> str:
         path = str(args.get("path", ""))
-        # The guard's own out-of-root rule, applied to reads. A model that can read `../../.ssh`
-        # has exfiltrated it the moment the result enters the transcript.
-        refusal = self.workspace.guard.check_path(path, workflow_id=self.workspace.workflow_id)
-        if refusal is not None and refusal.rule == "outside-repo-root":
-            return f"refused: {path} is outside the repository"
+        # `check_read`, not `check_path`. This asked the guard and then acted on ONE of its
+        # answers: every tier-1 refusal but `outside-repo-root` was computed and thrown away, so
+        # `read_file(".env")` returned the file. The guard was consulted and overruled.
+        #
+        # A read is its own question, which is why the guard now has its own answer for it rather
+        # than this reusing the write tiers — `.github/` must stay readable or an agent asked to
+        # fix a workflow cannot see the workflow.
+        refusal = self.workspace.guard.check_read(path)
+        if refusal is not None:
+            return f"refused: {path} is protected ({refusal.rule})"
         target = self.workspace.resolve(path)
         if not target.is_file():
             return f"error: no file at {path}"
@@ -411,10 +416,14 @@ class ToolRunnerImpl:
 
     def _list(self, args: dict[str, object]) -> str:
         pattern = str(args.get("glob", "*"))
+        # Names, not contents, so the stake is lower than `read_file`'s — but a listing of
+        # `.git/` is noise at best, and a listing of what is protected is a map of where to look.
         matches = sorted(
-            str(p.relative_to(self.workspace.root))
+            rel
             for p in self.workspace.root.rglob("*")
-            if p.is_file() and fnmatch.fnmatch(str(p.relative_to(self.workspace.root)), pattern)
+            if p.is_file()
+            and fnmatch.fnmatch(rel := str(p.relative_to(self.workspace.root)), pattern)
+            and self.workspace.guard.check_read(rel) is None
         )
         if not matches:
             return "(no matches)"
@@ -440,6 +449,13 @@ class ToolRunnerImpl:
                 continue
             rel = str(path.relative_to(self.workspace.root))
             if not fnmatch.fnmatch(rel, glob):
+                continue
+            # The same rule `read_file` applies, and the more important of the two: a search is how
+            # somebody LOOKS for a credential, and this walked `rglob("*")` with no guard at all —
+            # so `search_text(pattern="API_KEY")` returned lines out of `.env` and out of `.git/`.
+            # Skipped silently rather than refused: a search is over the tree, and naming every
+            # protected file it declined would be a listing of exactly what is worth reading.
+            if self.workspace.guard.check_read(rel) is not None:
                 continue
             try:
                 text = path.read_text()
