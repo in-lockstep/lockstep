@@ -640,6 +640,28 @@ Bind it with `lockstep.bind(Implement, TDD(...))` and `in-lockstep ls` prints `I
 so how implementing happens is one visible line. The CLI's `--strategy tdd` does the same for a
 repository that has bound nothing.
 
+## Reading the process you are running
+
+Extending something starts with reading it, and the shipped processes are framework code rather
+than lines in your module. `show-workflow` prints them:
+
+```bash
+in-lockstep show-workflow                    # the families and their ids
+in-lockstep show-workflow implement          # a whole module
+in-lockstep show-workflow implement/propose  # one process
+in-lockstep show-workflow --registered       # what THIS repository has in force
+```
+
+It reads nothing and spends nothing. The source comes from `inspect.getsource` on the module that
+is actually imported, so what you read is what runs — a property a copy in your own file could not
+have offered, which is the argument that retired `init --eject`. Ejecting gave you a readable copy
+and, with it, a fork: every later fix landed twice and reached nobody who had already scaffolded.
+
+`--registered` answers the neighbouring question. `show-workflow implement` prints what the
+framework ships; `--registered` prints what your `lockstep.py` put in force, which differs the
+moment somebody writes their own — and that is exactly the case where reading the shipped source
+would mislead.
+
 ## The path a project takes
 
 The framework is built around one arc, and each stage is meant to reuse the last rather than
@@ -698,17 +720,39 @@ there the gate answers from CODEOWNERS alone.
 
 The rule is one line long: **process goes in `.lockstep/lockstep.py`, CI invokes it.**
 
+For the processes the framework ships, "goes in" means *registered*, not written:
+
 ```python
-@workflow(id="implement/from-ticket")
-async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome:
-    return await ctx.do(Implement(ticket=await tickets.get(ticket)))
+from in_lockstep.workflows import implement
+
+implement.register()
 ```
 
 ```bash
 in-lockstep run implement/from-ticket --arg ticket='#59' --budget 2.00
 ```
 
-The signature is the contract: `ticket` arrives from `--arg ticket=...`, and `tickets` is filled
+That is what `init --implement` writes, and `implement/from-ticket` is framework code — read it
+with `in-lockstep show-workflow implement`. Registering rather than copying is why a fix to the
+process reaches a repository by upgrading. **Do not hand-write `@workflow(id="implement/...")`
+beside that call**: `@workflow` refuses a repeated id, so a module claiming a shipped id from a
+`def` of its own raises `DuplicateWorkflow` at load, which is the correct answer to asking for two
+different things under one name.
+
+A process of your own is the same shape, under an id you own:
+
+```python
+@workflow(id="implement/from-label")
+async def implement_from_label(ctx: RunContext, label: str, tickets: TicketSource) -> Outcome[Any]:
+    ready = await tickets.search(f"label:{label}", limit=1)
+    return await ctx.do(Implement(ticket=ready[0]))
+```
+
+```bash
+in-lockstep run implement/from-label --arg label='ready' --budget 2.00
+```
+
+The signature is the contract: `label` arrives from `--arg label=...`, and `tickets` is filled
 from the container because its annotation names a bound port. The dispatcher resolves
 `TicketSource` so the body never touches `ctx.container`.
 

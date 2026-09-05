@@ -7,7 +7,8 @@ once in this repository's own module — and could never reach a repository that
 forever in any tree scaffolded before it.
 
 Nothing here registers on import. `@workflow` raises `DuplicateWorkflow` on a repeated id, so a
-module still carrying its own ejected copy would fail to load ENTIRELY the moment the framework
+module carrying its own copy of these — hand-written, or ejected by a version that offered it —
+    would fail to load ENTIRELY the moment the framework
 claimed the same ids — an upgrade that breaks every existing adopter. Registration is a call
 somebody makes:
 
@@ -246,8 +247,8 @@ def register() -> None:
 
     Called by an adopter's `lockstep.py`, never on import. Raises `DuplicateWorkflow` if the
     module already defines one of these ids itself, which is the correct and informative failure:
-    a repository that ejected the source and then also called this asked for two different things
-    under one name.
+    a repository carrying its own copy of one of these and also calling this asked for two different
+    things under one name.
     """
     workflow(id="implement/from-ticket")(implement_from_ticket)
     workflow(id="implement/propose")(implement_propose)
