@@ -148,20 +148,41 @@ def test_what_init_writes_carries_no_workflow_bodies(tmp_path):
     assert "from in_lockstep.workflows import" in source
 
 
-def test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs(tmp_path):
-    """The other half. Owning your process is a real position -- ADR 0001 deleted a compiler over
-    generated output nobody could read -- so `--eject` writes the bodies into the module.
+def test_the_shipped_process_can_be_read_without_being_copied(tmp_path):
+    """`GATE-PLUGIN-3`, the other half. Reading was the part people wanted; owning was what made
+    every fix land twice and never reach a repository that had already scaffolded.
 
-    The text comes from `inspect.getsource` on the installed package, so there is exactly one copy
-    of it and it is the code that runs. That is the whole difference from the string literals this
-    replaced: those were a second copy, and they drifted.
+    `init --eject` was built first and dropped: it reintroduced the import-merging machinery this
+    change exists to retire, and left duplicate imports when both verbs were ejected into one file.
+    `show-workflow` gets the same value with none of it, because printing is not forking.
+
+    Printed from `inspect.getsource` on the module that is actually imported, so what a person
+    reads is what runs -- which a second copy in their own file could never promise.
     """
-    source = _scaffolded(tmp_path, "--implement", "--eject")
-    assert "async def implement_from_ticket" in source
-    assert "from in_lockstep.workflows import" not in source, "an ejected module owns its process"
-    # And it is the shipped text, not a paraphrase of it: a line only the framework module carries.
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
     from in_lockstep.workflows import implement
 
-    marker = "the ticket that pull request was opened for"
-    if marker in inspect.getsource(implement):
-        assert marker in source
+    listing = CliRunner().invoke(main, ["show-workflow"])
+    assert listing.exit_code == 0
+    assert "implement/propose" in listing.output and "fix/report" in listing.output
+
+    one = CliRunner().invoke(main, ["show-workflow", "implement/report"])
+    assert one.exit_code == 0
+    assert "async def implement_report" in one.output
+    # The shipped text, not a paraphrase: a line only the framework module carries.
+    assert one.output.strip() in inspect.getsource(implement)
+
+    unknown = CliRunner().invoke(main, ["show-workflow", "nope/x"])
+    assert unknown.exit_code != 0
+    assert "Shipped:" in unknown.output, "a refusal names what does exist"
+
+
+def test_nothing_init_writes_is_a_workflow_body(tmp_path):
+    """The property `--eject` used to violate on request. There is no flag that puts a copy of a
+    process into an adopter's module any more, which is what makes one copy a fact rather than a
+    default."""
+    source = _scaffolded(tmp_path, "--implement", "--fix")
+    for body in ("async def implement_from_ticket", "async def fix_from_ticket", "await ctx.do("):
+        assert body not in source
