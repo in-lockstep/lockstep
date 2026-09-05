@@ -377,9 +377,29 @@ def _detect_facts(root: Path) -> RepoFacts:
         except ValueError:
             package = {}
 
+    cargo = read("Cargo.toml")
+    gradle = has("build.gradle", "build.gradle.kts")
+
     python = bool(pyproject) or has("setup.py", "setup.cfg") or has("requirements.txt")
     node = bool(package)
-    stack = "python" if python else ("node" if node else "")
+    rust = bool(cargo)
+    go = has("go.mod")
+    jvm = has("pom.xml") or gradle
+    # Every ecosystem whose manifest is here, not the first one matched. A Go service with a
+    # package.json front end is two true facts, and reporting one of them made `ls` describe a
+    # repository as something it is only half of. Display only: which of these actually gets
+    # bound is decided per verb below.
+    stack = ", ".join(
+        name
+        for name, present in (
+            ("python", python),
+            ("node", node),
+            ("rust", rust),
+            ("go", go),
+            ("jvm", jvm),
+        )
+        if present
+    )
 
     raw_scripts = package.get("scripts")
     scripts: dict[str, Any] = raw_scripts if isinstance(raw_scripts, dict) else {}
@@ -405,12 +425,36 @@ def _detect_facts(root: Path) -> RepoFacts:
     # Only a target or script that is actually in the file is bound. Inventing `make build` for a
     # Makefile without a `build` target produces a binding that fails at run time, which is worse
     # than an honest absence.
+    #
+    # The native manifests come last, after both the Makefile and package.json, because every
+    # layer above them is a line somebody wrote: a `test` target and a `"test"` script are each a
+    # decision, where `cargo test` is derived from the presence of a manifest. A repository that
+    # wrote one down meant it, including when it wraps the very command derived here.
+    #
+    # What each manifest implies is only what its toolchain guarantees for any valid manifest.
+    # `cargo test`, `go test ./...` and `cargo build` cannot fail for being unconfigured. What is
+    # deliberately NOT derived: `cargo run` and `go run` on a repository with no binary — a
+    # library crate has no bin target and `cargo run` fails at run time, which is the same wrong
+    # default that runs the Makefile branch above refuses to invent — and any JVM command without
+    # the wrapper on disk, because `mvn` and `gradle` are not guaranteed to be installed while
+    # `./mvnw` and `./gradlew` are the repository's own copy. `mvnw.cmd` is not read: this
+    # framework runs its adapters on POSIX.
+    maven_wrapper = has("pom.xml") and has("mvnw")
+    gradle_wrapper = gradle and has("gradlew")
     test_command: tuple[str, ...] = ()
     if not pytest:
         if "test" in make_targets:
             test_command = ("make", "test")
         elif "test" in scripts:
             test_command = ("npm", "test")
+        elif rust:
+            test_command = ("cargo", "test")
+        elif go:
+            test_command = ("go", "test", "./...")
+        elif maven_wrapper:
+            test_command = ("./mvnw", "test")
+        elif gradle_wrapper:
+            test_command = ("./gradlew", "test")
 
     ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
     eslint = (
@@ -419,23 +463,52 @@ def _detect_facts(root: Path) -> RepoFacts:
         or has("eslint.config.js", "eslint.config.mjs", "eslint.config.cjs")
         or isinstance(package.get("eslintConfig"), dict)
     )
+    # A linter is bound only where the repository configured one, which is the rule eslint already
+    # follows and the reason `go vet ./...` is not here. Vet ships with the toolchain and would run
+    # for any module, so it is not a guess about whether it *works* — it is a guess about whether
+    # this repository treats it as its linter, and a `lint` verb bound to a checker nobody chose
+    # reports findings the repository never agreed to be judged by. An unbound Validate is visible:
+    # `init` writes a commented stub saying how to bind one.
+    clippy = rust and (has("clippy.toml", ".clippy.toml") or "[lints.clippy]" in cargo)
+    golangci = go and has(".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
     lint_command: tuple[str, ...] = ()
     if not ruff:
         if "lint" in make_targets:
             lint_command = ("make", "lint")
         elif eslint:
             lint_command = ("npx", "eslint", ".")
+        elif clippy:
+            lint_command = ("cargo", "clippy")
+        elif golangci:
+            lint_command = ("golangci-lint", "run")
 
     build_command: tuple[str, ...] = ()
     if "build" in make_targets:
         build_command = ("make", "build")
     elif "build" in scripts:
         build_command = ("npm", "run", "build")
+    elif rust:
+        build_command = ("cargo", "build")
+    elif go:
+        build_command = ("go", "build", "./...")
+    elif maven_wrapper:
+        build_command = ("./mvnw", "package")
+    elif gradle_wrapper:
+        build_command = ("./gradlew", "build")
     run_command: tuple[str, ...] = ()
     if "run" in make_targets:
         run_command = ("make", "run")
     elif "start" in scripts:
         run_command = ("npm", "start")
+    # Only where there is a binary to run. A library crate has no bin target and a Go module with
+    # its command under `cmd/` names it in a path nothing here can know, so `cargo run` and
+    # `go run .` are bound from the evidence of a main and not from the manifest. Neither JVM
+    # wrapper gets a run line at all: `./gradlew run` exists only with the application plugin, and
+    # Maven has no run phase.
+    elif rust and (has("src/main.rs") or "[[bin]]" in cargo):
+        run_command = ("cargo", "run")
+    elif go and has("main.go"):
+        run_command = ("go", "run", ".")
 
     # How the repository's own environment is built, for the `provision` step a scaffolded work
     # job runs before anything else (#185). The rule is narrower than the four verbs' above,
@@ -457,6 +530,10 @@ def _detect_facts(root: Path) -> RepoFacts:
     # so a repository that does not ignore node_modules or .venv sees its run record marked
     # dirty; and that venv is built on whatever `python` resolves to, which under uvx is the
     # framework's own interpreter.
+    # Cargo, Go and the JVM wrappers bind nothing here, and that is a positive answer rather than
+    # a gap: `cargo test` and `go test` resolve and fetch their own dependencies as part of the
+    # build, and `./mvnw`/`./gradlew` download the build tool itself. There is no separate frozen
+    # install step to run, so `provision` reporting `not bound` for them is the truth.
     provision: list[tuple[str, ...]] = []
     if "deps" in make_targets:
         provision.append(("make", "deps"))

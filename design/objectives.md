@@ -81,8 +81,8 @@ to move without somebody standing in front of this table.
 
 | Objective | Title | Status | Carried by | Blocked on | The gap |
 |---|---|---|---|---|---|
-| `O1` | Drop in, and reuse what the repository already has | partial | `GATE-TOOLING-1`, `GATE-PROVISION-1` | `GATE-TOOLING-2` | Detection reads `pyproject.toml`, `package.json` and the `Makefile`, and `RepoFacts.stack` is `python`, `node` or empty. A repository whose build is declared in `Cargo.toml`, `go.mod`, `pom.xml` or `build.gradle` is discovered only through a `Makefile` it may not have. Declining is correct and O1 says so; not discovering is the half that is missing, and `GATE-TOOLING-2` is where it is recorded. |
-| `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1` | `GATE-TOOLING-2` | The mechanism is held. `init` writes a twelve-line `lockstep.py` and a trampoline, everything it writes survives `mypy --strict` now that a `py.typed` ships, and a scaffolded repository reaches a green run with no hand-editing. What is left is the same gap O1 carries, arriving here as its consequence: detection reads three files, so an adopter whose build is declared in `Cargo.toml`, `go.mod` or `pom.xml` hand-writes bindings that were discoverable from a file in their tree. That is precisely the thing O2 says a person should never have to write. The old gap named N3 -- nobody has timed `init` to a first useful review -- which is a measurement of adoption rather than a property of the framework, and it was doing the work of hiding this one. |
+| `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2` | — | — |
+| `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2` | `GATE-TOOLING-3` | The same gap as before, one ecosystem-family narrower. #237 taught detection to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, so a Rust, Go or JVM adopter no longer hand-writes what was in their tree. A Ruby, PHP, Elixir, .NET, C++ or Swift adopter still does. This row did not move with O1's, and the reason is the difference between the two sentences: O1 sanctions declining in its own text -- *detection that guesses is worse than detection that declines* -- so a stack that is read or else named is O1 satisfied. O2's standard has no such clause. It is that what a person writes by hand is the thing nobody could have discovered for them, and a `Rakefile` sitting in the tree is discoverable. `GATE-TOOLING-3` is where the remainder is recorded. |
 | `O3` | The same process at a terminal and in CI | partial | `GATE-CI-1`, `GATE-RECORD-1` | `GATE-CI-2` | Every verb runs at a terminal, and on GitHub five trampolines carry the triggers and none of the logic. GitLab gets one active `review` job; the gate/work/propose split for the write verbs ships commented out, and there is no OIDC federation path, so keyless CI is GitHub-only. The scaffold says both plainly, which is the right way to ship a partial. It is still a partial. |
 | `O4` | Every model call is recorded | partial | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4` | `GATE-RECORD-5` | The default is fixed. Recording is what a run does now rather than a flag it is handed, so the path a person meets first keeps what it pays for and `--no-record` is how they decline. What is left is the word *every*: an adapter constructed with its own `invoker_factory=` builds its provider inside a lambda nothing can reach, so the seam never sees it. That is detected rather than prevented -- the run compares what the tape holds against what it spent and names the bypass instead of reporting a reassuring zero -- and a hole somebody is told about is still a hole. |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
@@ -92,7 +92,7 @@ to move without somebody standing in front of this table.
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
 | `O10` | It runs on itself | partial | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3` | `GATE-CI-3` | This repository's own lifecycle module is checked by its own gates now, and every Python file in the tree is reached or exempt with a reason. What is left is narrower and more awkward: two things this repository tells adopters to do that it does not do. `in-lockstep provision` builds a repository's environment and the README says the scaffolded work jobs run it -- every job here runs `uv sync` instead, so the verb has never provisioned this tree. And `doctor` is `continue-on-error` at all four call sites, so a control it reports missing has never stopped a run. The diagnostic is dogfooded; its verdict is not. |
 
-2 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+3 of 10 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -107,6 +107,17 @@ It moved to two the first time a gate closed. #232 shipped `py.typed`, `GATE-PLU
 the ledger turned red on O2 and O8 — both of which were blocked on it and neither of which had been
 re-read. That is the whole mechanism working on its first real use: O8 became `held`, and O2 did
 not, because closing one blocker exposed a second that the old gap text had been obscuring.
+
+It moved to three the same way, and O2 was again the row that did not move. #237 taught detection
+to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, closing `GATE-TOOLING-2` — the only
+gate cited under two rows' *blocked on*, so both turned red at once. O1 became `held` and O2 stayed
+`partial`, and the reason is worth keeping because it is not obvious from the two titles. O1's own
+sentence sanctions declining, so a stack that is either read or named by the decline satisfies it.
+O2's does not: its standard is that what a person writes by hand is the thing nobody could have
+discovered for them, and a Ruby team still hand-writes bindings out of a `Rakefile` that was in the
+tree the whole time. Twice now, the first closure has exposed the row underneath rather than
+finishing it — which is the argument for splitting *carried by* from *blocked on* in the first
+place, made twice by the mechanism rather than by anyone's judgement.
 
 ## Claimed by no objective
 

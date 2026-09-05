@@ -27,7 +27,7 @@ from in_lockstep.adapters.command import Test, Validate
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.ruff_adapter import RuffValidate
 from in_lockstep.adapters.sandbox import Sandbox, SandboxResult
-from in_lockstep.core.context import MAKE_TARGETS_SHOWN
+from in_lockstep.core.context import BUILD_MANIFESTS, MAKE_TARGETS_SHOWN
 from in_lockstep.core.types import VENV_BIN, RunResult
 from in_lockstep.lockstep import _detect_facts
 
@@ -591,3 +591,163 @@ def test_the_facts_summary_names_the_steps_and_detection_binds_provision_first(t
     bound = detected_bindings(facts)
     assert bound[0][0] is Provision and isinstance(bound[0][1], CommandProvision)
     assert bound[0][1].steps == facts.provision_commands
+
+
+# --- Beyond Python and Node: GATE-TOOLING-2 ---------------------------------------------------
+#
+# O1's first half. A repository that says how it builds itself in `Cargo.toml`, `go.mod`,
+# `pom.xml` or `build.gradle` was served only through a Makefile it may not have had, and `ls`
+# printed nothing rather than saying what had been looked for.
+
+
+def test_a_rust_repo_binds_cargo_for_test_and_build(tmp_path: Path) -> None:
+    """GATE-TOOLING-2: a Cargo.toml states how the repository tests and builds itself."""
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n'})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "rust"
+    assert facts.test_command == ("cargo", "test")
+    assert facts.build_command == ("cargo", "build")
+    kinds = {i: type(x) for i, x in detected_bindings(facts)}
+    assert kinds[Test] is CommandTest and kinds[Build] is CommandBuild
+
+
+def test_a_go_repo_binds_go_test_and_go_build(tmp_path: Path) -> None:
+    """GATE-TOOLING-2, the same for a go.mod."""
+    _write(tmp_path, {"go.mod": "module example.com/x\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "go"
+    assert facts.test_command == ("go", "test", "./...")
+    assert facts.build_command == ("go", "build", "./...")
+
+
+def test_a_library_crate_gets_no_cargo_run(tmp_path: Path) -> None:
+    """`cargo run` on a crate with no bin target fails at run time — the wrong default that runs.
+
+    The control is the same tree with a `src/main.rs`, which must bind it.
+    """
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n'})
+    assert _detect_facts(tmp_path).run_command == ()
+
+    _write(tmp_path, {"src/main.rs": "fn main() {}"})
+    assert _detect_facts(tmp_path).run_command == ("cargo", "run")
+
+
+def test_a_go_module_with_no_main_gets_no_run_command(tmp_path: Path) -> None:
+    """A module whose command lives under `cmd/` names it in a path nothing here can know."""
+    _write(tmp_path, {"go.mod": "module example.com/x\n", "cmd/serve/main.go": "package main"})
+    assert _detect_facts(tmp_path).run_command == ()
+
+    _write(tmp_path, {"main.go": "package main"})
+    assert _detect_facts(tmp_path).run_command == ("go", "run", ".")
+
+
+def test_a_jvm_repo_binds_nothing_until_its_wrapper_is_on_disk(tmp_path: Path) -> None:
+    """`mvn` and `gradle` are not guaranteed to be installed; `./mvnw` is the repository's own."""
+    _write(tmp_path, {"pom.xml": "<project/>"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "jvm"
+    assert facts.test_command == () and facts.build_command == ()
+
+    _write(tmp_path, {"mvnw": "#!/bin/sh\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.test_command == ("./mvnw", "test")
+    assert facts.build_command == ("./mvnw", "package")
+
+
+def test_a_gradle_repo_binds_its_wrapper(tmp_path: Path) -> None:
+    _write(tmp_path, {"build.gradle.kts": "", "gradlew": "#!/bin/sh\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "jvm"
+    assert facts.test_command == ("./gradlew", "test")
+    assert facts.build_command == ("./gradlew", "build")
+
+
+def test_a_linter_is_bound_only_where_the_repository_configured_one(tmp_path: Path) -> None:
+    """The eslint rule, applied to clippy and golangci-lint.
+
+    `cargo clippy` and `go vet` would both run for any valid manifest, so binding them is not a
+    guess about whether they work — it is a guess about whether this repository treats them as its
+    linter, and a Validate bound to a checker nobody chose reports findings nobody agreed to.
+    """
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n'})
+    assert _detect_facts(tmp_path).lint_command == ()
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n[lints.clippy]\nall = "warn"\n'})
+    assert _detect_facts(tmp_path).lint_command == ("cargo", "clippy")
+
+    go_repo = tmp_path / "go"
+    go_repo.mkdir()
+    _write(go_repo, {"go.mod": "module example.com/x\n"})
+    assert _detect_facts(go_repo).lint_command == (), "go vet is not bound without configuration"
+    _write(go_repo, {".golangci.yml": ""})
+    assert _detect_facts(go_repo).lint_command == ("golangci-lint", "run")
+
+
+def test_a_written_target_beats_a_command_derived_from_a_manifest(tmp_path: Path) -> None:
+    """A `test` target is a decision; `cargo test` is inferred from a file being present."""
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n', "Makefile": "test:\n\tcargo test --all\n"})
+    assert _detect_facts(tmp_path).test_command == ("make", "test")
+
+
+def test_the_stack_names_every_ecosystem_present_not_the_first(tmp_path: Path) -> None:
+    """A Go service with a package.json front end is two true facts."""
+    _write(tmp_path, {"go.mod": "module example.com/x\n", "package.json": '{"scripts":{"test":"jest"}}'})
+    assert _detect_facts(tmp_path).stack == "node, go"
+
+
+def test_every_advertised_manifest_is_one_detection_actually_reads(tmp_path: Path) -> None:
+    """The decline names files; each has to be load-bearing, or it is advertising a lie.
+
+    This is the direction that rots. `BUILD_MANIFESTS` is prose next to a reader that could stop
+    opening one of them and nothing else would notice — the same shape as a gate row citing a gate
+    nobody wrote. Each name, alone in a directory, must produce a fact.
+    """
+    minimal = {
+        "pyproject.toml": "[project]\nname = 'x'\n",
+        "setup.py": "from setuptools import setup\n",
+        "requirements.txt": "click\n",
+        "package.json": '{"name":"x"}',
+        "Makefile": "test:\n\techo\n",
+        "Cargo.toml": '[package]\nname = "x"\n',
+        "go.mod": "module example.com/x\n",
+        "pom.xml": "<project/>",
+        "build.gradle": "",
+        "build.gradle.kts": "",
+    }
+    assert set(minimal) == set(BUILD_MANIFESTS), "a manifest was advertised without a case here"
+    for name in BUILD_MANIFESTS:
+        root = tmp_path / name.replace(".", "_").replace("/", "_")
+        root.mkdir()
+        _write(root, {name: minimal[name]})
+        facts = _detect_facts(root)
+        assert facts.summary(), f"{name} is advertised by the decline and detection reads nothing from it"
+
+
+def test_a_repository_detection_cannot_serve_is_told_what_was_looked_for(tmp_path: Path) -> None:
+    """GATE-TOOLING-2's second half: declining by name.
+
+    A Dockerfile is the control. It makes `summary()` non-empty without making anything bindable,
+    so a decline keyed on "was anything found at all" would go quiet on exactly the tree that
+    needs it. (A README does not serve as that control: `summary()` does not report one, which is
+    the sort of thing a control is for.)
+    """
+    _write(tmp_path, {"README.md": "# x\n", "Dockerfile": "FROM scratch\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.summary(), "the control is only meaningful if something was found"
+    declined = facts.declined()
+    for name in BUILD_MANIFESTS:
+        assert name in declined, f"the decline does not name {name}"
+
+
+def test_a_manifest_that_named_no_command_declines_differently(tmp_path: Path) -> None:
+    """A pom.xml does state how the repository builds. Saying otherwise sends its owner to fix
+    the thing that is not broken, so the decline names the wrapper instead."""
+    _write(tmp_path, {"pom.xml": "<project/>"})
+    declined = _detect_facts(tmp_path).declined()
+    assert "jvm is here" in declined and "./mvnw" in declined
+    assert "nothing here states how this repository builds" not in declined
+
+
+def test_a_servable_repository_declines_nothing(tmp_path: Path) -> None:
+    """The other side of the ratchet: a decline that fired on a bound repository would be noise."""
+    _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n'})
+    assert _detect_facts(tmp_path).declined() == ""

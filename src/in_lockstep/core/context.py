@@ -77,6 +77,28 @@ AGENT_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", ".cursorrules")
 #: How many Makefile targets `RepoFacts.summary()` names before saying "+N more".
 MAKE_TARGETS_SHOWN = 8
 
+#: The files in which a repository states how it builds, tests and runs itself, and which
+#: `_detect_facts` therefore opens.
+#:
+#: Named here rather than only in the reader because O1's second half needs it: *detection that
+#: guesses is worse than detection that declines*, and a decline that does not say what was looked
+#: for leaves an adopter unable to tell an unsupported stack from a misconfigured one. This is the
+#: list `RepoFacts.declined()` prints, and `test_detect.py` holds it to being true — every name
+#: here, alone in a directory, must produce a fact, or the decline is advertising a file nothing
+#: reads.
+BUILD_MANIFESTS = (
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+    "package.json",
+    "Makefile",
+    "Cargo.toml",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+)
+
 
 @dataclass(frozen=True)
 class RepoFacts:
@@ -89,7 +111,12 @@ class RepoFacts:
     binding derived from it.
     """
 
-    stack: str = ""  # "python" | "node" | "" when neither is recognised
+    #: The ecosystems whose manifests are in the tree, comma-joined in a fixed order:
+    #: `"python"`, `"node"`, `"rust"`, `"go"`, `"jvm"`, or `""` when none is recognised. A list
+    #: rather than a winner, because a Go service with a package.json front end is two true facts
+    #: and picking one would report a repository as something it is only half of. Display only —
+    #: what gets bound is decided per verb below, where the precedence is written down.
+    stack: str = ""
     pytest: bool = False
     test_command: tuple[str, ...] = ()  # a generic runner argv, e.g. ("npm", "test")
     ruff: bool = False
@@ -109,6 +136,46 @@ class RepoFacts:
     readme: bool = False
     docs: bool = False
     agent_instructions: tuple[str, ...] = ()  # names only; the contents are read per run
+
+    def declined(self) -> str:
+        """What was looked for, when nothing found here can serve a verb. Empty otherwise.
+
+        O1's second half — *detection that guesses is worse than detection that declines* — is
+        only half a rule while the decline is silent. `ls` printed what was found and never what
+        was sought, so a Rust repository before `BUILD_MANIFESTS` grew a `Cargo.toml` entry and a
+        genuinely unsupported one produced the same output: nothing. An adopter could not tell
+        which they had, and the honest answer costs one line.
+
+        The predicate is *can any verb be served*, not *was anything found at all*. A repository
+        with a Dockerfile, a README and no build manifest has facts worth printing and still
+        cannot be bound, and that is exactly the case where the decline is the useful half.
+
+        Three cases rather than one sentence, because one sentence was wrong in two of them. A
+        `pom.xml` with no `./mvnw` beside it *does* state how the repository builds, and telling
+        that adopter "nothing here states how this repository builds" would send them to fix the
+        thing that is not broken. What they need to hear is that the wrapper is missing.
+        """
+        servable = (
+            self.pytest
+            or self.test_command
+            or self.ruff
+            or self.lint_command
+            or self.build_command
+            or self.run_command
+            or self.provision_commands
+        )
+        if servable:
+            return ""
+        if self.stack:
+            # Reaching here with `jvm` in the stack means no usable wrapper: `pom.xml` and
+            # `build.gradle` bind their commands only when `./mvnw` or `./gradlew` is on disk, so
+            # had one been there this would have been servable.
+            wrapper = " (a Maven or Gradle repository needs its ./mvnw or ./gradlew committed)"
+            hint = wrapper if "jvm" in self.stack else ""
+            return f"{self.stack} is here and named no test, lint, build or run command{hint}"
+        if self.makefile:
+            return "a Makefile is here with no test, lint, build or run target"
+        return f"nothing here states how this repository builds; looked for {', '.join(BUILD_MANIFESTS)}"
 
     def summary(self) -> tuple[str, ...]:
         """A human-readable list of what was found, for `ls` and `doctor`."""

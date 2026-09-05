@@ -35,10 +35,11 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     The precedence, decided in `_detect_facts` and stated here where it is consumed: a tool with
     structured output wins the verb where that structure matters (pytest's per-test cases are what
     a fix loop reproduces from; ruff's per-rule findings are what a review reads). Where none was
-    found, the Makefile serves the verb before package.json does, so a Go repository with
-    `make test` gets a Test binding that reports an exit code, which is less than pytest gives and
-    more than nothing. Build and run have no structured tool at all, so for them the Makefile is
-    the first choice rather than the fallback.
+    found, the Makefile serves the verb before package.json does, and both before a command
+    derived from a native manifest (`cargo test`, `go test ./...`, `./mvnw test`) — because a
+    target and a script are each something somebody wrote down, where the derived command is
+    inferred from a manifest's presence. Build and run have no structured tool at all, so for them
+    the Makefile is the first choice rather than the fallback.
     """
     out: list[tuple[type[Any], Any]] = []
 

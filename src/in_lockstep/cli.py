@@ -1064,6 +1064,11 @@ def ls_cmd() -> None:
     detected = lockstep.repo.facts.summary()
     if detected:
         click.echo(f"detected  {'; '.join(detected)}")
+    # The other half of O1's rule. Printing only what was found made an unsupported stack and a
+    # misconfigured one produce the same output, so a person could not tell which they had.
+    declined = lockstep.repo.facts.declined()
+    if declined:
+        click.echo(f"declined  {declined}")
     if os.environ.get(DISABLE_ENV):
         click.echo(f"DISABLED  {DISABLE_ENV} is set; no adapter will execute")
 
@@ -4928,6 +4933,11 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         found = facts.summary()
         if found:
             click.echo(f"  detected {'; '.join(found)}")
+        # The moment an adopter learns their stack is not served is the moment they are told what
+        # was looked for -- `init` is where the bindings they will otherwise hand-write are chosen.
+        declined = facts.declined()
+        if declined:
+            click.echo(f"  declined {declined}")
 
     # Relative like every other path this command writes, and unlike the cassette default, which
     # is joined to the repository root. Different commands, different failure modes: `init` is run
