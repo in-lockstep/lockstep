@@ -10,13 +10,16 @@ how.
 ## The mission
 
 > Enable teams of software engineers to work together using a framework to keep AI usage
-> disciplined and structural enabling collaborative development work to proceed on the hosted SCM
+> disciplined and structured enabling collaborative development work to proceed on the hosted SCM
 > of their choice using the provider(s) and model(s) of their choice constrained by the
-> process(s) of their choice.
+> process(es) and policy of their choice.
 
 Everything below is that sentence made checkable. The mission is wider than the ten objectives
 are — it names collaboration between engineers, and choice of provider and model, which no
 objective yet carries — and `design/objectives.md` records that gap rather than papering over it.
+It also names *policy* of their choice, which O8 does carry and `GATE-POLICY-2` says is not yet
+kept: five declared `Policy` fields are printed by `ls` and reported in the receipt and enforced
+by nothing.
 
 ## What this framework is for
 

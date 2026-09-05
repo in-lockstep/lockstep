@@ -3,9 +3,9 @@
 ## The mission
 
 > Enable teams of software engineers to work together using a framework to keep AI usage
-> disciplined and structural enabling collaborative development work to proceed on the hosted SCM
+> disciplined and structured enabling collaborative development work to proceed on the hosted SCM
 > of their choice using the provider(s) and model(s) of their choice constrained by the
-> process(s) of their choice.
+> process(es) and policy of their choice.
 
 The ten objectives in `CLAUDE.md` are how that sentence is made measurable. This file is the
 ledger over them, and it exists for one reason: **the objectives had no ratchet.**
@@ -86,7 +86,7 @@ to move without somebody standing in front of this table.
 | `O3` | The same process at a terminal and in CI | partial | `GATE-CI-1`, `GATE-RECORD-1` | `GATE-CI-2` | Every verb runs at a terminal, and on GitHub five trampolines carry the triggers and none of the logic. GitLab gets one active `review` job; the gate/work/propose split for the write verbs ships commented out, and there is no OIDC federation path, so keyless CI is GitHub-only. The scaffold says both plainly, which is the right way to ship a partial. It is still a partial. |
 | `O4` | Every model call is recorded | partial | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3` | `GATE-RECORD-4` | The mechanism is complete: every model-calling command takes `--record`, the seam in `ai/bootstrap.py` wraps whatever provider an adapter builds, and a run that spends tokens the recorder never saw says so rather than reporting a reassuring zero. What is not held is the default. O4's own sentence is that recording *is not an option a run turns on*, and it is a flag that is off, so a laptop `in-lockstep review` keeps nothing. Every path the framework itself drives passes the flag; the path a person meets first does not. |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
-| `O6` | The model never holds a secret | partial | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1` | `GATE-POLICY-2` | The best-executed objective here, and not `held`. Credentials are dropped from every child environment, a container is preferred and refused rather than silently downgraded when the caller asked for one, `run_script` refuses outright until a runner is bound, and the opt-out is a differently-named class somebody can grep for. What is unmet is a second surface: `Policy.network` and `Policy.permissions` are merged, printed by `ls` and reported in the receipt, and read by nothing. The ground is covered by the sandbox and the egress policy. A security field that reads as in force while enforcing nothing is still an O6 defect, because the receipt is what a reviewer believes. |
+| `O6` | The model never holds a secret | partial | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1` | `GATE-POLICY-2` | The best-executed objective here, and not `held`. Credentials are dropped from every child environment, a container is preferred and refused rather than silently downgraded when the caller asked for one, `run_script` refuses outright until a runner is bound, and the opt-out is a differently-named class somebody can grep for. What is unmet is a second surface: `Policy.network` and `Policy.permissions` are merged, printed by `ls` and reported in the receipt, and read by nothing. The ground is covered by the sandbox and the egress policy. A security field that reads as in force while enforcing nothing is still an O6 defect, because the receipt is what a reviewer believes — and the mission names *the policy of their choice* directly, so those five fields are not a duplicate surface but a choice an adopter is invited to make and nothing honours. |
 | `O7` | Determinism first | partial | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-EVAL-4`, `GATE-COST-3` | `GATE-REVIEW-4` | Well served where it was argued for: a ticket number and a lens name are resolved in Python before any credential is read, backport cherry-picks deterministically and reaches a model only for a conflict, and harvest and eval settle without one. One leak, in the place the objective names. A review finding's `path` and `line` come from the model and are checked against nothing, though `git diff --name-only base...head` knows which files the change touched for free. That is arithmetic wearing a prompt, and it decides where an inline comment lands. |
 | `O8` | Extended without forking | partial | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1` | `GATE-PLUGIN-2` | Every mechanism exists and is documented: packs that offer rather than apply, standards that may only tighten, lenses spread or replaced, custom verbs, middleware, strategies. The gap is the same missing `py.typed` that O2 carries, and it lands hardest here. The framework holds itself to `mypy --strict` and ships nothing that lets an adopter hold their own extension to anything. |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5` | — | — |
@@ -116,7 +116,8 @@ left. The list is recomputed by the test, so a gate cannot quietly join or leave
 ## What the mission says that the ten do not
 
 Recorded here rather than smoothed over, because the mission arrived after the objectives and is
-wider than they are. Two clauses of it are carried by no objective at all:
+wider than they are. Two clauses of it are carried by no objective at all, and a third is
+carried by an objective whose gate for it is unmet:
 
 **"teams of software engineers to work together" / "collaborative development work."** Nothing in
 O1-O10 is about more than one engineer. The review conversation reaching the next `/fix` as
@@ -129,8 +130,24 @@ choice. `llm/providers/` carries six of them behind a registry that refuses an e
 which is real and load-bearing surface — and by `CLAUDE.md`'s own rule it is currently surface
 that cites no objective. The mission is what justifies it; the ten have not caught up.
 
-The remaining clauses map cleanly. "The hosted SCM of their choice" is O3. "Constrained by the
-process(s) of their choice" is O1 and O8. "Disciplined and structural" is O4, O6 and O7.
+**"the policy of their choice"** is the third clause worth writing down, and it is the one that
+is not a gap in the objectives. It is carried: O8 is why an adopter binds their own `PathPolicy`,
+`InvokePolicy` and `EgressPolicy` in a `lockstep.py` the framework never edits, and O6 is why the
+egress and residency halves of that are enforced rather than declared. What the clause changes is
+the weight of `GATE-POLICY-2`, which is listed above as O6's blocker. That gate says every field
+`Policy` carries reaches something that enforces it, and that it does not: `network`,
+`permissions` and the three credit fields are merged by `resolve()`, printed by `ls` and reported
+in the receipt, and read by nothing else.
 
-Whether the answer is two more objectives or a wider reading of the existing ones is a decision,
-not a patch — and it is recorded here unresolved rather than settled by whoever noticed it.
+Before the mission was written down that read as a duplicate surface, because the sandbox and the
+egress policy cover the same ground and do enforce. It reads differently now. An adopter choosing
+a policy is doing the thing the mission exists for, and five of the fields they can choose are
+inert — which makes the receipt, the artefact a security reviewer reads to find out what is in
+force, the place the gap surfaces.
+
+The remaining clauses map cleanly. "The hosted SCM of their choice" is O3. "Constrained by the
+process(es) of their choice" is O1 and O8. "Disciplined and structured" is O4, O6 and O7.
+
+Whether the answer to the first two is more objectives or a wider reading of the existing ones is
+a decision, not a patch — and it is recorded here unresolved rather than settled by whoever
+noticed it.
