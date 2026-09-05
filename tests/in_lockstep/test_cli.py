@@ -458,7 +458,9 @@ def test_init_binds_provision_when_the_repository_has_a_lockfile(repo: Path) -> 
 
 
 def test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves(repo: Path) -> None:
-    """Issue 189. `init --implement` binds `ApprovalGate`, and `selfcheck` dispatches Test, which
+    """`GATE-PROVISION-2`, and issue 189.
+
+    `init --implement` binds `ApprovalGate`, and `selfcheck` dispatches Test, which
     declares EXECUTES_CODE. The gate is right to block; what was wrong is that `run selfcheck`
     declared `--approve` and never put it on the context, so no flag could open it. The message
     the run printed named two flags, and neither worked on this path."""

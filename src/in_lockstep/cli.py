@@ -4954,6 +4954,58 @@ def _without_duplicate_imports(existing: str, block: str) -> str:
     return "".join(out)
 
 
+def _without_duplicate_definitions(existing: str, block: str) -> str:
+    """The block, minus a top-level definition the module already has **character for character**.
+
+    The other half of #190, missed because it fixed the imports. `--implement` and `--fix` each
+    append a block that stands alone, and both carry `_last_unsuccessful` — so `init --implement
+    --fix` wrote it twice, the second shadowing the first, in the file `init` had just generated.
+    Ruff cannot see it (the first copy is called before the second is defined, so `F811` correctly
+    does not fire) and mypy is not run over a lifecycle module by anything we ship, which is how
+    it reached this repository's own `.lockstep/lockstep.py` and sat there.
+
+    Byte-identical is the whole condition, and it is the same argument `_without_duplicate_imports`
+    makes one function up: dropping a definition that is exactly the definition already present is
+    the only case where dropping cannot change what a name means. Two functions of one name whose
+    bodies differ are a real conflict, and the honest response to one is to leave both and let the
+    adopter's type checker say so — not to pick a winner silently.
+
+    Comment lines immediately above the definition go with it. They document that function and
+    nothing else, and leaving them behind produces a paragraph attached to whatever follows.
+    """
+    import ast
+
+    try:
+        have = {
+            node.name: ast.get_source_segment(existing, node)
+            for node in ast.parse(existing).body
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+        }
+        tree = ast.parse(block)
+    except SyntaxError:  # pragma: no cover - the caller refuses an unparseable module first
+        return block
+    if not have:
+        return block
+
+    lines = block.splitlines(keepends=True)
+    drop: set[int] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            continue
+        if have.get(node.name) != ast.get_source_segment(block, node):
+            continue
+        # `lineno` is the `def`; a decorator sits above it and is not part of the node's span.
+        start = min([node.lineno, *(d.lineno for d in node.decorator_list)]) - 1
+        while start > 0 and lines[start - 1].lstrip().startswith("#"):
+            start -= 1
+        end = node.end_lineno or node.lineno
+        # Trailing blank lines, so removing a block does not leave the gap it was sitting in.
+        while end < len(lines) and not lines[end].strip():
+            end += 1
+        drop.update(range(start, end))
+    return "".join(line for i, line in enumerate(lines) if i not in drop)
+
+
 def _scaffold_implement(module: Path, *, host: str = "") -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
@@ -4985,7 +5037,9 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         click.echo("Add the implement workflows by hand; the block to paste is in the docs, or run")
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")
     else:
-        merged = text + _without_duplicate_imports(text, _SCAFFOLD_IMPLEMENT_MODULE)
+        merged = text + _without_duplicate_definitions(
+            text, _without_duplicate_imports(text, _SCAFFOLD_IMPLEMENT_MODULE)
+        )
         try:
             # Never leave a module that will not import: a bad append breaks every later command,
             # not just this one. Refuse before writing rather than after loading.
@@ -5029,7 +5083,9 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
     else:
-        merged = text + _without_duplicate_imports(text, _SCAFFOLD_FIX_MODULE)
+        merged = text + _without_duplicate_definitions(
+            text, _without_duplicate_imports(text, _SCAFFOLD_FIX_MODULE)
+        )
         try:
             compile(merged, str(module), "exec")
         except SyntaxError as e:
@@ -5632,6 +5688,8 @@ _SCAFFOLD_FIX_MODULE = '''
 # The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
 # comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
+from typing import Any
+
 from in_lockstep import RunContext, Workshop
 from in_lockstep.adapters.ai import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
@@ -5676,7 +5734,7 @@ FIX_CHANGESET = "fix-changeset"
 
 
 @workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
     """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
@@ -5707,7 +5765,7 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
 @workflow(id="fix/propose")
 async def fix_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
-) -> Outcome:
+) -> Outcome[None]:
     """Open the verified fix from the staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. What it reads came from
@@ -5763,7 +5821,7 @@ async def fix_propose(
     return Outcome(status=Status.SUCCEEDED, value=change)
 
 @workflow(id="fix/report")
-async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
     """Say on the ticket that the run failed, when the half that would have said so never ran.
 
     `fix/propose` answers on every outcome it sees — a change opened, no change staged, tests
@@ -5812,7 +5870,7 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
     return Outcome(status=Status.SUCCEEDED, reason=None)
 
 
-def _last_unsuccessful(ticket: str) -> dict | None:
+def _last_unsuccessful(ticket: str) -> dict[str, Any] | None:
     """The newest recorded run for this ticket that did not succeed.
 
     Matched on the `ticket` the record carries rather than on the run id, because a run id is a
@@ -6135,6 +6193,8 @@ _SCAFFOLD_IMPLEMENT_MODULE = '''
 #
 #     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
 
+from typing import Any
+
 from in_lockstep import RunContext, Workshop
 from in_lockstep.adapters.ai import Implement, Oneshot
 from in_lockstep.adapters.pytest_adapter import PytestTest, Test
@@ -6222,7 +6282,7 @@ CHANGESET = "changeset"
 @workflow(id="implement/from-ticket")
 async def implement_from_ticket(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm
-) -> Outcome:
+) -> Outcome[None]:
     """Read the ticket and the review of the last attempt, implement it, test it, stage it.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
@@ -6259,7 +6319,7 @@ async def implement_from_ticket(
 @workflow(id="implement/propose")
 async def implement_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
-) -> Outcome:
+) -> Outcome[None]:
     """Open a change from a staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. Everything it reads
@@ -6323,7 +6383,7 @@ async def implement_propose(
 
 
 @workflow(id="implement/report")
-async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome:
+async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
     """Say on the ticket that the run failed, when the half that would have said so never ran.
 
     `implement/propose` answers on every outcome it sees — a change opened, no change staged, tests
@@ -6372,7 +6432,7 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     return Outcome(status=Status.SUCCEEDED, reason=None)
 
 
-def _last_unsuccessful(ticket: str) -> dict | None:
+def _last_unsuccessful(ticket: str) -> dict[str, Any] | None:
     """The newest recorded run for this ticket that did not succeed.
 
     Matched on the `ticket` the record carries rather than on the run id, because a run id is a
