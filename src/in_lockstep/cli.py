@@ -5838,7 +5838,7 @@ FIX_CHANGESET = "fix-changeset"
 
 
 @workflow(id="fix/from-ticket")
-async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
+async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[Any]:
     """Read the bug and the review of the last attempt, reproduce it, fix it, leave it staged.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
@@ -5869,7 +5869,7 @@ async def fix_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource, s
 @workflow(id="fix/propose")
 async def fix_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = FIX_CHANGESET
-) -> Outcome[None]:
+) -> Outcome[Any]:
     """Open the verified fix from the staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. What it reads came from
@@ -6386,7 +6386,7 @@ CHANGESET = "changeset"
 @workflow(id="implement/from-ticket")
 async def implement_from_ticket(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm
-) -> Outcome[None]:
+) -> Outcome[Any]:
     """Read the ticket and the review of the last attempt, implement it, test it, stage it.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
@@ -6423,7 +6423,7 @@ async def implement_from_ticket(
 @workflow(id="implement/propose")
 async def implement_propose(
     ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
-) -> Outcome[None]:
+) -> Outcome[Any]:
     """Open a change from a staged artifact, and say on the ticket what happened.
 
     Runs in the job that holds a write token and no provider credential. Everything it reads

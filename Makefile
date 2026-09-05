@@ -4,14 +4,28 @@ check: fmt lint typecheck test evidence
 
 ci: lint typecheck cov evidence
 
+# `.lockstep` is named EXPLICITLY, and that is not stylistic. mypy's recursive walk does not
+# descend into dot-directories, so a parent path does not reach `.lockstep/lockstep.py` — a target
+# that looked like it covered the file would check nothing and pass. Named directly it is picked
+# up: `mypy src` reports 117 files and `mypy src .lockstep` reports 118.
+#
+# That file is 771 lines binding every adapter, the path tiers and the egress policy, and it was
+# in neither of these targets. `mypy --strict` found a function defined twice the moment it was
+# pointed at it; ruff could not, because the first copy is called before the second is defined so
+# F811 correctly stays silent. A test asserts that every Python file in this repository is covered
+# by the paths below, so a new one outside them is a failure rather than a silence.
+#
+# `examples/` is deliberately not here, and cannot be added by appending it: two files named
+# `lockstep.py` in one mypy invocation is `Duplicate module named "lockstep"`, which stops the run
+# before it checks anything. The exemption is recorded with that reason in the test.
 fmt:
-	uv run ruff format src tests
+	uv run ruff format src tests .lockstep
 
 lint:
-	uv run ruff check src tests
+	uv run ruff check src tests .lockstep
 
 typecheck:
-	uv run mypy src
+	uv run mypy src .lockstep
 
 test:
 	uv run pytest -q
