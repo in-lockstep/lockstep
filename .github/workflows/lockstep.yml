@@ -83,6 +83,11 @@ jobs:
       # lockfile, but `uv run` above has already refreshed one by the time this executes, so a
       # stale `uv.lock` cannot fail here. Claiming it could would be a line that reads like a
       # control and is not.
+      #
+      # The binding installs `--extra anthropic` for the same reason this step sits after the
+      # sync rather than instead of it: a bare `uv sync --locked` UNINSTALLS the extra the step
+      # above installed, and the first real run of this binding failed all four lenses that way.
+      # The environment this repository provisions is the one its own jobs need.
       - run: uv run in-lockstep provision
       # Not `continue-on-error`. Its verdict used to be discarded because it cried wolf: a job
       # token cannot read the branch-protection API, and every unreadable answer was reported as
