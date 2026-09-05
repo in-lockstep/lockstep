@@ -66,29 +66,23 @@ jobs:
       # small, which means the one job that actually calls a model has to ask for one — and this
       # file had drifted from the scaffold it ships, which gets this right with
       # `uvx --from 'in-lockstep[anthropic]'`.
-      - run: uv sync --extra anthropic
-      # `provision`, then `doctor` — the order the README says a scaffolded work job uses, now run
-      # by the repository that says it (#249). `uv sync` above is the bootstrap and cannot be
-      # replaced here: an adopter's job installs the framework with `uvx --from in-lockstep[...]`
-      # and provisions the repository from that, while this job has to run the framework *in the
-      # tree*, so something must build that environment before `in-lockstep` exists to run at all.
-      # That is the exception this repository takes, and it is narrow: the verb still runs.
+      # `provision` FIRST, then the extra this job needs. `uv run` syncs the project itself, so
+      # this one step both bootstraps the framework and runs the verb the README tells adopters
+      # their work jobs run (#249) -- against this repository, rather than against the synthetic
+      # fixture in release-python.yml that was the only place it had ever run.
       #
-      # What the step proves is therefore the binding and the path, not the environment — the
-      # Provision verb, `CommandProvision`, the tool resolution that finds `uv`, and the sandbox,
-      # all against this repository rather than against the synthetic fixture in
-      # `release-python.yml` that was the only place they had ever run.
-      #
-      # What it does NOT prove, measured rather than assumed: `uv sync --locked` refuses a stale
-      # lockfile, but `uv run` above has already refreshed one by the time this executes, so a
-      # stale `uv.lock` cannot fail here. Claiming it could would be a line that reads like a
-      # control and is not.
-      #
-      # The binding installs `--extra anthropic` for the same reason this step sits after the
-      # sync rather than instead of it: a bare `uv sync --locked` UNINSTALLS the extra the step
-      # above installed, and the first real run of this binding failed all four lenses that way.
-      # The environment this repository provisions is the one its own jobs need.
+      # The order is the lesson, and it cost a red required check to learn. `provision` executes
+      # whatever `.lockstep/lockstep.py` binds, and under review that module is read from the BASE
+      # branch -- so this job cannot know what environment provision will leave behind, and must
+      # not depend on one. A bare `uv sync --locked` there uninstalls `--extra anthropic`, which
+      # is precisely what happened the first time the binding reached a real run: four lenses
+      # failed with "the anthropic provider needs its optional dependency", and no branch could
+      # fix it from itself, because the binding that broke it was already on main. Installing what
+      # this job needs AFTER provision makes the job robust to the binding rather than coupled to
+      # it -- which is the right relationship anyway, since the binding belongs to the repository
+      # and the extra belongs to this job.
       - run: uv run in-lockstep provision
+      - run: uv sync --extra anthropic
       # Not `continue-on-error`. Its verdict used to be discarded because it cried wolf: a job
       # token cannot read the branch-protection API, and every unreadable answer was reported as
       # a missing control, so `doctor` exited 1 on every run of this repository. That is fixed
