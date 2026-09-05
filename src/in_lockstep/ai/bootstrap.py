@@ -487,6 +487,29 @@ def invoker_factory(
         chosen = provider
         if chosen is None:
             chosen = registry.provider_for(selected, credentials_for(issuer, selected.provider))
+        # Recording, when the run asked for it. Attached HERE and not in the CLI, because an
+        # adapter reached through `in-lockstep run` builds its own invoker — `routed_invoker` calls
+        # this factory with no `provider=`, so the CLI has no object to wrap. That is why
+        # `implement` and `fix` recorded nothing while `review` recorded: not a policy, a seam.
+        #
+        # The run context carries it for the same reason it carries the transcript writer four
+        # lines down: one sink for the whole run, keyed on the run rather than on whichever
+        # invoker happened to be built first.
+        log = getattr(ctx, "recording", None)
+        if log is not None:
+            if getattr(chosen, "transmits", True) is False:
+                # A replay has nothing to record. Recording one would write a tape identical to
+                # the tape being read and tell the ledger that inferences were kept when none were
+                # made -- the fabrication `_one_provider` refuses one layer up, at the flag.
+                raise ValueError(
+                    f"{chosen.name()} serves from a recording, so there is nothing to record. "
+                    f"Drop --record, or drop the provider this module binds."
+                )
+            from .replay import Cassette, RecordingProvider
+
+            if not isinstance(log, Cassette):  # pragma: no cover - defensive, `run` builds it
+                raise TypeError(f"a recording must be a Cassette, not {type(log).__name__}")
+            chosen = RecordingProvider(chosen, log)
         # A per-turn transcript for every session this run makes. Keyed on the run id, so a
         # failed session's evidence is findable from its ledger record; absent when the context
         # has no run id, which is a test's hand-built context rather than a real run.

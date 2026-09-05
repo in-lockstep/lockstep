@@ -188,7 +188,7 @@ def _approval(approve: bool, approved_by: str) -> Any:
     return Approval()
 
 
-def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
+def _context(lockstep: Lockstep, run_id: str, approval: Any = None, *, recording: Any = None) -> Any:
     """Start a run, turning a startup refusal into a message rather than a traceback.
 
     `UndeclaredBudget` lives in `core` and cannot inherit from `ClickException` — `core` imports
@@ -199,7 +199,7 @@ def _context(lockstep: Lockstep, run_id: str, approval: Any = None) -> Any:
     from .core.verbs import UngatedAgency
 
     try:
-        return lockstep.context(run_id=run_id, approval=approval)
+        return lockstep.context(run_id=run_id, approval=approval, recording=recording)
     except (UndeclaredBudget, UngatedAgency) as e:
         raise click.ClickException(str(e)) from None
     except DailySpendExceeded as e:
@@ -381,6 +381,9 @@ def _run_registered(
     args: tuple[str, ...],
     no_middleware: bool,
     approval: Any = None,
+    *,
+    record: bool = False,
+    cassette: str = "",
 ) -> None:
     """Dispatch a workflow the repository registered.
 
@@ -404,7 +407,11 @@ def _run_registered(
     # a constant. `_run_id` is what makes the id unique.
     ci_run = os.environ.get("GITHUB_RUN_ID", "")
     base = entry.id.replace("/", "-") + (f"-{ci_run}" if ci_run else "")
-    ctx = _context(lockstep, _run_id(base), approval)
+    run_id = _run_id(base)
+    # Built here rather than by the caller, because the run id is what names it and this is where
+    # the run id exists. `implement` and `fix` arrive through this function and nowhere else.
+    tape = _run_cassette(lockstep, run_id, cassette) if record else None
+    ctx = _context(lockstep, run_id, approval, recording=tape)
     try:
         result = asyncio.run(entry.fn(ctx, **inject_ports(entry.fn, ctx, parsed)))
     except TypeError as e:
@@ -430,6 +437,11 @@ def _run_registered(
     click.echo("")
     _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
+    if tape is not None:
+        # Said, because a flag whose effect is a file in a directory nobody looks at is a flag
+        # people stop passing. Zero is printed as zero and means it: the run made no model call.
+        click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
+        _warn_if_calls_went_unrecorded(tape, ctx)
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
     _exit_for(result, ctx)
 
@@ -673,6 +685,65 @@ def main() -> None:
     redact_registry.seed_from_environment()
 
 
+def _warn_if_calls_went_unrecorded(tape: Any, ctx: Any) -> None:
+    """A run that spent tokens and kept nothing has a model call the recorder never saw.
+
+    The seam covers every adapter that lets the framework build its invoker, which is the default
+    and what `routed_invoker` does. An adapter constructed with its own `invoker_factory=` builds
+    the provider itself, and nothing can reach inside a lambda to wrap it — so for that repository
+    `--record` records nothing.
+
+    Detected rather than predicted. The CLI does not know which adapters a workflow will dispatch,
+    and guessing from the bindings would be wrong in both directions; the spend is a fact the run
+    produced. So the discrepancy is measured after the fact and named, which is the difference
+    between "kept 0" meaning "no model was called" and "kept 0" meaning "the recorder was bypassed"
+    — two states one number cannot tell apart, and this repository does not let a number stand for
+    both.
+    """
+    if tape.calls() or not getattr(ctx.spend.charged, "total_tokens", 0):
+        return
+    click.echo(
+        "          nothing was kept, but this run spent tokens — so something called a model the "
+        "recorder never saw. An adapter bound with its own `invoker_factory=` constructs its "
+        "provider itself; wrap it there, or let the framework build the invoker."
+    )
+
+
+def _run_cassette(lockstep: Any, run_id: str, cassette: str) -> Any:
+    """Where a workflow run's recording goes. OUTSIDE the repository, on a laptop as in CI.
+
+    Not a CI convention promoted to a default. A write verb's tape holds every file the session
+    opened and every command's output, and `read_file` refuses `.lockstep/cassettes/` precisely
+    because a tape inside the tree is a file the NEXT run's model can open -- a concentration of
+    everything the last session touched, arriving as context nobody chose to supply. Keeping it
+    out of the tree is the control; the read refusal is the second lock on the same door.
+
+    `RUNNER_TEMP` when the host names one, so O3's "the same process at a terminal and in CI" is
+    the same PATH RULE too, rather than two rules that happen to agree today.
+
+    Unlike `_cassette_default`, which review shares: a review is one turn with no tools, so its
+    tape holds the diff somebody was already reviewing and there is nothing to read it back with.
+    """
+    import tempfile
+
+    from .ai.replay import Cassette
+
+    if cassette:
+        chosen = Path(cassette).expanduser().resolve()
+        root = Path(lockstep.repo.root).resolve()
+        if chosen == root or root in chosen.parents:
+            raise click.ClickException(
+                f"--cassette {cassette} is inside the repository. A recording of a workflow run "
+                f"holds every file the session read and every command's output, and a model's own "
+                f"read_file can open anything in the tree — so a tape in here becomes the next "
+                f"run's prompt. Put it under $TMPDIR."
+            )
+        return Cassette.load(chosen)
+    base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
+    safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in run_id).strip("-.") or "run"
+    return Cassette.load(Path(base) / "in-lockstep" / f"{safe}.json")
+
+
 def _cassette_default(lockstep: Any, verb: str) -> str:
     """Where a verb's recording goes when nobody passed `--cassette`.
 
@@ -731,6 +802,13 @@ def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
 )
 @click.option("--approve", is_flag=True, help="You are the human watching this run.")
 @click.option("--approved-by", default="", help="Who asked, when nobody is watching. Recorded.")
+@click.option("--record", is_flag=True, help="Keep every model call this run makes.")
+@click.option(
+    "--cassette",
+    default="",
+    type=click.Path(),
+    help="Where to keep it. Must be outside the repository; defaults to $RUNNER_TEMP or $TMPDIR.",
+)
 def run_cmd(
     target: str,
     paths: tuple[str, ...],
@@ -741,6 +819,8 @@ def run_cmd(
     budget: float | None,
     approve: bool,
     approved_by: str,
+    record: bool,
+    cassette: str,
 ) -> None:
     """Run a workflow, by the id it was registered under.
 
@@ -755,6 +835,11 @@ def run_cmd(
 
     `--recover` restarts an interrupted run from its checkpoints. It covers machine failure only:
     a run never waits on a person, so resuming after a human is a different mechanism entirely.
+
+    `--record` keeps every model call the run makes. This is the flag `implement` and `fix` never
+    had: CI drives them through this command, and an adapter reached this way builds its own
+    invoker, so there was no provider for a CLI flag to wrap. The run context carries the tape
+    instead and `ai.bootstrap` wraps at the seam every adapter already goes through.
     """
     lockstep, recorder = _default_lockstep()
 
@@ -777,7 +862,14 @@ def run_cmd(
 
     if target != "selfcheck":
         _run_registered(
-            lockstep, recorder, known[target], args, no_middleware, _approval(approve, approved_by)
+            lockstep,
+            recorder,
+            known[target],
+            args,
+            no_middleware,
+            _approval(approve, approved_by),
+            record=record,
+            cassette=cassette,
         )
         return
     if no_middleware:
@@ -793,7 +885,8 @@ def run_cmd(
     # a green selfcheck by any flag, and the message it printed named two that do not work here
     # (#189). `--no-middleware` was not the escape hatch either: it drops `CostBudget` with the
     # gate, and startup then refuses the undeclared budget instead.
-    ctx = _context(lockstep, run_id, _approval(approve, approved_by))
+    tape = _run_cassette(lockstep, run_id, cassette) if record else None
+    ctx = _context(lockstep, run_id, _approval(approve, approved_by), recording=tape)
     if checkpoint or recover_id:
         from .platform.state import StateStore
 
@@ -829,6 +922,9 @@ def run_cmd(
     _echo_telemetry(recorder)
     click.echo(f"spend     ${ctx.spend.charged.usd:.4f}, {ctx.spend.charged.wall_seconds:.2f}s")
 
+    if tape is not None:
+        click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
+        _warn_if_calls_went_unrecorded(tape, ctx)
     # The rule `_write_workflow_ledger` states — every dispatched run leaves a record — applied
     # to the one dispatch that predates it. Selfcheck is the first command an adopter runs, and
     # its record carrying schema-4 provenance is how they see what a record even is.

@@ -74,6 +74,22 @@ class StepStore(Protocol):
 
 
 @runtime_checkable
+class InferenceLog(Protocol):
+    """Where a run's model calls are kept. One log for the whole run.
+
+    Declared here for the reason `StepStore` is: `RunContext` carries it and `core` may not depend
+    on an implementation. Deliberately thin — `core` does not need to know how a call is written
+    down, only that the run has somewhere to write it and can say how much it kept. The writing is
+    `ai.replay`'s, where the request and answer types live.
+
+    One object per run rather than one per invoker: a workflow's steps each build their own
+    invoker, and two of them saving the same tape would lose whichever wrote first.
+    """
+
+    def calls(self) -> int: ...
+
+
+@runtime_checkable
 class SecretResolver(Protocol):
     """Resolves a named secret at the edge. Values never enter a context package."""
 

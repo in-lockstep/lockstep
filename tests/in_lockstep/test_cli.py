@@ -3247,3 +3247,120 @@ def test_a_verb_with_no_bound_composition_records_no_subject() -> None:
     from in_lockstep.lockstep import Lockstep
 
     assert _eval_subject(Lockstep(), kind="review", aspect="security", model_id="m") is None
+
+
+# -- GATE-RECORD-2: a workflow run keeps its inferences ----------------------------------------
+#
+# The flag `implement` and `fix` never had. CI drives the write verbs through `in-lockstep run`,
+# and an adapter reached that way builds its OWN invoker — `routed_invoker` calls the factory with
+# no `provider=`, so the CLI had no object to wrap. That is why those two recorded nothing while
+# `review` recorded: not a policy, a seam.
+
+
+class _Scripted:
+    """A provider that answers, so the seam can be tested rather than the registry."""
+
+    def name(self) -> str:
+        return "scripted"
+
+    def base_url(self) -> str:
+        return ""
+
+    async def generate(self, input):  # noqa: ANN001, ANN202, A002
+        from in_lockstep.llm.types import LLMOutput, TokenUsage
+
+        return LLMOutput(content="done", usage=TokenUsage(input_tokens=10, output_tokens=2))
+
+
+def _recording_ctx(tmp_path: Path):  # noqa: ANN202
+    from in_lockstep.ai.replay import Cassette
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep()
+    lockstep.budget = __import__("in_lockstep.core.spend", fromlist=["Budget"]).Budget(usd=1.0)
+    tape = Cassette.load(tmp_path / "tape.json")
+    return lockstep.context(run_id="demo-1", recording=tape), tape
+
+
+def test_gate_record_2_the_framework_records_the_provider_it_builds(tmp_path: Path) -> None:
+    """GATE-RECORD-2. Asserted at the seam every adapter reaches, not through one adapter.
+
+    `invoker_factory(...)(ctx)` is what `routed_invoker` calls, so this is the path a workflow's
+    adapter takes. `provider=` stands in for the registry lookup and changes nothing about where
+    the wrap happens.
+    """
+    from in_lockstep.ai.bootstrap import invoker_factory
+    from in_lockstep.ai.pricing import CostTable, Rate
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    ctx, tape = _recording_ctx(tmp_path)
+    table = CostTable()
+    table.add("house-model", Rate(input_per_m=1.0, output_per_m=2.0))
+    invoker = invoker_factory(
+        "local:house-model", provider=_Scripted(), egress=UnsandboxedEgress(), cost_table=table
+    )(ctx)
+
+    assert type(invoker.provider).__name__ == "RecordingProvider", type(invoker.provider).__name__
+    assert tape.calls() == 0, "nothing has been asked yet"
+
+
+def test_a_run_that_records_nothing_leaves_a_tape_that_says_zero(tmp_path: Path) -> None:
+    """Absent is not zero, and here zero is the honest number: a context carrying no recording
+    wraps nothing, so an adapter's provider is the one the registry returned."""
+    from in_lockstep.ai.bootstrap import invoker_factory
+    from in_lockstep.ai.pricing import CostTable, Rate
+    from in_lockstep.core.spend import Budget
+    from in_lockstep.lockstep import Lockstep
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    lockstep = Lockstep()
+    lockstep.budget = Budget(usd=1.0)
+    table = CostTable()
+    table.add("house-model", Rate(input_per_m=1.0, output_per_m=2.0))
+    invoker = invoker_factory(
+        "local:house-model", provider=_Scripted(), egress=UnsandboxedEgress(), cost_table=table
+    )(lockstep.context(run_id="demo-2"))
+    assert type(invoker.provider).__name__ == "_Scripted"
+
+
+def test_a_replay_cannot_also_be_recorded(tmp_path: Path) -> None:
+    """`_one_provider` refuses `--offline --record` at the flag. This is the same argument one
+    layer down, where a module could bind a replaying provider and ask for a recording anyway —
+    which would write a tape identical to the one being read and report inferences nobody made."""
+    from in_lockstep.ai.bootstrap import invoker_factory
+    from in_lockstep.ai.pricing import CostTable, Rate
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    class _Replaying(_Scripted):
+        transmits = False
+
+    ctx, _ = _recording_ctx(tmp_path)
+    table = CostTable()
+    table.add("house-model", Rate(input_per_m=1.0, output_per_m=2.0))
+    with pytest.raises(ValueError, match="nothing to record"):
+        invoker_factory(
+            "local:house-model", provider=_Replaying(), egress=UnsandboxedEgress(), cost_table=table
+        )(ctx)
+
+
+def test_a_workflow_recording_stays_out_of_the_repository(repo: Path) -> None:
+    """A write verb's tape holds every file the session opened, so it is kept out of the tree in
+    the first place. `read_file` refusing `.lockstep/cassettes/` (GATE-GUARD-4) is the second lock
+    on the same door, not the only one."""
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["run", "selfcheck", "--record", "--cassette", ".lockstep/cassettes/x.json"]
+    )
+    assert result.exit_code != 0
+    assert "inside the repository" in result.output
+    assert "next run's prompt" in result.output
+
+
+def test_a_recorded_run_says_where_it_put_the_tape(repo: Path) -> None:
+    """A flag whose effect is a file in a directory nobody looks at is a flag people stop
+    passing."""
+    _write(repo)
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--record"])
+    assert "kept      0 inference(s)" in result.output, result.output
+    kept = result.output.split(" in ")[-1].strip().splitlines()[0]
+    assert str(repo) not in kept, f"the tape landed inside the repository: {kept}"
