@@ -1363,3 +1363,75 @@ def test_costs_from_a_mixed_run_report_a_fraction_not_a_flag() -> None:
     live = Cost(input_tokens=100, output_tokens=0, usd=0.3, billed_tokens=100)
     replayed = Cost(input_tokens=300, output_tokens=0, usd=0.0, billed_tokens=0)
     assert (live + replayed).billed_fraction == 0.25
+
+
+# -- GATE-GUARD-4: what a model may READ is its own question, and it was answered by accident ---
+
+
+def _tree_with_secrets(root: Path):  # noqa: ANN202
+    """A repository shaped like an adopter's: a `.env`, a previous run's tape, ordinary source."""
+    from in_lockstep.ai.builtins import ToolRunnerImpl, Workspace
+    from in_lockstep.core.changes import ChangeGuard
+
+    (root / ".lockstep" / "cassettes").mkdir(parents=True)
+    (root / ".git").mkdir()
+    (root / "src").mkdir()
+    (root / ".env").write_text("SERVICE_API_KEY=not-a-real-secret-abc123\n")
+    (root / ".lockstep" / "cassettes" / "implement.json").write_text('{"provider_calls": {}}')
+    (root / ".git" / "config").write_text("[remote]\n  url = https://x:tok@git\n")
+    (root / "src" / "app.py").write_text('API_KEY_NAME = "x"\n')
+    (root / ".github").mkdir()
+    (root / ".github" / "ci.yml").write_text("on: push\n")
+    return ToolRunnerImpl(workspace=Workspace(root=root, guard=ChangeGuard(), workflow_id="fix"))
+
+
+@pytest.mark.parametrize(
+    "path,rule",
+    [
+        (".env", ".env"),
+        (".lockstep/cassettes/implement.json", ".lockstep/cassettes/"),
+        (".git/config", ".git/"),
+    ],
+)
+def test_gate_guard_4_read_file_refuses_what_the_guard_refuses(tmp_path: Path, path: str, rule: str) -> None:
+    """GATE-GUARD-4. `_read` asked the guard and acted on ONE of its answers.
+
+    Every tier-1 refusal but `outside-repo-root` was computed and thrown away, so `read_file(".env")`
+    returned the file — the guard consulted and overruled in the same expression. That is O6 as
+    CLAUDE.md states it: a successful injection is supposed to have nothing to take.
+    """
+    out = _tree_with_secrets(tmp_path)._read({"path": path})
+    assert out.startswith("refused:"), out
+    assert rule in out, "the refusal does not say which rule refused, so a model cannot tell why"
+
+
+def test_gate_guard_4_a_search_cannot_reach_what_a_read_cannot(tmp_path: Path) -> None:
+    """The more important half. A search is how somebody LOOKS for a credential, and it walked
+    `rglob("*")` with no guard at all — so `search_text(pattern="API_KEY")` returned the line out
+    of `.env` that `read_file` was refusing one method over."""
+    found = _tree_with_secrets(tmp_path)._search({"pattern": "API_KEY"})
+    assert "src/app.py" in found, "the search stopped working"
+    assert "not-a-real-secret" not in found and ".env" not in found, found
+
+
+def test_gate_guard_4_a_listing_does_not_map_what_is_protected(tmp_path: Path) -> None:
+    """Names rather than contents, so the stake is lower — but a listing of what is refused is a
+    map of where to look, and a listing of `.git/` is noise either way."""
+    listed = _tree_with_secrets(tmp_path)._list({"glob": "*"})
+    assert "src/app.py" in listed
+    assert ".env" not in listed and ".git/" not in listed
+
+
+@pytest.mark.parametrize("path", ["src/app.py", ".github/ci.yml", ".lockstep/lockstep.py"])
+def test_a_read_refusal_that_refused_everything_would_be_the_same_defect(tmp_path: Path, path: str) -> None:
+    """The other direction, and the reason the read list is SHORTER than the write tiers.
+
+    `.github/` and `.lockstep/lockstep.py` are tier 1 for writes because editing them changes what
+    a later run may do — and reading them is how an agent asked to fix a workflow finds out what
+    the workflow does. Reusing the write list would refuse reads nobody needed refused, and a guard
+    that says no to ordinary work is one somebody turns off.
+    """
+    root = tmp_path
+    runner = _tree_with_secrets(root)
+    (root / ".lockstep" / "lockstep.py").write_text("lockstep = 1\n")
+    assert not runner._read({"path": path}).startswith("refused:")

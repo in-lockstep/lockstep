@@ -77,6 +77,31 @@ DENY_ALWAYS: tuple[str, ...] = (
 )
 
 DENY_ALWAYS_SUFFIXES: tuple[str, ...] = (".pem", ".pth", "id_rsa", "id_ed25519")
+
+# What a model may not READ, which is a different question from what it may not write and had been
+# answered by accident. `_read` consulted `check_path` and acted on `outside-repo-root` alone, so
+# every other tier-1 rule was computed and discarded: `read_file(".env")` returned the file.
+#
+# A shorter list than the write tiers, deliberately, because reusing them would refuse reads nobody
+# needed refused. `.github/` is tier 1 for writes because editing it changes what CI runs — and
+# reading it is how an agent asked to fix a failing workflow finds out what the workflow does. A
+# guard that says no to ordinary work is one somebody turns off.
+#
+# So this is only the paths whose CONTENTS are the risk.
+DENY_READ: tuple[str, ...] = (
+    # Recordings of earlier runs: a whole composed prompt, every file that session opened, every
+    # command's output. Readable, a tape is the next run's prompt — a concentration of everything
+    # the last run touched, arriving as context nobody chose to supply.
+    ".lockstep/cassettes/",
+    ".lockstep/transcripts/",
+    # Every version of everything, including what a later commit removed. A credential deleted in
+    # the commit that noticed it is still in here.
+    ".git/",
+)
+
+#: Read-denied by suffix or by name. `.pth` is deliberately absent: it executes at interpreter
+#: start, so it is write-sensitive, and its contents are a path.
+DENY_READ_SUFFIXES: tuple[str, ...] = (".pem", "id_rsa", "id_ed25519")
 DENY_ALWAYS_BASENAMES: tuple[str, ...] = ("conftest.py", "CODEOWNERS", "sitecustomize.py")
 
 # Deny by default; a named workflow may be granted.
@@ -144,6 +169,8 @@ class PathPolicy:
     # on the instructions for every future run.
     grants: frozenset[str] = frozenset()
     granted_to_workflow: str = ""
+    deny_read: tuple[str, ...] = DENY_READ
+    deny_read_suffixes: tuple[str, ...] = DENY_READ_SUFFIXES
     test_patterns: tuple[str, ...] = TEST_PATTERNS
     test_directories: tuple[str, ...] = TEST_DIRECTORIES
 
@@ -234,6 +261,26 @@ class ChangeGuard:
             )
             if not granted:
                 return Refusal(path=path, rule=hit, tier=2)
+        return None
+
+    def check_read(self, path: str) -> Refusal | None:
+        """Whether a model may read this path. NOT the same question as whether it may write it.
+
+        `DENY_READ` says why the two lists differ. What they share is the out-of-root rule, which
+        is the one refusal `_read` was already making: a model that can read `../../.ssh` has
+        exfiltrated it the moment the result enters the message history.
+        """
+        if escapes_root(path):
+            return Refusal(path=path, rule="outside-repo-root", tier=1)
+        normalized = _normalize(path)
+        if posixpath.basename(normalized).startswith(".env"):
+            return Refusal(path=path, rule=".env", tier=1)
+        for prefix in self.policy.deny_read:
+            if normalized == prefix.rstrip("/") or normalized.startswith(prefix):
+                return Refusal(path=path, rule=prefix, tier=1)
+        for suffix in self.policy.deny_read_suffixes:
+            if normalized.endswith(suffix):
+                return Refusal(path=path, rule=suffix, tier=1)
         return None
 
     def check_change(self, change: FileChange, *, workflow_id: str = "") -> Refusal | None:
