@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044098,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1970,
+        "message": "Regex used to discover workflow ids and resolve function names from source text is applied to module source that could be influenced by module content.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1953,
+        "message": "`inspect.getsource` output is printed directly to the CLI without sanitization; not an injection risk in this context but the surface is worth noting.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "975a7e272daceacdb67e6632f0cbc7eedaeef605",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 775,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T164956Z-648f",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 778,
+  "ts": "2026-09-05T16:50:15+00:00",
+  "wall_seconds": 19.702
+}
