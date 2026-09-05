@@ -171,8 +171,24 @@ def test_the_shipped_process_can_be_read_without_being_copied(tmp_path):
     one = CliRunner().invoke(main, ["show-workflow", "implement/report"])
     assert one.exit_code == 0
     assert "async def implement_report" in one.output
-    # The shipped text, not a paraphrase: a line only the framework module carries.
+    # The shipped text, and ONLY the asked-for function. A substring test alone would pass for any
+    # prefix of the module, so it is paired with the two neighbours that must NOT appear -- which
+    # is what makes it an assertion about isolation rather than about containment.
     assert one.output.strip() in inspect.getsource(implement)
+    assert "async def implement_propose" not in one.output
+    assert "async def implement_from_ticket" not in one.output
+
+    whole = CliRunner().invoke(main, ["show-workflow", "implement"])
+    assert whole.exit_code == 0
+    for fn in ("implement_from_ticket", "implement_propose", "implement_report"):
+        assert f"async def {fn}" in whole.output, "a family prints the whole module"
+
+    mine = CliRunner().invoke(main, ["show-workflow", "--registered"])
+    assert mine.exit_code == 0
+    # What THIS repository has in force, which is the different question. It loads the lifecycle
+    # module to answer it; without that it reported `selfcheck` and nothing else.
+    assert "implement/propose  (in_lockstep.workflows.implement" in mine.output
+    assert "selfcheck" in mine.output
 
     unknown = CliRunner().invoke(main, ["show-workflow", "nope/x"])
     assert unknown.exit_code != 0
@@ -186,3 +202,34 @@ def test_nothing_init_writes_is_a_workflow_body(tmp_path):
     source = _scaffolded(tmp_path, "--implement", "--fix")
     for body in ("async def implement_from_ticket", "async def fix_from_ticket", "await ctx.do("):
         assert body not in source
+
+
+def test_the_id_discovery_is_not_vacuous():
+    """`_workflow_ids` reads the ids out of `register()`'s source with a regex.
+
+    A regex that stopped matching -- because somebody reformatted `register`, or `ruff format`
+    split the call across lines -- would return an empty set, and every symptom of that is quiet:
+    `show-workflow` would list a family with no ids, and `show-workflow implement/propose` would
+    refuse with a message naming nothing as shipped. So the count is asserted, not just used.
+    """
+    from in_lockstep.cli import _workflow_ids
+    from in_lockstep.workflows import fix, implement
+
+    assert _workflow_ids(implement) == {
+        "implement/from-ticket",
+        "implement/propose",
+        "implement/report",
+    }
+    assert _workflow_ids(fix) == {"fix/from-ticket", "fix/propose", "fix/report"}
+
+
+def test_every_discovered_id_actually_resolves_to_a_function():
+    """The other half: an id the regex finds must name something `getattr` can reach. The two are
+    read out of one line each, so a rename that updated the id and not the function would leave
+    `show-workflow` refusing an id it had just advertised."""
+    from in_lockstep.cli import _workflow_function, _workflow_ids
+    from in_lockstep.workflows import fix, implement
+
+    for module in (implement, fix):
+        for workflow_id in _workflow_ids(module):
+            assert callable(_workflow_function(module, workflow_id))
