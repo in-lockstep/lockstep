@@ -1,0 +1,47 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.050477,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 369,
+        "message": "No test for `errored` status with no reason",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 320,
+        "message": "`test_the_other_verbs_run_is_not_borrowed` parametrises over `blocked` and `failed` but not `errored`",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b695fc0a7472fec33a7fc0356442e7d2d4ec4929",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 479,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T142309Z-3532",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 482,
+  "ts": "2026-09-05T14:23:25+00:00",
+  "wall_seconds": 16.599
+}
