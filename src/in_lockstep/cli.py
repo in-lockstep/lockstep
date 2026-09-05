@@ -1906,6 +1906,98 @@ def improve_cmd(explain: bool) -> None:
     click.echo("          drafts a prompt change yet.")
 
 
+@main.command(name="show-workflow")
+@click.argument("name", default="")
+@click.option(
+    "--registered", is_flag=True, help="Print what this repository has registered, not the shipped source."
+)
+def show_workflow_cmd(name: str, registered: bool) -> None:
+    """Print the source of a process the framework ships. Reads nothing, spends nothing.
+
+    The answer to "what does `/implement` actually do?" that does not require owning a copy of it.
+    `init` used to append ~560 lines of workflow source into the adopter's module so it could be
+    read and edited; the reading was the part people wanted and the owning was what made every fix
+    land twice and never reach a repository that had already scaffolded. This is the reading half
+    on its own.
+
+    Printed from `inspect.getsource` on the module that is actually imported, so what appears here
+    is what runs -- not a rendering of it, and not a second copy that can drift. That is the whole
+    property, and it is why this replaced `init --eject` rather than joining it.
+
+    NAME is a family (`implement`, `fix`) or a single workflow id (`implement/propose`). With no
+    argument it lists what can be shown.
+
+    `--registered` answers the neighbouring question: not what the framework ships, but what THIS
+    repository has put in force -- which is different the moment somebody writes their own, and is
+    the case where reading the shipped source would mislead.
+    """
+    import inspect
+
+    from .core.workflow import registered as registered_workflows
+
+    if registered:
+        # Load the lifecycle module first. Without it this reported `selfcheck` and nothing else --
+        # the framework's own registration and none of the repository's -- which is the exact
+        # opposite of what the flag says it answers.
+        _default_lockstep()
+        entries = sorted(registered_workflows(), key=lambda r: r.id)
+        if not entries:
+            click.echo("nothing registered; a lifecycle module is what puts a workflow in force")
+            return
+        for entry in entries:
+            click.echo(f"{entry.id}  ({entry.module}.{entry.name})")
+        return
+
+    from .workflows import fix as fix_workflows
+    from .workflows import implement as implement_workflows
+
+    families = {"implement": implement_workflows, "fix": fix_workflows}
+    if not name:
+        click.echo("families")
+        for family, module in families.items():
+            ids = sorted(_workflow_ids(module))
+            click.echo(f"  {family:12} {', '.join(ids)}")
+        click.echo("")
+        click.echo("`show-workflow <family>` prints a whole module; `show-workflow <id>` prints one.")
+        click.echo("`--registered` prints what this repository has in force instead.")
+        return
+
+    if name in families:
+        click.echo(inspect.getsource(families[name]))
+        return
+
+    family = name.split("/")[0]
+    chosen = families.get(family)
+    if chosen is None or name not in _workflow_ids(chosen):
+        known = sorted(i for m in families.values() for i in _workflow_ids(m))
+        raise click.ClickException(
+            f"no shipped workflow named {name!r}. Shipped: {', '.join(known)}. "
+            f"For one this repository declares itself, `show-workflow --registered` names it and "
+            f"the module it came from."
+        )
+    click.echo(inspect.getsource(_workflow_function(chosen, name)))
+
+
+def _workflow_ids(module: Any) -> set[str]:
+    """The ids a shipped module claims, read off its `register()` rather than a list kept beside it.
+
+    A second list would be a second thing to forget: `register()` is what actually claims them.
+    """
+    import inspect
+
+    return set(re.findall(r'workflow\(id="([^"]+)"\)', inspect.getsource(module.register)))
+
+
+def _workflow_function(module: Any, workflow_id: str) -> Any:
+    import inspect
+
+    source = inspect.getsource(module.register)
+    match = re.search(rf'workflow\(id="{re.escape(workflow_id)}"\)\((\w+)\)', source)
+    if match is None:  # pragma: no cover - the caller checked membership first
+        raise click.ClickException(f"{workflow_id} is not registered by {module.__name__}")
+    return getattr(module, match.group(1))
+
+
 @main.command(name="comment")
 @click.option("--pr", "number", required=True, type=int, help="The change request to comment on.")
 @click.option(
@@ -4806,12 +4898,7 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
     is_flag=True,
     help="Also scaffold the /fix chat-ops trampoline and its two workflows (the ai-generated-issue target).",
 )
-@click.option(
-    "--eject",
-    is_flag=True,
-    help="Write the workflow source into the module instead of registering the shipped one.",
-)
-def init_cmd(force: bool, with_implement: bool, with_fix: bool, eject: bool) -> None:
+def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
     """Scaffold a lifecycle definition and a CI trampoline.
 
     The trampoline is written once and never read back: there is no drift check on it, and no
@@ -4865,9 +4952,9 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool, eject: bool) -> 
         click.echo("day a verb of yours produces a change to write; the file says where.")
 
     if with_implement:
-        _scaffold_implement(module, host=host, eject=eject)
+        _scaffold_implement(module, host=host)
     if with_fix:
-        _scaffold_fix(module, host=host, eject=eject)
+        _scaffold_fix(module, host=host)
 
     _disclose_what_a_run_keeps()
 
@@ -5246,8 +5333,8 @@ REGISTER_TAIL = """
 # defines its own `{family}/from-ticket` AND called this would be asking for two things under one
 # name, and should hear about it.
 #
-# `in-lockstep init --eject` writes the source here instead, for a repository that wants to own
-# its process -- at the cost that fixes to the shipped version stop arriving.
+# `in-lockstep show-workflow {family}` prints the source, so the process is readable without
+# being a copy you then own and stop getting fixes for.
 from in_lockstep.workflows import {family} as {family}_workflows
 
 {family}_workflows.register()
@@ -5255,95 +5342,7 @@ from in_lockstep.workflows import {family} as {family}_workflows
 """
 
 
-def _wrap_long_imports(text: str) -> str:
-    """Re-wrap an import line that outgrew the line length, after the merge rather than before.
-
-    `_ejected_source` flattens parenthesised imports to one line because
-    `_without_duplicate_imports` matches single-line imports only and cannot see a multi-line one —
-    a duplicate that survives the merge is `F811` in the module `init` has just written. Flattening
-    then produces the opposite complaint from `ruff`, which wants the parenthesised form back once
-    the line is long. So the flattening is for the merge and this puts it back afterwards, which is
-    the only order in which both tools are satisfied.
-    """
-    out = []
-    for line in text.splitlines(keepends=True):
-        match = re.match(r"^from ([\w.]+) import ([^(\n]+)$", line.rstrip("\n"))
-        if match is None or len(line.rstrip("\n")) <= 100:
-            out.append(line)
-            continue
-        names = [n.strip() for n in match.group(2).split(",") if n.strip()]
-        out.append(f"from {match.group(1)} import (\n")
-        out.extend(f"    {n},\n" for n in names)
-        out.append(")\n")
-    return "".join(out)
-
-
-def _ejected_source(family: str) -> str:
-    """The shipped workflow module's own source, read from the installed package.
-
-    There is exactly ONE copy of this text and it is the code that runs. That is the whole
-    difference from what `init` used to do: a string literal in this file was a second copy, and
-    the two had drifted 96 lines of real code apart by the time anybody measured them — with only
-    the other one under test.
-
-    Ejecting is a real choice rather than a fallback. A repository that wants to own its process
-    and edit it should have it, and ADR 0001 deleted a compiler over generated output nobody could
-    read. What it costs is stated where the choice is made: fixes to the shipped version stop
-    arriving, which is exactly what happened to every repository scaffolded before 0.3.0.
-
-    Imports are rewritten from relative to absolute, because the source is about to live outside
-    the package it was written in. `register()` is dropped: an ejected module defines the
-    workflows with the decorator, so nothing is left to register.
-    """
-    import ast
-    import inspect
-
-    from .workflows import fix as fix_workflows
-    from .workflows import implement as implement_workflows
-
-    module = {"implement": implement_workflows, "fix": fix_workflows}[family]
-    text = inspect.getsource(module)
-    # The module preamble belongs to the file it came from, not to a block appended to somebody
-    # else's. `from __future__` in particular must be the first statement, so leaving it in
-    # produces a module that will not parse — which the compile guard below catches, and which is
-    # a refusal rather than a feature.
-    tree = ast.parse(text)
-    first = next(
-        (
-            n
-            for n in tree.body
-            if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
-            and not (isinstance(n, ast.ImportFrom) and n.module == "__future__")
-        ),
-        None,
-    )
-    if first is not None:
-        text = "".join(text.splitlines(keepends=True)[first.lineno - 1 :])
-    # `from ..platform.x` -> `from in_lockstep.platform.x`, `from ._shared` -> the package path.
-    text = re.sub(r"^from \.\.", "from in_lockstep.", text, flags=re.M)
-    text = re.sub(r"^from \._shared import", "from in_lockstep.workflows._shared import", text, flags=re.M)
-    # The registrations become decorators, so the ejected copy owns the ids outright.
-    # One line per import. `_without_duplicate_imports` matches a single-line `from X import a, b`
-    # and cannot see a parenthesised one, so a multi-line import survives the merge and lands a
-    # second time when both verbs are ejected — F811 in the module `init` just wrote.
-    text = re.sub(
-        r"^from ([\w.]+) import \(\n((?:\s+\w+,\n)+)\)$",
-        lambda m: (
-            f"from {m.group(1)} import "
-            + ", ".join(n.strip().rstrip(",") for n in m.group(2).splitlines())
-            + "\n"
-        ),
-        text,
-        flags=re.M,
-    )
-    ids = dict(re.findall(r'workflow\(id="([^"]+)"\)\((\w+)\)', text))
-    text = re.sub(r"\n\ndef register\(\) -> None:.*", "\n", text, flags=re.S)
-    for wid, fn in ids.items():
-        text = re.sub(rf"^(async def {fn}\()", f'@workflow(id="{wid}")\n\\1', text, flags=re.M)
-    return "\n\n" + text
-
-
-def _scaffold_implement(module: Path, *, host: str = "", eject: bool = False) -> None:
+def _scaffold_implement(module: Path, *, host: str = "") -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
     The headline feature used to require reverse-engineering this repository's own trampoline.
@@ -5374,13 +5373,9 @@ def _scaffold_implement(module: Path, *, host: str = "", eject: bool = False) ->
         click.echo("Add the implement workflows by hand; the block to paste is in the docs, or run")
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")
     else:
-        tail = _ejected_source("implement") if eject else REGISTER_TAIL.format(family="implement")
-        block = _wrap_long_imports(
-            _SCAFFOLD_IMPLEMENT_CONFIG + _without_duplicate_imports(_SCAFFOLD_IMPLEMENT_CONFIG, tail)
-        )
-        merged = _wrap_long_imports(
-            text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
-        )
+        tail = REGISTER_TAIL.format(family="implement")
+        block = _SCAFFOLD_IMPLEMENT_CONFIG + _without_duplicate_imports(_SCAFFOLD_IMPLEMENT_CONFIG, tail)
+        merged = text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         try:
             # Never leave a module that will not import: a bad append breaks every later command,
             # not just this one. Refuse before writing rather than after loading.
@@ -5401,7 +5396,7 @@ def _scaffold_implement(module: Path, *, host: str = "", eject: bool = False) ->
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
 
-def _scaffold_fix(module: Path, *, host: str = "", eject: bool = False) -> None:
+def _scaffold_fix(module: Path, *, host: str = "") -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
     `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
@@ -5424,13 +5419,9 @@ def _scaffold_fix(module: Path, *, host: str = "", eject: bool = False) -> None:
         click.echo(f"{module} is not a recognisable lockstep module — not modifying it.")
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
     else:
-        tail = _ejected_source("fix") if eject else REGISTER_TAIL.format(family="fix")
-        block = _wrap_long_imports(
-            _SCAFFOLD_FIX_CONFIG + _without_duplicate_imports(_SCAFFOLD_FIX_CONFIG, tail)
-        )
-        merged = _wrap_long_imports(
-            text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
-        )
+        tail = REGISTER_TAIL.format(family="fix")
+        block = _SCAFFOLD_FIX_CONFIG + _without_duplicate_imports(_SCAFFOLD_FIX_CONFIG, tail)
+        merged = text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         try:
             compile(merged, str(module), "exec")
         except SyntaxError as e:
