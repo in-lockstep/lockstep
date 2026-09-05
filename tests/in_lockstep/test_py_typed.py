@@ -148,20 +148,126 @@ def test_what_init_writes_carries_no_workflow_bodies(tmp_path):
     assert "from in_lockstep.workflows import" in source
 
 
-def test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs(tmp_path):
-    """The other half. Owning your process is a real position -- ADR 0001 deleted a compiler over
-    generated output nobody could read -- so `--eject` writes the bodies into the module.
+def test_the_shipped_process_can_be_read_without_being_copied(tmp_path):
+    """`GATE-PLUGIN-3`, the other half. Reading was the part people wanted; owning was what made
+    every fix land twice and never reach a repository that had already scaffolded.
 
-    The text comes from `inspect.getsource` on the installed package, so there is exactly one copy
-    of it and it is the code that runs. That is the whole difference from the string literals this
-    replaced: those were a second copy, and they drifted.
+    `init --eject` was built first and dropped: it reintroduced the import-merging machinery this
+    change exists to retire, and left duplicate imports when both verbs were ejected into one file.
+    `show-workflow` gets the same value with none of it, because printing is not forking.
+
+    Printed from `inspect.getsource` on the module that is actually imported, so what a person
+    reads is what runs -- which a second copy in their own file could never promise.
     """
-    source = _scaffolded(tmp_path, "--implement", "--eject")
-    assert "async def implement_from_ticket" in source
-    assert "from in_lockstep.workflows import" not in source, "an ejected module owns its process"
-    # And it is the shipped text, not a paraphrase of it: a line only the framework module carries.
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
     from in_lockstep.workflows import implement
 
-    marker = "the ticket that pull request was opened for"
-    if marker in inspect.getsource(implement):
-        assert marker in source
+    listing = CliRunner().invoke(main, ["show-workflow"])
+    assert listing.exit_code == 0
+    assert "implement/propose" in listing.output and "fix/report" in listing.output
+
+    one = CliRunner().invoke(main, ["show-workflow", "implement/report"])
+    assert one.exit_code == 0
+    assert "async def implement_report" in one.output
+    # The shipped text, and ONLY the asked-for function. A substring test alone would pass for any
+    # prefix of the module, so it is paired with the two neighbours that must NOT appear -- which
+    # is what makes it an assertion about isolation rather than about containment.
+    assert one.output.strip() in inspect.getsource(implement)
+    assert "async def implement_propose" not in one.output
+    assert "async def implement_from_ticket" not in one.output
+
+    whole = CliRunner().invoke(main, ["show-workflow", "implement"])
+    assert whole.exit_code == 0
+    for fn in ("implement_from_ticket", "implement_propose", "implement_report"):
+        assert f"async def {fn}" in whole.output, "a family prints the whole module"
+
+
+def test_registered_reports_the_repository_it_is_standing_in(tmp_path):
+    """`--registered` answers what THIS repository has in force, so it is asserted inside a
+    repository this test made rather than whichever one the suite happens to be run from.
+
+    The first version read the ambient working directory: green on a laptop sitting in this
+    project, exit 1 in CI. A test whose subject is "the repository you are in" has to bring one.
+    """
+    from in_lockstep.core.workflow import restore, snapshot
+
+    runner = CliRunner()
+    state = snapshot()
+    try:
+        with runner.isolated_filesystem(temp_dir=tmp_path) as here:
+            root = Path(here)
+            (root / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.1.0"\n')
+            (root / "uv.lock").touch()
+            (root / "tests").mkdir()
+            # Scaffold first, then COMMIT — in that order, and both are required.
+            #
+            # Once a CI environment is detected, configuration loads from the trusted ref (the base
+            # branch) and not from the working tree. So a repository with no commits has no ref to
+            # read and the loader refuses; and a repository committed BEFORE `init` has a ref whose
+            # tree predates the module, which reports "no .lockstep/lockstep.py at base branch" and
+            # lists `selfcheck` alone. Both were real failures here, in that order, each one CI
+            # telling me precisely which half I had wrong.
+            subprocess.run(["git", "init", "-q", "-b", "main", "."], cwd=root, check=True)
+            assert runner.invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "-c", "user.email=t@e.st", "-c", "user.name=t", "commit", "-qm", "base"],
+                cwd=root,
+                check=True,
+            )
+
+            mine = runner.invoke(main, ["show-workflow", "--registered"])
+            assert mine.exit_code == 0, mine.output
+            # It loads the lifecycle module to answer; without that it reported `selfcheck` and
+            # nothing else, which is the opposite of what the flag says.
+            assert "implement/propose  (in_lockstep.workflows.implement" in mine.output
+            assert "fix/report  (in_lockstep.workflows.fix" in mine.output
+            assert "selfcheck" in mine.output
+    finally:
+        restore(state)
+
+    unknown = CliRunner().invoke(main, ["show-workflow", "nope/x"])
+    assert unknown.exit_code != 0
+    assert "Shipped:" in unknown.output, "a refusal names what does exist"
+
+
+def test_nothing_init_writes_is_a_workflow_body(tmp_path):
+    """The property `--eject` used to violate on request. There is no flag that puts a copy of a
+    process into an adopter's module any more, which is what makes one copy a fact rather than a
+    default."""
+    source = _scaffolded(tmp_path, "--implement", "--fix")
+    for body in ("async def implement_from_ticket", "async def fix_from_ticket", "await ctx.do("):
+        assert body not in source
+
+
+def test_the_id_discovery_is_not_vacuous():
+    """`_workflow_ids` reads the ids out of `register()`'s source with a regex.
+
+    A regex that stopped matching -- because somebody reformatted `register`, or `ruff format`
+    split the call across lines -- would return an empty set, and every symptom of that is quiet:
+    `show-workflow` would list a family with no ids, and `show-workflow implement/propose` would
+    refuse with a message naming nothing as shipped. So the count is asserted, not just used.
+    """
+    from in_lockstep.cli import _workflow_ids
+    from in_lockstep.workflows import fix, implement
+
+    assert _workflow_ids(implement) == {
+        "implement/from-ticket",
+        "implement/propose",
+        "implement/report",
+    }
+    assert _workflow_ids(fix) == {"fix/from-ticket", "fix/propose", "fix/report"}
+
+
+def test_every_discovered_id_actually_resolves_to_a_function():
+    """The other half: an id the regex finds must name something `getattr` can reach. The two are
+    read out of one line each, so a rename that updated the id and not the function would leave
+    `show-workflow` refusing an id it had just advertised."""
+    from in_lockstep.cli import _workflow_function, _workflow_ids
+    from in_lockstep.workflows import fix, implement
+
+    for module in (implement, fix):
+        for workflow_id in _workflow_ids(module):
+            assert callable(_workflow_function(module, workflow_id))
