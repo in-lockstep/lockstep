@@ -1,0 +1,87 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058539,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The `provision` step is added to three workflow files but the diff does not include the fourth (`lockstep.yml` is shown, so all four are covered). No gap detected here \u2014 all four drop `continue-on-error` and add the `IN_LOCKSTEP_ORG_SPEND_LIMIT` env var. The change matches the description on both halves.",
+        "path": ".github/workflows/ai-generated.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The fix to `_branch_protection` matches the description: `DOC121`/ERROR is now reserved for GitHub literally returning `Branch not protected`, and every other non-zero exit becomes `DOC120`/NOTE. The default branch is fetched dynamically rather than hard-coded to `main`. The intent is fully implemented.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "`Provision` is now bound to `CommandProvision([['uv', 'sync', '--locked']])`, matching the claim that the verb was previously unbound. Import line updated consistently.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "`GATE-CI-3` moves from `unmet` to `held`, and the text accurately reflects both halves of the closure. The description's claim that both halves now hold is consistent with the diff.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "O10 moves from `partial` to `held` and the count updates from 4 to 5. CLAUDE.md is updated to match. All three are consistent with each other and with the gate change.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "Four new tests cover the `DOC120`/`DOC121` distinction, the non-error path, the success path, and the dynamic branch name lookup. These match the behavioural claims in the diff.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The quickstart output check is updated to expect `DOC120` instead of `DOC121` for a no-remote tree, and asserts `DOC121` is absent. This matches the new behaviour.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "`MAX_STATEMENTS` moves from 13 to 14 to account for the added `provision` step. The comment records the reason. Consistent with the workflow changes.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6314c8400336df836d49aa5896c44245bc6bdc0a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 691,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T225413Z-acb5",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 694,
+  "ts": "2026-09-05T22:54:31+00:00",
+  "wall_seconds": 18.894
+}
