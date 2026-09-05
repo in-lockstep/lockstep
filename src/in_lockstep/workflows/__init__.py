@@ -5,9 +5,10 @@
     implement.register()
     fix.register()
 
-`init --implement` writes those lines. `init --eject` writes the source instead, for a repository
-that wants to own and edit its own process — which is a real position rather than a fallback, and
-the one ADR 0001 deleted a compiler to protect.
+`init --implement` writes those lines. Reading the source is `in-lockstep show-workflow
+implement`, which prints it from the module that is actually imported — so what you read is what
+runs. There is deliberately no flag that writes a copy into an adopter's module: a copy is a fork,
+and every fix to it then lands twice and reaches nobody who scaffolded before it.
 """
 
 from . import fix, implement

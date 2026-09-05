@@ -9,6 +9,7 @@ ship; this applies it to what we say.
 
 from __future__ import annotations
 
+import inspect
 import re
 from pathlib import Path
 
@@ -272,3 +273,43 @@ def test_the_quickstart_outputs_match_the_tool_that_ships(tmp_path, monkeypatch)
         assert stable in ls_out and stable in doc, f"ls line drifted: {stable!r}"
     for stable in ("DOC101", "DOC121", "DOC130"):
         assert stable in doctor_out and stable in doc, f"doctor code drifted: {stable!r}"
+
+
+def test_no_documented_snippet_claims_a_workflow_id_the_framework_ships() -> None:
+    """A snippet that hand-writes a shipped id raises `DuplicateWorkflow` at module load.
+
+    `docs/extending.md` told an adopter to write `@workflow(id="implement/from-ticket")` in their
+    own module. That was correct until #261 made the shipped processes framework code: the
+    framework now claims that id in `implement.register()`, `@workflow` refuses a repeated id from
+    a different `def`, and anyone who ran `init --implement` and then followed the page had a
+    `lockstep.py` that would not import at all.
+
+    Parsing was not enough to catch it — the snippet is valid Python, and it is valid in
+    isolation. It is only wrong in the presence of the registration `init` writes, which is the
+    configuration every reader of that page is in. So this asserts the relationship rather than
+    the syntax.
+
+    Deliberately not a check that the id is *bound*: an adopter's own `implement/from-label` is
+    the documented, encouraged case, and a test that required every documented id to be one of
+    ours would refuse the very extensibility O8 is about.
+    """
+    from in_lockstep.workflows import fix, implement
+
+    shipped = set()
+    for module in (implement, fix):
+        source = inspect.getsource(module.register)
+        shipped |= set(re.findall(r'workflow\(id="([^"]+)"\)', source))
+    assert shipped, "no shipped workflow ids were found; this test would pass over nothing"
+
+    claimed_by_docs = []
+    for doc in sorted((ROOT / "docs").glob("*.md")) + [ROOT / "README.md"]:
+        for block in _python_blocks(doc):
+            for wid in re.findall(r'@workflow\(id="([^"]+)"\)', block):
+                if wid in shipped:
+                    claimed_by_docs.append(f"{doc.name}: @workflow(id={wid!r})")
+
+    assert not claimed_by_docs, (
+        f"{claimed_by_docs} claim ids the framework registers ({sorted(shipped)}). A reader who "
+        f"scaffolded with `init` and then copied this gets DuplicateWorkflow at load. Register "
+        f"the shipped process (`implement.register()`) or choose an id of your own."
+    )

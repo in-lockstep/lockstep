@@ -92,20 +92,20 @@ ALLOWED: dict[str, set[str]] = {
     # into something bindable — which is the auto-binding this whole design refuses.
     "market": {"market", "privileged"},
     # `trial` runs a verb against a cassette, so it names an implementation — the same edge
-    # `strategies` takes, for the same reason: a measurement that could only reference strings
+    # `adapters` takes, for the same reason: a measurement that could only reference strings
     # would not be a measurement of anything. It reaches `evaluation` for the corpus contract and
     # `packs` for where a pack keeps its cases. Acyclic: none of those import `trial`.
     "trial": {"adapters", "ai", "core", "evaluation", "packs", "privileged", "trial"},
     # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
-    # file did for a phase. The edge is acyclic: `adapters` takes its registry by injection and
-    # never imports `strategies` back.
+    # file did for a phase. The edge is acyclic: nothing in `adapters` imports a composition
+    # root back.
     # The processes the framework ships for an adopter to register. It names implementations —
     # `Implement`, `Fix`, the artifact readers, the proposal helpers — because a process that could
     # only reference strings would not be a process. Acyclic: none of those imports `workflows`,
     # and nothing inside the framework does either. Only an adopter's own module and `cli` (for
-    # `--eject`, which reads the source) reach it.
+    # `show-workflow`, which reads the source) reach it.
     "workflows": {"core", "adapters", "platform", "workflows"},
     # `platform` was added for exactly one edge: the pre-run daily spend ceiling reads the
     # ledger, and the ledger is platform's. The facade composes what the layers provide, and a
@@ -138,13 +138,13 @@ ALLOWED: dict[str, set[str]] = {
         # edge back — `metrics` imports nothing of ours, which is what keeps its arithmetic
         # testable against a list somebody wrote by hand.
         "metrics",
-        "strategies",
         "receipt",
         "packs",
         "market",
         "trial",
-        # `--eject` reads the shipped workflow source out of the installed package, so the CLI
-        # imports the modules it is about to copy. One direction: `workflows` never imports `cli`.
+        # `show-workflow` prints the shipped process from `inspect.getsource` on the module that
+        # is actually imported, and `init --implement` scaffolds the `register()` call, so the CLI
+        # imports what it is about to describe. One direction: `workflows` never imports `cli`.
         "workflows",
         "cli",
     },
@@ -228,3 +228,22 @@ def test_ports_declares_protocols_only() -> None:
             assert is_protocol or is_exception or is_constants, (
                 f"{node.name} in core/ports is neither a Protocol, an exception, nor constants"
             )
+
+
+def test_every_layer_named_in_allowed_exists() -> None:
+    """A phantom layer is an allowance that can never be exercised, and never fails.
+
+    `strategies` sat in `ALLOWED["cli"]` from the pivot commit until #270, for a package that was
+    never built. It cost nothing and proved nothing, which is the problem: this dict reads as the
+    architecture, so a name in it that resolves to nothing means the reader is looking at a plan
+    rather than at the tree. The same shape as a gate row citing a gate nobody wrote.
+
+    The other direction is `test_arrows_point_down_only`, which refuses a layer with no entry. Between
+    the two, the dict and the tree name the same set.
+    """
+    named = set(ALLOWED) | {layer for allowed in ALLOWED.values() for layer in allowed}
+    missing = {n for n in named if not (SRC / f"{n}.py").exists() and not (SRC / n).is_dir()}
+    assert not missing, (
+        f"ALLOWED names {sorted(missing)}, which are not packages or modules under src/in_lockstep. "
+        f"An allowance for something that does not exist is never exercised and never fails."
+    )
