@@ -34,6 +34,7 @@ to argue with.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from dataclasses import dataclass
@@ -87,23 +88,40 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
     if not isinstance(calls, dict) or not calls:
         raise NothingToHarvest(f"{path} holds no recorded calls")
 
+    order = data.get("order") if isinstance(data, dict) else None
+    sessions = _sessions(calls, [str(k) for k in order] if isinstance(order, list) else [])
+    if not sessions:
+        sessions = [[key] for key in sorted(calls)]
+
+    # ONE case per session, not per call. A nine-turn session recorded nine calls, and eight of
+    # them are the same conversation with one more turn on the end — so nine cases are nine copies
+    # of one question, each bigger than the last, and the ninth contains all of the others.
+    #
+    # The one kept is the session's LAST measurable call, because that is where the answer worth
+    # grading is: a write verb's earlier turns answer with a tool call and empty prose, from which
+    # `_expect` can derive nothing, so a case built on turn 1 would be a case that cannot fail.
+    # Its request carries the whole session, which is exactly why `_elide` exists.
     buildable: list[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
     without_request = 0
     unmeasurable = 0
-    for key, entry in sorted(calls.items()):
-        if not isinstance(entry, dict):
-            continue
-        request = entry.get("request")
-        if not isinstance(request, dict):
-            without_request += 1
-            continue
-        expect = _expect(_answer(entry))
-        if not expect:
-            # A case with no expectation cannot fail, and `Case.parse` refuses one. An answer that
-            # is neither JSON nor long enough to quote is a recording, not a measurement.
-            unmeasurable += 1
-            continue
-        buildable.append((key, request, expect, entry))
+    for session in sessions:
+        measurable = None
+        for key in session:
+            entry = calls.get(key)
+            if not isinstance(entry, dict):
+                continue
+            request = entry.get("request")
+            if not isinstance(request, dict):
+                without_request += 1
+                continue
+            expect = _expect(_answer(entry))
+            if not expect:
+                # A case with no expectation cannot fail, and `Case.parse` refuses one.
+                unmeasurable += 1
+                continue
+            measurable = (key, request, expect, entry)
+        if measurable is not None:
+            buildable.append(measurable)
 
     # Names are decided over the WHOLE tape, not one call at a time, because a name is only
     # ambiguous relative to its neighbours. `_stem` reads the last user message, and in a
@@ -122,12 +140,18 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
     out: list[Harvested] = []
     for (key, request, expect, entry), stem in zip(buildable, stems, strict=True):
         name = f"{stem}-{key[:8]}" if shared[stem] > 1 else stem
+        elided, omitted = _elide(request)
         out.append(
             Harvested(
                 name=f"{family}/{name}" if family else name,
                 case={
-                    "input": {"request": request},
+                    "input": {"request": elided},
                     "expect": expect,
+                    # What this case does NOT carry, counted and digested. Empty when the session
+                    # read nothing and ran nothing, which is every `review` recording — and an
+                    # empty block is omitted entirely rather than written as zeros, because a
+                    # category nobody dropped is absent, not zero.
+                    **({"omitted": omitted} if omitted else {}),
                     # The answer, in the case. Without this a case is a pointer at a cassette, and
                     # a pointer is worth what the thing it points at is still there: a case that
                     # travels — out of a CI runner in an artifact, into a repository, between two
@@ -182,6 +206,111 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
             f"built from either."
         )
     return out
+
+
+#: A string in a tool call's input longer than this is a BODY rather than an address. `path`,
+#: `pattern` and `glob` are how a session says where it went; `contents` is what it wrote, and
+#: `write_file` carries the whole new file rather than a diff. Shape rather than a list of tool
+#: names, so an adopter's own tool is elided on the same rule as ours (O8).
+MAX_INLINE_CHARS = 200
+
+
+def _extends(earlier: dict[str, Any], later: dict[str, Any]) -> bool:
+    """Whether `later` is the same conversation, one or more turns on.
+
+    `AiInvoker` builds each turn from `list(history)` and only ever appends, so within one
+    invocation every request after the first begins with the whole of the one before it. Across two
+    invocations -- TDD's red phase and its green phase -- the system prompt differs, so no chain
+    forms, which is correct: those are two questions and deserve two cases.
+    """
+    if earlier.get("system") != later.get("system") or earlier.get("model") != later.get("model"):
+        return False
+    before, after = earlier.get("messages") or [], later.get("messages") or []
+    return len(after) > len(before) and after[: len(before)] == before
+
+
+def _sessions(calls: dict[str, Any], order: list[str]) -> list[list[str]]:
+    """The tape's calls, grouped into the conversations that produced them.
+
+    Grouped from `order` -- the sequence they were recorded in -- and NOT from `sorted(calls)`,
+    which is hash order and says nothing about what followed what. A tape with no `order` (one
+    written before it was kept) falls back to one session per call, which is what harvesting did
+    before sessions existed.
+    """
+    grouped: list[list[str]] = []
+    for key in order:
+        entry = calls.get(key)
+        request = entry.get("request") if isinstance(entry, dict) else None
+        if not isinstance(request, dict):
+            continue
+        previous = calls.get(grouped[-1][-1], {}) if grouped else {}
+        if grouped and _extends(previous.get("request") or {}, request):
+            grouped[-1].append(key)
+        else:
+            grouped.append([key])
+    return grouped
+
+
+def _elide(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The request with its bodies removed, and a falsifiable account of what was removed.
+
+    A write verb's last turn embeds every earlier turn verbatim -- so the final request IS the
+    session's whole contents: every file the model chose to open, every command's stdout and
+    stderr, and a whole post-image of each file it wrote. That is the thing that must not travel.
+
+    What travels instead is addresses: which files, which commands, how much. Per category a count,
+    a byte total and a sha256 over exactly what was dropped, in order -- because an elision nobody
+    can check is an elision that quietly becomes a fabrication, and somebody holding the tape can
+    reproduce the digest and see that this case left out what it says it left out.
+
+    `recoverable` is honest rather than hopeful. Command output is not byte-stable across runs and
+    a file body is only recoverable if you know which commit it was read at, which a case does not
+    record. So both are `false`, and the digest is what stands in for them.
+    """
+    dropped: dict[str, list[str]] = {}
+
+    def _cut(kind: str, text: str) -> str:
+        dropped.setdefault(kind, []).append(text)
+        return f"[elided: {len(text)} chars of {kind}; see `omitted`]"
+
+    messages = []
+    for message in request.get("messages") or []:
+        if not isinstance(message, dict):
+            continue
+        rebuilt = dict(message)
+        if rebuilt.get("role") == "tool_result" and isinstance(rebuilt.get("content"), str):
+            rebuilt["content"] = _cut("tool_result", rebuilt["content"])
+        calls_out = []
+        for call in rebuilt.get("tool_calls") or []:
+            if not isinstance(call, dict):
+                continue
+            rebuilt_call = dict(call)
+            arguments = dict(rebuilt_call.get("input") or {})
+            for field_name, value in arguments.items():
+                if isinstance(value, str) and len(value) > MAX_INLINE_CHARS:
+                    arguments[field_name] = _cut("tool_call_input", value)
+            rebuilt_call["input"] = arguments
+            calls_out.append(rebuilt_call)
+        if rebuilt.get("tool_calls") is not None:
+            rebuilt["tool_calls"] = calls_out
+        messages.append(rebuilt)
+
+    elided = dict(request)
+    elided["messages"] = messages
+    omitted = {
+        kind: {
+            "count": len(texts),
+            "bytes": sum(len(x) for x in texts),
+            "sha256": hashlib.sha256("".join(texts).encode()).hexdigest(),
+            "recoverable": False,
+            "why": (
+                "command output is not byte-stable across runs, and a file body is recoverable "
+                "only against the commit it was read at, which a case does not record"
+            ),
+        }
+        for kind, texts in sorted(dropped.items())
+    }
+    return elided, omitted
 
 
 def _recorded(entry: dict[str, Any]) -> dict[str, Any]:

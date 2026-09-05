@@ -142,7 +142,8 @@ jobs:
       - run: |
           uv run in-lockstep run implement/from-ticket \
             --arg ticket="#${ISSUE}" \
-            --approved-by "${ACTOR}"
+            --approved-by "${ACTOR}" \
+            --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           # A name GitHub computed and the gate above verified, not one the comment claimed.
@@ -182,7 +183,14 @@ jobs:
             changeset/
             attempt/
             history.bundle
+            # The cases harvested from the recording, in-process at the end of the run.
+            # The TAPE is not here and never is: it holds every file the session opened
+            # and every command's output, and it dies in RUNNER_TEMP with the runner.
+            .lockstep/cases/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 drops hidden files by
+          # DEFAULT, so without this the line above is silently ignored.
+          include-hidden-files: true
           retention-days: 30
 
   propose:

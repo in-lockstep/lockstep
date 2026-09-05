@@ -442,6 +442,7 @@ def _run_registered(
         # people stop passing. Zero is printed as zero and means it: the run made no model call.
         click.echo(f"kept      {tape.calls()} inference(s) in {tape.path}")
         _warn_if_calls_went_unrecorded(tape, ctx)
+        _harvest_in_process(tape, entry.id, lockstep)
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
     _exit_for(result, ctx)
 
@@ -683,6 +684,47 @@ def main() -> None:
     # Env scraping is the fallback source, not the mechanism: `Auth` registers what it mints. But
     # a key already in the environment before a run starts is real, and this is where it is seen.
     redact_registry.seed_from_environment()
+
+
+def _harvest_in_process(tape: Any, workflow_id: str, lockstep: Any) -> None:
+    """Turn the tape into cases here, at the end of the run, rather than as a second CI statement.
+
+    Two reasons, and the second is the one that decided it. `implement.yml` is at 13 of
+    `MAX_STATEMENTS = 13`, and its own comment says a cap somebody raises whenever it bites is not
+    a cap — so a harvest step would have cost a raise nobody had argued for. And a step that can be
+    forgotten is a step that will be: the flag and what makes it worth passing belong together, or
+    a repository ends up recording into a tape nothing reads, which is the defect #216's own review
+    turned up one layer out.
+
+    Never fatal. Harvest refuses rather than inventing -- a session whose answers state nothing a
+    machine can settle is a real refusal -- and that is the wrong reason to fail work somebody is
+    waiting on. The refusal is printed and the run keeps its own verdict.
+    """
+    from .evaluation.harvest import NothingToHarvest, harvest
+
+    family = workflow_id.split("/")[0]
+    into = Path(lockstep.repo.root) / ".lockstep" / "cases"
+    try:
+        found = harvest(tape.path, family=family)
+    except NothingToHarvest as e:
+        click.echo(f"cases     none: {e}")
+        return
+    for item in found:
+        item.case.setdefault("harvested", {})["key"] = _case_key(item)
+        sink.write_json(item.path_in(into), item.case)
+    click.echo(f"cases     {len(found)} in {into}")
+
+
+def _case_key(item: Any) -> str:
+    """The hash of the request as the CASE carries it. See `_eval_harvest`, which does the same.
+
+    Stamped by this layer because `evaluation` is a leaf that may not import the hash, and doing it
+    twice is better than two implementations of one hash that drift apart in silence.
+    """
+    from .ai.replay import key_of, request_from
+
+    stored = (item.case.get("input") or {}).get("request")
+    return key_of(request_from(stored)) if isinstance(stored, dict) else ""
 
 
 def _warn_if_calls_went_unrecorded(tape: Any, ctx: Any) -> None:
@@ -4802,13 +4844,19 @@ def _disclose_what_a_run_keeps() -> None:
     """
     click.echo("")
     click.echo("What a run keeps:")
-    click.echo("  A recording holds the request verbatim -- the whole composed prompt and the")
-    click.echo("  whole diff that was sent. Redaction masks the credential shapes it knows;")
-    click.echo("  it never masks source.")
-    click.echo(f"  Locally, only under --record: {CASSETTE_DIR}/<verb>.json, now gitignored.")
-    click.echo("  In CI, the recording is written to the runner's temporary directory and dies")
-    click.echo("  with the runner. What survives is the cases harvested from it, in the run")
-    click.echo("  artifact, which says how many days it is kept.")
+    click.echo("  A recording holds the request verbatim. For `review` that is the composed")
+    click.echo("  prompt and the diff. For `implement` and `fix` it is more: every file the")
+    click.echo("  model chose to open, every command's output, and a whole copy of each file")
+    click.echo("  it wrote -- because a session re-sends its history every turn.")
+    click.echo("  Redaction masks the credential shapes it knows; it never masks source.")
+    click.echo("")
+    click.echo(f"  Locally, only under --record: {CASSETTE_DIR}/<verb>.json, gitignored.")
+    click.echo("  In CI the recording is written OUTSIDE the checkout, and dies with the runner.")
+    click.echo("  What survives is the cases harvested from it: the question that was asked, and")
+    click.echo("  which files and commands the session reached for -- addresses, not contents.")
+    click.echo("  Each case says what it left out, with a count, a size and a digest, so the")
+    click.echo("  omission can be checked rather than taken on trust. They ride the run artifact,")
+    click.echo("  which says how many days it is kept.")
     click.echo("  Run records are the exception and are meant to survive: an orphan branch.")
 
 
@@ -5501,7 +5549,8 @@ jobs:
           uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run implement/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
-            --budget 2.00
+            --budget 2.00 \
+            --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           # A name GitHub computed and the gate verified, not one the comment claimed.
@@ -5522,7 +5571,17 @@ jobs:
           path: |
             changeset/
             history.bundle
+            # The cases harvested from the recording, in-process at the end of the run.
+            # The TAPE is not here and never is: it holds every file the session opened
+            # and every command's output, and dies in RUNNER_TEMP with the runner.
+            .lockstep/cases/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 drops hidden files by DEFAULT,
+          # so without this the line above is silently ignored and the artifact arrives short.
+          include-hidden-files: true
+          # Said rather than inherited: the vendor default is 90 days, and this artifact holds
+          # cases built from a session that read your files. Two weeks is enough to notice a run.
+          retention-days: 14
 
   propose:
     needs: [gate, implement]
@@ -5865,7 +5924,8 @@ jobs:
           uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
-            --budget 3.00
+            --budget 3.00 \
+            --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           ACTOR: ${{ needs.gate.outputs.actor }}
@@ -5882,7 +5942,17 @@ jobs:
           path: |
             fix-changeset/
             history.bundle
+            # The cases harvested from the recording, in-process at the end of the run.
+            # The TAPE is not here and never is: it holds every file the session opened
+            # and every command's output, and dies in RUNNER_TEMP with the runner.
+            .lockstep/cases/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 drops hidden files by DEFAULT,
+          # so without this the line above is silently ignored and the artifact arrives short.
+          include-hidden-files: true
+          # Said rather than inherited: the vendor default is 90 days, and this artifact holds
+          # cases built from a session that read your files. Two weeks is enough to notice a run.
+          retention-days: 14
 
   propose:
     needs: [gate, fix]
@@ -5990,7 +6060,8 @@ jobs:
           uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "labeled:${LABELER}" \\
-            --budget 3.00
+            --budget 3.00 \
+            --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           LABELER: ${{ github.event.sender.login }}
@@ -6007,7 +6078,17 @@ jobs:
           path: |
             fix-changeset/
             history.bundle
+            # The cases harvested from the recording, in-process at the end of the run.
+            # The TAPE is not here and never is: it holds every file the session opened
+            # and every command's output, and dies in RUNNER_TEMP with the runner.
+            .lockstep/cases/
           if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 drops hidden files by DEFAULT,
+          # so without this the line above is silently ignored and the artifact arrives short.
+          include-hidden-files: true
+          # Said rather than inherited: the vendor default is 90 days, and this artifact holds
+          # cases built from a session that read your files. Two weeks is enough to notice a run.
+          retention-days: 14
 
   propose:
     needs: fix

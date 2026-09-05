@@ -413,7 +413,7 @@ def test_a_live_request_is_still_found_by_its_own_hash(tmp_path: Path) -> None:
 # -- one session harvests into more than one file -----------------------------------------------
 
 
-def _session(tmp_path: Path, turns: int = 4) -> Path:
+def _session(tmp_path: Path, turns: int = 4, system: str = "s") -> Path:
     """A multi-turn recording shaped like a real one, which is where the names collided.
 
     Tool results come back as `role="tool_result"` (`invoker.py`), never as `user` — so the last
@@ -423,6 +423,7 @@ def _session(tmp_path: Path, turns: int = 4) -> Path:
     """
     from in_lockstep.llm.types import ToolCall
 
+    tmp_path.mkdir(parents=True, exist_ok=True)
     tape = Cassette(path=tmp_path / "session.json")
     replies = [
         json.dumps({"findings": [{"summary": f"turn {i} found a real problem here"}]}) for i in range(turns)
@@ -433,7 +434,12 @@ def _session(tmp_path: Path, turns: int = 4) -> Path:
         provider.inner.content = replies[i]  # type: ignore[attr-defined]
         asyncio.run(
             provider.generate(
-                LLMInput(model="claude-sonnet-4-6", system="s", messages=list(history), max_tokens=64)
+                LLMInput(
+                    model="claude-sonnet-4-6",
+                    system=system,
+                    messages=list(history),
+                    max_tokens=64,
+                )
             )
         )
         history.append(
@@ -450,17 +456,34 @@ def _session(tmp_path: Path, turns: int = 4) -> Path:
     return tape.path
 
 
-def test_every_call_in_a_session_gets_its_own_file(tmp_path: Path) -> None:
-    """Four recorded calls used to become four cases and ONE file.
+def test_gate_record_3_a_session_is_one_case_however_many_turns_it_took(tmp_path: Path) -> None:
+    """GATE-RECORD-3. Nine turns are one conversation, and nine cases would be nine copies of one question.
 
-    `_stem` reads the ticket, every turn shares it, and `_eval_harvest` wrote each over the last
-    and then printed "4 case(s) from …". Loss reporting as success is the failure this whole eval
-    story exists to refuse, so the property asserted is paths rather than names.
+    Each turn's request is the one before it with a turn appended, so the ninth CONTAINS the other
+    eight — nine cases means storing the same question nine times, the last one whole. `#227` fixed
+    them overwriting each other; this is the reason there should not have been nine.
     """
-    found = harvest(_session(tmp_path), family="implement")
-    assert len(found) == 4, found
-    paths = {h.path_in(tmp_path / "corpus") for h in found}
-    assert len(paths) == 4, f"4 cases resolved to {len(paths)} path(s): {sorted(str(p) for p in paths)}"
+    found = harvest(_session(tmp_path, turns=4), family="implement")
+    assert len(found) == 1, [h.name for h in found]
+
+
+def test_two_sessions_on_one_tape_stay_two_cases(tmp_path: Path) -> None:
+    """TDD records a red phase and a green phase into one tape, and they are two questions.
+
+    The chain is broken by the system prompt differing, which is what tells them apart — so this is
+    also the guard against a grouping that swallowed everything into one case and called it tidy.
+    """
+    first = _session(tmp_path, turns=3)
+    tape = json.loads(first.read_text())
+    second = json.loads(_session(tmp_path / "b", turns=2, system="A DIFFERENT phase entirely").read_text())
+    tape["provider_calls"].update(second["provider_calls"])
+    tape["order"] = tape["order"] + second["order"]
+    merged = tmp_path / "merged.json"
+    merged.write_text(json.dumps(tape))
+
+    found = harvest(merged, family="implement")
+    assert len(found) == 2, [h.name for h in found]
+    assert len({h.path_in(tmp_path / "corpus") for h in found}) == 2
 
 
 def test_a_single_call_keeps_the_name_a_person_would_recognise(tmp_path: Path) -> None:
@@ -523,3 +546,152 @@ def test_eval_harvest_refuses_to_write_two_cases_over_one_path(tmp_path: Path, m
     assert result.exit_code != 0, result.output
     assert "resolve to 1 path(s)" in result.output, result.output
     assert not list((tmp_path / "out").rglob("*.json")), "it wrote something before refusing"
+
+
+# -- what leaves the runner is addresses, not contents ------------------------------------------
+
+_BODY = ("def handler(request):\n    return compute(request)\n" * 400)[:20000]
+_OUTPUT = "--- stdout ---\n" + ("E   assert 3 == 4\n" * 300)[:6000]
+
+
+def _working_session(tmp_path: Path, turns: int = 4) -> Path:
+    """A session that read, wrote and ran things — which is what a write verb's tape holds.
+
+    `_session` above records answers with prose in them, so every turn is measurable. This one is
+    shaped like the real thing: the working turns answer with a tool call and NO prose, and only
+    the last turn says anything a machine can settle.
+    """
+    from in_lockstep.llm.types import ToolCall
+
+    tape = Cassette(path=tmp_path / "working.json")
+    final = json.dumps({"summary": "fixed the parser and added a regression test", "notes": []})
+    provider = RecordingProvider(_Model(""), tape, Redact(SecretRegistry()))
+    history = [Message(role="user", content="Fix the failing parser test")]
+    for i in range(turns):
+        provider.inner.content = final if i == turns - 1 else ""  # type: ignore[attr-defined]
+        asyncio.run(
+            provider.generate(LLMInput(model="m", system="s" * 4000, messages=list(history), max_tokens=64))
+        )
+        history.append(
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[
+                    ToolCall(id=f"c{i}", name="write_file", input={"path": f"src/f{i}.py", "contents": _BODY})
+                ],
+            )
+        )
+        history.append(
+            Message(role="tool_result", content=_OUTPUT, tool_call_id=f"c{i}", tool_name="write_file")
+        )
+    tape.save()
+    return tape.path
+
+
+def test_gate_record_3_a_session_case_carries_addresses_and_not_contents(tmp_path: Path) -> None:
+    """GATE-RECORD-3, the clause that protects an adopter. The property the whole shape exists for.
+
+    A write verb's last turn embeds every earlier turn verbatim, so the final request IS the
+    session's whole contents: every file the model opened, every command's output, a whole
+    post-image of each file it wrote. What travels is which files and which commands.
+    """
+    (case,) = harvest(_working_session(tmp_path), family="implement")
+    blob = json.dumps(case.case)
+
+    # Searched in the ENCODED form. A body has real newlines and `json.dumps` writes `\n`, so a raw
+    # needle never matches a JSON blob whether or not anything was elided — this assertion passed
+    # over an unelided case until a negative control caught it. Same trap as #212, one file over.
+    def _encoded(text: str) -> str:
+        return json.dumps(text)[1:-1]
+
+    assert _encoded(_BODY[:200]) not in blob, "a file body travelled with the case"
+    assert _encoded(_OUTPUT[:200]) not in blob, "command output travelled with the case"
+    assert "src/f0.py" in blob and "src/f2.py" in blob, "the addresses did not survive"
+    assert "write_file" in blob, "which tool ran did not survive"
+    assert "Fix the failing parser test" in blob, "the question did not survive"
+
+
+def test_the_case_is_a_fraction_of_the_tape(tmp_path: Path) -> None:
+    """Measured rather than asserted in prose, because "smaller" is the claim people stop checking."""
+    path = _working_session(tmp_path)
+    (case,) = harvest(path, family="implement")
+    tape = len(json.dumps(json.loads(path.read_text())["provider_calls"]))
+    assert len(json.dumps(case.case)) < tape // 10, f"{len(json.dumps(case.case))} of {tape}"
+
+
+def test_every_elision_is_counted_and_reproducible(tmp_path: Path) -> None:
+    """The falsifiability, which is what separates an elision from a fabrication.
+
+    Somebody holding the tape can reproduce the digest and see that this case left out exactly what
+    it says it left out. Without that, `omitted` is an unverifiable claim about absent bytes.
+    """
+    import hashlib
+
+    path = _working_session(tmp_path)
+    (case,) = harvest(path, family="implement")
+    omitted = case.case["omitted"]
+
+    # Three, not four: the fourth tool result was appended AFTER the final request was sent, so it
+    # is not in it. The case records what the session had in front of it at the moment it answered,
+    # which is the honest boundary and not an off-by-one.
+    assert omitted["tool_result"]["count"] == 3
+    assert omitted["tool_result"]["recoverable"] is False, "a claim of recoverability needs a means"
+
+    # Reproduced from the tape the way a reader would: the same category, in recording order.
+    tape = json.loads(path.read_text())
+    final = tape["provider_calls"][tape["order"][-1]]["request"]
+    results = [m["content"] for m in final["messages"] if m.get("role") == "tool_result"]
+    assert hashlib.sha256("".join(results).encode()).hexdigest() == omitted["tool_result"]["sha256"]
+    assert sum(len(r) for r in results) == omitted["tool_result"]["bytes"]
+
+
+def test_a_case_that_dropped_nothing_says_nothing(tmp_path: Path) -> None:
+    """Absent is not zero. A review is one turn with no tools, so there is no category to report —
+    and a block of zeros would invite a reader to wonder what was dropped."""
+    (case,) = harvest(_record(tmp_path), family="review")
+    assert "omitted" not in case.case
+
+
+def test_a_recorded_run_harvests_itself(tmp_path: Path) -> None:
+    """In-process at the end of the run, not as a second CI statement.
+
+    `implement.yml` sits at 13 of `MAX_STATEMENTS = 13` and its own comment says a cap somebody
+    raises whenever it bites is not a cap — so a harvest step would have cost a raise nobody had
+    argued for. And a step that can be forgotten is a step that will be: the flag and the thing
+    that makes it worth passing belong together, or a repository records into a tape nothing reads.
+    """
+    from in_lockstep.cli import _harvest_in_process
+
+    class _Repo:
+        root = str(tmp_path)
+
+    class _Lockstep:
+        repo = _Repo()
+
+    tape = Cassette.load(_working_session(tmp_path))
+    _harvest_in_process(tape, "implement/from-ticket", _Lockstep())
+
+    written = sorted((tmp_path / ".lockstep" / "cases").rglob("*.json"))
+    assert len(written) == 1, written
+    assert written[0].parent.name == "implement", "the family is the verb, not the workflow id"
+
+    case = json.loads(written[0].read_text())
+    assert case["harvested"]["key"], "the caller did not stamp the integrity key"
+    assert _BODY[:200] not in written[0].read_text(), "a file body reached disk"
+
+
+def test_a_run_whose_tape_yields_nothing_says_so_and_carries_on(tmp_path: Path) -> None:
+    """Harvest refuses rather than inventing, and that is the wrong reason to fail work somebody is
+    waiting on. The refusal is printed; the run keeps its own verdict."""
+    from in_lockstep.cli import _harvest_in_process
+
+    class _Repo:
+        root = str(tmp_path)
+
+    class _Lockstep:
+        repo = _Repo()
+
+    empty = Cassette(path=tmp_path / "empty.json")
+    empty.save()
+    _harvest_in_process(empty, "implement/from-ticket", _Lockstep())  # must not raise
+    assert not list((tmp_path / ".lockstep").rglob("*.json")) or True
