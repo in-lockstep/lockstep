@@ -401,14 +401,22 @@ are what `InvokePolicy.under()` composes into the loop. A denied tool is removed
 `ToolSet` rather than refused when called, and `scan_input="block"` refuses before the first model
 call.
 
-`Policy` also carries `network`, `permissions` and three credit fields. Those are merged, printed
-by `ls` and reported in the receipt, and **nothing enforces them today** (`GATE-POLICY-2`,
-`unmet`). Do not write an org floor that leans on them.
+`Policy` carries those three fields and nothing else. It used to carry `network`, `permissions`
+and three credit fields as well; they were merged, printed by `ls` and reported in the receipt,
+and enforced by nothing, so #263 deleted them. A security field that reads as in force while
+enforcing nothing is worse than its absence, and the receipt is the artefact a reviewer trusts.
 
-Egress is the one worth knowing about, because it looks like the gap and is not: a real egress
-floor is `IN_LOCKSTEP_EGRESS=enforced` under a host that constrains destinations, verified by a
-probe, with `UnsandboxedEgress` as the named opt-out. That control is enforced and is checked by
-`doctor`; `Policy(network=...)` is a field the compiler-era design left behind.
+What to write instead, for each of them:
+
+| was | use |
+|---|---|
+| `Policy(network=...)` | `IN_LOCKSTEP_EGRESS=enforced` under a host that constrains destinations, verified by a probe, with `UnsandboxedEgress` as the named opt-out. Enforced, and checked by `doctor`. |
+| `Policy(permissions=...)` | the `Sandbox` a deterministic adapter runs under, and `deny_tools` for what a model may call. |
+| the three credit fields | `Budget` and the `CostBudget` middleware, which refuse a run rather than describing one. |
+
+Each of those enforces. That is the whole difference, and it is why the fields went rather than
+gaining an enforcement path of their own: every one of them already had a control covering the
+same ground, so wiring them would have meant two writers of one rule.
 
 At one repository, that line lives in `lockstep.py`. At two hundred, a line every repository has
 to remember is drift by another name. So standards also travel as an **installable package**: an

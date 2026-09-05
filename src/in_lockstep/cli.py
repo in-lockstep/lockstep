@@ -1169,9 +1169,9 @@ def ls_cmd() -> None:
             click.echo(f"  {layer.name}  <- {layer.source or 'local'}")
         resolved = lockstep.policy.resolve()
         click.echo(
-            f"  = network={resolved.network or '(unset)'}"
-            f" scan={resolved.scan_input or '(unset)'}"
+            f"  = scan={resolved.scan_input or '(unset)'}"
             f" deny_tools={len(resolved.deny_tools)}"
+            f" max_turns={resolved.max_turns if resolved.max_turns is not None else '(unset)'}"
         )
 
     routes = lockstep.models.routes

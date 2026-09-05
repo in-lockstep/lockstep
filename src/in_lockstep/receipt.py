@@ -155,11 +155,9 @@ def _policy(lockstep: Lockstep) -> dict[str, Any]:
             {"name": layer.name, "source": layer.source or "local"} for layer in lockstep.policy.layers
         ],
         "resolved": {
-            "network": resolved.network,
             "scan_input": resolved.scan_input,
             "deny_tools": sorted(resolved.deny_tools),
             "max_turns": resolved.max_turns,
-            "permissions": resolved.permissions,
         },
     }
 
@@ -326,7 +324,7 @@ def render(receipt: dict[str, Any]) -> list[str]:
         lines.append(f"  {layer['name']}{source}")
     resolved = receipt["policy"]["resolved"]
     lines.append(
-        f"  = network={resolved['network'] or '(unset)'} scan={resolved['scan_input'] or '(unset)'} "
+        f"  = scan={resolved['scan_input'] or '(unset)'} "
         f"deny_tools={len(resolved['deny_tools'])} max_turns={resolved['max_turns']}"
     )
 

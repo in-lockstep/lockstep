@@ -342,12 +342,43 @@ def test_budget_blocks_when_the_ceiling_is_already_crossed() -> None:
 # -- PolicyStack: GATE-POLICY-1 -------------------------------------------------------
 
 
-def test_gate_policy_1_deny_all_is_an_irreversible_floor() -> None:
-    """A repo inheriting two upstreams must not have the second undo the first's egress rule."""
+def test_gate_policy_1_a_later_contribution_cannot_weaken_an_earlier_one() -> None:
+    """A repo inheriting two upstreams must not have the second undo the first.
+
+    This asserted it of `network="deny-all"`, which was the clearest statement of the property and
+    the only one over a field nothing enforced. #263 deleted that field, and the property is not
+    lost with it: it is what `scan_input` and `deny_tools` do, on fields the loop actually reads.
+    A merge that only ever tightens is the whole claim, and it now has no inert carrier.
+    """
     stack = PolicyStack()
-    stack.contribute(Policy(name="org", network="deny-all"))
-    stack.contribute(Policy(name="local", network="allow-list"))
-    assert stack.resolve().network == "deny-all"
+    stack.contribute(Policy(name="org", scan_input="block", deny_tools=("github:merge_pull_request",)))
+    stack.contribute(Policy(name="local", scan_input="warn", deny_tools=()))
+    resolved = stack.resolve()
+    assert resolved.scan_input == "block", "a later layer weakened the scan setting"
+    assert "github:merge_pull_request" in resolved.deny_tools, "a later layer dropped a deny"
+
+
+def test_a_policy_field_that_enforces_nothing_is_not_offered() -> None:
+    """GATE-POLICY-2, as a shape assertion rather than a promise.
+
+    `network`, `permissions` and three credit fields were merged, printed by `ls` and reported in
+    the receipt, and read by nothing else -- a security field that reads as in force while
+    enforcing nothing, in the artefact a reviewer trusts. Every field left is composed into the
+    loop by `InvokePolicy.under()`, and a new one that is not would put the receipt back to
+    describing a control that does not exist.
+    """
+    from dataclasses import fields
+
+    from in_lockstep.core.policy import ResolvedPolicy
+
+    assert {f.name for f in fields(ResolvedPolicy)} == {"deny_tools", "scan_input", "max_turns"}
+    assert {f.name for f in fields(Policy)} == {
+        "name",
+        "source",
+        "deny_tools",
+        "scan_input",
+        "max_turns",
+    }
 
 
 def test_gate_policy_1_ceilings_take_the_lowest_not_the_last() -> None:
