@@ -408,3 +408,118 @@ def test_a_live_request_is_still_found_by_its_own_hash(tmp_path: Path) -> None:
     """
     tape = Cassette.load(_secret_tape(tmp_path))
     assert tape.replay_provider(_request(text="the key is supersecretvalue123")) is not None
+
+
+# -- one session harvests into more than one file -----------------------------------------------
+
+
+def _session(tmp_path: Path, turns: int = 4) -> Path:
+    """A multi-turn recording shaped like a real one, which is where the names collided.
+
+    Tool results come back as `role="tool_result"` (`invoker.py`), never as `user` — so the last
+    user message is the ticket EVERY turn shares, and a stem read off it is the same string for the
+    whole session. A fixture whose tool results were `role="user"` would not reproduce this, which
+    is worth saying because that is the fixture somebody writes by accident.
+    """
+    from in_lockstep.llm.types import ToolCall
+
+    tape = Cassette(path=tmp_path / "session.json")
+    replies = [
+        json.dumps({"findings": [{"summary": f"turn {i} found a real problem here"}]}) for i in range(turns)
+    ]
+    provider = RecordingProvider(_Model(""), tape, Redact(SecretRegistry()))
+    history = [Message(role="user", content="Fix the failing test in the parser module please")]
+    for i in range(turns):
+        provider.inner.content = replies[i]  # type: ignore[attr-defined]
+        asyncio.run(
+            provider.generate(
+                LLMInput(model="claude-sonnet-4-6", system="s", messages=list(history), max_tokens=64)
+            )
+        )
+        history.append(
+            Message(
+                role="assistant",
+                content=replies[i],
+                tool_calls=[ToolCall(id=f"c{i}", name="read_file", input={"path": f"src/f{i}.py"})],
+            )
+        )
+        history.append(
+            Message(role="tool_result", content=f"contents {i}", tool_call_id=f"c{i}", tool_name="read_file")
+        )
+    tape.save()
+    return tape.path
+
+
+def test_every_call_in_a_session_gets_its_own_file(tmp_path: Path) -> None:
+    """Four recorded calls used to become four cases and ONE file.
+
+    `_stem` reads the ticket, every turn shares it, and `_eval_harvest` wrote each over the last
+    and then printed "4 case(s) from …". Loss reporting as success is the failure this whole eval
+    story exists to refuse, so the property asserted is paths rather than names.
+    """
+    found = harvest(_session(tmp_path), family="implement")
+    assert len(found) == 4, found
+    paths = {h.path_in(tmp_path / "corpus") for h in found}
+    assert len(paths) == 4, f"4 cases resolved to {len(paths)} path(s): {sorted(str(p) for p in paths)}"
+
+
+def test_a_single_call_keeps_the_name_a_person_would_recognise(tmp_path: Path) -> None:
+    """The other direction. Every `review` recording is one call, and those are the cases somebody
+    reads in a promotion diff — so the suffix is applied only where a stem is actually shared."""
+    (only,) = harvest(_record(tmp_path), family="review")
+    assert only.name == "review/review-this-diff-for-security-problems"
+
+
+def test_harvest_says_which_reason_it_found_nothing(tmp_path: Path) -> None:
+    """One message covered both causes and named the wrong one for the commoner case.
+
+    A tape whose answers state nothing settleable was told its REQUESTS had not been stored, so the
+    advice was "re-record" — which would produce exactly the same tape.
+    """
+    unmeasurable = _record(tmp_path, content="ok")
+    with pytest.raises(NothingToHarvest) as caught:
+        harvest(unmeasurable)
+    assert "nothing a machine can settle" in str(caught.value)
+    assert "Re-record with" not in str(caught.value), "it advises the one action that cannot help"
+    assert "produces the same tape" in str(caught.value), "it does not say why re-recording is not it"
+
+
+def test_the_other_reason_still_says_re_record(tmp_path: Path) -> None:
+    """A tape recorded before requests were kept IS fixed by re-recording, and still says so. Both
+    halves, because a split that only got the new case right would just move the wrong advice."""
+    tape = json.loads(_record(tmp_path).read_text())
+    for entry in tape["provider_calls"].values():
+        del entry["request"]
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(tape))
+
+    with pytest.raises(NothingToHarvest) as caught:
+        harvest(path)
+    assert "before requests were stored" in str(caught.value)
+    assert "Re-record with `--record`" in str(caught.value)
+
+
+def test_eval_harvest_refuses_to_write_two_cases_over_one_path(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """The writer's own guard, independent of what `harvest` names things.
+
+    Naming is where the collision came from and it is fixed there; this is the check that would
+    have turned the nine-turn tape red instead of leaving one file and a cheerful count. It has to
+    hold even if a future namer regresses, so it is asserted against a `harvest` forced to collide
+    rather than against the namer that no longer does.
+    """
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+    from in_lockstep.evaluation.harvest import Harvested
+
+    def _collide(cassette, *, family=""):  # noqa: ANN001, ANN202, ARG001
+        case = {"input": {"request": {}}, "expect": {"contains": ["something long enough"]}}
+        return [Harvested(name="same", case=dict(case)), Harvested(name="same", case=dict(case))]
+
+    monkeypatch.setattr("in_lockstep.evaluation.harvest.harvest", _collide)
+    result = CliRunner().invoke(
+        main, ["eval", "harvest", "--from", str(_record(tmp_path)), "--into", str(tmp_path / "out")]
+    )
+    assert result.exit_code != 0, result.output
+    assert "resolve to 1 path(s)" in result.output, result.output
+    assert not list((tmp_path / "out").rglob("*.json")), "it wrote something before refusing"

@@ -982,6 +982,17 @@ def _eval_harvest(from_cassette: str, into: str, family: str) -> None:
     from .privileged import sink
 
     target = _Path(into)
+    # Belt and braces over `harvest`'s naming, and the reason is what it cost: a nine-turn tape
+    # named every case after the ticket every turn shared, and this loop wrote nine files over each
+    # other and then printed "9 case(s) from ...". Loss that reports as success is the one failure
+    # this repository's whole eval story is about, so the count is checked rather than trusted.
+    paths = [item.path_in(target) for item in found]
+    if len(set(paths)) != len(paths):
+        clashing = sorted({str(p) for p in paths if paths.count(p) > 1})
+        raise click.ClickException(
+            f"{len(found)} case(s) resolve to {len(set(paths))} path(s), so writing them would "
+            f"silently keep the last: {clashing}"
+        )
     for item in found:
         # Stamped here rather than in `harvest`, which may not import the hash: `evaluation` is a
         # leaf. This is the same join `_eval_subject` makes for a different reason — the layer that

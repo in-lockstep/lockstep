@@ -35,6 +35,7 @@ to argue with.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -86,22 +87,41 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
     if not isinstance(calls, dict) or not calls:
         raise NothingToHarvest(f"{path} holds no recorded calls")
 
-    out: list[Harvested] = []
+    buildable: list[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
     without_request = 0
-    for index, (key, entry) in enumerate(sorted(calls.items())):
+    unmeasurable = 0
+    for key, entry in sorted(calls.items()):
         if not isinstance(entry, dict):
             continue
         request = entry.get("request")
         if not isinstance(request, dict):
             without_request += 1
             continue
-        answer = _answer(entry)
-        expect = _expect(answer)
+        expect = _expect(_answer(entry))
         if not expect:
             # A case with no expectation cannot fail, and `Case.parse` refuses one. An answer that
             # is neither JSON nor long enough to quote is a recording, not a measurement.
+            unmeasurable += 1
             continue
-        name = _name(request, key, index)
+        buildable.append((key, request, expect, entry))
+
+    # Names are decided over the WHOLE tape, not one call at a time, because a name is only
+    # ambiguous relative to its neighbours. `_stem` reads the last user message, and in a
+    # multi-turn session that is the ticket every turn shares: tool results come back as
+    # `role="tool_result"` (`invoker.py`), never as `user`, so a nine-turn implement run produced
+    # nine cases with one name and `_eval_harvest` wrote nine files over each other. It reported
+    # "9 case(s)" and left one, which is the shape of loss that looks like success.
+    #
+    # Suffixed from the KEY rather than a counter, so the name says which call it is rather than
+    # what order it happened to be read in — and ALL of the colliding ones are suffixed, because
+    # letting the first keep the clean name would invent a primacy the tape does not have. A tape
+    # with one call per stem, which is every `review` recording, keeps the readable name.
+    stems = [_stem(request) or f"call-{key[:8]}" for key, request, _, _ in buildable]
+    shared = Counter(stems)
+
+    out: list[Harvested] = []
+    for (key, request, expect, entry), stem in zip(buildable, stems, strict=True):
+        name = f"{stem}-{key[:8]}" if shared[stem] > 1 else stem
         out.append(
             Harvested(
                 name=f"{family}/{name}" if family else name,
@@ -140,10 +160,26 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
         )
 
     if not out:
+        # Split by cause. One message covered both and named the wrong one for the commoner case:
+        # a tape whose every answer was unmeasurable was told its requests had not been stored, so
+        # the advice was "re-record" when re-recording would produce exactly the same tape.
+        if without_request and not unmeasurable:
+            raise NothingToHarvest(
+                f"{path} has {without_request} call(s) recorded before requests were stored, and no "
+                f"case can be built from an answer whose question was not kept. Re-record with "
+                f"`--record` to harvest from it."
+            )
+        if unmeasurable and not without_request:
+            raise NothingToHarvest(
+                f"{path} has {unmeasurable} call(s) whose answers state nothing a machine can "
+                f"settle -- not JSON, and no string long enough to be worth quoting. Re-recording "
+                f"produces the same tape; what would change this is a prompt whose answer has a "
+                f"shape, which is what the structured output schema is for."
+            )
         raise NothingToHarvest(
-            f"{path} has {without_request} call(s) recorded before requests were stored, and no "
-            f"case can be built from an answer whose question was not kept. Re-record with "
-            f"`--record` to harvest from it."
+            f"{path} has {without_request} call(s) recorded before requests were stored and "
+            f"{unmeasurable} whose answers state nothing a machine can settle, so no case can be "
+            f"built from either."
         )
     return out
 
@@ -232,11 +268,12 @@ def _needles(answer: Any) -> list[str]:
     return unique[:MAX_CONTAINS]
 
 
-def _name(request: dict[str, Any], key: str, index: int) -> str:
-    """A filename a person can recognise later, falling back to the key when nothing else says.
+def _stem(request: dict[str, Any]) -> str:
+    """A filename a person can recognise later, or "" when the request says nothing usable.
 
-    The last user message is what the run was actually asked, so its first line is the best short
-    name available — far better than a hash somebody would have to grep for.
+    The last user message is what the run was actually asked, so its first words are the best short
+    name available — far better than a hash somebody would have to grep for. It is only a STEM,
+    because in a multi-turn session every turn shares it: the caller decides what makes it unique.
     """
     messages = request.get("messages")
     last = ""
@@ -246,5 +283,4 @@ def _name(request: dict[str, Any], key: str, index: int) -> str:
                 last = str(message.get("content", ""))
                 break
     words = [w for w in "".join(c if c.isalnum() else " " for c in last.lower()).split() if w][:6]
-    stem = "-".join(words)
-    return stem or f"call-{index}-{key[:8]}"
+    return "-".join(words)

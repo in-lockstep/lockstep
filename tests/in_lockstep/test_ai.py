@@ -579,8 +579,11 @@ def test_a_recorded_request_survives_the_round_trip_through_json() -> None:
     assert key_of(request_from(json.loads(json.dumps(payload)))) == key_of(request)
 
 
-def test_cassettes_record_tool_io_too(tmp_path: Path) -> None:
-    """A cassette that captures only provider calls replays a tool loop by re-running tools."""
+def test_a_cassette_can_record_tool_io_although_no_run_does(tmp_path: Path) -> None:
+    """The mechanism works; nothing invokes it. `grep -rn record_tool src/` finds the definition
+    and nothing else, so on every live path a tool result reaches the tape as part of the next
+    turn's message history instead. The name says so, because the old one asserted a fact about
+    runs that this test cannot check — it is a unit test of two methods, and it says that now."""
     tape = Cassette(path=tmp_path / "c.json")
     tape.record_tool("git", "log", {"n": 1}, "abc123 initial commit", Redact(SecretRegistry()))
     assert tape.replay_tool("git", "log", {"n": 1}) == "abc123 initial commit"
