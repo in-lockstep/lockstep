@@ -4,9 +4,17 @@ Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so one is 
 the six providers and survives swapping one for another — which is what makes them usable as an
 eval substrate rather than only as a debugging aid.
 
-Tool IO is recorded too. A cassette that captures only provider calls replays a tool-using loop by
-re-running the tools, which is neither offline nor deterministic; and the gap would not show up
-until a strategy that actually uses tools arrives.
+Tool IO CAN be recorded — `record_tool`/`replay_tool` exist and work — and on every live path it
+is not. Nothing under `src/` calls either; the only caller is a test. This paragraph used to state
+the capability as a fact about runs, which is the `unit only` confusion one file over, and it
+mattered more here than in a gate row: a reader deciding what a tape contains was told it holds
+tool IO, and what it holds is prompt content.
+
+What actually happens is that a tool result reaches the tape anyway, as part of the next turn's
+message history — so a tool-using session IS replayable, and it is replayable because the results
+are in the requests rather than because they were recorded as tool calls. The distinction is
+invisible until somebody tries to replay a loop that re-runs its tools, which is the case the two
+methods were written for and the case nothing has needed yet.
 
 Every cassette is written through `Redact`. They are committed to the repository as fixtures, and
 they contain whole prompts and whole tool results.
