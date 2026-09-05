@@ -16,7 +16,8 @@ Not storage. Say it plainly, because the two feel the same at the moment you do 
 same afterwards:
 
 - A case holds the **whole composed prompt and the whole diff** that was sent. Redaction masks
-  credentials; it does not mask source.
+  the credential shapes it knows — named values, vendor prefixes, connection strings — and never
+  masks source. A secret with no name and no prefix is a secret it cannot see.
 - `git rm` is not deletion. A promoted case stays reachable in every clone, in every fork, in
   everyone's reflog, forever.
 - The cap below bounds how large the permanently published set gets. It does not make any of it

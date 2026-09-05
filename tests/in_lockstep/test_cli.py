@@ -3109,7 +3109,10 @@ def test_init_says_what_a_run_keeps(repo: Path) -> None:
     be said out loud rather than discovered."""
     out = CliRunner().invoke(main, ["init"]).output
     assert "What a run keeps" in out
-    assert "masks credentials" in out, "the disclosure does not say what redaction does not cover"
+    # The property, not the sentence. This pinned the phrase "masks credentials", which is the
+    # over-promise that phrasing turned out to be: the patterns recognise shapes, and a secret
+    # with no name and no vendor prefix is one they cannot see.
+    assert "never masks source" in out, "the disclosure does not say what redaction does not cover"
     assert "runner" in out, "the disclosure does not say what happens to a recording in CI"
 
 
