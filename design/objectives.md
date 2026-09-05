@@ -90,9 +90,9 @@ to move without somebody standing in front of this table.
 | `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3` | — | — |
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
-| `O10` | It runs on itself | partial | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3` | `GATE-CI-3` | This repository's own lifecycle module is checked by its own gates now, and every Python file in the tree is reached or exempt with a reason. What is left is narrower and more awkward: two things this repository tells adopters to do that it does not do. `in-lockstep provision` builds a repository's environment and the README says the scaffolded work jobs run it -- every job here runs `uv sync` instead, so the verb has never provisioned this tree. And `doctor` is `continue-on-error` at all four call sites, so a control it reports missing has never stopped a run. The diagnostic is dogfooded; its verdict is not. |
+| `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
 
-4 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+5 of 10 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -127,6 +127,24 @@ have left O7 `partial` against a gap the row already knew about — which is the
 new gate to describe something it had described perfectly well the first time. So both halves
 landed, and O7 is the first objective here to close because somebody read the gap and finished it
 rather than because a gate happened to flip.
+
+Five, when #249 closed `GATE-CI-3`. Both halves of that row were about this repository not doing
+what it tells adopters to do, and the second half turned out not to be a policy question at all.
+`doctor` was `continue-on-error: true` at all four of its call sites, which reads as a decision
+nobody made — and was in fact a decision the tool forced. It reported every unreadable answer
+about branch protection as *the default branch has no protection rule*, at ERROR, and a CI job's
+token cannot read that API. So a fully protected `main` was reported unprotected on every run,
+`doctor` exited 1 every time, and the only way to keep the job usable was to throw its verdict
+away. *Absent is not zero*, inside the tool whose job is finding absent controls, costing this
+repository the whole of the second clause. The lesson generalises past this gate: a diagnostic
+that cannot distinguish **did not hold** from **could not look** will have its verdict discarded,
+and then it gates nothing at all.
+
+What O10 covers, plainly, so the `held` is readable: reviews, fixes, implementations and
+measurement, which are the four things the objective names. `backport`, `triage`, `rfe`, `pack`
+and `market` are not exercised here, and that is not a gap this row is hiding — this repository
+has no maintenance line to backport to and is not an adopter of packs, and a gate demanding
+otherwise would be demanding a fiction rather than evidence.
 
 ## Claimed by no objective
 

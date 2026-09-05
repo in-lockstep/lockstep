@@ -271,8 +271,12 @@ def test_the_quickstart_outputs_match_the_tool_that_ships(tmp_path, monkeypatch)
         "policy",
     ):
         assert stable in ls_out and stable in doc, f"ls line drifted: {stable!r}"
-    for stable in ("DOC101", "DOC121", "DOC130"):
+    for stable in ("DOC101", "DOC120", "DOC130"):
         assert stable in doctor_out and stable in doc, f"doctor code drifted: {stable!r}"
+    # DOC121 asserts a branch has no protection rule. A tree with no remote has no default branch
+    # to protect and nothing that could have been read, so claiming it here was a finding about
+    # the reader's terminal rather than about their repository (#249).
+    assert "DOC121" not in doctor_out, "a repository with no remote cannot be found unprotected"
 
 
 def test_no_documented_snippet_claims_a_workflow_id_the_framework_ships() -> None:

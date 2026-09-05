@@ -230,35 +230,86 @@ def _cassettes(report: Report, root: Path) -> None:
     )
 
 
+#: What GitHub says when the branch exists and carries no protection rule. The only answer that
+#: means the control is genuinely absent; every other failure means this could not find out.
+_UNPROTECTED = "Branch not protected"
+
+
+def _gh(root: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
+    """`gh` with output captured, or None when gh could not be run at all."""
+    try:
+        return subprocess.run(["gh", *args], cwd=root, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 def _branch_protection(report: Report, root: Path) -> None:
-    """With an ambient repository token, branch protection is the only remaining backstop."""
+    """With an ambient repository token, branch protection is the only remaining backstop.
+
+    Reporting it is where this went wrong, and the failure is the one this repository's own rule
+    names: **absent is not zero**. Any non-zero `gh` exit was reported as `the default branch has
+    no protection rule, or it could not be read` at ERROR — one message for two facts, and the
+    severity of the worse one. In CI that fired on every run: the job holds a token that cannot
+    read the protection API, so a fully protected branch was reported as unprotected. The verdict
+    had to be discarded with `continue-on-error` to keep the job usable, which is how a
+    diagnostic that cries wolf ends up gating nothing at all (#249).
+
+    So only GitHub actually saying `Branch not protected` is the ERROR. Everything else — no
+    credential, no permission, no network, a default branch by another name — is a NOTE that says
+    the check did not run, which is what its two neighbours (`DOC122`, `DOC125`) already did.
+
+    The default branch is asked for rather than assumed. This checked `branches/main/protection`
+    literally, so a repository whose default is `master` got `Branch not found` and, under the old
+    reporting, an ERROR about a rule it may well have had.
+    """
     if not (root / ".git").exists():
         return
-    try:
-        result = subprocess.run(
-            ["gh", "api", "repos/{owner}/{repo}/branches/main/protection"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except (OSError, subprocess.SubprocessError):
+    named = _gh(root, "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name")
+    if named is None:
+        report.add("DOC120", Severity.NOTE, "could not check branch protection (gh unavailable)", "")
+        return
+    branch = named.stdout.strip()
+    if named.returncode != 0 or not branch:
         report.add(
             "DOC120",
             Severity.NOTE,
-            "could not check branch protection (gh unavailable)",
-            "",
+            "could not read this repository's default branch; branch protection was not checked",
+            _gh_said(named),
         )
         return
-    if result.returncode != 0:
+
+    result = _gh(root, "api", f"repos/{{owner}}/{{repo}}/branches/{branch}/protection")
+    if result is None:
+        report.add("DOC120", Severity.NOTE, "could not check branch protection (gh unavailable)", "")
+        return
+    if result.returncode == 0:
+        return
+    if _UNPROTECTED in (result.stderr + result.stdout):
         report.add(
             "DOC121",
             Severity.ERROR,
-            "the default branch has no protection rule, or it could not be read",
+            f"the default branch ({branch}) has no protection rule",
             "The apply job holds an ambient repository token that can write any branch, so "
             "branch protection is what keeps protected branches unreachable. Without it, "
             "'writes go through a pull request' is a convention rather than a guarantee.",
         )
+        return
+    report.add(
+        "DOC120",
+        Severity.NOTE,
+        f"could not read branch protection for {branch}; it was not checked",
+        _gh_said(result)
+        + " A job token usually cannot read this API. Run `in-lockstep doctor` at a terminal, "
+        "where gh carries your own credentials, to get an answer.",
+    )
+
+
+def _gh_said(result: subprocess.CompletedProcess[str]) -> str:
+    """What gh reported, trimmed to one line. Quoted rather than paraphrased: the difference
+    between `Bad credentials` and `Resource not accessible by integration` is the difference
+    between two fixes, and a paraphrase loses it."""
+    said = (result.stderr.strip() or result.stdout.strip()).splitlines()
+    return f"gh said: {said[0][:200]}" if said else ""
 
 
 def _escalation_labels(report: Report, root: Path, lockstep: Any = None) -> None:

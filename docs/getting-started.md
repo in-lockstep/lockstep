@@ -384,10 +384,8 @@ ERROR   DOC101  no provider-side organisation spend limit is attested
                  Set a hard monthly cap in the provider console and record it as
                  IN_LOCKSTEP_ORG_SPEND_LIMIT=<amount>. A per-run budget cannot bound a runaway trigger,
                  and the per-day ceiling the substrate enforced no longer exists.
-ERROR   DOC121  the default branch has no protection rule, or it could not be read
-                 The apply job holds an ambient repository token that can write any branch, so branch
-                 protection is what keeps protected branches unreachable. Without it, 'writes go through
-                 a pull request' is a convention rather than a guarantee.
+NOTE    DOC120  could not read this repository's default branch; branch protection was not checked
+                 gh said: no git remotes found
 WARNING DOC130  no egress enforcement is declared
                  Set IN_LOCKSTEP_EGRESS=enforced where the host constrains egress. Runs that hold write
                  or execute tools, or that read untrusted content, are refused without it.

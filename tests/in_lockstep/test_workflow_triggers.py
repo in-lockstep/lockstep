@@ -212,11 +212,17 @@ ALLOWED_STATEMENTS = (
 #: work half failed and `propose` was therefore skipped. Recorded rather than quietly bumped,
 #: because a cap somebody raises whenever it bites is not a cap.
 #:
+#: Moved 13 -> 14 when the work job started running `in-lockstep provision` before `doctor` — the
+#: order the README tells adopters their work jobs use, which this repository was not itself
+#: running (#249, GATE-CI-3). The same shape of bump as the last one and recorded the same way:
+#: one more bare invocation of the framework, no more logic in the file. A trampoline that runs
+#: the documented sequence is the thing this rule is protecting, not the thing it is against.
+#:
 #: Note what this number does and does not guard. `ALLOWED_STATEMENTS` above is the real gate: it
-#: is what refuses an `if`, a `case`, a composed commit message or a `gh` call, and it did not move.
-#: This is the secondary tripwire on growth, and every one of the thirteen is still a bare
+#: is what refuses an `if`, a `case`, a composed commit message or a `gh` call, and it has never
+#: moved. This is the secondary tripwire on growth, and every one of the fourteen is still a bare
 #: invocation of the framework.
-MAX_STATEMENTS = 13
+MAX_STATEMENTS = 14
 
 
 def _statements(workflow: str) -> list[str]:
