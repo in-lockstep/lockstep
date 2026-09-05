@@ -324,14 +324,19 @@ def test_a_blocked_run_is_not_announced_as_a_failure(verb: str, workflows, tmp_p
     assert "$97.54" in said, "what it cost is still the thing a person needs"
 
 
+@pytest.mark.parametrize("status", ["failed", "blocked"])
 @pytest.mark.parametrize(("verb", "other"), [("implement", "fix"), ("fix", "implement")])
-def test_the_other_verbs_run_is_not_borrowed(verb, other, workflows, tmp_path, monkeypatch) -> None:
+def test_the_other_verbs_run_is_not_borrowed(verb, other, status, workflows, tmp_path, monkeypatch):
     """Both verbs answer on the same ticket, so their records sit side by side.
 
     Matching on ticket and status alone let `/fix` find an `implement/` run and quote its reason as
     though it were the fix attempt — a confident, specific, wrong answer, which
     `test_another_tickets_failure_is_not_borrowed` already calls worse than silence. The same
     argument, one axis over.
+
+    Parametrised over `blocked` as well as `failed` because the two now take different branches of
+    the sentence, so a filter leaking only one of them would be invisible to the other. Raised by
+    this repository's own `review/tests` lens on the change that added this test.
     """
     ledger = _ledger_with(
         tmp_path,
@@ -340,7 +345,7 @@ def test_the_other_verbs_run_is_not_borrowed(verb, other, workflows, tmp_path, m
             "kind": "workflow",
             "workflow": f"{other}/from-ticket",
             "args": {"ticket": "#139"},
-            "status": "failed",
+            "status": status,
             "reason": f"{other}.went_wrong",
             "ts": "2026-09-01T19:54:34+00:00",
         },
@@ -398,3 +403,37 @@ def test_a_run_that_recorded_nothing_is_not_called_a_failure(verb, workflows, tm
     assert "failed" not in said, f"nothing here knows that it failed: {said}"
     assert "ended before it recorded anything" in said
     assert "the job log is the only account of it" in said, "and it still says where to look"
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_blocked_run_that_recorded_no_cost_still_reads_as_stopped(verb, workflows, tmp_path, monkeypatch):
+    """The cost is optional and the verdict is not.
+
+    `killswitch` and `approval.required` both stop a run before it spends anything, and
+    `lockstep-history` carries four such records — so a blocked run with no cost is the common
+    shape, not an edge. `spent` renders as an empty string there and the sentence around it still
+    has to be true. Raised by this repository's own `review/tests` lens.
+    """
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-3",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#139"},
+            "status": "blocked",
+            "reason": "approval.required",
+            "ts": "2026-09-01T22:09:46+00:00",
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#139", tickets=tracker, scm=_Host())
+
+    (said,) = tracker.said
+    assert "was stopped by `approval.required`" in said, said
+    assert "failed" not in said
+    # No cost recorded, so none is claimed — not "$0.00 spent", which reads as a run that reached
+    # a provider and was given nothing.
+    assert "spent" not in said, said
