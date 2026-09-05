@@ -201,7 +201,18 @@ def test_registered_reports_the_repository_it_is_standing_in(tmp_path):
             (root / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.1.0"\n')
             (root / "uv.lock").touch()
             (root / "tests").mkdir()
-            subprocess.run(["git", "init", "-q", "."], cwd=root, check=True)
+            # A COMMIT on the trusted ref, not just `git init`. Configuration is loaded from the
+            # base branch rather than the working tree whenever a CI environment is detected, and
+            # a repository with no commits has no such ref — so this passed on a laptop and
+            # refused in CI, with the loader saying exactly why. The fixture has to be the shape
+            # the code requires, not the shape that happens to work where it was written.
+            subprocess.run(["git", "init", "-q", "-b", "main", "."], cwd=root, check=True)
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "-c", "user.email=t@e.st", "-c", "user.name=t", "commit", "-qm", "base"],
+                cwd=root,
+                check=True,
+            )
             assert runner.invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
 
             mine = runner.invoke(main, ["show-workflow", "--registered"])
