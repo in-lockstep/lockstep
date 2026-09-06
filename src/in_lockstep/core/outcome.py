@@ -237,6 +237,18 @@ class Outcome(Generic[ValueT]):
 
     @classmethod
     def blocked_by(cls, reason: str, **kw: Any) -> Outcome[ValueT]:
+        """A control refused this run. Nothing was judged, so `decided` defaults to False.
+
+        `decided` defaulted to True here, which said a blocked run had settled something. It had
+        not: a budget ceiling, an approval gate or an egress refusal stops the work from
+        happening, so there is no verdict to have reached. `undecided_rate` counted
+        `decided is False` and therefore counted none of them, and every blocked run read as a run
+        that decided (#256).
+
+        A caller may still pass `decided=True` — a control that fires *after* a real verdict has
+        one to keep — which is why this is a default rather than an override.
+        """
+        kw.setdefault("decided", False)
         return cls(status=Status.BLOCKED, reason=reason, **kw)
 
     @classmethod

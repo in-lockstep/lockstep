@@ -34,7 +34,7 @@ from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..worktree import head_state, materialize
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
-from .strategy import PhaseError, read_reply, reported, run_phase, test_findings
+from .strategy import PhaseError, not_a_verdict, read_reply, reported, run_phase, test_findings
 
 
 async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]:
@@ -184,6 +184,9 @@ class TDD(ImplementStrategy):
                 uncollected = (
                     await _uncollected(ctx, tree, tests) if red.status is not Status.SUCCEEDED else ()
                 )
+            if (stopped := not_a_verdict(red, cost=red.cost)) is not None:
+                # A ceiling or a broken runner, not a test that passed when it should have failed.
+                return stopped
             if red.status is not Status.SUCCEEDED:
                 # The test did not fail, and the three reasons for that are not one finding.
                 #
@@ -257,6 +260,8 @@ class TDD(ImplementStrategy):
 
         async with materialize(session.repo_root, full) as tree:
             green = await ctx.do(Test(root=tree, expect="pass"))
+        if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
+            return stopped
         if green.status is not Status.SUCCEEDED:
             return Outcome(
                 status=Status.FAILED,

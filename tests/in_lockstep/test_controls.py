@@ -1204,3 +1204,211 @@ def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch) -> N
     monkeypatch.setattr(subprocess, "run", fake_run)
     doctor._branch_protection(doctor.Report(), doctor.Path("."))
     assert any("branches/master/protection" in a for a in asked), asked
+
+
+# -- blocked is not a failure, in eight more places (issue 256) ---------------------------------
+#
+# `Status` distinguishes blocked (a control working), errored (infrastructure broke) and failed
+# (the domain said no). Each of these collapsed that to a boolean, so a control firing was
+# reported as the work going wrong -- in the sentence on a pull request, in the census `improve`
+# reads, and in the number a pack is judged by.
+
+
+def test_a_sandbox_that_refuses_is_blocked_in_every_command_adapter() -> None:
+    """`CommandProvision` had the guard. The other four mapped exit 126 like any other failure,
+    so a container runtime an adopter asked for and does not have read as "your tests failed"."""
+    import asyncio
+    import types
+
+    from in_lockstep.adapters import command as c
+    from in_lockstep.adapters.pytest_adapter import Test
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.core.types import Build, Provision, Run, Validate
+
+    sandbox = Sandbox(image="python:3.11-slim", require_container=True)
+    # No runtime on PATH: the condition an adopter without a container engine is actually in.
+    sandbox.runtime = lambda: None  # type: ignore[method-assign]
+    ctx = types.SimpleNamespace(repo=types.SimpleNamespace(root="."))
+
+    cases = [
+        (c.CommandTest(["pytest"], sandbox=sandbox), Test(paths=())),
+        (c.CommandValidate(["ruff", "check"], sandbox=sandbox), Validate(paths=())),
+        (c.CommandBuild(["make", "build"], sandbox=sandbox), Build()),
+        (c.CommandRun(["make", "run"], sandbox=sandbox), Run()),
+        (c.CommandProvision([["uv", "sync"]], sandbox=sandbox), Provision()),
+    ]
+    for adapter, request in cases:
+        outcome = asyncio.run(adapter.invoke(ctx, request))
+        assert outcome.status is Status.BLOCKED, (
+            f"{type(adapter).__name__} reported a refused sandbox as {outcome.status.value}"
+        )
+
+
+def test_a_blocked_review_does_not_say_no_findings_on_the_pull_request() -> None:
+    """A sentence only a review that read the diff can earn. It was gated on `decided`, which
+    defaults to True, so the killswitch path posted it."""
+    from in_lockstep.core.outcome import Outcome
+    from in_lockstep.platform.report import review_comment
+
+    body = review_comment("security", Outcome.blocked_by("review.killswitch"))
+    assert "No findings." not in body
+    assert "Refused before it could review" in body
+
+
+def test_a_control_refusal_is_not_rendered_as_a_finding_about_the_change() -> None:
+    """`cost.budget_exceeded` rendered in the findings table beside real review findings, so a
+    budget ceiling read as something the reviewer noticed about the code."""
+    from in_lockstep.core.outcome import Finding, Outcome, Severity
+    from in_lockstep.platform.report import review_comment
+
+    refusal = Finding(
+        id="cost.budget_exceeded",
+        message="the run would exceed $0.75",
+        severity=Severity.ERROR,
+        blocking=True,
+    )
+    body = review_comment("security", Outcome.blocked_by("cost.budget_exceeded", findings=(refusal,)))
+    assert "| | location | finding |" not in body, "a refusal was rendered in the findings table"
+    assert "cost.budget_exceeded" in body and "A control stopped this run" in body
+
+
+def test_a_blocked_run_decides_nothing() -> None:
+    """`undecided_rate` counts `decided is False`, and every blocked outcome carried True — so a
+    run whose judgement never happened was counted among the ones that reached a verdict."""
+    from in_lockstep.core.outcome import Outcome
+
+    assert Outcome.blocked_by("approval.required").decided is False
+    assert Outcome.blocked_by("x", decided=True).decided is True, "a caller may still say otherwise"
+
+
+def test_a_control_refusal_is_not_counted_among_what_the_reviewer_keeps_finding() -> None:
+    """`improve --explain` listed `approval.required` under **trend**, as though a control firing
+    were a recurring defect the prompt should be changed to avoid."""
+    from in_lockstep.metrics import recurring
+
+    records = [
+        {
+            "run_id": "r1",
+            "status": "blocked",
+            "findings": {"count": 1, "items": [{"id": "approval.required"}]},
+        },
+        {
+            "run_id": "r2",
+            "status": "succeeded",
+            "findings": {"count": 1, "items": [{"id": "review.security"}]},
+        },
+    ]
+    names = {row.finding for row in recurring(records)}
+    assert "review.security" in names, "a real finding was dropped"
+    assert "approval.required" not in names, "a control refusal was counted as a finding"
+
+
+def test_a_ceiling_on_the_test_is_not_reported_as_a_test_that_disagreed() -> None:
+    """`if status is not SUCCEEDED` is a two-way split over a six-member enum, so a budget ceiling
+    on the third Test of a TDD run produced `tdd.not_green` about a suite that never ran."""
+    from in_lockstep.adapters.ai.strategy import not_a_verdict
+    from in_lockstep.core.outcome import Finding, Outcome, Severity, Status
+
+    ceiling = Finding(id="cost.budget_exceeded", message="ceiling", severity=Severity.ERROR)
+    blocked = Outcome.blocked_by("cost.budget_exceeded", findings=(ceiling,))
+    passed = not_a_verdict(blocked)
+    assert passed is not None and passed.status is Status.BLOCKED
+    assert passed.findings[0].id == "cost.budget_exceeded", "the refusal must travel as itself"
+
+    # FAILED is exactly the case those findings ARE about: the suite ran and disagreed.
+    assert not_a_verdict(Outcome(status=Status.FAILED)) is None
+    assert not_a_verdict(Outcome(status=Status.SUCCEEDED)) is None
+    assert not_a_verdict(Outcome(status=Status.ERRORED)) is not None
+
+
+def test_a_pack_refused_by_a_control_is_not_a_pack_that_broke() -> None:
+    """A restricted-residency or unpriced-model refusal read as `errored`, which is the number a
+    pack is judged by."""
+    from in_lockstep.trial import ERRORED, REFUSED
+
+    assert REFUSED != ERRORED
+
+
+# -- one cached answer counted thirty times (issue 259) -----------------------------------------
+
+
+def _replay(run: str, finding: str = "review.security") -> dict:
+    return {
+        "run_id": run,
+        "status": "succeeded",
+        "cost_usd": 0.0,
+        "billed_fraction": 0.0,
+        "ts": f"2026-09-0{1 + int(run[-1]) % 9}T00:00:00Z",
+        "findings": {"count": 1, "items": [{"id": finding}]},
+    }
+
+
+def _paid(run: str, finding: str = "review.security") -> dict:
+    # No `billed_fraction`: this repository's eight paid records carry `cost_usd` and not that
+    # field, which is exactly why reading one signal could not tell these populations apart.
+    return {
+        "run_id": run,
+        "status": "succeeded",
+        "cost_usd": 9.61,
+        "ts": "2026-09-02T00:00:00Z",
+        "findings": {"count": 1, "items": [{"id": finding}]},
+    }
+
+
+def test_a_trend_is_not_cleared_by_replaying_one_cassette() -> None:
+    """`review.security` reached 30 of 52 runs here entirely from `review --offline` replaying one
+    shipped cassette: the same composed prompt, the same two findings, $0.00. The census counted
+    one cached answer thirty times as thirty independent judgments, and that census is what #163's
+    learning loop would propose prompt changes from."""
+    from in_lockstep.metrics import recurring
+
+    records = [_replay(f"r{i}") for i in range(30)]
+    trend = next(t for t in recurring(records) if t.finding == "review.security")
+
+    assert trend.runs == 30, "the run count itself is honest and stays"
+    assert trend.billed_runs == 0 and trend.replayed_runs == 30
+    assert not trend.qualifies, "thirty replays of one answer cleared a threshold for five"
+
+
+def test_a_trend_over_real_calls_still_qualifies() -> None:
+    """The control. If billing were read as a filter rather than as the denominator, a real trend
+    would stop qualifying too, and the census would be useless in the other direction."""
+    from in_lockstep.metrics import recurring
+
+    records = [_paid(f"p{i}") for i in range(5)]
+    for i, record in enumerate(records):
+        record["ts"] = f"2026-0{8 + i % 2}-0{1 + i}T00:00:00Z"
+    trend = next(t for t in recurring(records) if t.finding == "review.security")
+    assert trend.billed_runs == 5
+    assert trend.qualifies, "five billed runs across two weeks is exactly what a trend is"
+
+
+def test_a_record_carrying_no_billing_signal_is_neither_billed_nor_replayed() -> None:
+    """Absent is not zero, and it is not one either. A record with neither field is its own
+    bucket, because folding it into `replayed` would under-count real judgments and folding it
+    into `billed` would let unmeasured records clear a threshold."""
+    from in_lockstep.metrics import recurring
+
+    records = [{"run_id": "u1", "status": "succeeded", "findings": {"count": 1, "items": [{"id": "x"}]}}]
+    trend = next(t for t in recurring(records) if t.finding == "x")
+    assert (trend.billed_runs, trend.replayed_runs, trend.unmeasured_runs) == (0, 0, 1)
+
+
+def test_the_census_says_which_runs_were_paid_for() -> None:
+    """A number nobody can see the population of is the thing this file exists to refuse."""
+    from in_lockstep.metrics import as_trend_text, recurring
+
+    text = "\n".join(as_trend_text(recurring([_replay("r1"), _replay("r2"), _paid("p1")])))
+    assert "1 billed, 2 replayed" in text
+
+
+def test_the_spend_report_does_not_average_a_field_the_paid_runs_lack() -> None:
+    """`report` printed "actually billed 0%" beside a spend total of $275: the mean was taken over
+    the records carrying `billed_fraction`, every one of them a replay reporting 0.0, while the
+    runs that actually spent carried the field not at all."""
+    from in_lockstep.metrics import as_text, build
+
+    text = "\n".join(as_text(build([_replay("r1"), _replay("r2"), _paid("p1")])))
+    assert "actually billed 0%" not in text
+    assert "1 billed, 2 replayed" in text

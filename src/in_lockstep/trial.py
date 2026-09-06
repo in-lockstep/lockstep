@@ -49,6 +49,11 @@ OUTSTANDING = "outstanding"
 UNRECORDED = "unrecorded"
 NOT_EXERCISED = "not exercised"
 ERRORED = "errored"
+#: A control refused the run, so the case was never put to the pack. Its own state rather than
+#: `errored`, because a restricted-residency or unpriced-model refusal is this machine declining
+#: to make the call -- and filing that as a pack that broke is the "blocked is not a failure" rule
+#: broken in the number people judge a pack by (#256).
+REFUSED = "refused"
 
 
 @dataclass(frozen=True)
@@ -83,6 +88,7 @@ class Trial:
             "unrecorded": sum(1 for r in scoped if r.state == UNRECORDED),
             "not_exercised": sum(1 for r in scoped if r.state == NOT_EXERCISED),
             "errored": sum(1 for r in scoped if r.state == ERRORED),
+            "refused": sum(1 for r in scoped if r.state == REFUSED),
             "pass_rate": (sum(1 for r in decided if r.passed) / len(decided)) if decided else None,
         }
 
@@ -185,6 +191,14 @@ def _review_case(adapter: Any, case: Case, origin: str, family: str) -> CaseResu
         # run, and calling that a failure would let a pack look bad for an incomplete recording.
         return CaseResult(case=case.name, family=family, origin=origin, state=UNRECORDED, detail=str(e))
 
+    if outcome.status is Status.BLOCKED:
+        return CaseResult(
+            case=case.name,
+            family=family,
+            origin=origin,
+            state=REFUSED,
+            detail=outcome.reason or outcome.status.value,
+        )
     if outcome.status is not Status.SUCCEEDED:
         return CaseResult(
             case=case.name,

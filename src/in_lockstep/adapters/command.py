@@ -101,6 +101,24 @@ def _argv0(command: tuple[str, ...], cwd: str | None, ctx: object, sandbox: obje
     return command[0], resolved
 
 
+def _refused(result: Any) -> Outcome[Any] | None:
+    """BLOCKED when the sandbox declined to run at all, else None.
+
+    A `Sandbox(require_container=True)` that finds no runtime returns exit 126 with
+    `how="refused:no-container"` **without running anything**. Mapping that through the ordinary
+    exit-code path told an adopter their tests failed, when what happened is that a control they
+    asked for did its job — and `blocked` is not a failure is the rule this repository states and
+    then broke in four adapters (#256). `CommandProvision` had the guard; the other four did not,
+    which is what a rule enforced in one place out of five looks like.
+
+    Checked on `how` rather than on 126, because 126 from a command that DID run is "not
+    executable", which is a real environment failure and not this.
+    """
+    if getattr(result, "how", "") != "refused:no-container":
+        return None
+    return Outcome.blocked_by(result.stderr.strip() or "refused to run outside a container")
+
+
 def _could_not_run(argv0: str, resolved: Resolution) -> Outcome[Any]:
     """Exit 127 is the shell's "no such command". It is an environment fact, not a verdict on the
     change, and it names every place the tool was looked for."""
@@ -154,6 +172,8 @@ class CommandTest:
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         cmd = [argv0, *self.command[1:], *selector, *inp.args, *(inp.paths or ())]
         result = await self.sandbox.run(cmd, cwd=cwd)
+        if (refused := _refused(result)) is not None:
+            return refused
         if result.exit_code == 127:
             return _could_not_run(argv0, resolved)
 
@@ -236,6 +256,8 @@ class CommandValidate:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         result = await self.sandbox.run([argv0, *self.command[1:], *(inp.paths or ())], cwd=cwd)
+        if (refused := _refused(result)) is not None:
+            return refused
         if result.exit_code == 127:
             return _could_not_run(argv0, resolved)
         clean = result.exit_code == 0
@@ -296,6 +318,8 @@ class CommandBuild:
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         cmd = [argv0, *self.command[1:], *([inp.target] if inp.target else []), *inp.args]
         result = await self.sandbox.run(cmd, cwd=cwd)
+        if (refused := _refused(result)) is not None:
+            return refused
         if result.exit_code == 127:
             return _could_not_run(argv0, resolved)
         ok = result.exit_code == 0
@@ -376,6 +400,8 @@ class CommandRun:
                 )
             runner = replace(runner, extra_env={**runner.extra_env, **dict(inp.env)})
         result = await runner.run(cmd, cwd=cwd)
+        if (refused := _refused(result)) is not None:
+            return refused
         if result.exit_code == 127:
             return _could_not_run(argv0, resolved)
         ok = result.exit_code == 0
@@ -489,10 +515,11 @@ class CommandProvision:
             argv0, resolved = self._resolve(step[0], cwd)
             cmd = [argv0, *step[1:]]
             result = await self.sandbox.run(cmd, cwd=cwd)
-            if getattr(result, "how", "") == "refused:no-container":
-                # A sandbox told to require a container found none: the control working, not
-                # the install failing.
-                return Outcome.blocked_by(result.stderr.strip() or "refused to run outside a container")
+            if (refused := _refused(result)) is not None:
+                # A sandbox told to require a container found none: the control working, not the
+                # install failing. This was the only adapter that said so; `_refused` is that
+                # judgement, hoisted, so the other four cannot drift from it again.
+                return refused
             if result.exit_code == 127 and resolved.path is None:
                 # 127 is "no such command" only when nothing was found. Provisioning is where a
                 # lockfile's hooks run, and a `preinstall` that names a missing command exits 127

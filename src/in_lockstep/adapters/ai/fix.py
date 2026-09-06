@@ -35,7 +35,16 @@ from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
 from ..worktree import materialize
-from .strategy import AGENCY, AiStrategy, PhaseError, read_reply, reported, run_phase, test_findings
+from .strategy import (
+    AGENCY,
+    AiStrategy,
+    PhaseError,
+    not_a_verdict,
+    read_reply,
+    reported,
+    run_phase,
+    test_findings,
+)
 
 
 @dataclass(frozen=True)
@@ -157,6 +166,8 @@ class DiagnoseThenFix(FixStrategy):
 
             async with materialize(session.repo_root, reproducer) as tree:
                 red = await ctx.do(_test_spec(tree, "fail"))
+            if (stopped := not_a_verdict(red, cost=repro_inv.cost)) is not None:
+                return stopped
             if red.status is not Status.SUCCEEDED:
                 return Outcome(
                     status=Status.FAILED,
@@ -229,6 +240,8 @@ class DiagnoseThenFix(FixStrategy):
 
         async with materialize(session.repo_root, full) as tree:
             green = await ctx.do(_test_spec(tree, "pass"))
+        if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
+            return stopped
         if green.status is not Status.SUCCEEDED:
             return Outcome(
                 status=Status.FAILED,

@@ -116,7 +116,13 @@ class Report:
     cost_total: Measured = Measured(None)
     cost_per_run: Measured = Measured(None)
     tokens_total: Measured = Measured(None)
-    billed_share: Measured = Measured(None)
+    #: How many runs money actually moved for, how many were served from a recording, and how many
+    #: carry no signal either way. Counted rather than averaged: `billed_fraction` is 0.0 on every
+    #: replay and absent on every paid record here, so a mean over the carriers was taken over the
+    #: zeroes alone and printed "actually billed 0%" beside a spend total of $275 (#259).
+    billed_runs: int = 0
+    replayed_runs: int = 0
+    unmeasured_runs: int = 0
     #: What share of the input a run sent was served from cache rather than paid for at full rate.
     #: The number that says whether prompt caching is working, which `tokens` alone cannot: it
     #: counts input plus output and excludes the cache entirely, so a working cache looks exactly
@@ -198,6 +204,13 @@ class Trend:
     dated_runs: int
     #: Runs carrying no `ts`. Absent, not week zero.
     undated_runs: int
+    #: Runs where money actually moved. The denominator `qualifies` reads, because thirty replays
+    #: of one cassette are one observation and not thirty (#259).
+    billed_runs: int
+    #: Runs a signal says were served from a recording.
+    replayed_runs: int
+    #: Runs carrying neither signal. Absent, not zero, and never folded into either of the others.
+    unmeasured_runs: int
     #: Runs where at least one occurrence stopped the run. Per run, because two ceilings hit in one
     #: run is one run stopped.
     blocking_runs: int
@@ -298,6 +311,46 @@ def _weeks(records: list[dict[str, Any]]) -> list[tuple[str, int, float]]:
     return [(label, runs, cost) for label, (runs, cost) in sorted(buckets.items())]
 
 
+BILLED, REPLAYED, UNMEASURED = "billed", "replayed", "unmeasured"
+
+
+def _billing(record: dict[str, Any]) -> str:
+    """Whether this record was paid for, served from a recording, or cannot be told apart.
+
+    Three answers rather than two, because *absent is not zero* applies to the field that would
+    settle it. `billed_fraction` is 0.0 on a replay and **missing entirely** on this repository's
+    eight paid records, so reading it alone would file every real model call as unmeasured, and
+    treating missing as zero would file them as replays.
+
+    So a record is billed if either signal says money moved, replayed only if a signal is present
+    and says none did, and unmeasured when neither is there. The third bucket is the point: a
+    census that folded it into either of the others would be reporting a figure computed from no
+    evidence, which is the failure most of this repository's design exists to prevent.
+    """
+    fraction = record.get("billed_fraction")
+    cost = record.get("cost_usd")
+    known = [v for v in (fraction, cost) if isinstance(v, int | float) and not isinstance(v, bool)]
+    if not known:
+        return UNMEASURED
+    return BILLED if any(v > 0 for v in known) else REPLAYED
+
+
+def _refused(record: dict[str, Any]) -> bool:
+    """Whether this record is a control refusing, rather than work that happened.
+
+    Decided by the record's **status**, not by a list of finding ids. Every control refusal is a
+    BLOCKED outcome by construction, so a control added later is excluded without anybody
+    remembering to add it -- the argument `test_sinks.py` makes about listing primitives rather
+    than sinks, after an enumerated list of sinks had already missed five.
+
+    Why it matters here: a blocked run's findings are `cost.budget_exceeded`, `approval.required`,
+    `egress.unenforced` and their kin, and counting them among "what it keeps finding" told
+    `improve --explain` that a budget ceiling was a recurring defect the prompt should be changed
+    to avoid (#256). It is the opposite -- it is the control working.
+    """
+    return str(record.get("status", "")) == "blocked"
+
+
 def _findings(records: list[dict[str, Any]]) -> tuple[int, list[tuple[str, int]], int]:
     """How many findings, which ones recur, and how many were the injection scanner speaking.
 
@@ -309,6 +362,8 @@ def _findings(records: list[dict[str, Any]]) -> tuple[int, list[tuple[str, int]]
     ids: Counter[str] = Counter()
     injections = 0
     for record in records:
+        if _refused(record):
+            continue
         found = record.get("findings")
         if not isinstance(found, dict):
             continue
@@ -435,7 +490,9 @@ def build(records: list[dict[str, Any]]) -> Report:
         cost_total=_measure(_numbers(records, "cost_usd"), total),
         cost_per_run=_measure(_numbers(records, "cost_usd"), total, "mean"),
         tokens_total=_measure(_numbers(records, "tokens"), total),
-        billed_share=_measure(_numbers(records, "billed_fraction"), total, "mean"),
+        billed_runs=sum(1 for r in records if _billing(r) == BILLED),
+        replayed_runs=sum(1 for r in records if _billing(r) == REPLAYED),
+        unmeasured_runs=sum(1 for r in records if _billing(r) == UNMEASURED),
         cached_share=_cached(records),
         seconds_median=_measure(_numbers(records, "wall_seconds"), total, "median"),
         seconds_p90=_measure(_numbers(records, "wall_seconds"), total, "p90"),
@@ -579,8 +636,15 @@ def recurring(
     dated: dict[str, set[str]] = {}
     blocking: dict[str, set[str]] = {}
     workflows: dict[str, set[str]] = {}
+    by_billing: dict[str, dict[str, set[str]]] = {}
 
     for index, record in enumerate(records):
+        if _refused(record):
+            # Same rule as `_findings`, and the census is where it did the most damage:
+            # `improve --explain` listed `approval.required` and `cost.budget_exceeded` among
+            # this repository's top recurring findings, under a heading that invites changing the
+            # prompt to stop them happening (#256).
+            continue
         found = record.get("findings")
         if not isinstance(found, dict):
             continue
@@ -599,6 +663,7 @@ def recurring(
         # A record with no `run_id` is still one run. Falling back to its position keeps it from
         # merging with every other unidentified record into a single phantom run.
         run = str(record.get("run_id") or f"#{index}")
+        paid_for = _billing(record)
         week = _iso_week(record)
         where = str(record.get("workflow") or record.get("kind") or "")
         for item in items:
@@ -609,6 +674,7 @@ def recurring(
                 continue
             occurrences[name] += 1
             runs.setdefault(name, set()).add(run)
+            by_billing.setdefault(name, {}).setdefault(paid_for, set()).add(run)
             if week:
                 weeks.setdefault(name, set()).add(week)
                 dated.setdefault(name, set()).add(run)
@@ -626,10 +692,21 @@ def recurring(
             weeks=len(weeks.get(name, ())),
             dated_runs=len(dated.get(name, ())),
             undated_runs=len(runs[name]) - len(dated.get(name, ())),
+            billed_runs=len(by_billing.get(name, {}).get(BILLED, ())),
+            replayed_runs=len(by_billing.get(name, {}).get(REPLAYED, ())),
+            unmeasured_runs=len(by_billing.get(name, {}).get(UNMEASURED, ())),
             blocking_runs=len(blocking.get(name, ())),
             workflows=tuple(sorted(workflows.get(name, ()))),
             considered=considered,
-            qualifies=len(runs[name]) >= min_runs and len(weeks.get(name, ())) >= min_weeks,
+            # Billed runs, not all runs. `review.security` reached 30 of 52 here entirely from
+            # `review --offline` replaying one shipped cassette -- the same composed prompt, the
+            # same two findings, $0.00 -- so the threshold was about to be cleared by one cached
+            # answer counted thirty times, and this census is what #163's learning loop proposes
+            # from (#259). A trend needs distinct judgments, and a replay is not one.
+            qualifies=(
+                len(by_billing.get(name, {}).get(BILLED, ())) >= min_runs
+                and len(weeks.get(name, ())) >= min_weeks
+            ),
             min_runs=min_runs,
             min_weeks=min_weeks,
         )
@@ -662,7 +739,7 @@ def as_trend_text(trends: list[Trend], *, limit: int = TOP_N) -> list[str]:
     else:
         head = (
             f"trend     nothing recurs yet — no finding id clears both thresholds "
-            f"(min_runs {min_runs}, min_weeks {min_weeks}), over {considered} record(s)"
+            f"(min_runs {min_runs} billed, min_weeks {min_weeks}), over {considered} record(s)"
         )
 
     # A: qualifying rows first, and never truncated away. The sort `recurring` returns is by runs,
@@ -686,9 +763,17 @@ def as_trend_text(trends: list[Trend], *, limit: int = TOP_N) -> list[str]:
         # `runs` carries the records it was counted over, and `blocking` carries the runs it was
         # counted over. Both were bare, which made the gate row claiming every count has its
         # denominator an overclaim rather than a description.
+        # `runs` alone said thirty where the answer was one cached reply replayed thirty times, so
+        # the split travels beside it: what was paid for, what was served from a recording, and
+        # what carries no signal either way. `qualifies` reads the first of those.
+        paid = f"{trend.billed_runs} billed"
+        if trend.replayed_runs:
+            paid += f", {trend.replayed_runs} replayed"
+        if trend.unmeasured_runs:
+            paid += f", {trend.unmeasured_runs} —"
         out += [
             f"  {mark} {trend.finding:<28}{trend.runs:>3} of {trend.considered} run(s)"
-            f"  {trend.occurrences:>3} occurrence(s)   {span:<28}"
+            f"  ({paid})  {trend.occurrences:>3} occurrence(s)   {span:<28}"
             f"{trend.blocking_runs} of {trend.runs} blocking   {', '.join(trend.workflows)}"
         ]
     hidden = len(trends) - len(shown)
@@ -734,8 +819,18 @@ def as_text(report: Report) -> list[str]:
     out += [f"  total         {_amount(report.cost_total)}"]
     out += [f"  per run       {_amount(report.cost_per_run)}"]
     out += [f"  tokens        {report.tokens_total.render(places=0)}"]
-    if report.billed_share.value is not None:
-        out += [f"  actually billed {report.billed_share.value:.0%} of runs' tokens (the rest replayed)"]
+    # Counted, not averaged. This printed "actually billed 0%" beside a spend total of $275,
+    # because the mean was taken over the records carrying `billed_fraction` -- every one of them
+    # a replay reporting 0.0 -- while the runs that actually spent carried the field not at all.
+    # Absent is not zero, in the command whose whole job is reporting spend (#259).
+    counted = report.billed_runs + report.replayed_runs + report.unmeasured_runs
+    if counted:
+        parts = [f"{report.billed_runs} billed"]
+        if report.replayed_runs:
+            parts.append(f"{report.replayed_runs} replayed")
+        if report.unmeasured_runs:
+            parts.append(f"{report.unmeasured_runs} —")
+        out += [f"  runs          {', '.join(parts)}  (of {counted})"]
     if report.cached_share.value is not None:
         out += [
             f"  from cache    {report.cached_share.value:.0%} of input, "

@@ -487,6 +487,39 @@ def failure_outcome(error: Exception, *, cost: Any = None) -> Outcome[Any]:
     return errored(reason, str(error), cost)
 
 
+def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Outcome[Any] | None:
+    """The Test did not reach a verdict — pass its own status through. None when it did.
+
+    Every red/green check in a strategy was `if status is not SUCCEEDED`, which is a two-way split
+    over a six-member enum: a budget ceiling on the third Test of a TDD run produced
+    `tdd.not_green` — *the implementation did not make the staged test pass* — about a suite that
+    never ran (#256). Same for an ERRORED runner, and `_revert_verify` runs the Test most likely
+    to meet a ceiling.
+
+    FAILED passes through as None because FAILED is exactly the case those findings are about:
+    the suite ran and disagreed. What this catches is the other four members, where the sentence
+    would be an assertion about a test run that did not happen.
+
+    The refusal's own findings and reason travel with it, so a `cost.budget_exceeded` arrives at
+    the caller as itself rather than as a claim about the change.
+
+    `Outcome[Any]` rather than a bare `Any`, and not a TypeVar: the callers return this where an
+    `Outcome[ImplementReport]` or an `Outcome[FixReport]` is declared, and a bare `Any` return
+    makes each of those a `no-any-return` under `--strict`. `Any` as the parameter is honest here
+    -- what travels is whatever the caller passed, and a refusal carries no report of its own.
+    """
+    if outcome.status in (Status.SUCCEEDED, Status.FAILED):
+        return None
+    return Outcome(
+        status=outcome.status,
+        reason=outcome.reason,
+        value=value,
+        cost=cost if cost is not None else outcome.cost,
+        findings=outcome.findings,
+        decided=outcome.decided,
+    )
+
+
 def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any) -> Any:
     """The run's invoker: an injected factory, or the one routed from `lockstep.models.route`.
 

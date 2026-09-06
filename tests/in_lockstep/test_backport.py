@@ -25,7 +25,7 @@ from in_lockstep.adapters.backport import (
     GitBackport,
 )
 from in_lockstep.cli import main
-from in_lockstep.core.outcome import Cost, Outcome, Status
+from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
 from in_lockstep.core.types import FileChange
 from in_lockstep.core.verbs import Capability, Verb
 
@@ -505,3 +505,84 @@ def test_the_resolver_still_holds_no_tools() -> None:
     source = inspect.getsource(AiBackportResolver.resolve)
     assert "tools=" not in source and "run_tool=" not in source
     assert not hasattr(AiBackportResolver, "_session_cls"), "it is not a strategy and must not become one"
+
+
+# -- a refused resolver is not a failed backport (issue 255) ------------------------------------
+
+
+class _StoppedResolver:
+    """A resolver that never reaches a verdict: a control refused it, or infrastructure broke."""
+
+    def __init__(self, status: Status, reason: str) -> None:
+        self.status = status
+        self.reason = reason
+
+    async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+        return Outcome(
+            status=self.status,
+            reason=self.reason,
+            cost=Cost(usd=0.0),
+            findings=(Finding(id=self.reason, message="refused", severity=Severity.ERROR),),
+            decided=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "status,reason",
+    [
+        (Status.BLOCKED, "cost.budget_exceeded"),
+        (Status.BLOCKED, "residency.external_model"),
+        (Status.ERRORED, "provider.timeout"),
+        (Status.ERRORED, "backport.unparseable"),
+    ],
+)
+def test_a_resolver_that_never_answered_keeps_its_own_status(repo: Path, status, reason) -> None:
+    """`_conflict_outcome` is hard-coded FAILED, and that is right for the caller with no resolver
+    bound. Where one WAS consulted, the reason survived and the status did not — so a budget
+    ceiling arrived as `failed`, which is exit 1 instead of 3, a ledger record saying `failed`,
+    and `failure_rate` moving the run out of its denominator and into its numerator."""
+    sha = _diverge(repo)
+    adapter = GitBackport(str(repo), resolver=_StoppedResolver(status, reason))
+    outcome = _run(adapter, Backport(target="release-1.0", commits=(sha,)))
+
+    assert outcome.status is status, f"{reason} was re-filed as {outcome.status.value}"
+    assert outcome.reason == reason
+    assert outcome.decided is False, "nothing was decided about the conflict"
+
+
+def test_a_refused_resolver_is_not_told_to_bind_a_resolver(repo: Path) -> None:
+    """`backport.conflict` advises re-running with a resolver bound — which the operator just
+    did. A run that consulted one and was refused has to say what refused it instead."""
+    sha = _diverge(repo)
+    adapter = GitBackport(str(repo), resolver=_StoppedResolver(Status.BLOCKED, "cost.budget_exceeded"))
+    outcome = _run(adapter, Backport(target="release-1.0", commits=(sha,)))
+
+    ids = {f.id for f in outcome.findings}
+    assert "backport.conflict" not in ids, "it told them to do the thing they had done"
+    stopped = next(f for f in outcome.findings if f.id == "backport.resolver_stopped")
+    assert "cost.budget_exceeded" in stopped.message
+    assert "git cherry-pick -x" in stopped.message, "the manual retreat is still what they need"
+    assert "cost.budget_exceeded" in ids, "the refusal's own finding must travel too"
+
+
+def test_a_resolver_that_answered_and_failed_is_still_a_failed_backport(repo: Path) -> None:
+    """The control. FAILED is a verdict — the resolver looked and could not do it — and folding
+    that into the refused branch would be the same error in the other direction."""
+    sha = _diverge(repo)
+    adapter = GitBackport(str(repo), resolver=_StoppedResolver(Status.FAILED, "backport.no_resolution"))
+    outcome = _run(adapter, Backport(target="release-1.0", commits=(sha,)))
+
+    assert outcome.status is Status.FAILED
+    assert "backport.conflict" in {f.id for f in outcome.findings}
+
+
+def test_a_resolver_that_succeeded_with_no_files_is_a_failed_backport(repo: Path) -> None:
+    """The other control: SUCCEEDED-but-empty is an answer that resolved nothing, not a refusal."""
+    sha = _diverge(repo)
+
+    class _Empty:
+        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+            return Outcome(status=Status.SUCCEEDED, value=(), cost=Cost(usd=0.0))
+
+    outcome = _run(GitBackport(str(repo), resolver=_Empty()), Backport(target="release-1.0", commits=(sha,)))
+    assert outcome.status is Status.FAILED
