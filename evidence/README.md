@@ -50,6 +50,11 @@ counterpart benefit.
 evidence/cases/<family>/<name>.json    one promoted case, self-contained
 ```
 
+Today that is one case: `cases/review/lockstep-48-security.json`, a real model reviewing
+in-lockstep/lockstep#48 through the security lens — the recording the package already ships and
+`review --offline` replays, harvested from that cassette and the `request.json` beside it. It was
+the first promotion because it was the one that published nothing new.
+
 Self-contained matters (`GATE-EVAL-4`): a case carries the answer its expectations came from, so it
 settles with no cassette anywhere. The tape it was harvested from was destroyed with the CI runner
 that made it, and `harvested.cassette` is provenance rather than a dependency.
@@ -63,9 +68,8 @@ is written rather than promised.
 
 ## Promoting one
 
-Five commands, on a laptop, by a person. The `mkdir` is not padding: no family directory ships, so
-the first promotion is the one where `cp` into a missing directory fails, and the first promotion
-is the only one this section is written for.
+Five commands, on a laptop, by a person. The `mkdir` is not padding: only `review/` exists, so the
+first promotion into any other family is the one where `cp` into a missing directory fails.
 
 ```bash
 gh run download <run-id> -n lockstep-run -D /tmp/candidates
@@ -75,9 +79,24 @@ uv run in-lockstep eval run --corpus evidence/cases
 git add evidence/cases/review/<name>.json
 ```
 
+The name is yours to choose. `harvest` names a case after the first six words of the question it
+was asked, which for a review is `review-the-change-between-<base>-and`; the file name is what a
+person reads in `eval run`'s output, so name it for what it was.
+
 Then open a pull request. Read the case in the diff — all of it, including the request — and say in
 the message why this one is worth publishing forever. If `eval run` does not settle it, do not
 promote it: a case that cannot be settled offline is a file, not a measurement.
+
+### From the shipped recording
+
+The package carries one recording of its own — the demo `review --offline` replays — and its
+request ships beside it in `request.json`, which `harvest` reads. That is where the first case came
+from, and it is the one promotion that publishes nothing new:
+
+```bash
+uv run in-lockstep eval harvest --from src/in_lockstep/cassettes/review-security.json \
+  --into /tmp/candidates --family review
+```
 
 ## Why not `.lockstep/`
 

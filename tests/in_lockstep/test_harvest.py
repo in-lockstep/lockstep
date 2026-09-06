@@ -695,3 +695,100 @@ def test_a_run_whose_tape_yields_nothing_says_so_and_carries_on(tmp_path: Path) 
     empty.save()
     _harvest_in_process(empty, "implement/from-ticket", _Lockstep())  # must not raise
     assert not list((tmp_path / ".lockstep").rglob("*.json")) or True
+
+
+# -- the shipped recording, and the sidecar its request lives in ----------------------------
+
+
+def _shipped_cassette() -> Path:
+    """The demo recording as installed, by the same lookup `cli._shipped_fixture` uses."""
+    from importlib import resources
+
+    with resources.as_file(resources.files("in_lockstep.cassettes") / "review-security.json") as path:
+        return Path(path)
+
+
+def _sidecar(tmp_path: Path, key: str, request: object) -> None:
+    (tmp_path / "request.json").write_text(json.dumps({"key": key, "note": "test", "request": request}))
+
+
+def _strip_requests(path: Path) -> str:
+    """A tape as it was recorded before requests were kept. Returns its only key."""
+    data = json.loads(path.read_text())
+    ((key, entry),) = data["provider_calls"].items()
+    entry.pop("request")
+    path.write_text(json.dumps(data))
+    return key
+
+
+def test_gate_fixture_1_the_shipped_recording_harvests_to_a_case_that_settles() -> None:
+    """GATE-FIXTURE-1, read from the harvester's side.
+
+    The shipped tape keeps its request in `request.json` beside it, and the reader here had never
+    been taught about the file: the one recording every clean install has -- the first real
+    inference an adopter sees -- was counted as recorded before requests were stored and told to
+    re-record, which is the one thing a reader with no key cannot do.
+
+    The case has to hash back to the tape's only key, because that is the integrity check
+    `eval run` and `test_evidence.py` apply to a promoted case. A sidecar read into the wrong entry,
+    or a request reshaped on the way through, fails here rather than in the corpus.
+    """
+    tape = _shipped_cassette()
+    (harvested,) = harvest(tape, family="review")
+    (key,) = json.loads(tape.read_text())["provider_calls"]
+    assert harvested.case["harvested"]["filed_under"] == key
+    assert key_of(request_from(harvested.case["input"]["request"])) == key
+
+    case = Case.parse(harvested.case, name=harvested.name)
+    result = grade(case, json.loads(case.recorded["content"]))
+    assert result["deterministic_passed"] is True
+    assert result["rubric_outstanding"] is False
+
+
+def test_a_sidecar_supplies_the_request_a_tape_did_not_keep(tmp_path: Path) -> None:
+    """The same fill, over a tape built here, so the property is not only true of one file."""
+    path = _record(tmp_path)
+    request = json.loads(path.read_text())["provider_calls"].popitem()[1]["request"]
+    key = _strip_requests(path)
+    _sidecar(tmp_path, key, request)
+
+    (harvested,) = harvest(path)
+    assert key_of(request_from(harvested.case["input"]["request"])) == key
+
+
+def test_a_sidecar_never_replaces_a_request_the_tape_recorded(tmp_path: Path) -> None:
+    """A recorded request is the one that was sent. A sidecar that could replace it would re-key a
+    recording from outside the tape, which is the fabrication `ReplayProvider` stays strict
+    against -- so a sidecar beside a complete tape is not even opened."""
+    path = _record(tmp_path)
+    ((key, entry),) = json.loads(path.read_text())["provider_calls"].items()
+    _sidecar(tmp_path, key, dict(entry["request"], system="a different question entirely"))
+
+    (harvested,) = harvest(path)
+    assert harvested.case["input"]["request"]["system"] == entry["request"]["system"]
+
+
+def test_a_sidecar_naming_no_entry_on_the_tape_fills_nothing(tmp_path: Path) -> None:
+    """Keyed, so it has to say which entry it belongs to. One that names nothing changes nothing,
+    and the refusal a request-less tape gets goes on being true of it."""
+    path = _record(tmp_path)
+    request = json.loads(path.read_text())["provider_calls"].popitem()[1]["request"]
+    _strip_requests(path)
+    _sidecar(tmp_path, "0" * 64, request)
+
+    with pytest.raises(NothingToHarvest, match="recorded before requests were stored"):
+        harvest(path)
+
+
+def test_an_unreadable_sidecar_is_refused_by_name_only_when_it_is_needed(tmp_path: Path) -> None:
+    """Beside a tape that kept every request it is never opened, so a broken one costs nothing.
+    Beside a tape that needs it, the refusal names the sidecar rather than telling the holder of
+    the shipped demo to re-record what they have no key to re-record."""
+    path = _record(tmp_path)
+    (tmp_path / "request.json").write_text("{not json")
+    (harvested,) = harvest(path)
+    assert harvested.case["input"]["request"]["model"] == "claude-sonnet-4-6"
+
+    _strip_requests(path)
+    with pytest.raises(NothingToHarvest, match=r"request\.json .* cannot be read"):
+        harvest(path)

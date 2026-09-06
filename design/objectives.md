@@ -85,7 +85,7 @@ to move without somebody standing in front of this table.
 | `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2` | `GATE-TOOLING-3` | The same gap as before, one ecosystem-family narrower. #237 taught detection to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, so a Rust, Go or JVM adopter no longer hand-writes what was in their tree. A Ruby, PHP, Elixir, .NET, C++ or Swift adopter still does. This row did not move with O1's, and the reason is the difference between the two sentences: O1 sanctions declining in its own text -- *detection that guesses is worse than detection that declines* -- so a stack that is read or else named is O1 satisfied. O2's standard has no such clause. It is that what a person writes by hand is the thing nobody could have discovered for them, and a `Rakefile` sitting in the tree is discoverable. `GATE-TOOLING-3` is where the remainder is recorded. |
 | `O3` | The same process at a terminal and in CI | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-CI-2` | — | — |
 | `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5` | — | — |
-| `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
+| `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4`, `GATE-EVIDENCE-1` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases, `eval run` settles them, and since #268 one promoted case is settled on every commit — the corpus a proposal would be measured against is no longer empty, only small. Nothing drafts a prompt change, nothing measures a draft against that corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
 | `O6` | The model never holds a secret | held | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1`, `GATE-POLICY-2` | — | — |
 | `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3` | — | — |
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3` | — | — |
@@ -178,6 +178,17 @@ GitLab* — so the objective is about an adopter's host being served, not about 
 running on both. Where *we run it here* lives is O10, and that row already states what this
 repository does and does not dogfood. Recording the distinction is the alternative to letting a
 `held` quietly mean more than it does.
+
+Still eight, when #268 and #269 closed `GATE-EVIDENCE-1`, and O5 is the row that did not move —
+correctly, because that gate was one of seven under its *blocked on* and the other six are the
+writing half its gap text has named from the start. The closure is recorded anyway for what it
+was: the first promotion. The shipped cassette's request had shipped beside it in `request.json`
+since #129, and `harvest` had never been taught the file, so the one recording every clean
+install has was told to re-record itself. Teaching the reader turned it into a case; promoting
+that case gave the gate its subject; and because the case is the demo's, the first thing
+published forever into `evidence/` was something the package already published. The path the
+corpus was written for — a CI run's artifact, downloaded and read by a person — has still carried
+no promotion, and the gate row says so rather than letting `held` cover it.
 
 ## Claimed by no objective
 
