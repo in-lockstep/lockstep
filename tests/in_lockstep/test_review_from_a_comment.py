@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from in_lockstep.platform.chatops import AspectRefused, aspect_from
+from in_lockstep.platform.chatops import AspectRefused, aspect_from, resolve_aspect
 
 KNOWN = ("security", "intent", "performance", "tests")
 
@@ -114,6 +114,27 @@ def test_no_known_lenses_at_all_refuses_rather_than_accepting_anything() -> None
     one case where the closed set stopped being closed."""
     with pytest.raises(AspectRefused):
         aspect_from("/review security", known=())
+
+
+def test_a_flag_is_resolved_by_the_rule_a_comment_is(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--aspect` and `/review <lens>` used to differ in exactly the way that cost something: the
+    comment was resolved here and the flag reached the adapter, whose refusal arrives after the
+    run id (#275). One function, so the two cannot drift apart again."""
+    assert resolve_aspect("SECURITY", known=KNOWN) == "security"
+    with pytest.raises(AspectRefused, match="no lens named 'sekurity'"):
+        resolve_aspect("sekurity", known=KNOWN)
+    with pytest.raises(AspectRefused):
+        resolve_aspect("--> <script>", known=KNOWN)
+
+
+def test_an_undeclared_set_is_refused_for_a_comment_and_passed_through_for_a_flag() -> None:
+    """`None` is a bound adapter that is not `Inspectable`: it stated no set, and the shipped four
+    would be a guess about somebody else's adapter. The two callers part here, on who typed the
+    name. A flag is the operator's, and the adapter's own refusal is still ahead of it; a comment
+    is anyone's, and "resolved against a closed set" is the whole promise `GATE-REVIEW-3` makes."""
+    assert resolve_aspect("style", known=None) == "style"
+    with pytest.raises(AspectRefused, match="Inspectable"):
+        aspect_from("/review style", known=None)
 
 
 # -- the refs a comment event does not carry ------------------------------------------------

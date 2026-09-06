@@ -13,7 +13,7 @@ from typing import Any
 
 from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
 from in_lockstep.core.types import ChangeSet, TestReport, TestVerdict
-from in_lockstep.platform.report import fix_body, implement_body, marker, review_comment
+from in_lockstep.platform.report import MARKER, fix_body, implement_body, marker, review_comment
 from in_lockstep.platform.scm import GitHubScm
 
 
@@ -98,6 +98,50 @@ def test_a_pipe_or_backtick_in_the_path_is_escaped_too() -> None:
     assert "weird\\|name.py" in row, "the path's pipe must be escaped"
     # The only backticks in the row are the two that open/close the location code span.
     assert row.count("`") == 2, "a backtick from the path would open a stray span"
+
+
+def test_the_marker_cannot_be_closed_by_its_own_argument() -> None:
+    """GATE-REVIEW-3's second half, held by the writer and not only by the ordering (#275). A kind
+    carrying `-->` closed the HTML comment early: the rest rendered as visible text, and the anchor
+    the next run finds its own comment by was gone, so it posted a second comment beside the
+    first. `!` goes too, because `--!>` closes a comment as well."""
+    for kind in ("review:-->evil", "review:--> <script>", "review:x--!>y", "review:<!--"):
+        anchor = marker(kind)
+        assert anchor.count("-->") == 1 and anchor.endswith(" -->"), anchor
+        assert anchor.count("<!--") == 1 and anchor.startswith("<!-- "), anchor
+        assert "!" not in anchor[5:-4], anchor
+        assert MARKER.fullmatch(anchor), f"the reader must match everything the writer can emit: {anchor}"
+
+
+def test_the_marker_is_stable_and_leaves_every_shipped_kind_alone() -> None:
+    """Escaping must not move an anchor a comment already carries, or every sticky comment posted
+    before it would be orphaned and re-posted. Injective as well: two lenses that escaped to one
+    anchor would edit each other's comments."""
+    assert marker("review:security") == "<!-- in-lockstep:review:security -->"
+    assert marker("review:api-design") == "<!-- in-lockstep:review:api-design -->"
+    assert marker("implement") == "<!-- in-lockstep:implement -->"
+    assert marker("a>b") != marker("a%3Eb")
+    assert marker("review:-->evil") == marker("review:-->evil")
+
+
+def test_a_hyphenated_lens_writes_a_marker_the_posting_command_finds() -> None:
+    """`comment` matched the marker with a pattern of its own that excluded `-`, so a body a
+    hyphenated lens wrote was refused as carrying no marker at all. One pattern, beside the
+    writer, so the reader cannot disagree with it again (#275)."""
+    body = review_comment("api-design", _outcome())
+    found = MARKER.search(body)
+    assert found is not None and found.group(0) == marker("review:api-design")
+
+
+def test_an_escaped_marker_is_still_stripped_before_a_prompt_sees_it() -> None:
+    """The strip in both SCM adapters keys on `<!-- in-lockstep:` and runs to the next `>`, which
+    is exactly why the writer must never emit one inside the kind."""
+    from in_lockstep.platform.scm.github import _clean as clean_github
+    from in_lockstep.platform.scm.gitlab import _clean as clean_gitlab
+
+    body = f"looks fine\n\n{marker('review:-->evil')}"
+    assert clean_github(body) == "looks fine"
+    assert clean_gitlab(body) == "looks fine"
 
 
 # -- the implement PR body ----------------------------------------------------------------------

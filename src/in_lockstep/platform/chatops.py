@@ -72,12 +72,16 @@ class AspectRefused(Exception):
     """
 
 
-def aspect_from(body: str, *, known: Collection[str]) -> str:
+def aspect_from(body: str, *, known: Collection[str] | None) -> str:
     """Which review lens this comment asked for, resolved against the lenses that exist.
 
     `known` is the BOUND adapter's lens map, not the shipped one. A repository that replaced its
     lenses gets exactly its own set, and one that added a lens can name it — which is what makes
-    `AiReview(lenses=...)` reach chat-ops rather than stopping at the CLI.
+    `AiReview(lenses=...)` reach chat-ops rather than stopping at the CLI. `None` is a bound
+    adapter that declares no map at all, and a comment is refused against it rather than handed
+    through: a comment is written by anyone who can comment, and "resolved against a closed set"
+    is the whole promise. `resolve_aspect` below draws the line differently for a flag, and says
+    why.
 
     Unlike `resume_depth` above, this decides which prompt composes, so the closed set is doing real
     work rather than being tidy. `design/strategy-selection.md` draws the line where it belongs: it
@@ -97,16 +101,46 @@ def aspect_from(body: str, *, known: Collection[str]) -> str:
             "this comment does not begin with `/review`, so nothing here names a lens. "
             "Guessing one out of prose is how a tool spends money on a comment nobody meant."
         )
+    if known is None:
+        raise AspectRefused(
+            "a comment's lens is resolved against the lenses the bound Review adapter declares, and "
+            "this repository's declares none: it is not `Inspectable`. Give it `compositions()`, or "
+            "run `in-lockstep review --aspect <lens>` at a terminal, where the name is handed to the "
+            "adapter to refuse for itself."
+        )
 
-    options = ", ".join(sorted(known)) or "none — this repository binds a Review adapter with no lenses"
     asked = (match.group(1) or "").strip()
     if not asked:
-        raise AspectRefused(f"`/review` needs a lens. This repository has: {options}.")
+        raise AspectRefused(f"`/review` needs a lens. This repository has: {_options(known)}.")
+    return resolve_aspect(asked, known=known)
 
+
+def resolve_aspect(asked: str, *, known: Collection[str] | None) -> str:
+    """A lens name as typed — after `/review` in a comment, or after `--aspect` at a terminal —
+    resolved against the lenses that exist, or refused with the set that does.
+
+    One resolution for both spellings, because the two used to differ in exactly the way that
+    cost something (#275). A comment was resolved here, before any run id existed; a flag reached
+    the adapter, whose refusal is by name but arrives after `_run_id`, so a mistyped `--aspect`
+    wrote a `blocked` record — the framework's word for a control stopping a run, spent on a typo
+    stopping nothing, inside the census that `blocked` is kept out of failure rates to protect.
+
+    `None` is an adapter that declares no lens map, and here the name passes through as typed.
+    Refusing against the shipped four would list lenses the repository does not have, and passing
+    through is not a guess: the adapter's own refusal is still ahead, and the record it then
+    writes is the cost of binding an adapter that does not say what it has. `aspect_from` refuses
+    the same `None` for a comment, because a flag is typed by the operator and a comment by anyone.
+    """
+    if known is None:
+        return asked
     # Case-folded, which is free: the set is closed, so folding cannot admit a name that was not
     # already in it. Matched against the declared spelling so the answer is the repository's own.
     folded = {name.casefold(): name for name in known}
     resolved = folded.get(asked.casefold())
     if resolved is None:
-        raise AspectRefused(f"no lens named {asked!r}. This repository has: {options}.")
+        raise AspectRefused(f"no lens named {asked!r}. This repository has: {_options(known)}.")
     return resolved
+
+
+def _options(known: Collection[str]) -> str:
+    return ", ".join(sorted(known)) or "none — this repository binds a Review adapter with no lenses"

@@ -20,7 +20,7 @@ import pytest
 from click.testing import CliRunner
 
 from in_lockstep.ai.replay import Cassette
-from in_lockstep.cli import main
+from in_lockstep.cli import EXIT_BLOCKED, main
 from in_lockstep.core.context import RunContext
 from in_lockstep.core.outcome import Outcome
 from in_lockstep.evaluation.subject import EvalSubject
@@ -3762,6 +3762,48 @@ lockstep.models.route("review", "anthropic:claude-haiku-4-5")
 lockstep.models.route("review/security", "google:gemini-2.5-flash")
 """
 
+STYLE_ONLY_MODULE = """
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.core.spend import Budget
+from in_lockstep.prompts.review import SecurityReviewPrompt
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+lockstep.bind(Review, AiReview(lenses={"style": SecurityReviewPrompt}))
+"""
+
+OPAQUE_REVIEW_MODULE = """
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai import Review
+from in_lockstep.core.outcome import Finding, Outcome, Severity
+from in_lockstep.core.spend import Budget
+from in_lockstep.core.verbs import Verb
+
+
+class OpaqueReview:
+    verb = Verb.REVIEW
+    capabilities = frozenset()
+
+    async def invoke(self, ctx, inp):
+        return Outcome.blocked_by(
+            "review.unknown_aspect",
+            findings=(
+                Finding(
+                    id="review.unknown_aspect",
+                    message=f"opaque: no lens named {inp.aspect!r}",
+                    severity=Severity.ERROR,
+                    blocking=True,
+                ),
+            ),
+        )
+
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+lockstep.bind(Review, OpaqueReview())
+"""
+
 
 def test_ls_prints_one_guardrail_chain_per_distinct_stack(repo: Path) -> None:
     """`ls` used to print the first lens's chain as everybody's, which became a lie the moment a
@@ -3813,3 +3855,72 @@ def test_review_runs_a_lens_on_the_model_its_own_route_names(repo: Path) -> None
     )
     assert result.exit_code == 0, result.output
     assert "haiku" in _ledger_record(repo, "review-intent").read_text()
+
+
+def test_a_mistyped_aspect_is_an_error_and_not_a_record(repo: Path) -> None:
+    """GATE-REVIEW-3, at the terminal (#275). The adapter refuses a lens it does not have, but after
+    `_run_id`, so `--aspect sekurity` wrote a `blocked` record -- the framework's word for a control
+    stopping a run, spent on a typo stopping nothing. Resolved before the run id exists, the typo is
+    a message naming what does exist, exit 1 rather than BLOCKED's 3, and the ledger is untouched."""
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--aspect", "sekurity", "--base", "HEAD", "--diff", _diff(repo)]
+    )
+    assert result.exit_code == 1, result.output
+    assert "'sekurity'" in result.output, result.output
+    assert "security" in result.output, "the refusal has to say what does exist"
+    assert not list((repo / ".lockstep/ledger").glob("*.json")), "a typo must not append a ledger record"
+
+
+def test_an_aspect_is_matched_the_way_a_comment_is(repo: Path) -> None:
+    """The positive control, and the one liberty the comment path already takes: case-folded,
+    which is free against a closed set. The run id carries the declared spelling, so the record a
+    person looks for is under the name the repository uses."""
+    _write(repo)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--aspect", "INTENT", "--base", "HEAD", "--diff", _diff(repo)]
+    )
+    assert result.exit_code == 0, result.output
+    assert _ledger_record(repo, "review-intent").exists()
+
+
+def test_an_aspect_is_resolved_against_the_bound_adapters_lenses_not_the_shipped_ones(repo: Path) -> None:
+    """A module that binds `AiReview(lenses={"style": ...})` has one lens, and the flag's default
+    `security` is a name it does not have. The refusal lists the repository's own lens and none of
+    the shipped four, because a list of lenses the repository does not have is the guess this
+    resolution exists to refuse."""
+    _lifecycle(repo).write_text(STYLE_ONLY_MODULE)
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    assert result.exit_code == 1, result.output
+    assert "'security'" in result.output and "style" in result.output, result.output
+    assert "intent" not in result.output, "the shipped lenses are not this repository's"
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--aspect", "style", "--base", "HEAD", "--diff", _diff(repo)]
+    )
+    assert "no lens named" not in result.output, result.output
+
+
+def test_ls_says_a_lens_route_is_unchecked_when_the_adapter_states_no_set(repo: Path) -> None:
+    """The third reader of `_review_lenses`. A route to `review/<lens>` beside an adapter that is
+    not `Inspectable` cannot be checked, and an empty flag would read as checked and fine -- the
+    reassurance `ls`'s flag column exists to refuse. Said so instead."""
+    from in_lockstep.cli import _route_flag
+
+    verbs = {"review", "implement"}
+    assert "unchecked" in _route_flag("review/style", verbs, None)
+    assert "no such lens" not in _route_flag("review/style", verbs, None)
+    assert _route_flag("review/style", verbs, ("style",)) == ""
+    assert "no such lens" in _route_flag("review/style", verbs, ("security",))
+
+
+def test_an_adapter_that_declares_no_lenses_is_handed_the_name_to_refuse_itself(repo: Path) -> None:
+    """A bound Review adapter that is not `Inspectable` has stated no set, and a set nobody stated
+    is not one to refuse against: this used to fall back to the shipped four, which would have
+    refused the lens the adapter actually had. The name passes through, and the adapter's own
+    refusal -- by name, after the run id, at the cost of a record -- is the adopter's to keep."""
+    _lifecycle(repo).write_text(OPAQUE_REVIEW_MODULE)
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--aspect", "style", "--base", "HEAD", "--diff", _diff(repo)]
+    )
+    assert result.exit_code == EXIT_BLOCKED, result.output
+    assert "opaque: no lens named 'style'" in result.output, result.output

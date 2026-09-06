@@ -48,7 +48,9 @@ def lenses():
     state = snapshot()
     module, _ref = load(str(ROOT))
     try:
-        yield set(_review_lenses(module.lockstep))
+        known = _review_lenses(module.lockstep)
+        assert known is not None, "this repository's Review adapter must declare its lenses"
+        yield set(known)
     finally:
         restore(state)
 
