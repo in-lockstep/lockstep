@@ -1,0 +1,66 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.064385,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 757,
+        "message": "The verb-parity test asserts each verb appears in GitLab and in the GitHub trampoline, but `in-lockstep gate` is only in the GitHub *implement* trampoline (`_SCAFFOLD_IMPLEMENT_TRAMPOLINE`), not in `_SCAFFOLD_TRAMPOLINE` (the review trampoline). The fallback to `_github_review_scaffold()` is the disjunction, so the assertion may pass even if `gate` is absent from `_SCAFFOLD_IMPLEMENT_TRAMPOLINE`, as long as `_SCAFFOLD_TRAMPOLINE` contains it \u2014 which is unlikely for the gate verb. The test could \u2026[truncated]",
+        "path": "tests/in_lockstep/test_gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 795,
+        "message": "The credential-split test asserts `'ANTHROPIC_IDENTITY_TOKEN' in work` by serialising the `work` job back to YAML and string-searching it. Because `id_tokens:` is a top-level key in the job dict (not in `script`), `yaml.safe_dump(parsed['work'])` will include it, so the assertion does exercise the right thing \u2014 but the comment says 'the work job has no way to reach a model' if it fails, when the actual mechanism being tested is the `id_tokens` key, not an environment variable or script line. No \u2026[truncated]",
+        "path": "tests/in_lockstep/test_gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "The section-citation check searches `in-lockstep-design.md` for headings matching `^#+ (\\d+(?:\\.\\d+)*) ` and compares against `\u00a7N.N` citations in gates.md. This will correctly catch the fixed pointer. No gap in the assertion itself \u2014 the test would fail if `\u00a717.11` were not a real heading \u2014 but the test only checks citations that use the `\u00a7` prefix. A future citation using a different convention (e.g. 'section 17.11' or 'ADR 0001 17.11') would not be caught. This is a boundary the test does not \u2026[truncated]",
+        "path": "tests/in_lockstep/test_gates.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2c020738479ce060216e173c6eecd1d2759be177",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 785,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T002239Z-e610",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 788,
+  "ts": "2026-09-06T00:22:59+00:00",
+  "wall_seconds": 20.24
+}
