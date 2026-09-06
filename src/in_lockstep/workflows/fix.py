@@ -203,7 +203,7 @@ async def fix_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: S
         # and not something the change under review did wrong.
         #
         # Written as a map rather than a two-way branch so the statuses this does NOT special-case
-        # are visible instead of implied: `Status` has six members and a boolean covers two.
+        # are visible instead of implied: `Status` has five members and a boolean covers two.
         #
         # And the reason is no longer defaulted to the status. `Outcome(status=Status.BLOCKED)`
         # with no reason is legal, and the old fallback rendered it "stopped by `blocked`" -- a

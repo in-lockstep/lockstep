@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.evaluation import load_cases, subject_for, summarize
 from in_lockstep.evaluation.cases import Case, CaseError, grade
 from in_lockstep.evaluation.subject import EvalSubject
@@ -140,13 +138,6 @@ def test_a_failing_deterministic_case_is_not_ok() -> None:
     summary = summarize([grade(case, {"findings": [{"path": "a"}]})])
     assert summary["ok"] is False
     assert summary["pass_rate"] == 0.0
-
-
-def test_an_undecided_outcome_is_distinguishable_from_a_cache_hit() -> None:
-    """Both are 'not a failure'. Only one of them decided anything."""
-    undecided: Outcome[Any] = Outcome(status=Status.SUCCEEDED, decided=False)
-    cache_hit: Outcome[Any] = Outcome.skipped()
-    assert (undecided.status, undecided.decided) != (cache_hit.status, cache_hit.decided)
 
 
 # -- GATE-LEDGER-4 / GATE-EVAL-1: identity ------------------------------------------
