@@ -272,7 +272,14 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: shipped process -- and hands the run to `_run_registered`. Composition and translation, the
 #: same shape as `implement`'s; what a proposal MEANS lives in `workflows/improve.py` and
 #: `improver.py`, where a test reaches it without a CliRunner.
-CLI_HELPER_STATEMENTS = 930
+#: 930 -> 965 with #204, all three of them rendering or composing. `_scaffold_review` writes the
+#: `/review` trampoline and prints what it wrote, the same shape as the two write-verb scaffolds;
+#: `_guardrail_chains` renders one line per distinct stack now that a `Lens` may carry its own,
+#: where `ls` used to print the first lens's chain as everybody's; `_route_flag` renders the note
+#: beside a route to a lens nothing binds. What a lens MEANS -- which stack, which ceilings, which
+#: route wins -- lives in `prompts/review.py` (`Lens.stack`, `Lens.under`) and
+#: `ai/bootstrap.py` (`routed_model`), where `test_lens.py` reaches it without a CliRunner.
+CLI_HELPER_STATEMENTS = 965
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

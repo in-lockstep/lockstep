@@ -237,19 +237,26 @@ class Prompt(Generic[P, S]):
         _, body = parse_frontmatter(self.body.resolve(self.package()))
         return body
 
-    def system(self, layers: PromptLayers | None = None) -> str:
+    def system(self, layers: PromptLayers | None = None, *, emphasis: str = "") -> str:
         """Compose the system prompt.
 
         Order is guardrails, body, skills, contexts — a framework invariant, resolved here because
         this is the only place it can be guaranteed. Guardrails are inlined first and verbatim:
         their position is a security property, not a rendering preference.
+
+        `emphasis` is what a `Lens` adds beside the bind, and it rides in the same section as the
+        class's own: one heading, the subclass's text first, then the lens's. One section rather
+        than two, because a model reading two "Emphasis for this team" headings would reasonably
+        wonder which team -- and an empty string leaves the composed text byte-identical to what it
+        was before this parameter existed, which is what keeps every shipped cassette replaying.
         """
         parts: list[str] = []
         if layers is not None:
             parts.extend(layers.guardrail_texts())
         parts.append(self.body_text().strip())
-        if self.emphasis:
-            parts.append(f"## Emphasis for this team\n\n{self.emphasis.strip()}")
+        added = "\n\n".join(text.strip() for text in (self.emphasis, emphasis) if text.strip())
+        if added:
+            parts.append(f"## Emphasis for this team\n\n{added}")
         for exemplar in self.exemplars:
             parts.append(f"## Example\n\n{exemplar.strip()}")
         if layers is not None:
@@ -342,12 +349,15 @@ class Composition:
     #: The class that owns this composition — `AiReview`, `TDD` — or `"shipped"` when nothing is
     #: bound and the answer came from the framework's own map.
     source: str
+    #: What a `Lens` added beside the bind, so `show-prompt` renders what a run would send and
+    #: `ls` can star a lens whose CLASS is the shipped one and whose text is not.
+    emphasis: str = ""
 
     def projection(self) -> list[str]:
         return self.layers.projection(self.prompt.body_label())
 
     def text(self) -> str:
-        return self.prompt.system(self.layers)
+        return self.prompt.system(self.layers, emphasis=self.emphasis)
 
 
 def compositions(

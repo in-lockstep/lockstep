@@ -52,6 +52,35 @@ The guardrail is labelled `acme-review-prompts/house` rather than `house`, becau
 read to answer "whose rule is this" and two packs contributing `house` would otherwise be
 indistinguishable in the one artifact meant to tell them apart.
 
+## Enhancing a shipped lens instead of replacing it
+
+`prompts/security.md` above is a whole body, and `OurSecurity` swaps it in. `prompts/style.md` is
+the other kind of file a pack can ship: three paragraphs that ride *after* the shipped body, under
+its emphasis heading, with the shipped prose and the shipped key both kept.
+
+```python
+# .lockstep/lockstep.py — keep the framework's security lens, add Acme's phrasing to it
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.packs import pack
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt
+
+acme = pack("acme-review-prompts")
+
+lockstep.bind(
+    Review,
+    AiReview(lenses={**LENSES, "security": Lens(SecurityReviewPrompt, emphasis=acme.emphasis("style"))}),
+)
+```
+
+No subclass, and no new name: the key stays `security`, so `review.security` in the ledger, the
+sticky comment's marker and any `Improvable` declared against it all survive the upgrade. A pack
+that wants to add a lens of its own names it something nobody had (`a11y`), never a shipped name
+with a different body — publishing an enhancement under a shipped name silently forks every
+consumer's review history.
+
+`style.md` is not a lens, and `pack try` does not treat it as one: a `prompts/<aspect>.md` is
+measured only when `corpus/review/<aspect>-reviewer/` sits beside it.
+
 ## Why there is no Python in it
 
 `pack describe` reports `imports: none` for this pack — derived by walking the AST of every `.py`

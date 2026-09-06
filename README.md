@@ -41,7 +41,7 @@ still advertises.
 
 | Capability | Status | What that means |
 |---|---|---|
-| Code Review | runs | `review --aspect security`, per-lens prompts, cassette-replayable offline |
+| Code Review | runs | `review --aspect security`, per-lens prompts, cassette-replayable offline; `/review <lens>` on a pull request from `init --review`, resolved in Python against the lenses the module binds and posted from a job holding no key; a `Lens` a repository enhances, bounds and routes without a fork |
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
@@ -106,6 +106,8 @@ is why each refusal is where it is.
 ```bash
 in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
 in-lockstep review --base ...    # review a change, one lens at a time
+in-lockstep review --ask "/review tests" --pr 42   # the lens a comment named, resolved here; --comment-out writes the body
+in-lockstep comment --pr 42 --body-file findings.md   # post what another job composed, from a job with no key
 in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing itself
 in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
 in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local model
