@@ -48,7 +48,7 @@ whose closure would change the row. Every claim in either column is about one ga
 hide inside a bundle: an objective blocked on four things does not go quiet when three of them
 close.
 
-Seven properties, all in `test_objectives.py`, which discharges `GATE-TEST-8`:
+Eight properties, all in `test_objectives.py`, which discharges `GATE-TEST-8`:
 
 1. **Primary key.** The ids here are exactly `O1`-`O10`, each once. `GATE-TEST-7` had to be added
    to `gates.md` for the same reason, after a duplicate id let two rows discharge each other.
@@ -72,6 +72,12 @@ Seven properties, all in `test_objectives.py`, which discharges `GATE-TEST-8`:
 7. **Every objective short of `held` states a gap**, and the *claimed by no objective* section
    lists exactly the unsettled gates that appear under no row's *blocked on*. `CLAUDE.md` is blunt
    about what that section means: surface serving no objective is surface to remove.
+8. **The count of `held` gates no row cites is written down, and is exact.** Property 7 sees only
+   the unsettled half of the ledger: a gate that holds and that no objective claims was invisible
+   to it, and thirty-nine of them were when #273 counted. The *held, and claimed by no objective*
+   section states the number; the test recomputes it and fails in both directions, naming the
+   gates, so a held gate can neither join the uncited set quietly nor leave it without the
+   sentence being lowered.
 
 Deliberately not checked: whether a gap's prose is *true*. No test reads prose. What a test can do
 is make it impossible for the gap to be silently empty, and impossible for the gates underneath it
@@ -222,6 +228,32 @@ that was tested, correct, and constructed by nothing. Its row said the honest re
 bind it or retire it, and #265 retired it -- what it did was not wanted by any module, which is
 why no module bound it, and `CLAUDE.md` is blunt that surface serving no objective is surface to
 remove. The table returns the day a gate qualifies; the test recomputes it either way.
+
+## Held, and claimed by no objective
+
+**39 held gates are cited by no objective row.** The number is exact and the test recomputes it:
+it may not rise without a row claiming the gate or this sentence saying why it holds for nobody,
+and when it falls this sentence is lowered and the fall is the credit.
+
+The section above sees the unsettled half of the ledger and reads as *almost everything here
+serves an objective*. It means *almost every unsettled thing does*. The other half is this number,
+and it was found by counting (#273): nearly half the `held` rows assert a property that no stated
+direction claims. The list is not written here because a list of thirty-nine is a census and not
+a ratchet; the test names the members whenever the count moves, which is the moment somebody is
+standing in front of this table anyway.
+
+What the number holds is not junk, and that is the point of writing it down. Some of it is the
+apparatus checking itself -- `GATE-TEST-7` and `GATE-TEST-8` are the two ledgers' own consistency
+checks, `GATE-CFG-2` is `doctor` refusing a configuration read from the ref under review -- and no
+objective row will ever cite those, because they serve every row rather than one. Most of it is
+mechanism built, held and tested that no objective has yet been asked to carry: the transport
+retry and async-client rows (`GATE-RETRY-1` to `-4`, `GATE-ASYNC-1` to `-4`), the ledger and cost
+plumbing (`GATE-LEDGER-1`, `-3` to `-9`, `GATE-COST-1`, `-2`, `-5`), the three write guards
+(`GATE-GUARD-1` to `-3`) and `GATE-REVIEW-1`, the nearest held surface to the mission's
+collaboration clause. #240 added two objectives to carry what the mission named and no objective
+did; this number is what it has to move, one re-read row at a time -- and a gate whose row cannot
+be claimed by any objective's own text, after that reading, is what `CLAUDE.md` calls surface to
+remove.
 
 ## How the mission maps, and what it cost to say so
 
