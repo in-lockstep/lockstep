@@ -247,3 +247,86 @@ def test_every_layer_named_in_allowed_exists() -> None:
         f"ALLOWED names {sorted(missing)}, which are not packages or modules under src/in_lockstep. "
         f"An allowance for something that does not exist is never exercised and never fails."
     )
+
+
+#: Statements inside `cli.py`'s module-level helpers — the functions that are not click commands.
+#: Pinned at the measured value, and two-sided, for the reason `.coverage-floor` is: a
+#: one-directional ratchet with a stale floor is a dead gate.
+#:
+#: Statements rather than lines, and helpers rather than the file. A line count is what the
+#: trampoline gate tried first and it measured the wrong thing — it went red when a workflow
+#: carried its record out as a bundle, one more invocation and no more logic, and the tempting fix
+#: was to raise the number. It would be worse here: this codebase asks for dense comments, so a
+#: line count would charge a contributor for following the house style. An AST statement count
+#: cannot see a comment or a docstring at all.
+#:
+#: The commands are excluded because their statements are argument handling, which is the thing
+#: this module is FOR and should be free to grow. What is bounded is the other 900.
+CLI_HELPER_STATEMENTS = 900
+
+#: How far below the pin the count may drift before the pin itself is stale. Same shape as the
+#: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
+#: being asked to write down that it happened.
+CLI_HELPER_SLACK = 40
+
+
+def _helper_statements(path: Path) -> int:
+    import ast
+
+    tree = ast.parse(path.read_text())
+
+    def is_command(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+        for decorator in fn.decorator_list:
+            node = decorator.func if isinstance(decorator, ast.Call) else decorator
+            label = ast.unparse(node)
+            if "command" in label or "group" in label:
+                return True
+        return False
+
+    total = 0
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) or is_command(node):
+            continue
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.stmt):
+                continue
+            # A docstring is an expression statement holding a string, and this codebase writes
+            # long ones on purpose. Counting them would make the rule argue against the style.
+            if isinstance(inner, ast.Expr) and isinstance(getattr(inner, "value", None), ast.Constant):
+                if isinstance(inner.value.value, str):
+                    continue
+            total += 1
+    return total
+
+
+def test_the_composition_root_does_not_grow_logic() -> None:
+    """`cli` is wide by design and bounded by nothing, so logic accumulates there unnoticed.
+
+    The layering gate above enforces direction and acyclicity. Neither bounds width, and `cli`
+    reaches 18 of the other 20 packages where the next widest reaches 8 — correctly, because a
+    composition root is the one place that may name every implementation. The cost is that this is
+    the one module where a lifecycle decision can be added and no gate says anything: `_eval_subject`
+    and `_case_key` are identity decisions living in the argument-parsing layer, and each arrived
+    by a defensible local argument (#239).
+
+    So the bound is not a refactor and does not ask for one. It asks that the next such decision
+    come with the sentence explaining it, the way `MAX_STATEMENTS` does for a trampoline — a cap
+    works when it forces an argument each time it bites, and does not when it is raised on sight.
+
+    Two-sided. Over the pin, say why the composition root needed more logic, or move it down. Under
+    it by more than the slack, lower the pin and take the credit: a floor nobody lowers is how a
+    ratchet becomes a formality.
+    """
+    count = _helper_statements(SRC / "cli.py")
+    assert count <= CLI_HELPER_STATEMENTS, (
+        f"cli.py's helpers hold {count} statements, over the pinned {CLI_HELPER_STATEMENTS}. "
+        f"If this is a decision about what a run MEANS -- identity, keying, what a census counts, "
+        f"what a workflow dispatches to -- it belongs where a workflow can reach it and a test can "
+        f"run it without a CliRunner. If it is parsing, composing, rendering or translating, raise "
+        f"the pin in the same commit and say which."
+    )
+    assert count >= CLI_HELPER_STATEMENTS - CLI_HELPER_SLACK, (
+        f"cli.py's helpers hold {count} statements, {CLI_HELPER_STATEMENTS - count} below the "
+        f"pinned {CLI_HELPER_STATEMENTS}. Lower the pin to {count}: logic left the composition "
+        f"root, which is the direction this is for, and a floor nobody lowers stops being one."
+    )
