@@ -655,6 +655,22 @@ def _model_routes(report: Report, lockstep: Any) -> None:
                 'qualified: "<provider>:<model>".',
             )
             continue
+        # What the registration declares the model can do, in the order the invoker asks: can it
+        # do the job, then what does it cost. Every shipped AI verb asks for its answer in a
+        # schema, so a registration declaring it will not honour one is a route every shipped
+        # verb refuses before its first turn (GATE-MODEL-1) -- said here, where nothing is spent.
+        if not registry.registration_for(selected).caps.structured_output:
+            report.add(
+                "DOC152",
+                Severity.WARNING,
+                f"route {verb} -> {model_id!r} is registered as not answering with a schema, so a "
+                f"run would be refused",
+                "Every shipped AI verb needs its answer in a schema. Route the verb to a model whose "
+                "registration declares structured_output=True, or register this one so if it "
+                "honours a schema when asked. The refusal names the model and the capability, and "
+                "nothing is sent.",
+            )
+            continue
         # The same table the run builds, so "priced" here means priced there — including the
         # zero a free registration adds. Re-deriving the rule inline is how the two drift.
         table = table_for(registry, selected, bound)

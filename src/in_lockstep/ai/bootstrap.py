@@ -188,7 +188,14 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         data_policy=DataPolicy.INTERNAL,
         endpoint=local_url,
         auth_target=AuthTarget.MODEL_PROVIDER.value,
-        caps=ModelCaps(tool_use=True, structured_output=False),
+        # `structured_output` was `False` here for as long as the field meant a native JSON mode
+        # and was read by nothing. It is read now, and it means "answers a schema when asked" --
+        # which every shipped verb asks, `triage` included, and this repository routes its own
+        # triage here (`local:qwen3-8b`, the $0 path `docs/getting-started.md` shows). A refusal
+        # keyed on the old value would have refused the documented route. The registration covers
+        # every Ollama model, so it cannot know which of them honour a schema; an operator who
+        # knows theirs does not registers it under a name of their own with `False`.
+        caps=ModelCaps(tool_use=True, structured_output=True),
         # Free only when the endpoint is genuinely local. `free` lets `--model local:qwen3-8b`
         # run without a cost-table entry — but pointing OLLAMA_URL at a hosted endpoint must not
         # make hosted tokens read as free, which is the exact invariant `Registration.free`
@@ -259,6 +266,23 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     )
 
     return registry
+
+
+def caps_for(registry: ProviderRegistry, model: Model) -> ModelCaps | None:
+    """What the model's registration declares it can do, or `None` when nothing registers it.
+
+    `None` rather than a refusal, for the same reason `table_for` tolerates the same absence one
+    function down: an unregistered provider is refused where a provider is needed -- at
+    `provider_for`, on a real call -- and a dry run or a replay that never asks for one must not
+    fail on a lookup made for a check the invoker then skips. An undeclared capability is
+    unchecked, and `AiInvoker.caps` says why that is not a control failing open.
+    """
+    from ..llm.registry import ProviderRegistrationError
+
+    try:
+        return registry.registration_for(model).caps
+    except ProviderRegistrationError:
+        return None
 
 
 def table_for(registry: ProviderRegistry, model: Model, table: CostTable | None = None) -> CostTable:
@@ -570,6 +594,9 @@ def invoker_factory(
             # (GATE-RESIDENCY-1). Resolved per model, so a local Ollama route stays INTERNAL
             # while a hosted route through the same lockstep.py is EXTERNAL.
             data_policy=registry.data_policy_for(selected),
+            # And what the registration says its models can do, so a call that needs a schema or
+            # hands tools is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(registry, selected),
         )
 
     return build

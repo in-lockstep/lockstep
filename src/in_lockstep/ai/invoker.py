@@ -40,6 +40,7 @@ from ..llm.interface import (
     RateLimitError,
     TransientError,
 )
+from ..llm.registry import ModelCaps
 from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
 from ..privileged.egress import EgressPolicy
 from ..privileged.redact import Redact
@@ -212,6 +213,7 @@ class Invoker(Protocol):
         tools: ToolSet | None = None,
         run_tool: ToolRunner | None = None,
         policy: InvokePolicy | None = None,
+        schema: dict[str, Any] | None = None,
     ) -> Invocation: ...
 
 
@@ -229,6 +231,7 @@ class AiInvoker:
         egress: EgressPolicy | None = None,
         transcript: Any = None,
         data_policy: DataPolicy | None = None,
+        caps: ModelCaps | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -250,6 +253,14 @@ class AiInvoker:
         # by hand rather than through `invoker_factory` — is treated as UNKNOWN on a restricted
         # repository, because residency is the one control where "nobody said" must fail closed.
         self.data_policy = data_policy
+        # What the model's registration declares it can do (`ModelCaps`), for the two refusals in
+        # `run` that need it. `None` is an invoker built by hand rather than through the factory,
+        # and it is NOT treated as incapable: a capability nobody declared is not a capability
+        # nobody has, and unlike residency this is not a control where silence must fail closed
+        # -- a wrong refusal here costs a run somebody wanted, and a wrong pass costs a call the
+        # parser then refuses. So an undeclared invoker is unchecked, and says so nowhere, because
+        # there is nothing to say: the operator who wants the refusal registers the provider.
+        self.caps = caps
 
     async def run(
         self,
@@ -260,7 +271,12 @@ class AiInvoker:
         tools: ToolSet | None = None,
         run_tool: ToolRunner | None = None,
         policy: InvokePolicy | None = None,
+        schema: dict[str, Any] | None = None,
     ) -> Invocation:
+        """One model turn-loop. `schema` is the shape the caller needs the answer in, when it needs
+        one: it is not sent (the caller has already put it in the prompt, and `settle` repairs the
+        reply against it), it is what lets this refuse a model whose registration says it will not
+        honour one, before the first turn is paid for."""
         policy = policy or InvokePolicy()
         tools = tools or ToolSet.none()
         started = time.monotonic()
@@ -292,6 +308,33 @@ class AiInvoker:
                 f"registered {stated}, not INTERNAL; route to a provider whose registration "
                 f"says the bytes stay, or lift the classification deliberately",
             )
+
+        # GATE-MODEL-1. What the registration says the model can do, checked against what this
+        # call needs, ahead of pricing: whether a model can do the job is a prior question to what
+        # it would cost, and the answer was on the registration all along -- `structured_output`
+        # was declared for five providers and read by nothing, so an adopter who routed a verb at
+        # a model that cannot answer with a schema found out from `*.unparseable` after two paid
+        # calls rather than from a refusal naming the model (#274). BLOCKED, not FAILED: the
+        # adopter's choice is being declined, not broken, and the message says which line to
+        # change. An invoker with no declaration is not checked; the attribute says why.
+        if self.caps is not None:
+            if schema is not None and not self.caps.structured_output:
+                raise InvocationBlocked(
+                    "model.no_structured_output",
+                    f"model {self.model!r} is registered as not answering with a schema "
+                    f"(ModelCaps.structured_output=False), and this call needs its answer in one. "
+                    f"Route the verb to a model whose registration declares it, or register this "
+                    f"one with structured_output=True if it honours a schema when asked. Nothing "
+                    f"was sent and nothing was charged.",
+                )
+            if tools.tools and not self.caps.tool_use:
+                raise InvocationBlocked(
+                    "model.no_tool_use",
+                    f"model {self.model!r} is registered as not making tool calls "
+                    f"(ModelCaps.tool_use=False), and this session hands it "
+                    f"{len(tools.tools)} tool(s). Route the verb to a model whose registration "
+                    f"declares tool use. Nothing was sent and nothing was charged.",
+                )
 
         # An unpriced model is refused here, before any call. Pricing it at a default rate would
         # record a fabricated cost and budget against a number nobody chose.

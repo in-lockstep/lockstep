@@ -157,7 +157,12 @@ class TDD(ImplementStrategy):
         try:
             # -- Phase 1: red -------------------------------------------------------------------
             red_inv = await run_phase(
-                session, system, _with_directive(base, _RED_DIRECTIVE), package, prefix="implement"
+                session,
+                system,
+                _with_directive(base, _RED_DIRECTIVE),
+                package,
+                prefix="implement",
+                schema=IMPLEMENT_SCHEMA,
             )
 
             tests = session.workspace.changeset(ticket=ticket.key)
@@ -215,7 +220,12 @@ class TDD(ImplementStrategy):
 
             # -- Phase 2: green -----------------------------------------------------------------
             green_inv = await run_phase(
-                session, system, _with_directive(base, _green_directive(tests)), package, prefix="implement"
+                session,
+                system,
+                _with_directive(base, _green_directive(tests)),
+                package,
+                prefix="implement",
+                schema=IMPLEMENT_SCHEMA,
             )
         except PhaseError as e:
             return e.outcome

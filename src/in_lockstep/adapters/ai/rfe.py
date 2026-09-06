@@ -163,6 +163,7 @@ class AiRfe:
                 tools=self.tools,
                 run_tool=self.run_tool,
                 policy=self.policy,
+                schema=RFE_SCHEMA,
             )
             settled = await settle(
                 invoker,

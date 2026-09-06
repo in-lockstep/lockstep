@@ -210,6 +210,7 @@ class AiReview:
                 tools=self.tools,
                 run_tool=self.run_tool,
                 policy=policy,
+                schema=REVIEW_SCHEMA,
             )
             # The shape, settled: parsed and validated, and re-prompted ONCE with the parser's own
             # words when it is not (GATE-SHAPE-1). Inside this `try`, so a ceiling or a provider

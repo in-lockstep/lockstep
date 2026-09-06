@@ -279,7 +279,9 @@ class DiagnoseThenFix(FixStrategy):
         truncation, caught once around both phases in `execute`."""
         lens = session.prompts[prompt_id]()
         system = lens.system(session.layers) + "\n\n" + _schema_instruction(FIX_SCHEMA)
-        return await run_phase(session, system, lens.render(params, package), package, prefix="fix")
+        return await run_phase(
+            session, system, lens.render(params, package), package, prefix="fix", schema=FIX_SCHEMA
+        )
 
 
 def _test_spec(tree: str, expect: str) -> Test:

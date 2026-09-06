@@ -69,7 +69,9 @@ class Oneshot(ImplementStrategy):
         # an infrastructure failure, or a truncated answer all come back as `PhaseError` carrying
         # the Outcome to return — the mapping every strategy shared, now in one place.
         try:
-            invocation = await run_phase(session, system, messages, package, prefix="implement")
+            invocation = await run_phase(
+                session, system, messages, package, prefix="implement", schema=IMPLEMENT_SCHEMA
+            )
         except PhaseError as e:
             return e.outcome
 
