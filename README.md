@@ -60,6 +60,7 @@ still advertises.
 | Pack catalog | runs | a static `index.toml` in a git repo; `market add`/`search`/`lint`, receipts re-derived locally and refused when they disagree |
 | Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
 | Metrics report | runs | `report` reads the ledger back: outcomes, effort, spend, turns per strategy, what it keeps finding. `--html` writes one self-contained page, `--scm` adds merge and issue timings. Every number carries its denominator, and a field nobody measured is a dash |
+| Consistency across askers | runs | `report --by actor` splits the ledger by who asked: outcome mix, turns and spend per succeeded run, findings per run, and the spread between askers with every number carrying the runs it came from. Askers are stable pseudonyms unless `--names`; a run nobody is recorded as asking for is a `—` row, never an "unknown" bucket |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
 | Improvement loop | runs | `improve` reads the ledger for a finding that keeps coming back, drafts a change to the one declared `Improvable` body it is attributed to, measures the draft against the promoted corpus before opening anything — both arms over the same cases, `—` where nobody judged — and stages the change with its scorecard; `run improve/propose` is the job that holds the write token, and it enforces the open-proposal ceiling where the proposal is opened. It refuses before its first model call unless a trend qualifies, the body is writable by grant, and a promoted case fails against it. `improve --explain` reads the ledger and says what would stop a proposal, opening nothing and spending nothing |
 | Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
@@ -121,6 +122,7 @@ in-lockstep pack try <pack>      # measure it on your cases, replaying a cassett
 in-lockstep pack describe        # the receipt: what is bound, what it may do, what proves it
 in-lockstep doctor               # are the controls actually in place?
 in-lockstep report --by model    # what the ledger adds up to — and whether it was rewritten
+in-lockstep report --by actor    # are people getting consistent results? pseudonymous; --names to name them
 in-lockstep history --explain X  # one run's record, every field, in words
 in-lockstep egress-manifest      # the hosts a run may dial, for the proxy that enforces it
 in-lockstep gate --actor ...     # is this person allowed to fire a chat-ops trigger

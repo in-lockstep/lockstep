@@ -143,6 +143,13 @@ def test_a_runs_row_names_something_that_ships() -> None:
             and _importable("in_lockstep.workflows.improve", "improve_measure")
             and "improve" in commands
         ),
+        # The split and the spread, plus the command: a row that survived `keyed_by_actor` being
+        # deleted would be claiming a comparison nothing computes.
+        "Consistency across askers": (
+            _importable("in_lockstep.metrics", "keyed_by_actor")
+            and _importable("in_lockstep.metrics", "Spread")
+            and "report" in commands
+        ),
         "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,
         "RFE": "rfe" in SHIPPED_VERBS and "rfe" in commands,
         "Triage": "triage" in SHIPPED_VERBS and "triage" in commands,

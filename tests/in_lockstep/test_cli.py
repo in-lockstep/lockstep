@@ -3567,3 +3567,49 @@ def test_a_hand_written_adapter_that_bypasses_every_seam_is_named_not_hidden(rep
     )
     assert result.exit_code == 0, result.output
     assert "recorder never saw" in result.output, result.output
+
+
+def test_gate_team_1_report_by_actor_prints_the_spread_pseudonymously_and_names_only_on_request(
+    repo: Path,
+) -> None:
+    """GATE-TEAM-1, on the command. `--by actor` is the one `--by` value that shapes the full
+    report -- re-decided rather than slipped past the note that says `--by` does not -- and every
+    form of the output agrees about who `actor-1` is."""
+    import json
+
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    first = dict(
+        _seed_record("review.security", run="r1", ts="2026-09-01T00:00:00+00:00"),
+        ci_actor="amy",
+        cost_usd=0.1,
+    )
+    second = dict(
+        _seed_record("review.security", run="r2", ts="2026-09-02T00:00:00+00:00"),
+        ci_actor="zed",
+        cost_usd=0.3,
+    )
+    local = _seed_record("review.security", run="r3")
+    _seed_ledger(repo, first, second, local)
+
+    result = CliRunner().invoke(main, ["report", "--by", "actor"])
+    assert result.exit_code == 0, result.output
+    assert "note      --by actor" not in result.output, "actor is the exception, and says so by not noting"
+    assert "spend per success  actor-2 $0.3000  (1 of 1)   vs   actor-1 $0.1000  (1 of 1)" in result.output
+    assert "carried no identity" in result.output
+    assert "amy" not in result.output and "zed" not in result.output
+
+    named = CliRunner().invoke(main, ["report", "--by", "actor", "--names"])
+    assert named.exit_code == 0, named.output
+    assert "zed $0.3000  (1 of 1)   vs   amy $0.1000  (1 of 1)" in named.output
+
+    grouped = CliRunner().invoke(main, ["report", "--by", "actor", "--by-kind"])
+    assert grouped.exit_code == 0, grouped.output
+    assert "actor-1" in grouped.output and "—" in grouped.output and "amy" not in grouped.output
+
+    as_json = CliRunner().invoke(main, ["report", "--by", "actor", "--format", "json"])
+    assert as_json.exit_code == 0, as_json.output
+    assert set(json.loads(as_json.output)) == {"actor-1", "actor-2", "—"}
+
+    # The default report still names nobody, and still says who and how many.
+    plain = CliRunner().invoke(main, ["report"])
+    assert "actor-1                  1 run(s)" in plain.output and "amy" not in plain.output
