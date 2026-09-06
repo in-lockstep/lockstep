@@ -627,3 +627,138 @@ def test_the_learning_loops_own_runs_are_counted_apart_from_what_it_reads() -> N
     assert report.failure_rate.value == pytest.approx(1 / 2)
     assert "learning      1" in "\n".join(as_text(report))
     assert build([_record()]).meta_runs == 0
+
+
+# -- who and how: askers, pseudonyms, and the spread -------------------------------------------
+#
+# The hero of the site says everybody has the same model and nobody has the same results. The
+# report is where a team can see whether that is still true of them, and the number is the spread
+# between askers. Three disciplines around it: nobody is named by default, absent is a row and not
+# a bucket, and a small number stays small.
+
+
+def _asked(who: str, *, ts: str, via: str = "ci", **over: Any) -> dict[str, Any]:
+    """A record somebody asked for, by the host's word (`ci_actor`) or a person's (`approval`)."""
+    identity: dict[str, Any] = (
+        {"ci_actor": who} if via == "ci" else {"approval": {"by": who, "attended": False}}
+    )
+    return _record(ts=ts, **identity, **over)
+
+
+def test_askers_are_pseudonyms_by_default_numbered_by_first_appearance() -> None:
+    """`actor-1` is whoever appeared first in the window, by timestamp, not by count or by name:
+    that is what makes the pseudonym stable across two reports over the same records."""
+    # zed appears first by timestamp and last by name and by count, so an ordering by either of
+    # the wrong keys would number amy first. The ledger order is amy first, for the same reason.
+    records = [
+        _asked("amy", ts="2026-09-02T00:00:00+00:00", via="approval"),
+        _asked("amy", ts="2026-09-03T00:00:00+00:00", via="approval"),
+        _asked("zed", ts="2026-09-01T00:00:00+00:00"),
+    ]
+    team = build(records).team
+    assert [(row.name, row.runs) for row in team.actors] == [("actor-1", 1), ("actor-2", 2)]
+    assert build(records, names=True).team.actors[0].name == "zed"
+    text = "\n".join(as_text(build(records), actors=True))
+    page = as_html(build(records))
+    for login in ("amy", "zed"):
+        assert login not in text and login not in page
+    assert "actor-1" in text and "actor-1" in page
+    # The grouped-table keys agree with the full report about who actor-1 is.
+    assert [r["actor"] for r in metrics.keyed_by_actor(records)] == ["actor-2", "actor-2", "actor-1"]
+
+
+def test_names_reveal_the_login_only_when_asked_for() -> None:
+    records = [_asked("amy", ts="2026-09-01T00:00:00+00:00"), _asked("zed", ts="2026-09-02T00:00:00+00:00")]
+    named = build(records, names=True)
+    assert [row.name for row in named.team.actors] == ["amy", "zed"]
+    assert "amy" in "\n".join(as_text(named, actors=True)) and "amy" in as_html(named)
+    assert [r["actor"] for r in metrics.keyed_by_actor(records, names=True)] == ["amy", "zed"]
+
+
+def test_gate_team_1_a_run_carrying_no_identity_is_a_dash_row_and_never_the_largest_asker() -> None:
+    """GATE-TEAM-1, the absence half. A local run carries neither `ci_actor` nor `approval.by`.
+    It renders under `—` with its count, is not numbered, and is in no spread -- forty-five local
+    runs are not an asker for somebody to be compared against."""
+    records = [_record(), _record(), _record(), _asked("amy", ts="2026-09-01T00:00:00+00:00", cost_usd=0.10)]
+    team = build(records).team
+    assert [row.name for row in team.actors] == ["actor-1"]
+    assert team.nobody is not None and team.nobody.runs == 3
+    assert team.spreads == [], "one asker has no spread; the dash row must not supply the second"
+    text = "\n".join(as_text(build(records), actors=True))
+    assert "—               3 run(s)   carried no identity" in text
+    assert "unknown" not in text.lower()
+    assert "one asker; a spread needs two" in text
+    assert [r["actor"] for r in metrics.keyed_by_actor(records)] == ["—", "—", "—", "actor-1"]
+
+
+def test_gate_team_1_the_spread_names_top_and_bottom_with_both_denominators() -> None:
+    """GATE-TEAM-1, the comparison half. Per metric, the gap between the asker at the top and the
+    one at the bottom, each carrying the runs it was measured over -- so one run reads as one run
+    and not as a verdict."""
+    records = [
+        _asked("amy", ts="2026-09-01T00:00:00+00:00", cost_usd=0.10, turns=4),
+        _asked("amy", ts="2026-09-01T01:00:00+00:00", cost_usd=0.30, turns=6),
+        _asked("zed", ts="2026-09-02T00:00:00+00:00", cost_usd=0.02, turns=2),
+    ]
+    team = build(records).team
+    by_metric = {s.metric: s for s in team.spreads}
+    spend = by_metric["spend per success"]
+    assert (spend.high, spend.low) == ("actor-1", "actor-2")
+    assert spend.high_value.value == pytest.approx(0.20) and spend.high_value.total == 2
+    assert spend.low_value.total == 1
+    text = "\n".join(as_text(build(records), actors=True))
+    assert "spend per success  actor-1 $0.2000  (2 of 2)   vs   actor-2 $0.0200  (1 of 1)" in text
+    assert "turns per success  actor-1 5.0  (2 of 2)   vs   actor-2 2.0  (1 of 1)" in text
+    page = as_html(build(records))
+    assert "Consistency across askers" in page and "(2 of 2)" in page and "(1 of 1)" in page
+
+
+def test_per_asker_numbers_are_per_success_and_keep_the_denominator_they_lost() -> None:
+    """Turns and spend are over SUCCEEDED runs, with every success as the denominator. An asker
+    whose successes mostly carry no turn count reads `(1 of 2)`, and a blocked run is in the
+    outcome mix and in neither rate."""
+    records = [
+        _asked("amy", ts="2026-09-01T00:00:00+00:00", turns=3, cost_usd=0.10),
+        _asked("amy", ts="2026-09-01T01:00:00+00:00", cost_usd=0.10),
+        _asked("amy", ts="2026-09-01T02:00:00+00:00", status="blocked", decided=False, cost_usd=0.0),
+        _asked("amy", ts="2026-09-01T03:00:00+00:00", status="failed"),
+    ]
+    (row,) = build(records).team.actors
+    assert (row.succeeded, row.failed, row.blocked, row.runs) == (2, 1, 1, 4)
+    assert row.turns.render(places=1) == "3.0  (from 1 of 2)"
+    assert row.spend.value == pytest.approx(0.10) and row.spend.total == 2
+    assert row.failed_share.value == pytest.approx(1 / 3), "one failed of the three that reached a verdict"
+    assert "1 blocked" in "\n".join(as_text(build(records), actors=True))
+
+
+def test_what_one_asker_keeps_finding_counts_distinct_runs() -> None:
+    twice = {"count": 2, "items": [{"id": "review.security"}, {"id": "review.security"}]}
+    records = [
+        _asked("amy", ts="2026-09-01T00:00:00+00:00", findings=twice),
+        _asked(
+            "amy",
+            ts="2026-09-01T01:00:00+00:00",
+            findings={"count": 1, "items": [{"id": "review.path_not_in_diff"}]},
+        ),
+        _asked(
+            "amy",
+            ts="2026-09-01T02:00:00+00:00",
+            run_id="r3",
+            findings={"count": 1, "items": [{"id": "injection.x"}]},
+        ),
+    ]
+    (row,) = build(records).team.actors
+    assert dict(row.top_findings)["review.security"] == 1, "two occurrences in one run is one run"
+    assert "injection.x" not in dict(row.top_findings)
+    assert row.findings.value == pytest.approx(4 / 3)
+
+
+def test_two_spellings_of_one_person_are_two_askers_not_a_guess() -> None:
+    """`labeled:tpouyer` and `tpouyer` are one human on this repository's ledger, and the report
+    does not know that. Merging them would be an aliasing decision it has no evidence for; it
+    shows two askers, and the spread between them is a spread between spellings."""
+    records = [
+        _asked("tpouyer", ts="2026-09-01T00:00:00+00:00"),
+        _asked("labeled:tpouyer", ts="2026-09-02T00:00:00+00:00", via="approval"),
+    ]
+    assert len(build(records).team.actors) == 2

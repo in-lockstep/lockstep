@@ -1691,9 +1691,14 @@ def _with_delivery(report: Any) -> Any:
     "--by",
     "group_by",
     default="kind",
-    type=click.Choice(["kind", "workflow", "model", "strategy", "aspect", "status", "subject"]),
+    type=click.Choice(["kind", "workflow", "model", "strategy", "aspect", "status", "subject", "actor"]),
     show_default=True,
-    help="What one row aggregates over.",
+    help="What one row aggregates over. `actor` also turns the full report's who-and-how into the spread.",
+)
+@click.option(
+    "--names",
+    is_flag=True,
+    help="Name askers instead of the stable pseudonyms. The signal is the spread, not the person.",
 )
 @click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]), show_default=True)
 @click.option(
@@ -1714,7 +1719,7 @@ def _with_delivery(report: Any) -> Any:
     is_flag=True,
     help="Also ask the host what happened to the work: merges, and how long issues stayed open.",
 )
-def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm: bool) -> None:
+def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: str, with_scm: bool) -> None:
     """What the ledger adds up to: runs, failures, spend, effort, and what it keeps finding.
 
     Reads whichever store this repository records into — the orphan branch in a git repository,
@@ -1724,7 +1729,13 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
 
     `--scm` is opt-in because it needs a token and a network call, and because evidence this
     framework wrote and evidence it asked somebody else for are kept apart on the page.
+
+    `--by actor` is the one `--by` value that shapes the full report: it turns the who-and-how
+    section into a table per asker -- outcome mix, turns and spend per success, findings per run --
+    and the spread between askers, each number with the runs it came from. Askers are pseudonyms
+    unless `--names` is passed, because a report that reads as a leaderboard is gamed or resented.
     """
+    from . import metrics
     from .platform.ledger.store import summarize
 
     ledger = _ledger()
@@ -1750,21 +1761,25 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
     # outputs working unchanged: the json shape is somebody's script, and a grouped table is what
     # you want when you already know which column you are reading.
     if fmt == "table" and not grouped:
-        from . import metrics
-
         # `--by` reaches `summarize` below and nothing on this path, so a person who passed one and
         # got the full report was reading a page that had silently discarded their question. Said
         # rather than fixed by making `--by` change this report: the two outputs answer different
         # questions, and quietly turning one into the other would be a worse surprise than a line.
-        if click.get_current_context().get_parameter_source("group_by") is not ParameterSource.DEFAULT:
+        # `actor` is the exception, re-decided rather than slipped past: it does not regroup the
+        # report, it expands one section of it, which is what the flag's help says.
+        by_actor = group_by == "actor"
+        if (
+            not by_actor
+            and click.get_current_context().get_parameter_source("group_by") is not ParameterSource.DEFAULT
+        ):
             click.echo(
                 f"note      --by {group_by} applies to `--by-kind` and `--format json`, not this report"
             )
             click.echo("")
-        report = metrics.build(records)
+        report = metrics.build(records, names=names)
         if with_scm:
             report = _with_delivery(report)
-        for line in metrics.as_text(report):
+        for line in metrics.as_text(report, actors=by_actor):
             click.echo(line)
         # On this path too, and not only under `--by-kind`. The footer is what GATE-LEDGER-8
         # asserts, and a richer report that quietly stopped saying whether the history behind it
@@ -1782,7 +1797,12 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
             click.echo(f"{'page':<10}{html_path}")
         return
 
-    stats = summarize(records, by=group_by)
+    # The same pseudonyms the full report uses, so `actor-1` here is `actor-1` there. Derived onto
+    # copies rather than read off the record, because no record carries an `actor` key: the
+    # identity is `approval.by` or `ci_actor`, and the store's summariser reads one key.
+    stats = summarize(
+        metrics.keyed_by_actor(records, names=names) if group_by == "actor" else records, by=group_by
+    )
     if fmt == "json":
         payload = {
             key: {

@@ -92,7 +92,7 @@ to move without somebody standing in front of this table.
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
 | `O11` | The provider and the model are the adopter's, not ours | partial | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4` | `GATE-MODEL-1` | Registering a provider is a line in `lockstep.py`: six ship behind a registry, a constructed client whose base URL does not equal its registered `endpoint` is refused, a restricted repository blocks a model that is not registered `DataPolicy.INTERNAL` (including a hand-built invoker that declared no policy, which fails closed as undeclared), and `DEFAULT_COST_PER_M` appears nowhere -- an unpriced model is refused rather than priced by a guess. What is missing is the third refusal: `ModelCaps.structured_output` is declared per model and read by nothing, so a route to a model that cannot answer with a schema is found out by a failed call rather than by a refusal that names the model and the capability. |
-| `O12` | A second engineer is served, not obstructed | unmet | — | `GATE-TEAM-1` | The objective with the least under it, which is why it is written down rather than assumed. Nothing here measures whether a second engineer arriving at a repository is served: the ledger records who asked and what it cost, and no command splits by person, so a team cannot see whether two engineers running the same process get the same results. Effects that are collaborative -- the review conversation reaching the next `/fix`, a shared history branch -- are carried by gates about provenance and about records, and citing those here would be claiming a direction is served by mechanisms built for another one. An objective no gate carries can never be `held`, and this row is what that rule looks like when it is honest rather than embarrassing. |
+| `O12` | A second engineer is served, not obstructed | partial | `GATE-TEAM-1` | `GATE-TEAM-2` | The objective with the least under it, and since #164 no longer nothing. `history --explain` names who approved a run and who asked for it, and `report --by actor` splits the ledger by asker and prints the spread between askers with every number carrying its runs -- pseudonymously, with a `—` row for runs nobody is recorded as asking for. What it cannot yet do is ask the question of the runs a team mostly makes: a local run carries no identity, so on this repository forty-five of fifty-six records are under the dash and the spread it prints is between two spellings of one person. `GATE-TEAM-2` names the remedy the issue refused to make a default: an opt-in local identity. Until then the row is honest about being one gate wide, and about the dogfood ledger holding one engineer. |
 
 8 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
@@ -200,6 +200,16 @@ decided rather than closed. #266 asked whether the loop's before/after arm shoul
 and the row records the caller that would -- a post-merge comparison -- as the thing that does not
 exist yet. Recording a decision not to close a gate is the same act as closing one: the ledger
 says what is true, and the number stays where the evidence leaves it.
+
+Still eight, when #164 closed `GATE-TEAM-1`, and O12 moved from `unmet` to `partial` rather than to
+`held`. It could have read `held`: one gate carried it and nothing blocked it, which is the rule's
+letter. It does not, because the gate's own row says the dogfood ledger holds one human under two
+spellings and forty-five local runs with no identity at all -- so the spread the command prints
+on this repository is between spellings, not people. Rather than let one gate carry the mission's
+"teams" half on that evidence, the row names what is missing as a gate of its own: `GATE-TEAM-2`,
+an opt-in local identity, which the issue itself refused to make a default. That is the third
+time this ledger has kept a row short of `held` by naming the gate underneath, and the first time
+it did so on the way up from `unmet`.
 
 ## Claimed by no objective
 

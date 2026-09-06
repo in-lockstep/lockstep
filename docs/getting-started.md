@@ -342,7 +342,12 @@ in-lockstep report --by subject --by-kind
 
 `--by` selects what one row aggregates over, and it applies to that grouped table and to
 `--format json` — not to the full report, which always groups by kind. Pass it without either and
-the report says so rather than dropping your question.
+the report says so rather than dropping your question. The one exception is `--by actor`, which
+expands the full report's *who and how* section into a table per asker — outcome mix, turns and
+spend per succeeded run, findings per run — and the spread between askers, each number with the
+runs it came from. Askers are stable pseudonyms, numbered by first appearance, unless you pass
+`--names`; the signal is the spread, not the person. A run nobody is recorded as asking for — every
+local run — is a `—` row with its count, and is in no spread.
 
 A run whose model the framework did not choose carries no subject at all rather than a partial one,
 and `implement` and `fix` carry none either: those strategies append the repository's house rules at

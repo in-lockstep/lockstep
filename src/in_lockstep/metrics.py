@@ -96,6 +96,83 @@ class Group:
 
 
 @dataclass(frozen=True)
+class ActorRow:
+    """One asker, and what their runs add up to, every number beside the runs it came from.
+
+    `name` is a pseudonym unless the report was built with `names=True`. The login is not kept
+    anywhere else on the row, so a page rendered from the default report cannot name a person by
+    accident: the signal is the spread between askers, and a report that read as a leaderboard
+    would be gamed or resented, both of which destroy the number.
+    """
+
+    name: str
+    runs: int
+    succeeded: int
+    failed: int
+    errored: int
+    blocked: int
+    unclassified: int
+    #: Mean turns over the SUCCEEDED runs, with every succeeded run as the denominator -- so an
+    #: asker whose successes mostly carry no turn count reads as `(2 of 9)` rather than as a mean
+    #: over the two that did. Per success, because a run that stopped early took fewer turns for
+    #: the wrong reason.
+    turns: Measured
+    #: Mean spend per succeeded run, same denominator. Per success and never a total: a total
+    #: rewards running less, which is the opposite of what the framework exists for.
+    spend: Measured
+    #: Mean findings per run, over the runs that were not a control refusing.
+    findings: Measured
+    #: The finding ids that came back most for this asker, by distinct runs.
+    top_findings: list[tuple[str, int]]
+    #: Failures over the runs that reached a verdict of the work. `blocked` leaves the
+    #: denominator here as it does in the headline rate.
+    failed_share: Measured
+
+
+@dataclass(frozen=True)
+class Spread:
+    """One metric's gap between the asker at the top and the one at the bottom, both carrying
+    the runs they were measured over. Only exists where two askers were measured on it."""
+
+    metric: str
+    low: str
+    high: str
+    low_value: Measured
+    high_value: Measured
+
+
+@dataclass(frozen=True)
+class Team:
+    """Every asker the ledger names, and the runs it does not.
+
+    `actors` are ordered by first appearance in the window, which is what makes a pseudonym
+    stable across two reports over the same records. `nobody` holds the runs carrying neither an
+    approver nor a host actor -- a local run -- and it renders under `—` with its count rather
+    than as a bucket named "unknown" that quietly becomes the largest asker. It is in no spread.
+    """
+
+    actors: list[ActorRow] = field(default_factory=list)
+    nobody: ActorRow | None = None
+    spreads: list[Spread] = field(default_factory=list)
+    named: bool = False
+
+
+#: How many of an asker's recurring finding ids a row shows. Three, because the row is one line
+#: of a table somebody reads across askers, and the question is "does one person keep tripping
+#: the same thing", which the top of the list answers.
+ACTOR_FINDINGS_SHOWN = 3
+
+#: The metrics a spread is computed over, in the order they print. The label is what a reader
+#: sees; the attribute is the `Measured` on `ActorRow`.
+SPREAD_METRICS = (
+    ("spend per success", "spend"),
+    ("turns per success", "turns"),
+    ("findings per run", "findings"),
+    ("failed", "failed_share"),
+)
+
+
+@dataclass(frozen=True)
 class Report:
     """Everything the ledger can say about itself."""
 
@@ -142,7 +219,9 @@ class Report:
     top_findings: list[tuple[str, int]] = field(default_factory=list)
     injection_signals: int = 0
 
-    people: list[tuple[str, int]] = field(default_factory=list)
+    #: Who asked, and whether people are getting consistent results from the same process. Built
+    #: pseudonymously unless `build(..., names=True)`; see `Team`.
+    team: Team = field(default_factory=Team)
     unattended: Measured = Measured(None)
     against_dirty_tree: Measured = Measured(None)
 
@@ -418,20 +497,125 @@ def _is_number(value: Any) -> TypeGuard[float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _people(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
-    """Who asked for runs. `approval.by` is what a person claimed; `ci_actor` is what the host
-    said. Both are counted, and a run carrying neither is nobody's rather than anonymous."""
-    who: Counter[str] = Counter()
+def actor_of(record: dict[str, Any]) -> str:
+    """Who asked for a run, or "" when the record does not say.
+
+    `approval.by` is what a person claimed, `ci_actor` is what the host said, and the claim wins
+    because it is the more specific one: `labeled:tpouyer` says the label trigger acted for that
+    person, where the host actor says only who pushed the button. Two spellings of one human are
+    two askers here, deliberately -- merging them would be an aliasing decision this module has no
+    evidence for, and a report that quietly folded identities together would be inventing.
+    """
+    approval = record.get("approval")
+    if isinstance(approval, dict) and approval.get("by"):
+        return str(approval["by"])
+    return str(record.get("ci_actor") or "")
+
+
+def _pseudonyms(records: list[dict[str, Any]]) -> dict[str, str]:
+    """Login -> `actor-N`, numbered by first appearance in the window.
+
+    First appearance by timestamp, and by ledger order for records that carry none -- an undated
+    record cannot be placed, and putting it first or last would be a claim about when it ran.
+    The order is what makes a pseudonym stable: two reports over the same records name the same
+    person the same way, and a report over a longer window extends the numbering rather than
+    reshuffling it.
+    """
+    first: dict[str, tuple[str, int]] = {}
+    for index, record in enumerate(records):
+        who = actor_of(record)
+        if not who:
+            continue
+        stamp = record.get("ts")
+        # A record with no `ts` sorts after every dated one -- "~" is past every digit -- and
+        # then by position, so the fallback is stable rather than arbitrary.
+        key = (str(stamp) if isinstance(stamp, str) else "~", index)
+        if who not in first or key < first[who]:
+            first[who] = key
+    ordered = sorted(first, key=lambda who: first[who])
+    return {who: f"actor-{n}" for n, who in enumerate(ordered, start=1)}
+
+
+def _actor_row(name: str, group: list[dict[str, Any]]) -> ActorRow:
+    statuses = Counter(str(r.get("status", "")) for r in group)
+    successes = [r for r in group if r.get("status") == "succeeded"]
+    working = [r for r in group if not _refused(r)]
+    verdicts = [r for r in working if r.get("status") in VERDICTS]
+    runs_by_id: dict[str, set[str]] = {}
+    counts: list[float] = []
+    for index, record in enumerate(working):
+        found = record.get("findings")
+        if not isinstance(found, dict):
+            continue
+        if isinstance(found.get("count"), int) and not isinstance(found.get("count"), bool):
+            counts.append(float(found["count"]))
+        for item in found.get("items") or []:
+            if isinstance(item, dict) and item.get("id") and not str(item["id"]).startswith("injection."):
+                runs_by_id.setdefault(str(item["id"]), set()).add(str(record.get("run_id") or f"#{index}"))
+    top = sorted(((fid, len(runs)) for fid, runs in runs_by_id.items()), key=lambda r: (-r[1], r[0]))
+    return ActorRow(
+        name=name,
+        runs=len(group),
+        succeeded=statuses.get("succeeded", 0),
+        failed=statuses.get("failed", 0),
+        errored=statuses.get("errored", 0),
+        blocked=statuses.get("blocked", 0),
+        unclassified=sum(1 for r in group if r.get("status") not in VERDICTS),
+        turns=_measure(_numbers(successes, "turns"), len(successes), "mean"),
+        spend=_measure(_numbers(successes, "cost_usd"), len(successes), "mean"),
+        findings=_measure(counts, len(working), "mean"),
+        top_findings=top[:ACTOR_FINDINGS_SHOWN],
+        failed_share=_share(verdicts, lambda r: r.get("status") in FAILED),
+    )
+
+
+def _team(records: list[dict[str, Any]], *, names: bool) -> Team:
+    """Every asker, the runs nobody asked for, and the spread between askers.
+
+    The spread is the number the section exists for: per metric, the gap between the asker at
+    the top and the one at the bottom, each carrying its denominator. It needs two askers with a
+    measured value; one asker has no spread, and saying so is better than printing a gap of
+    nothing. The `—` row is never in it, because forty-five local runs with no identity are not
+    an asker to be compared against.
+    """
+    pseudonyms = _pseudonyms(records)
+    groups: dict[str, list[dict[str, Any]]] = {}
+    unnamed: list[dict[str, Any]] = []
     for record in records:
-        approval = record.get("approval")
-        name = ""
-        if isinstance(approval, dict):
-            name = str(approval.get("by") or "")
-        if not name:
-            name = str(record.get("ci_actor") or "")
-        if name:
-            who[name] += 1
-    return who.most_common(TOP_N)
+        who = actor_of(record)
+        if who:
+            groups.setdefault(who, []).append(record)
+        else:
+            unnamed.append(record)
+    actors = [_actor_row(who if names else pseudonyms[who], groups[who]) for who in pseudonyms]
+    nobody = _actor_row("—", unnamed) if unnamed else None
+    spreads: list[Spread] = []
+    for label, attr in SPREAD_METRICS:
+        measured = [(row, getattr(row, attr)) for row in actors if getattr(row, attr).value is not None]
+        if len(measured) < 2:
+            continue
+        low = min(measured, key=lambda pair: pair[1].value or 0.0)
+        high = max(measured, key=lambda pair: pair[1].value or 0.0)
+        spreads.append(
+            Spread(metric=label, low=low[0].name, high=high[0].name, low_value=low[1], high_value=high[1])
+        )
+    return Team(actors=actors, nobody=nobody, spreads=spreads, named=names)
+
+
+def keyed_by_actor(records: list[dict[str, Any]], *, names: bool = False) -> list[dict[str, Any]]:
+    """The records with an `actor` key, for the grouped table and the JSON shape.
+
+    The same pseudonyms `build` uses, so `--by actor --by-kind` and the full report agree on who
+    `actor-1` is. A record carrying no identity is keyed `—`, which is the rule the full report
+    follows: absent is a row of its own, not a bucket called unknown.
+    """
+    pseudonyms = _pseudonyms(records)
+    out = []
+    for record in records:
+        who = actor_of(record)
+        key = (who if names else pseudonyms[who]) if who else "—"
+        out.append({**record, "actor": key})
+    return out
 
 
 def _ticket_of(record: dict[str, Any]) -> str:
@@ -465,8 +649,13 @@ def _attempts(records: list[dict[str, Any]]) -> list[tuple[str, int, Measured]]:
     return rows
 
 
-def build(records: list[dict[str, Any]]) -> Report:
-    """Everything above, over one list of ledger records."""
+def build(records: list[dict[str, Any]], *, names: bool = False) -> Report:
+    """Everything above, over one list of ledger records.
+
+    `names` is the one switch that changes what a page can say about a person. Off, every asker
+    is `actor-N`; on, their login. Off is the default because the signal a team needs is the
+    spread, not the leaderboard.
+    """
     total = len(records)
     if not total:
         return Report(records=0)
@@ -522,7 +711,7 @@ def build(records: list[dict[str, Any]]) -> Report:
         ),
         top_findings=top_findings,
         injection_signals=injections,
-        people=_people(records),
+        team=_team(records, names=names),
         unattended=_share(
             records, lambda r: isinstance(r.get("approval"), dict) and r["approval"].get("attended") is False
         ),
@@ -799,8 +988,12 @@ def as_trend_text(trends: list[Trend], *, limit: int = TOP_N) -> list[str]:
     return out
 
 
-def as_text(report: Report) -> list[str]:
-    """The terminal form. One screen, and every number carrying its denominator."""
+def as_text(report: Report, *, actors: bool = False) -> list[str]:
+    """The terminal form. One screen, and every number carrying its denominator.
+
+    `actors` turns the who-and-how section into the full per-asker table with the spread -- what
+    `report --by actor` prints. Off, the section is the seed it always was: who, and how many.
+    """
     if not report.records:
         return ["no records yet; the first run that writes one creates them"]
 
@@ -877,12 +1070,24 @@ def as_text(report: Report) -> list[str]:
         out += ["  —  (no record carries a ticket)"]
 
     hygiene: list[str] = []
-    for name, count in report.people:
-        hygiene += [f"  {name:<24} {count} run(s)"]
+    if actors:
+        hygiene += _actor_table(report.team)
+    else:
+        for row in report.team.actors:
+            hygiene += [f"  {row.name:<24} {row.runs} run(s)"]
+        if report.team.nobody is not None:
+            hygiene += [f"  {'—':<24} {report.team.nobody.runs} run(s)   (carried no identity: a local run)"]
     if report.unattended.value:
         hygiene += [f"  unattended    {report.unattended.value:.0%} of runs, with nobody watching"]
     if report.against_dirty_tree.value:
         hygiene += [f"  dirty tree    {report.against_dirty_tree.value:.0%} of runs saw uncommitted changes"]
+    if report.team.actors and not report.team.named:
+        # Last, so the section closes on what the names are rather than opening a rate under it.
+        hygiene += [
+            "  (pseudonyms, by first appearance; `--names` to name them"
+            + ("" if actors else "; `report --by actor` for the spread")
+            + ")"
+        ]
     if hygiene:
         out += ["", "who and how"] + hygiene
 
@@ -898,6 +1103,51 @@ def as_text(report: Report) -> list[str]:
 
     out += ["", "A dash is a number nobody measured. It is not a zero."]
     return out
+
+
+def _actor_table(team: Team) -> list[str]:
+    """The per-asker table and the spread, as terminal lines. Every number beside its runs."""
+    out: list[str] = []
+    for row in team.actors:
+        mix = f"{row.succeeded} ok, {row.failed} failed, {row.errored} errored, {row.blocked} blocked"
+        if row.unclassified:
+            mix += f", {row.unclassified} no verdict"
+        out += [f"  {row.name:<12} {row.runs:>4} run(s)   {mix}"]
+        out += [
+            f"               turns/success {row.turns.render(places=1)}   "
+            f"spend/success {_amount(row.spend)}   findings/run {row.findings.render(places=1)}"
+        ]
+        if row.top_findings:
+            out += ["               " + ", ".join(f"{fid} {n} run(s)" for fid, n in row.top_findings)]
+    if team.nobody is not None:
+        out += [f"  {'—':<12} {team.nobody.runs:>4} run(s)   carried no identity (a local run); in no spread"]
+    if not team.actors:
+        out += ["  —  (no record names who asked; only CI and unattended runs carry an asker)"]
+    if team.spreads:
+        out += ["", "spread   top against bottom, each with the runs it was measured over"]
+        for spread in team.spreads:
+            high = _spread_value(spread.metric, spread.high_value)
+            low = _spread_value(spread.metric, spread.low_value)
+            out += [f"  {spread.metric:<18} {spread.high} {high}   vs   {spread.low} {low}"]
+    elif len(team.actors) == 1:
+        out += ["", "spread   —  (one asker; a spread needs two)"]
+    return out
+
+
+def _spread_value(metric: str, measured: Measured) -> str:
+    """One side of a spread, in the unit the metric is read in, ALWAYS with the runs it came from.
+
+    `Measured.render` labels a number only when it is partial, which is right for a table whose
+    runs column is beside it. A spread line has no such column, and an asker with one run reads
+    as a verdict without it -- "$0.0400 vs $0.0200" says one person spends twice as much, where
+    "(1 of 1)" says one run happened.
+    """
+    if metric == "failed":
+        return _pct(measured)
+    shown = _amount(measured) if metric.startswith("spend") else measured.render(places=1)
+    if measured.value is None or not measured.complete:
+        return shown
+    return f"{shown}  ({measured.of} of {measured.total})"
 
 
 def _amount(measured: Measured) -> str:
@@ -945,6 +1195,7 @@ def as_html(report: Report, *, title: str = "in-lockstep — what the ledger say
         _bars("Turns per piece of work", [(n, m.value or 0) for n, m in report.turns_by_strategy], GOLD, ""),
         _bars("What it keeps finding", report.top_findings, MINT, ""),
         _kinds_table(report),
+        _team_section(report),
         _delivery(report),
         _foot(report),
     ]
@@ -1048,6 +1299,55 @@ def _kinds_table(report: Report) -> str:
     )
     return f"""<section><h2>By kind of work</h2><div class=scroll><table>
 <tr><th>kind</th><th>runs</th><th>failed</th><th>median</th><th>spend</th></tr>{rows}</table></div></section>"""
+
+
+def _team_section(report: Report) -> str:
+    """Consistency across askers: the comparison the site's hero promises to make visible.
+
+    A table rather than bars, because the point is reading one asker against another across
+    four columns, and every cell carries its denominator the way the terminal form does. Gold for
+    the spread, which is about the people; mint for the rest.
+    """
+    team = report.team
+    if not team.actors and team.nobody is None:
+        return ""
+
+    def cell(row: ActorRow) -> str:
+        mix = f"{row.succeeded} ok / {row.failed} failed / {row.errored} errored / {row.blocked} blocked"
+        keeps = ", ".join(f"{fid} ({n})" for fid, n in row.top_findings) or "—"
+        return (
+            f"<tr><td>{_esc(row.name)}</td><td>{row.runs}</td><td>{_esc(mix)}</td>"
+            f"<td>{_esc(row.turns.render(places=1))}</td><td>{_esc(_amount(row.spend))}</td>"
+            f"<td>{_esc(row.findings.render(places=1))}</td><td>{_esc(keeps)}</td></tr>"
+        )
+
+    rows = "".join(cell(row) for row in team.actors)
+    if team.nobody is not None:
+        rows += (
+            f"<tr><td>—</td><td>{team.nobody.runs}</td>"
+            f"<td colspan=5>carried no identity — a local run; in no spread</td></tr>"
+        )
+    spread = ""
+    if team.spreads:
+        items = "".join(
+            f"<li><b style='color:{GOLD}'>{_esc(s.metric)}</b>: {_esc(s.high)} "
+            f"{_esc(_spread_value(s.metric, s.high_value))} against {_esc(s.low)} "
+            f"{_esc(_spread_value(s.metric, s.low_value))}</li>"
+            for s in team.spreads
+        )
+        spread = (
+            f"<p class=sub>The spread, top against bottom, each with its denominator:</p><ul>{items}</ul>"
+        )
+    elif len(team.actors) == 1:
+        spread = "<p class=sub>One asker; a spread needs two.</p>"
+    who = (
+        ""
+        if team.named
+        else "<p class=sub>Askers are pseudonyms, numbered by first appearance. The signal is the spread.</p>"
+    )
+    return f"""<section><h2>Consistency across askers</h2>{who}<div class=scroll><table>
+<tr><th>asker</th><th>runs</th><th>outcomes</th><th>turns / success</th><th>spend / success</th>
+<th>findings / run</th><th>keeps finding</th></tr>{rows}</table></div>{spread}</section>"""
 
 
 def _delivery(report: Report) -> str:
