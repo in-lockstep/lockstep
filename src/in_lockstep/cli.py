@@ -1826,24 +1826,57 @@ def report_cmd(group_by: str, fmt: str, grouped: bool, html_path: str, with_scm:
     is_flag=True,
     help="Read the ledger and say what would stop a proposal. Opens nothing, spends nothing.",
 )
-def improve_cmd(explain: bool) -> None:
-    """Would a prompt change be worth proposing, and what would stop it?
+@click.option(
+    "--model", default="anthropic:claude-sonnet-4-6", help="The drafting model, when lockstep.py routes none."
+)
+@click.option("--corpus", default="", type=click.Path(), help="Promoted cases. Defaults to evidence/cases.")
+@click.option("--budget", type=float, default=None, help="Hard ceiling, in USD.")
+@click.option("--approve", is_flag=True, help="You are the human watching this run.")
+@click.option("--approved-by", default="", help="Who asked, when nobody is watching. Recorded.")
+@click.option(
+    "--record/--no-record",
+    default=None,
+    help="Keep this run's model calls. On by default; --no-record declines.",
+)
+@click.option(
+    "--cassette", default="", type=click.Path(), help="Where to keep it. Must be outside the repository."
+)
+def improve_cmd(
+    explain: bool,
+    model: str,
+    corpus: str,
+    budget: float | None,
+    approve: bool,
+    approved_by: str,
+    record: bool | None,
+    cassette: str,
+) -> None:
+    """Propose a prompt change the record supports, or say what stops one.
 
-    `--explain` is the whole command today. It reads the ledger this repository already wrote,
-    names the body a recurring finding is attributed to, asks the guard whether that path is even
-    writable, and lists the ceilings a proposal run would meet. It reaches no model, holds no key,
-    writes no ledger record and opens nothing.
+    Without a flag this runs `improve/measure` in-process: it reads the ledger for a qualifying
+    trend, drafts a change to the one declared body that trend is attributed to, re-asks every
+    promoted case that body is evidence for against the draft, and stages the change with its
+    scorecard when the draft improved the measurement. It refuses before the first model call
+    unless a trend qualifies, the body is writable by grant, and a promoted case fails against the
+    body as it stands -- each refusal is `blocked`, exit 3, and costs nothing. Opening the staged
+    change is `in-lockstep run improve/propose`, the job that holds a write token.
 
-    Without `--explain` it refuses, exit 3. Nothing drafts a prompt change yet, and a command that
-    printed a summary for work it had not done is the failure this framework exists to refuse.
+    `--explain` reads the ledger and names what would stop a proposal. It reaches no model, holds
+    no key, writes no ledger record and opens nothing.
     """
     from . import metrics
 
     if not explain:
-        click.echo("improve   refused: nothing drafts a prompt change yet.")
-        click.echo("          `--explain` reads the ledger and names the ceiling that would stop a")
-        click.echo("          proposal. It opens nothing and spends nothing.")
-        raise SystemExit(EXIT_BLOCKED)
+        _improve_measure(
+            model=model,
+            corpus=corpus,
+            budget=budget,
+            approve=approve,
+            approved_by=approved_by,
+            record=record,
+            cassette=cassette,
+        )
+        return
 
     lockstep, _recorder = _default_lockstep()
     # WITH the lockstep, unlike `report` and `_explain_run`, which call `_ledger()` bare. Every
@@ -1889,8 +1922,12 @@ def improve_cmd(explain: bool) -> None:
         else:
             click.echo("          attributed: —  (no recorded finding matches what it answers)")
         refusal = guard.check_path(body.body)
-        if refusal is not None:
-            click.echo(f"guard     refused — tier {refusal.tier}, rule {refusal.rule}")
+        if refusal is not None and guard.check_path(body.body, workflow_id="improve/propose") is None:
+            # Named by a tier AND lifted for exactly the workflow that writes: the state
+            # GATE-IMPROVE-3 asks for, and the one `improve` proceeds under.
+            click.echo(f"guard     granted to improve/propose — tier {refusal.tier}, rule {refusal.rule}")
+        elif refusal is not None:
+            click.echo(f"guard     refused — tier {refusal.tier}, rule {refusal.rule}; no grant lifts it")
         else:
             # Said this way on purpose. `prompts/` in tier 2 is anchored at the repository root, so
             # a body under `src/in_lockstep/prompts/` matches neither tier and is writable because
@@ -1943,8 +1980,66 @@ def improve_cmd(explain: bool) -> None:
     click.echo(f"  budget          {stated or '—  (this lifecycle declares no ceiling)'}")
     click.echo(f"  daily           {daily}")
     click.echo("")
-    click.echo("opens     nothing. `in-lockstep improve` without --explain exits 3: no mechanism")
-    click.echo("          drafts a prompt change yet.")
+    click.echo("opens     nothing here. `in-lockstep improve` runs improve/measure, which refuses before")
+    click.echo("          the first model call unless a trend qualifies, the body is granted, and a")
+    click.echo("          promoted case fails against it; `run improve/propose` opens what it staged.")
+
+
+def _improve_measure(
+    *,
+    model: str,
+    corpus: str,
+    budget: float | None,
+    approve: bool,
+    approved_by: str,
+    record: bool | None,
+    cassette: str,
+) -> None:
+    """`in-lockstep improve`: the measuring half, in-process, with shipped defaults for what the
+    module left unbound -- the same composition `implement` does for its adapter."""
+    from .adapters.ai import AiImprove, Draft, Measure
+    from .core.improve import Improver
+    from .core.spend import Budget
+    from .core.workflow import get
+    from .improver import CorpusImprover
+    from .middleware.approval import ApprovalGate
+    from .workflows import improve as improve_workflows
+
+    lockstep, recorder = _default_lockstep()
+    keeping = _recording(record=record)
+    if budget is not None:
+        lockstep.budget = Budget(usd=budget)
+    source = click.get_current_context().get_parameter_source
+    # The flag wins when typed; otherwise the module's route, and the CLI's default only when the
+    # module routed nothing -- so a repository that chose its drafting model is not overridden by
+    # a default it never saw.
+    if source("model") is not ParameterSource.DEFAULT or "improve" not in lockstep.models.routes:
+        lockstep.models.route("improve", model)
+    if not lockstep.container.has(Draft):
+        adapter = AiImprove()
+        lockstep.bind(Draft, adapter)
+        lockstep.bind(Measure, adapter)
+    if not lockstep.container.has(Improver):
+        where = Path(corpus) if corpus else Path(lockstep.repo.root) / "evidence" / "cases"
+        lockstep.bind(Improver, CorpusImprover(where))
+    if get(improve_workflows.MEASURE) is None:
+        improve_workflows.register()
+    approval = _approval(approve, approved_by)
+    if approval.granted and not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
+        lockstep.middleware = [*lockstep.middleware, ApprovalGate()]
+    entry = get(improve_workflows.MEASURE)
+    click.echo("opens     nothing here; `in-lockstep run improve/propose` opens what this stages")
+    _run_registered(
+        lockstep,
+        recorder,
+        entry,
+        (),
+        False,
+        approval,
+        record=keeping,
+        asked=record is True,
+        cassette=cassette,
+    )
 
 
 @main.command(name="show-workflow")
@@ -1991,8 +2086,9 @@ def show_workflow_cmd(name: str, registered: bool) -> None:
 
     from .workflows import fix as fix_workflows
     from .workflows import implement as implement_workflows
+    from .workflows import improve as improve_workflows
 
-    families = {"implement": implement_workflows, "fix": fix_workflows}
+    families = {"implement": implement_workflows, "fix": fix_workflows, "improve": improve_workflows}
     if not name:
         click.echo("families")
         for family, module in families.items():

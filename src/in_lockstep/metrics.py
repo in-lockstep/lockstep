@@ -109,6 +109,10 @@ class Report:
     failure_rate: Measured = Measured(None)
     undecided_rate: Measured = Measured(None)
     blocked: int = 0
+    #: Runs of the learning loop itself (`improve/*` workflows), counted apart from the runs it
+    #: reads. Zero when nothing has run it, which is a measured zero: the field is derived from
+    #: the workflow id every dispatched run carries.
+    meta_runs: int = 0
     #: Records whose status is not a verdict. Never folded into the failure rate's denominator.
     unclassified: int = 0
     top_reasons: list[tuple[str, int]] = field(default_factory=list)
@@ -473,6 +477,12 @@ def build(records: list[dict[str, Any]]) -> Report:
     # The failure rate is a share of the records that carry a verdict. A record that carries none
     # is not evidence of success, and putting it in the denominator says it is.
     judged = [r for r in records if r.get("status") in VERDICTS]
+    # And a refused record leaves the DENOMINATOR too, not only the numerator. `blocked` was never a
+    # failure here, but it sat under the rate, so every control that fired made the rate fall: a
+    # scheduled learning-loop run refusing weekly for nothing -- the ordinary state of a corpus at
+    # its ceiling -- would have manufactured an improving failure rate out of nothing improving
+    # (#163's design panel found this on the ledger before the loop existed). Counted apart below.
+    verdicts = [r for r in judged if not _refused(r)]
 
     return Report(
         records=total,
@@ -480,12 +490,15 @@ def build(records: list[dict[str, Any]]) -> Report:
         runs_by_kind=_group(records, "kind"),
         runs_by_model=_group(records, "model"),
         by_week=_weeks(records),
-        failure_rate=_share(judged, lambda r: r.get("status") in FAILED),
+        failure_rate=_share(verdicts, lambda r: r.get("status") in FAILED),
         # Over the judged records as well: a schema-4 dict-returning workflow record carries
         # `decided: true` as a default nobody measured, not as a fact about the run.
         undecided_rate=_share(judged, lambda r: r.get("decided") is False),
-        blocked=sum(1 for r in records if r.get("status") == "blocked"),
+        blocked=sum(1 for r in records if _refused(r)),
         unclassified=total - len(judged),
+        # The learning loop's own runs, apart. A run that proposes a change to a prompt is a run
+        # ABOUT the other runs, and folding it into their outcomes would let the loop grade itself.
+        meta_runs=sum(1 for r in records if str(r.get("workflow") or "").startswith("improve/")),
         top_reasons=reasons.most_common(TOP_N),
         cost_total=_measure(_numbers(records, "cost_usd"), total),
         cost_per_run=_measure(_numbers(records, "cost_usd"), total, "mean"),
@@ -798,7 +811,11 @@ def as_text(report: Report) -> list[str]:
     out += ["outcomes"]
     out += [f"  failed        {_pct(report.failure_rate)}"]
     out += [f"  decided none  {_pct(report.undecided_rate)}"]
-    out += [f"  blocked       {report.blocked}  (a control stopping a run is the control working)"]
+    out += [
+        f"  blocked       {report.blocked}  (a control stopping a run is the control working; not in a rate)"
+    ]
+    if report.meta_runs:
+        out += [f"  learning      {report.meta_runs}  (the improve loop's own runs, counted apart)"]
     if report.unclassified:
         out += [
             f"  no verdict    {report.unclassified}  (written before schema 5 by a workflow that "

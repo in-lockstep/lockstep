@@ -15,14 +15,15 @@ from whichever branch is under review.
 
 from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
-from in_lockstep.adapters.ai import TDD, DiagnoseThenFix
+from in_lockstep.adapters.ai import TDD, AiImprove, DiagnoseThenFix, Draft, Measure
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.core.changes import DENY_ALWAYS, ChangeGuard, PathPolicy
-from in_lockstep.core.improve import Improvable
+from in_lockstep.core.changes import DENY_ALWAYS, DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
+from in_lockstep.core.improve import Improvable, Improver
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.spend import Budget
+from in_lockstep.improver import CorpusImprover
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.scm import GitHubScm, Scm
@@ -48,7 +49,21 @@ lockstep = Lockstep.detect()
 # Built by extension rather than by editing the framework's tuple, which is what `PathPolicy`
 # is for (O8) — and `_matches` takes an explicit `always=` flag precisely so that a repository
 # constructing a new tuple here does not silently lose the basename and suffix rules.
-lockstep.guard = ChangeGuard(PathPolicy(deny_always=(*DENY_ALWAYS, "evidence/")))
+lockstep.guard = ChangeGuard(
+    PathPolicy(
+        deny_always=(*DENY_ALWAYS, "evidence/"),
+        # The shipped prompt bodies. `prompts/` is tier 2 anchored at the repository root, and this
+        # repository's bodies live under `src/in_lockstep/prompts/`, which matched neither tier:
+        # writable because nothing named it, which `improve --explain` printed as "permitted by
+        # omission" for as long as that was true. Named now, and granted to exactly the workflow
+        # that opens a prompt proposal, so the learning loop's one write is by grant and never by
+        # absence (GATE-IMPROVE-3). No other workflow may write there, and `improve/measure` refuses
+        # before spending if this grant is missing.
+        deny_unless_granted=(*DENY_UNLESS_GRANTED, "src/in_lockstep/prompts/"),
+        grants=frozenset({"src/in_lockstep/prompts/"}),
+        granted_to_workflow="improve/propose",
+    )
+)
 
 # -- deterministic verbs ------------------------------------------------------------
 #
@@ -228,8 +243,9 @@ lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
 # the 27 recorded runs; every other id is three runs or fewer. Adding the rest would be declaring
 # attributions nobody could act on.
 #
-# It changes nothing on its own. `improve` opens nothing and spends nothing today, and the body
-# named here is not writable by any grant — `improve --explain` prints that verdict beside it.
+# It changes nothing on its own. `improve --explain` reads it and prints the guard's verdict on
+# the path; `improve` proposes against it only when a trend qualifies AND a promoted case fails
+# against the body as it stands, and it is granted below to the one workflow that writes.
 lockstep.improve = (
     Improvable(
         body="src/in_lockstep/prompts/review/security.md",
@@ -259,6 +275,11 @@ lockstep.models.route("triage", "local:qwen3-8b")
 # the reproducer pass — and it is the verb the loop retries, so the cheaper model is the one that
 # should be running three times rather than once.
 lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
+# Opus for the drafter, as for implement: rewriting a prompt body so that named cases would pass
+# is a judgment over prose, made once per proposal. The MEASURING calls do not use this route --
+# each re-asks a promoted case against the model that case was recorded on, because a comparison
+# that also changed the model would be a comparison of two things.
+lockstep.models.route("improve", "anthropic:claude-opus-4-6")
 
 # -- the workshop -------------------------------------------------------------------
 #
@@ -379,6 +400,18 @@ lockstep.middleware += [
 # The label is write-gated, so it is the authorization — which is why that trampoline has no gate
 # job and the `/fix` comment one does.
 
+# -- the learning loop --------------------------------------------------------------
+#
+# One adapter serves both of the loop's paid requests -- `Draft`, one call that rewrites a body,
+# and `Measure`, one call per promoted case that body is evidence for -- so they spend from one
+# budget and record onto one tape. The `Improver` port is the measuring half: it reads the
+# promoted corpus and the ledger census, which a workflow may not import, and it is bound here
+# because where the corpus lives is this repository's decision (`evidence/README.md`).
+improving = AiImprove()
+lockstep.bind(Draft, improving)
+lockstep.bind(Measure, improving)
+lockstep.bind(Improver, CorpusImprover("evidence/cases"))
+
 # -- the processes ------------------------------------------------------------------
 #
 # Registered, not copied. `init` used to append ~560 lines of these workflows as generated source,
@@ -394,6 +427,8 @@ lockstep.middleware += [
 # its process. That is a real position, not a fallback.
 from in_lockstep.workflows import fix as fix_workflows  # noqa: E402
 from in_lockstep.workflows import implement as implement_workflows  # noqa: E402
+from in_lockstep.workflows import improve as improve_workflows  # noqa: E402
 
 implement_workflows.register()
 fix_workflows.register()
+improve_workflows.register()

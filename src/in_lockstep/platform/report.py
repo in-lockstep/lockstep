@@ -184,3 +184,67 @@ def _code(text: str) -> str:
     a backtick would tear the span open — so both are removed/escaped, not just the message's."""
     inner = " ".join(str(text).split()).replace("`", "").replace("|", "\\|")
     return f"`{inner[:200]}`"
+
+
+def scorecard_lines(scorecard: Any) -> list[str]:
+    """The measurement as terminal lines: both arms over one denominator, then the verdict.
+
+    Returned rather than printed, like `as_trend_text`, so the workflow that has the stream
+    writes them. `—` where a column has no subject: a scorecard with no rubric has nothing
+    outstanding to report, and `0` would read as "judged, and all passed".
+    """
+    before, after = scorecard.before, scorecard.after
+    out = [f"measured  {before.measured} case(s), both arms"]
+    for name, arm in (("before", before), ("after", after)):
+        outstanding = f"{arm.outstanding} outstanding" if arm.outstanding else "—"
+        out.append(f"{name:<9} {arm.passed} passed, {arm.failed} failed, {outstanding}")
+        for failure in arm.failures:
+            out.append(f"          {failure.case}: {failure.check} {failure.detail}".rstrip())
+    for case, why in scorecard.dropped:
+        out.append(f"dropped   {case}: {why}")
+    out.append(f"verdict   {scorecard.verdict}")
+    return out
+
+
+def improve_body(scorecard: Any, rationale: str, *, run_id: str, label: str) -> str:
+    """The pull-request body for a prompt proposal: the numbers, their denominators, who judged.
+
+    Every figure carries the population it was counted over, and the judgement column says
+    `—` where nobody judged: the deterministic checks were settled by a grader, the rubric
+    checks by nobody, and the person reading this is the judge the loop declares.
+    """
+    before, after = scorecard.before, scorecard.after
+    lines = [
+        f"A prompt change to `{label}`, drafted by a model from the recorded cases the current "
+        f"body fails, and measured against the promoted corpus before it was opened.",
+        "",
+        "| | measured | passed | failed | outstanding |",
+        "|---|---|---|---|---|",
+        f"| before | {before.measured} | {before.passed} | {before.failed} | {before.outstanding or '—'} |",
+        f"| after | {after.measured} | {after.passed} | {after.failed} | {after.outstanding or '—'} |",
+        "",
+        f"**Verdict:** {scorecard.verdict}, over {len(scorecard.cases)} case(s) both arms answered"
+        + (f"; {len(scorecard.dropped)} dropped" if scorecard.dropped else "")
+        + ".",
+        "",
+        "**Judged by:** a person — this pull request. The deterministic checks above were settled "
+        "by the grader `eval run` uses; no judge model is bound, so a rubric expectation is `—` "
+        "rather than passed.",
+        "",
+        f"**Measurement run:** `{run_id}` — `in-lockstep history --explain {run_id}` prints its "
+        "record, and the paid arm's inferences were recorded on that run's tape.",
+    ]
+    if rationale:
+        lines += ["", "**The drafter's rationale**", "", rationale.strip()]
+    if scorecard.dropped:
+        lines += ["", "**Not measured**", ""]
+        lines += [f"- `{case}`: {why}" for case, why in scorecard.dropped]
+    lines += [
+        "",
+        "The body was written by a model reading recorded answers to somebody else's diffs. Read "
+        "the whole diff as you would a change from a stranger; the controls bounded which file "
+        "it could touch, not what it said.",
+        "",
+        marker("improve"),
+    ]
+    return "\n".join(lines)

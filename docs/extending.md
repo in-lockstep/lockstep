@@ -182,6 +182,64 @@ that decision.
 guardrail is for constraints, and the difference is where it sits: emphasis rides after the body,
 guardrails before it.
 
+## The learning loop
+
+`in-lockstep improve` is the framework reading its own record and proposing a change to one of
+its prompts, as a pull request a person reads. It runs in three refusals and two model calls, and
+the refusals come first.
+
+**A trend has to qualify.** The census `improve --explain` prints — a finding id that recurs
+across enough *billed* runs and enough weeks — and a body has to claim it. Bodies are declared,
+never guessed from a finding id's shape:
+
+```python
+from in_lockstep.core.improve import Improvable
+
+lockstep.improve = (
+    Improvable(body="prompts/review/security.md", verb="review",
+               label="review/security", answers=("review.security",)),
+)
+```
+
+**The body has to be writable by grant.** `prompts/` is tier 2, so the proposing workflow needs a
+named grant, and *nothing names this path* is a refusal rather than a permission:
+
+```python
+from in_lockstep.core.changes import ChangeGuard, PathPolicy
+
+lockstep.guard = ChangeGuard(PathPolicy(
+    grants=frozenset({"prompts/"}), granted_to_workflow="improve/propose",
+))
+```
+
+**A promoted case has to fail against the body as it stands.** A harvested case passes the answer
+it was harvested with by construction, so the loop can only learn from a case somebody tightened —
+see `evidence/README.md`. On a corpus at its ceiling it refuses before spending.
+
+Then it drafts, on the model routed for `improve`, and re-asks every attributable case against
+the draft on the model that case was recorded on. The scorecard has both arms over the same cases;
+`improved` means a case the current body failed now passes and none was lost, and only
+`improved` is staged. `in-lockstep run improve/propose` opens it, counting what is already open
+on the host first. Bind the adapter and the corpus, register the process, and it runs the same
+way at a terminal and from `.github/workflows/improve.yml`:
+
+```python
+from in_lockstep.adapters.ai import AiImprove, Draft, Measure
+from in_lockstep.core.improve import Improver
+from in_lockstep.improver import CorpusImprover
+from in_lockstep.workflows import improve
+
+improving = AiImprove()
+lockstep.bind(Draft, improving)
+lockstep.bind(Measure, improving)
+lockstep.bind(Improver, CorpusImprover("evidence/cases"))
+lockstep.models.route("improve", "anthropic:claude-opus-4-6")
+improve.register()
+```
+
+The judge is the person on the pull request. A rubric expectation is `outstanding` on both arms,
+and the body says so rather than printing a pass.
+
 ## Middleware
 
 Cross-cutting behaviour (tracing, budgets, retries, approval) is a middleware chain around every

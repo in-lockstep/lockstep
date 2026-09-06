@@ -2,6 +2,7 @@
 
 from .fix import DiagnoseThenFix, Fix, FixReport, FixSession, FixStrategy
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
+from .improve import AiImprove, Draft, DraftReport, Measure
 from .oneshot import Oneshot
 from .review import AiReview, Review, ReviewFinding, ReviewReport
 from .rfe import AiRfe, Rfe, RfeDraft
@@ -42,4 +43,8 @@ __all__ = [
     "Triage",
     "TriageDecision",
     "UndeclaredAgency",
+    "AiImprove",
+    "Draft",
+    "DraftReport",
+    "Measure",
 ]

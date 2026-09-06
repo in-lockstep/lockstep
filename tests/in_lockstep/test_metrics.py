@@ -96,7 +96,12 @@ def test_blocked_is_counted_apart_and_is_never_a_failure() -> None:
     one that says the framework is broken."""
     report = build([_record(status="blocked"), _record(), _record(status="failed")])
     assert report.blocked == 1
-    assert report.failure_rate.value == pytest.approx(1 / 3), "only the failed one"
+    # Out of the denominator as well as the numerator. With the blocked run under the rate this
+    # read 1/3, and every control that fired made the rate fall -- a scheduled loop refusing weekly
+    # for nothing would have manufactured an improving number (#163). Two runs reached a verdict
+    # of the work; one failed.
+    assert report.failure_rate.value == pytest.approx(1 / 2), "one failed, of the two that ran to a verdict"
+    assert report.failure_rate.total == 2
 
 
 def test_a_record_with_no_verdict_is_counted_apart_and_never_as_not_failed() -> None:
@@ -607,3 +612,18 @@ def test_every_count_the_census_prints_carries_the_population_it_came_from() -> 
     line = next(ln for ln in metrics.as_trend_text(metrics.recurring(records)) if " x " in ln)
     assert "2 of 3 run(s)" in line, line
     assert "1 of 2 blocking" in line, line
+
+
+def test_the_learning_loops_own_runs_are_counted_apart_from_what_it_reads() -> None:
+    """A run that proposes a change to a prompt is a run about the other runs. Counted, and named,
+    and not folded into the outcomes it was reading."""
+    from in_lockstep.metrics import as_text
+
+    report = build(
+        [_record(), _record(status="blocked", workflow="improve/measure"), _record(status="failed")]
+    )
+    assert report.meta_runs == 1
+    assert report.blocked == 1
+    assert report.failure_rate.value == pytest.approx(1 / 2)
+    assert "learning      1" in "\n".join(as_text(report))
+    assert build([_record()]).meta_runs == 0

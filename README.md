@@ -61,7 +61,7 @@ still advertises.
 | Spend controls | runs | per-run predictive budget, rolling daily ceiling, org-limit attestation |
 | Metrics report | runs | `report` reads the ledger back: outcomes, effort, spend, turns per strategy, what it keeps finding. `--html` writes one self-contained page, `--scm` adds merge and issue timings. Every number carries its denominator, and a field nobody measured is a dash |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
-| Improvement trend | runs | `improve --explain` reads the ledger for a finding that keeps coming back, per run and per week with the denominator on both, attributes it to a declared `Improvable` body or to a dash, and prints the guard's verdict on that path. It opens nothing, spends nothing and writes no record; `improve` without the flag refuses, because nothing drafts a prompt change yet. `gate --open-proposals <workflow> --max N` asks the host how many are already open and refuses when it cannot count |
+| Improvement loop | runs | `improve` reads the ledger for a finding that keeps coming back, drafts a change to the one declared `Improvable` body it is attributed to, measures the draft against the promoted corpus before opening anything — both arms over the same cases, `—` where nobody judged — and stages the change with its scorecard; `run improve/propose` is the job that holds the write token, and it enforces the open-proposal ceiling where the proposal is opened. It refuses before its first model call unless a trend qualifies, the body is writable by grant, and a promoted case fails against it. `improve --explain` reads the ledger and says what would stop a proposal, opening nothing and spending nothing |
 | Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
 
 ## Why code rather than configuration
@@ -109,6 +109,7 @@ in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing
 in-lockstep backport --target .. # replay merged commits onto a release line; model only on conflict
 in-lockstep triage --ticket X    # classify a ticket; cheap enough for a local model
 in-lockstep rfe --idea "..."     # draft a ticket from a rough idea; --create files it
+in-lockstep improve              # propose a prompt change the record supports; refuses before spending unless it can
 in-lockstep show-prompt <lens>   # what the model is told, offline, no key
 in-lockstep ls                   # the resolved container, middleware, standards and policy
 in-lockstep provision            # the repository's own environment, from its lockfile; CI runs it first

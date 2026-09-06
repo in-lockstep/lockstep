@@ -329,6 +329,17 @@ class RunContext:
     #: framework cannot reach a module-level `lockstep`, and the alternative — resolving the facade
     #: out of the container — would let a workflow reach every binding when it needs one number.
     max_attempts: int = 3
+    #: How many change requests one workflow may have open at once, snapshotted like
+    #: `max_attempts`: the proposing workflow enforces it where a proposal is opened
+    #: (`GATE-IMPROVE-8`), and a preflight command a pipeline can forget is not enforcement.
+    max_open_proposals: int = 1
+    #: Which prompt bodies a recurring finding may be attributed to. Empty means none is, and
+    #: a proposal is refused rather than guessed from the shape of a finding id.
+    improvable: tuple[Any, ...] = ()
+    #: The lifecycle's guard, so a workflow can ask whether a path is writable BY GRANT before
+    #: spending on a change to it. None on a hand-built context; the workflow that needs one
+    #: refuses when it is absent, because absence of a guard is not permission.
+    guard: Any = None
     _step_counts: dict[str, int] = field(default_factory=dict, repr=False)
     last_step: StepId | None = None
     last_capabilities: frozenset[Any] = frozenset()

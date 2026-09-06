@@ -12,14 +12,16 @@ wrong silently, and a wrong attribution is worse than none: it points the next p
 text that had nothing to do with the evidence, and the measurement afterwards would be real
 arithmetic over the wrong subject.
 
-Vocabulary only. `core` may import nothing of ours but `core`, and this file imports nothing at
-all, so the layer that reads the ledger and the layer that composes prompts can both name an
+Vocabulary only. `core` may import nothing of ours but `core`, and this file imports nothing of
+ours at all, so the layer that reads the ledger and the layer that composes prompts can both name an
 `Improvable` without either one reaching the other.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -53,3 +55,188 @@ class Improvable:
         the declaration would then be making a promise about evidence nobody had seen.
         """
         return finding in self.answers
+
+
+# -- the loop's vocabulary -----------------------------------------------------------------
+#
+# What the measuring layer and the proposing workflow say to each other, with no implementation
+# on either side. The workflow may import `core`, `adapters` and `platform`; the layer that grades
+# a case may import `evaluation` and the ledger census; neither may import the other. So the
+# shapes live here and a port carries them, the way `TicketSource` carries tickets.
+
+#: What a measurement can conclude. `unmeasured` is its own word rather than a zero: no case both
+#: arms could answer is a different fact from "the arms agree", and a loop that reported the
+#: second when the first was true would open nothing while reading as though it had checked.
+IMPROVED = "improved"
+UNCHANGED = "unchanged"
+REGRESSED = "regressed"
+UNMEASURED = "unmeasured"
+
+
+@dataclass(frozen=True)
+class Attribution:
+    """Which body a qualifying trend is attributed to, and the numbers behind it.
+
+    `body` is None when nothing qualifies, and `reason` says why in words a person can act on —
+    no finding clears the thresholds, or the ones that do answer to no declared body. A dash, not
+    a guess: `Improvable.answers_for` is exact membership for the reason its docstring gives.
+    """
+
+    body: Improvable | None
+    finding: str = ""
+    runs: int = 0
+    billed_runs: int = 0
+    weeks: int = 0
+    considered: int = 0
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class Failure:
+    """One deterministic check one arm did not pass, named so a drafter and a reader can see it."""
+
+    case: str
+    check: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class Arm:
+    """One side of the comparison over the cases both sides were measured on.
+
+    `outstanding` counts rubric expectations nobody judged, and it is reported rather than folded
+    into either of its neighbours: a rubric is `outstanding` until a judge answers it, and this
+    loop ships with no judge model, so the column is a person's on the pull request.
+    """
+
+    measured: int
+    passed: int
+    failed: int
+    outstanding: int = 0
+    failures: tuple[Failure, ...] = ()
+
+
+@dataclass(frozen=True)
+class Baseline:
+    """The current body against the corpus, before any money is spent.
+
+    `cases` is the denominator both arms share: every promoted case whose recorded prompt carries
+    the body as it stands. A case recorded against an older body is `unattributable` — not failed,
+    not skipped into the count, just not evidence about this text — and it is counted so a reader
+    can see how much of the corpus a proposal was measured on.
+    """
+
+    cases: tuple[str, ...]
+    arm: Arm
+    corpus: int
+    unattributable: int
+    models: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Probe:
+    """One recorded question, re-asked with the body swapped and nothing else changed.
+
+    `request` is the recorded request as the case carries it, with `system` substituted — the
+    same model, the same messages, the same diff. The arms differ in exactly the drafted text,
+    which is the only way the comparison can be about the draft.
+    """
+
+    case: str
+    model: str
+    request: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Answered:
+    """What came back for one probe. `refused` is a control working; `errored` is the provider."""
+
+    case: str
+    content: str = ""
+    status: str = "answered"
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class Scorecard:
+    """Both arms over one denominator, and the verdict the loop acts on.
+
+    `improved` means the draft passed a case the current body failed and regressed none.
+    `regressed` means it failed a case the current body passed, whatever else it gained — the
+    corpus is the floor, and a change that lowers it is not opened. `unchanged` means the two
+    pass sets agree, which is not evidence for a change. `dropped` names the cases the after arm
+    could not answer, with why; they leave the denominator on both sides rather than counting
+    against either.
+    """
+
+    cases: tuple[str, ...]
+    before: Arm
+    after: Arm
+    verdict: str
+    dropped: tuple[tuple[str, str], ...] = ()
+
+    def as_record(self) -> dict[str, Any]:
+        """The shape that rides an artifact and a ledger record. Numbers and names only."""
+
+        def arm(side: Arm) -> dict[str, Any]:
+            return {
+                "measured": side.measured,
+                "passed": side.passed,
+                "failed": side.failed,
+                "outstanding": side.outstanding,
+                "failures": [{"case": f.case, "check": f.check, "detail": f.detail} for f in side.failures],
+            }
+
+        return {
+            "cases": list(self.cases),
+            "before": arm(self.before),
+            "after": arm(self.after),
+            "verdict": self.verdict,
+            "dropped": [list(pair) for pair in self.dropped],
+        }
+
+    @classmethod
+    def from_record(cls, raw: Mapping[str, Any]) -> Scorecard:
+        """The inverse of `as_record`, tolerant of nothing: a malformed scorecard is refused by
+        the KeyError it raises, because a proposal opened on numbers nobody can read back is a
+        proposal whose body lies."""
+
+        def arm(side: Mapping[str, Any]) -> Arm:
+            return Arm(
+                measured=int(side["measured"]),
+                passed=int(side["passed"]),
+                failed=int(side["failed"]),
+                outstanding=int(side.get("outstanding", 0)),
+                failures=tuple(
+                    Failure(case=str(f["case"]), check=str(f["check"]), detail=str(f["detail"]))
+                    for f in side.get("failures", ())
+                ),
+            )
+
+        return cls(
+            cases=tuple(str(c) for c in raw["cases"]),
+            before=arm(raw["before"]),
+            after=arm(raw["after"]),
+            verdict=str(raw["verdict"]),
+            dropped=tuple((str(a), str(b)) for a, b in raw.get("dropped", ())),
+        )
+
+
+class Improver(Protocol):
+    """The measuring half of the loop, behind a port.
+
+    Implemented where `evaluation` and the ledger census may be imported; consumed by a workflow
+    that may import neither. `current` and `draft` are whole prompt files, header included — the
+    implementation strips the two-key header itself, so the workflow never has to know what a
+    header is.
+    """
+
+    def attribute(
+        self, records: Sequence[Mapping[str, Any]], declared: Sequence[Improvable]
+    ) -> Attribution: ...
+
+    def baseline(self, body: Improvable, current: str) -> Baseline: ...
+
+    def probes(self, body: Improvable, current: str, draft: str) -> tuple[Probe, ...]: ...
+
+    def score(self, baseline: Baseline, answers: Sequence[Answered]) -> Scorecard: ...

@@ -56,6 +56,7 @@ class Verb:
     TRIAGE: ClassVar[Verb]
     RFE: ClassVar[Verb]
     DEBUG: ClassVar[Verb]
+    IMPROVE: ClassVar[Verb]
 
     def __new__(cls, value: str) -> Verb:
         key = value.strip().lower()
@@ -120,6 +121,10 @@ SHIPPED_VERBS = (
     "triage",
     "rfe",
     "debug",
+    # The learning loop: drafts a change to one declared prompt body and measures it against
+    # the harvested corpus before proposing it (O5). Shipped because the framework ships the
+    # process; routed like any other verb, so the drafting model is the adopter's choice.
+    "improve",
 )
 
 for _shipped in SHIPPED_VERBS:

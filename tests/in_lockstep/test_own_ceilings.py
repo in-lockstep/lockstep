@@ -195,3 +195,38 @@ def test_extending_the_deny_list_did_not_drop_what_it_already_protected(lockstep
     """
     for path in (".lockstep/lockstep.py", "src/conftest.py", "keys/deploy.pem", ".env.local"):
         assert lockstep.guard.check_path(path) is not None, f"{path} lost its protection"
+
+
+def test_gate_improve_3_this_repositorys_prompts_are_writable_by_grant_and_never_by_omission(
+    lockstep,
+) -> None:  # noqa: ANN001
+    """GATE-IMPROVE-3, on the repository that actually holds the bodies.
+
+    `src/in_lockstep/prompts/**` matched neither tier, so the guard permitted a write there by
+    absence, and `improve --explain` said so for as long as it was true. Read off this repository's
+    own lifecycle: a tier names the path now, exactly one workflow holds the grant, and any other
+    workflow -- including the one that stages the change -- is refused. The measuring workflow
+    asks these same two questions before it spends, so the grant is checked twice.
+    """
+    body = "src/in_lockstep/prompts/review/security.md"
+    bare = lockstep.guard.check_path(body)
+    assert bare is not None and bare.tier == 2, "the body is permitted by omission again"
+    assert lockstep.guard.check_path(body, workflow_id="improve/propose") is None
+    for other in ("improve/measure", "implement/propose", "fix/propose", ""):
+        assert lockstep.guard.check_path(body, workflow_id=other) is not None, other
+    # And the lifecycle module still refuses to become writable through the same grant.
+    assert lockstep.guard.check_path(".lockstep/lockstep.py", workflow_id="improve/propose") is not None
+
+
+def test_this_repository_binds_the_learning_loop_it_dogfoods(lockstep) -> None:  # noqa: ANN001
+    """O10. The loop is registered and its two ports are bound here, so the trampoline's
+    `in-lockstep run improve/measure` resolves to what this file says and not to a CLI default."""
+    from in_lockstep.adapters.ai import Draft, Measure
+    from in_lockstep.core.improve import Improver
+    from in_lockstep.core.workflow import get
+
+    assert lockstep.container.has(Draft) and lockstep.container.has(Measure)
+    assert lockstep.container.has(Improver)
+    assert "improve" in lockstep.models.routes
+    assert get("improve/measure") is not None and get("improve/propose") is not None
+    assert lockstep.improve and lockstep.improve[0].body == "src/in_lockstep/prompts/review/security.md"

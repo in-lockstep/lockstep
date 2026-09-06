@@ -96,6 +96,10 @@ ALLOWED: dict[str, set[str]] = {
     # would not be a measurement of anything. It reaches `evaluation` for the corpus contract and
     # `packs` for where a pack keeps its cases. Acyclic: none of those import `trial`.
     "trial": {"adapters", "ai", "core", "evaluation", "packs", "privileged", "trial"},
+    # The measuring half of the learning loop. It grades promoted cases and reads the ledger
+    # census, which the workflow consuming it may not import; the workflow reaches it through
+    # the `Improver` port in `core`. Same shape as `trial`, for the same reason.
+    "improver": {"ai", "core", "evaluation", "metrics", "improver"},
     # `adapters` was added when the first executable strategy was registered. A registration
     # names an implementation — that is what distinguishes it from a catalogue entry — so a
     # composition root that may not import one can only ever register strings, which is what this
@@ -142,6 +146,7 @@ ALLOWED: dict[str, set[str]] = {
         "packs",
         "market",
         "trial",
+        "improver",
         # `show-workflow` prints the shipped process from `inspect.getsource` on the module that
         # is actually imported, and `init --implement` scaffolds the `register()` call, so the CLI
         # imports what it is about to describe. One direction: `workflows` never imports `cli`.
@@ -262,7 +267,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #:
 #: The commands are excluded because their statements are argument handling, which is the thing
 #: this module is FOR and should be free to grow. What is bounded is the other 900.
-CLI_HELPER_STATEMENTS = 900
+#: 900 -> 930 with #163: `_improve_measure` composes the learning loop's defaults -- binds the
+#: adapter and the corpus port the module left unbound, routes the drafting model, registers the
+#: shipped process -- and hands the run to `_run_registered`. Composition and translation, the
+#: same shape as `implement`'s; what a proposal MEANS lives in `workflows/improve.py` and
+#: `improver.py`, where a test reaches it without a CliRunner.
+CLI_HELPER_STATEMENTS = 930
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
