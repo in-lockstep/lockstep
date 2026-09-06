@@ -487,7 +487,7 @@ def failure_outcome(error: Exception, *, cost: Any = None) -> Outcome[Any]:
     return errored(reason, str(error), cost)
 
 
-def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Any:
+def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Outcome[Any] | None:
     """The Test did not reach a verdict — pass its own status through. None when it did.
 
     Every red/green check in a strategy was `if status is not SUCCEEDED`, which is a two-way split
@@ -502,6 +502,11 @@ def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Any:
 
     The refusal's own findings and reason travel with it, so a `cost.budget_exceeded` arrives at
     the caller as itself rather than as a claim about the change.
+
+    `Outcome[Any]` rather than a bare `Any`, and not a TypeVar: the callers return this where an
+    `Outcome[ImplementReport]` or an `Outcome[FixReport]` is declared, and a bare `Any` return
+    makes each of those a `no-any-return` under `--strict`. `Any` as the parameter is honest here
+    -- what travels is whatever the caller passed, and a refusal carries no report of its own.
     """
     if outcome.status in (Status.SUCCEEDED, Status.FAILED):
         return None
