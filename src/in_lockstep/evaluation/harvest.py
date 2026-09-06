@@ -49,6 +49,16 @@ MAX_CONTAINS = 3
 #: Strings short enough to appear by accident. A `contains` on "id" is a check that cannot fail.
 MIN_NEEDLE_CHARS = 12
 
+#: Where a request lives when the tape beside it kept only the hash. One recording is in that
+#: state: the shipped demo, whose `cassettes/request.json` holds the request verbatim under the key
+#: it hashes to, so the fixture can be read and diffed as well as replayed (`GATE-FIXTURE-1`). The
+#: file documents its own contract in its `note`, and the reader on this side was never taught it
+#: -- so the one recording every clean install has, the first real inference an adopter sees, was
+#: counted as recorded-before-requests-were-stored and told to re-record, which is the one thing a
+#: reader with no key cannot do. `cli._shipped_fixture` reads the same file by the same name; both
+#: are pinned to the real one by tests over the shipped tree, so a rename fails in two places.
+REQUEST_SIDECAR = "request.json"
+
 
 class NothingToHarvest(ValueError):
     """A cassette that cannot produce cases, with the reason a person can act on."""
@@ -74,9 +84,10 @@ class Harvested:
 def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
     """Every recorded call in `cassette` that carries its request, as a case.
 
-    Calls recorded before requests were stored are skipped rather than guessed at — their answer is
-    real, and a case wrapped around an answer whose question is unknown is a case that cannot be
-    re-run, which is the one thing a case is for.
+    A request the tape did not keep is looked for in `request.json` beside it before the call is
+    counted as unharvestable. Calls whose request is in neither place are skipped rather than
+    guessed at — their answer is real, and a case wrapped around an answer whose question is
+    unknown is a case that cannot be re-run, which is the one thing a case is for.
     """
     path = Path(cassette)
     try:
@@ -87,6 +98,7 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
     calls = data.get("provider_calls") if isinstance(data, dict) else None
     if not isinstance(calls, dict) or not calls:
         raise NothingToHarvest(f"{path} holds no recorded calls")
+    calls = _with_sidecar(calls, path)
 
     order = data.get("order") if isinstance(data, dict) else None
     sessions = _sessions(calls, [str(k) for k in order] if isinstance(order, list) else [])
@@ -206,6 +218,46 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
             f"built from either."
         )
     return out
+
+
+def _with_sidecar(calls: dict[str, Any], cassette: Path) -> dict[str, Any]:
+    """`calls`, with the sidecar's request filled in where the tape kept none.
+
+    Consulted only when some entry lacks a request. A tape that recorded every request -- which is
+    every tape `record_provider` writes -- never opens the file, so a stray or broken `request.json`
+    beside one costs nothing; a tape that needs it and cannot read it is refused with the sidecar
+    named, because the alternative is the standard refusal telling the holder of the shipped demo
+    to re-record what they have no key to re-record.
+
+    Fills ONLY an entry that lacks a request. The request a tape recorded is the one that was
+    sent, and a sidecar allowed to replace it would be a way to re-key a recording from outside the
+    tape -- the same fabrication `ReplayProvider` stays strict against. Keyed, so the sidecar has to
+    name the entry it belongs to: one naming nothing on this tape fills nothing, and the refusal a
+    request-less tape gets then says what is true of it.
+
+    The key is trusted as an index and not verified here, because this layer may not import the
+    hash. The check lives where the hash does: the CLI stamps a case with the hash of the request
+    it carries, `eval run` refuses a case whose request and answer are not a pair, and
+    `GATE-FIXTURE-1` asserts the shipped sidecar hashes to the shipped tape's only key.
+    """
+    if all(isinstance(entry.get("request"), dict) for entry in calls.values() if isinstance(entry, dict)):
+        return calls
+    beside = cassette.with_name(REQUEST_SIDECAR)
+    try:
+        sidecar = json.loads(beside.read_text())
+    except FileNotFoundError:
+        return calls
+    except (OSError, ValueError) as e:
+        raise NothingToHarvest(
+            f"{beside} sits beside {cassette}, which kept no request, and cannot be read: {e}"
+        ) from None
+    if not isinstance(sidecar, dict):
+        return calls
+    key, request = str(sidecar.get("key", "")), sidecar.get("request")
+    entry = calls.get(key)
+    if not isinstance(entry, dict) or isinstance(entry.get("request"), dict) or not isinstance(request, dict):
+        return calls
+    return {**calls, key: {**entry, "request": request}}
 
 
 #: A string in a tool call's input longer than this is a BODY rather than an address. `path`,
