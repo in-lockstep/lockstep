@@ -60,6 +60,16 @@ write-capable verb (implement, fix) needs **three**:
 | work | provider key (+ tracker read) | read | `in-lockstep provision`, then `in-lockstep run <verb>/from-ticket`: builds the repository's environment, stages an artifact |
 | propose | write token | write | `in-lockstep run <verb>/propose`: opens the change request |
 
+A read-only verb asked for **on the thread** -- `/review <lens>` on a pull request -- needs three
+as well, and for the same reason the write verbs do, even though nothing is written to the tree:
+posting a comment is a write. `gate` authorizes the asker holding nothing. `review` holds the
+provider key and `pull-requests: read`, because a comment event carries neither ref and the
+framework asks the host what the pull request points at; it resolves the lens in Python against
+the lenses the module binds, runs it, and writes the comment body with `--comment-out`. `post`
+holds `pull-requests: write` and no provider SDK, and runs `in-lockstep comment --body-file`,
+which finds the sticky comment by the marker inside the body it was handed -- so the lens, which
+came out of an untrusted comment, never appears in YAML. `in-lockstep init --review` writes it.
+
 Backport sits between the two shapes. Its default is deterministic: `git cherry-pick` stages the
 artifact and no model is called, so its work job needs **no provider key at all**. The propose job
 opens the artifact against the release line with `apply --base <target>`. Only `--resolve`, which
@@ -98,6 +108,7 @@ human's queue either way.
 | Contract clause | GitHub Actions | GitLab CI |
 |---|---|---|
 | Trigger, read verb | `on: pull_request` | `rules: $CI_PIPELINE_SOURCE == "merge_request_event"` |
+| Trigger, read verb on request | `issue_comment` (`/review <lens>`); the lens is resolved in Python against the lenses the module binds, the pull request's refs are asked of the host, and a job holding the write token and no provider SDK posts the body the reviewing job wrote | none: GitLab CI has no issue-comment trigger. The review job runs on every merge request; a lens on request is `in-lockstep review --aspect <lens>` locally, or a pipeline run with variables driving the same command |
 | Trigger, write verb | `issue_comment` (`/implement`), plus `issues: labeled` (`ai-generated`). The comment trigger fires on an **issue or a pull request**, since a reviewer asks for the next attempt where they are reading; the comment's number is passed through and `ticket_for` resolves it, never an `if:` expression | run-pipeline-with-variables (`LOCKSTEP_ISSUE`), manually or via the trigger API. GitLab CI has no issue-comment trigger; a webhook bridge can supply one |
 | Base ref through | `origin/${GITHUB_BASE_REF}` | `origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}`, after an explicit `git fetch` (MR pipelines do not fetch the target branch) |
 | Who asked | `github.event.comment.user.login` + `author_association`, verified by the gate job | `GITLAB_USER_LOGIN`; no `author_association` exists, so the gate answers from CODEOWNERS, read from a checkout the job `rules:` pin to the default branch, because the asker picks the pipeline's ref |

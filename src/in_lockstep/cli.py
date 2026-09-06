@@ -1166,10 +1166,8 @@ def ls_cmd() -> None:
                 for label in sorted(composed)
             )
             click.echo(f"  {type(binding.impl).__name__:<18} {names}")
-            guardrails = next(iter(composed.values())).layers.guardrails
-            chain = ", ".join(name for name, _ in guardrails) or "(none)"
-            drift = "" if guardrails and guardrails[0][0] == "baseline" else "   <- baseline does not lead"
-            click.echo(f"  {'':<18} guardrails: {chain}{drift}")
+            for chain, drift, scope in _guardrail_chains(composed):
+                click.echo(f"  {'':<18} guardrails: {chain}{scope}{drift}")
 
     click.echo("")
     click.echo("middleware  (privileged tier runs outside this chain and is not listed)")
@@ -1199,11 +1197,13 @@ def ls_cmd() -> None:
     routes = lockstep.models.routes
     if routes:
         click.echo("")
-        click.echo("models  (verb -> model; resolved per verb, overridable at the call)")
+        click.echo("models  (verb -> model; resolved per verb, or per lens as review/<lens>)")
         known = {v.value for v in Verb.known()}
+        # Read only when a route names a lens: the lens list composes prompts, which is file IO a
+        # repository routing by verb alone should not pay for.
+        lenses = _review_lenses(lockstep) if any("/" in key for key in routes) else ()
         for routed_verb, model_id in sorted(routes.items()):
-            flag = "" if routed_verb in known else "  <- no such verb (typo?)"
-            click.echo(f"  {routed_verb:22} {model_id}{flag}")
+            click.echo(f"  {routed_verb:22} {model_id}{_route_flag(routed_verb, known, lenses)}")
 
     click.echo("")
     click.echo("workflows")
@@ -2650,7 +2650,12 @@ def review_cmd(
         base, head = refs
 
     if source("model") is ParameterSource.DEFAULT:
-        model = lockstep.models.routes.get("review", model)
+        # The lens's own route first, then the verb's -- `routed_model` is the one rule for which
+        # key wins, shared with the adapter's own resolution so `ls`, this command and a
+        # module-bound adapter agree about the model a lens runs on (#204).
+        from .ai.bootstrap import routed_model
+
+        model = routed_model(lockstep.models.routes, "review", aspect) or model
 
     # `--offline` with nothing else works out of the box, because both halves of a replay ship:
     # the recording, and the diff it was recorded against. A cassette is keyed on the whole
@@ -5010,9 +5015,53 @@ def _is_shipped(shipped: dict[str, Composition], label: str, composed: Compositi
 
     Class identity, not label presence: a subclass of `SecurityReviewPrompt` that only adds
     `emphasis` is still an override, and it is exactly the override a reader would want flagged.
+    And a `Lens` that adds emphasis to the shipped class without subclassing it is the same
+    override spelled without a class, so it is starred for the same reason.
     """
     origin = shipped.get(label)
-    return origin is not None and type(origin.prompt) is type(composed.prompt)
+    return origin is not None and type(origin.prompt) is type(composed.prompt) and not composed.emphasis
+
+
+def _guardrail_chains(composed: dict[str, Composition]) -> list[tuple[str, str, str]]:
+    """Each distinct guardrail chain an adapter composes, with a drift note and, when there is
+    more than one, the lenses it applies to.
+
+    One line per chain rather than one for the adapter. `ls` used to print the first lens's chain
+    as though it were every lens's, which was true while a stack belonged to the adapter and
+    became a lie the moment a `Lens` could carry its own (#204): a lens whose stack dropped the
+    baseline would have been reported as leading with it. A single chain prints exactly as it
+    always did, so a repository with one stack sees no new line.
+    """
+    chains: dict[tuple[str, ...], list[str]] = {}
+    for label in sorted(composed):
+        names = tuple(name for name, _ in composed[label].layers.guardrails)
+        chains.setdefault(names, []).append(label.rsplit("/", 1)[-1])
+    out: list[tuple[str, str, str]] = []
+    for names, labels in chains.items():
+        chain = ", ".join(names) or "(none)"
+        drift = "" if names and names[0] == "baseline" else "   <- baseline does not lead"
+        scope = f"  ({', '.join(labels)})" if len(chains) > 1 else ""
+        out.append((chain, drift, scope))
+    return out
+
+
+def _route_flag(key: str, verbs: set[str], lenses: tuple[str, ...]) -> str:
+    """What `ls` says beside a route that names nothing a run would resolve.
+
+    A route is a line somebody wrote, and a line that names a verb nothing serves or a lens
+    nothing binds reads as configured while doing nothing. `review/<lens>` is checked against the
+    lenses the BOUND adapter has, the same list `/review` resolves a comment against; any other
+    verb's routes resolve by verb alone today, and a slash there is said to do nothing rather
+    than left to look like it does.
+    """
+    verb, _, lens = key.partition("/")
+    if verb not in verbs:
+        return "  <- no such verb (typo?)"
+    if not lens:
+        return ""
+    if verb != "review":
+        return "  <- only review routes per lens; this resolves by verb"
+    return "" if lens in lenses else "  <- no such lens (typo?)"
 
 
 def _resolve_prompt(index: dict[str, Composition], name: str) -> str:
@@ -5126,7 +5175,13 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
     is_flag=True,
     help="Also scaffold the /fix chat-ops trampoline and its two workflows (the ai-generated-issue target).",
 )
-def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
+@click.option(
+    "--review",
+    "with_review",
+    is_flag=True,
+    help="Also scaffold the /review <lens> chat-ops trampoline: a lens on request, posted without a key.",
+)
+def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: bool) -> None:
     """Scaffold a lifecycle definition and a CI trampoline.
 
     The trampoline is written once and never read back: there is no drift check on it, and no
@@ -5189,6 +5244,8 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         _scaffold_implement(module, host=host)
     if with_fix:
         _scaffold_fix(module, host=host)
+    if with_review:
+        _scaffold_review(host=host)
 
     _disclose_what_a_run_keeps()
 
@@ -5665,6 +5722,37 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         else:
             module.write_text(merged)
             click.echo(f"extended {module} with fix/from-ticket and fix/propose")
+
+
+def _scaffold_review(*, host: str = "") -> None:
+    """The `/review <lens>` chat-ops flow: a three-job trampoline, and nothing appended to the
+    module.
+
+    Nothing appended, because there is nothing to append. The two write verbs each register a
+    pair of workflows and bind the ports they need; a review on request runs the same `review`
+    command the `pull_request` trampoline runs, against the adapter the module already binds --
+    the shipped one, or whatever `AiReview(lenses=...)` a repository wrote. What the comment may
+    name is exactly that adapter's lens list, which `ls` prints, so the flow is real the moment
+    the trampoline exists (#204).
+
+    GitLab CI has no issue-comment trigger, so there is no file to write there. `.gitlab-ci.yml`'s
+    review job already runs on every merge request; a lens on request is `in-lockstep review
+    --aspect <lens>` from a laptop, or a pipeline run with variables driving the same command --
+    the shape the work job takes for `LOCKSTEP_ISSUE`.
+    """
+    if host == "gitlab":
+        click.echo("gitlab: no issue-comment trigger exists, so there is no /review file to write.")
+        click.echo("        The review job in .gitlab-ci.yml runs on every merge request; a lens on")
+        click.echo("        request is `in-lockstep review --aspect <lens>`, locally or from a")
+        click.echo("        pipeline run with variables, the way the work job takes LOCKSTEP_ISSUE.")
+        return
+    if _write_trampoline(Path(".github/workflows/review.yml"), _SCAFFOLD_REVIEW_TRAMPOLINE):
+        click.echo("")
+        click.echo("Three jobs, because posting is a write: `gate` holds no credential, `review`")
+        click.echo("holds the provider key and reads, `post` holds the write token and no provider")
+        click.echo("SDK. The lens a comment names is resolved in Python against the lenses your")
+        click.echo("module binds -- `in-lockstep ls` prints them -- and the pull request's refs are")
+        click.echo("asked of the host, because a comment event carries neither.")
 
 
 def _scaffold_module(facts: Any) -> str:
@@ -6568,6 +6656,195 @@ jobs:
             --push
         if: always()
         continue-on-error: true
+"""
+
+
+_SCAFFOLD_REVIEW_TRAMPOLINE = """\
+# `/review <lens>` on a pull request. Hand-written and permanent; nothing generates or checks it.
+#
+# THIS FILE CONTAINS NO LIFECYCLE LOGIC. Which lens the comment asked for is resolved in Python
+# against the lenses your module actually binds -- `in-lockstep ls` prints them, and a name that is
+# not among them is refused before any credential is read. Which change the comment is about is
+# resolved in Python too: an `issue_comment` event carries neither ref, so the framework asks the
+# host what the pull request points at. GitHub's expression language has twelve functions and none
+# of them splits a string, so this file could not parse the argument even if it wanted to.
+#
+# WHY A SEPARATE FILE FROM lockstep.yml. That one runs on `pull_request` and reviews every change
+# once, unattended, through the lens it names. This is somebody asking, on the thread, for a
+# specific lens -- usually one that did not run automatically, or the same one again after a push.
+# Different trigger, different authorization, different job split.
+#
+# WHO MAY FIRE IT. Anyone who can see a repository can comment on it, so the comment is not the
+# authorization. `gate` is, and it runs first and alone: an unauthorized comment costs one job that
+# calls nothing and reaches no host. It passes an org member or owner, or anyone named in
+# CODEOWNERS, read from this checkout -- the default branch -- never from anywhere a contributor
+# can write.
+#
+# THE THREE JOBS ARE A CREDENTIAL SPLIT, NOT A PIPELINE. `review` holds the provider credential
+# and read access. `post` holds `pull-requests: write` and no provider SDK at all -- it cannot call
+# a model because the extra is not installed, which is a fact about the environment rather than a
+# property of the code path taken. No amount of Python makes one process hold two token scopes,
+# which is why the findings travel between them as a file.
+#
+# WHAT BOUNDS THE SPEND. One lens, one run, and the ceiling your module declares. NO `--budget`
+# here, and its absence is deliberate: `review --budget` REPLACES the module's ceiling rather than
+# merging with it, so a literal in this file would outrank the module silently and permanently.
+# lockstep.yml does state one, and that is not an inconsistency: it runs on `pull_request`, which
+# is the workflow a repository gets before it has a lockstep.py at all. This trigger cannot be in
+# that position -- it resolves the lens against the adapter the module binds, so the module exists
+# by the time this runs, and the ceiling it declares is the one that applies.
+#
+# NO `doctor` STEP, and that is a decision rather than an omission. lockstep.yml runs it on every
+# pull request, so the controls were checked for this change when it was opened; re-running a lens
+# on request is not a second occasion to ask.
+#
+# WHAT THIS DOES NOT DO. A fork's pull request has no head commit in this checkout, so `/review` on
+# one refuses rather than reviewing the wrong thing. That refusal is the honest outcome.
+#
+# Pinned by version and by SHA for the same reason as lockstep.yml: an unpinned install runs
+# whatever the registry serves next, beside the provider key.
+name: review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  # Per issue, and NOT cancel-in-progress: a cancelled model call may still be billed, and throws
+  # away what was paid for.
+  group: review-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # `startsWith` rather than `contains`, which would fire on every comment that merely mentions
+    # `/review` -- including one explaining why not to run it. A pull-request comment fires
+    # `issue_comment` too and is deliberately not filtered out: a reviewer asking for a lens is
+    # standing on the pull request when they ask.
+    if: startsWith(github.event.comment.body, '/review')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      actor: ${{ steps.check.outputs.actor }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - id: check
+        run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep gate \\
+            --actor "$ACTOR" --association "$ASSOCIATION"
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+        env:
+          ACTOR: ${{ github.event.comment.user.login }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+
+  review:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Read-only, and needed: the framework asks the host what the pull request points at,
+      # because an `issue_comment` event carries neither ref -- GITHUB_BASE_REF is empty and
+      # GITHUB_SHA is the default branch's tip. A run built from those would diff the default
+      # branch against itself and report a clean bill of health for a change it never read.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # The base ref has to be a commit this checkout has. Without it, configuration cannot be
+          # loaded from the trusted ref and the diff cannot be taken.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # BODY travels as an environment variable and is never interpolated into this script. A
+      # `${{ github.event.comment.body }}` inside a `run:` is shell injection into the one job
+      # holding a provider credential, written by anyone who can comment. The cassette name is
+      # built from $ISSUE, a number, for the same reason.
+      #
+      # `--comment-out` writes the comment body for the NEXT job to post: the job that called the
+      # model must not also hold the token that writes the repository.
+      - run: |
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep review \\
+            --ask "$BODY" --pr "$ISSUE" --comment-out findings.md \\
+            --record --cassette "${RUNNER_TEMP}/review-${ISSUE}.json"
+        env:
+          BODY: ${{ github.event.comment.body }}
+          ISSUE: ${{ github.event.issue.number }}
+          # `gh` reads this to ask the host for the pull request's refs. The read token, not a
+          # write one: this job's `permissions` above are what bound it.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # A variable rather than a secret: a workspace id identifies, it does not authenticate.
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      # Recording is ON. The tape stays in RUNNER_TEMP and dies with the runner; what survives is
+      # the cases harvested from it, which ride the artifact below. Delete both steps if you would
+      # rather keep nothing; nothing else depends on them.
+      - name: Harvest what the review recorded
+        # Harvest refuses rather than inventing, so a recording it cannot build a case from exits
+        # non-zero. That is right for harvest and the wrong reason to fail somebody's review.
+        continue-on-error: true
+        run: |
+          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \\
+            --from "${RUNNER_TEMP}/review-${ISSUE}.json" \\
+            --into .lockstep/cases \\
+            --family review
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: review-${{ github.event.issue.number }}
+          path: |
+            findings.md
+            history.bundle
+            .lockstep/cases/
+          if-no-files-found: ignore
+          # `.lockstep/` is a dotted path and upload-artifact@v4 drops hidden files by DEFAULT,
+          # so without this the line above is silently ignored and the artifact arrives short.
+          include-hidden-files: true
+          # Said rather than inherited: the vendor default is 90 days, and this artifact holds
+          # cases built from a prompt and a diff. Two weeks is enough to notice a run.
+          retention-days: 14
+
+  post:
+    needs: review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # The write token, alone. `uvx` below installs no provider extra, so this process cannot
+      # call a model even if something asked it to.
+      pull-requests: write
+      contents: read
+      # Reading this run's own artifact.
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: review-${{ github.event.issue.number }}
+      # The marker that anchors the sticky comment is INSIDE the body `review` composed, so
+      # nothing here names a lens. That is not economy: the lens came out of an untrusted comment
+      # and was resolved in the other job, and naming it here would put it back in YAML.
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep comment \\
+            --pr "$ISSUE" --body-file findings.md
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 """
 
 

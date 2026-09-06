@@ -14,13 +14,21 @@ from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
 from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy, Invoker, ToolRunner
-from ...ai.prompt import Composition, PromptLayers, compositions
+from ...ai.prompt import Composition, PromptLayers
 from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
 from ...privileged.egress import EgressRefused
-from ...prompts.review import LENSES, REVIEW_SCHEMA, ReviewParams, ReviewPrompt, review_layers
+from ...prompts.review import (
+    LENSES,
+    REVIEW_SCHEMA,
+    Lens,
+    ReviewParams,
+    ReviewPrompt,
+    as_lens,
+    review_layers,
+)
 
 
 @dataclass(frozen=True)
@@ -77,7 +85,7 @@ class AiReview:
         repo_root: str = "",
         policy: InvokePolicy | None = None,
         curator: ContextCurator | None = None,
-        lenses: Mapping[str, type[ReviewPrompt]] | None = None,
+        lenses: Mapping[str, type[ReviewPrompt] | Lens] | None = None,
         tools: ToolSet | None = None,
         run_tool: ToolRunner | None = None,
         layers: PromptLayers | None = None,
@@ -108,7 +116,14 @@ class AiReview:
         # in the file whose whole point is being inspectable — or overriding `invoke` wholesale.
         # Copied rather than aliased, so a later mutation of the global cannot reach a bound
         # adapter, and an adapter's lens map cannot leak back into the shipped one.
-        self.lenses: Mapping[str, type[ReviewPrompt]] = dict(lenses) if lenses is not None else dict(LENSES)
+        #
+        # Either spelling per entry: the bare prompt class every document shows, or a `Lens`
+        # carrying an emphasis, a stack of its own and its own ceilings (#204). Kept as given
+        # rather than normalised here, so what a module bound is what `adapter.lenses` holds;
+        # `as_lens` reads either at the two places a lens is used.
+        self.lenses: Mapping[str, type[ReviewPrompt] | Lens] = (
+            dict(lenses) if lenses is not None else dict(LENSES)
+        )
 
     def compositions(self) -> dict[str, Composition]:
         """What `show-prompt` and `ls` read: this adapter's lenses, under their qualified labels.
@@ -118,17 +133,30 @@ class AiReview:
         sniffing across six classes is inference, and the failure mode is silence: a renamed
         attribute would make an override invisible again, which is the defect this method exists
         to close.
+
+        Per lens rather than through `compositions()`, because a lens may carry its own stack and
+        its own emphasis, and the shared helper assumes one stack for a whole map. What it says
+        about each label is exactly what `invoke` would compose for it -- same layers, same
+        emphasis -- so `show-prompt` and `ls` describe the run rather than the adapter's default.
         """
-        return compositions(
-            self.lenses,
-            self.layers if self.layers is not None else review_layers(),
-            verb=str(type(self).verb),
-            source=type(self).__name__,
-        )
+        default = self.layers if self.layers is not None else review_layers()
+        verb = str(type(self).verb)
+        out: dict[str, Composition] = {}
+        for key, declared in self.lenses.items():
+            lens = as_lens(declared)
+            label = key if "/" in key else f"{verb}/{key}"
+            out[label] = Composition(
+                label=label,
+                prompt=lens.prompt(),
+                layers=lens.stack(default),
+                source=type(self).__name__,
+                emphasis=lens.emphasis,
+            )
+        return out
 
     async def invoke(self, ctx: Any, inp: Review) -> Outcome[ReviewReport]:
-        lens = self.lenses.get(inp.aspect)
-        if lens is None:
+        declared = self.lenses.get(inp.aspect)
+        if declared is None:
             return Outcome.blocked_by(
                 "review.unknown_aspect",
                 findings=(
@@ -141,8 +169,11 @@ class AiReview:
                 ),
             )
 
-        prompt: ReviewPrompt = lens()
-        layers: PromptLayers = self.layers if self.layers is not None else review_layers()
+        lens = as_lens(declared)
+        prompt: ReviewPrompt = lens.prompt()
+        layers: PromptLayers = lens.stack(self.layers if self.layers is not None else review_layers())
+        # This lens's ceilings, or the adapter's. `Lens.under` says which way each may move.
+        policy: InvokePolicy = lens.under(self.policy)
         root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
         package = self._gather(inp, root)
 
@@ -167,10 +198,10 @@ class AiReview:
                 ),
             )
 
-        system = prompt.system(layers) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
+        system = prompt.system(layers, emphasis=lens.emphasis) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
         messages = prompt.render(ReviewParams(base=inp.base, head=inp.head, aspect=inp.aspect), package)
 
-        invoker: Invoker = self._invoker(ctx)
+        invoker: Invoker = self._invoker(ctx, inp.aspect)
         try:
             invocation = await invoker.run(
                 system=system,
@@ -178,7 +209,7 @@ class AiReview:
                 context=package,
                 tools=self.tools,
                 run_tool=self.run_tool,
-                policy=self.policy,
+                policy=policy,
             )
             # The shape, settled: parsed and validated, and re-prompted ONCE with the parser's own
             # words when it is not (GATE-SHAPE-1). Inside this `try`, so a ceiling or a provider
@@ -190,7 +221,7 @@ class AiReview:
                 system=system,
                 messages=messages,
                 context=package,
-                policy=self.policy,
+                policy=policy,
             )
             invocation = settled.invocation
         except InvocationBlocked as e:
@@ -229,9 +260,10 @@ class AiReview:
                     Finding(
                         id="review.truncated",
                         message=(
-                            f"the model stopped at the {self.policy.max_tokens}-token output cap "
-                            f"with its answer unfinished. Raise `InvokePolicy.max_tokens` for this "
-                            f"lens; the cost estimate rises with it, so the budget may need to too."
+                            f"the model stopped at the {policy.max_tokens}-token output cap "
+                            f"with its answer unfinished. Raise `max_tokens` for this lens -- "
+                            f"`Lens(..., max_tokens=N)` on its entry, or the adapter's policy; "
+                            f"the cost estimate rises with it, so the budget may need to too."
                         ),
                         severity=Severity.ERROR,
                         blocking=True,
@@ -345,10 +377,14 @@ class AiReview:
             reason="exhausted" if invocation.exhausted else None,
         )
 
-    def _invoker(self, ctx: Any) -> Invoker:
+    def _invoker(self, ctx: Any, aspect: str) -> Invoker:
+        """The invoker for one lens. A route keyed `review/<aspect>` wins over `review`, so a
+        repository can put its security lens on a different model from its other three with one
+        line and no fork; an injected factory is used as given, because whoever passed one has
+        already chosen."""
         from .strategy import resolve_invoker
 
-        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx, aspect=aspect)
         return invoker
 
     def _gather(self, inp: Review, root: str) -> ContextPackage:

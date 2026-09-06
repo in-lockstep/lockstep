@@ -146,6 +146,75 @@ aspect then reports the lenses *this adapter* has, not the ones that happen to s
 The map is copied at construction, in both directions: a later mutation of `LENSES` cannot reach
 an adapter you already bound, and an adapter cannot leak a lens back into the shipped map.
 
+### Enhancing a shipped lens, without a subclass
+
+An entry in that map is either a prompt class or a `Lens`: the declared form, carrying the prompt
+and everything about running it that used to belong to the adapter alone.
+
+```python
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt, review_layers
+
+lockstep.bind(
+    Review,
+    AiReview(
+        lenses={
+            **LENSES,
+            "security": Lens(
+                prompt=SecurityReviewPrompt,
+                emphasis="SQLAlchemy 2.x session discipline; no bare excepts",
+                layers=review_layers().plus(guardrails=(("acme/house", "Never touch migrations."),)),
+                max_tokens=8000,
+            ),
+        },
+    ),
+)
+lockstep.models.route("review/security", "anthropic:claude-opus-4-6")
+```
+
+Every field but `prompt` defaults to the adapter's, so `Lens(SecurityReviewPrompt)` means exactly
+what the bare class meant. What each one adds:
+
+- **`emphasis`** rides after the shipped body under its emphasis heading, beside anything a
+  subclass's own `emphasis` says. The shipped prose is kept; this is for the three sentences a
+  team wants to add to `security` without a class. A pack offers the same through
+  `pack.emphasis("style")`, which reads `prompts/style.md` with its header stripped.
+- **`layers`** is this lens's whole stack, and the other lenses keep the adapter's. Whole, not
+  appended to: spell it `review_layers().plus(...)` to keep the baseline, and `ls` prints one
+  guardrail chain per distinct stack so a lens that dropped it is visible beside the ones that
+  did not.
+- **`max_turns`** may only tighten and **`max_tokens`** replaces, and the asymmetry has a reason
+  on each side. The adapter's turn cap is already the lower of its own and the policy floor an
+  organisation contributed, and the floor cannot be recovered from that number, so a lens asking
+  for more turns is clipped rather than guessed at. No such floor exists for output tokens, so a
+  lens's number is exact, and it is the number `review.truncated` tells you to raise for one lens.
+- **The route** is a line in the models table rather than a field: `review/security` wins over
+  `review`, a lens with no route of its own takes the verb's, and `ls` flags a route to a lens
+  nothing binds the way it flags a route to a verb nothing serves.
+
+The key stays `security`, and that is the point of the shape. `review.security` is the finding id,
+the sticky comment's marker, the `Improvable` label and the census key, all at once. An
+enhancement published under a new name would fork every one of those for every consumer.
+**Namespace on `plus`, a name nobody had; never on `replacing`, a shipped name.** A lens of your
+own is `a11y`; a better `security` is still `security`.
+
+### A lens is not a verb
+
+> A `Lens` differs in what it **says**. A `Verb` differs in what it **may do**.
+
+The first instinct is to make each review kind a verb of its own -- `REVIEW_SECURITY`,
+`REVIEW_TESTS` -- so each can carry its own prompt and route. Dispatch is keyed on the request
+type, not the verb, so four verbs are mechanically four request dataclasses, four adapters and
+four binds, and the same again for every lens an extender adds; and `review.<aspect>` re-keyed
+would split every ledger record and every `Improvable` written against the old key. What it
+would buy is one span name.
+
+Capabilities are declared on the adapter, and approval and budget gates read them off the bound
+object. Four prose lenses over one diff share one posture -- a single turn, the diff in the
+prompt, no tools -- and are lenses. A review that must execute the suite, hold write tools, or
+take a deployed artifact instead of a diff has crossed a capability line, and that one genuinely
+is a verb: declare it as *A verb of your own* above describes.
+
 Read what you bound, before it runs:
 
 ```bash

@@ -190,6 +190,21 @@ def test_a_missing_guardrail_says_which_file(tmp_path: Path) -> None:
         pack("acme-review-prompts", entries=[_example_entry()]).guardrails("nope")
 
 
+def test_a_packs_emphasis_is_its_fragment_with_the_header_stripped() -> None:
+    """The no-subclass way a pack enhances a shipped lens (#204): text for `Lens(emphasis=...)`,
+    read the way a guardrail is and returned as the string the composer takes. No label, because
+    emphasis lands inside the body section, where the bind line already names the pack."""
+    text = pack("acme-review-prompts", entries=[_example_entry()]).emphasis("style")
+    assert "the line, then the consequence" in text
+    assert not text.startswith("---"), "frontmatter is stripped, as it is for a guardrail"
+    assert "acme-style" not in text, "the header's `name` is about the file, not for the model"
+
+
+def test_a_missing_emphasis_says_which_file() -> None:
+    with pytest.raises(PackError, match="prompts/nope.md"):
+        pack("acme-review-prompts", entries=[_example_entry()]).emphasis("nope")
+
+
 def test_a_body_resolves_through_the_packs_own_package() -> None:
     """At bind time importing is expected — the repository has decided to trust the pack by then."""
     found = pack("acme-review-prompts", entries=[_example_entry()])

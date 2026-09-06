@@ -3629,3 +3629,187 @@ def test_gate_team_1_report_by_actor_prints_the_spread_pseudonymously_and_names_
     # The default report still names nobody, and still says who and how many.
     plain = CliRunner().invoke(main, ["report"])
     assert "actor-1                  1 run(s)" in plain.output and "amy" not in plain.output
+
+
+# -- #204: a lens on request, and a Lens as a declared object ---------------------------------------
+
+
+def test_init_review_scaffolds_the_credential_split(repo: Path) -> None:
+    """The `/review <lens>` flow, as an adopter gets it rather than as this repository runs it.
+
+    The property that must survive: no job holds a provider key and a write token -- here the
+    write is `pull-requests: write`, because posting a comment is a write -- and the posting job
+    does not even install a provider SDK. The gate runs first and alone.
+    """
+    import yaml
+
+    result = CliRunner().invoke(main, ["init", "--review"])
+    assert result.exit_code == 0, result.output
+    workflow = yaml.safe_load((repo / ".github/workflows/review.yml").read_text())
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"gate", "review", "post"}
+    assert jobs["review"]["needs"] == "gate" and jobs["post"]["needs"] == "review"
+    for name, job in jobs.items():
+        text = yaml.dump(job)
+        holds_key = "ANTHROPIC_API_KEY" in text
+        permissions = job.get("permissions") or {}
+        writes = "write" in (permissions.get("contents"), permissions.get("pull-requests"))
+        assert not (holds_key and writes), f"{name} holds a provider key and write access"
+    assert "anthropic" not in yaml.dump(jobs["post"]).lower()
+    assert jobs["review"]["permissions"]["pull-requests"] == "read", "the host is asked for the refs"
+    assert all("timeout-minutes" in j for j in jobs.values())
+
+
+def test_the_review_scaffold_passes_only_options_the_commands_declare(repo: Path) -> None:
+    """The failure the first scaffold shipped, guarded for the sixth: a flag the CLI does not take
+    is a red first run for every adopter, and nobody reads a scaffold before running it."""
+    import re
+
+    CliRunner().invoke(main, ["init", "--review"])
+    text = (repo / ".github/workflows/review.yml").read_text()
+    for command in ("review", "comment", "gate", "history"):
+        declared = {o for p in main.commands[command].params for o in p.opts}
+        for chunk in text.split(f"in-lockstep {command} ")[1:]:
+            used = set(re.findall(r"(--[a-z-]+)", chunk.split("env:")[0].split("- uses:")[0]))
+            assert used <= declared, f"the scaffold passes {sorted(used - declared)} to {command}"
+    assert "--comment-out" in text and "--ask" in text and "--pr" in text
+    import yaml
+
+    runs = " ".join(s.get("run") or "" for j in yaml.safe_load(text)["jobs"].values() for s in j["steps"])
+    assert "--budget" not in runs, "the module's ceiling applies; a literal here would outrank it"
+
+
+def test_the_review_scaffold_never_interpolates_the_comment_into_a_shell(repo: Path) -> None:
+    """`${{ github.event.comment.body }}` inside a `run:` is shell injection into the one job
+    holding a provider credential, written by anyone who can comment. It travels as `env`."""
+    import yaml
+
+    CliRunner().invoke(main, ["init", "--review"])
+    workflow = yaml.safe_load((repo / ".github/workflows/review.yml").read_text())
+    for job in workflow["jobs"].values():
+        for step in job["steps"]:
+            assert "comment.body" not in (step.get("run") or ""), step
+    review = next(s for s in workflow["jobs"]["review"]["steps"] if "--ask" in (s.get("run") or ""))
+    assert review["env"]["BODY"] == "${{ github.event.comment.body }}"
+    assert '"$BODY"' in review["run"]
+
+
+def test_the_review_scaffold_is_pinned_like_the_others(repo: Path) -> None:
+    import re
+
+    from in_lockstep import __version__
+
+    CliRunner().invoke(main, ["init", "--review"])
+    text = (repo / ".github/workflows/review.yml").read_text()
+    assert f"in-lockstep[anthropic]=={__version__}" in text
+    assert "IN_LOCKSTEP_VERSION" not in text
+    for used in re.findall(r"uses: (\S+)", text):
+        _, _, ref = used.partition("@")
+        assert re.fullmatch(r"[0-9a-f]{40}", ref), f"{used} is not pinned by SHA"
+
+
+def test_init_review_writes_nothing_on_gitlab_and_says_why(repo: Path) -> None:
+    """GitLab CI has no issue-comment trigger. A file that could not fire is worse than none, so
+    the flag prints where a lens on request comes from there instead."""
+    (repo / ".gitlab-ci.yml").write_text("stages: [review]\n")
+    result = CliRunner().invoke(main, ["init", "--review"])
+    assert result.exit_code == 0, result.output
+    assert not (repo / ".github" / "workflows" / "review.yml").exists()
+    assert "no issue-comment trigger" in result.output
+
+
+def test_init_review_composes_with_the_write_verbs(repo: Path) -> None:
+    result = CliRunner().invoke(main, ["init", "--implement", "--fix", "--review"])
+    assert result.exit_code == 0, result.output
+    names = {p.name for p in (repo / ".github" / "workflows").iterdir()}
+    assert {"lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml", "review.yml"} <= names
+
+
+LENS_MODULE = """
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.core.spend import Budget
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt, review_layers
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+lockstep.bind(
+    Review,
+    AiReview(
+        lenses={
+            **LENSES,
+            "security": Lens(
+                prompt=SecurityReviewPrompt,
+                emphasis="SQLAlchemy 2.x session discipline",
+                layers=review_layers().plus(guardrails=(("acme/house", "Never touch migrations."),)),
+            ),
+        },
+    ),
+)
+lockstep.models.route("review", "anthropic:claude-haiku-4-5")
+lockstep.models.route("review/security", "google:gemini-2.5-flash")
+lockstep.models.route("review/sekurity", "google:gemini-2.5-flash")
+lockstep.models.route("implement/oneshot", "anthropic:claude-opus-4-6")
+"""
+
+ROUTES_MODULE = """
+from in_lockstep import Lockstep
+from in_lockstep.core.spend import Budget
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=5.00)
+lockstep.models.route("review", "anthropic:claude-haiku-4-5")
+lockstep.models.route("review/security", "google:gemini-2.5-flash")
+"""
+
+
+def test_ls_prints_one_guardrail_chain_per_distinct_stack(repo: Path) -> None:
+    """`ls` used to print the first lens's chain as everybody's, which became a lie the moment a
+    `Lens` could carry its own stack (#204). One chain still prints as it always did."""
+    _lifecycle(repo).write_text(LENS_MODULE)
+    result = CliRunner().invoke(main, ["ls"])
+    assert result.exit_code == 0, result.output
+    assert "guardrails: baseline, review/reviewing  (intent, performance, tests)" in result.output
+    assert "guardrails: baseline, review/reviewing, acme/house  (security)" in result.output
+    assert "review/security*" in result.output, "a lens that adds emphasis is not the shipped prompt"
+
+
+def test_ls_flags_a_route_to_a_lens_nothing_binds(repo: Path) -> None:
+    _lifecycle(repo).write_text(LENS_MODULE)
+    result = CliRunner().invoke(main, ["ls"])
+    lines = {line.split()[0]: line for line in result.output.splitlines() if line.startswith("  review")}
+    assert "no such lens" in lines["review/sekurity"]
+    assert "<-" not in lines["review/security"]
+    assert "<-" not in lines["review"]
+    implement = next(line for line in result.output.splitlines() if "implement/oneshot" in line)
+    assert "only review routes per lens" in implement
+
+
+def test_show_prompt_renders_what_a_lens_adds(repo: Path) -> None:
+    _lifecycle(repo).write_text(LENS_MODULE)
+    result = CliRunner().invoke(main, ["show-prompt", "security", "--diff"])
+    assert result.exit_code == 0, result.output
+    assert any(line.startswith("+") and "SQLAlchemy" in line for line in result.output.splitlines())
+    assert any(
+        line.startswith("+") and "Never touch migrations." in line for line in result.output.splitlines()
+    )
+    result = CliRunner().invoke(main, ["show-prompt", "intent", "--diff"])
+    assert "unmodified" in result.output, "the other lenses are exactly the shipped ones"
+
+
+def test_review_runs_a_lens_on_the_model_its_own_route_names(repo: Path) -> None:
+    """`review/security` wins over `review` for that lens, and a lens with no route of its own
+    takes the verb's. Read off the ledger, because the record is what a person checks.
+
+    A module that routes and binds nothing, so the CLI builds the adapter and `--dry-run` swaps
+    the provider: a module that binds its own `AiReview` resolves its own invoker, and the record
+    then withholds the model because this command's flag was not consulted."""
+    _lifecycle(repo).write_text(ROUTES_MODULE)
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    assert result.exit_code == 0, result.output
+    assert "gemini-2.5-flash" in _ledger_record(repo, "review-security").read_text()
+    result = CliRunner().invoke(
+        main, ["review", "--dry-run", "--aspect", "intent", "--base", "HEAD", "--diff", _diff(repo)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "haiku" in _ledger_record(repo, "review-intent").read_text()

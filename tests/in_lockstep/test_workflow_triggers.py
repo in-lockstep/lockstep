@@ -396,6 +396,7 @@ def _scaffolds() -> dict[str, str]:
         _SCAFFOLD_FIX_TRAMPOLINE,
         _SCAFFOLD_GITLAB_TRAMPOLINE,
         _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        _SCAFFOLD_REVIEW_TRAMPOLINE,
         _SCAFFOLD_TRAMPOLINE,
     )
 
@@ -405,6 +406,9 @@ def _scaffolds() -> dict[str, str]:
         "scaffold: implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
         "scaffold: fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
         "scaffold: ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        # The sixth, added with the flag that writes it (#204). It uploads `findings.md`, a
+        # history bundle and harvested cases, which is run evidence three ways over.
+        "scaffold: review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
     }
 
 

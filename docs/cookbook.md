@@ -179,6 +179,24 @@ lockstep.bind(
 
 `in-lockstep show-prompt license` renders it offline, and `ls` stars it as not-the-shipped-prompt.
 
+To add to a shipped lens rather than write one, keep its class and its key. A `Lens` carries what
+a subclass would have carried, and a route keyed `review/<lens>` puts that one lens on a different
+model:
+
+```python
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt
+
+lockstep.bind(
+    Review,
+    AiReview(lenses={**LENSES, "security": Lens(SecurityReviewPrompt, emphasis="No bare excepts.")}),
+)
+lockstep.models.route("review/security", "anthropic:claude-opus-4-6")
+```
+
+The key stays `security`, so `review.security` in the ledger and the sticky comment's marker both
+survive the change. A lens of your own gets a name nobody had; a better `security` stays `security`.
+
 ## 10. Make the ledger auditable
 
 Every run records to the `lockstep-history` orphan branch. Two commands read it, and both check

@@ -9,6 +9,7 @@ answers to "may this repository send code there".
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -439,7 +440,27 @@ def recorded(provider: Any, log: Any) -> Any:
     return RecordingProvider(provider, log)
 
 
-def routed_invoker(verb: Any) -> Any:
+def routed_model(models: Mapping[str, str], verb: str, aspect: str = "") -> str:
+    """The model id a route table names for a verb, or for one lens of it. Empty when neither.
+
+    `review/security` before `review`: a route keyed on the lens is the more specific declaration
+    and wins, and a lens with no route of its own takes the verb's, so per-lens routing costs a
+    repository nothing until it writes a line (#204). One function for both readers -- the CLI's
+    `--model` default and `routed_invoker` below -- because two spellings of "which key wins" is
+    how a repository's `ls` and its run come to disagree about the model.
+
+    The key is `verb/aspect` and not a second table, so `ls` prints lens routes beside verb routes
+    under one heading and can flag a route to a lens nothing binds the same way it flags a route
+    to a verb nothing serves.
+    """
+    if aspect:
+        specific = str(models.get(f"{verb}/{aspect}", "") or "")
+        if specific:
+            return specific
+    return str(models.get(verb, "") or "")
+
+
+def routed_invoker(verb: Any, *, aspect: str = "") -> Any:
     """A `Callable[[ctx], AiInvoker]` that reads the model route off the run context.
 
     The default every AI adapter falls back to when no `invoker_factory=` was passed: the model
@@ -447,14 +468,17 @@ def routed_invoker(verb: Any) -> Any:
     `context()` time, so route lines may appear before or after the bind — and egress from the
     bound `EgressPolicy`, via `invoker_factory`'s own lazy resolution. An explicit
     `invoker_factory=` remains the seam for a custom `ProviderRegistry` or provider.
+
+    `aspect` names the lens when the verb has them, and `routed_model` says which key wins.
     """
     key = getattr(verb, "value", str(verb))
 
     def build(ctx: Any) -> Any:
-        model_id = str((getattr(ctx, "models", None) or {}).get(key, "") or "")
+        model_id = routed_model(getattr(ctx, "models", None) or {}, key, aspect)
         if not model_id:
+            keys = f'"{key}/{aspect}" or "{key}"' if aspect else f'"{key}"'
             raise MissingModelRoute(
-                f'no model routed for {key!r}: add `lockstep.models.route("{key}", ...)` to '
+                f"no model routed for {key!r}: add `lockstep.models.route({keys}, ...)` to "
                 f"lockstep.py, or pass `invoker_factory=` to the adapter. Nothing was sent and "
                 f"nothing was charged."
             )

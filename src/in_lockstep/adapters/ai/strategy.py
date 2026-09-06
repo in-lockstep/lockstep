@@ -520,8 +520,11 @@ def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Outco
     )
 
 
-def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any) -> Any:
+def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any, *, aspect: str = "") -> Any:
     """The run's invoker: an injected factory, or the one routed from `lockstep.models.route`.
+
+    `aspect` is the lens, for the one verb that has them: `review/<aspect>` is tried before
+    `review`, and the strategies pass nothing because their prompts are not routed apart.
 
     It is the seam a repository substitutes for a gateway or a cassette provider, so every AI
     adapter goes through this one function rather than spelling it out — six had, and the
@@ -545,7 +548,7 @@ def resolve_invoker(invoker_factory: Any, verb: Any, ctx: Any) -> Any:
     """
     from ...ai.bootstrap import recorded, routed_invoker
 
-    factory = invoker_factory or routed_invoker(verb)
+    factory = invoker_factory or routed_invoker(verb, aspect=aspect)
     invoker = factory(ctx)
     log = getattr(ctx, "recording", None)
     if log is not None and getattr(invoker, "provider", None) is not None:

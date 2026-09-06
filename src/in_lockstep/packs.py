@@ -119,6 +119,27 @@ class Pack:
             fragments.append((f"{self.name}/{name}", body.strip()))
         return tuple(fragments)
 
+    def emphasis(self, name: str) -> str:
+        """`prompts/<name>.md` as the text a `Lens(emphasis=...)` rides after a shipped body.
+
+        The no-subclass way for a pack to ENHANCE a shipped lens rather than replace it (#204):
+        `Lens(prompt=SecurityReviewPrompt, emphasis=acme.emphasis("style"))` keeps the framework's
+        body and the framework's key, and adds the pack's paragraphs under the emphasis heading.
+        A pack that wants its own body ships one and points `body()` at it; the difference is
+        whether the shipped prose is kept, and this is the spelling that keeps it.
+
+        Frontmatter stripped, like `guardrails()`, because a header is what a file says about
+        itself and not something to send. Returned as text rather than a `Body` because emphasis
+        is composed as a string beside the class's own -- and, unlike a guardrail, it carries no
+        label: it lands inside the body section of the projection, where the pack is already
+        named by the bind line that reached for it.
+        """
+        text = self.read(f"prompts/{name}.md")
+        if text is None:
+            raise PackError(f"pack {self.name!r} has no prompts/{name}.md")
+        _, body = parse_frontmatter(text)
+        return body.strip()
+
     # -- inspection, none of which imports the pack -----------------------------------
 
     def read(self, relative: str) -> str | None:
