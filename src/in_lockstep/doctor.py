@@ -486,8 +486,21 @@ def _history_integrity(report: Report, root: Path) -> None:
     ledger = GitLedger(root=root)
     try:
         problems = ledger.verify()
+        acknowledged = ledger.acknowledged_rewrites()
     except HistoryError:
         return
+    for note in acknowledged:
+        # Still said, under the name of the person who explained it. An acknowledged rewrite is
+        # not an alarm and not a secret: the note is the reason the check can stay red for the
+        # unexplained ones without teaching anybody to read past it (#295).
+        report.add(
+            "DOC173",
+            Severity.NOTE,
+            f"{ledger.branch}: commit {note.commit[:12]} rewrote {len(note.lines)} record(s), "
+            f"acknowledged by {note.by}",
+            f"{note.reason} ({note.ts}). `history --acknowledge` wrote this; the rewrite itself is "
+            f"unchanged and the note is append-only like a record.",
+        )
     if problems:
         shown = "; ".join(problems[:3]) + ("; …" if len(problems) > 3 else "")
         report.add(

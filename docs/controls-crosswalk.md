@@ -58,7 +58,10 @@ halves, and each is honest about what it cannot do:
   contradiction. `report` prints the contradictions at read time and `doctor` fails on them
   (`DOC167`), so a rewritten ledger breaks a required check rather than waiting to be noticed
   (`GATE-LEDGER-8`). A legitimate reconcile or absorb never trips it: re-adding the same content
-  is the same blob, which git records as no change.
+  is the same blob, which git records as no change. A rewrite somebody can explain is acknowledged
+  by name (`history --acknowledge`), as a note appended to the branch and protected by the same
+  walk; `report` and `doctor` then print the note where the alarm was, and every unexplained
+  rewrite stays an alarm (`GATE-LEDGER-11`).
 - **A replaced chain is the remote's to refuse.** A force-push of freshly fabricated commits
   discards the contradiction along with the commits that held it, and no local walk can see what
   is no longer there. Protect `lockstep-history` against force-push and deletion (a ruleset with

@@ -211,6 +211,49 @@ def test_gate_ledger_8_report_raises_the_alarm_at_read_time(hermetic: Path) -> N
     assert "TAMPERED" in result.stderr and "records/r1.json" in result.stderr
 
 
+def test_gate_ledger_11_report_prints_the_note_where_the_alarm_was(hermetic: Path) -> None:
+    """An acknowledged rewrite is not an alarm and not a secret: the same fact, on the same stream,
+    with a name and a reason attached, and a footer that says "except" rather than "append-only"."""
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.01}))
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.99}))  # the rewrite
+    rewrite = str(ledger.head())
+
+    written = CliRunner().invoke(
+        main,
+        ["history", "--acknowledge", rewrite[:8], "--reason", "the id was reused before ids carried a stamp"],
+    )
+    assert written.exit_code == 0, written.output
+    assert f"acknowledged  {rewrite[:12]}  rewrote 1 record(s)  (by t <t@example.test>)" in written.output, (
+        "--by defaults to the configured git author"
+    )
+
+    result = CliRunner().invoke(main, ["report"])
+    assert result.exit_code == 0, result.output
+    assert "TAMPERED" not in result.stderr and "NOT APPEND-ONLY" not in result.output
+    assert f"acknowledged  commit {rewrite[:12]} rewrote 1 record(s): the id was reused" in result.stderr
+    assert "by t <t@example.test>" in result.stderr
+    assert "append-only across the retained chain, except 1 rewrite(s) acknowledged by name" in result.output
+
+
+def test_an_acknowledgement_nobody_signed_is_refused(hermetic: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No git author and no --by: refused rather than signed by the framework, because a note the
+    framework signed is one nobody stands behind."""
+    _repo(hermetic)
+    ledger = GitLedger(root=hermetic)
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.01}))
+    asyncio.run(ledger.append("r1", {"kind": "review", "cost_usd": 0.99}))
+    subprocess.run(["git", "config", "--unset", "user.name"], cwd=hermetic, check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hermetic / "no-global"))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(hermetic / "no-system"))
+
+    result = CliRunner().invoke(main, ["history", "--acknowledge", str(ledger.head()), "--reason", "x"])
+    assert result.exit_code != 0
+    assert "who and why" in result.output, result.output
+    assert len(ledger.verify()) == 1, "nothing was written"
+
+
 def test_the_alarm_stays_off_json_stdout(hermetic: Path) -> None:
     """A fleet scanner parses stdout; the tamper flag must reach the human without breaking it."""
     _repo(hermetic)

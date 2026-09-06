@@ -13,6 +13,7 @@ index is untouched, and the working branch is not written to.
 from __future__ import annotations
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
 
@@ -299,6 +300,135 @@ def test_absorbing_a_bundle_does_not_read_as_tampering(tmp_path: Path) -> None:
     assert [r["run_id"] for r in ledger_a.records()] == ["run-a", "run-b"]
 
 
+# -- GATE-LEDGER-11: a flagged rewrite can be acknowledged by name ------------------------------
+#
+# Every report on this repository opened with TAMPERED for four days because nobody could answer
+# the flag (#295). An acknowledgement is a note appended to the branch -- who, why, what -- and it
+# is the one shape in which a contradiction stops being an alarm without becoming a secret.
+
+
+def _rewritten(tmp_path: Path) -> tuple[GitLedger, str]:
+    """A ledger with one rewrite in it, and the commit that made it."""
+    ledger = GitLedger(root=_repo(tmp_path))
+    asyncio.run(ledger.append("run-1", {"kind": "review", "cost_usd": 0.02}))
+    asyncio.run(ledger.append("run-2", {"kind": "review", "cost_usd": 0.03}))
+    _tamper(ledger, "run-1")
+    return ledger, str(ledger.head())
+
+
+def test_gate_ledger_11_an_acknowledged_rewrite_stops_being_an_alarm_and_keeps_its_name(
+    tmp_path: Path,
+) -> None:
+    ledger, rewrite = _rewritten(tmp_path)
+    assert len(ledger.verify()) == 1
+
+    note = ledger.acknowledge(
+        rewrite[:8], reason="the same run id was reused before ids carried a stamp", by="t <t@example.test>"
+    )
+    assert ledger.verify() == [], "acknowledged, so no longer an alarm"
+    (found,) = ledger.acknowledged_rewrites()
+    assert found == note
+    assert found.commit == rewrite and found.by == "t <t@example.test>"
+    assert found.lines and "records/run-1.json" in found.lines[0], "what was rewritten travels with the note"
+    assert len(ledger.records()) == 2, "a note is not a record"
+    subject = _git(ledger.root, "log", "-1", "--format=%s", f"refs/heads/{DEFAULT_BRANCH}")
+    assert subject == f"acknowledge {rewrite[:12]}: rewrote 1 record(s)"
+
+
+def test_gate_ledger_11_a_note_covers_exactly_the_commit_it_names(tmp_path: Path) -> None:
+    """A later rewrite, or an earlier one in another commit, is still an alarm. The note is not an
+    allow-list and not a switch."""
+    ledger, rewrite = _rewritten(tmp_path)
+    ledger.acknowledge(rewrite, reason="known migration", by="t")
+    _tamper(ledger, "run-2")
+    problems = ledger.verify()
+    assert len(problems) == 1 and "records/run-2.json" in problems[0]
+    assert len(ledger.acknowledged_rewrites()) == 1
+
+
+def test_gate_ledger_11_editing_the_note_itself_is_a_contradiction(tmp_path: Path) -> None:
+    """The note is protected by the same walk as a record, so an acknowledgement cannot be
+    quietly reworded after the fact."""
+    import tempfile
+
+    ledger, rewrite = _rewritten(tmp_path)
+    ledger.acknowledge(rewrite, reason="known migration", by="t")
+    head = str(ledger.head())
+    with tempfile.TemporaryDirectory() as tmp:
+        index = Path(tmp) / "index"
+        ledger._git("read-tree", head, index=index)
+        reworded = json.dumps({"commit": rewrite, "by": "x", "reason": "z"}) + "\n"
+        blob = ledger._git("hash-object", "-w", "--stdin", stdin=reworded)
+        ledger._git(
+            "update-index", "--add", "--cacheinfo", f"100644,{blob},acknowledged/{rewrite}.json", index=index
+        )
+        tree = ledger._git("write-tree", index=index)
+    made = ledger._git(*ledger._identity(), "commit-tree", tree, "-p", head, "-m", "reword")
+    ledger._git("update-ref", ledger.ref, made, head)
+    assert any(f"acknowledged/{rewrite}.json was modified" in p for p in ledger.verify())
+
+
+@pytest.mark.parametrize(
+    ("reason", "by", "why"),
+    [("", "t", "who and why"), ("known", "", "who and why"), ("   ", "t", "who and why")],
+)
+def test_gate_ledger_11_a_note_that_says_nothing_checkable_is_refused(
+    tmp_path: Path, reason: str, by: str, why: str
+) -> None:
+    ledger, rewrite = _rewritten(tmp_path)
+    with pytest.raises(HistoryError, match=why):
+        ledger.acknowledge(rewrite, reason=reason, by=by)
+    assert len(ledger.verify()) == 1, "nothing was written"
+
+
+def test_gate_ledger_11_a_commit_that_rewrote_nothing_cannot_be_acknowledged(tmp_path: Path) -> None:
+    """An acknowledgement of nothing is the allow-list this is not."""
+    ledger, _rewrite = _rewritten(tmp_path)
+    first = _git(ledger.root, "rev-list", "--max-parents=0", f"refs/heads/{DEFAULT_BRANCH}")
+    with pytest.raises(HistoryError, match="rewrote nothing"):
+        ledger.acknowledge(first, reason="x", by="t")
+    with pytest.raises(HistoryError, match="not a commit on"):
+        ledger.acknowledge("0" * 40, reason="x", by="t")
+    with pytest.raises(HistoryError, match="not a commit on"):
+        ledger.acknowledge(_git(ledger.root, "rev-parse", "main"), reason="x", by="t")
+
+
+def test_gate_ledger_11_a_second_acknowledgement_is_refused_and_the_first_stands(tmp_path: Path) -> None:
+    ledger, rewrite = _rewritten(tmp_path)
+    ledger.acknowledge(rewrite, reason="first", by="amy")
+    with pytest.raises(HistoryError, match="already acknowledged by amy"):
+        ledger.acknowledge(rewrite, reason="second", by="zed")
+    (found,) = ledger.acknowledged_rewrites()
+    assert found.by == "amy" and found.reason == "first"
+
+
+def test_gate_ledger_11_a_note_travels_with_the_records_through_absorb_and_push(tmp_path: Path) -> None:
+    """Both rebuilds start from the other side's tree and add records; a note that did not travel
+    would be a flag that came back the moment the branch was published."""
+    a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    ledger_a, ledger_b = GitLedger(root=a), GitLedger(root=b)
+    asyncio.run(ledger_a.append("run-a", {"kind": "review"}))
+    asyncio.run(ledger_b.append("run-b", {"kind": "review"}))
+    _tamper(ledger_b, "run-b")
+    rewrite = str(ledger_b.head())
+    ledger_b.acknowledge(rewrite, reason="known", by="t")
+
+    ledger_a.absorb(ledger_b.bundle(tmp_path / "b.bundle"))
+    assert ledger_a.verify() == [], "the absorbed rewrite arrived with its note"
+    assert [n.commit for n in ledger_a.acknowledged_rewrites()] == [rewrite]
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    for clone in (a, b):
+        subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=clone, check=True)
+    ledger_a.push()
+    asyncio.run(ledger_b.append("run-b2", {"kind": "review"}))
+    ledger_b.push()  # rejected once, reconciled onto a's tree, pushed
+    landed = GitLedger(root=a)
+    landed._git("fetch", "origin", f"{landed.ref}:{landed.ref}")
+    assert landed.verify() == [] and len(landed.acknowledged_rewrites()) == 1
+
+
 def test_an_empty_history_has_nothing_to_verify(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     assert GitLedger(root=root).verify() == []
@@ -320,6 +450,29 @@ def test_doctor_fails_on_a_rewritten_ledger(tmp_path: Path, monkeypatch: pytest.
     tampered = next(c for c in report.checks if c.code == "DOC167")
     assert tampered.severity is doctor_module.Severity.ERROR
     assert "force-push" in tampered.hint, "the check's blind spot is stated where it fires"
+
+
+def test_gate_ledger_11_doctor_notes_an_acknowledged_rewrite_and_stays_red_for_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The required check stops failing on a rewrite somebody explained, and says who and why as
+    a NOTE -- so the explanation is on the same page as the alarm would have been."""
+    from in_lockstep import doctor as doctor_module
+
+    ledger, rewrite = _rewritten(tmp_path)
+    ledger.acknowledge(rewrite, reason="known migration", by="t <t@example.test>")
+    monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "100")
+    report = doctor_module.run(ledger.root)
+    codes = [c.code for c in report.checks]
+    assert "DOC167" not in codes
+    noted = next(c for c in report.checks if c.code == "DOC173")
+    assert noted.severity is doctor_module.Severity.NOTE
+    assert "t <t@example.test>" in noted.message and "known migration" in noted.hint
+
+    _tamper(ledger, "run-2")
+    again = doctor_module.run(ledger.root)
+    assert "DOC167" in [c.code for c in again.checks], "an unexplained rewrite is still an ERROR"
+    assert "DOC173" in [c.code for c in again.checks], "and the explained one is still named"
 
 
 def test_doctor_says_nothing_about_a_repo_that_never_recorded(

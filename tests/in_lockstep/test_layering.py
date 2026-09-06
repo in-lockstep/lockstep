@@ -290,7 +290,10 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: a dash with the reason, and `_provenance` carries the host's run id into the record. Which
 #: artifacts are outstanding and what "once" means live in `platform/ledger/reconcile.py`, where
 #: `test_reconcile.py` reaches them against two real git ledgers and a stubbed host.
-CLI_HELPER_STATEMENTS = 994
+#: 994 -> 997 with #295, rendering: `_history_line` names the rewrites somebody acknowledged
+#: beside the ones nobody has. What an acknowledgement is, and what it covers, lives in
+#: `platform/ledger/history.py`, where `test_history.py` reaches it without a CliRunner.
+CLI_HELPER_STATEMENTS = 997
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

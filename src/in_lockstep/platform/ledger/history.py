@@ -34,6 +34,27 @@ from ...privileged.redact import Redact
 
 DEFAULT_BRANCH = "lockstep-history"
 RECORDS = "records"
+#: Where an acknowledged rewrite is written down: one file per acknowledged commit, appended
+#: like a record and protected like one, because `verify` walks the whole tree and a note that
+#: was later edited is a contradiction in its own right.
+ACKNOWLEDGED = "acknowledged"
+
+
+@dataclass(frozen=True)
+class Acknowledgement:
+    """A rewrite somebody stood behind by name: which commit, who, why, and what it rewrote.
+
+    Not an allow-list. `verify` still finds every contradiction; this is the shape in which one
+    of them stops being an alarm, and it is printed where the alarm was. A tamper flag nobody
+    can acknowledge is one everybody learns to read past, and then the next one is read past too
+    (#295).
+    """
+
+    commit: str
+    by: str
+    reason: str
+    ts: str
+    lines: tuple[str, ...]
 
 
 class HistoryError(RuntimeError):
@@ -185,12 +206,42 @@ class GitLedger:
         modification flagged here therefore means either tampering or two different runs that
         shared a run id, and the second is worth an alarm too: one of those records silently
         replaced the other.
+
+        What comes back is every contradiction nobody has acknowledged. An acknowledged one is a
+        commit somebody stood behind by name, in a note appended to this branch (`acknowledge`),
+        and `acknowledged_rewrites` returns those with the note — so a reader still sees the
+        rewrite, under the name of the person who explained it, instead of an alarm that has
+        been read past for days (#295). The note covers exactly the commit it names: a rewrite
+        in any other commit, before or after, is still an alarm.
         """
+        acknowledged = self.acknowledgements()
+        return [line for commit, line in self._contradictions() if commit not in acknowledged]
+
+    def acknowledged_rewrites(self) -> list[Acknowledgement]:
+        """The contradictions somebody acknowledged, each with who, why, and what it rewrote."""
+        notes = self.acknowledgements()
+        lines: dict[str, list[str]] = {}
+        for commit, line in self._contradictions():
+            if commit in notes:
+                lines.setdefault(commit, []).append(line)
+        return [
+            Acknowledgement(
+                commit=commit,
+                by=str(notes[commit].get("by", "")),
+                reason=str(notes[commit].get("reason", "")),
+                ts=str(notes[commit].get("ts", "")),
+                lines=tuple(found),
+            )
+            for commit, found in lines.items()
+        ]
+
+    def _contradictions(self) -> list[tuple[str, str]]:
+        """Every commit that modified or deleted a file after its append, as (commit, line)."""
         head = self.head()
         if head is None:
             return []
         raw = self._git("log", "--format=%H", "--name-status", "--diff-filter=MD", self.ref)
-        problems: list[str] = []
+        problems: list[tuple[str, str]] = []
         commit = ""
         for line in raw.splitlines():
             if not line.strip():
@@ -200,8 +251,75 @@ class GitLedger:
                 continue
             status, path = line.split("\t", 1)
             verb = "modified" if status.startswith("M") else "deleted"
-            problems.append(f"{path} was {verb} after being appended (commit {commit[:12]})")
+            problems.append((commit, f"{path} was {verb} after being appended (commit {commit[:12]})"))
         return problems
+
+    # -- acknowledging a rewrite -------------------------------------------------------
+
+    def acknowledgements(self) -> dict[str, dict[str, object]]:
+        """Every acknowledgement on the branch, keyed by the full commit it stands behind."""
+        head = self.head()
+        if head is None:
+            return {}
+        listing = self._try("ls-tree", "--name-only", f"{head}:{ACKNOWLEDGED}") or ""
+        out: dict[str, dict[str, object]] = {}
+        for name in sorted(listing.splitlines()):
+            raw = self._try("show", f"{head}:{ACKNOWLEDGED}/{name}")
+            if raw:
+                note = json.loads(raw)
+                if isinstance(note, dict) and note.get("commit"):
+                    out[str(note["commit"])] = note
+        return out
+
+    def acknowledge(self, commit: str, *, reason: str, by: str) -> Acknowledgement:
+        """Stand behind one rewrite by name. Appended, never edited; returns the note it wrote.
+
+        Refused in every case where the note would say nothing checkable: no name or no reason
+        (a shrug on the record), a commit that is not on this branch, a commit that rewrote
+        nothing (nothing to acknowledge, and a note about it would be the allow-list this is not),
+        and a commit already acknowledged (the first note stands, and a second would have to edit
+        it — which `verify` would flag). What the commit rewrote is copied into the note, so a
+        reader of the note alone knows what was stood behind.
+        """
+        from datetime import UTC, datetime
+
+        if not reason.strip() or not by.strip():
+            raise HistoryError("an acknowledgement names who and why, or it is a shrug on the record")
+        head = self.head()
+        if head is None:
+            raise HistoryError("there is no history to acknowledge anything on")
+        full = self._try("rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
+        if not full or self._try("merge-base", "--is-ancestor", full, head) is None:
+            raise HistoryError(f"{commit} is not a commit on {self.branch}")
+        rewrote = [line for at, line in self._contradictions() if at == full]
+        if not rewrote:
+            raise HistoryError(
+                f"{full[:12]} rewrote nothing after its append; there is nothing to acknowledge"
+            )
+        already = self.acknowledgements().get(full)
+        if already is not None:
+            raise HistoryError(f"{full[:12]} is already acknowledged by {already.get('by', '?')}")
+        stamp = datetime.now(UTC).isoformat(timespec="seconds")
+        note = {"commit": full, "by": by.strip(), "reason": reason.strip(), "ts": stamp, "rewrote": rewrote}
+        payload = self.redact.text(json.dumps(note, indent=2, sort_keys=True)) + "\n"
+        blob = self._git("hash-object", "-w", "--stdin", stdin=payload)
+        with tempfile.TemporaryDirectory() as tmp:
+            index = Path(tmp) / "index"
+            self._git("read-tree", head, index=index)
+            self._git(
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{blob},{ACKNOWLEDGED}/{full}.json",
+                index=index,
+            )
+            tree = self._git("write-tree", index=index)
+        subject = f"acknowledge {full[:12]}: rewrote {len(rewrote)} record(s)"
+        made = self._git(*self._identity(), "commit-tree", tree, "-p", head, "-m", subject)
+        self._git("update-ref", self.ref, made, head)
+        return Acknowledgement(
+            commit=full, by=by.strip(), reason=reason.strip(), ts=stamp, lines=tuple(rewrote)
+        )
 
     # -- publishing ----------------------------------------------------------------
 
@@ -242,6 +360,10 @@ class GitLedger:
         with tempfile.TemporaryDirectory() as tmp:
             index = Path(tmp) / "index"
             self._git("read-tree", remote_head, index=index)
+            # Acknowledgements travel with the records they explain. Both rebuilds below start
+            # from the OTHER side's tree and add this side's records, which would drop a note this
+            # side made -- and a note that vanished on push would be a flag that came back.
+            self._carry(index, str(self.head()), ACKNOWLEDGED)
             for record in mine:
                 run_id = str(record.get("run_id", "run"))
                 payload = json.dumps(record, indent=2, sort_keys=True, default=repr) + "\n"
@@ -338,6 +460,7 @@ class GitLedger:
                     f"100644,{blob},{RECORDS}/{name}",
                     index=index,
                 )
+            self._carry(index, other, ACKNOWLEDGED)
             tree = self._git("write-tree", index=index)
         commit = self._git(
             *self._identity(),
@@ -351,6 +474,13 @@ class GitLedger:
             _absorb_subject(run_id),
         )
         self._git("update-ref", self.ref, commit, str(head))
+
+    def _carry(self, index: Path, source: str, subdir: str) -> None:
+        """Copy every entry of `subdir` from `source`'s tree into the index being built."""
+        listing = self._try("ls-tree", "--name-only", f"{source}:{subdir}") or ""
+        for name in sorted(listing.splitlines()):
+            blob = self._git("rev-parse", f"{source}:{subdir}/{name}")
+            self._git("update-index", "--add", "--cacheinfo", f"100644,{blob},{subdir}/{name}", index=index)
 
 
 #: The absorb commit's subject, with the run it took in when the caller knew it. Read back by
