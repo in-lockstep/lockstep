@@ -33,22 +33,11 @@ NOT_OURS = {".venv", "venv", "__pycache__", ".git", ".mypy_cache", ".ruff_cache"
 # reviewer sees, which is the property a silent gap never had — and it is per tool because the two
 # catch different things: ruff reaches the test suite and mypy does not.
 EXEMPT: dict[str, dict[str, str]] = {
-    "ruff check": {
-        "examples": (
-            "The worked examples. ruff passes on all of them today, so this is a scope line rather "
-            "than a tolerated failure: they are checked in #247 together with the typecheck half, "
-            "because splitting them would leave the harder half unowned."
-        ),
-    },
+    # `examples` was here for both tools until #247: two files named `lockstep.py` cannot share a
+    # mypy invocation, so the Makefile gives each worked example one of its own, and names each
+    # example's `.lockstep` for ruff. The seven errors they carried are gone with the exemption.
+    "ruff check": {},
     "mypy": {
-        "examples": (
-            "Two of the four worked examples are named `lockstep.py`, and mypy refuses more than "
-            'one module of a given name in one invocation — `Duplicate module named "lockstep"`, '
-            "and it stops before checking anything. So `examples` cannot be appended to the "
-            "typecheck target; it needs an invocation per file. They do carry real type errors and "
-            "an adopter reads them, which is an O8 problem rather than a reason to leave them out. "
-            "Filed as #247."
-        ),
         "tests": (
             "693 errors across 53 files today. Type-checking the suite is its own project, not a "
             "line on a Makefile target. Recorded here rather than left implicit because "

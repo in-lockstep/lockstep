@@ -12,6 +12,7 @@ sentences in a prompt.
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 # The example's own modules sit beside `.lockstep/`, not inside it: this file is configuration,
 # and the code it configures is the project. `parent.parent` rather than `parent` for that reason.
@@ -26,6 +27,7 @@ from wayfinder import (  # noqa: E402
 
 from in_lockstep import (  # noqa: E402
     Lockstep,
+    Outcome,
     Policy,
     RunContext,
     Ticket,
@@ -87,7 +89,7 @@ lockstep.bind(Implement, WayfinderImplement(max_tickets_per_session=1))
 
 
 @workflow(id="wayfinder/chart-github")
-async def chart_github(ctx: RunContext, label: str = "wayfinder", target: str = ""):
+async def chart_github(ctx: RunContext, label: str = "wayfinder", target: str = "") -> Outcome[Any]:
     """Chart a map made of GitHub issues carrying a label.
 
     Needs `gh` authenticated and nothing else — no key, no spend, because charting is
@@ -100,7 +102,7 @@ async def chart_github(ctx: RunContext, label: str = "wayfinder", target: str = 
 
 
 @workflow(id="wayfinder/work-github")
-async def work_github(ctx: RunContext, label: str = "wayfinder", target: str = ""):
+async def work_github(ctx: RunContext, label: str = "wayfinder", target: str = "") -> Outcome[Any]:
     """Claim one unblocked issue from the labelled map."""
     from github_map import load_map as load_github_map
 
@@ -108,7 +110,7 @@ async def work_github(ctx: RunContext, label: str = "wayfinder", target: str = "
 
 
 @workflow(id="wayfinder/chart")
-async def chart(ctx: RunContext, map: str = "map.json", target: str = ""):
+async def chart(ctx: RunContext, map: str = "map.json", target: str = "") -> Outcome[Any]:
     """The first session: name the destination, map the frontier, stop.
 
     Takes a path rather than tickets, because `--arg` values arrive from the command line as
@@ -123,7 +125,7 @@ async def chart(ctx: RunContext, map: str = "map.json", target: str = ""):
 
 
 @workflow(id="wayfinder/work")
-async def work(ctx: RunContext, map: str = "map.json", target: str = ""):
+async def work(ctx: RunContext, map: str = "map.json", target: str = "") -> Outcome[Any]:
     """A later session: claim one unblocked ticket, resolve it, and nothing else."""
     return await ctx.do(load_map(map, target, request=Implement))
 

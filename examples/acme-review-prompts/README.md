@@ -27,9 +27,11 @@ from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt, review_laye
 
 acme = pack("acme-review-prompts")
 
+
 class OurSecurity(SecurityReviewPrompt):
     version = "acme-1"
     body = acme.body("prompts/security.md")
+
 
 lockstep.bind(
     Review,
