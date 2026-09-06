@@ -1,0 +1,119 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.062792,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 14,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 130,
+        "message": "resolve_aspect passes the raw `asked` string through when `known is None`, including HTML-dangerous values.",
+        "path": "src/in_lockstep/platform/chatops.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 23,
+        "message": "MARKER character class includes `%` but does not constrain percent-escape sequences to be well-formed.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:[^->]+ -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:[A-Za-z0-9_.~:%-]+ -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:{kind} -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:{quote(kind, safe=':')} -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\"): +        anchor = marker(kind) +        assert anchor.count(\"-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\") == 1 and anchor.startswith(\"<!-- \"), anchor +        assert \"!\" not in anchor[5:-4], anchor +        assert MARKE",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:api-design -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:implement -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:` and runs to the next `>`, which +    is exactly why the writer must never emit one inside the kind.\"\"",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:api-design -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:api-design -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "df3cf4b0f081d1c52e5ce258eaf814a9debe7301",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 602,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T165151Z-f01e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 605,
+  "ts": "2026-09-06T16:52:10+00:00",
+  "wall_seconds": 18.291
+}
