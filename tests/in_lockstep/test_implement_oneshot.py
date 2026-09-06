@@ -575,7 +575,7 @@ def test_a_strategy_may_not_declare_less_agency_than_it_holds() -> None:
 
     `AiStrategy.capabilities` defaulted to the empty set while `_session` handed every subclass
     `write_file`, `delete_file` and `run_script` plus a paid model call. `ApprovalGate`,
-    `UndeclaredBudget` and `Retry`'s re-invocation refusal all read that frozenset off the bound
+    `UndeclaredBudget` and the mandatory-egress trigger all read that frozenset off the bound
     object — so a strategy that merely omitted the line got an adapter none of the three applied
     to, silently, and the population most likely to omit it is somebody writing their first
     strategy from the docs.

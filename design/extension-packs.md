@@ -138,7 +138,7 @@ that already declares it:
 
 | Field | Read off |
 |---|---|
-| `capabilities` | the bound object: the same frozenset `ApprovalGate`, the budget refusal and `Retry` key on |
+| `capabilities` | the bound object: the same frozenset `ApprovalGate`, the budget refusal and the egress trigger key on |
 | `projection` / `guardrails_intact` | the composed prompt, via `PromptLayers.projection()` |
 | `policy` | the stack's own layers with their sources, plus what they merged to |
 | `models[].priced` | the same `table_for` `DOC151` uses |

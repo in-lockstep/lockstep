@@ -153,7 +153,7 @@ def test_classification_is_by_status_not_text() -> None:
     assert isinstance(classify(Rated("slow down"), provider="p"), RateLimitError)
     transient = classify(Broke("upstream unavailable"), provider="p")
     assert isinstance(transient, TransientError)
-    assert transient.retryable, "5xx is the ERRORED class Retry targets"
+    assert transient.retryable, "5xx is the ERRORED class RetryPolicy targets"
 
 
 def test_context_length_error_is_actually_raised() -> None:

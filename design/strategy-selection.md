@@ -27,7 +27,7 @@ beside `UngatedAgency` and `UndeclaredAgency`. Those are already refusals about 
 lifecycle rather than about a run, made where they cost nothing, and this is the same kind.
 
 What the invariant buys is that every gate sees one picture regardless of what gets chosen.
-`ApprovalGate`, the budget refusal, `Retry`'s re-invocation check and the mandatory-egress trigger
+`ApprovalGate`, the budget refusal and the mandatory-egress trigger
 all key on `capabilities` read off the **bound object** — and the bound object is the selector,
 whose set is the shared set. So an outsider who influences the choice gains no authority they did
 not already have, which is the whole claim.

@@ -8,8 +8,8 @@ request or a ticket label can steer.
 The capability declaration on each strategy is the load-bearing line. `WRITES_FILES` and
 `EXECUTES_CODE` beside `SPENDS_BUDGET` is what makes the framework treat an implementing session as
 an agent with agency rather than a read-only reviewer: `ApprovalGate` becomes a startup
-requirement, egress enforcement becomes mandatory before the first call, and `Retry` refuses to
-re-invoke it. None of that is configured per strategy — it is all keyed off the declaration.
+requirement, and egress enforcement becomes mandatory before the first call. None of that is
+configured per strategy — it is all keyed off the declaration.
 """
 
 from __future__ import annotations

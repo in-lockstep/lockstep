@@ -419,7 +419,7 @@ def _resolver_stopped(
     numerator — the thing `design/gates.md` names twice as what must not happen.
 
     ERRORED is flattened by the same line and costs more than honesty: `strategy.py` calls ERRORED
-    the class `Retry` targets, so filing `provider.timeout` as a domain failure makes it
+    the class transport retry targets, so filing `provider.timeout` as a domain failure makes it
     unretryable as well as untrue.
 
     Partitioned on status rather than on a list of reason strings, which is what #256 settled: a

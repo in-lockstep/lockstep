@@ -484,7 +484,7 @@ def test_a_blocked_run_that_recorded_no_cost_still_reads_as_stopped(verb, workfl
 @pytest.mark.parametrize("verb", ["implement", "fix"])
 def test_a_run_that_broke_is_not_called_a_failure_either(verb, workflows, tmp_path, monkeypatch):
     """`errored` is infrastructure breaking, which `Status` keeps apart from `failed` on purpose:
-    one is the class `Retry` targets, the other is the domain saying no. Telling a person their
+    one is the class transport retry targets, the other is the domain saying no. Telling a person their
     change failed when a provider timed out points them at the wrong thing to fix.
 
     Raised by a sweep of this repository for other places the same rule is broken — the first fix

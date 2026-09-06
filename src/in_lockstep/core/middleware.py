@@ -99,10 +99,10 @@ def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
 
     Every capability-aware middleware needs this and none of them can get it from the `ActionCall`:
     a call names a *request type*, and capabilities belong to whatever is bound to serve it, which
-    is the whole point of binding. `Retry` and `ApprovalGate` each open-coded the same four lines,
-    and the obvious guess — `capabilities_of(call)` — silently returns an empty set, which fails
-    *open* for both of them. A helper that fails closed by construction is worth more than the four
-    lines.
+    is the whole point of binding. `ApprovalGate` and the since-retired `Retry` middleware each
+    open-coded the same four lines, and the obvious guess — `capabilities_of(call)` — silently
+    returns an empty set, which fails *open* for both of them. A helper that fails closed by
+    construction is worth more than the four lines.
 
     A call-scoped adapter (`via=`) is read directly: the declaration travels with whatever will
     actually serve the call, bound or supplied.
@@ -113,15 +113,3 @@ def capabilities_for(ctx: object, call: ActionCall) -> frozenset[Capability]:
     if container is None or not container.has(call.iface):
         return frozenset()
     return capabilities_of(container.resolve(call.iface))
-
-
-class RefusesBudgetedActions:
-    """Mixin for middleware that must not re-invoke an action which spends money.
-
-    Retrying at the action boundary re-runs a whole agentic loop and re-pays every turn already
-    spent. Retry belongs at the transport, where one HTTP attempt is one HTTP attempt.
-    """
-
-    @staticmethod
-    def spends_budget(call: ActionCall, capabilities: frozenset[Capability]) -> bool:
-        return Capability.SPENDS_BUDGET in capabilities

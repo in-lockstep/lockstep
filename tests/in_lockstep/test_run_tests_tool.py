@@ -75,8 +75,8 @@ def test_a_verb_that_only_subclasses_the_base_still_gets_it() -> None:
 
 def test_the_tool_declares_no_capability_the_set_did_not_already_hold(tmp_path: Path) -> None:
     """`EXECUTES_CODE` is already declared by `read_write_execute`, and that declaration is what
-    egress enforcement, `ApprovalGate` and `Retry` all key on. Adding a tool must not widen it —
-    a set that grew a capability here would change what three controls do, quietly."""
+    egress enforcement and `ApprovalGate` both key on. Adding a tool must not widen it —
+    a set that grew a capability here would change what two controls do, quietly."""
     from in_lockstep.ai.builtins import read_write
     from in_lockstep.core.verbs import Capability
 
