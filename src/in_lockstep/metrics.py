@@ -298,6 +298,22 @@ def _weeks(records: list[dict[str, Any]]) -> list[tuple[str, int, float]]:
     return [(label, runs, cost) for label, (runs, cost) in sorted(buckets.items())]
 
 
+def _refused(record: dict[str, Any]) -> bool:
+    """Whether this record is a control refusing, rather than work that happened.
+
+    Decided by the record's **status**, not by a list of finding ids. Every control refusal is a
+    BLOCKED outcome by construction, so a control added later is excluded without anybody
+    remembering to add it -- the argument `test_sinks.py` makes about listing primitives rather
+    than sinks, after an enumerated list of sinks had already missed five.
+
+    Why it matters here: a blocked run's findings are `cost.budget_exceeded`, `approval.required`,
+    `egress.unenforced` and their kin, and counting them among "what it keeps finding" told
+    `improve --explain` that a budget ceiling was a recurring defect the prompt should be changed
+    to avoid (#256). It is the opposite -- it is the control working.
+    """
+    return str(record.get("status", "")) == "blocked"
+
+
 def _findings(records: list[dict[str, Any]]) -> tuple[int, list[tuple[str, int]], int]:
     """How many findings, which ones recur, and how many were the injection scanner speaking.
 
@@ -309,6 +325,8 @@ def _findings(records: list[dict[str, Any]]) -> tuple[int, list[tuple[str, int]]
     ids: Counter[str] = Counter()
     injections = 0
     for record in records:
+        if _refused(record):
+            continue
         found = record.get("findings")
         if not isinstance(found, dict):
             continue
@@ -581,6 +599,12 @@ def recurring(
     workflows: dict[str, set[str]] = {}
 
     for index, record in enumerate(records):
+        if _refused(record):
+            # Same rule as `_findings`, and the census is where it did the most damage:
+            # `improve --explain` listed `approval.required` and `cost.budget_exceeded` among
+            # this repository's top recurring findings, under a heading that invites changing the
+            # prompt to stop them happening (#256).
+            continue
         found = record.get("findings")
         if not isinstance(found, dict):
             continue

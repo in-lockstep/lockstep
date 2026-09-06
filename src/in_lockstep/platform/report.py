@@ -40,6 +40,17 @@ def review_comment(aspect: str, outcome: Any) -> str:
     Injection signals are split out because they are a fact about the *change* (a diff that tried
     to talk to the reviewer), not a review finding about the code, and conflating the two would let
     a real security note hide in a list of style nits.
+
+    Control refusals are split out for the same reason and were not (#256). A budget ceiling or an
+    approval gate attaches a blocking ERROR-severity finding, and they rendered in the findings
+    table indistinguishably from something the reviewer noticed about the code — so `blocked` read
+    as `we found a serious problem` in the artefact people actually read.
+
+    Which findings those are is decided by the outcome's **status**, not by a list of ids. A
+    refusal is what a BLOCKED outcome carries, by construction, so a control added later is
+    partitioned without anybody remembering to add it — the argument `test_sinks.py` makes about
+    listing primitives rather than sinks, after an enumerated list of sinks had already missed
+    five.
     """
     status = outcome.status.value
     decided = "" if outcome.decided else " · decided nothing"
@@ -50,18 +61,27 @@ def review_comment(aspect: str, outcome: Any) -> str:
         "",
     ]
 
-    findings = [f for f in outcome.findings if not f.id.startswith(("injection.", "review.not_reviewed"))]
+    rest = [f for f in outcome.findings if not f.id.startswith(("injection.", "review.not_reviewed"))]
     injections = [f for f in outcome.findings if f.id.startswith("injection.")]
     omitted = [f for f in outcome.findings if f.id == "review.not_reviewed"]
+    refused = status == "blocked"
+    findings = [] if refused else rest
 
-    if findings:
+    if refused:
+        lines += ["### Refused before it could review", ""]
+        lines += [f"- `{f.id}` — {_cell(f.message)}" for f in rest] or ["- (no reason recorded)"]
+        lines += ["", "_A control stopped this run. Nothing here is a finding about the change._", ""]
+    elif findings:
         lines += ["| | location | finding |", "|---|---|---|"]
         for f in findings:
             loc = f"{f.path}:{f.line}" if f.path and f.line else f.path
             where = _code(loc) if loc else ""
             lines.append(f"| {_icon(f)} | {where} | {_cell(f.message)} |")
         lines.append("")
-    elif outcome.decided:
+    elif status == "succeeded" and outcome.decided:
+        # A sentence only a review that actually read the diff can earn. It was gated on
+        # `decided`, which defaults to True, so the killswitch path -- which builds a blocked
+        # outcome carrying nothing -- posted "No findings." on the pull request (#256).
         lines += ["No findings.", ""]
 
     if injections:
