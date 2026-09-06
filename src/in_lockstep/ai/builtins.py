@@ -210,8 +210,8 @@ def read_only(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
 def read_write(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
     """Adds staging a change. Declares WRITES_FILES, which is what makes policy see it.
 
-    That declaration is load-bearing in three places at once: egress enforcement becomes
-    mandatory, `ApprovalGate` gates the action, and `Retry` refuses to re-invoke it.
+    That declaration is load-bearing in two places at once: egress enforcement becomes
+    mandatory, and `ApprovalGate` gates the action.
     """
     tools, runner = read_only(workspace)
     tools = tools | ToolSet.of(
@@ -255,8 +255,7 @@ def read_write_execute(
     `EXECUTES_CODE` here is not a label — it is the declaration three separate controls key on,
     and declaring it is the point of this function existing rather than a `run_script=True`
     parameter on `read_write`. It makes egress enforcement mandatory before the first model call,
-    it makes `ApprovalGate` a startup requirement for any adapter that also spends money, and it
-    makes `Retry` refuse to re-invoke the action.
+    and it makes `ApprovalGate` a startup requirement for any adapter that also spends money.
 
     Passing no `commands` runner is allowed and yields a set that still declares the capability
     while every call refuses. That is deliberate: a tool set's declaration is what policy sees, so

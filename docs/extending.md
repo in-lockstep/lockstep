@@ -376,7 +376,9 @@ a loop in progress, middleware is the wrong layer.
 
 **Some actions must not be re-invoked.** An action declaring `Capability.SPENDS_BUDGET` re-runs a
 whole agentic loop and re-pays every turn already spent, so anything that might call `next()` twice
-should refuse it. Inherit `RefusesBudgetedActions` and check, as `Retry` does.
+should check `Capability.SPENDS_BUDGET in capabilities_for(ctx, call)` first and refuse. The
+framework ships no retrying middleware for exactly this reason: retry belongs at the transport,
+where one HTTP attempt is one HTTP attempt, and `AiInvoker` carries that layer.
 
 What you cannot do here is redaction, egress or residency. Those are privileged: they run outside
 this chain because `--no-middleware` exists, and a debugging flag must not be able to switch off
@@ -709,7 +711,7 @@ approach that ran, and `verb`.
 `capabilities` is the load-bearing frozenset every gate reads off the bound object, and it is not
 optional: subclassing `AiStrategy` means being handed `write_file`, `delete_file` and `run_script`
 and paying for a model call, so declaring less than `AGENCY` is refused at class creation.
-`ApprovalGate`, the budget refusal and `Retry` all key on that set. An undeclared strategy would
+`ApprovalGate`, the budget refusal and the egress trigger all key on that set. An undeclared strategy would
 be an ungated one, which is why this is an error and not a warning.
 
 Declaring *more* is allowed, and is sometimes right: a set that could execute on some other

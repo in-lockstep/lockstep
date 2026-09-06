@@ -89,8 +89,8 @@ class AiStrategy:
 
         `capabilities` defaulted to the empty set while every subclass was handed write, delete and
         execute tools plus a paid model call — so a strategy that simply omitted the line got an
-        adapter that walked past `ApprovalGate`, past `UndeclaredBudget` and past `Retry`'s
-        re-invocation refusal, all three of which read this frozenset off the bound object. It
+        adapter that walked past `ApprovalGate`, past `UndeclaredBudget` and past the mandatory-
+        egress trigger, all three of which read this frozenset off the bound object. It
         failed OPEN, silently, on the one population most likely to hit it: somebody writing their
         first strategy by following `docs/extending.md`.
 
@@ -109,8 +109,9 @@ class AiStrategy:
             raise UndeclaredAgency(
                 f"{cls.__name__} subclasses AiStrategy, so it is handed write_file, delete_file "
                 f"and run_script and it pays for a model call — but `capabilities` omits "
-                f"{sorted(c.value for c in missing)}. ApprovalGate, the budget refusal and Retry "
-                f"all read that set off the bound object, so an undeclared strategy is an ungated "
+                f"{sorted(c.value for c in missing)}. ApprovalGate, the budget refusal and the "
+                f"egress trigger all read that set off the bound object, so an undeclared strategy "
+                f"is an ungated "
                 f"one. Either subclass a per-verb base (ImplementStrategy, FixStrategy), which "
                 f"declares it for you, or write:\n\n"
                 f"    capabilities: ClassVar[frozenset[Capability]] = AGENCY\n"
@@ -461,7 +462,7 @@ def blocked(reason: str, message: str) -> Outcome[Any]:
 
 
 def errored(reason: str, message: str, cost: Any = None) -> Outcome[Any]:
-    """Infrastructure, not a verdict. ERRORED is the class `Retry` targets."""
+    """Infrastructure, not a verdict. ERRORED is the class transport retry (`RetryPolicy`) targets."""
     from ...core.outcome import Cost
 
     return Outcome(

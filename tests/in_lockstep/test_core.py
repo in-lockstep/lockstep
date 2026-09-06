@@ -35,7 +35,6 @@ from in_lockstep.core.verbs import Capability, Verb
 from in_lockstep.core.workflow import DuplicateWorkflow, id_of, restore, snapshot, workflow
 from in_lockstep.middleware.budget import CostBudget
 from in_lockstep.middleware.otel import Recorder, otel
-from in_lockstep.middleware.retry import Retry
 
 
 @dataclass(frozen=True)
@@ -71,18 +70,6 @@ class Flaky:
         if self.calls <= self.fail_times:
             return Outcome.errored("transient")
         return Outcome(status=Status.SUCCEEDED, value=inp)
-
-
-class Spender:
-    verb: ClassVar[Verb] = Verb.IMPLEMENT
-    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.SPENDS_BUDGET})
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    async def invoke(self, ctx, inp):
-        self.calls += 1
-        return Outcome.errored("provider 500")
 
 
 def ctx_with(
@@ -314,23 +301,6 @@ def test_metrics_carry_no_run_id() -> None:
     for metric in recorder.metrics:
         assert "run_id" not in metric.dimensions
     assert any("in_lockstep.run_id" in s.attributes for s in recorder.spans)
-
-
-def test_retry_targets_errored_only() -> None:
-    adapter = Flaky(fail_times=2)
-    ctx, _ = ctx_with((Thing, adapter), middleware=[Retry(attempts=3, base_delay=0)])
-    outcome = asyncio.run(ctx.do(Thing("x")))
-    assert outcome.succeeded
-    assert adapter.calls == 3
-
-
-def test_gate_retry_5_refuses_to_retry_a_budgeted_action() -> None:
-    """Re-invoking a loop re-pays every turn already spent."""
-    adapter = Spender()
-    ctx, _ = ctx_with((Thing, adapter), middleware=[Retry(attempts=3, base_delay=0)])
-    outcome = asyncio.run(ctx.do(Thing("x")))
-    assert adapter.calls == 1, "must be invoked exactly once"
-    assert any(f.id == "retry.refused_budgeted_action" for f in outcome.findings)
 
 
 def test_budget_blocks_when_the_ceiling_is_already_crossed() -> None:

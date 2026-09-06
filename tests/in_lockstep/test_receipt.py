@@ -41,7 +41,7 @@ def _lockstep(root: Path) -> Lockstep:
 def test_capabilities_come_off_the_bound_object(tmp_path: Path) -> None:
     """The set every gate reads is the set the receipt reports.
 
-    `ApprovalGate`, the budget refusal and `Retry` all key on `capabilities` off the bound
+    `ApprovalGate`, the budget refusal and the egress trigger all key on `capabilities` off the bound
     adapter. A receipt keyed on anything else — the class, a declared kind, a manifest — would
     describe a different adapter than the one that runs, which is the failure mode that makes
     published metadata worthless.

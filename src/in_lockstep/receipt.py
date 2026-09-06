@@ -94,7 +94,7 @@ def _bindings(lockstep: Lockstep) -> list[dict[str, Any]]:
     """What serves each interface, and what it admits to being able to do.
 
     `capabilities` is read off the bound object rather than the class, because that is where every
-    gate reads it — `ApprovalGate`, the budget refusal and `Retry` all key on this set, so a
+    gate reads it — `ApprovalGate`, the budget refusal and the egress trigger all key on this set, so a
     receipt keyed on anything else would describe a different adapter than the one that runs.
     """
     out: list[dict[str, Any]] = []

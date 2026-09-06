@@ -217,9 +217,11 @@ Every gate that is `unmet`, `partial` or `unit only` and cited by no row above. 
 `retired` are exempt: one is past the cut line by a recorded decision, the other has no subject
 left. The list is recomputed by the test, so a gate cannot quietly join or leave it.
 
-| Gate | Status | Why it is here |
-|---|---|---|
-| `GATE-RETRY-5` | unit only | `Retry` middleware is constructed by nothing. Its own row already states the honest resolution — bind it or retire it in favour of the transport-level retry that is bound and live — and that is a decision rather than a patch. Until it is taken, no objective is served by the row, which is the fact this section exists to keep in view. |
+Empty. `GATE-RETRY-5` was its one entry from the day this file was written: a `Retry` middleware
+that was tested, correct, and constructed by nothing. Its row said the honest resolution was to
+bind it or retire it, and #265 retired it -- what it did was not wanted by any module, which is
+why no module bound it, and `CLAUDE.md` is blunt that surface serving no objective is surface to
+remove. The table returns the day a gate qualifies; the test recomputes it either way.
 
 ## How the mission maps, and what it cost to say so
 

@@ -214,7 +214,7 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
         # posted publicly on the ticket, where a wrong one is a false claim in the place a person
         # reads it. `blocked` is a control working -- a budget ceiling or an approval gate --
         # and calling it a failure teaches everyone the ceiling is a fault rather than a decision
-        # somebody made. `errored` is infrastructure breaking, which is the class `Retry` targets
+        # somebody made. `errored` is infrastructure breaking, which is the class transport retry targets
         # and not something the change under review did wrong.
         #
         # Written as a map rather than a two-way branch so the statuses this does NOT special-case

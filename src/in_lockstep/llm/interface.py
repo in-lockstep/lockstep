@@ -188,7 +188,7 @@ class ModelNotFoundError(LLMError):
 
 
 class TransientError(LLMError):
-    """5xx, connection reset, read timeout — the ERRORED class §4.3 says Retry targets.
+    """5xx, connection reset, read timeout — the ERRORED class §4.3 says retry targets.
 
     Upstream `with_retry` retried ONLY RateLimitError, so exactly these got zero retries.
     """
