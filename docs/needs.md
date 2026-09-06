@@ -42,12 +42,15 @@ history branch on 2026-09-06 with `in-lockstep report` and then record by record
   because a run records by default and `review --offline` is what a contributor runs to check a
   change end to end. The report files them as replays. They show the path works, not that a model
   was asked.
-- **The reviews a model was asked for are not on the branch.** Every pull request pays for a
+- **The reviews a model was asked for were not on the branch.** Every pull request pays for a
   `review`, fifty runs of the `lockstep` workflow in the two days before this was written, and
-  each writes its record into a bundle that leaves the job as an artifact with a 30-day retention,
-  because a read-only job cannot publish to the ledger. Nobody has reconciled one. The volume N3
-  asks about exists; the ledger this document leans on cannot see it, and in a month the artifacts
-  will not either. Filed as #294.
+  each wrote its record into a bundle that left the job as an artifact with a 30-day retention,
+  because a read-only job cannot publish to the ledger. Nobody had reconciled one when this was
+  filed as #294. Since #294 a `publish` job pushes each review's record as it finishes, a
+  scheduled sweep absorbs what that misses, and `report --scm` counts what is still outstanding;
+  the first sweep is what brings the 30-day window's worth onto the branch, and the count is what
+  says whether it did. The volume N3 asks about exists, and the ledger this document leans on can
+  now see it.
 - **And the branch flags itself.** Every report opens with `TAMPERED`, because the 2026-09-02
   reconcile rewrote the first record's shape and nothing can acknowledge that, so the flag has
   been read past for four days. Filed as #295.

@@ -412,6 +412,70 @@ def _scaffolds() -> dict[str, str]:
     }
 
 
+def _review_trampolines() -> dict[str, dict[str, Any]]:
+    """This repository's review-on-pull-request workflow and the one `init` scaffolds, loaded."""
+    from in_lockstep.cli import _SCAFFOLD_TRAMPOLINE
+
+    return {
+        "lockstep.yml": _load("lockstep.yml"),
+        "scaffold: lockstep.yml": yaml.load(
+            _SCAFFOLD_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader
+        ),
+    }
+
+
+def test_gate_ledger_10_the_review_record_is_published_by_a_job_holding_write_and_no_credential() -> None:
+    """The pipe #294 found open: a review job holding `contents: read` bundled its record into an
+    artifact, and nothing downstream held the write token to push it. Now a `publish` job does,
+    on the split `propose` already uses -- write access, no provider credential, no provider
+    SDK -- in this repository's workflow and in the one an adopter is given."""
+    for name, spec in _review_trampolines().items():
+        review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
+        bundled = " ".join(s.get("run", "") for s in review["steps"])
+        assert "history --bundle history.bundle" in bundled, f"{name}: the review job bundles nothing"
+        upload = next(s for s in review["steps"] if "upload-artifact" in str(s.get("uses", "")))
+        assert "history.bundle" in str(upload["with"]["path"]), f"{name}: the artifact carries no bundle"
+
+        assert publish["needs"] == "review", name
+        assert "always()" in str(publish.get("if", "")), (
+            f"{name}: a refused review is the run most worth a record"
+        )
+        permissions = publish["permissions"]
+        assert permissions.get("contents") == "write" and permissions.get("actions") == "read", name
+        assert "id-token" not in permissions, (
+            f"{name}: the publishing job must not be able to mint a credential"
+        )
+        body = yaml.dump(publish).lower()
+        assert "anthropic" not in body, f"{name}: the publishing job reaches for a provider"
+        download = next(s for s in publish["steps"] if "download-artifact" in str(s.get("uses", "")))
+        assert download["with"]["name"] == upload["with"]["name"], (
+            f"{name}: publish downloads a different artifact"
+        )
+        runs = re.sub(r"\\\s*\n\s*", " ", " ".join(s.get("run", "") for s in publish["steps"]))
+        assert re.search(r"in-lockstep history\s+--from-bundle\s+\S*history\.bundle\"?\s+--push", runs), (
+            f"{name}: publish does not absorb and push the bundle: {runs}"
+        )
+
+
+def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:
+    """`cancel-in-progress` cancels a run when the next push lands, and a push can be refused, so
+    the publish job can miss a bundle. The sweep takes in each outstanding artifact once, from a
+    job holding the write token and no provider, and it is one bare invocation of the framework."""
+    spec = _load("reconcile.yml")
+    assert "schedule" in spec["on"] and "workflow_dispatch" in spec["on"]
+    assert spec["permissions"] == {}, "a workflow-level grant reaches jobs that should not have it"
+    assert spec["concurrency"]["cancel-in-progress"] is False
+    ((_name, job),) = spec["jobs"].items()
+    assert job["permissions"] == {"contents": "write", "actions": "read"}
+    assert "anthropic" not in yaml.dump(job).lower()
+    statements = [
+        line.strip() for s in job["steps"] for line in s.get("run", "").splitlines() if line.strip()
+    ]
+    assert "uv run in-lockstep history --from-artifacts lockstep-run --push" in statements, statements
+    for statement in statements:
+        assert any(p.match(statement) for p in ALLOWED_STATEMENTS), f"`{statement}` is not an invocation"
+
+
 def test_gate_record_1_every_scaffolded_upload_declares_what_it_keeps() -> None:
     """Retention and hidden files, on every trampoline an adopter is given rather than two of five.
 

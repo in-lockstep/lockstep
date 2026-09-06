@@ -85,6 +85,7 @@ def test_a_run_record_says_when_against_what_and_under_which_config(hermetic: Pa
     assert "config" in record, "which lockstep.py constrained the run is part of the evidence"
     assert "base" not in record, "no CI, no base ref — absent, never fabricated"
     assert "identity" not in record, "nobody opted in, so nobody is named -- absent, not detected"
+    assert "ci_run" not in record, "no CI, no run id -- absent, never fabricated"
 
 
 def test_gate_team_2_a_local_run_carries_the_identity_the_repository_opted_into(
@@ -127,6 +128,7 @@ def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_BASE_REF", "main")
     monkeypatch.setenv("GITHUB_ACTOR", "octocat")
+    monkeypatch.setenv("GITHUB_RUN_ID", "424242")
     monkeypatch.chdir(_repo(tmp_path))
     (tmp_path / "README.md").write_text("edited\n")
 
@@ -137,6 +139,9 @@ def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(
     assert out["base"] == "main"
     assert out["ci_actor"] == "octocat"
     assert out["config"] == "trusted ref origin/main"
+    # GATE-LEDGER-10: the host's run id, which the run's artifacts carry too -- the join that says
+    # whether a bundled record has reached the branch without downloading the bundle (#294).
+    assert out["ci_run"] == "424242"
 
 
 # -- report ---------------------------------------------------------------------------

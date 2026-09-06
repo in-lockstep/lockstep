@@ -43,7 +43,12 @@ from ...privileged import sink
 # #164 refused to record it by default, because a report naming people who never chose to be
 # named is the leaderboard the pseudonyms exist to refuse. Additive, and bumped for the reason 4
 # gives. Nothing numeric.
-SCHEMA = 7
+#
+# 8: a record written under CI carries `ci_run`, the host's id for the run that wrote it -- the
+# same id the run's artifacts carry. It is the join `report --scm` and `history --from-artifacts`
+# use to say whether a bundled record has reached the branch without downloading the bundle
+# (#294). Absent outside CI. Additive, bumped for the reason 4 gives, nothing numeric.
+SCHEMA = 8
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 
