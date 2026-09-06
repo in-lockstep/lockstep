@@ -15,17 +15,24 @@ ci: lint typecheck cov evidence
 # F811 correctly stays silent. A test asserts that every Python file in this repository is covered
 # by the paths below, so a new one outside them is a failure rather than a silence.
 #
-# `examples/` is deliberately not here, and cannot be added by appending it: two files named
-# `lockstep.py` in one mypy invocation is `Duplicate module named "lockstep"`, which stops the run
-# before it checks anything. The exemption is recorded with that reason in the test.
+# `examples/` cannot be appended to the mypy line: two files named `lockstep.py` in one invocation
+# is `Duplicate module named "lockstep"`, which stops the run before it checks anything. So each
+# worked example gets an invocation of its own, and the wayfinder one names the modules beside its
+# lifecycle file, because a file inside `.lockstep/` imports them and mypy resolves an import only
+# to a module it was handed. Each example's `.lockstep` is named for the ruff lines for the reason
+# `.lockstep` is named above: a walk does not enter it. These are the files an adopter copies
+# (O8), and they carried seven type errors between them for as long as nothing looked (#247).
 fmt:
-	uv run ruff format src tests .lockstep
+	uv run ruff format src tests .lockstep examples examples/pr-review/.lockstep examples/wayfinder-implement/.lockstep
 
 lint:
-	uv run ruff check src tests .lockstep
+	uv run ruff check src tests .lockstep examples examples/pr-review/.lockstep examples/wayfinder-implement/.lockstep
 
 typecheck:
 	uv run mypy src .lockstep
+	uv run mypy examples/pr-review/.lockstep/lockstep.py
+	uv run mypy examples/wayfinder-implement/.lockstep/lockstep.py examples/wayfinder-implement/wayfinder.py examples/wayfinder-implement/github_map.py
+	uv run mypy examples/acme-review-prompts examples/acme-standards
 
 test:
 	uv run pytest -q

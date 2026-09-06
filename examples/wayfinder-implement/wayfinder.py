@@ -153,7 +153,7 @@ class WayfinderImplement:
                 "plan without one.",
             )
 
-        package = ContextPackage(items=list(target.as_context()))
+        package = ContextPackage(items=tuple(target.as_context()))
         invoker = self.invoker_factory(ctx)
         invocation = await invoker.run(
             system=_SYSTEM,
