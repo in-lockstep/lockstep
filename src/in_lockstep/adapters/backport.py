@@ -226,6 +226,8 @@ class GitBackport:
                     cost = cost + answer.cost
                     findings.extend(answer.findings)
                     files = answer.value or ()
+                    if (stopped := _resolver_stopped(answer, inp, conflict, picked, cost, findings)) is not None:
+                        return stopped
                     if answer.status is not Status.SUCCEEDED or not files:
                         outcome = _conflict_outcome(inp, conflict, picked, cost)
                         return Outcome(
@@ -396,6 +398,66 @@ def _changeset_between(work: GitLocal, base: str, inp: Backport) -> ChangeSet:
     return ChangeSet(changes=tuple(changes), summary=summary, ticket=key)
 
 
+def _resolver_stopped(
+    answer: Any,
+    inp: Backport,
+    conflict: Conflict,
+    picked: list[PickedCommit],
+    cost: Cost,
+    findings: list[Finding],
+) -> Outcome[BackportReport] | None:
+    """The resolver never reached a verdict — pass its status through. None when it did.
+
+    `_conflict_outcome` is hard-coded FAILED and its docstring says why: *no control refused
+    anything; git met a conflict*. That is true of the caller with no resolver bound, where
+    nothing was consulted. At the caller below it a resolver WAS consulted and can have been
+    refused — and the reason survived while the status did not, so `cost.budget_exceeded` arrived
+    as `failed` (#255). Downstream that is exit 1 instead of 3, a ledger record saying `failed`,
+    and `metrics.FAILED` moving the run out of the denominator of `failure_rate` and into the
+    numerator — the thing `design/gates.md` names twice as what must not happen.
+
+    ERRORED is flattened by the same line and costs more than honesty: `strategy.py` calls ERRORED
+    the class `Retry` targets, so filing `provider.timeout` as a domain failure makes it
+    unretryable as well as untrue.
+
+    Partitioned on status rather than on a list of reason strings, which is what #256 settled: a
+    control added later needs no entry anywhere for this to keep working.
+
+    The finding matters as much as the status. `backport.conflict` tells the operator to *re-run
+    with a resolver bound* — advice they have just followed — so a refused resolver says what
+    refused it and leaves the manual command, which is still the thing they need.
+    """
+    if answer.status in (Status.SUCCEEDED, Status.FAILED):
+        return None
+    report = BackportReport(target=inp.target, picked=tuple(picked), conflict=conflict)
+    return Outcome(
+        status=answer.status,
+        reason=answer.reason or "backport.resolver_stopped",
+        value=report,
+        cost=cost,
+        findings=(
+            Finding(
+                id="backport.resolver_stopped",
+                message=(
+                    f"the resolver did not answer for {conflict.commit[:12]} "
+                    f"({answer.reason or answer.status.value}), so the conflict is unresolved and "
+                    f"nothing was decided about it. Resolve by hand:  {_manual(inp, conflict, picked)}"
+                ),
+                severity=Severity.ERROR,
+                blocking=True,
+            ),
+            *findings,
+        ),
+        decided=answer.decided,
+    )
+
+
+def _manual(inp: Backport, conflict: Conflict, picked: list[PickedCommit]) -> str:
+    """The commands a person runs to finish the pick by hand. One spelling, two callers."""
+    shas = " ".join(p.sha for p in picked) + (" " if picked else "") + conflict.commit
+    return f"git checkout -b backport-{conflict.commit[:8]} {inp.target} && git cherry-pick -x {shas}"
+
+
 def _conflict_outcome(
     inp: Backport, conflict: Conflict, picked: list[PickedCommit], cost: Cost
 ) -> Outcome[BackportReport]:
@@ -404,8 +466,7 @@ def _conflict_outcome(
     FAILED rather than BLOCKED — no control refused anything; git met a conflict, which is the
     ordinary hazard of the operation.
     """
-    shas = " ".join(p.sha for p in picked) + (" " if picked else "") + conflict.commit
-    manual = f"git checkout -b backport-{conflict.commit[:8]} {inp.target} && git cherry-pick -x {shas}"
+    manual = _manual(inp, conflict, picked)
     return Outcome(
         status=Status.FAILED,
         reason="backport.conflict",
