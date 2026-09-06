@@ -508,6 +508,11 @@ def _provenance(lockstep: Any) -> dict[str, Any]:
             # The host-computed identity, beside whatever `--approved-by` claimed: the two
             # corroborate each other, and a mismatch is worth seeing in the record.
             out["ci_actor"] = ci_env.actor
+        if ci_env.run_id:
+            # The host's id for this run, which its artifacts carry too. It is the join that lets
+            # `report --scm` say whether a bundled record has reached the branch without
+            # downloading the bundle, and lets the sweep absorb each artifact once (#294).
+            out["ci_run"] = ci_env.run_id
     identity = getattr(lockstep, "identity", None)
     if identity is not None and repo is not None:
         # Only when the module said so. `lockstep.identity = GitAuthor()` is a line a repository
@@ -1443,6 +1448,12 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
     "--bundle", default="", type=click.Path(), help="Write the branch to a file to travel as an artifact."
 )
 @click.option("--from-bundle", default="", type=click.Path(), help="Take in history another job recorded.")
+@click.option(
+    "--from-artifacts",
+    default="",
+    metavar="NAME",
+    help="Absorb every outstanding bundle the host still holds under this artifact name, once each.",
+)
 @click.option("--limit", type=int, default=20, show_default=True)
 @click.option(
     "--explain",
@@ -1450,7 +1461,9 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
     metavar="RUN",
     help="One run's record, every field, in words. A prefix finds the latest matching run.",
 )
-def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int, explain: str) -> None:
+def history_cmd(
+    push: bool, bundle: str, from_bundle: str, from_artifacts: str, limit: int, explain: str
+) -> None:
     """Run records, on an orphan branch that touches nothing anybody works on.
 
     Records are committed locally as each run finishes. Publishing is a separate act, because
@@ -1472,6 +1485,34 @@ def history_cmd(push: bool, bundle: str, from_bundle: str, limit: int, explain: 
         except HistoryError as e:
             raise click.ClickException(str(e)) from None
         click.echo(f"absorbed  {from_bundle}")
+
+    if from_artifacts:
+        # The sweep. What `lockstep.yml`'s `publish` job missed -- a run cancelled by the next
+        # push, a refused push -- sits in an artifact on a 30-day clock, and this takes each one
+        # in once, deciding "once" the way `reconcile.py` says. Pushed below with everything else
+        # when `--push` is given, so the absorbs and the push are one act as they read.
+        from .platform.ledger.reconcile import absorb_outstanding
+
+        lockstep, _recorder = _default_lockstep()
+        try:
+            swept = absorb_outstanding(ledger, _bound_scm(lockstep), from_artifacts)
+        except (HistoryError, RuntimeError) as e:
+            raise click.ClickException(str(e)) from None
+        for taken in swept.taken:
+            click.echo(f"absorbed  artifact {taken.id}  (run {taken.run_id})")
+        for empty in swept.empty:
+            click.echo(f"empty     artifact {empty.id}  (run {empty.run_id}) carried no bundle")
+        for failed, why in swept.failed:
+            click.echo(f"failed    artifact {failed.id}  (run {failed.run_id}): {why}", err=True)
+        if swept.expired:
+            click.echo(
+                f"expired   {len(swept.expired)} artifact(s) expired before anyone absorbed them; "
+                f"those records are gone"
+            )
+        click.echo(
+            f"artifacts {len(swept.taken)} absorbed, {len(swept.empty)} empty, "
+            f"{len(swept.failed)} failed, {len(swept.expired)} expired"
+        )
 
     head = ledger.head()
     if head is None:
@@ -1659,7 +1700,49 @@ def _history_line(verify: Any, tampered: list[Any]) -> str:
     return "history   append-only across the retained chain"
 
 
-def _with_delivery(report: Any) -> Any:
+def _report_host() -> tuple[Any, str]:
+    """The host `report --scm` asks, or None and the reason it could not be found. Never raises.
+
+    `_bound_scm`, not `GitHubScm()`: on a GitLab project, naming the GitHub adapter here would
+    read nothing while claiming to have tried. Loaded once and shared by the two questions the
+    flag asks, because loading the module twice would register its workflows twice.
+    """
+    try:
+        lockstep, _recorder = _default_lockstep()
+        return _bound_scm(lockstep), ""
+    except Exception as e:  # noqa: BLE001 - a report degrades with a reason, it does not fail
+        return None, str(e)
+
+
+def _bundles_line(host: Any, records: list[dict[str, Any]], ledger: Any, *, reason: str) -> str:
+    """How many run records are still in artifacts the host holds, or a dash and why.
+
+    The branch is not the whole record: a review job holding `contents: read` can only bundle its
+    record into an artifact, and fifty of them sat there on a 30-day clock while `report` presented
+    eight paid runs as everything (#294). So the footer says how many are outstanding, by the run
+    id a record and an artifact both carry -- no download -- and a count it cannot take renders as
+    a dash carrying the reason, never as zero.
+    """
+    from .platform.ledger.reconcile import RUN_ARTIFACT, outstanding
+
+    if host is None:
+        return f"bundles   — ({reason})"
+    listing = getattr(host, "run_artifacts", None)
+    if listing is None:
+        return f"bundles   — ({type(host).__name__} cannot list run artifacts)"
+    notes = getattr(ledger, "absorbed_runs", None)
+    try:
+        found = outstanding(listing(RUN_ARTIFACT), records, absorbed=notes() if callable(notes) else ())
+    except Exception as e:  # noqa: BLE001 - a report degrades with a reason, it does not fail
+        return f"bundles   — (not counted: {e})"
+    gone = f", {len(found.expired)} expired before anyone absorbed them" if found.expired else ""
+    return (
+        f"bundles   {len(found.pending)} outstanding under `{RUN_ARTIFACT}`{gone}; "
+        f"`history --from-artifacts {RUN_ARTIFACT} --push` absorbs them"
+    )
+
+
+def _with_delivery(report: Any, host: Any, reason: str) -> Any:
     """`report` plus what the host says happened to the work, or `report` and a printed reason.
 
     Never raises. A metrics page is a document somebody reads, and the alternative to "we could not
@@ -1674,11 +1757,10 @@ def _with_delivery(report: Any) -> Any:
 
     from . import metrics
 
+    if host is None:
+        click.echo(f"delivery   skipped: {reason}", err=True)
+        return report
     try:
-        # `_bound_scm`, not `GitHubScm()`: on a GitLab project, naming the GitHub adapter here
-        # would read nothing while claiming to have tried.
-        lockstep, _recorder = _default_lockstep()
-        host = _bound_scm(lockstep)
         rows = getattr(host, "delivery_rows", None)
         if rows is None:
             click.echo(
@@ -1763,6 +1845,14 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
     tampered = verify() if callable(verify) else []
     for problem in tampered:
         click.echo(f"TAMPERED  {problem}", err=True)
+    # The host is asked only under `--scm`, because asking needs a token and a network call.
+    # Without it the bundles line is a dash that says so: the branch is not presented as the
+    # whole record on the strength of a question nobody asked (#294).
+    host, reason = (
+        _report_host()
+        if with_scm
+        else (None, "pass --scm to ask the host how many run records are still in artifacts")
+    )
 
     # The full report is the default now. `--format json` and `--by-kind` keep the original two
     # outputs working unchanged: the json shape is somebody's script, and a grouped table is what
@@ -1785,13 +1875,14 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
             click.echo("")
         report = metrics.build(records, names=names)
         if with_scm:
-            report = _with_delivery(report)
+            report = _with_delivery(report, host, reason)
         for line in metrics.as_text(report, actors=by_actor):
             click.echo(line)
         # On this path too, and not only under `--by-kind`. The footer is what GATE-LEDGER-8
         # asserts, and a richer report that quietly stopped saying whether the history behind it
         # is append-only would be a page of numbers with the one caveat about them removed.
         click.echo(_history_line(verify, tampered))
+        click.echo(_bundles_line(host, records, ledger, reason=reason))
         if html_path:
             # Written HERE and not by `metrics`, which is a leaf that may not reach `privileged`.
             # A report carries finding text and run ids, so putting it on disk is a redaction sink.
@@ -1845,6 +1936,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
     click.echo(_history_line(verify, tampered))
+    click.echo(_bundles_line(host, records, ledger, reason=reason))
 
 
 @main.command(name="improve")
@@ -5939,11 +6031,13 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 
 _SCAFFOLD_TRAMPOLINE = """# Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
 #
-# One job, because reviewing is read-only: it needs a provider credential and `contents: read`,
-# and nothing else. The two-job split — an unprivileged job that talks to a model, a privileged
-# one that writes — is what keeps an API key and a write token out of the same process, and it
-# is what you add here the day a verb of yours produces a change to apply. Adding it now would
-# scaffold a job with nothing to do.
+# Two jobs. Reviewing is read-only, so the job that does it needs a provider credential and
+# `contents: read` and nothing else -- and the record it writes can therefore only leave as a
+# bundle in its artifact. The second job holds `contents: write` and no provider credential, and
+# publishes that bundle to the `lockstep-history` branch. That split -- an unprivileged job that
+# talks to a model, a privileged one that writes -- is what keeps an API key and a write token
+# out of the same process, and it is the same shape a verb of yours that produces a change will
+# use the day you add one.
 #
 # The base ref is passed explicitly because configuration is loaded from it: lockstep.py comes
 # from the base branch, never from the ref under review, or a pull request could supply the file
@@ -6032,11 +6126,18 @@ jobs:
       - name: No provider credential
         if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
         run: echo "no ANTHROPIC_API_KEY (fork pull request?) — review skipped, nothing failed"
+      # `review` is read-only and this job has `contents: read`, so it cannot publish its own
+      # record. The bundle carries it out, and `publish` below pushes it.
+      - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
           name: lockstep-run
-          path: .lockstep/
+          path: |
+            history.bundle
+            .lockstep/
           if-no-files-found: ignore
           # `.lockstep/` is a dotted path and upload-artifact@v4 excludes hidden files by DEFAULT,
           # so without this the directory above is silently dropped and the artifact arrives empty.
@@ -6045,6 +6146,40 @@ jobs:
           # hold prompts and diffs. Two weeks is long enough to notice a run and download it, and
           # short enough that inaction deletes rather than accumulates.
           retention-days: 14
+
+  # Where the run record becomes durable. `review` holds the provider credential and
+  # `contents: read`, so its record can only leave as the bundle in the artifact above; this job
+  # holds `contents: write` and no provider credential, and pushes it to the `lockstep-history`
+  # branch -- the split the write verbs use, so an API key and a write token never share a
+  # process. `always()`, because a review that was refused is the run most worth a record of;
+  # `continue-on-error`, because a record that could not be pushed must not turn the review red.
+  # What this misses -- a run cancelled by the next push -- `in-lockstep history --from-artifacts
+  # lockstep-run --push` absorbs from a job holding the write token, once each; `report --scm`
+  # counts what is outstanding.
+  publish:
+    needs: review
+    if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: lockstep-run
+          path: ${{ runner.temp }}/review
+        continue-on-error: true
+      # No provider extra: this job must be unable to reach a model.
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history \
+            --from-bundle "${RUNNER_TEMP}/review/history.bundle" \
+            --push
+        continue-on-error: true
 """
 
 _SCAFFOLD_GITLAB_TRAMPOLINE = """\

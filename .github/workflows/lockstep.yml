@@ -171,7 +171,7 @@ jobs:
             --into .lockstep/cases \
             --family review
       # `review` is read-only and this job has `contents: read`, so it cannot publish its own
-      # record. The bundle carries it out; a person or the implement trampoline pushes it.
+      # record. The bundle carries it out, and `publish` below pushes it to `lockstep-history`.
       - run: uv run in-lockstep history --bundle history.bundle
         if: always()
         continue-on-error: true
@@ -193,3 +193,41 @@ jobs:
           # asks how long a repository keeps them and this is half the answer. Deletion is
           # automatic here, so inaction deletes rather than accumulating.
           retention-days: 30
+
+  # Where the run record becomes durable. `review` holds the provider credential and
+  # `contents: read`, so its record can only leave as the bundle in the artifact above -- and for
+  # two days of pull requests that is where every one of them stayed, on a 30-day clock, while
+  # the branch `report` reads held eight paid runs (#294). This job holds `contents: write` and
+  # no provider credential, which is exactly the half a record should be published from: the
+  # split implement.yml's `propose` job already uses, one more time.
+  #
+  # `always()`, because a review that blocked or errored is the run most worth a record of. Not
+  # for a fork, whose token cannot push. `continue-on-error` on the publish, because a record that
+  # could not be pushed must not turn the review's verdict red -- and what this job misses (a run
+  # `cancel-in-progress` cancelled, a refused push) the scheduled `reconcile` workflow sweeps up,
+  # while `report --scm` counts what is still outstanding.
+  publish:
+    needs: review
+    if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # NOT `--extra anthropic`: this job holds a write token and must be unable to reach a model.
+      - run: uv sync
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: lockstep-run
+          path: ${{ runner.temp }}/review
+        continue-on-error: true
+      - run: |
+          uv run in-lockstep history \
+            --from-bundle "${RUNNER_TEMP}/review/history.bundle" \
+            --push
+        continue-on-error: true

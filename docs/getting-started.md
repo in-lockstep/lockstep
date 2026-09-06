@@ -89,7 +89,11 @@ in-lockstep history --push     # publish it; needs push access, never automatic
 Local runs append to a local ref and stop. Reaching a remote needs credentials and is a side
 effect nobody asked for by typing a command in a terminal, so publishing is a separate act. In
 practice that act is CI, where the job that can push carries the record out as a bundle from the
-job that made it.
+job that made it. When that job is cancelled or its push refused, the bundle stays in the run's
+artifact, and `in-lockstep history --from-artifacts lockstep-run --push` from a job holding the
+write token absorbs what the host still holds, once each. `in-lockstep report --scm` says how many
+are outstanding, and without `--scm` it says it did not ask rather than presenting the branch as the
+whole record.
 
 ## The module is the configuration
 

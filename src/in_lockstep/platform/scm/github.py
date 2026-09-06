@@ -9,6 +9,7 @@ from typing import Any
 
 from ...core.changes import ChangeGuard
 from ...core.types import ChangeSet
+from ..ledger.reconcile import RunArtifact
 from .base import (
     MAX_CHANGES_READ,
     MAX_REMARK_CHARS,
@@ -251,6 +252,65 @@ class GitHubScm:
             )
             for r in sorted(mine, key=lambda r: int(r.get("number") or 0), reverse=True)
         )
+
+    def run_artifacts(self, name: str) -> tuple[RunArtifact, ...]:
+        """Every artifact uploaded under `name`, expired ones included, as the sweep and
+        `report --scm` need them: which run made each, and whether the bytes are still there.
+
+        Not on the `Scm` port, for the reason `delivery_rows` gives: a forge capability the local
+        git host cannot have. Expired artifacts are listed rather than filtered, because a record
+        that expired before anyone absorbed it is a record that is gone, and the count has to say so.
+        """
+        code, out, err = self._gh(
+            "api", "--paginate",
+            f"repos/{{owner}}/{{repo}}/actions/artifacts?name={name}&per_page=100",
+            "--jq", ".artifacts[] | {id, expired, created_at, run_id: .workflow_run.id}",
+        )  # fmt: skip
+        if code != 0:
+            raise RuntimeError(f"gh api actions/artifacts failed: {err.strip()}")
+        found: list[RunArtifact] = []
+        for line in out.splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict) or row.get("id") is None:
+                continue
+            found.append(
+                RunArtifact(
+                    id=int(row["id"]),
+                    run_id=str(row.get("run_id") or ""),
+                    expired=bool(row.get("expired")),
+                    created_at=str(row.get("created_at") or ""),
+                )
+            )
+        return tuple(found)
+
+    def download_artifact(self, artifact_id: int, into: Path) -> Path:
+        """Fetch one artifact's zip and unpack it under `into`, which is returned.
+
+        Bytes, not text: `_gh` decodes, and a zip is not a string. Extracted from memory rather
+        than written to disk first, so the only files this leaves behind are the artifact's own.
+        """
+        import io
+        import os
+        import zipfile
+
+        env = {**os.environ, "GH_TOKEN": self.token} if self.token else None
+        result = subprocess.run(
+            ["gh", "api", f"repos/{{owner}}/{{repo}}/actions/artifacts/{artifact_id}/zip"],
+            cwd=self.root,
+            capture_output=True,
+            timeout=300,
+            env=env,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gh api actions/artifacts/{artifact_id}/zip failed: "
+                f"{result.stderr.decode('utf-8', 'replace').strip()}"
+            )
+        with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
+            archive.extractall(into)
+        return into
 
     def delivery_rows(self, *, limit: int = 200) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Pull requests this framework opened, and issues it filed, as rows for `metrics.delivery`.

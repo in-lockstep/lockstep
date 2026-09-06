@@ -390,18 +390,20 @@ def test_the_scaffolded_review_passes_only_options_review_declares(repo: Path) -
 
 
 def test_the_scaffold_uploads_a_path_something_writes(repo: Path) -> None:
-    """It pointed at `.lockstep/out/`, which no code path in the package ever creates."""
+    """It pointed at `.lockstep/out/`, which no code path in the package ever creates. Two paths
+    now, and each has a writer in the same job: harvest fills `.lockstep/cases/`, and the bundle
+    step writes `history.bundle` for the `publish` job to absorb (#294)."""
     import yaml
 
     CliRunner().invoke(main, ["init"])
     workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
     paths = [
-        s["with"]["path"]
+        s["with"]["path"].split()
         for j in workflow["jobs"].values()
         for s in j["steps"]
         if "upload-artifact" in str(s.get("uses", ""))
     ]
-    assert paths == [".lockstep/"], paths
+    assert paths == [["history.bundle", ".lockstep/"]], paths
 
 
 def test_the_scaffold_carries_a_timeout(repo: Path) -> None:
@@ -3629,6 +3631,42 @@ def test_gate_team_1_report_by_actor_prints_the_spread_pseudonymously_and_names_
     # The default report still names nobody, and still says who and how many.
     plain = CliRunner().invoke(main, ["report"])
     assert "actor-1                  1 run(s)" in plain.output and "amy" not in plain.output
+
+
+def test_gate_ledger_10_report_counts_the_records_still_in_artifacts_or_says_it_did_not_ask(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The branch is not the whole record: fifty reviews sat in artifacts while `report` presented
+    eight paid runs as everything (#294). Under `--scm` the footer counts what is outstanding by
+    the run id both sides carry; without it, or on a host that cannot list artifacts, a dash with
+    the reason -- never a zero nobody measured."""
+    from in_lockstep.platform.ledger.reconcile import RunArtifact
+
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    _seed_ledger(repo, dict(_seed_record("review.security", run="r1"), ci_run="100"))
+
+    plain = CliRunner().invoke(main, ["report"])
+    assert plain.exit_code == 0, plain.output
+    assert "bundles   — (pass --scm to ask the host" in plain.output, plain.output
+    grouped = CliRunner().invoke(main, ["report", "--by-kind"])
+    assert "bundles   — (pass --scm" in grouped.output, "the grouped table ends with the same caveat"
+
+    class _Forge:
+        def run_artifacts(self, name: str) -> tuple[RunArtifact, ...]:
+            assert name == "lockstep-run"
+            return (RunArtifact(1, "100"), RunArtifact(2, "101"), RunArtifact(3, "102", expired=True))
+
+    _raw_host(monkeypatch, _Forge())
+    asked = CliRunner().invoke(main, ["report", "--scm"])
+    assert asked.exit_code == 0, asked.output
+    assert (
+        "bundles   1 outstanding under `lockstep-run`, 1 expired before anyone absorbed them; "
+        "`history --from-artifacts lockstep-run --push` absorbs them"
+    ) in asked.output, asked.output
+
+    _raw_host(monkeypatch, object())
+    cannot = CliRunner().invoke(main, ["report", "--scm"])
+    assert "bundles   — (object cannot list run artifacts)" in cannot.output, cannot.output
 
 
 def test_gate_team_2_report_by_actor_counts_a_local_run_that_opted_in(repo: Path) -> None:

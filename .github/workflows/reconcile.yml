@@ -1,0 +1,46 @@
+# Invokes the CLI. Contains no lifecycle logic, and nothing generates or checks it.
+#
+# The sweep behind `lockstep.yml`'s `publish` job. That job absorbs a review's record the moment
+# the review finishes, and it can miss one: `cancel-in-progress` cancels a run when the next push
+# lands, a runner can time out, a push can be refused. What it misses sits in the `lockstep-run`
+# artifact on a 30-day clock -- which is where every review record this repository paid for sat
+# for two days before #294: recorded, as O4 asks, and then discarded one step down the pipe.
+#
+# This absorbs each outstanding bundle once. An artifact whose run a record on the branch already
+# names, or whose run an absorb commit already names, is left alone; an expired one is counted and
+# said so, because those records are gone and a sweep that skipped them quietly would present the
+# branch as the whole record. `report --scm` prints the same count.
+#
+# Holds a write token and no provider credential, like every job that publishes here. The
+# concurrency group is the branch it pushes, so two sweeps -- this and a `publish` job -- do not
+# race each other's reconcile.
+name: reconcile
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lockstep-history
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      # NOT `--extra anthropic`: this job holds a write token and must be unable to reach a model.
+      - run: uv sync
+      - run: uv run in-lockstep history --from-artifacts lockstep-run --push
+        env:
+          GH_TOKEN: ${{ github.token }}

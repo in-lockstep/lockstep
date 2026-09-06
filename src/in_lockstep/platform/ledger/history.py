@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -282,19 +283,46 @@ class GitLedger:
         self._git("bundle", "create", str(target), self.ref)
         return target
 
-    def absorb(self, path: str | Path) -> str:
-        """Take a bundle's history into this clone, then reconcile it with whatever is here."""
+    def absorb(self, path: str | Path, *, run_id: str = "") -> str:
+        """Take a bundle's history into this clone, then reconcile it with whatever is here.
+
+        `run_id` is the host's id for the run that made the bundle, and it goes into the absorb
+        commit's subject so `absorbed_runs` can read it back: that is what lets a sweep take an
+        artifact in once even when the bundle carried no record naming its run (#294).
+        """
         source = Path(path)
         if not source.is_file():
             raise HistoryError(f"no history bundle at {source}")
         if self.head() is None:
             self._git("fetch", str(source), f"{self.ref}:{self.ref}")
+            if run_id:
+                self.note_absorbed(run_id)
         else:
             self._git("fetch", str(source), f"{self.ref}:refs/lockstep/incoming")
-            self._merge_ref("refs/lockstep/incoming")
+            self._merge_ref("refs/lockstep/incoming", run_id=run_id)
         return self._git("rev-parse", self.ref)
 
-    def _merge_ref(self, other: str) -> None:
+    def note_absorbed(self, run_id: str) -> None:
+        """An empty absorb: a commit with the same tree that only says the run was looked at.
+
+        For an artifact that carried no bundle, or a bundle that created the branch outright and
+        so made no merge commit. Without it the sweep would download the same empty artifact
+        every day until it expired, and "once" would be a claim about the ordinary case only.
+        """
+        head = self.head()
+        if head is None or not run_id:
+            return
+        tree = self._git("rev-parse", f"{head}^{{tree}}")
+        commit = self._git(*self._identity(), "commit-tree", tree, "-p", head, "-m", _absorb_subject(run_id))
+        self._git("update-ref", self.ref, commit, head)
+
+    def absorbed_runs(self) -> set[str]:
+        """Which runs' artifacts this branch has already taken in, read from the absorb commits'
+        own subjects — the second half of "once", beside the `ci_run` a record carries."""
+        log = self._try("log", "--format=%s", self.ref) or ""
+        return set(_ABSORBED.findall(log))
+
+    def _merge_ref(self, other: str, *, run_id: str = "") -> None:
         """Fold another history's records into this one. Same rule as `_reconcile`."""
         head = self.head()
         listing = (self._try("ls-tree", "--name-only", f"{other}:{RECORDS}") or "").splitlines()
@@ -320,9 +348,18 @@ class GitLedger:
             "-p",
             self._git("rev-parse", other),
             "-m",
-            "absorb history from a bundle",
+            _absorb_subject(run_id),
         )
         self._git("update-ref", self.ref, commit, str(head))
+
+
+#: The absorb commit's subject, with the run it took in when the caller knew it. Read back by
+#: `absorbed_runs`, so the subject is a format and not prose: change both or neither.
+_ABSORBED = re.compile(r"^absorb history from a bundle \(run (\S+)\)$", re.M)
+
+
+def _absorb_subject(run_id: str) -> str:
+    return f"absorb history from a bundle (run {run_id})" if run_id else "absorb history from a bundle"
 
 
 def _safe(run_id: str) -> str:

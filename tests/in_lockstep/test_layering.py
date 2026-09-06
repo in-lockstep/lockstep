@@ -285,7 +285,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: claims into the record beside `ci_actor`, and `history --explain` renders the line. What an
 #: identity IS -- configured, never invented -- lives in `platform/identity.py`, where
 #: `test_identity.py` reaches it without a CliRunner.
-CLI_HELPER_STATEMENTS = 973
+#: 973 -> 994 with #294, composing and rendering: `_report_host` finds the host once for both
+#: questions `--scm` asks, `_bundles_line` renders how many run records are still in artifacts or
+#: a dash with the reason, and `_provenance` carries the host's run id into the record. Which
+#: artifacts are outstanding and what "once" means live in `platform/ledger/reconcile.py`, where
+#: `test_reconcile.py` reaches them against two real git ledgers and a stubbed host.
+CLI_HELPER_STATEMENTS = 994
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
