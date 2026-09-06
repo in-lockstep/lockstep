@@ -61,6 +61,11 @@ LEDGER_ROW = re.compile(r"^\| `(O\d+)` \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]
 # The `claimed by no objective` table, which carries gate ids rather than objective ids.
 UNCLAIMED_ROW = re.compile(r"^\| `(GATE-[A-Za-z0-9-]+)` \| ([^|]+) \| (.+) \|\s*$")
 
+# `**39 held gates are cited by no objective row.**` -- the other half of the ledger, as a number.
+# A count rather than a list, because a list of thirty-nine is a census and the test carries the
+# names in its message; a number is what a ratchet can be two-sided over.
+HELD_UNCITED = re.compile(r"\b(\d+) held gates? (?:are|is) cited by no objective row")
+
 GATE_ROW = re.compile(r"^\| `(GATE-[A-Za-z0-9-]+)` \| ([^|]+) \| ([^|]+) \|")
 
 CITED = re.compile(r"`(GATE-[A-Za-z0-9-]+)`")
@@ -162,6 +167,18 @@ def _should_be_unclaimed(rows: list[Row], gate_status: dict[str, str]) -> set[st
     """Unsettled gates no objective is blocked on."""
     claimed = {g for row in rows for g in row.blocked}
     return {g for g, status in gate_status.items() if status in UNSETTLED and g not in claimed}
+
+
+def _held_and_uncited(rows: list[Row], gate_status: dict[str, str]) -> set[str]:
+    """Held gates no objective carries.
+
+    The half `_should_be_unclaimed` cannot see (#273). It filters on `UNSETTLED`, so a gate that
+    holds and that no row claims was invisible to the only ratchet over "surface serving no
+    objective" -- and thirty-nine of them were, nearly half the held rows. Carried is the only
+    column that can cite a held gate: property 5 refuses one under *blocked on*.
+    """
+    carried = {g for row in rows for g in row.carried}
+    return {g for g, status in gate_status.items() if status == "held" and g not in carried}
 
 
 def test_the_ledgers_are_not_empty():
@@ -267,6 +284,54 @@ def test_the_unclaimed_computation_ignores_settled_and_claimed_gates():
         "GATE-CONTROLONLY-4": "held",
     }
     assert _should_be_unclaimed(rows, status) == {"GATE-CONTROLONLY-2"}
+
+
+def _stated_held_uncited(text: str) -> int | None:
+    """The number the ledger writes down, or None when the sentence is gone."""
+    _, _, tail = text.partition("## Held, and claimed by no objective")
+    found = HELD_UNCITED.search(tail)
+    return int(found.group(1)) if found else None
+
+
+def test_gate_test_8_the_held_and_uncited_count_is_exact_in_both_directions():
+    """Two-sided, like the coverage floor and the composition-root pin, and for the same reason: a
+    ceiling nobody lowers stops being one. Up means a held gate joined the uncited set -- claim it
+    under an objective whose own text says so, or say in the section why it holds for nobody.
+    Down means a row claimed one, and the credit for that is writing the smaller number."""
+    text = OBJECTIVES_MD.read_text()
+    stated = _stated_held_uncited(text)
+    assert stated is not None, "the ledger no longer states how many held gates no objective cites"
+    actual = _held_and_uncited(_ledger(text), _gate_status(GATES_MD.read_text()))
+    assert stated == len(actual), (
+        f"the ledger says {stated} held gates are cited by no objective row; the tables say "
+        f"{len(actual)}: {', '.join(sorted(actual))}. "
+        + (
+            "Up: a held gate nothing claims. Cite it under an objective whose text covers it, or "
+            "say in the section why it serves no row -- or remove the surface."
+            if len(actual) > stated
+            else "Down: a row claimed one. Lower the number in the section and take the credit."
+        )
+    )
+
+
+def test_the_held_and_uncited_computation_sees_only_held_gates_no_row_carries():
+    """The control. A gate a row carries is cited; a gate that is not held belongs to the other
+    section; a held gate nobody carries is the one this counts."""
+    rows = [Row("O1", "t", "held", ("GATE-CONTROLONLY-1",), (), "—")]
+    status = {
+        "GATE-CONTROLONLY-1": "held",  # carried, so cited
+        "GATE-CONTROLONLY-2": "held",  # carried by nobody
+        "GATE-CONTROLONLY-3": "unmet",  # not held; the other section's business
+        "GATE-CONTROLONLY-4": "retired",
+    }
+    assert _held_and_uncited(rows, status) == {"GATE-CONTROLONLY-2"}
+    assert (
+        _stated_held_uncited(
+            "## Held, and claimed by no objective\n\n**7 held gates are cited by no objective row.**"
+        )
+        == 7
+    )
+    assert _stated_held_uncited("no such section") is None
 
 
 def _mission(text: str) -> str:
