@@ -22,7 +22,7 @@ from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
 from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.replay import request_from
-from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.structured import schema_instruction, settle
 from ...core.improve import Answered, Probe
 from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
@@ -149,6 +149,16 @@ class AiImprove:
             invocation = await invoker.run(
                 system=system, messages=messages, context=package, policy=self.policy
             )
+            settled = await settle(
+                invoker,
+                invocation,
+                schema=IMPROVE_SCHEMA,
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+            )
+            invocation = settled.invocation
         except (InvocationBlocked, EgressRefused) as e:
             return Outcome.blocked_by(
                 e.reason,
@@ -163,14 +173,11 @@ class AiImprove:
                 f"unfinished; a partial body cannot be applied",
                 cost=invocation.cost,
             )
-        try:
-            parsed = parse(invocation.content)
-        except SchemaError as e:
-            return _errored("improve.unparseable", str(e), cost=invocation.cost)
-        problems = validate(parsed.value, IMPROVE_SCHEMA)
-        if problems:
-            return _errored("improve.schema_mismatch", "; ".join(problems), cost=invocation.cost)
-        value = parsed.value if isinstance(parsed.value, dict) else {}
+        if settled.reason == "unparseable":
+            return _errored("improve.unparseable", settled.detail, cost=invocation.cost)
+        if settled.reason == "schema_mismatch":
+            return _errored("improve.schema_mismatch", "; ".join(settled.problems), cost=invocation.cost)
+        value = settled.value if isinstance(settled.value, dict) else {}
         revised = str(value.get("body", "")).strip()
         if not revised or revised == body.strip():
             # A draft identical to the current body would measure `unchanged` after a paid probe

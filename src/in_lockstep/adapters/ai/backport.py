@@ -21,7 +21,7 @@ from typing import Any, ClassVar
 from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
 from ...ai.prompt import Composition, PromptLayers, compositions
-from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.structured import schema_instruction, settle
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import FileChange
 from ...core.verbs import Verb
@@ -99,13 +99,24 @@ class AiBackportResolver:
         # that applies it. It is single-turn for the matching reason, stated on `self.policy`: it is
         # handed everything it may see, so a second turn has no tool result to react to.
         invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        messages = prompt.render(params, package)
         try:
             invocation = await invoker.run(
                 system=system,
-                messages=prompt.render(params, package),
+                messages=messages,
                 context=package,
                 policy=self.policy,
             )
+            settled = await settle(
+                invoker,
+                invocation,
+                schema=BACKPORT_SCHEMA,
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+            )
+            invocation = settled.invocation
         except (InvocationBlocked, EgressRefused, InvocationFailed) as e:
             # One mapping, shared with `run_phase`. Written out here it had already drifted into
             # three `except` clauses doing what two lines do, and the drift that matters is whether
@@ -120,23 +131,19 @@ class AiBackportResolver:
                 invocation.cost,
             )
 
-        try:
-            parsed = parse(invocation.content)
-        except SchemaError as e:
-            return _errored("backport.unparseable", str(e), invocation.cost)
-        problems = validate(parsed.value, BACKPORT_SCHEMA)
-        if problems:
+        if settled.reason == "unparseable":
+            return _errored("backport.unparseable", settled.detail, invocation.cost)
+        if settled.reason == "schema_mismatch":
             return Outcome(
                 status=Status.ERRORED,
                 reason="backport.schema_mismatch",
                 cost=invocation.cost,
                 findings=tuple(
                     Finding(id="backport.schema_mismatch", message=p, severity=Severity.ERROR, blocking=True)
-                    for p in problems
+                    for p in settled.problems
                 ),
             )
-
-        data = parsed.value if isinstance(parsed.value, dict) else {}
+        data = settled.value if isinstance(settled.value, dict) else {}
         listed = data.get("files")
         raw_files = listed if isinstance(listed, list) else []
         files = tuple(

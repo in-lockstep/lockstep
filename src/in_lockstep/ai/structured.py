@@ -9,6 +9,14 @@ repaired — once, and then once more with the parse error quoted back. Bounded 
 unbounded repair loop against a model that cannot produce the shape is a way to spend a budget
 on the same failure repeatedly.
 
+That second sentence was a promise this module made and nothing kept. `parse` repaired a
+truncated object by closing its brackets and then gave up, and the "once more with the error
+quoted back" existed only here. Three reviews on this repository's own required check errored
+`review.unparseable` on `Expecting ',' delimiter` a few hundred characters in — a malformed
+object, not a cut-off one, which bracket-closing cannot touch — and each one turned a required
+check red on a change nothing was wrong with (#254). `settle` is the re-prompt: one more turn,
+carrying the reply and the parser's own words, and never a third.
+
 The truncation repair is worth keeping: a JSON object cut off by a token limit is not malformed
 input, it is a complete answer with its tail missing, and closing the brackets recovers it.
 """
@@ -87,6 +95,124 @@ def parse(text: str) -> ParseResult:
             raise SchemaError(
                 f"the reply is not JSON and could not be repaired: {first.msg} at position {first.pos}"
             ) from first
+
+
+@dataclass
+class Settled:
+    """What one structured answer came to, after at most one re-prompt.
+
+    `invocation` is the LAST call's, with the turns, cost and findings of both calls folded in when
+    a re-prompt happened, so an adapter reporting a failure reports what it actually cost.
+    `reason` is empty on success; `truncated` says the reply hit the output cap (never
+    re-prompted -- that is a policy number, not a shape the model chose); `unparseable` and
+    `schema_mismatch` say what still failed after the re-prompt, with `problems` holding every
+    error seen, first attempt first.
+    """
+
+    invocation: Any
+    value: Any = None
+    reason: str = ""
+    problems: tuple[str, ...] = ()
+    reprompted: bool = False
+
+    @property
+    def detail(self) -> str:
+        """The failure, in one line naming both attempts when there were two."""
+        if not self.reprompted:
+            return self.problems[0] if self.problems else ""
+        first = "; ".join(self.problems[: self._split])
+        second = "; ".join(self.problems[self._split :])
+        return f"first reply: {first}. After one re-prompt quoting that back: {second}"
+
+    _split: int = 1
+
+
+def _shape(content: str, schema: dict[str, Any]) -> tuple[Any, tuple[str, ...], str]:
+    """Parse and validate one reply: (value, problems, reason). Empty reason means it is usable."""
+    try:
+        value = parse(content).value
+    except SchemaError as e:
+        return None, (str(e),), "unparseable"
+    problems = tuple(validate(value, schema))
+    if problems:
+        return None, problems, "schema_mismatch"
+    return value, (), ""
+
+
+def reprompt_text(problems: tuple[str, ...]) -> str:
+    """The one follow-up turn: the parser's own words, and the ask restated. Nothing about what
+    the answer should SAY -- a re-prompt that restated the question would be asking twice."""
+    listed = "\n".join(f"- {p}" for p in problems)
+    return (
+        f"Your previous reply could not be used:\n{listed}\n\n"
+        "Reply again with a single JSON document and nothing else -- no prose, no code fence -- that "
+        "validates against the output schema you were given. Keep what you found; change only the shape."
+    )
+
+
+async def settle(
+    invoker: Any,
+    invocation: Any,
+    *,
+    schema: dict[str, Any],
+    system: str,
+    messages: list[Any],
+    context: Any = None,
+    policy: Any = None,
+) -> Settled:
+    """The reply as the schema requires it, re-prompting once when it is not.
+
+    Takes the FIRST invocation rather than making it, so an adapter's own handling of a refusal,
+    an egress decision or a provider failure around that call is untouched -- and calls the
+    invoker again inside the same adapter step, so the second bill lands under the same budget
+    middleware and the same recording as the first (O4). A truncated reply is returned as it is:
+    an output cap is a number in the policy, and a re-prompt would pay for the same cut-off
+    again. Once and never a third time, because a model that cannot produce the shape after being
+    shown exactly what was wrong with it will not on the third try, and the third bill is the one
+    nobody argued for.
+    """
+    if invocation.truncated:
+        return Settled(invocation=invocation, reason="truncated")
+    value, problems, reason = _shape(invocation.content, schema)
+    if not reason:
+        return Settled(invocation=invocation, value=value)
+
+    from dataclasses import replace
+
+    from ..llm.types import Message
+    from .invoker import InvokePolicy
+
+    history = [
+        *messages,
+        Message(role="assistant", content=invocation.content),
+        Message(role="user", content=reprompt_text(problems)),
+    ]
+    second = await invoker.run(
+        system=system,
+        messages=history,
+        context=context,
+        # One answer turn and no tools: the shape is being fixed, not the work redone.
+        policy=replace(policy if policy is not None else InvokePolicy(), max_turns=1),
+    )
+    merged = replace(
+        second,
+        turns=invocation.turns + second.turns,
+        cost=invocation.cost + second.cost,
+        # The context was scanned once already; the second scan is over the same text.
+        findings=invocation.findings,
+    )
+    if second.truncated:
+        return Settled(invocation=merged, reason="truncated", problems=problems, reprompted=True)
+    value, again, reason_again = _shape(second.content, schema)
+    if not reason_again:
+        return Settled(invocation=merged, value=value, problems=problems, reprompted=True)
+    return Settled(
+        invocation=merged,
+        reason=reason_again,
+        problems=problems + again,
+        reprompted=True,
+        _split=len(problems),
+    )
 
 
 def schema_instruction(schema: dict[str, Any]) -> str:

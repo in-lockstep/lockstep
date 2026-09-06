@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
 from ...ai.prompt import Composition, PromptLayers, compositions
-from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
@@ -180,6 +180,19 @@ class AiReview:
                 run_tool=self.run_tool,
                 policy=self.policy,
             )
+            # The shape, settled: parsed and validated, and re-prompted ONCE with the parser's own
+            # words when it is not (GATE-SHAPE-1). Inside this `try`, so a ceiling or a provider
+            # failing on the second call is handled exactly as on the first.
+            settled = await settle(
+                invoker,
+                invocation,
+                schema=REVIEW_SCHEMA,
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+            )
+            invocation = settled.invocation
         except InvocationBlocked as e:
             return Outcome.blocked_by(
                 e.reason,
@@ -226,31 +239,32 @@ class AiReview:
                 ),
             )
 
-        try:
-            parsed = parse(invocation.content)
-        except SchemaError as e:
+        if settled.reason == "unparseable":
             return Outcome(
                 status=Status.ERRORED,
                 reason="review.unparseable",
                 cost=invocation.cost,
                 findings=(
-                    Finding(id="review.unparseable", message=str(e), severity=Severity.ERROR, blocking=True),
+                    Finding(
+                        id="review.unparseable",
+                        message=settled.detail,
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
                 ),
             )
-
-        problems = validate(parsed.value, REVIEW_SCHEMA)
-        if problems:
+        if settled.reason == "schema_mismatch":
             return Outcome(
                 status=Status.ERRORED,
                 reason="review.schema_mismatch",
                 cost=invocation.cost,
                 findings=tuple(
                     Finding(id="review.schema_mismatch", message=p, severity=Severity.ERROR, blocking=True)
-                    for p in problems
+                    for p in settled.problems
                 ),
             )
 
-        report = _to_report(parsed.value, inp.aspect)
+        report = _to_report(settled.value, inp.aspect)
         report, unreachable, unplaced = _in_the_change(report, package)
         findings = tuple(
             Finding(

@@ -116,10 +116,13 @@ def test_an_empty_idea_is_refused_before_a_token_is_spent() -> None:
 
 
 def test_a_schema_mismatch_is_errored_not_a_silent_pass() -> None:
-    adapter, _ = _adapter(json.dumps({"problem": "no title or proposal"}))
+    adapter, provider = _adapter(json.dumps({"problem": "no title or proposal"}))
     outcome = asyncio.run(adapter.invoke(None, _spec()))
     assert outcome.status is Status.ERRORED
     assert outcome.reason == "rfe.schema_mismatch"
+    # Re-prompted once with the missing keys named, then reported (GATE-SHAPE-1).
+    assert len(provider.calls) == 2
+    assert "missing required key" in provider.calls[1].messages[-1].content
 
 
 def test_from_ticket_carries_title_body_and_discussion() -> None:

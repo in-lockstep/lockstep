@@ -22,7 +22,7 @@ from typing import Any, ClassVar
 from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
 from ...ai.prompt import Composition, PromptLayers, compositions
-from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
@@ -164,6 +164,16 @@ class AiRfe:
                 run_tool=self.run_tool,
                 policy=self.policy,
             )
+            settled = await settle(
+                invoker,
+                invocation,
+                schema=RFE_SCHEMA,
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+            )
+            invocation = settled.invocation
         except InvocationBlocked as e:
             return _blocked(e.reason, str(e))
         except EgressRefused as e:
@@ -179,24 +189,19 @@ class AiRfe:
                 invocation.cost,
             )
 
-        try:
-            parsed = parse(invocation.content)
-        except SchemaError as e:
-            return _errored("rfe.unparseable", str(e), invocation.cost)
-
-        problems = validate(parsed.value, RFE_SCHEMA)
-        if problems:
+        if settled.reason == "unparseable":
+            return _errored("rfe.unparseable", settled.detail, invocation.cost)
+        if settled.reason == "schema_mismatch":
             return Outcome(
                 status=Status.ERRORED,
                 reason="rfe.schema_mismatch",
                 cost=invocation.cost,
                 findings=tuple(
                     Finding(id="rfe.schema_mismatch", message=p, severity=Severity.ERROR, blocking=True)
-                    for p in problems
+                    for p in settled.problems
                 ),
             )
-
-        draft = _to_draft(parsed.value)
+        draft = _to_draft(settled.value)
         findings = tuple(
             Finding(
                 id="rfe.open_question",
