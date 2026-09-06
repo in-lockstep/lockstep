@@ -91,8 +91,10 @@ to move without somebody standing in front of this table.
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5` | — | — |
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
+| `O11` | The provider and the model are the adopter's, not ours | partial | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4` | `GATE-MODEL-1` | Registering a provider is a line in `lockstep.py`: six ship behind a registry, a constructed client whose base URL does not equal its registered `endpoint` is refused, a restricted repository blocks a model that is not registered `DataPolicy.INTERNAL` (including a hand-built invoker that declared no policy, which fails closed as undeclared), and `DEFAULT_COST_PER_M` appears nowhere -- an unpriced model is refused rather than priced by a guess. What is missing is the third refusal: `ModelCaps.structured_output` is declared per model and read by nothing, so a route to a model that cannot answer with a schema is found out by a failed call rather than by a refusal that names the model and the capability. |
+| `O12` | A second engineer is served, not obstructed | unmet | — | `GATE-TEAM-1` | The objective with the least under it, which is why it is written down rather than assumed. Nothing here measures whether a second engineer arriving at a repository is served: the ledger records who asked and what it cost, and no command splits by person, so a team cannot see whether two engineers running the same process get the same results. Effects that are collaborative -- the review conversation reaching the next `/fix`, a shared history branch -- are carried by gates about provenance and about records, and citing those here would be claiming a direction is served by mechanisms built for another one. An objective no gate carries can never be `held`, and this row is what that rule looks like when it is honest rather than embarrassing. |
 
-7 of 10 are `held`. That is the number this file exists to make visible, and it should be read
+7 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -172,41 +174,60 @@ left. The list is recomputed by the test, so a gate cannot quietly join or leave
 |---|---|---|
 | `GATE-RETRY-5` | unit only | `Retry` middleware is constructed by nothing. Its own row already states the honest resolution — bind it or retire it in favour of the transport-level retry that is bound and live — and that is a decision rather than a patch. Until it is taken, no objective is served by the row, which is the fact this section exists to keep in view. |
 
-## What the mission says that the ten do not
+## How the mission maps, and what it cost to say so
 
-Recorded here rather than smoothed over, because the mission arrived after the objectives and is
-wider than they are. Two clauses of it are carried by no objective at all, and a third is
-carried by an objective whose gate for it is unmet:
+The mission arrived after the objectives and was wider than they were. Two of its clauses were
+carried by no objective at all, and this section recorded that unresolved rather than letting
+whoever noticed it settle it. #240 is where it was settled.
 
-**"teams of software engineers to work together" / "collaborative development work."** Nothing in
-O1-O10 is about more than one engineer. The review conversation reaching the next `/fix` as
-untrusted context is collaborative in effect, and the ledger is shared in effect, but no objective
-names collaboration as a direction — so nothing measures whether a second engineer arriving at a
-repository is served or obstructed.
+**The decision was two more objectives, not a wider reading of the ten.** Both were available.
+Provider and model choice could have been read into O8 — an adopter binding their own provider in
+a `lockstep.py` the framework never edits is extension without forking, and the shape does fit.
+It was refused because O8 does not say it. Stretching an objective to cover something it does not
+state is the inflation this whole apparatus exists to refuse, and it would have made O8's `held`
+mean less than it does today: a row is worth something only while its text is the thing being
+measured. Collaboration had no such candidate at all.
 
-**"the provider(s) and model(s) of their choice."** No objective mentions provider or model
-choice. `llm/providers/` carries six of them behind a registry that refuses an endpoint mismatch,
-which is real and load-bearing surface — and by `CLAUDE.md`'s own rule it is currently surface
-that cites no objective. The mission is what justifies it; the ten have not caught up.
+So the ten became twelve. The mapping is now one clause to one objective, which is the property
+worth having:
 
-**"the policy of their choice"** is the third clause worth writing down, and it is the one that
-is not a gap in the objectives. It is carried: O8 is why an adopter binds their own `PathPolicy`,
-`InvokePolicy` and `EgressPolicy` in a `lockstep.py` the framework never edits, and O6 is why the
-egress and residency halves of that are enforced rather than declared. What the clause changes is
-the weight of `GATE-POLICY-2`, which is listed above as O6's blocker. That gate says every field
-`Policy` carries reaches something that enforces it, and that it does not: `network`,
-`permissions` and the three credit fields are merged by `resolve()`, printed by `ls` and reported
-in the receipt, and read by nothing else.
+| the mission says | the objective |
+|---|---|
+| the hosted SCM of their choice | O3 |
+| the provider(s) and model(s) of their choice | **O11** |
+| the process(es) of their choice | O1, O8 |
+| the policy of their choice | O6, O8 |
+| disciplined and structured | O4, O6, O7 |
+| teams of engineers working together | **O12** |
 
-Before the mission was written down that read as a duplicate surface, because the sandbox and the
-egress policy cover the same ground and do enforce. It reads differently now. An adopter choosing
-a policy is doing the thing the mission exists for, and five of the fields they can choose are
-inert — which makes the receipt, the artefact a security reviewer reads to find out what is in
-force, the place the gap surfaces.
+**O12 arrives `unmet`, and that is the point.** The ratchet's rule is that an objective no gate
+carries can never read as `held`, so adding a direction nothing serves does not quietly improve
+the census — it makes the census worse, visibly, which is the only honest thing a new objective
+with nothing under it can do. `GATE-TEAM-1` is what it is blocked on and #164 is the work. The
+alternative was to keep collaboration out of the objectives because it would look bad in the
+table, which is the reasoning this file exists to prevent.
 
-The remaining clauses map cleanly. "The hosted SCM of their choice" is O3. "Constrained by the
-process(es) of their choice" is O1 and O8. "Disciplined and structured" is O4, O6 and O7.
+**O11 arrives `partial`.** Its carriers were already here and already `held` — an endpoint that
+does not match its registration is refused, a restricted repository blocks a model that is not
+registered as internal, and no model is priced by a default — they were simply cited by nothing.
+That is the state `CLAUDE.md`'s rule reads as *surface to remove*, over surface nobody wanted
+removed. The rule was not wrong; the objectives were incomplete, and nothing could show it until
+the mission was written down beside them.
 
-Whether the answer to the first two is more objectives or a wider reading of the existing ones is
-a decision, not a patch — and it is recorded here unresolved rather than settled by whoever
-noticed it.
+**The policy clause needed no new objective and did need a change.** It is carried by O8 and O6,
+and what it changed was the weight of `GATE-POLICY-2`: five `Policy` fields an adopter could set
+were merged, printed by `ls`, reported in the receipt and enforced by nothing. Before the mission
+was written that read as a duplicate surface, since the sandbox and the egress policy cover the
+same ground and do enforce. It read differently afterwards — an adopter choosing a policy is doing
+the thing the mission exists for, and five of the choices were inert. #263 deleted them, and O6 is
+`held`.
+
+## Held, and cited by nothing
+
+The section above lists the *unsettled* gates no objective is blocked on. There is a second pool
+it cannot see: thirty-nine gates are `held` and cited by no row here, because the check filters on
+unsettled statuses — so a held gate serving no stated direction is invisible to the very section
+that exists to find surface serving no direction. #273 is that gap.
+
+O11's three carriers came out of that pool. It is worth draining for that reason rather than as a
+matter of tidiness: what is in there is not junk, it is directions nobody has written down yet.

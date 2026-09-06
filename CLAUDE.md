@@ -15,21 +15,22 @@ how.
 > process(es) and policy of their choice.
 
 Everything below is that sentence made checkable. The mission is wider than the ten objectives
-are — it names collaboration between engineers, and choice of provider and model, which no
-objective yet carries — and `design/objectives.md` records that gap rather than papering over it.
-It also names *policy* of their choice, which O8 does carry and `GATE-POLICY-2` says is not yet
-kept: five declared `Policy` fields are printed by `ls` and reported in the receipt and enforced
-by nothing.
+was — it named collaboration between engineers, and choice of provider and model, and for a
+while no objective carried either. `design/objectives.md` recorded that gap rather than papering
+over it, and #240 settled it the way the ledger asks: two more objectives rather than a wider
+reading of the ten, because stretching an objective to cover something it does not say is the
+inflation this whole apparatus exists to refuse. O11 and O12 are those, and O12 arrives `unmet` —
+which is the point of writing it down.
 
 ## What this framework is for
 
-Ten objectives, numbered so a change can cite one. They are the direction; everything below this
+Twelve objectives, numbered so a change can cite one. They are the direction; everything below this
 section is detail about how to work here without breaking something.
 
 Their status is not a matter of opinion. `design/objectives.md` is the ledger over them, joined to
 `design/gates.md` and ratcheted the same way: an objective is `held` only when gates that hold
 carry it, every gap it states is anchored in a named gate, and closing one of those gates fails
-the build until somebody re-reads the row. 7 of 10 are `held` today. Read it before claiming a
+the build until somebody re-reads the row. 7 of 12 are `held` today. Read it before claiming a
 change serves an objective, because the row will tell you what is already carrying it.
 
 **Every change is measured against these.** A feature, a fix, a refactor or a deletion either moves
@@ -76,6 +77,19 @@ kind of act as adding a verb, and must be as easy. The four shipped lenses are e
 **O10 — It runs on itself.** This repository uses the framework for its own reviews, fixes,
 implementations and measurement. A capability that cannot be dogfooded here is one we are asking
 adopters to trust on our word.
+
+**O11 — The provider and the model are the adopter's, not ours.** A repository routes each verb at
+whatever provider and model it wants, including one this framework has never heard of, and
+registering one is a line in `lockstep.py` rather than a fork. Where the framework cannot honour a
+route it refuses by name: a model it cannot price is not priced by a default, an endpoint that
+does not match its registration is not called, and a capability a verb needs is checked rather
+than assumed.
+
+**O12 — A second engineer is served, not obstructed.** The mission is about teams, and everything
+above is written as though one person were working alone. What one engineer's run produced has to
+be legible to the next — who asked for it, what it cost, what it decided, and whether people are
+getting consistent results from the same process. This is the objective with the least under it,
+and saying so is the reason it is here.
 
 ## Tests
 
