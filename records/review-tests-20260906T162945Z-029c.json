@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.076397,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 148,
+        "message": "test_every_shipped_verb_tells_the_invoker_the_shape_it_needs hardcodes 'improve.py' as the expected exemption without asserting why.",
+        "path": "tests/in_lockstep/test_model_caps.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 113,
+        "message": "test_a_toolless_call_on_a_registration_without_tool_use_proceeds passes schema=SCHEMA to an invoker whose caps say structured_output=True (default), but also has tool_use=False \u2014 the assertion only checks call count, not that no InvocationBlocked was raised.",
+        "path": "tests/in_lockstep/test_model_caps.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 174,
+        "message": "No test covers the settle() repair loop passing schema= to the second invoker.run call on a model that would be refused.",
+        "path": "tests/in_lockstep/test_model_caps.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "90c7b004aaa48475df6f946b905ba0e4fe5a96d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 715,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T162945Z-029c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 718,
+  "ts": "2026-09-06T16:30:08+00:00",
+  "wall_seconds": 23.078
+}
