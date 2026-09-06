@@ -5039,8 +5039,9 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool) -> None:
         if _write_trampoline(Path(".gitlab-ci.yml"), _SCAFFOLD_GITLAB_TRAMPOLINE):
             click.echo("")
             click.echo("One active job, because reviewing is read-only. The gate/work/propose split")
-            click.echo("for write-capable verbs is in the same file, commented out; it and the")
-            click.echo("host-neutral contract are documented in docs/trampoline.md.")
+            click.echo("for write-capable verbs is in the same file and active -- inert until a")
+            click.echo("pipeline runs with LOCKSTEP_ISSUE set on the default branch. The file says")
+            click.echo("which credential each job needs; docs/trampoline.md is the contract.")
     elif _write_trampoline(Path(".github/workflows/lockstep.yml"), _SCAFFOLD_TRAMPOLINE):
         click.echo("")
         click.echo("One job, because reviewing is read-only. Add the privileged `apply` job the")
@@ -5443,12 +5444,13 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
     The headline feature used to require reverse-engineering this repository's own trampoline.
     The YAML holds only what CI owns — trigger, job split, credentials — and everything the
     comment actually does is appended to lockstep.py as Python. On GitLab the YAML half already
-    lives in the scaffolded `.gitlab-ci.yml` (the commented gate/work/propose block), so only the
-    Python half is appended here.
+    lives in the scaffolded `.gitlab-ci.yml` (its gate/work/propose jobs), so only the Python half
+    is appended here.
     """
     if host == "gitlab":
-        click.echo("gitlab: the gate/work/propose jobs live in .gitlab-ci.yml (commented out);")
-        click.echo("        docs/trampoline.md is the contract and says how to enable them.")
+        click.echo("gitlab: the gate/work/propose jobs are already in .gitlab-ci.yml, and stay")
+        click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
+        click.echo("        branch. Scope their credentials first; the file says which.")
     else:
         _write_trampoline(Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE)
 
@@ -5500,8 +5502,9 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
     with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
     """
     if host == "gitlab":
-        click.echo("gitlab: the gate/work/propose jobs live in .gitlab-ci.yml (commented out);")
-        click.echo("        docs/trampoline.md is the contract and says how to enable them.")
+        click.echo("gitlab: the gate/work/propose jobs are already in .gitlab-ci.yml, and stay")
+        click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
+        click.echo("        branch. Scope their credentials first; the file says which.")
     else:
         _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
         _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
@@ -5769,8 +5772,8 @@ _SCAFFOLD_GITLAB_TRAMPOLINE = """\
 # The same trampoline lockstep.yml is on GitHub, in GitLab's own terms; docs/trampoline.md is the
 # host-neutral contract both are written against. One ACTIVE job, because reviewing is read-only:
 # it needs a provider credential and the read the runner already has, and nothing else. The
-# gate/work/propose split for write-capable verbs is below, commented out until its credentials
-# are provisioned.
+# gate/work/propose split for write-capable verbs is below and active, held inert by its `rules:`
+# until a pipeline runs with LOCKSTEP_ISSUE set on the default branch.
 #
 # One GitLab-specific warning, and it is the important one: a merge-request pipeline runs THIS
 # FILE from the source branch — the change under review can edit it. The framework's own
@@ -5852,7 +5855,12 @@ review:
 # the asker picks the ref when they run a pipeline, and the gate's CODEOWNERS must come from a
 # ref the asker cannot supply.
 #
-# To enable: uncomment; create environments `lockstep-work` and `lockstep-propose`; then SCOPE
+# ACTIVE, and inert until asked for: every `rules:` below requires LOCKSTEP_ISSUE on the default
+# branch, so a repository that never runs a pipeline with that variable never runs these jobs.
+# Shipping them commented out meant an adopter's first write-verb run was a YAML editing exercise
+# against a file the framework does not regenerate, which is the opposite of what O3 asks.
+#
+# Before the first run: create environments `lockstep-work` and `lockstep-propose`; then SCOPE
 # the credentials — GitLab's default variable scope is every environment, and an unscoped
 # variable quietly puts both credentials in both jobs, which unmakes the split without any
 # visible failure. Scope ANTHROPIC_API_KEY and a read-only project access token (read_api, as
@@ -5863,66 +5871,80 @@ review:
 # implement` provides. Then run a pipeline on the default branch with LOCKSTEP_ISSUE set
 # (Run pipeline, or the trigger API).
 #
-#gate:
-#  stage: gate
-#  image: python:3.11-slim
-#  timeout: 5m
-#  rules:
-#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#  script:
-#    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
-#    # No association here — GitLab computes no author_association — so the gate answers from
-#    # CODEOWNERS alone, read from this checkout, which the rules above pin to the default
-#    # branch. GitLab recognises three CODEOWNERS locations; take the first that exists.
-#    - |
-#      in-lockstep gate --actor "$GITLAB_USER_LOGIN" \\
-#        --codeowners "$(ls CODEOWNERS .gitlab/CODEOWNERS docs/CODEOWNERS 2>/dev/null | head -1)"
-#
-#work:
-#  stage: work
-#  # uv's image rather than python:3.11-slim: the same slim Python plus the `uv` a uv.lock
-#  # repository's Provision binding runs. A Node repository names an image that carries node
-#  # too, or `provision` refuses naming every place it looked. Pin by digest as a reviewed change.
-#  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
-#  timeout: 30m
-#  environment: lockstep-work
-#  rules:
-#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#  variables:
-#    GIT_DEPTH: "0"
-#  script:
-#    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
-#    # The repository's own environment, before anything runs in it; docs/trampoline.md says why
-#    # this runs here and never in review. Not `|| true`: an environment that could not be built
-#    # is this job's failure, named.
-#    - in-lockstep provision
-#    - in-lockstep doctor || true
-#    - |
-#      in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
-#        --approved-by "${GITLAB_USER_LOGIN}" --budget 2.00
-#    - in-lockstep history --bundle history.bundle || true
-#  artifacts:
-#    when: always
-#    paths: [changeset/, history.bundle]
-#
-#propose:
-#  stage: propose
-#  image: python:3.11-slim
-#  timeout: 10m
-#  environment: lockstep-propose
-#  rules:
-#    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#  script:
-#    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
-#    # Moved out of the workspace, deliberately: artifacts extract into it, and left there the
-#    # changeset directory would be swept into the commit open_change makes.
-#    - mv changeset /tmp/changeset
-#    - mv history.bundle /tmp/history.bundle || true
-#    # The runner's default token cannot push; the propose token can, and it is the only
-#    # credential this job holds.
-#    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-#    - in-lockstep run implement/propose --arg ticket="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
-#    - in-lockstep history --from-bundle /tmp/history.bundle --push || true
+gate:
+  stage: gate
+  image: python:3.11-slim
+  timeout: 5m
+  rules:
+    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+    # No association here — GitLab computes no author_association — so the gate answers from
+    # CODEOWNERS alone, read from this checkout, which the rules above pin to the default
+    # branch. GitLab recognises three CODEOWNERS locations; take the first that exists.
+    - |
+      in-lockstep gate --actor "$GITLAB_USER_LOGIN" \\
+        --codeowners "$(ls CODEOWNERS .gitlab/CODEOWNERS docs/CODEOWNERS 2>/dev/null | head -1)"
+
+work:
+  stage: work
+  # Keyless, where this GitLab is federated with the provider. `id_tokens:` mints a short-lived
+  # JWT per job and puts it in the environment; `ANTHROPIC_IDENTITY_TOKEN` is the name the SDK's
+  # own jwt-bearer chain reads, and the framework hands that case straight to it -- so there is
+  # no GitLab-specific resolver here and none is needed, which is why this is three lines rather
+  # than a port.
+  #
+  # Honest about the half this repository cannot test: whether a federation rule can be created
+  # for a GitLab issuer is a question for the provider, and this repository is GitHub-hosted, so
+  # it has never performed this exchange. If it is not available to you, delete these three lines
+  # and scope ANTHROPIC_API_KEY to lockstep-work instead. The run is identical either way, and a
+  # long-lived key in a scoped, protected variable is a real position rather than a fallback.
+  id_tokens:
+    ANTHROPIC_IDENTITY_TOKEN:
+      aud: https://api.anthropic.com
+  # uv's image rather than python:3.11-slim: the same slim Python plus the `uv` a uv.lock
+  # repository's Provision binding runs. A Node repository names an image that carries node
+  # too, or `provision` refuses naming every place it looked. Pin by digest as a reviewed change.
+  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+  timeout: 30m
+  environment: lockstep-work
+  rules:
+    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+    # The repository's own environment, before anything runs in it; docs/trampoline.md says why
+    # this runs here and never in review. Not `|| true`: an environment that could not be built
+    # is this job's failure, named.
+    - in-lockstep provision
+    - in-lockstep doctor || true
+    - |
+      in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
+        --approved-by "${GITLAB_USER_LOGIN}" --budget 2.00
+    - in-lockstep history --bundle history.bundle || true
+  artifacts:
+    when: always
+    paths: [changeset/, history.bundle]
+
+propose:
+  stage: propose
+  image: python:3.11-slim
+  timeout: 10m
+  environment: lockstep-propose
+  rules:
+    - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+    # Moved out of the workspace, deliberately: artifacts extract into it, and left there the
+    # changeset directory would be swept into the commit open_change makes.
+    - mv changeset /tmp/changeset
+    - mv history.bundle /tmp/history.bundle || true
+    # The runner's default token cannot push; the propose token can, and it is the only
+    # credential this job holds.
+    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - in-lockstep run implement/propose --arg ticket="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
+    - in-lockstep history --from-bundle /tmp/history.bundle --push || true
 """
 
 _SCAFFOLD_IMPLEMENT_TRAMPOLINE = """\

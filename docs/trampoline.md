@@ -115,8 +115,19 @@ a `gh pr create` appearing in the YAML fails CI: each of those has a port behind
 for the command is how lifecycle logic gets back into YAML.
 
 The scaffolded `.gitlab-ci.yml` (from `in-lockstep init` on a GitLab repository) is the GitLab
-worked example: one active review job, and the gate/work/propose block commented out until its
-environments and credentials are provisioned.
+worked example, and carries the same four jobs: review, and the gate/work/propose split for the
+write verbs. They ship active rather than commented out — every one is held inert by its `rules:`
+until a pipeline runs with `LOCKSTEP_ISSUE` set on the default branch, so a repository that never
+asks never runs them, and an adopter who does ask is scoping credentials rather than editing YAML
+the framework does not regenerate.
+
+Keyless CI is `id_tokens:` on the `work` job, which mints a short-lived JWT into
+`ANTHROPIC_IDENTITY_TOKEN` — the name the provider SDK's own jwt-bearer chain reads, so the
+framework hands that case straight to it and there is no GitLab-specific resolver. What this
+repository cannot tell you is whether a federation rule can be created for a GitLab issuer: that
+is a question for the provider, and this repository is GitHub-hosted, so it has never performed
+the exchange. The scaffold says so at the lines themselves, and a scoped protected variable
+holding a long-lived key is the documented alternative rather than a fallback.
 
 ## Porting to another host
 
