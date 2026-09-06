@@ -20,6 +20,7 @@ import pytest
 from click.testing import CliRunner
 
 from in_lockstep.adapters import CommandBuild, CommandTest, CommandValidate, PytestTest, RuffValidate, tooling
+from in_lockstep.adapters.ruff_adapter import DEFAULT_PATHS
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.cli import main
 from in_lockstep.core.types import Build, Locatable, Test, Validate
@@ -99,6 +100,30 @@ def test_ruff_validate_runs_the_repositorys_ruff(tmp_path: Path, monkeypatch: py
     outcome = asyncio.run(RuffValidate(sandbox=sandbox).invoke(ctx, Validate()))
     assert outcome.succeeded
     assert sandbox.command[0] == str(venv_ruff)
+
+
+def test_ruff_gets_the_default_path_as_one_argument_and_a_given_list_verbatim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fallback used to be `(".")`: a parenthesised string, not a tuple, which unpacked into
+    one argument only because `.` is one character long. Any longer default -- `"./src"` -- would
+    have reached ruff as `. / s r c`, five paths nobody wrote, and run green on the `.` (#246).
+    The fallback is a typed tuple now, so mypy refuses a string there; this pins what reaches the
+    command line either way, so a default that changes has to change here too, on purpose.
+    """
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    ruff = _executable(tmp_path / ".venv" / "bin" / "ruff")
+    _executable(tmp_path / ".venv" / "bin" / "python")
+    ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
+
+    sandbox = _Recording()
+    asyncio.run(RuffValidate(sandbox=sandbox).invoke(ctx, Validate()))
+    assert sandbox.command == [str(ruff), "check", "--output-format", "json", "."]
+    assert isinstance(DEFAULT_PATHS, tuple), "a string would unpack per character"
+
+    sandbox = _Recording()
+    asyncio.run(RuffValidate(sandbox=sandbox).invoke(ctx, Validate(paths=("src", "tests"))))
+    assert sandbox.command == [str(ruff), "check", "--output-format", "json", "src", "tests"]
 
 
 def test_ruff_missing_everywhere_is_a_refusal_naming_what_it_tried(

@@ -13,6 +13,14 @@ from .sandbox import Runner, Sandbox
 
 __all__ = ["RuffValidate", "Validate"]
 
+#: Where ruff looks when the request names nothing. A typed tuple rather than a literal in the
+#: argv, because the literal used to be `(".")` -- a parenthesised string, not a tuple -- and it
+#: unpacked into one argument only because `.` is one character long. `("./src")` in the same
+#: position would have reached ruff as `. / s r c`: five paths nobody wrote, and a run that stayed
+#: green because `.` was still among them (#246). With the annotation, a string here is refused by
+#: mypy before it is ever unpacked.
+DEFAULT_PATHS: tuple[str, ...] = (".",)
+
 
 class RuffValidate:
     verb: ClassVar[Verb] = Verb.VALIDATE
@@ -46,7 +54,7 @@ class RuffValidate:
             return Outcome.errored(
                 f"ruff is not installed for the repository; looked for {', '.join(resolved.tried)}"
             )
-        cmd = [resolved.path, "check", "--output-format", "json", *(inp.paths or ("."))]
+        cmd = [resolved.path, "check", "--output-format", "json", *(inp.paths or DEFAULT_PATHS)]
         rules = [*self.select, *inp.rules]
         if rules:
             cmd += ["--select", ",".join(rules)]
