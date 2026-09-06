@@ -90,18 +90,21 @@ def ctx_with(
 # -- GATE-OUT-1 ---------------------------------------------------------------------
 
 
-def test_gate_out_1_status_is_closed_at_six_members() -> None:
-    """UNDECIDED is not a status: evidence is orthogonal to how a run ended."""
-    assert len(Status) == 6
+def test_gate_out_1_status_is_closed_at_five_members() -> None:
+    """UNDECIDED is not a status: evidence is orthogonal to how a run ended.
+
+    Five, not six. `SKIPPED` was the sixth, reserved to a `Cache` middleware nobody wrote, and
+    #267 removed it rather than keep a member of a closed taxonomy that nothing produced."""
+    assert len(Status) == 5
     assert {s.name for s in Status} == {
         "SUCCEEDED",
         "FAILED",
         "ERRORED",
         "BLOCKED",
-        "SKIPPED",
         "PARKED",
     }
     assert not hasattr(Status, "UNDECIDED")
+    assert not hasattr(Status, "SKIPPED")
 
 
 def test_parked_exists_but_nothing_produces_it_at_1_0() -> None:
@@ -111,11 +114,12 @@ def test_parked_exists_but_nothing_produces_it_at_1_0() -> None:
 
 
 def test_decided_is_orthogonal_to_status() -> None:
-    """A successful run that judged nothing is not a cache hit, and must not look like one."""
+    """A successful run that judged nothing ended the same way as one that did; only the evidence
+    differs, and it lives on `decided` rather than on a status of its own."""
     undecided: Outcome[Any] = Outcome(status=Status.SUCCEEDED, decided=False)
-    cache_hit: Outcome[Any] = Outcome.skipped()
+    decided: Outcome[Any] = Outcome(status=Status.SUCCEEDED, decided=True)
     assert undecided.succeeded and not undecided.decided
-    assert cache_hit.status is Status.SKIPPED and cache_hit.decided
+    assert undecided.status is decided.status and undecided.decided != decided.decided
 
 
 def test_reason_refines_status_without_new_members() -> None:

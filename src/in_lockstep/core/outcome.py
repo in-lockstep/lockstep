@@ -17,21 +17,34 @@ ValueT = TypeVar("ValueT")
 
 
 class Status(Enum):
-    """Closed at six members. Deliberately.
+    """Closed at five members. Deliberately.
 
     `UNDECIDED` is not here: "how did it end" and "did it produce evidence" are orthogonal
     questions, and an unjudged rubric is a fully successful run that decided nothing. Folding it
-    into SKIPPED would make it indistinguishable from a cache hit — which is exactly the
-    reassuring-number failure the eval contract exists to prevent. Evidence lives on
-    `Outcome.decided`, which also composes under fan-out (`all(o.decided)`) where a seventh
+    into a status would make it look like a way of ending rather than an absence of evidence —
+    which is exactly the reassuring-number failure the eval contract exists to prevent. Evidence
+    lives on `Outcome.decided`, which also composes under fan-out (`all(o.decided)`) where a
     status member would not.
+
+    `SKIPPED` is not here either, and was. It was reserved to a `Cache` middleware — "a cache hit
+    yields SKIPPED, decided" — and the reservation was the entire mechanism: no such middleware
+    was ever written, `Outcome.skipped()` had no caller under `src/`, and a member of a closed
+    taxonomy that nothing produces is a promise the ledger and the metric were being asked to
+    honour on no evidence (#267, `GATE-OUT-2`). Removed rather than kept "in case", by the same
+    rule that retired the `Retry` middleware: surface nobody asked for is surface to remove. An
+    adapter with nothing to do says so as a `BLOCKED` refusal with a reason, or a `SUCCEEDED`
+    that decided nothing, both of which the ledger already tells apart.
+
+    `PARKED` stays with no producer, and the difference is that its absence is a recorded
+    deferral: `design/in-lockstep-design.md` §17.11 puts `ctx.park` past the 1.0 cut line, and
+    `GATE-OUT-6` carries that. Adding to a closed enum later is breaking; keeping a member a
+    decision reserved is not.
     """
 
     SUCCEEDED = "succeeded"
     FAILED = "failed"  # the domain said no: tests red, review rejected. Routable data.
     ERRORED = "errored"  # infrastructure broke. Retryable, alertable.
     BLOCKED = "blocked"  # policy or a gate stopped it. Neither failure nor error.
-    SKIPPED = "skipped"  # cache hit or conditional bypass. Reserved to Cache.
     PARKED = "parked"  # ended at a human boundary with a continuation registered.
 
     @property
@@ -41,7 +54,6 @@ class Status(Enum):
             Status.SUCCEEDED,
             Status.FAILED,
             Status.ERRORED,
-            Status.SKIPPED,
             Status.BLOCKED,
         )
 
@@ -250,7 +262,3 @@ class Outcome(Generic[ValueT]):
         """
         kw.setdefault("decided", False)
         return cls(status=Status.BLOCKED, reason=reason, **kw)
-
-    @classmethod
-    def skipped(cls, reason: str = "cache", **kw: Any) -> Outcome[ValueT]:
-        return cls(status=Status.SKIPPED, reason=reason, **kw)
