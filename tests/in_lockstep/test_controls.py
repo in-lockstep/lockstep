@@ -1328,3 +1328,87 @@ def test_a_pack_refused_by_a_control_is_not_a_pack_that_broke() -> None:
     from in_lockstep.trial import ERRORED, REFUSED
 
     assert REFUSED != ERRORED
+
+
+# -- one cached answer counted thirty times (issue 259) -----------------------------------------
+
+
+def _replay(run: str, finding: str = "review.security") -> dict:
+    return {
+        "run_id": run,
+        "status": "succeeded",
+        "cost_usd": 0.0,
+        "billed_fraction": 0.0,
+        "ts": f"2026-09-0{1 + int(run[-1]) % 9}T00:00:00Z",
+        "findings": {"count": 1, "items": [{"id": finding}]},
+    }
+
+
+def _paid(run: str, finding: str = "review.security") -> dict:
+    # No `billed_fraction`: this repository's eight paid records carry `cost_usd` and not that
+    # field, which is exactly why reading one signal could not tell these populations apart.
+    return {
+        "run_id": run,
+        "status": "succeeded",
+        "cost_usd": 9.61,
+        "ts": "2026-09-02T00:00:00Z",
+        "findings": {"count": 1, "items": [{"id": finding}]},
+    }
+
+
+def test_a_trend_is_not_cleared_by_replaying_one_cassette() -> None:
+    """`review.security` reached 30 of 52 runs here entirely from `review --offline` replaying one
+    shipped cassette: the same composed prompt, the same two findings, $0.00. The census counted
+    one cached answer thirty times as thirty independent judgments, and that census is what #163's
+    learning loop would propose prompt changes from."""
+    from in_lockstep.metrics import recurring
+
+    records = [_replay(f"r{i}") for i in range(30)]
+    trend = next(t for t in recurring(records) if t.finding == "review.security")
+
+    assert trend.runs == 30, "the run count itself is honest and stays"
+    assert trend.billed_runs == 0 and trend.replayed_runs == 30
+    assert not trend.qualifies, "thirty replays of one answer cleared a threshold for five"
+
+
+def test_a_trend_over_real_calls_still_qualifies() -> None:
+    """The control. If billing were read as a filter rather than as the denominator, a real trend
+    would stop qualifying too, and the census would be useless in the other direction."""
+    from in_lockstep.metrics import recurring
+
+    records = [_paid(f"p{i}") for i in range(5)]
+    for i, record in enumerate(records):
+        record["ts"] = f"2026-0{8 + i % 2}-0{1 + i}T00:00:00Z"
+    trend = next(t for t in recurring(records) if t.finding == "review.security")
+    assert trend.billed_runs == 5
+    assert trend.qualifies, "five billed runs across two weeks is exactly what a trend is"
+
+
+def test_a_record_carrying_no_billing_signal_is_neither_billed_nor_replayed() -> None:
+    """Absent is not zero, and it is not one either. A record with neither field is its own
+    bucket, because folding it into `replayed` would under-count real judgments and folding it
+    into `billed` would let unmeasured records clear a threshold."""
+    from in_lockstep.metrics import recurring
+
+    records = [{"run_id": "u1", "status": "succeeded", "findings": {"count": 1, "items": [{"id": "x"}]}}]
+    trend = next(t for t in recurring(records) if t.finding == "x")
+    assert (trend.billed_runs, trend.replayed_runs, trend.unmeasured_runs) == (0, 0, 1)
+
+
+def test_the_census_says_which_runs_were_paid_for() -> None:
+    """A number nobody can see the population of is the thing this file exists to refuse."""
+    from in_lockstep.metrics import as_trend_text, recurring
+
+    text = "\n".join(as_trend_text(recurring([_replay("r1"), _replay("r2"), _paid("p1")])))
+    assert "1 billed, 2 replayed" in text
+
+
+def test_the_spend_report_does_not_average_a_field_the_paid_runs_lack() -> None:
+    """`report` printed "actually billed 0%" beside a spend total of $275: the mean was taken over
+    the records carrying `billed_fraction`, every one of them a replay reporting 0.0, while the
+    runs that actually spent carried the field not at all."""
+    from in_lockstep.metrics import as_text, build
+
+    text = "\n".join(as_text(build([_replay("r1"), _replay("r2"), _paid("p1")])))
+    assert "actually billed 0%" not in text
+    assert "1 billed, 2 replayed" in text

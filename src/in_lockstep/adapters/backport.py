@@ -226,7 +226,9 @@ class GitBackport:
                     cost = cost + answer.cost
                     findings.extend(answer.findings)
                     files = answer.value or ()
-                    if (stopped := _resolver_stopped(answer, inp, conflict, picked, cost, findings)) is not None:
+                    if (
+                        stopped := _resolver_stopped(answer, inp, conflict, picked, cost, findings)
+                    ) is not None:
                         return stopped
                     if answer.status is not Status.SUCCEEDED or not files:
                         outcome = _conflict_outcome(inp, conflict, picked, cost)
