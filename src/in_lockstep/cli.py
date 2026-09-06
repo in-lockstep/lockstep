@@ -1454,6 +1454,14 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
     metavar="NAME",
     help="Absorb every outstanding bundle the host still holds under this artifact name, once each.",
 )
+@click.option(
+    "--acknowledge",
+    default="",
+    metavar="COMMIT",
+    help="Stand behind one flagged rewrite by name. Needs --reason; --by defaults to the git author.",
+)
+@click.option("--reason", default="", help="Why the rewrite in --acknowledge was legitimate.")
+@click.option("--by", default="", help="Who is acknowledging. Defaults to the configured git author.")
 @click.option("--limit", type=int, default=20, show_default=True)
 @click.option(
     "--explain",
@@ -1462,7 +1470,15 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
     help="One run's record, every field, in words. A prefix finds the latest matching run.",
 )
 def history_cmd(
-    push: bool, bundle: str, from_bundle: str, from_artifacts: str, limit: int, explain: str
+    push: bool,
+    bundle: str,
+    from_bundle: str,
+    from_artifacts: str,
+    acknowledge: str,
+    reason: str,
+    by: str,
+    limit: int,
+    explain: str,
 ) -> None:
     """Run records, on an orphan branch that touches nothing anybody works on.
 
@@ -1513,6 +1529,23 @@ def history_cmd(
             f"artifacts {len(swept.taken)} absorbed, {len(swept.empty)} empty, "
             f"{len(swept.failed)} failed, {len(swept.expired)} expired"
         )
+
+    if acknowledge:
+        # A person's act, by name. `--by` defaults to the configured git author whether or not the
+        # module opted into recording it on runs: the opt-in exists so nobody is named who did not
+        # choose to be, and running this command is the choice. No name at all is refused rather
+        # than signed "in-lockstep", because a note the framework signed is one nobody stands
+        # behind.
+        from .platform.identity import GitAuthor
+
+        who = by or GitAuthor().claim(str(ledger.root))
+        try:
+            note = ledger.acknowledge(acknowledge, reason=reason, by=who)
+        except HistoryError as e:
+            raise click.ClickException(str(e)) from None
+        click.echo(f"acknowledged  {note.commit[:12]}  rewrote {len(note.lines)} record(s)  (by {note.by})")
+        for line in note.lines:
+            click.echo(f"              {line}")
 
     head = ledger.head()
     if head is None:
@@ -1684,19 +1717,29 @@ def _attempts_from(artifact: str) -> tuple[tuple[Any, Any], ...]:
     return ((changeset, verdict),)
 
 
-def _history_line(verify: Any, tampered: list[Any]) -> str:
+def _history_line(verify: Any, tampered: list[Any], acknowledged: list[Any] = []) -> str:  # noqa: B006
     """Whether the numbers just printed came from a history that is still append-only.
 
     Its own function because both report shapes have to end with it. It was written once, inside
     the grouped-table branch, and the richer report added beside it would have inherited every
     number and none of the caveat.
+
+    An acknowledged rewrite is named in the footer too, because "append-only" would then be a
+    sentence with an exception somebody has to scroll up to find (#295). The default is a shared
+    empty list that is never mutated, so the two older callers stay as they were.
     """
     if not callable(verify):
         # The file store keeps no history, so there is nothing to verify — and saying nothing
         # would read as verified. Absent is not zero, for evidence as much as for numbers.
         return "history   unverifiable (file store keeps no history; tamper-evidence needs the git ledger)"
+    noted = f", {len(acknowledged)} rewrite(s) acknowledged by name" if acknowledged else ""
     if tampered:
-        return f"history   NOT APPEND-ONLY: {len(tampered)} record(s) rewritten (see above)"
+        return f"history   NOT APPEND-ONLY: {len(tampered)} record(s) rewritten (see above){noted}"
+    if acknowledged:
+        return (
+            f"history   append-only across the retained chain, except {len(acknowledged)} rewrite(s) "
+            f"acknowledged by name (see above)"
+        )
     return "history   append-only across the retained chain"
 
 
@@ -1845,6 +1888,17 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
     tampered = verify() if callable(verify) else []
     for problem in tampered:
         click.echo(f"TAMPERED  {problem}", err=True)
+    # The rewrites somebody stood behind, printed where the alarm was and on the same stream: a
+    # reader sees the same fact, now with a name and a reason attached, rather than nothing where
+    # an alarm used to be (#295).
+    noted = getattr(ledger, "acknowledged_rewrites", None)
+    acknowledged = noted() if callable(noted) else []
+    for note in acknowledged:
+        click.echo(
+            f"acknowledged  commit {note.commit[:12]} rewrote {len(note.lines)} record(s): "
+            f"{note.reason}  (by {note.by}, {note.ts})",
+            err=True,
+        )
     # The host is asked only under `--scm`, because asking needs a token and a network call.
     # Without it the bundles line is a dash that says so: the branch is not presented as the
     # whole record on the strength of a question nobody asked (#294).
@@ -1881,7 +1935,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
         # On this path too, and not only under `--by-kind`. The footer is what GATE-LEDGER-8
         # asserts, and a richer report that quietly stopped saying whether the history behind it
         # is append-only would be a page of numbers with the one caveat about them removed.
-        click.echo(_history_line(verify, tampered))
+        click.echo(_history_line(verify, tampered, acknowledged))
         click.echo(_bundles_line(host, records, ledger, reason=reason))
         if html_path:
             # Written HERE and not by `metrics`, which is a leaf that may not reach `privileged`.
@@ -1935,7 +1989,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
         )
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
-    click.echo(_history_line(verify, tampered))
+    click.echo(_history_line(verify, tampered, acknowledged))
     click.echo(_bundles_line(host, records, ledger, reason=reason))
 
 

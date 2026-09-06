@@ -210,3 +210,15 @@ in-lockstep doctor                # DOC167, an ERROR — tampering fails a requi
 The check reads the retained chain. A force-push that *replaced* the chain is the remote's to
 refuse. Protect `lockstep-history` with a ruleset blocking force-pushes and deletions. Appends
 are fast-forwards and still flow, so it needs no reviews and slows nothing down.
+
+A flag you can explain, you acknowledge by name, and it stops being an alarm without becoming a
+secret:
+
+```bash
+in-lockstep history --acknowledge adca58e --reason "a laptop's fixed-run-id record replaced the branch's" --push
+```
+
+That appends a note to the branch — who, why, when, and what the commit rewrote — and `report`
+and `doctor` print the note where `TAMPERED` was. A rewrite in any other commit is still an alarm,
+and the note itself is protected by the same check. A flag nobody can acknowledge is one everybody
+learns to read past.

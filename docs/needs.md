@@ -51,9 +51,12 @@ history branch on 2026-09-06 with `in-lockstep report` and then record by record
   the first sweep is what brings the 30-day window's worth onto the branch, and the count is what
   says whether it did. The volume N3 asks about exists, and the ledger this document leans on can
   now see it.
-- **And the branch flags itself.** Every report opens with `TAMPERED`, because the 2026-09-02
-  reconcile rewrote the first record's shape and nothing can acknowledge that, so the flag has
-  been read past for four days. Filed as #295.
+- **And the branch flagged itself with no way to answer.** Every report opened with `TAMPERED`,
+  because the 2026-09-02 reconcile carried a laptop's fixed-run-id record over the branch's own
+  record of the same id, and nothing could acknowledge that, so the flag was read past for four
+  days. Filed as #295, which gave the flag an answer: `history --acknowledge` appends a note by
+  name, and `report` prints the note where the alarm was. The acknowledgement of that rewrite is a
+  person's act, and the report opens with the flag until somebody makes it.
 
 So the open question is not whether anything has run. It is whether enough has run, somewhere the
 report can read, to say what a first review is worth and how long the road to it is — and nobody
