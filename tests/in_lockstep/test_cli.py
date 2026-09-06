@@ -2721,18 +2721,38 @@ def _seed_record(fid: str, *, run: str, ts: str | None = "2026-09-01T00:00:00+00
     }
 
 
-def test_improve_refuses_to_propose_and_says_nothing_drafts_a_change_yet(repo: Path) -> None:
-    """GATE-IMPROVE-1. The bare command has to refuse rather than do the nearest available thing.
-    Nothing drafts a prompt change, and a command that printed a cheerful summary for work it did
-    not do is the failure this framework exists to refuse."""
-    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+def test_improve_refuses_before_its_first_model_call_when_no_trend_qualifies(repo: Path) -> None:
+    """GATE-IMPROVE-1. The bare command spends nothing until every precondition holds, and the
+    first one -- a finding that clears both thresholds -- is not met by one run. No key is in the
+    environment here, so reaching a provider would be an error rather than a refusal: exit 3 and
+    `blocked` are the proof the model was never asked.
+
+    A refusal is a run, and it leaves a BLOCKED record. That is deliberate and safe since #256:
+    the census `--explain` reads excludes refused records by status, so the record the refusal
+    writes cannot be the trend the next tick proposes from -- asserted below by reading it back.
+    """
+    import json
+
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\nfrom in_lockstep.middleware import CostBudget\n"
+        "lockstep = Lockstep.detect()\nlockstep.middleware += [CostBudget(usd=1.00)]\n"
+    )
     _seed_ledger(repo, _seed_record("review.security", run="r1"))
     before = sorted((repo / ".lockstep/ledger").glob("*.json"))
 
-    result = CliRunner().invoke(main, ["improve"])
+    result = CliRunner().invoke(main, ["improve", "--no-record"])
     assert result.exit_code == 3, result.output
-    assert "refused" in result.output, result.output
-    assert sorted((repo / ".lockstep/ledger").glob("*.json")) == before
+    assert "blocked" in result.output and "improve.no_trend" in result.output, result.output
+    after = sorted((repo / ".lockstep/ledger").glob("*.json"))
+    assert len(after) == len(before) + 1, "a dispatched run leaves a record, refused or not"
+    (new,) = [p for p in after if p not in before]
+    record = json.loads(new.read_text())
+    assert record["status"] == "blocked" and record["workflow"] == "improve/measure"
+    assert record["cost_usd"] == 0
+    # The census the next tick reads still sees one run, not two.
+    explained = CliRunner().invoke(main, ["improve", "--explain"])
+    assert explained.exit_code == 0, explained.output
+    assert "review.security" in explained.stdout and "improve.no_trend" not in explained.stdout
 
 
 def test_explain_writes_no_record_and_opens_nothing(repo: Path) -> None:

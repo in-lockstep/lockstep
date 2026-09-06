@@ -637,6 +637,22 @@ class GitLocal:
             "user.email=in-lockstep@users.noreply.github.com",
         ]
 
+    def open_changes_by_workflow(self, workflow: str, *, limit: int = 200) -> tuple[ChangeRequest, ...]:
+        """Every branch this framework opened for `workflow` that still exists here.
+
+        Local git has no pull requests, so "open" means the branch is still in the repository: a
+        person who merged or deleted it closed it. It exists so the open-proposal ceiling is a
+        ceiling at a terminal as well as on a host (O3) — `GATE-IMPROVE-8` says the count is taken
+        where a proposal is opened, and a local host that could not count would have to refuse
+        every local proposal or let every one through.
+
+        `limit` is accepted for the shape the hosted implementations share and is not a truncation
+        here: `git branch --list` returns every match.
+        """
+        listed = self.git("branch", "--list", "--format=%(refname:short)", f"{RUN_BRANCH_PREFIX}/*")
+        mine = [b.strip() for b in listed.splitlines() if is_run_branch_of(b.strip(), workflow)]
+        return tuple(ChangeRequest(id=b, url="", branch=b, title="") for b in sorted(mine))
+
     async def open_change(
         self,
         cs: ChangeSet,

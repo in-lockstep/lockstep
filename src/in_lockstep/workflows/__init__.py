@@ -4,6 +4,7 @@
 
     implement.register()
     fix.register()
+    improve.register()
 
 `init --implement` writes those lines. Reading the source is `in-lockstep show-workflow
 implement`, which prints it from the module that is actually imported — so what you read is what

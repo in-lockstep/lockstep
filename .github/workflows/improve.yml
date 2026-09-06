@@ -1,0 +1,129 @@
+# The learning loop, on a schedule. Invokes the CLI; contains no lifecycle logic.
+#
+# Three jobs, the implement split: a gate that authorises the asker and counts what is already
+# open, a measuring job that holds the provider credential and `contents: read`, and a proposing
+# job that holds a write token and no credential. On a schedule the asker is whoever last changed
+# this file's cron, which GitHub reports as `github.actor`; the gate treats them exactly as it
+# treats a commenter, so a schedule is not a way around the actor check.
+#
+# No `--approved-by` on the measuring run, deliberately. The loop drafts and measures and writes
+# nothing, so no grant is needed, and a schedule has no asker to name: passing the gate's actor
+# would record a person as approving runs they never asked for, and `report` would count them.
+#
+# The open-proposal ceiling is counted twice on purpose: here, so a scheduled run costs nothing
+# when a proposal is already open, and again inside `improve/propose` where the proposal is
+# opened, because a preflight a pipeline can forget is not enforcement (GATE-IMPROVE-8).
+#
+# Most weeks `improve/measure` refuses before its first model call -- no trend qualifies, or every
+# promoted case passes against the body as it stands -- and exits 3, which is `blocked`: a control
+# working, not a failure. The measuring step translates exactly that exit into a green step, and
+# nothing else, so a schedule does not paint the repository red for having nothing to learn.
+name: improve
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: improve
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      actor: ${{ steps.check.outputs.actor }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - id: check
+        run: |
+          uv run in-lockstep gate --actor "$ACTOR" --open-proposals improve/propose --max 1
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+        env:
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  measure:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv run in-lockstep provision
+      - run: uv sync --extra anthropic
+      - run: uv run in-lockstep doctor
+        env:
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      - run: |
+          uv run in-lockstep run improve/measure --record || status=$?
+          test "${status:-0}" -eq 3 && echo "refused before spending; the ledger record says why" && exit 0
+          exit "${status:-0}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
+          ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
+      - run: uv run in-lockstep history --bundle history.bundle
+        if: always()
+        continue-on-error: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: improve-${{ github.run_id }}
+          path: |
+            changeset/
+            attempt/
+            history.bundle
+            .lockstep/cases/
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 30
+
+  propose:
+    needs: [gate, measure]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: improve-${{ github.run_id }}
+          path: improve
+      - if: ${{ hashFiles('improve/changeset/changeset.json') != '' }}
+        run: uv run in-lockstep run improve/propose --arg artifact=improve/changeset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          uv run in-lockstep history \
+            --from-bundle improve/history.bundle \
+            --push
+        if: always()
+        continue-on-error: true

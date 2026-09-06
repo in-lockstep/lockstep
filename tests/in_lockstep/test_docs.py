@@ -135,9 +135,12 @@ def test_a_runs_row_names_something_that_ships() -> None:
         # Three halves, because the claim has three: the vocabulary a repository declares in,
         # the arithmetic over the ledger, and the command that prints it. Any one alone would
         # be a row that survives the other two being deleted.
-        "Improvement trend": (
+        # Four halves now: the vocabulary, the census, the command, and the process that drafts,
+        # measures and stages -- which is the half the row claims since #163.
+        "Improvement loop": (
             _importable("in_lockstep.core.improve", "Improvable")
             and _importable("in_lockstep.metrics", "recurring")
+            and _importable("in_lockstep.workflows.improve", "improve_measure")
             and "improve" in commands
         ),
         "Backport": "backport" in SHIPPED_VERBS and "backport" in commands,

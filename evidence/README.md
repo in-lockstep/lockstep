@@ -98,6 +98,21 @@ uv run in-lockstep eval harvest --from src/in_lockstep/cassettes/review-security
   --into /tmp/candidates --family review
 ```
 
+## Tightening a case
+
+A harvested case's expectations were derived from the answer it came from, so the prompt that
+produced that answer passes it by construction. That makes a promoted case a floor: `make check`
+fails if a change below the model breaks it, and a prompt proposal that loses it is `regressed`.
+
+It becomes something a prompt can *improve on* only when a person tightens it. Read the answer,
+decide what a correct one would also have said, and put that in the expectations — a `contains`
+naming the finding the model missed, a higher floor on `count`, a field under `schema`. That edit
+is the one labelling act the learning loop learns from: `in-lockstep improve` refuses to spend on
+a corpus every case of which passes, and drafts against exactly the checks a tightened case fails.
+
+Tighten in a pull request, like promoting. The expectation is a claim about what good output looks
+like, and it should be read by somebody other than the person who made it.
+
 ## Why not `.lockstep/`
 
 `.lockstep/` leads `DENY_ALWAYS` in `core/changes.py`, checked before any grant, so nothing routed

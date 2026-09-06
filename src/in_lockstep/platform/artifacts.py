@@ -17,7 +17,9 @@ the control on that path, not `Redact`.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from ..core.types import ChangeAuthor, ChangeSet, FileChange, TestVerdict
 from ..privileged.redact import Redact
@@ -55,6 +57,7 @@ def write_changeset(
     *,
     redact: Redact | None = None,
     verdict: TestVerdict | None = None,
+    scorecard: Mapping[str, Any] | None = None,
 ) -> Path:
     """Serialize, metadata masked, contents verbatim. Returns where it landed.
 
@@ -79,6 +82,11 @@ def write_changeset(
     }
     if verdict is not None:
         document["verdict"] = {field: getattr(verdict, field) for field in _VERDICT_FIELDS}
+    if scorecard is not None:
+        # The measurement a prompt proposal was opened on, in the same document as the change it
+        # measured, so the two cannot travel apart: a proposal read back with no scorecard is one
+        # whose body would have to invent its numbers, and `read_scorecard` returns None instead.
+        document["scorecard"] = dict(scorecard)
     path.write_text(json.dumps(document, indent=2) + "\n")
     return path
 
@@ -148,3 +156,16 @@ def read_verdict(artifact: str | Path) -> TestVerdict | None:
         # than let a non-numeric field crash the propose job — the change still applies; the body
         # just cannot claim a result over it.
         return None
+
+
+def read_scorecard(artifact: str | Path) -> dict[str, Any] | None:
+    """The scorecard a staged proposal was measured on, or None when the change carries none.
+
+    None rather than an empty dict, for the reason `read_verdict` returns None for an untested
+    change: a proposal with no measurement is a different thing from one measured at zero, and the
+    workflow that opens proposals refuses the first rather than printing the second.
+    """
+    path = payload_path(artifact)
+    document = json.loads(path.read_text())
+    raw = document.get("scorecard") if isinstance(document, dict) else None
+    return dict(raw) if isinstance(raw, dict) else None

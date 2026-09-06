@@ -189,6 +189,9 @@ class Lockstep:
             models=dict(self.models.routes),
             max_attempts=self.max_attempts,
             recording=recording,
+            max_open_proposals=self.max_open_proposals,
+            improvable=tuple(self.improve),
+            guard=self.guard,
         )
 
     def declared_ceiling(self) -> Budget:
