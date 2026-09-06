@@ -508,6 +508,15 @@ def _provenance(lockstep: Any) -> dict[str, Any]:
             # The host-computed identity, beside whatever `--approved-by` claimed: the two
             # corroborate each other, and a mismatch is worth seeing in the record.
             out["ci_actor"] = ci_env.actor
+    identity = getattr(lockstep, "identity", None)
+    if identity is not None and repo is not None:
+        # Only when the module said so. `lockstep.identity = GitAuthor()` is a line a repository
+        # writes deliberately and nothing detects (#289). Its own field, beside `ci_actor` (what
+        # the host said) and `approval.by` (what a grant claimed), so a reader can tell the three
+        # kinds of claim apart. Empty is absent, and absent is written nowhere.
+        who = str(identity.claim(repo.root) or "")
+        if who:
+            out["identity"] = who
     source = str(getattr(lockstep, "config_source", "") or "")
     if source:
         out["config"] = source
@@ -1564,6 +1573,7 @@ def _explain_run(run_id: str) -> None:
         watched = "attended" if approval.get("attended") else "unattended"
         click.echo(f"{'approved':<10}{approval['by']}  ({watched})")
     line("ci actor", "ci_actor")
+    line("identity", "identity")
     args = record.get("args")
     if isinstance(args, dict) and args:
         click.echo(f"{'args':<10}" + "  ".join(f"{k}={v}" for k, v in sorted(args.items())))
@@ -1796,7 +1806,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
 
     # The same pseudonyms the full report uses, so `actor-1` here is `actor-1` there. Derived onto
     # copies rather than read off the record, because no record carries an `actor` key: the
-    # identity is `approval.by` or `ci_actor`, and the store's summariser reads one key.
+    # asker is `approval.by`, `ci_actor` or `identity`, and the store's summariser reads one key.
     stats = summarize(
         metrics.keyed_by_actor(records, names=names) if group_by == "actor" else records, by=group_by
     )

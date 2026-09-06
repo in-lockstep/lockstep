@@ -502,14 +502,18 @@ def actor_of(record: dict[str, Any]) -> str:
 
     `approval.by` is what a person claimed, `ci_actor` is what the host said, and the claim wins
     because it is the more specific one: `labeled:tpouyer` says the label trigger acted for that
-    person, where the host actor says only who pushed the button. Two spellings of one human are
-    two askers here, deliberately -- merging them would be an aliasing decision this module has no
-    evidence for, and a report that quietly folded identities together would be inventing.
+    person, where the host actor says only who pushed the button. `identity` is read last: what the
+    repository's own `lockstep.identity` line claimed -- the configured git author, for the shipped
+    `GitAuthor` (#289) -- which is a claim with no host to corroborate it, so anything more
+    specific wins.
+    Two spellings of one human are two askers here, deliberately -- merging them would be an
+    aliasing decision this module has no evidence for, and a report that quietly folded
+    identities together would be inventing.
     """
     approval = record.get("approval")
     if isinstance(approval, dict) and approval.get("by"):
         return str(approval["by"])
-    return str(record.get("ci_actor") or "")
+    return str(record.get("ci_actor") or record.get("identity") or "")
 
 
 def _pseudonyms(records: list[dict[str, Any]]) -> dict[str, str]:
@@ -1076,7 +1080,10 @@ def as_text(report: Report, *, actors: bool = False) -> list[str]:
         for row in report.team.actors:
             hygiene += [f"  {row.name:<24} {row.runs} run(s)"]
         if report.team.nobody is not None:
-            hygiene += [f"  {'—':<24} {report.team.nobody.runs} run(s)   (carried no identity: a local run)"]
+            hygiene += [
+                f"  {'—':<24} {report.team.nobody.runs} run(s)   (carried no identity: a local run; "
+                "`lockstep.identity = GitAuthor()` records one)"
+            ]
     if report.unattended.value:
         hygiene += [f"  unattended    {report.unattended.value:.0%} of runs, with nobody watching"]
     if report.against_dirty_tree.value:
@@ -1120,7 +1127,12 @@ def _actor_table(team: Team) -> list[str]:
         if row.top_findings:
             out += ["               " + ", ".join(f"{fid} {n} run(s)" for fid, n in row.top_findings)]
     if team.nobody is not None:
-        out += [f"  {'—':<12} {team.nobody.runs:>4} run(s)   carried no identity (a local run); in no spread"]
+        out += [
+            f"  {'—':<12} {team.nobody.runs:>4} run(s)   carried no identity (a local run); in no spread",
+            # The remedy beside the dash, the way a refusal lists what exists: the row is honest
+            # about the absence, and this is the line that ends it.
+            f"  {'':<12}      (`lockstep.identity = GitAuthor()` records who ran a local run)",
+        ]
     if not team.actors:
         out += ["  —  (no record names who asked; only CI and unattended runs carry an asker)"]
     if team.spreads:

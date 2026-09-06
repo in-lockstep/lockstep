@@ -98,9 +98,9 @@ to move without somebody standing in front of this table.
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5`, `GATE-LENS-1` | — | — |
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
 | `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1` | — | — |
-| `O12` | A second engineer is served, not obstructed | partial | `GATE-TEAM-1` | `GATE-TEAM-2` | The objective with the least under it, and since #164 no longer nothing. `history --explain` names who approved a run and who asked for it, and `report --by actor` splits the ledger by asker and prints the spread between askers with every number carrying its runs -- pseudonymously, with a `—` row for runs nobody is recorded as asking for. What it cannot yet do is ask the question of the runs a team mostly makes: a local run carries no identity, so on this repository forty-five of fifty-six records are under the dash and the spread it prints is between two spellings of one person. `GATE-TEAM-2` names the remedy the issue refused to make a default: an opt-in local identity. Until then the row is honest about being one gate wide, and about the dogfood ledger holding one engineer. |
+| `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2` | — | — |
 
-9 of 12 are `held`. That is the number this file exists to make visible, and it should be read
+10 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -230,6 +230,21 @@ And the row is `held` on a refusal no shipped registration triggers, the same st
 `GATE-AUTH-2` has had all along: the check runs before every call, and the refusal is exercised
 against a registration constructed to declare the incapacity, because the declaration is the
 operator's and the shipped ones make none.
+
+Ten, when #289 closed `GATE-TEAM-2` and O12 moved to `held`. The #164 paragraph above kept the
+row `partial` on purpose, and named the one thing missing as a gate: a local run carried no
+identity, so the consistency question could not be asked of the runs a team mostly makes. That
+gate now holds, on the terms the issue set -- one line a repository writes and nothing detects,
+because the alternative was naming people who never chose to be named. So the two gates carry
+the objective's sentence between them: what one engineer's run produced is legible to the next,
+and whether people get consistent results can be asked of every run, not only the ones a host or
+a grant happened to stamp. What has not changed is stated where it was: this repository's own
+ledger holds one engineer, and opting in here gives him a third spelling, so the spread the
+command prints on this repository is still between spellings and not people. That is a fact
+about this repository's headcount and not a gap in the framework -- no gate can close it, and
+`GATE-TEAM-1`'s row keeps saying it -- which is why the objective is `held` on the mechanism the
+tests exercise over a two-person ledger rather than on the evidence this one repository can
+produce. Still the objective with the least under it; two gates rather than one.
 
 ## Claimed by no objective
 

@@ -84,6 +84,34 @@ def test_a_run_record_says_when_against_what_and_under_which_config(hermetic: Pa
     assert record["head"] == head
     assert "config" in record, "which lockstep.py constrained the run is part of the evidence"
     assert "base" not in record, "no CI, no base ref — absent, never fabricated"
+    assert "identity" not in record, "nobody opted in, so nobody is named -- absent, not detected"
+
+
+def test_gate_team_2_a_local_run_carries_the_identity_the_repository_opted_into(
+    hermetic: Path,
+) -> None:
+    """GATE-TEAM-2, end to end. One line in `lockstep.py` and a local run's record says who ran
+    it, as `identity`, in git's own spelling. The scaffolded module records nothing until the
+    line is there -- the test above holds that half -- so this is the whole opt-in, from the file
+    a person edits to the field a report counts."""
+    _repo(hermetic)
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    module = hermetic / ".lockstep" / "lockstep.py"
+    module.write_text(
+        module.read_text() + "\nfrom in_lockstep import GitAuthor\nlockstep.identity = GitAuthor()\n"
+    )
+    (hermetic / "sample.py").write_text("x = 1\n")
+    result = CliRunner().invoke(main, ["run", "selfcheck", "--paths", str(hermetic)])
+    assert "spend" in result.output, result.output
+
+    records = [
+        r for r in GitLedger(root=hermetic).records() if str(r.get("run_id", "")).startswith("selfcheck-")
+    ]
+    assert records, "the run must have left a selfcheck record"
+    record = records[-1]
+    assert record["identity"] == "t <t@example.test>"
+    assert "ci_actor" not in record, "a local run: the host said nothing, and nothing is invented"
+    assert record["schema"] == SCHEMA
 
 
 def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(

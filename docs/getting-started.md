@@ -361,8 +361,20 @@ the report says so rather than dropping your question. The one exception is `--b
 expands the full report's *who and how* section into a table per asker — outcome mix, turns and
 spend per succeeded run, findings per run — and the spread between askers, each number with the
 runs it came from. Askers are stable pseudonyms, numbered by first appearance, unless you pass
-`--names`; the signal is the spread, not the person. A run nobody is recorded as asking for — every
-local run — is a `—` row with its count, and is in no spread.
+`--names`; the signal is the spread, not the person. A run nobody is recorded as asking for is a
+`—` row with its count, and is in no spread. Every local run is such a run until the repository
+opts in:
+
+```python
+from in_lockstep import GitAuthor
+
+lockstep.identity = GitAuthor()
+```
+
+That records the configured git author — `Name <email>`, both required, as git would write it on
+a commit — on every run made at a terminal here, as `identity`, beside `ci_actor` and
+`approval.by` and never in place of them. It is a line nobody detects for you, because a report
+that named people who never chose to be named is the leaderboard the pseudonyms exist to refuse.
 
 A run whose model the framework did not choose carries no subject at all rather than a partial one,
 and `implement` and `fix` carry none either: those strategies append the repository's house rules at

@@ -35,7 +35,15 @@ from ...privileged import sink
 # resolve — because a subject key computed from a guess is a comparison somebody could act on.
 # `implement` and `fix` records carry none at all: those strategies append the repository's house
 # rules at run time, so their static flatten is not what ran.
-SCHEMA = 6
+#
+# 7: a record carries `identity` -- what the repository's `lockstep.identity` line claimed; for
+# the shipped `GitAuthor`, the configured git author as `Name <email>` -- and not otherwise. A
+# third identity beside `ci_actor` (what the host said) and `approval.by` (what a grant claimed),
+# under its own name so a reader can tell which kind of claim it is. Opt-in and never detected:
+# #164 refused to record it by default, because a report naming people who never chose to be
+# named is the leaderboard the pseudonyms exist to refuse. Additive, and bumped for the reason 4
+# gives. Nothing numeric.
+SCHEMA = 7
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 

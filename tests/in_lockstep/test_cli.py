@@ -3631,6 +3631,37 @@ def test_gate_team_1_report_by_actor_prints_the_spread_pseudonymously_and_names_
     assert "actor-1                  1 run(s)" in plain.output and "amy" not in plain.output
 
 
+def test_gate_team_2_report_by_actor_counts_a_local_run_that_opted_in(repo: Path) -> None:
+    """GATE-TEAM-2, on the command. Two local runs carrying the git author their repositories opted
+    into recording are two askers with a spread between them; `history --explain` says which kind
+    of claim the identity is, under its own label, so a reader never mistakes it for what a host
+    said."""
+    _lifecycle(repo).write_text("from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n")
+    first = dict(
+        _seed_record("review.security", run="r1", ts="2026-09-01T00:00:00+00:00"),
+        identity="Amy <amy@example.test>",
+        cost_usd=0.1,
+    )
+    second = dict(
+        _seed_record("review.security", run="r2", ts="2026-09-02T00:00:00+00:00"),
+        identity="Zed <zed@example.test>",
+        cost_usd=0.3,
+    )
+    _seed_ledger(repo, first, second)
+
+    result = CliRunner().invoke(main, ["report", "--by", "actor"])
+    assert result.exit_code == 0, result.output
+    assert "spend per success  actor-2 $0.3000  (1 of 1)   vs   actor-1 $0.1000  (1 of 1)" in result.output
+    assert "amy@" not in result.output and "zed@" not in result.output
+    named = CliRunner().invoke(main, ["report", "--by", "actor", "--names"])
+    assert "Amy <amy@example.test>" in named.output, named.output
+
+    explained = CliRunner().invoke(main, ["history", "--explain", "r1"])
+    assert explained.exit_code == 0, explained.output
+    assert "identity  " in explained.output and "Amy <amy@example.test>" in explained.output
+    assert "ci actor" not in explained.output, "the label says which kind of claim it is"
+
+
 # -- #204: a lens on request, and a Lens as a declared object ---------------------------------------
 
 
