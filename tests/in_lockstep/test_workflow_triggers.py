@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -53,18 +54,18 @@ class _Loader(yaml.SafeLoader):
     pass
 
 
-_Loader.add_constructor(
-    "tag:yaml.org,2002:bool",
-    lambda loader, node: (
-        loader.construct_scalar(node)
-        if loader.construct_scalar(node) in ("on", "off")
-        else yaml.SafeLoader.construct_yaml_bool(loader, node)
-    ),
-)
+def _on_stays_a_string(loader: yaml.SafeLoader, node: yaml.Node) -> Any:
+    assert isinstance(node, yaml.ScalarNode)
+    value = loader.construct_scalar(node)
+    return value if value in ("on", "off") else yaml.SafeLoader.construct_yaml_bool(loader, node)
 
 
-def _load(name: str) -> dict:
-    return yaml.load((WORKFLOWS / name).read_text(), Loader=_Loader)
+_Loader.add_constructor("tag:yaml.org,2002:bool", _on_stays_a_string)
+
+
+def _load(name: str) -> dict[str, Any]:
+    loaded: dict[str, Any] = yaml.load((WORKFLOWS / name).read_text(), Loader=_Loader)
+    return loaded
 
 
 ALL_WORKFLOWS = sorted(WORKFLOWS.glob("*.yml"))
@@ -333,8 +334,8 @@ class _StrictLoader(_Loader):
     """A loader that refuses a duplicate key rather than keeping the last one."""
 
 
-def _no_duplicate_keys(loader: yaml.Loader, node: yaml.MappingNode, deep: bool = False) -> dict:
-    mapping: dict = {}
+def _no_duplicate_keys(loader: yaml.Loader, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
+    mapping: dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
         if key in mapping:
@@ -378,7 +379,7 @@ def test_a_comment_body_never_reaches_a_shell(path: Path) -> None:
 # -- GATE-RECORD-1: every CI review records, and the recording does not leave the runner --------
 
 
-def _steps(spec: dict) -> list[dict]:
+def _steps(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return [s for job in (spec.get("jobs") or {}).values() for s in (job.get("steps") or [])]
 
 

@@ -1,11 +1,13 @@
+from typing import Any
+
 # -- asking for the caching the framework already measured -------------------------------------
 
 
-def _kwargs(**over):
+def _kwargs(**over: Any) -> dict[str, Any]:
     from in_lockstep.llm._claude import claude_kwargs
     from in_lockstep.llm.types import LLMInput, Message
 
-    base = {
+    base: dict[str, Any] = {
         "model": "claude-opus-4-6",
         "system": "You implement one ticket.",
         "messages": [Message(role="user", content="Implement #146.")],

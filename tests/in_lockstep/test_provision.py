@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -109,11 +110,12 @@ def test_every_step_that_ran_is_in_the_result_when_all_succeed(tmp_path: Path) -
 
 
 def test_a_provisioner_found_nowhere_is_a_refusal_naming_every_place_looked(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """Exit 127 is an environment fact, not a verdict: `errored`, with the venv path and PATH in
     the reason, the same shape `CommandTest` gives a missing runner (GATE-TOOLING-1)."""
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    # `tooling` does `import shutil`, so patching the module patches what it consults.
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     sandbox = _Recording(exits={"uv": 127})
     adapter = CommandProvision([["uv", "sync", "--locked"]], sandbox=sandbox)
     outcome = asyncio.run(adapter.invoke(_ctx(tmp_path), Provision()))
@@ -123,7 +125,7 @@ def test_a_provisioner_found_nowhere_is_a_refusal_naming_every_place_looked(
     assert str(tmp_path / ".venv" / "bin" / "uv") in outcome.reason and "uv on PATH" in outcome.reason
 
 
-def test_a_network_less_container_is_blocked_not_run(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_a_network_less_container_is_blocked_not_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """The control working: a sandbox that denies the network cannot reach a registry, and running
     it would produce a failure that reads as the registry's. Nothing is executed."""
     monkeypatch.setattr(Sandbox, "runtime", lambda self: "/usr/bin/docker")
@@ -139,7 +141,7 @@ def test_a_network_less_container_is_blocked_not_run(tmp_path: Path, monkeypatch
 
 
 def test_gate_provision_1_an_image_that_denies_the_network_is_blocked_even_with_no_runtime(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """Without a runtime, `Sandbox` would run the steps on the host with the network it has: the
     binding said container and no network, and quietly doing less is the failure a security
@@ -156,7 +158,7 @@ def test_gate_provision_1_an_image_that_denies_the_network_is_blocked_even_with_
 
 
 def test_a_sandbox_that_requires_a_container_and_finds_none_is_blocked_not_failed(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """The sandbox's own refusal (exit 126, `refused:no-container`) is the control working, and
     it must not read as the install failing."""
@@ -202,11 +204,14 @@ def test_exit_127_from_a_tool_that_was_found_is_the_install_failing_not_the_tool
     assert f"{npm} ci exited 127" in outcome.findings[0].message
 
 
-def test_the_default_sandbox_allows_the_network_and_still_drops_credentials(monkeypatch) -> None:  # noqa: ANN001
+def test_the_default_sandbox_allows_the_network_and_still_drops_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # noqa: ANN001
     """The one deterministic adapter whose job is to reach a registry. A lockfile's install hooks
     are repository-authored code, so the provider key is still not in their environment."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-not-real")
     adapter = CommandProvision([["uv", "sync"]])
+    assert isinstance(adapter.sandbox, Sandbox)
     assert adapter.sandbox.allow_network is True
     assert "ANTHROPIC_API_KEY" not in adapter.sandbox.clean_env()
 
@@ -292,12 +297,15 @@ def test_ls_prints_the_provisioner_and_where_its_tool_came_from(repo: Path) -> N
     assert "verbs defined but unbound" not in result.output
 
 
-def test_doctor_raises_doc180_for_a_bound_provisioner_it_cannot_find(repo: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_raises_doc180_for_a_bound_provisioner_it_cannot_find(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """Through the `Locatable` seam and no doctor code of its own: the scaffolded module binds
     Provision from the lockfile, and a `uv` that is nowhere is named before any run."""
     _uv_repo(repo)
     assert CliRunner().invoke(main, ["init"]).exit_code == 0
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    # `tooling` does `import shutil`, so patching the module patches what it consults.
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     result = CliRunner().invoke(main, ["doctor"])
     assert "DOC180" in result.output, result.output
     assert "Provision -> CommandProvision found no uv" in result.output
@@ -340,7 +348,9 @@ def test_provision_exits_nonzero_and_names_the_step_when_it_fails(repo: Path) ->
     assert "sync --locked exited 2" in result.output and "the lockfile needs to be updated" in result.output
 
 
-def test_the_kill_switch_refuses_provision_before_the_module_is_even_loaded(repo: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_the_kill_switch_refuses_provision_before_the_module_is_even_loaded(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """ "Nothing executes" has to include the module's own import-time code, so the switch is read
     before `_default_lockstep` loads it."""
     _uv_repo(repo)
@@ -368,7 +378,7 @@ def test_provision_names_the_module_not_detection_when_a_module_binds_nothing(re
 
 
 def test_gate_provision_1_the_interpreter_the_suite_runs_on_is_the_one_provision_built(
-    repo: Path, monkeypatch
+    repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """End to end. Before, `python` resolves outside the repository; `provision` runs the `uv` on
     PATH (a stand-in that does what `uv sync` does: makes `.venv/bin/python`); after, the same

@@ -21,11 +21,11 @@ from typing import Any
 
 import pytest
 
-from in_lockstep.ai.builtins import DEFAULT_TEST_RUNS, Workspace, read_write_execute
+from in_lockstep.ai.builtins import DEFAULT_TEST_RUNS, ToolRunnerImpl, Workspace, read_write_execute
 from in_lockstep.core.changes import ChangeGuard
 
 
-def _runner(tmp_path: Path, tests: Any = None, **over: Any):
+def _runner(tmp_path: Path, tests: Any = None, **over: Any) -> ToolRunnerImpl:
     workspace = Workspace(root=tmp_path, guard=ChangeGuard())
     _tools, runner = read_write_execute(workspace, tests=tests, **over)
     return runner
@@ -34,7 +34,8 @@ def _runner(tmp_path: Path, tests: Any = None, **over: Any):
 def _call(runner: Any, **args: Any) -> str:
     from in_lockstep.ai.tools import BUILTIN_SERVER
 
-    return asyncio.run(runner(BUILTIN_SERVER, "run_tests", args))
+    answer: str = asyncio.run(runner(BUILTIN_SERVER, "run_tests", args))
+    return answer
 
 
 # -- the tool exists and is declared where every verb sees it -----------------------------------

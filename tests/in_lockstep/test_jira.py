@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import pytest
@@ -21,7 +23,9 @@ from in_lockstep.platform.tickets import JiraSource, TicketDraft, TicketState, T
 BASE = "https://acme.atlassian.net"
 
 
-def _issue(key: str = "PROJ-1", *, status="In Progress", category="indeterminate", itype="Bug") -> dict:
+def _issue(
+    key: str = "PROJ-1", *, status: str = "In Progress", category: str = "indeterminate", itype: str = "Bug"
+) -> dict[str, Any]:
     return {
         "key": key,
         "self": f"{BASE}/rest/api/2/issue/10001",
@@ -39,7 +43,7 @@ def _issue(key: str = "PROJ-1", *, status="In Progress", category="indeterminate
     }
 
 
-def _source(handler, **kwargs) -> JiraSource:
+def _source(handler: Callable[[httpx.Request], httpx.Response], **kwargs: Any) -> JiraSource:
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE)
     return JiraSource(base_url=BASE, client=client, **kwargs)
 
@@ -63,7 +67,7 @@ def test_get_maps_a_jira_issue_onto_the_framework_ticket() -> None:
     "category,state",
     [("new", TicketState.OPEN), ("indeterminate", TicketState.IN_PROGRESS), ("done", TicketState.DONE)],
 )
-def test_status_categories_are_the_cross_site_invariant(category, state) -> None:
+def test_status_categories_are_the_cross_site_invariant(category: str, state: TicketState) -> None:
     src = _source(lambda req: httpx.Response(200, json=_issue(category=category)))
     assert asyncio.run(src.get("PROJ-1")).state is state
 
@@ -92,7 +96,7 @@ def test_create_without_a_project_is_unsupported() -> None:
 
 
 def test_search_runs_jql_and_maps_each_issue() -> None:
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["path"] = req.url.path
@@ -110,13 +114,13 @@ def test_search_runs_jql_and_maps_each_issue() -> None:
 
 def test_search_on_cloud_uses_the_enhanced_jql_endpoint() -> None:
     """Cloud removed the unbounded /search; an email (Cloud) routes to /search/jql."""
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["path"] = req.url.path
         return httpx.Response(200, json={"issues": []})
 
-    src = _source(lambda r: None, email="me@acme.com")  # client injected below
+    src = _source(lambda r: httpx.Response(200), email="me@acme.com")  # client injected below
     src.client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE)
     asyncio.run(src.search("project = PROJ"))
     assert seen["path"] == "/rest/api/2/search/jql"
@@ -125,7 +129,7 @@ def test_search_on_cloud_uses_the_enhanced_jql_endpoint() -> None:
 def test_a_custom_acceptance_field_is_requested_and_read() -> None:
     """The `fields` allow-list must name the custom field, or Jira omits it and the feature is
     dead. And when present, criteria come from it, not the description."""
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["fields"] = req.url.params.get("fields", "")
@@ -141,7 +145,7 @@ def test_a_custom_acceptance_field_is_requested_and_read() -> None:
 
 
 def test_add_labels_sends_a_jira_update_op() -> None:
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["body"] = json.loads(req.content)

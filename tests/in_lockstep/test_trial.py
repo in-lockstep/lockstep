@@ -10,6 +10,7 @@ or into `passed` would produce a number that reads like a measurement and is not
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +57,7 @@ class Scripted(LLMProvider):
         return LLMOutput(content=content, usage=TokenUsage(input_tokens=100, output_tokens=20))
 
 
-def _invoker_factory(provider: LLMProvider, *, egress: Any = None):
+def _invoker_factory(provider: LLMProvider, *, egress: Any = None) -> Callable[[Any], AiInvoker]:
     """An invoker over a stub provider.
 
     `egress` defaults to `EgressPolicy.detect()`, which enforces nothing here — and that is the
@@ -67,7 +68,7 @@ def _invoker_factory(provider: LLMProvider, *, egress: Any = None):
     table = CostTable()
     table.add(MODEL, Rate(input_per_m=1.0, output_per_m=2.0))
 
-    def build(ctx):
+    def build(ctx: Any) -> AiInvoker:
         return AiInvoker(
             provider,
             model=MODEL,
@@ -81,7 +82,7 @@ def _invoker_factory(provider: LLMProvider, *, egress: Any = None):
 
 
 def _pack(
-    root: Path, *, cases: dict[str, dict], family: str = "review", lens: str = "security-reviewer"
+    root: Path, *, cases: dict[str, dict[str, Any]], family: str = "review", lens: str = "security-reviewer"
 ) -> Pack:
     module = root / "trial_pack"
     module.mkdir(exist_ok=True)
@@ -101,6 +102,12 @@ CASE_DETERMINISTIC = {"name": "finds-it", "input": {"diff": DIFF}, "expect": {"c
 CASE_RUBRIC = {"name": "judged", "input": {"diff": DIFF}, "expect": {"rubric": "names the mechanism"}}
 
 
+def _file(pack: Pack, relative: str) -> Path:
+    path = pack.file(relative)
+    assert path is not None, "a pack loaded from a directory has a root"
+    return path
+
+
 def _record(pack: Pack, provider: Scripted) -> Cassette:
     """Produce the pack's cassette by running the trial once against a stub.
 
@@ -109,7 +116,7 @@ def _record(pack: Pack, provider: Scripted) -> Cassette:
     will later replay it. Recording against a stub tests the harness; it makes no claim about a
     model, which is why this cassette lives in a tmpdir and never in the repository.
     """
-    tape = Cassette.load(pack.file("cassettes/trial.json"))
+    tape = Cassette.load(_file(pack, "cassettes/trial.json"))
     recording = RecordingProvider(provider, tape, Redact())
     run(pack, invoker_factory=_invoker_factory(recording, egress=UnsandboxedEgress()))
     tape.save()
@@ -137,11 +144,11 @@ def test_a_case_that_was_never_recorded_is_unrecorded_and_not_a_failure(tmp_path
     _record(pack, Scripted([FOUND]))
 
     # A second case the author never recorded.
-    corpus = pack.file("corpus/review/security-reviewer")
+    corpus = _file(pack, "corpus/review/security-reviewer")
     (corpus / "unrecorded.json").write_text(
         json.dumps({"name": "unrecorded", "input": {"diff": "+x = 1\n"}, "expect": {"contains": ["x"]}})
     )
-    tape = Cassette.load(pack.file("cassettes/trial.json"))
+    tape = Cassette.load(_file(pack, "cassettes/trial.json"))
     trial = run(pack, invoker_factory=_invoker_factory(ReplayProvider(tape)))
 
     states = {r.case: r.state for r in trial.results}
@@ -295,7 +302,7 @@ def test_the_example_pack_cannot_be_measured_yet_and_says_so(
 
 def _with_prompts(pack: Pack, **bodies: str) -> Pack:
     """Write `prompts/<name>.md` into a pack, the way a pack author ships one."""
-    prompts = pack.file("prompts")
+    prompts = _file(pack, "prompts")
     assert prompts is not None
     prompts.mkdir(exist_ok=True)
     for name, text in bodies.items():
@@ -383,7 +390,7 @@ def test_a_lens_a_pack_invented_is_measured_end_to_end(
     from in_lockstep.cli import _trial_lenses
 
     lenses = _trial_lenses(pack)
-    tape = Cassette.load(pack.file("cassettes/trial.json"))
+    tape = Cassette.load(_file(pack, "cassettes/trial.json"))
     run(
         pack,
         invoker_factory=_invoker_factory(
@@ -394,6 +401,6 @@ def test_a_lens_a_pack_invented_is_measured_end_to_end(
     tape.save()
 
     trial = run(pack, invoker_factory=_invoker_factory(ReplayProvider(tape)), lenses=lenses)
-    assert [r.state for r in trial.results] == [DECIDED], [(r.state, r.notes) for r in trial.results]
+    assert [r.state for r in trial.results] == [DECIDED], [(r.state, r.detail) for r in trial.results]
     assert trial.results[0].passed is True
     assert trial.summary()["pass_rate"] == 1.0

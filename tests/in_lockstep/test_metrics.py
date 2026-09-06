@@ -194,11 +194,11 @@ def test_an_empty_ledger_says_so_rather_than_reporting_zeroes() -> None:
 
 
 def test_delivery_measures_only_what_the_host_timed() -> None:
-    pulls = [
+    pulls: list[dict[str, Any]] = [
         {"created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-01T02:00:00Z"},
         {"created_at": "2026-09-01T00:00:00Z", "merged_at": None},
     ]
-    issues = [
+    issues: list[dict[str, Any]] = [
         {
             "created_at": "2026-09-01T00:00:00Z",
             "closed_at": "2026-09-02T00:00:00Z",

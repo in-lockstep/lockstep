@@ -9,6 +9,7 @@ masquerade as the repository or weaken what the repository said.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class FakeEntry:
     """The shape `importlib.metadata` yields: a name and a loadable."""
 
-    def __init__(self, name: str, hook) -> None:
+    def __init__(self, name: str, hook: Callable[[Standards], None] | Exception) -> None:
         self.name = name
         self._hook = hook
 
@@ -111,7 +112,7 @@ def test_detect_discovers_the_entry_point_group(monkeypatch: pytest.MonkeyPatch)
 
     seen: dict[str, str] = {}
 
-    def fake_entry_points(*, group: str):
+    def fake_entry_points(*, group: str) -> list[FakeEntry]:
         seen["group"] = group
         return [FakeEntry("acme", lambda std: std.contribute(Policy(name="floor", max_turns=16)))]
 

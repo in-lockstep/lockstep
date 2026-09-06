@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 
 import httpx
 import pytest
 
+from in_lockstep.llm.interface import Credentials, LLMProvider, ProviderSettings
 from in_lockstep.llm.providers._claude_base import ClaudeTransport
 from in_lockstep.llm.providers.ollama import OllamaProvider
 from in_lockstep.llm.types import LLMInput, Message
@@ -42,7 +44,7 @@ def _input() -> LLMInput:
     return LLMInput(model="m", system="s", messages=[Message(role="user", content="go")], max_tokens=16)
 
 
-async def _run_concurrently(provider) -> float:
+async def _run_concurrently(provider: LLMProvider) -> float:
     started = time.monotonic()
     await asyncio.gather(*(provider.generate(_input()) for _ in range(CONCURRENT)))
     return time.monotonic() - started
@@ -54,7 +56,7 @@ async def _run_concurrently(provider) -> float:
 class _FakeMessages:
     """The SDK surface `ClaudeTransport.generate` calls, and nothing else."""
 
-    def __init__(self, delay) -> None:
+    def __init__(self, delay: Callable[[], Awaitable[None]]) -> None:
         self._delay = delay
 
     async def create(self, **kwargs):
@@ -73,7 +75,7 @@ class _FakeMessages:
 class _FakeClaude(ClaudeTransport):
     """The real transport with the SDK client replaced. Everything else is production code."""
 
-    def __init__(self, delay) -> None:
+    def __init__(self, delay: Callable[[], Awaitable[None]]) -> None:
         self._delay = delay
         super().__init__(settings=_settings(), creds=_creds())
 
@@ -81,15 +83,11 @@ class _FakeClaude(ClaudeTransport):
         return type("Client", (), {"messages": _FakeMessages(self._delay)})()
 
 
-def _settings():
-    from in_lockstep.llm.interface import ProviderSettings
-
+def _settings() -> ProviderSettings:
     return ProviderSettings(base_url="https://example.invalid")
 
 
-def _creds():
-    from in_lockstep.llm.interface import Credentials
-
+def _creds() -> Credentials:
     return Credentials()
 
 
@@ -138,8 +136,7 @@ class _SlowTransport(httpx.AsyncBaseTransport):
         )
 
 
-def test_gate_async_4_the_ollama_provider_does_not_block_the_loop(monkeypatch) -> None:
-    from in_lockstep.llm.providers import ollama as module
+def test_gate_async_4_the_ollama_provider_does_not_block_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
     original = httpx.AsyncClient
 
@@ -147,7 +144,8 @@ def test_gate_async_4_the_ollama_provider_does_not_block_the_loop(monkeypatch) -
         kw.pop("transport", None)
         return original(transport=_SlowTransport(), **kw)
 
-    monkeypatch.setattr(module.httpx, "AsyncClient", _slow_client)
+    # `ollama` does `import httpx`, so patching the module patches the client it constructs.
+    monkeypatch.setattr(httpx, "AsyncClient", _slow_client)
     provider = OllamaProvider(settings=_settings(), creds=_creds())
     elapsed = asyncio.run(_run_concurrently(provider))
     assert elapsed < CEILING, f"three concurrent Ollama calls took {elapsed:.2f}s"

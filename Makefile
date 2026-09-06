@@ -22,6 +22,13 @@ ci: lint typecheck cov evidence
 # to a module it was handed. Each example's `.lockstep` is named for the ruff lines for the reason
 # `.lockstep` is named above: a walk does not enter it. These are the files an adopter copies
 # (O8), and they carried seven type errors between them for as long as nothing looked (#247).
+#
+# `tests` is on the mypy line since #248. It was exempt as "its own project" -- 693 errors when it
+# was filed, 831 by the time it was picked up, because a suite nobody checks grows errors at the
+# rate it grows -- and `pyproject.toml` carried a `tests.*` override that read as though the suite
+# were checked. Two ways dead: nothing ran mypy over `tests`, and the override could not have
+# matched if something had, because without `tests/__init__.py` mypy names a test module by its
+# basename. Both are fixed; the override relaxes `disallow_untyped_defs` only.
 fmt:
 	uv run ruff format src tests .lockstep examples examples/pr-review/.lockstep examples/wayfinder-implement/.lockstep
 
@@ -29,7 +36,7 @@ lint:
 	uv run ruff check src tests .lockstep examples examples/pr-review/.lockstep examples/wayfinder-implement/.lockstep
 
 typecheck:
-	uv run mypy src .lockstep
+	uv run mypy src .lockstep tests
 	uv run mypy examples/pr-review/.lockstep/lockstep.py
 	uv run mypy examples/wayfinder-implement/.lockstep/lockstep.py examples/wayfinder-implement/wayfinder.py examples/wayfinder-implement/github_map.py
 	uv run mypy examples/acme-review-prompts examples/acme-standards

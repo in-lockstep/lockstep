@@ -31,21 +31,12 @@ NOT_OURS = {".venv", "venv", "__pycache__", ".git", ".mypy_cache", ".ruff_cache"
 
 # Paths a tool knowingly does not reach, per tool, each with the reason. An exemption is a line a
 # reviewer sees, which is the property a silent gap never had — and it is per tool because the two
-# catch different things: ruff reaches the test suite and mypy does not.
-EXEMPT: dict[str, dict[str, str]] = {
-    # `examples` was here for both tools until #247: two files named `lockstep.py` cannot share a
-    # mypy invocation, so the Makefile gives each worked example one of its own, and names each
-    # example's `.lockstep` for ruff. The seven errors they carried are gone with the exemption.
-    "ruff check": {},
-    "mypy": {
-        "tests": (
-            "693 errors across 53 files today. Type-checking the suite is its own project, not a "
-            "line on a Makefile target. Recorded here rather than left implicit because "
-            "`pyproject.toml` carries a `tests.*` mypy override that reads as though tests were "
-            "checked, and nothing exercises it: `mypy src` never looks at them. Filed as #248."
-        ),
-    },
-}
+# catch different things. Both maps are empty today, and that is the state to defend: `examples`
+# left both in #247 (two files named `lockstep.py` cannot share a mypy invocation, so each worked
+# example gets one of its own), and `tests` left mypy's in #248, where it had sat as "693 errors,
+# its own project" while `pyproject.toml` carried a `tests.*` override that read as though the
+# suite were checked. The next exemption added here should be as hard to write as those were.
+EXEMPT: dict[str, dict[str, str]] = {"ruff check": {}, "mypy": {}}
 
 TARGET = re.compile(r"^\t+uv run (ruff (?:check|format)|mypy) ([^\n|]+)$", re.M)
 

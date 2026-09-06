@@ -122,7 +122,7 @@ def _miscarried(rows: list[Row], gate_status: dict[str, str]) -> list[str]:
 
     The over-claiming direction. An objective no gate carries can never read as satisfied.
     """
-    bad = []
+    bad: list[str] = []
     for row in rows:
         if row.status == "held" and not row.carried:
             bad.append(f"{row.oid} is held and no gate carries it")
@@ -144,7 +144,7 @@ def _misblocked(rows: list[Row], gate_status: dict[str, str]) -> list[str]:
     be open, and O5's four `GATE-IMPROVE` blockers are why that was not enough — three could have
     been built with nothing here noticing.
     """
-    bad = []
+    bad: list[str] = []
     for row in rows:
         bad.extend(
             f"{row.oid} is blocked on {g}, which is {gate_status.get(g, 'absent')}"

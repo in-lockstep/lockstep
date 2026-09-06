@@ -12,11 +12,15 @@ Each test captures one acceptance criterion:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from io import BytesIO
+from pathlib import Path
+from typing import Any
 
 import pytest
 
 from in_lockstep.ai.auth import Auth, AuthRequest, AuthTarget, EnvResolver, OidcResolver
+from in_lockstep.llm.interface import Credentials, ProviderSettings
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
 # ---------------------------------------------------------------------------
@@ -41,21 +45,18 @@ def test_default_auth_chain_starts_with_oidc_resolver() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _fake_oidc_opener(token_value: str = "oidc-test-token-value-1234"):
-    """Return a callable that fakes urllib.request.urlopen for the OIDC endpoint."""
+def _fake_oidc_opener(token_value: str = "oidc-test-token-value-1234") -> Callable[..., BytesIO]:
+    """Return a callable that fakes urllib.request.urlopen for the OIDC endpoint. A `BytesIO` is
+    already the context manager `with urlopen(...) as resp` needs; the dunders this used to set
+    on the instance were never consulted, because special-method lookup goes to the type."""
 
-    def opener(req, *, timeout=10):
-        body = json.dumps({"value": token_value}).encode()
-        resp = BytesIO(body)
-        resp.read = resp.read  # already fine
-        resp.__enter__ = lambda s: s
-        resp.__exit__ = lambda s, *a: None
-        return resp
+    def opener(req: object, *, timeout: float = 10) -> BytesIO:
+        return BytesIO(json.dumps({"value": token_value}).encode())
 
     return opener
 
 
-def test_oidc_resolver_ignores_api_key_requests(monkeypatch) -> None:
+def test_oidc_resolver_ignores_api_key_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     """A provider wanting api_key must get {} so EnvResolver can answer instead."""
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
@@ -71,7 +72,7 @@ def test_oidc_resolver_ignores_api_key_requests(monkeypatch) -> None:
     assert result == {}, f"OidcResolver should return {{}} for keys=('api_key',), got {result}"
 
 
-def test_oidc_resolver_answers_id_token_requests(monkeypatch) -> None:
+def test_oidc_resolver_answers_id_token_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     """When id_token is in request.keys and CI vars are set, the resolver should answer."""
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
@@ -90,7 +91,7 @@ def test_oidc_resolver_answers_id_token_requests(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_env_resolution_unchanged_outside_ci(monkeypatch) -> None:
+def test_env_resolution_unchanged_outside_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     """Without OIDC env vars, OidcResolver returns {} and EnvResolver resolves as before."""
     monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_URL", raising=False)
     monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", raising=False)
@@ -111,7 +112,7 @@ def test_env_resolution_unchanged_outside_ci(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_oidc_token_seeded_into_redaction_registry(monkeypatch) -> None:
+def test_oidc_token_seeded_into_redaction_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     """The id_token must appear in the registry before credentials_for returns."""
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
@@ -135,7 +136,7 @@ def test_oidc_token_seeded_into_redaction_registry(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_oidc_token_is_redacted_in_rendered_text(monkeypatch) -> None:
+def test_oidc_token_is_redacted_in_rendered_text(monkeypatch: pytest.MonkeyPatch) -> None:
     """A minted OIDC token must be masked by Redact — it never appears in rendered output."""
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
@@ -160,7 +161,7 @@ def test_oidc_token_is_redacted_in_rendered_text(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_api_key_falls_through_to_env_on_ci(monkeypatch) -> None:
+def test_api_key_falls_through_to_env_on_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     """Even on CI with OIDC vars set, an api_key request must be resolved by EnvResolver."""
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://fake.actions.url/token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
@@ -183,7 +184,7 @@ def test_api_key_falls_through_to_env_on_ci(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _federation_env(monkeypatch) -> None:
+def _federation_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_IDENTITY_TOKEN", "ANTHROPIC_IDENTITY_TOKEN_FILE"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("ANTHROPIC_FEDERATION_RULE_ID", "fdrl_test")
@@ -192,7 +193,9 @@ def _federation_env(monkeypatch) -> None:
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "gha-request-token")
 
 
-def test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists(monkeypatch) -> None:
+def test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """No ANTHROPIC_API_KEY, federation configured: `credentials_for` mints the GitHub JWT itself
     — through Auth, so it is seeded into redaction — and with the audience the federation rule
     validates, not the chain default."""
@@ -201,13 +204,9 @@ def test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists(mon
     _federation_env(monkeypatch)
     seen: dict[str, str] = {}
 
-    def opener(req, *, timeout=10):
+    def opener(req: Any, *, timeout: float = 10) -> BytesIO:
         seen["url"] = req.full_url
-        body = json.dumps({"value": "gha-jwt-for-anthropic"}).encode()
-        resp = BytesIO(body)
-        resp.__enter__ = lambda s=resp: s
-        resp.__exit__ = lambda s=resp, *a: None
-        return resp
+        return BytesIO(json.dumps({"value": "gha-jwt-for-anthropic"}).encode())
 
     monkeypatch.setattr("urllib.request.urlopen", opener)
     registry = SecretRegistry()
@@ -221,7 +220,7 @@ def test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists(mon
     assert "gha-jwt-for-anthropic" in registry.known(), "minted through Auth, so redaction saw it"
 
 
-def test_an_operator_supplied_token_file_defers_to_the_sdk_chain(monkeypatch) -> None:
+def test_an_operator_supplied_token_file_defers_to_the_sdk_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     """ANTHROPIC_IDENTITY_TOKEN_FILE already set means somebody wired their own supply; the
     framework mints nothing and returns the same empty-is-ambient signal the cloud providers
     use, so the SDK's documented chain does the reading, the exchange and the caching."""
@@ -238,7 +237,7 @@ def test_an_operator_supplied_token_file_defers_to_the_sdk_chain(monkeypatch) ->
     assert not creds.secret_values()
 
 
-def test_a_static_key_still_wins_over_configured_federation(monkeypatch) -> None:
+def test_a_static_key_still_wins_over_configured_federation(monkeypatch: pytest.MonkeyPatch) -> None:
     """An explicitly set key is somebody meaning it — the same precedence the SDK documents."""
     from in_lockstep.ai.bootstrap import credentials_for
 
@@ -249,7 +248,7 @@ def test_a_static_key_still_wins_over_configured_federation(monkeypatch) -> None
     assert creds.get("id_token") == ""
 
 
-def test_the_refusal_now_names_the_federation_path(monkeypatch) -> None:
+def test_the_refusal_now_names_the_federation_path(monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep.ai.bootstrap import MissingCredential, credentials_for
 
     for var in (
@@ -270,14 +269,16 @@ def test_the_refusal_now_names_the_federation_path(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _client_kwargs(monkeypatch, creds, settings=None) -> dict:
+def _client_kwargs(
+    monkeypatch: pytest.MonkeyPatch, creds: Credentials, settings: ProviderSettings | None = None
+) -> dict[str, Any]:
     anthropic = pytest.importorskip("anthropic", reason="client tests need the provider extra")
 
     from in_lockstep.llm.interface import ProviderSettings
     from in_lockstep.llm.providers.anthropic import AnthropicProvider
 
     settings = settings or ProviderSettings()
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
     class _Capture:
         def __init__(self, **kwargs):
@@ -288,7 +289,7 @@ def _client_kwargs(monkeypatch, creds, settings=None) -> dict:
     return captured
 
 
-def test_the_client_gets_the_federation_credentials_object(monkeypatch) -> None:
+def test_the_client_gets_the_federation_credentials_object(monkeypatch: pytest.MonkeyPatch) -> None:
     """The identifiers arrive through settings — the provider reads no environment
     (GATE-AUTH-1) — and parameterise the SDK's own token exchange."""
     credentials_lib = pytest.importorskip("anthropic.lib.credentials")
@@ -310,7 +311,7 @@ def test_the_client_gets_the_federation_credentials_object(monkeypatch) -> None:
     assert "federation-rule-id" not in headers, "an exchange parameter is not a request header"
 
 
-def test_an_empty_credential_passes_no_credential_argument_at_all(monkeypatch) -> None:
+def test_an_empty_credential_passes_no_credential_argument_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
     """An empty api_key is not nothing to the SDK — any explicit credential argument suppresses
     its env chain, and passing one is what kept federation unreachable."""
     from in_lockstep.llm.interface import Credentials
@@ -319,7 +320,7 @@ def test_an_empty_credential_passes_no_credential_argument_at_all(monkeypatch) -
     assert "api_key" not in kwargs and "credentials" not in kwargs
 
 
-def test_a_static_key_reaches_the_client_as_before(monkeypatch) -> None:
+def test_a_static_key_reaches_the_client_as_before(monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep.llm.interface import Credentials, SecretStr
 
     kwargs = _client_kwargs(monkeypatch, Credentials(values={"api_key": SecretStr("sk-ant-x-12345678")}))
@@ -327,7 +328,7 @@ def test_a_static_key_reaches_the_client_as_before(monkeypatch) -> None:
     assert "credentials" not in kwargs
 
 
-def test_a_service_account_name_is_refused_before_any_exchange(monkeypatch) -> None:
+def test_a_service_account_name_is_refused_before_any_exchange(monkeypatch: pytest.MonkeyPatch) -> None:
     """The name-vs-id trap, caught locally: the Console shows the NAME, the exchange wants the
     svac_-tagged id, and this run's own HTTP 400 is the round-trip this guard replaces."""
     from in_lockstep.ai.bootstrap import MissingCredential, default_registry
@@ -344,7 +345,7 @@ def test_a_service_account_name_is_refused_before_any_exchange(monkeypatch) -> N
 # -- a token that outlives its own run ---------------------------------------------------------
 
 
-def test_the_identity_token_is_minted_again_rather_than_replayed(monkeypatch) -> None:
+def test_the_identity_token_is_minted_again_rather_than_replayed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The SDK re-runs the exchange as its access token nears expiry, and a GitHub OIDC JWT lives
     minutes — so what `identity_token_provider` returns the second time has to be a NEW token.
 
@@ -368,7 +369,7 @@ def test_the_identity_token_is_minted_again_rather_than_replayed(monkeypatch) ->
     assert provider._identity_token_provider() == "jwt-second", "each exchange gets its own token"
 
 
-def test_a_refresh_that_fails_serves_the_token_it_already_had(monkeypatch) -> None:
+def test_a_refresh_that_fails_serves_the_token_it_already_had(monkeypatch: pytest.MonkeyPatch) -> None:
     """A getter the SDK calls is the wrong place to raise from: the old behaviour was to present a
     stale token, and a stale token at least has a chance. Losing the run to an exception inside a
     callback would be a new failure introduced by the fix for an old one."""
@@ -384,7 +385,7 @@ def test_a_refresh_that_fails_serves_the_token_it_already_had(monkeypatch) -> No
     assert provider._identity_token_provider() == "jwt-cached"
 
 
-def test_an_empty_refresh_does_not_blank_the_credential(monkeypatch) -> None:
+def test_an_empty_refresh_does_not_blank_the_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     """`OidcResolver` returns nothing at all when the CI variables are missing, so a refresh can
     legitimately come back empty. Handing "" to the exchange would turn a working run into an
     authentication error for the rest of its life."""
@@ -401,7 +402,7 @@ def test_an_empty_refresh_does_not_blank_the_credential(monkeypatch) -> None:
     assert provider._identity_token_provider() == "jwt-cached"
 
 
-def test_every_minted_token_is_seeded_into_redaction(monkeypatch, tmp_path) -> None:
+def test_every_minted_token_is_seeded_into_redaction(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The reason the refresh goes back through `Auth` instead of calling the resolver directly.
 
     Minting is the only moment a secret is visible before a client swallows it, so it is the only

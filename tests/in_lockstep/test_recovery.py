@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
@@ -36,7 +36,7 @@ class Thing:
     payload: str = ""
 
 
-def ctx(tmp_path: Path, adapter, *, recovering: bool = False, run_id: str = "r1") -> RunContext:
+def ctx(tmp_path: Path, adapter: Any, *, recovering: bool = False, run_id: str = "r1") -> RunContext:
     container = Container()
     container.bind(Thing, adapter)
     return RunContext(
@@ -122,7 +122,7 @@ def test_checkpoints_are_written_atomically(tmp_path: Path) -> None:
 
 def test_only_terminal_outcomes_are_checkpointed(tmp_path: Path) -> None:
     """A parked run is waiting, not done; replaying it as done would skip the human."""
-    parked = Outcome(status=Status.PARKED, reason="pr_review")
+    parked: Outcome[Any] = Outcome(status=Status.PARKED, reason="pr_review")
     assert not parked.terminal
 
 

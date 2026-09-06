@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,7 @@ def _with_origin(tmp_path: Path) -> Path:
     return root
 
 
-def _scm(root: Path, handler, **kwargs) -> GitLabScm:
+def _scm(root: Path, handler: Callable[[httpx.Request], httpx.Response], **kwargs: Any) -> GitLabScm:
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE)
     return GitLabScm(root, project="group/proj", client=client, **kwargs)
 
@@ -103,7 +104,7 @@ def test_open_change_pushes_the_run_branch_and_opens_a_draft_mr(tmp_path: Path) 
     """The whole discipline in one pass: run-scoped branch, conventional subject, trailers,
     a real push, and a merge request whose draft state is the title prefix GitLab uses."""
     root = _with_origin(tmp_path)
-    posted: dict = {}
+    posted: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         if req.method == "GET":  # no base= means the project is asked for its default branch
@@ -147,7 +148,7 @@ def test_open_change_targets_base_or_asks_for_the_default_branch(tmp_path: Path)
     root = _with_origin(tmp_path)
     subprocess.run(["git", "branch", "release-1.0"], cwd=root, capture_output=True, check=True)
     subprocess.run(["git", "push", "-q", "origin", "release-1.0"], cwd=root, capture_output=True)
-    seen: list[tuple[str, str, dict | None]] = []
+    seen: list[tuple[str, str, dict[str, Any] | None]] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
         body = json.loads(req.content) if req.content else None
@@ -172,7 +173,7 @@ def test_open_change_targets_base_or_asks_for_the_default_branch(tmp_path: Path)
 def test_mark_ready_strips_the_draft_prefix_by_rewriting_the_title(tmp_path: Path) -> None:
     from in_lockstep.platform.scm.base import ChangeRequest
 
-    seen: dict = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["method"], seen["path"] = req.method, req.url.path
@@ -244,12 +245,12 @@ def test_api_errors_carry_gitlabs_body_and_never_the_token(tmp_path: Path) -> No
 # -- the TicketSource protocol, on GitLab ---------------------------------------------
 
 
-def _issues(handler, **kwargs) -> GitLabIssues:
+def _issues(handler: Callable[[httpx.Request], httpx.Response], **kwargs: Any) -> GitLabIssues:
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE)
     return GitLabIssues(base_url=BASE, project="group/proj", client=client, **kwargs)
 
 
-def _issue(iid: int = 42, *, state: str = "opened", labels: list[str] | None = None) -> dict:
+def _issue(iid: int = 42, *, state: str = "opened", labels: list[str] | None = None) -> dict[str, Any]:
     return {
         "iid": iid,
         "title": "Checkout 500s",
@@ -307,7 +308,7 @@ def test_get_maps_an_issue_and_its_notes_onto_the_framework_ticket() -> None:
 
 
 def test_create_posts_the_payload_and_reads_the_issue_back() -> None:
-    posted: dict = {}
+    posted: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         if req.method == "POST" and req.url.path.endswith("/issues"):
@@ -325,7 +326,7 @@ def test_create_posts_the_payload_and_reads_the_issue_back() -> None:
 
 
 def test_search_passes_the_query_and_maps_each_row() -> None:
-    seen: dict = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["params"] = dict(req.url.params)
@@ -337,7 +338,7 @@ def test_search_passes_the_query_and_maps_each_row() -> None:
 
 
 def test_add_labels_uses_the_add_labels_update() -> None:
-    seen: dict = {}
+    seen: dict[str, Any] = {}
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen["method"], seen["path"], seen["body"] = req.method, req.url.path, json.loads(req.content)
@@ -370,7 +371,9 @@ def test_transition_maps_coarse_and_refuses_what_it_cannot_mean() -> None:
 # -- host detection and the hosted factory --------------------------------------------
 
 
-def test_detect_host_prefers_the_running_ci_environment(tmp_path: Path, monkeypatch) -> None:
+def test_detect_host_prefers_the_running_ci_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep.platform.hosted import detect_host
 
     for var in ("GITHUB_ACTIONS", "GITLAB_CI"):
@@ -379,7 +382,7 @@ def test_detect_host_prefers_the_running_ci_environment(tmp_path: Path, monkeypa
     assert detect_host(tmp_path) == "gitlab"
 
 
-def test_detect_host_reads_the_tree_then_the_remote(tmp_path: Path, monkeypatch) -> None:
+def test_detect_host_reads_the_tree_then_the_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep.platform.hosted import detect_host
 
     for var in ("GITHUB_ACTIONS", "GITLAB_CI"):
@@ -402,7 +405,9 @@ def test_detect_host_reads_the_tree_then_the_remote(tmp_path: Path, monkeypatch)
     assert detect_host(root) == "gitlab", "both hosts' files present: the remote decides"
 
 
-def test_detect_host_reads_a_gitlab_ci_file_without_env_or_remote(tmp_path: Path, monkeypatch) -> None:
+def test_detect_host_reads_a_gitlab_ci_file_without_env_or_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The tree signal on its own: a fresh clone with no remote and no CI env must still be
     placed by the `.gitlab-ci.yml` it carries."""
     from in_lockstep.platform.hosted import detect_host
@@ -415,7 +420,7 @@ def test_detect_host_reads_a_gitlab_ci_file_without_env_or_remote(tmp_path: Path
 
 
 def test_hosted_tickets_prefers_the_ci_environment_over_a_credentialed_remote(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A GitLab runner's origin is `https://gitlab-ci-token:<token>@host/...`. The ambient
     CI_SERVER_URL/CI_PROJECT_PATH are the documented defaults and carry no credential, so they
@@ -440,7 +445,7 @@ def test_hosted_tickets_prefers_the_ci_environment_over_a_credentialed_remote(
     assert tickets.project == "g/p"
 
 
-def test_gitlab_ci_detection_carries_the_merge_request_iid(monkeypatch) -> None:
+def test_gitlab_ci_detection_carries_the_merge_request_iid(monkeypatch: pytest.MonkeyPatch) -> None:
     """`review --comment` finds its thread through `ci.detect().pr_number`; without the iid the
     sticky-comment path this feature exists for is unreachable on the very pipelines it targets."""
     from in_lockstep.platform import ci
@@ -459,7 +464,9 @@ def test_gitlab_ci_detection_carries_the_merge_request_iid(monkeypatch) -> None:
     assert env is not None and env.pr_number is None, "absent outside a merge-request pipeline"
 
 
-def test_hosted_factories_return_the_detected_hosts_adapters(tmp_path: Path, monkeypatch) -> None:
+def test_hosted_factories_return_the_detected_hosts_adapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
     from in_lockstep.platform.scm import GitHubScm
 
@@ -485,7 +492,9 @@ def test_hosted_factories_return_the_detected_hosts_adapters(tmp_path: Path, mon
 # -- the scaffolded trampoline --------------------------------------------------------
 
 
-def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(tmp_path: Path, monkeypatch) -> None:
+def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The trampoline the host can actually run: `.gitlab-ci.yml`, version-pinned, with the
     review job active and the gate/work/propose split present (commented) in the same file."""
     import yaml
@@ -529,7 +538,7 @@ def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(tmp_path: Path, 
 
 
 def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_uv(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Issue 185 on GitLab. The work job runs `in-lockstep provision` before `doctor`, not
     `|| true`, on uv's image so the constant line finds a provisioner for the most common Python
@@ -556,7 +565,9 @@ def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_u
         assert "provision" not in rendered, f"{job} must not provision"
 
 
-def test_init_on_gitlab_writes_no_github_workflow_files(tmp_path: Path, monkeypatch) -> None:
+def test_init_on_gitlab_writes_no_github_workflow_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`--implement`/`--fix` on a GitLab repository must not scaffold GitHub YAML the host would
     silently ignore: the Python halves are appended, and the output points at the gate/work/
     propose block already in .gitlab-ci.yml instead."""
@@ -576,7 +587,9 @@ def test_init_on_gitlab_writes_no_github_workflow_files(tmp_path: Path, monkeypa
     assert "implement/from-ticket" in module and "fix/from-ticket" in module
 
 
-def test_init_leaves_an_existing_gitlab_ci_file_alone(tmp_path: Path, monkeypatch) -> None:
+def test_init_leaves_an_existing_gitlab_ci_file_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A trampoline is never regenerated — and on GitLab the file may predate the framework."""
     from click.testing import CliRunner
 
@@ -696,7 +709,7 @@ def test_gitlab_counts_open_proposals_past_the_hosts_page_cap(tmp_path: Path) ->
     """GitLab caps `per_page` at 100 whatever is asked for, so one request is a count with a
     silent ceiling on it. `changes_for` asks for 60 and never noticed; a ceiling cannot afford
     not to."""
-    pages: list[dict[str, Any]] = []
+    pages: list[list[dict[str, Any]]] = []
     seen: list[Any] = []
 
     def _request(method: str, path: str, *, json: Any = None, params: Any = None) -> Any:
@@ -733,7 +746,7 @@ def test_gitlab_reports_a_draft_merge_request_by_its_title_prefix_as_well(tmp_pa
 # -- the write verbs run under GitLab as they run under GitHub (GATE-CI-2, issue 236) ----------
 
 
-def _gitlab_scaffold(tmp_path, monkeypatch):
+def _gitlab_scaffold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     import yaml
     from click.testing import CliRunner
 
@@ -743,11 +756,12 @@ def _gitlab_scaffold(tmp_path, monkeypatch):
     monkeypatch.setenv("GITLAB_CI", "true")
     monkeypatch.chdir(tmp_path)
     assert CliRunner().invoke(main, ["init"]).exit_code == 0
-    return yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    scaffold: dict[str, Any] = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+    return scaffold
 
 
 def test_gate_ci_2_the_write_verbs_run_the_same_framework_commands_on_both_hosts(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """O3's actual claim: the same process, not a similar one.
 
@@ -781,7 +795,7 @@ def _github_review_scaffold() -> str:
 
 
 def test_gate_ci_2_the_provider_key_and_the_write_token_are_never_in_one_job(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The reason there are three jobs rather than one, asserted on GitLab's own spelling.
 
@@ -802,7 +816,7 @@ def test_gate_ci_2_the_provider_key_and_the_write_token_are_never_in_one_job(
 
 
 def test_gate_ci_2_keyless_ci_asks_for_the_audience_the_exchange_validates(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A JWT minted for the wrong audience is refused at the exchange, after the job has started.
 

@@ -24,7 +24,7 @@ from in_lockstep.adapters.ai.tdd import TDD
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
-from in_lockstep.core.outcome import Status
+from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.spend import Budget, Spend
 from in_lockstep.core.types import Test
 from in_lockstep.llm.interface import LLMProvider
@@ -89,7 +89,7 @@ class Ctx:
 
         self.container = _Container()
 
-    async def do(self, request: Test):  # noqa: ANN202
+    async def do(self, request: Test) -> Outcome[Any]:
         return await PytestTest(args=["-q"]).invoke(self, request)
 
 
@@ -126,7 +126,7 @@ def repo(tmp_path: Path) -> Path:
 _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n"
 
 
-def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
+def _run(provider: Scripted, repo: Path, *, test_bound: bool = True) -> Outcome[Any]:
     return asyncio.run(
         _adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Implement(ticket=_ticket()))
     )
@@ -143,6 +143,7 @@ def test_tdd_writes_a_failing_test_then_makes_it_green(repo: Path) -> None:
     )
     outcome = _run(provider, repo)
     assert outcome.status is Status.SUCCEEDED, outcome.findings
+    assert outcome.value is not None
     paths = set(outcome.value.changeset.paths())
     assert paths == {"test_calc.py", "calc.py"}
     assert outcome.value.strategy == "implement/tdd"
@@ -281,4 +282,5 @@ def test_tdd_fails_when_the_implementation_leaves_the_test_red(repo: Path) -> No
     assert outcome.status is Status.FAILED
     assert outcome.reason == "tdd.not_green"
     # The change is still carried so a person can see what it tried.
+    assert outcome.value is not None
     assert set(outcome.value.changeset.paths()) == {"test_calc.py", "calc.py"}

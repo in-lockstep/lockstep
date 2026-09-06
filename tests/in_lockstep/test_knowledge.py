@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.evaluation import load_cases, subject_for, summarize
 from in_lockstep.evaluation.cases import Case, CaseError, grade
+from in_lockstep.evaluation.subject import EvalSubject
 
 PROMPTS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "prompts"
 CORPUS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "corpus"
@@ -142,15 +144,15 @@ def test_a_failing_deterministic_case_is_not_ok() -> None:
 
 def test_an_undecided_outcome_is_distinguishable_from_a_cache_hit() -> None:
     """Both are 'not a failure'. Only one of them decided anything."""
-    undecided = Outcome(status=Status.SUCCEEDED, decided=False)
-    cache_hit = Outcome.skipped()
+    undecided: Outcome[Any] = Outcome(status=Status.SUCCEEDED, decided=False)
+    cache_hit: Outcome[Any] = Outcome.skipped()
     assert (undecided.status, undecided.decided) != (cache_hit.status, cache_hit.decided)
 
 
 # -- GATE-LEDGER-4 / GATE-EVAL-1: identity ------------------------------------------
 
 
-def _subject(prompt: str = "body", skills: tuple[str, ...] = ("s1",)) -> object:
+def _subject(prompt: str = "body", skills: tuple[str, ...] = ("s1",)) -> EvalSubject:
     return subject_for(
         verb="review",
         strategy_id="review/security",

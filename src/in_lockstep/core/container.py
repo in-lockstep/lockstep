@@ -9,7 +9,6 @@ that a YAML user gets by reading their file.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypeVar
@@ -52,10 +51,16 @@ class Container:
         self._bindings: dict[tuple[type[Any], str | None], Binding] = {}
         self._singletons: dict[tuple[type[Any], str | None], Any] = {}
 
+    # `iface` is a request type or a port and `impl` is what serves it: `bind(Test, PytestTest())`
+    # maps a verb's request to its adapter, `bind(Improver, CorpusImprover(...))` a port to an
+    # implementation. One signature carries both, and the `T` this used to declare -- `impl: T |
+    # type[T] | Callable[[], T]` -- held for the second only. It never failed a build because the
+    # one caller in `src` is `Lockstep.bind`, which says `Any`; the first test to call this
+    # directly under mypy was refused for binding an adapter to the request it serves (#248).
     def bind(
         self,
-        iface: type[T],
-        impl: T | type[T] | Callable[[], T],
+        iface: type[Any],
+        impl: Any,
         *,
         name: str | None = None,
         scope: Scope = Scope.SINGLETON,

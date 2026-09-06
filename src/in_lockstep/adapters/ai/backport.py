@@ -19,7 +19,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
 from ...ai.context import ContextItem, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
+from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy, Invoker
 from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import schema_instruction, settle
 from ...core.outcome import Finding, Outcome, Severity, Status
@@ -44,7 +44,7 @@ class AiBackportResolver:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker] | None = None,
+        invoker_factory: Callable[[Any], Invoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[BackportPrompt]] | None = None,
@@ -98,7 +98,7 @@ class AiBackportResolver:
         # them — a resolver that could also call `write_file` would route the merge around the thing
         # that applies it. It is single-turn for the matching reason, stated on `self.policy`: it is
         # handed everything it may see, so a second turn has no tool result to react to.
-        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         messages = prompt.render(params, package)
         try:
             invocation = await invoker.run(

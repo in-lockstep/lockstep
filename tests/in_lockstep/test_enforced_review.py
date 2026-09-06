@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -52,7 +53,7 @@ def lenses():
         restore(state)
 
 
-def _step() -> dict:
+def _step() -> dict[str, Any]:
     workflow = yaml.safe_load(WORKFLOW.read_text())
     return next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
 

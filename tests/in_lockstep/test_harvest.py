@@ -24,11 +24,12 @@ import pytest
 from in_lockstep.ai.replay import Cassette, RecordingProvider, key_of, request_from
 from in_lockstep.evaluation.cases import Case, grade
 from in_lockstep.evaluation.harvest import MIN_NEEDLE_CHARS, NothingToHarvest, harvest
+from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage
 from in_lockstep.privileged.redact import Redact, SecretRegistry
 
 
-class _Model:
+class _Model(LLMProvider):
     """A provider that says one thing, so a test can be about the recording rather than the reply."""
 
     def __init__(self, content: str) -> None:
@@ -391,7 +392,9 @@ def test_gate_eval_3_a_redacted_recording_still_finds_itself(tmp_path: Path) -> 
     """
     tape = Cassette.load(_secret_tape(tmp_path))
     ((filed_under, entry),) = tape.provider_calls.items()
-    stored = request_from(entry["request"])
+    request = entry["request"]
+    assert isinstance(request, dict)
+    stored = request_from(request)
 
     assert "supersecretvalue123" not in json.dumps(entry), "the fixture cannot exercise the property"
     assert key_of(stored) != filed_under, "nothing was redacted, so this proves nothing"
@@ -522,7 +525,9 @@ def test_the_other_reason_still_says_re_record(tmp_path: Path) -> None:
     assert "Re-record with `--record`" in str(caught.value)
 
 
-def test_eval_harvest_refuses_to_write_two_cases_over_one_path(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_eval_harvest_refuses_to_write_two_cases_over_one_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """The writer's own guard, independent of what `harvest` names things.
 
     Naming is where the collision came from and it is fixed there; this is the check that would
@@ -718,7 +723,7 @@ def _strip_requests(path: Path) -> str:
     ((key, entry),) = data["provider_calls"].items()
     entry.pop("request")
     path.write_text(json.dumps(data))
-    return key
+    return str(key)
 
 
 def test_gate_fixture_1_the_shipped_recording_harvests_to_a_case_that_settles() -> None:

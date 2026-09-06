@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Any, ClassVar
 
 from ...ai.context import ContextCurator, ContextItem, ContextNeed, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
+from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy, Invoker, ToolRunner
 from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
@@ -72,7 +72,7 @@ class AiReview:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker] | None = None,
+        invoker_factory: Callable[[Any], Invoker] | None = None,
         *,
         repo_root: str = "",
         policy: InvokePolicy | None = None,
@@ -170,7 +170,7 @@ class AiReview:
         system = prompt.system(layers) + "\n\n" + schema_instruction(REVIEW_SCHEMA)
         messages = prompt.render(ReviewParams(base=inp.base, head=inp.head, aspect=inp.aspect), package)
 
-        invoker: AiInvoker = self._invoker(ctx)
+        invoker: Invoker = self._invoker(ctx)
         try:
             invocation = await invoker.run(
                 system=system,
@@ -345,10 +345,10 @@ class AiReview:
             reason="exhausted" if invocation.exhausted else None,
         )
 
-    def _invoker(self, ctx: Any) -> AiInvoker:
+    def _invoker(self, ctx: Any) -> Invoker:
         from .strategy import resolve_invoker
 
-        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         return invoker
 
     def _gather(self, inp: Review, root: str) -> ContextPackage:

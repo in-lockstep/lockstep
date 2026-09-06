@@ -21,7 +21,7 @@ from in_lockstep.adapters.ai.fix import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
-from in_lockstep.core.outcome import Status
+from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.spend import Budget, Spend
 from in_lockstep.core.types import Test
 from in_lockstep.llm.interface import LLMProvider
@@ -80,7 +80,7 @@ class Ctx:
 
         self.container = _Container()
 
-    async def do(self, request: Test):  # noqa: ANN202
+    async def do(self, request: Test) -> Outcome[Any]:
         return await PytestTest(args=["-q"]).invoke(self, request)
 
 
@@ -117,7 +117,7 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
-def _run(provider: Scripted, repo: Path, *, test_bound: bool = True):
+def _run(provider: Scripted, repo: Path, *, test_bound: bool = True) -> Outcome[Any]:
     return asyncio.run(_adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Fix(ticket=_ticket())))
 
 
@@ -133,6 +133,7 @@ def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path)
     outcome = _run(provider, repo)
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
+    assert report is not None
     # The reproducer and the fix are separate change sets.
     assert set(report.reproducer.paths()) == {"test_calc.py"}
     assert set(report.fix.paths()) == {"calc.py"}
@@ -198,4 +199,5 @@ def test_fix_fails_when_the_change_does_not_make_the_reproducer_pass(repo: Path)
     assert outcome.status is Status.FAILED
     assert outcome.reason == "fix.not_fixed"
     # The attempt is still carried so a person can see what it tried.
+    assert outcome.value is not None
     assert set(outcome.value.changeset.paths()) == {"test_calc.py", "calc.py"}

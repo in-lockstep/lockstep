@@ -51,7 +51,9 @@ def test_one_flag_alone_is_the_ordinary_case() -> None:
     _one_provider(dry_run=False, offline=False, record=False)
 
 
-def test_review_refuses_the_pair_before_reading_a_key(tmp_path: Path, monkeypatch) -> None:
+def test_review_refuses_the_pair_before_reading_a_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Through the live command, and before any credential work: the refusal must not arrive as a
     missing-key error, which is what a person would get if the guard sat lower down."""
     monkeypatch.chdir(tmp_path)
@@ -172,7 +174,9 @@ def test_pack_try_is_deliberately_not_in_that_list():
     """
     from in_lockstep.cli import main
 
-    option = next(o for o in main.commands["pack"].commands["try"].params if o.name == "record")
+    pack = main.commands["pack"]
+    assert isinstance(pack, click.Group)
+    option = next(o for o in pack.commands["try"].params if o.name == "record")
     assert option.default is False
     assert option.secondary_opts == []
 
@@ -193,14 +197,14 @@ def test_a_run_that_reached_no_provider_says_nothing_about_recording():
     class _Tape:
         path = "/tmp/nothing.json"
 
-        def __init__(self, calls):
+        def __init__(self, calls: int) -> None:
             self._calls = calls
 
-        def calls(self):
+        def calls(self) -> int:
             return self._calls
 
     class _Ctx:
-        def __init__(self, tokens):
+        def __init__(self, tokens: int) -> None:
             self.spend = SimpleNamespace(charged=SimpleNamespace(total_tokens=tokens))
 
     # Nothing called, nothing spent, nobody asked: silent.

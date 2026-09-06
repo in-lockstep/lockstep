@@ -170,7 +170,9 @@ the way a reader has to.
 ## Style
 
 - Line length 110. `ruff format` decides everything else; do not hand-wrap.
-- `mypy --strict` over `src`. Tests are exempt from `disallow_untyped_defs` and nothing else.
+- `mypy --strict` over `src`, `.lockstep`, `examples` and `tests`. Tests are exempt from
+  `disallow_untyped_defs` and nothing else: an unannotated test is fine, a half-annotated one is
+  not, and both have their bodies checked.
 - Comments explain **why**, and especially why not the obvious alternative. The codebase is written
   so that a reader hitting a strange decision finds the reason next to it rather than in a commit
   message. Match that density; it is the house style, not decoration.

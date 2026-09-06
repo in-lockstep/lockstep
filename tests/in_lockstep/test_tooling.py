@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -50,9 +52,10 @@ class _Recording:
 
 
 def test_gate_tooling_1_a_binary_is_found_in_the_venv_then_beside_the_interpreter_then_on_path(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/usr/local/bin/ruff")
+    # `tooling` does `import shutil`, so patching the module patches what it consults.
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/ruff")
     beside = _executable(tmp_path / "env" / "bin" / "python")
 
     on_path = tooling.binary("ruff", str(tmp_path), Sandbox(), beside=str(beside))
@@ -71,12 +74,12 @@ def test_gate_tooling_1_a_binary_is_found_in_the_venv_then_beside_the_interprete
     found = tooling.binary("ruff", str(tmp_path), Sandbox(), beside=str(beside))
     assert found.path == str(in_venv) and found.how == "the repository's .venv"
 
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     nowhere = tooling.binary("make", str(tmp_path), Sandbox())
     assert nowhere.path is None and nowhere.render().startswith("make  not found  (looked for ")
 
 
-def test_a_containerized_adapter_resolves_the_name_inside_the_image(monkeypatch) -> None:  # noqa: ANN001
+def test_a_containerized_adapter_resolves_the_name_inside_the_image(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """This host's filesystem says nothing about what the image has, so nothing is probed."""
     monkeypatch.setattr(Sandbox, "runtime", lambda self: "/usr/bin/docker")
     box = Sandbox(image="python:3.12")
@@ -85,9 +88,9 @@ def test_a_containerized_adapter_resolves_the_name_inside_the_image(monkeypatch)
     assert "container" in tooling.interpreter("/repo", box).how
 
 
-def test_ruff_validate_runs_the_repositorys_ruff(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_ruff_validate_runs_the_repositorys_ruff(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """GATE-TOOLING-1 for the linter: `ruff` on the sandbox's PATH was the tool's, or nothing."""
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     venv_ruff = _executable(tmp_path / ".venv" / "bin" / "ruff")
     _executable(tmp_path / ".venv" / "bin" / "python")
     sandbox = _Recording()
@@ -98,19 +101,22 @@ def test_ruff_validate_runs_the_repositorys_ruff(tmp_path: Path, monkeypatch) ->
     assert sandbox.command[0] == str(venv_ruff)
 
 
-def test_ruff_missing_everywhere_is_a_refusal_naming_what_it_tried(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
-    monkeypatch.setattr(tooling.sys, "executable", "/opt/tool/bin/python")
+def test_ruff_missing_everywhere_is_a_refusal_naming_what_it_tried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", "/opt/tool/bin/python")
     sandbox = _Recording()
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
     outcome = asyncio.run(RuffValidate(sandbox=sandbox).invoke(ctx, Validate()))
     assert outcome.status.value == "errored"
+    assert outcome.reason is not None
     assert ".venv/bin/ruff" in outcome.reason and "ruff on PATH" in outcome.reason
     assert sandbox.command == []
 
 
-def test_a_command_adapter_says_where_its_binary_comes_from(monkeypatch) -> None:  # noqa: ANN001
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/usr/local/bin/npm" if name == "npm" else None)
+def test_a_command_adapter_says_where_its_binary_comes_from(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/npm" if name == "npm" else None)
     adapter = CommandTest(["npm", "test"])
     assert isinstance(adapter, Locatable)
     (where,) = adapter.locations("/repo")
@@ -133,12 +139,12 @@ def test_ls_prints_where_each_deterministic_binding_resolved_its_tool(repo: Path
     assert f"ruff  {ruff}  (the repository's .venv)" in result.output
 
 
-def test_doctor_refuses_a_bound_tool_it_cannot_find(repo: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_refuses_a_bound_tool_it_cannot_find(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """DOC180: the path tried is in the message, because "not installed" was the unhelpful half of
     what the two first-time users read."""
     _python_repo(repo)
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
-    monkeypatch.setattr(tooling.sys, "executable", "")
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", "")
     result = CliRunner().invoke(main, ["doctor"])
     assert "DOC180" in result.output, result.output
     assert "Test -> PytestTest found no python" in result.output
@@ -146,7 +152,9 @@ def test_doctor_refuses_a_bound_tool_it_cannot_find(repo: Path, monkeypatch) -> 
     assert str(repo / ".venv" / "bin" / "python") in "".join(result.output.split())
 
 
-def test_doctor_probes_that_the_found_interpreter_can_run_pytest(repo: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_probes_that_the_found_interpreter_can_run_pytest(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """DOC181: found is not enough; an interpreter with no pytest in it is the #167 failure with
     a nicer path. The probe runs `import pytest` there."""
     _python_repo(repo)
@@ -163,7 +171,9 @@ def test_doctor_probes_that_the_found_interpreter_can_run_pytest(repo: Path, mon
 # -- what the review of issue 167 found ---------------------------------------------------------
 
 
-def test_a_relative_root_resolves_to_an_absolute_path(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_a_relative_root_resolves_to_an_absolute_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """`PytestTest(cwd="packages/api")` is an existing shape. A relative resolved path is execed
     by the sandbox relative to a different working directory, where it does not exist."""
     monkeypatch.chdir(tmp_path)
@@ -193,13 +203,13 @@ def test_a_red_suite_that_mentions_the_missing_module_phrase_is_still_red(tmp_pa
 
 
 def test_a_command_adapter_runs_the_repositorys_venv_tool_and_keeps_a_path_tool_bare(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """What `ls` prints is what runs: a `mypy` that lives only in the repository's `.venv` is
     substituted by its path, which is on nobody's PATH; a `make` found on PATH keeps its name,
     since the sandbox's PATH would find the same one."""
     mypy = _executable(tmp_path / ".venv" / "bin" / "mypy")
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/usr/bin/make" if name == "make" else None)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/make" if name == "make" else None)
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
 
     sandbox = _Recording()
@@ -211,9 +221,11 @@ def test_a_command_adapter_runs_the_repositorys_venv_tool_and_keeps_a_path_tool_
     assert sandbox.command == ["make", "build"]
 
 
-def test_exit_127_is_an_error_naming_where_the_tool_was_looked_for(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_exit_127_is_an_error_naming_where_the_tool_was_looked_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """The shell's "no such command" is an environment fact, not a verdict on the change."""
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
 
     class _Missing:
         async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
@@ -222,6 +234,7 @@ def test_exit_127_is_an_error_naming_where_the_tool_was_looked_for(tmp_path: Pat
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
     outcome = asyncio.run(CommandValidate(["mypy", "src"], sandbox=_Missing()).invoke(ctx, Validate()))
     assert outcome.status.value == "errored"
+    assert outcome.reason is not None
     assert outcome.reason.startswith("mypy could not be run; looked for ")
     assert "mypy on PATH" in outcome.reason
 
@@ -241,11 +254,13 @@ def test_an_argv0_with_a_directory_in_it_is_the_callers_own_path(tmp_path: Path)
     assert missing.path is None and missing.tried == (str(tmp_path / "tools" / "gone.sh"),)
 
 
-def test_beside_the_interpreter_uses_this_platforms_executable_suffix(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_beside_the_interpreter_uses_this_platforms_executable_suffix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """On Windows the file beside `python.exe` is `ruff.exe`; the venv branch knew and the
     beside branch did not."""
     monkeypatch.setattr(tooling, "_EXE", ".exe")
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     python = _executable(tmp_path / "env" / "bin" / "python.exe")
     ruff = _executable(tmp_path / "env" / "bin" / "ruff.exe")
     found = tooling.binary("ruff", str(tmp_path), Sandbox(), beside=str(python))

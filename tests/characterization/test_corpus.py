@@ -20,20 +20,22 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 CORPUS = Path(__file__).parent
 
 
-def _load(name: str) -> dict:
+def _load(name: str) -> dict[str, Any]:
     path = CORPUS / name
     if not path.exists():
         pytest.skip(f"{name} not captured")
-    return json.loads(path.read_text())
+    loaded: dict[str, Any] = json.loads(path.read_text())
+    return loaded
 
 
-def _cases(name: str, scope: str):
+def _cases(name: str, scope: str) -> list[tuple[str, str, dict[str, Any]]]:
     return [(scope, key, entry) for key, entry in sorted(_load(name).items())]
 
 
@@ -41,7 +43,7 @@ ALL = _cases("corpus.json", "repo") + _cases("corpus-shipped.json", "shipped")
 
 
 @pytest.mark.parametrize("scope,key,entry", ALL, ids=[f"{k}" for _, k, _ in ALL])
-def test_composed_prompt_matches_corpus(scope: str, key: str, entry: dict) -> None:
+def test_composed_prompt_matches_corpus(scope: str, key: str, entry: dict[str, Any]) -> None:
     """The captured text still hashes to what was recorded."""
     text = (CORPUS / "prompts" / f"{key}.txt").read_text()
     assert hashlib.sha256(text.encode()).hexdigest() == entry["sha256"], (
@@ -52,7 +54,7 @@ def test_composed_prompt_matches_corpus(scope: str, key: str, entry: dict) -> No
 
 
 @pytest.mark.parametrize("scope,key,entry", ALL, ids=[f"{k}" for _, k, _ in ALL])
-def test_body_sits_between_guardrails_and_skills(scope: str, key: str, entry: dict) -> None:
+def test_body_sits_between_guardrails_and_skills(scope: str, key: str, entry: dict[str, Any]) -> None:
     """The invariant `PromptLayers.signature()` cannot express, because body is not a Fragment.
 
     Guardrails strictly before the body; skills and contexts strictly after; contexts last.
@@ -75,7 +77,7 @@ def test_body_sits_between_guardrails_and_skills(scope: str, key: str, entry: di
 
 
 @pytest.mark.parametrize("scope,key,entry", ALL, ids=[f"{k}" for _, k, _ in ALL])
-def test_baseline_guardrail_is_first_and_present(scope: str, key: str, entry: dict) -> None:
+def test_baseline_guardrail_is_first_and_present(scope: str, key: str, entry: dict[str, Any]) -> None:
     """The shipped baseline reaches every agent and cannot be displaced or excluded."""
     assert entry["projection"][0] == "guardrail:baseline", (
         f"{key}: baseline must lead every composition, got {entry['projection'][0]}"
@@ -83,7 +85,7 @@ def test_baseline_guardrail_is_first_and_present(scope: str, key: str, entry: di
 
 
 @pytest.mark.parametrize("scope,key,entry", ALL, ids=[f"{k}" for _, k, _ in ALL])
-def test_enforce_ceilings_are_monotone(scope: str, key: str, entry: dict) -> None:
+def test_enforce_ceilings_are_monotone(scope: str, key: str, entry: dict[str, Any]) -> None:
     """GATE-POLICY-1 source of truth: what `PolicyStack` must reproduce.
 
     Recorded here rather than asserted loosely, because the new PolicyStack's whole claim is that

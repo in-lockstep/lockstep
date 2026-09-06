@@ -40,7 +40,7 @@ from ..core.types import (
 )
 from ..core.verbs import Capability, Verb
 from . import tooling
-from .sandbox import Sandbox
+from .sandbox import Runner, Sandbox
 
 __all__ = [
     "Build",
@@ -139,7 +139,7 @@ class CommandTest:
         command: list[str] | tuple[str, ...],
         *,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
         junit: str = "",
         selector_arg: tuple[str, ...] = (),
     ) -> None:
@@ -241,7 +241,7 @@ class CommandValidate:
         command: list[str] | tuple[str, ...],
         *,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
     ) -> None:
         if not command:
             raise ValueError("CommandValidate needs a command to run")
@@ -300,7 +300,7 @@ class CommandBuild:
         command: list[str] | tuple[str, ...],
         *,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
     ) -> None:
         if not command:
             raise ValueError("CommandBuild needs a command to run")
@@ -360,7 +360,7 @@ class CommandRun:
         command: list[str] | tuple[str, ...],
         *,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
     ) -> None:
         if not command:
             raise ValueError("CommandRun needs a command to run")
@@ -459,7 +459,7 @@ class CommandProvision:
         steps: Sequence[Sequence[str]],
         *,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
     ) -> None:
         self.steps = tuple(tuple(step) for step in steps)
         if not self.steps or any(not step for step in self.steps):
