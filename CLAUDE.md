@@ -139,6 +139,16 @@ forbids fails — and the fix is almost never to widen the allowance. `evaluatio
 leaves that may import nothing of ours, on purpose: the moment either reaches for a store it stops
 being testable against a list somebody wrote by hand.
 
+The same file bounds the **composition root**. `cli` reaches 18 of the other 20 packages where the
+next widest reaches 8, which is correct — something has to name every implementation — and it means
+`cli` is the one module where logic accumulates with no gate noticing. So the statements in its
+non-command helpers are pinned, two-sided, the way `.coverage-floor` is. Over the pin: say whether
+what you added is parsing, composing, rendering or translating — those belong here and the pin
+rises with an argument — or a decision about what a run *means*, which belongs where a workflow can
+reach it. Under it: lower the pin and take the credit. Statements, not lines, so a comment costs
+nothing; the house style asks for comments and a rule that charged for them would be pulling the
+other way.
+
 **Sinks** (`tests/in_lockstep/test_sinks.py`). Every write that leaves the process goes through
 `privileged.sink`, which redacts. This walks the AST and fails on a raw `write_text`, `print`, or
 `open(...).write`. It is inverted on purpose — it lists the *primitives*, not the sinks — because

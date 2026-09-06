@@ -1,4 +1,26 @@
-"""The `in-lockstep` command."""
+"""The `in-lockstep` command: the composition root.
+
+Wide on purpose. This module's `ALLOWED` entry reaches 18 of the other 20 packages, where the next
+widest reaches 8, and that is what a composition root is for — it is the one place that may name
+every implementation, because something has to. The layering gate enforces direction and
+acyclicity, and neither of those bounds width, so this is also the one place where logic can
+accumulate with nothing noticing (#239).
+
+**What belongs here: parse, compose, render, translate.** Read the flags. Build the `Lockstep` and
+the adapters a verb needs. Turn an `Outcome` into the lines a person reads and the exit code a
+trampoline branches on. Turn a domain exception into a message rather than a traceback.
+
+**What does not: deciding what a run means.** Identity and keying, what counts as a case, what a
+census counts, what a workflow dispatches to — those are decisions the framework makes, and a
+decision made here is one that cannot be reached from a workflow, tested without a CliRunner, or
+reused by an adopter who never types `in-lockstep`.
+
+The line is not always obvious and some of the calls that put logic here were right locally:
+`_case_key` concedes in its own comment that it duplicates a hash `evaluation` may not import,
+because doing it twice beats two implementations that drift. Eighteen right local calls is the
+symptom rather than the defect, which is why the rule is a bound with an argument attached and not
+a refactor. `test_layering.py::test_the_composition_root_does_not_grow_logic` is where it bites.
+"""
 
 from __future__ import annotations
 
