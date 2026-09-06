@@ -3,20 +3,30 @@
 Extension is ordinary subclassing plus binding. There is no plugin manifest and no registration
 DSL, because the container is already the registration mechanism.
 
+Every snippet on this page assumes two names and imports everything else: `lockstep`, the
+`Lockstep` your module built, and `ctx`, the `RunContext` a workflow is handed. The suite
+type-checks each page's snippets, in order, under the same `mypy --strict` an adopter runs, with
+exactly those two provided — so a shape shown here is a shape the checker accepts.
+
 ## A different adapter
 
 A verb is an interface; anything satisfying it can serve it.
 
 ```python
-from in_lockstep import Capability, Outcome, Test, Verb
+import subprocess
+
+from in_lockstep import Capability, Outcome, RunContext, Status, Test, Verb
 from in_lockstep.core.types import TestReport
 
 class ToxTest:
     verb = Verb.TEST
     capabilities = frozenset({Capability.EXECUTES_CODE, Capability.READS_REPO})
 
-    async def invoke(self, ctx, request: Test) -> Outcome[TestReport]:
-        ...
+    async def invoke(self, ctx: RunContext, request: Test) -> Outcome[TestReport]:
+        ran = subprocess.run(["tox", "-q"], cwd=ctx.repo.root, capture_output=True, text=True)
+        status = Status.SUCCEEDED if ran.returncode == 0 else Status.FAILED
+        # A real adapter parses the report; the shape is what matters here.
+        return Outcome(status=status, value=TestReport())
 
 lockstep.bind(Test, ToxTest())
 ```
@@ -57,7 +67,7 @@ Declaring one is constructing it, and the request it serves is an ordinary froze
 ```python
 from dataclasses import dataclass
 
-from in_lockstep import Capability, Outcome, Status, Verb
+from in_lockstep import Capability, Outcome, RunContext, Status, Verb
 
 BENCHMARK = Verb("benchmark")
 
@@ -70,8 +80,8 @@ class PyperfBenchmark:
     verb = BENCHMARK
     capabilities = frozenset({Capability.EXECUTES_CODE})
 
-    async def invoke(self, ctx, request) -> Outcome[dict]:
-        ...
+    async def invoke(self, ctx: RunContext, request: Benchmark) -> Outcome[dict[str, float]]:
+        return Outcome(status=Status.SUCCEEDED, value={"seconds": 0.0})
 
 lockstep.bind(Benchmark, PyperfBenchmark())
 outcome = await ctx.do(Benchmark(iterations=1000))
@@ -97,6 +107,8 @@ verb it has never heard of. Declare them yourself, or pass the model explicitly.
 Prompts are classes; their bodies are markdown files.
 
 ```python
+from in_lockstep.prompts.review import SecurityReviewPrompt
+
 class OurSecurityReview(SecurityReviewPrompt):
     version = "team-3"
     emphasis = "SQLAlchemy 2.x session discipline; no bare excepts"
@@ -106,6 +118,9 @@ Subclassing and setting `emphasis` keeps the shipped body and adds to it. To rep
 entirely, point at your own file:
 
 ```python
+from in_lockstep.ai.prompt import Body
+from in_lockstep.prompts.review import ReviewPrompt
+
 class OurReview(ReviewPrompt):
     version = "team-1"
     body = Body.from_file("prompts/our-review.md")
@@ -169,6 +184,8 @@ house = implement_layers().plus(
 ```
 
 ```python
+from in_lockstep.adapters.ai import Implement, Oneshot
+
 lockstep.bind(Implement, Oneshot(layers=house))
 ```
 
@@ -247,9 +264,14 @@ Cross-cutting behaviour (tracing, budgets, retries, approval) is a middleware ch
 that gives you before, after, around and instead from one hook:
 
 ```python
+from datetime import date
+
 from in_lockstep.core.middleware import ActionCall, Next, capabilities_for
 from in_lockstep.core.outcome import Outcome
 from in_lockstep.core.verbs import Capability
+
+def _is_friday() -> bool:
+    return date.today().weekday() == 4
 
 class FridayFreeze:
     async def __call__(self, ctx: object, call: ActionCall, next: Next) -> Outcome[object]:
@@ -330,7 +352,9 @@ agency is the change that should cost a decision. `doctor` re-derives against th
 shipped baseline, `DOC172` warns when a pack is installed unpinned.
 
 ```python
+from in_lockstep.adapters.ai import AiReview, Review
 from in_lockstep.packs import pack
+from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt, review_layers
 
 acme = pack("acme-review-prompts")
 
@@ -448,6 +472,8 @@ Bindings resolve repository-above-organisation, which is right for adapters and 
 standards. Standards go on the policy stack instead:
 
 ```python
+from in_lockstep import Policy
+
 lockstep.contribute(Policy(name="acme-floor", max_turns=8, deny_tools=("run_script",), scan_input="block"))
 ```
 
@@ -497,6 +523,8 @@ CI check (`in-lockstep doctor --strict`) and in provider billing limits, not in 
 A verb is routed to a model, and the route is one visible line. `in-lockstep ls` prints it:
 
 ```python
+from in_lockstep import Verb
+
 lockstep.models.route(Verb.TRIAGE,    "local:qwen3-8b")           # cheap reading, on a laptop
 lockstep.models.route(Verb.IMPLEMENT, "anthropic:claude-opus-4-6")
 lockstep.models.route(Verb.REVIEW,    "anthropic:claude-sonnet-4-6")
@@ -519,6 +547,7 @@ Because pricing keys on the id, a route to one is unpriced until you say what it
 refuses an unpriced route *before* the run spends anything, which is where you find out:
 
 ```python
+from in_lockstep import Verb
 from in_lockstep.ai.pricing import CostTable, Rate, default_table
 
 lockstep.models.route(Verb.REVIEW, "bedrock:us.anthropic.claude-sonnet-4-6-v1:0")
@@ -532,8 +561,10 @@ from an environment variable, build the default registry, register into it, and 
 factory:
 
 ```python
+from in_lockstep.adapters.ai import AiReview, Review
 from in_lockstep.ai.bootstrap import default_registry, invoker_factory
 from in_lockstep.llm.interface import DataPolicy, ProviderSettings
+from in_lockstep.llm.providers.openai_compat import OpenAIProvider
 
 registry = default_registry()
 registry.register(
@@ -564,6 +595,11 @@ The strategy IS the adapter. A binding does not choose a dispatcher configured b
 names the approach itself:
 
 ```python
+from in_lockstep import Workshop
+from in_lockstep.adapters.ai import TDD
+from in_lockstep.adapters.sandbox import Sandbox
+
+IMAGE = "ghcr.io/acme/ci:py312"
 lockstep.workshop = Workshop(commands=Sandbox(image=IMAGE, require_container=True))
 tdd = lockstep.use(TDD)             # or Oneshot, or your own class
 ```
@@ -576,7 +612,14 @@ module: the resolved policy floor, the repo root, and the workshop's runner wrap
 `bind` remains the primitive and the long spelling still works:
 
 ```python
-lockstep.bind(Implement, TDD(commands=WorktreeRunner(sandbox, root), policy=...))
+from in_lockstep.adapters.worktree import WorktreeRunner
+from in_lockstep.ai.invoker import InvokePolicy
+
+sandbox = Sandbox(image=IMAGE, require_container=True)
+lockstep.bind(
+    Implement,
+    TDD(commands=WorktreeRunner(sandbox, lockstep.repo.root), policy=InvokePolicy(max_turns=40)),
+)
 ```
 
 Prefer `use` anyway. The two arguments it fills in are the two a hand-written bind can silently
@@ -614,7 +657,12 @@ Binding can also happen at the call, when the workflow should say what serves a 
 the execution site:
 
 ```python
-outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
+from typing import Any
+
+from in_lockstep import Outcome, RunContext, TicketSource
+
+async def implement_with_tdd(ctx: RunContext, ticket: str, tickets: TicketSource) -> Outcome[Any]:
+    return await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)
 ```
 
 `via=` is call-scoped: it never touches the container, so nothing leaks into later calls, and the
@@ -816,6 +864,11 @@ different things under one name.
 A process of your own is the same shape, under an id you own:
 
 ```python
+from typing import Any
+
+from in_lockstep import Outcome, RunContext, TicketSource, workflow
+from in_lockstep.adapters.ai import Implement
+
 @workflow(id="implement/from-label")
 async def implement_from_label(ctx: RunContext, label: str, tickets: TicketSource) -> Outcome[Any]:
     ready = await tickets.search(f"label:{label}", limit=1)

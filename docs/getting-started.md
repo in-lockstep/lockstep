@@ -182,10 +182,12 @@ repository with no module runs on them directly. A target that is not in the fil
 A workflow asks for a verb; a binding decides what serves it.
 
 ```python
-from in_lockstep import RunContext, Test, Validate, workflow
+from typing import Any
+
+from in_lockstep import Outcome, RunContext, Test, Validate, workflow
 
 @workflow(id="ci/check")
-async def check(ctx: RunContext, paths):
+async def check(ctx: RunContext, paths: tuple[str, ...]) -> Outcome[Any]:
     validate = await ctx.do(Validate(paths=paths))
     if validate.blocked:
         return validate
@@ -375,6 +377,8 @@ Routing a verb to it in `lockstep.py` is one line. This repository routes its ow
 way:
 
 ```python
+from in_lockstep import Verb
+
 lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")
 ```
 

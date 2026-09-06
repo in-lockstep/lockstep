@@ -163,7 +163,9 @@ usually means adding a row and a test that cites it.
 **Docs** (`tests/in_lockstep/test_docs.py`). The README capability matrix is checked both ways: a
 `runs` row must name a symbol or command that exists, and a `planned` row must not. Python blocks in
 the README, `getting-started.md`, `extending.md` and `trampoline.md` must parse; the cookbook's must
-actually execute.
+actually execute; and every page's blocks, concatenated in order, must type-check under
+`mypy --strict` given only `lockstep` and `ctx` — so a snippet imports everything else it uses,
+the way a reader has to.
 
 ## Style
 
