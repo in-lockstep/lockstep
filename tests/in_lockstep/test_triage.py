@@ -185,10 +185,14 @@ def test_a_schema_mismatch_is_errored_not_a_silent_pass() -> None:
 
 
 def test_unparseable_output_is_named_as_such() -> None:
-    adapter, _provider = _adapter("I think this is a bug, honestly.")
+    """And re-prompted once first (GATE-SHAPE-1): this stub answers the same prose twice, so the
+    second call is the bounded re-prompt and the outcome names both attempts."""
+    adapter, provider = _adapter("I think this is a bug, honestly.")
     outcome = asyncio.run(adapter.invoke(None, _spec()))
     assert outcome.status is Status.ERRORED
     assert outcome.reason == "triage.unparseable"
+    assert len(provider.calls) == 2, "one re-prompt, and only one"
+    assert "After one re-prompt" in outcome.findings[0].message
 
 
 def test_from_ticket_maps_a_tracker_ticket() -> None:

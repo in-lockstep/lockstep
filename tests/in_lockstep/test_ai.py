@@ -1722,3 +1722,121 @@ def test_resolve_invoker_wraps_a_factory_that_did_not(tmp_path) -> None:
     )
     assert isinstance(invoker.provider, RecordingProvider)
     assert invoker.provider.inner is inner
+
+
+# -- GATE-SHAPE-1: a malformed reply is re-prompted once, with the parser's own words -----------
+#
+# Three reviews on this repository's required check errored `review.unparseable` on
+# `Expecting ',' delimiter` a few hundred characters in -- a malformed object, which the bracket
+# repair cannot touch -- and each turned the check red on a change nothing was wrong with (#254).
+# The structured module's docstring had promised "once more with the parse error quoted back" and
+# nothing implemented it.
+
+_MALFORMED = '{"findings": [{"path": "a.py", "line": 3, "summary": "Unquoted variable" "detail": "x"}]}'
+_GOOD = '{"findings": [{"path": "a.py", "line": 3, "summary": "Unquoted variable", "detail": "x"}]}'
+
+
+def _review(provider: Stub, **policy: int) -> object:
+    from in_lockstep.adapters.ai.review import AiReview, Review
+
+    adapter = AiReview(lambda ctx: invoker(provider), policy=InvokePolicy(max_turns=1, **policy))
+    return asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff="x")))
+
+
+def test_gate_shape_1_a_malformed_reply_is_reprompted_once_with_the_parsers_error() -> None:
+    """GATE-SHAPE-1. The second turn carries the reply and the exact words the parser refused it
+    with, and nothing else about the question -- a re-prompt that restated the ask would be asking
+    twice. Both calls are billed, and the outcome carries both."""
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(
+        replies=[
+            LLMOutput(content=_MALFORMED, usage=TokenUsage(input_tokens=100, output_tokens=40)),
+            LLMOutput(content=_GOOD, usage=TokenUsage(input_tokens=150, output_tokens=40)),
+        ]
+    )
+    outcome = _review(provider)
+    assert outcome.status is Status.SUCCEEDED, outcome
+    assert len(provider.calls) == 2, "one re-prompt, and only one"
+    follow_up = provider.calls[1].messages
+    assert follow_up[-2].role == "assistant" and follow_up[-2].content == _MALFORMED
+    assert follow_up[-1].role == "user"
+    assert "could not be used" in follow_up[-1].content
+    assert "Expecting ',' delimiter" in follow_up[-1].content, "the parser's own words, quoted back"
+    assert "change only the shape" in follow_up[-1].content
+    assert outcome.cost.input_tokens == 250 and outcome.cost.output_tokens == 80, "both calls are paid for"
+    assert [f.summary for f in outcome.value.findings] == ["Unquoted variable"]
+
+
+def test_gate_shape_1_a_second_failure_names_both_attempts_and_bills_both_and_stops() -> None:
+    """Never a third time. A model that cannot produce the shape after being shown exactly what
+    was wrong with it will not on the third try, and the third bill is the one nobody argued for."""
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(
+        replies=[
+            LLMOutput(content=_MALFORMED, usage=TokenUsage(input_tokens=100, output_tokens=40)),
+            LLMOutput(
+                content="I'd rather explain in prose.", usage=TokenUsage(input_tokens=150, output_tokens=9)
+            ),
+            LLMOutput(content=_GOOD),
+        ]
+    )
+    outcome = _review(provider)
+    assert outcome.status is Status.ERRORED and outcome.reason == "review.unparseable"
+    assert len(provider.calls) == 2, "a third call was made"
+    message = outcome.findings[0].message
+    assert message.startswith("first reply: ") and "After one re-prompt" in message
+    assert "Expecting ',' delimiter" in message and "not JSON" in message
+    assert outcome.cost.input_tokens == 250
+
+
+def test_gate_shape_1_a_schema_mismatch_is_reprompted_with_the_missing_key_named() -> None:
+    """Valid JSON of the wrong shape is the same failure one step later, and the re-prompt names
+    the key rather than saying "invalid"."""
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(replies=[LLMOutput(content='{"results": []}'), LLMOutput(content=_GOOD)])
+    outcome = _review(provider)
+    assert outcome.status is Status.SUCCEEDED
+    assert "missing required key 'findings'" in provider.calls[1].messages[-1].content
+
+
+def test_a_truncated_reply_is_not_reprompted() -> None:
+    """An output cap is a number in the policy. Re-prompting would pay for the same cut-off again,
+    and `review.truncated` already says which number to change."""
+    from in_lockstep.core.outcome import Status
+
+    provider = Stub(
+        replies=[LLMOutput(content='{"findings": [{"path": "a.py", "sum', stop_reason="max_tokens")]
+    )
+    outcome = _review(provider, max_tokens=16)
+    assert outcome.status is Status.ERRORED and outcome.reason == "review.truncated"
+    assert len(provider.calls) == 1
+
+
+def test_a_reply_that_parses_first_time_costs_one_call() -> None:
+    provider = Stub(replies=[LLMOutput(content=_GOOD)])
+    _review(provider)
+    assert len(provider.calls) == 1
+
+
+def test_gate_shape_1_the_review_skills_example_is_the_shape_the_parser_reads() -> None:
+    """GATE-SHAPE-1, the contract half (#271). The skill told the model `{path, line, comment}`
+    to an output path while the parser read `{path, line, summary, detail, severity}` inline, so
+    every review composed two contradictory shapes. The skill's own example now parses under the
+    schema and the parser reads its fields non-empty -- asserted from the file, so the two cannot
+    drift apart again without this going red."""
+    import re
+    from importlib import resources
+
+    from in_lockstep.adapters.ai.review import _to_report
+    from in_lockstep.prompts.review import REVIEW_SCHEMA
+
+    raw = (resources.files("in_lockstep.prompts") / "skills/review-format.md").read_text()
+    (block,) = re.findall(r"```json\n(.*?)\n```", raw, re.S)
+    example = parse(block).value
+    assert validate(example, REVIEW_SCHEMA) == []
+    (finding,) = _to_report(example, "security").findings
+    assert finding.summary and finding.detail and finding.line == 84 and finding.severity == "warning"
+    assert "output path" not in raw and '"comment"' not in raw, "the old contract is still in the skill"

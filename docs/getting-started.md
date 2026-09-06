@@ -215,6 +215,10 @@ in-lockstep review --offline
 ```text
 config    local working tree
 replaying the shipped fixture: in-lockstep/lockstep#48, security lens
+  note: the system prompt moved since this fixture was recorded, so what follows is the
+        model's answer to the prompt as recorded — not to the one composed just now, which
+        `in-lockstep show-prompt review/security` prints. Re-recording is a real model call,
+        which is the thing a reader trying this offline does not have.
 review/security  succeeded
   actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters
   actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment
@@ -226,7 +230,9 @@ ledger    lockstep-history:records/review-security.json  (local; `in-lockstep hi
 ```
 
 Those findings are what the model actually said about that pull request; the replay is
-deterministic and free. Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so
+deterministic and free. The note is the fixture being honest: a cassette is keyed on the whole
+composed prompt, the shipped prompts have moved since this one was recorded, and rather than fail
+on a key miss a reader cannot fix, the demo replays what was actually sent and says so. Cassettes sit at the `LLMInput`/`LLMOutput` seam rather than at HTTP, so
 one recorded against a provider replays against a different one, and they capture tool IO as well
 as model IO.
 

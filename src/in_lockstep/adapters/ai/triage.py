@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 from ...ai.context import ContextItem, ContextPackage, Provenance
 from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
 from ...ai.prompt import Composition, PromptLayers, compositions
-from ...ai.structured import SchemaError, parse, schema_instruction, validate
+from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.verbs import Capability, Verb
@@ -179,6 +179,16 @@ class AiTriage:
                 run_tool=self.run_tool,
                 policy=self.policy,
             )
+            settled = await settle(
+                invoker,
+                invocation,
+                schema=TRIAGE_SCHEMA,
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+            )
+            invocation = settled.invocation
         except InvocationBlocked as e:
             return _blocked(e.reason, str(e))
         except EgressRefused as e:
@@ -198,24 +208,19 @@ class AiTriage:
                 invocation.cost,
             )
 
-        try:
-            parsed = parse(invocation.content)
-        except SchemaError as e:
-            return _errored("triage.unparseable", str(e), invocation.cost)
-
-        problems = validate(parsed.value, TRIAGE_SCHEMA)
-        if problems:
+        if settled.reason == "unparseable":
+            return _errored("triage.unparseable", settled.detail, invocation.cost)
+        if settled.reason == "schema_mismatch":
             return Outcome(
                 status=Status.ERRORED,
                 reason="triage.schema_mismatch",
                 cost=invocation.cost,
                 findings=tuple(
                     Finding(id="triage.schema_mismatch", message=p, severity=Severity.ERROR, blocking=True)
-                    for p in problems
+                    for p in settled.problems
                 ),
             )
-
-        decision = _to_decision(parsed.value)
+        decision = _to_decision(settled.value)
         findings = tuple(
             Finding(
                 id="triage.missing",
