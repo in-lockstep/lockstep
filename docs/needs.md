@@ -29,11 +29,33 @@ adoption did not care which architecture served it.
 
 ## The one that matters most
 
-N2. Nothing has executed against a real model. The framework runs, the pipeline is wired end to
-end, and the ledger writes a line — but with a stub on the other end of it. Until a real call
-happens the project has architecture and no evidence, which is the same position it was in before
-the pivot, reached by a different route.
+N3, now. N2 was this section's subject for as long as nothing had run, and its row records what
+changed. What the row does not record is how thin the record is, so here it is, read off the
+history branch on 2026-09-06 with `in-lockstep report` and then record by record:
 
-That is why the plan's abandon criteria are weighted the way they are: a time tripwire and a cost
-tripwire can tell you a build has stalled or is uneconomic, but only running it against real
-changes can tell you whether the output is worth reading.
+- **Eight runs against a real model**, all from a comment: seven `/implement` and one `/fix`
+  between 2026-08-30 and 2026-09-02, $275 and 19.4 million tokens across four tickets, five of the
+  runs and $210 of the money on one ticket. Two succeeded. Three were stopped by a ceiling or a
+  gate, which is a control working; three failed or errored, which is the loop saying so.
+- **Thirty-seven review records that are not model calls.** Every one is the shipped recording
+  replayed offline on a laptop — 5,804 tokens and 16 milliseconds each, identical — appended
+  because a run records by default and `review --offline` is what a contributor runs to check a
+  change end to end. The report files them as replays. They show the path works, not that a model
+  was asked.
+- **The reviews a model was asked for are not on the branch.** Every pull request pays for a
+  `review`, fifty runs of the `lockstep` workflow in the two days before this was written, and
+  each writes its record into a bundle that leaves the job as an artifact with a 30-day retention,
+  because a read-only job cannot publish to the ledger. Nobody has reconciled one. The volume N3
+  asks about exists; the ledger this document leans on cannot see it, and in a month the artifacts
+  will not either. Filed as #294.
+- **And the branch flags itself.** Every report opens with `TAMPERED`, because the 2026-09-02
+  reconcile rewrote the first record's shape and nothing can acknowledge that, so the flag has
+  been read past for four days. Filed as #295.
+
+So the open question is not whether anything has run. It is whether enough has run, somewhere the
+report can read, to say what a first review is worth and how long the road to it is — and nobody
+has timed that road (N3) or priced a merged change (N8). ADR 0001 weighted the abandon criteria
+for exactly this: a time tripwire and a cost tripwire can say a build has stalled or is uneconomic,
+and only volume against real changes can say whether the output was worth reading. Eight paid runs
+on the branch and fifty in artifacts are not volume yet, and the second number is the one to go
+and get.

@@ -466,3 +466,34 @@ def test_no_documented_snippet_claims_a_workflow_id_the_framework_ships() -> Non
         f"scaffolded with `init` and then copied this gets DuplicateWorkflow at load. Register "
         f"the shipped process (`implement.register()`) or choose an id of your own."
     )
+
+
+# -- docs/needs.md: the conclusion has to agree with the table it sits under ---------------------
+#
+# The N2 row was updated when the loop first ran against a real model, and the section beneath it,
+# "the one that matters most", went on saying nothing had executed, sixteen lines apart (#238).
+# The section is the part a reader skims to, so it is the part that must not decay: whichever need
+# it opens on has to be one the table still calls open.
+
+_NEED_ROW = re.compile(r"^\| \*\*(N\d+)\*\* \| [^|]+ \| [^|]+ \| ([^|]+) \|", re.M)
+
+
+def _needs() -> tuple[dict[str, str], str]:
+    """The table's status cell per need, and the text of the closing section."""
+    text = (ROOT / "docs" / "needs.md").read_text()
+    rows = {m.group(1): m.group(2).strip().strip("*").lower() for m in _NEED_ROW.finditer(text)}
+    _, _, closing = text.partition("## The one that matters most")
+    return rows, closing
+
+
+def test_the_need_that_matters_most_is_one_the_table_still_calls_open() -> None:
+    rows, closing = _needs()
+    assert len(rows) >= 14 and closing, "docs/needs.md lost its table or its closing section"
+    named = re.search(r"\bN\d+\b", closing)
+    assert named, "the closing section names no need"
+    status = rows[named.group()]
+    assert status.startswith("open"), (
+        f"'The one that matters most' opens on {named.group()}, whose row says {status.split('.')[0]!r}. The "
+        f"row moved and the conclusion under it did not (#238): rewrite the section against the row, "
+        f"and open it on a need the table still calls open."
+    )
