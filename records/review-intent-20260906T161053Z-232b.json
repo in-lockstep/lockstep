@@ -1,0 +1,47 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.028933,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 302,
+        "message": "Test function name references GATE-TEST-8 but no other per-test name does; naming convention is inconsistent but not wrong.",
+        "path": "tests/in_lockstep/test_objectives.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 232,
+        "message": "Section prose says the list of 39 is not written here, but the test message will name members only when the count moves \u2014 a reader who never triggers the test cannot recover the list.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0378f5c9f011ef5150d633b18feae4fac0273b91",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 479,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T161053Z-232b",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 482,
+  "ts": "2026-09-06T16:11:06+00:00",
+  "wall_seconds": 12.895
+}
