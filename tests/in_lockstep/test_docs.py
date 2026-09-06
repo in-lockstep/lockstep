@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,6 +95,138 @@ def test_the_cookbook_snippets_execute_not_merely_parse(tmp_path, monkeypatch) -
             assert composed.strip(), f"cookbook prompt {name} composed to nothing"
             rendered += 1
     assert rendered, "no cookbook snippet defines a prompt — has recipe 9 gone?"
+
+
+# -- GATE-DOCS-1: what the docs show type-checks under what an adopter runs ---------------------
+#
+# `docs/extending.md` taught a workflow signature `mypy --strict` rejects, on the page that exists
+# to make extending discoverable, a week after #232 shipped `py.typed` so adopters could run that
+# very checker. Parsing and executing catch a name that does not exist; only the checker catches a
+# shape the framework rejects, and an adopter meets it on the first snippet they copy.
+
+DOCS_TYPED = (
+    ROOT / "README.md",
+    ROOT / "docs" / "getting-started.md",
+    ROOT / "docs" / "extending.md",
+    ROOT / "docs" / "trampoline.md",
+    ROOT / "docs" / "cookbook.md",
+)
+
+#: What a page's snippets may assume without importing it, and nothing else: the lifecycle the
+#: module built, and the run context a workflow is handed. Stated on the page that elides them.
+#: Deliberately NOT the framework's public names -- a prelude that imported `Verb` would let a
+#: snippet omit the import a reader needs, which is the README front-door defect one gate over.
+_PRELUDE = """from __future__ import annotations
+
+from in_lockstep import Lockstep
+from in_lockstep.core.context import RunContext
+
+lockstep = Lockstep()
+ctx: RunContext
+
+
+async def _page() -> None:
+"""
+
+
+#: The checker exactly as an adopter runs it.
+_MYPY = (sys.executable, "-m", "mypy", "--strict", "--no-error-summary")
+
+
+def _page_module(doc: Path) -> str:
+    """One module per page: its blocks in order, as a reader pasting them into one file would
+    have them, indented under one async function so the docs' top-level `await` shorthand is
+    legal and a name a later block relies on from an earlier one resolves."""
+    body: list[str] = []
+    for index, block in enumerate(_python_blocks(doc)):
+        body.append(f"    # -- block {index} --")
+        for line in block.rstrip("\n").splitlines():
+            if line.startswith("from __future__"):
+                continue
+            body.append(("    " + line) if line.strip() else "")
+    return _PRELUDE + "\n".join(body or ["    pass"]) + "\n"
+
+
+def test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy(tmp_path) -> None:
+    """GATE-DOCS-1. The same `mypy --strict` an adopter runs, over every page, with exactly the
+    two names the page says it assumes. Written to a temporary directory rather than the tree,
+    so `test_checked_tree.py`'s ratchet over checked paths is not asked to cover generated files.
+    """
+    import subprocess
+
+    modules = []
+    for doc in DOCS_TYPED:
+        module = tmp_path / (doc.stem.replace("-", "_") + ".py")
+        module.write_text(_page_module(doc))
+        modules.append(module.name)
+    result = subprocess.run(
+        [
+            *_MYPY,
+            "--cache-dir",
+            str(tmp_path / ".mypy"),
+            *modules,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert result.returncode == 0, (
+        "a documented snippet does not type-check under `mypy --strict`, which is the checker "
+        f"`py.typed` was shipped for adopters to run:\n{result.stdout}{result.stderr}"
+    )
+
+
+def test_the_typecheck_gate_would_notice_a_bare_outcome(tmp_path) -> None:
+    """The positive control, and the exact shape #252 filed: a bare `Outcome` on a documented
+    workflow. The gate passes over the real pages, so without this a checker that had silently
+    stopped finding anything would go on passing."""
+    import subprocess
+
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        _PRELUDE
+        + "    from in_lockstep import Outcome, TicketSource, workflow\n"
+        + "    from in_lockstep.adapters.ai import Implement\n\n"
+        + '    @workflow(id="implement/from-label")\n'
+        + "    async def implement_from_label(ctx: RunContext, label: str, tickets: TicketSource)"
+        + " -> Outcome:\n"
+        + '        ready = await tickets.search(f"label:{label}", limit=1)\n'
+        + "        return await ctx.do(Implement(ticket=ready[0]))\n"
+    )
+    result = subprocess.run(
+        [
+            *_MYPY,
+            "--cache-dir",
+            str(tmp_path / ".mypy"),
+            "bad.py",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert result.returncode != 0
+    assert "type-arg" in result.stdout, result.stdout
+
+
+def test_the_typecheck_gate_would_notice_a_missing_import(tmp_path) -> None:
+    """The other positive control, and the one that keeps the prelude honest: a snippet using a
+    framework name it never imported must fail, so the prelude can never quietly grow the import
+    a reader needs. The README front door once raised NameError for months on exactly this."""
+    import subprocess
+
+    bad = tmp_path / "bad.py"
+    bad.write_text(_PRELUDE + '    lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")\n')
+    result = subprocess.run(
+        [*_MYPY, "--cache-dir", str(tmp_path / ".mypy"), "bad.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert result.returncode != 0
+    assert 'Name "Verb" is not defined' in result.stdout, result.stdout
 
 
 # -- the README matrix, checked in both directions ------------------------------------------
@@ -248,7 +381,6 @@ def test_the_quickstart_outputs_match_the_tool_that_ships(tmp_path, monkeypatch)
     Subset matching, deliberately: hashes, paths and timings differ per machine; section
     headers, command vocabulary and fixed sentences do not."""
     import subprocess
-    import sys
 
     doc = (ROOT / "docs" / "getting-started.md").read_text()
     monkeypatch.chdir(tmp_path)

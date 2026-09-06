@@ -110,8 +110,9 @@ acme = "acme_lockstep:apply"
 
 ```python
 from in_lockstep import Policy
+from in_lockstep.core.standards import Standards
 
-def apply(std):
+def apply(std: Standards) -> None:
     std.contribute(Policy(name="acme-baseline", scan_input="block", max_turns=16))
 ```
 
