@@ -266,8 +266,10 @@ in-lockstep review --base origin/main --aspect security
 in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/change
 ```
 
-`review` reads and reports. `implement` reads a ticket, explores the repository with tools, and
-**stages** a change into an artifact. It writes nothing itself. `apply-inline --from-artifact`
+`review` reads and reports. `--aspect` names one of the lenses the repository's Review adapter
+declares, and a name that is not one is refused before anything runs, with the list of the ones
+that exist: a typo is an error, not a record. `implement` reads a ticket, explores the repository
+with tools, and **stages** a change into an artifact. It writes nothing itself. `apply-inline --from-artifact`
 is the second half, and it re-runs the path guard on what the first half produced.
 
 Implementing needs an approval path and egress enforcement before it will start, because the

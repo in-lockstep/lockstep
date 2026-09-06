@@ -16,13 +16,37 @@ unprivileged job recorded when it ran the suite against the staged change (item 
 
 from __future__ import annotations
 
+import re
 from typing import Any
+from urllib.parse import quote
+
+#: What `marker` writes, as its readers match it. One alphabet, defined once, beside the writer:
+#: `comment` finds a body's own marker with this rather than with a pattern of its own, because
+#: the copy it kept excluded `-` and so refused the body a hyphenated lens had written as carrying
+#: no marker at all (#275). Exactly what `quote` emits -- alphanumerics, `_.-~`, the `:` that joins
+#: kind to lens, and percent-escapes -- so the reader cannot disagree with the writer again.
+MARKER = re.compile(r"<!-- in-lockstep:[A-Za-z0-9_.~:%-]+ -->")
 
 
 def marker(kind: str) -> str:
     """The hidden anchor an upsert finds its own comment by. Stable per kind, so a security review
-    edits the security comment and a performance review its own, side by side."""
-    return f"<!-- in-lockstep:{kind} -->"
+    edits the security comment and a performance review its own, side by side.
+
+    Escaped, because the kind carries a lens name and the anchor is an HTML comment built by
+    interpolation. A `-->` inside it closed the comment early: the rest rendered as visible text on
+    the pull request, and the anchor the next run finds its own comment by was gone, so it posted a
+    second comment beside the first -- the one thing `upsert_comment` exists to prevent (#275).
+    The closed set `chatops.resolve_aspect` checks keeps such a name out of the command's paths;
+    this keeps it out of the marker for whoever calls `review_comment` directly, because a defence
+    that is only an ordering is one reordering away from gone.
+
+    Percent-encoded rather than stripped, for two properties stripping lacks: it is injective, so
+    two lenses cannot share one anchor and edit each other's comments; and it leaves every shipped
+    kind byte-identical. `-` stays literal, so a hyphenated lens keeps the anchor its earlier
+    comments already carry. What cannot survive is `<`, `>` and `!`, which is every character
+    HTML needs to close, open or interrupt a comment.
+    """
+    return f"<!-- in-lockstep:{quote(kind, safe=':')} -->"
 
 
 def _cost_line(cost: Any) -> str:

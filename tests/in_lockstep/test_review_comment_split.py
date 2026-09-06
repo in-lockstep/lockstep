@@ -64,6 +64,29 @@ def test_a_body_file_is_posted_under_the_marker_it_carries(
     assert posted == [(199, body.read_text(), "<!-- in-lockstep:review:security -->")]
 
 
+def test_a_hyphenated_lens_is_posted_under_the_marker_it_wrote(
+    bare: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reader used to be a copy of the writer that excluded `-`, so an adopter's `api-design`
+    lens composed a body this command then refused as unanchored (#275). The pattern is now the
+    writer's own."""
+    import in_lockstep.platform.hosted as hosted
+
+    posted: list[tuple[int, str, str]] = []
+
+    class _Host:
+        async def upsert_comment(self, target: int, body: str, marker: str) -> None:
+            posted.append((target, body, marker))
+
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: _Host())
+    body = bare / "findings.md"
+    body.write_text("Nothing to report.\n\n<!-- in-lockstep:review:api-design -->")
+
+    result = CliRunner().invoke(main, ["comment", "--pr", "199", "--body-file", str(body)])
+    assert result.exit_code == 0, result.output
+    assert posted == [(199, body.read_text(), "<!-- in-lockstep:review:api-design -->")]
+
+
 def test_a_body_with_no_marker_is_refused_rather_than_posted_unanchored(
     bare: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

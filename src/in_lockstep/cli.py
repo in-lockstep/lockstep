@@ -45,12 +45,9 @@ from .core.verbs import SHIPPED_VERBS, Verb, verb_of
 from .core.workflow import inject_ports, injectable_parameters, registered, workflow
 from .lockstep import Lockstep
 from .middleware.otel import Recorder, otel
+from .platform.report import MARKER as _MARKER
 from .privileged import sink
 from .privileged.redact import Redact, redact_registry
-
-#: The hidden anchor `platform.report.marker` writes. Matched rather than reconstructed, so the
-#: posting command never has to be told what kind of comment it is carrying.
-_MARKER = re.compile(r"<!-- in-lockstep:[^->]+ -->")
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -2177,6 +2174,9 @@ def comment_cmd(number: int, body_file: str) -> None:
     a chat-ops review ran came out of an untrusted comment and was resolved in the OTHER job, so
     naming it here would mean putting it in a workflow file — the one place `GATE-REVIEW-3` says it
     must never be. `review_comment` already ends with its marker, so the body knows what it is.
+
+    Matched with the writer's own pattern, not a copy. The copy this command kept excluded `-`,
+    so a body a hyphenated lens had written was refused here as carrying no marker at all (#275).
     """
     from pathlib import Path as _Path
 
@@ -2472,8 +2472,8 @@ def _refuse_provider_credential() -> None:
     )
 
 
-def _review_lenses(lockstep: Any) -> tuple[str, ...]:
-    """The lens names a review run would actually have.
+def _review_lenses(lockstep: Any) -> tuple[str, ...] | None:
+    """The lens names a review run would actually have, or None when nobody can say.
 
     The BOUND adapter's, when the module bound one — a repository that replaced its lens map gets
     exactly its own set, which is what carries `AiReview(lenses=...)` through to chat-ops. Read off
@@ -2484,15 +2484,22 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...]:
 
     Otherwise the shipped map, because that is precisely what this command binds a few lines below.
     Not a guess about the default: the same source, read early.
+
+    None when the module bound an adapter that is not `Inspectable`. This used to fall back to the
+    shipped map, which was a guess about a stranger's adapter: the refusal built on it listed four
+    lenses the repository did not have, and now that `--aspect` is resolved here too (#275) that
+    list would have refused the lens the adapter actually had. A set nobody stated is not one to
+    refuse against, and the two callers say what they do with None. An `Inspectable` adapter that
+    declares an empty map is the other case, and it is exactly what it says: no lenses.
     """
     from .adapters.ai.review import Review
     from .prompts.review import LENSES
 
     if lockstep.container.has(Review):
         adapter: Any = lockstep.container.resolve(Review)
-        labels = adapter.compositions() if hasattr(adapter, "compositions") else {}
-        if labels:
-            return tuple(sorted(str(label).rsplit("/", 1)[-1] for label in labels))
+        if not isinstance(adapter, Inspectable):
+            return None
+        return tuple(sorted(str(label).rsplit("/", 1)[-1] for label in adapter.compositions()))
     return tuple(sorted(LENSES))
 
 
@@ -2609,26 +2616,34 @@ def review_cmd(
         # A replay or a canned answer bills nothing, and states that as a ceiling of zero rather
         # than asking GATE-BUDGET-1 for an exemption. `_declare_zero_ceiling` says why.
         _declare_zero_ceiling(lockstep)
-    if ask:
-        # Resolved here, and here is the point. A workflow cannot do it — GitHub's expression
-        # language has twelve functions and none of them splits a string — and it must not, because
-        # `platform/chatops.py` records the rule: a comment is a command selector, never a command.
-        #
-        # Before `Auth()`, the registry, the cassette and the bind below, so a comment naming a lens
-        # nobody declared costs nothing at all. That ordering is the fix, not a tidiness: the
-        # adapter's own refusal arrives after `_run_id`, so an unrecognised aspect reaching the run
-        # earns a ledger record — and `blocked` sits inside `failure_rate`'s denominator, so anyone
-        # who could comment could deflate this repository's failure rate one typo at a time (#203).
-        from .platform.chatops import AspectRefused, aspect_from
+    # Resolved here, and here is the point. A workflow cannot do it — GitHub's expression
+    # language has twelve functions and none of them splits a string — and it must not, because
+    # `platform/chatops.py` records the rule: a comment is a command selector, never a command.
+    #
+    # Before `Auth()`, the registry, the cassette and the bind below, so a comment naming a lens
+    # nobody declared costs nothing at all. That ordering is the fix, not a tidiness: the
+    # adapter's own refusal arrives after `_run_id`, so an unrecognised aspect reaching the run
+    # earns a ledger record — and `blocked` sits inside `failure_rate`'s denominator, so anyone
+    # who could comment could deflate this repository's failure rate one typo at a time (#203).
+    #
+    # `--aspect` takes the same road, for the same reason (#275). It used to reach the adapter,
+    # whose refusal is by name but arrives after `_run_id`, so a typo at the terminal wrote a
+    # `blocked` record: the framework's word for a control stopping a run, spent on a typo
+    # stopping nothing, inside the census #256 and #259 are about. Resolved before the run id
+    # exists, a typo is an error and no record — and whatever was typed never reaches
+    # `report.marker` on this path either, though the marker now escapes its argument rather than
+    # relying on the ordering alone.
+    from .platform.chatops import AspectRefused, aspect_from, resolve_aspect
 
-        try:
-            aspect = aspect_from(ask, known=_review_lenses(lockstep))
-        except AspectRefused as refused:
-            # A message, not a traceback — the treatment this command already gives a missing
-            # credential or a malformed provider. Exit 1 rather than 3: BLOCKED means a control
-            # stopped a run that was otherwise going to happen, and a comment naming no lens is not
-            # a run somebody may not have. Nothing is recorded either way, so no rate moves.
-            raise click.ClickException(str(refused)) from None
+    known = _review_lenses(lockstep)
+    try:
+        aspect = aspect_from(ask, known=known) if ask else resolve_aspect(aspect, known=known)
+    except AspectRefused as refused:
+        # A message, not a traceback — the treatment this command already gives a missing
+        # credential or a malformed provider. Exit 1 rather than 3: BLOCKED means a control
+        # stopped a run that was otherwise going to happen, and a name that is not a lens is not
+        # a run somebody may not have. Nothing is recorded either way, so no rate moves.
+        raise click.ClickException(str(refused)) from None
 
     if pr_number and source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
         # `--pr` already meant "the change request this review is about" — it is what `--comment`
@@ -5069,7 +5084,7 @@ def _guardrail_chains(composed: dict[str, Composition]) -> list[tuple[str, str, 
     return out
 
 
-def _route_flag(key: str, verbs: set[str], lenses: tuple[str, ...]) -> str:
+def _route_flag(key: str, verbs: set[str], lenses: tuple[str, ...] | None) -> str:
     """What `ls` says beside a route that names nothing a run would resolve.
 
     A route is a line somebody wrote, and a line that names a verb nothing serves or a lens
@@ -5077,6 +5092,10 @@ def _route_flag(key: str, verbs: set[str], lenses: tuple[str, ...]) -> str:
     lenses the BOUND adapter has, the same list `/review` resolves a comment against; any other
     verb's routes resolve by verb alone today, and a slash there is said to do nothing rather
     than left to look like it does.
+
+    `lenses` is None when the bound adapter states no set (#275). Said so, rather than silent:
+    an empty flag beside a route reads as "checked, and fine", which is the reassurance this
+    column exists to refuse.
     """
     verb, _, lens = key.partition("/")
     if verb not in verbs:
@@ -5085,6 +5104,8 @@ def _route_flag(key: str, verbs: set[str], lenses: tuple[str, ...]) -> str:
         return ""
     if verb != "review":
         return "  <- only review routes per lens; this resolves by verb"
+    if lenses is None:
+        return "  <- unchecked: the bound Review adapter declares no lenses"
     return "" if lens in lenses else "  <- no such lens (typo?)"
 
 

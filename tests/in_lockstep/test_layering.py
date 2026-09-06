@@ -279,7 +279,9 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: beside a route to a lens nothing binds. What a lens MEANS -- which stack, which ceilings, which
 #: route wins -- lives in `prompts/review.py` (`Lens.stack`, `Lens.under`) and
 #: `ai/bootstrap.py` (`routed_model`), where `test_lens.py` reaches it without a CliRunner.
-CLI_HELPER_STATEMENTS = 965
+#: 965 -> 967 with #275, rendering: `_route_flag` says `unchecked` beside a lens route when the
+#: bound adapter states no lens set, where silence would have read as checked and fine.
+CLI_HELPER_STATEMENTS = 967
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
