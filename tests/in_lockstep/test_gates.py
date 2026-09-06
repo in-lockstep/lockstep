@@ -97,3 +97,31 @@ def test_an_unmet_gate_is_discharged_nowhere(gate: str) -> None:
         f"implemented it, say so in gates.md — and check whether a row in "
         f"docs/controls-crosswalk.md now understates what is in force."
     )
+
+
+def test_every_section_a_gate_cites_resolves() -> None:
+    """A `deferred` row is an exemption from the objectives ratchet, granted by a citation.
+
+    `deferred` was defined as "the deferral recorded in the plan and ADR 0001 §17.11", and §17.11
+    is not in ADR 0001 — it is §17.11 of `design/in-lockstep-design.md`, which says in terms that
+    `ctx.park` and `ctx.fan_out` are not on `RunContext` at 1.0. So the decision was recorded
+    correctly all along and only the pointer was wrong, which is the more dangerous of the two:
+    #272 was filed saying the deferral was recorded nowhere findable, after reading ADR 0001,
+    finding no §17, and not looking in the document the word "plan" names.
+
+    A citation nobody can follow and a citation to nothing look identical from outside, and five
+    rows are exempt from a ratchet on the strength of this one. So it is checked rather than read.
+    """
+    import re
+
+    design = (ROOT / "design" / "in-lockstep-design.md").read_text()
+    headings = set(re.findall(r"^#+ (\d+(?:\.\d+)*) ", design, re.M))
+    assert headings, "no numbered headings parsed; this check would pass over nothing"
+
+    cited = set(re.findall(r"§(\d+(?:\.\d+)*)", GATES_MD.read_text()))
+    assert cited, "no section citations found; the pattern that finds them has stopped matching"
+    missing = sorted(cited - headings)
+    assert not missing, (
+        f"design/gates.md cites {missing}, which are not headings in in-lockstep-design.md. "
+        f"An exemption granted by a citation nobody can follow is granted by nothing."
+    )

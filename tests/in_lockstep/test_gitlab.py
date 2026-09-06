@@ -513,19 +513,29 @@ def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(tmp_path: Path, 
     review = parsed["review"]
     assert review["rules"] == [{"if": '$CI_PIPELINE_SOURCE == "merge_request_event"'}]
     assert review["variables"]["GIT_DEPTH"] == "0", "the diff needs full history"
-    # The credential split ships in the same file, commented until its environments exist.
-    for job in ("#gate:", "#work:", "#propose:"):
-        assert job in text
+    # The credential split ships ACTIVE in the same file (#236). Asserted on the parse rather
+    # than on the text: these used to be checked as the strings "#gate:", "#work:", "#propose:",
+    # which is a check that passes on YAML no CI system could load.
+    for job in ("gate", "work", "propose"):
+        assert job in parsed, f"{job} is not a job in the scaffolded file"
+        assert parsed[job]["rules"] == [
+            {"if": "$LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}
+        ], f"{job} must be inert until a pipeline asks for it on the default branch"
+    # The whole point of three jobs: the provider key and the write token are never in one.
+    assert parsed["work"]["environment"] == "lockstep-work"
+    assert parsed["propose"]["environment"] == "lockstep-propose"
+    assert parsed["gate"].get("environment") is None, "the gate holds no credential at all"
     assert "docs/trampoline.md" in text, "the YAML points at the contract it implements"
 
 
 def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_uv(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Issue 185 on GitLab. The commented work job runs `in-lockstep provision` before `doctor`,
-    not `|| true`, on uv's image so the constant line finds a provisioner for the most common
-    Python layout. The active review job stays on python:3.11-slim and never provisions; neither
-    do gate and propose (GATE-PROVISION-1)."""
+    """Issue 185 on GitLab. The work job runs `in-lockstep provision` before `doctor`, not
+    `|| true`, on uv's image so the constant line finds a provisioner for the most common Python
+    layout. The review job stays on python:3.11-slim and never provisions; neither do gate and
+    propose (GATE-PROVISION-1)."""
+    import yaml
     from click.testing import CliRunner
 
     from in_lockstep.cli import main
@@ -534,16 +544,16 @@ def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_u
     monkeypatch.setenv("GITLAB_CI", "true")
     monkeypatch.chdir(tmp_path)
     assert CliRunner().invoke(main, ["init"]).exit_code == 0
-    text = (tmp_path / ".gitlab-ci.yml").read_text()
+    parsed = yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
 
-    work = text.split("#work:")[1].split("#propose:")[0]
-    assert "#    - in-lockstep provision\n#    - in-lockstep doctor || true\n" in work
-    assert "#  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim" in work
-    review = text.split("\nreview:\n")[1].split("\n#gate:")[0]
-    assert "image: python:3.11-slim" in review and "provision" not in review
-    gate = text.split("#gate:")[1].split("#work:")[0]
-    propose = text.split("#propose:")[1]
-    assert "provision" not in gate and "provision" not in propose
+    script = parsed["work"]["script"]
+    assert "in-lockstep provision" in script, "the environment is built before anything runs in it"
+    assert script.index("in-lockstep provision") < script.index("in-lockstep doctor || true")
+    assert parsed["work"]["image"] == "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
+    assert parsed["review"]["image"] == "python:3.11-slim"
+    for job in ("review", "gate", "propose"):
+        rendered = yaml.safe_dump(parsed[job])
+        assert "provision" not in rendered, f"{job} must not provision"
 
 
 def test_init_on_gitlab_writes_no_github_workflow_files(tmp_path: Path, monkeypatch) -> None:
@@ -718,3 +728,91 @@ def test_gitlab_reports_a_draft_merge_request_by_its_title_prefix_as_well(tmp_pa
     (only,) = scm.open_changes_by_workflow("improve")
     assert only.draft is True
     assert only.title == "a change"
+
+
+# -- the write verbs run under GitLab as they run under GitHub (GATE-CI-2, issue 236) ----------
+
+
+def _gitlab_scaffold(tmp_path, monkeypatch):
+    import yaml
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.chdir(tmp_path)
+    assert CliRunner().invoke(main, ["init"]).exit_code == 0
+    return yaml.safe_load((tmp_path / ".gitlab-ci.yml").read_text())
+
+
+def test_gate_ci_2_the_write_verbs_run_the_same_framework_commands_on_both_hosts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """O3's actual claim: the same process, not a similar one.
+
+    Compared against the GitHub trampoline rather than against a list written here, because a
+    list written here is a third statement of the contract that can drift from both files.
+    """
+    from in_lockstep.cli import _SCAFFOLD_IMPLEMENT_TRAMPOLINE
+
+    parsed = _gitlab_scaffold(tmp_path, monkeypatch)
+    gitlab = " ".join(
+        " ".join(job["script"]) for name, job in parsed.items() if name != "stages" and "script" in job
+    )
+    for verb in (
+        "in-lockstep gate",
+        "in-lockstep run implement/from-ticket",
+        "in-lockstep run implement/propose",
+        "in-lockstep provision",
+        "in-lockstep doctor",
+        "in-lockstep history",
+    ):
+        assert verb in gitlab, f"GitLab does not run {verb!r}"
+        assert verb in _SCAFFOLD_IMPLEMENT_TRAMPOLINE or verb in _github_review_scaffold(), (
+            f"{verb!r} is a GitLab-only invention; the hosts must run the same process"
+        )
+
+
+def _github_review_scaffold() -> str:
+    from in_lockstep.cli import _SCAFFOLD_TRAMPOLINE
+
+    return _SCAFFOLD_TRAMPOLINE
+
+
+def test_gate_ci_2_the_provider_key_and_the_write_token_are_never_in_one_job(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The reason there are three jobs rather than one, asserted on GitLab's own spelling.
+
+    `work` may reach a model and may not push; `propose` may push and never sees a provider
+    credential. A scaffold that put both in one job would read as the same process and would have
+    given up the property the split exists for.
+    """
+    import yaml
+
+    parsed = _gitlab_scaffold(tmp_path, monkeypatch)
+    work = yaml.safe_dump(parsed["work"])
+    propose = yaml.safe_dump(parsed["propose"])
+
+    assert "ANTHROPIC_IDENTITY_TOKEN" in work, "the work job has no way to reach a model"
+    assert "git remote set-url" not in work, "the work job must not be able to push"
+    assert "ANTHROPIC" not in propose, "the job that can push must hold no provider credential"
+    assert "GITLAB_TOKEN" in propose, "the propose job has no write credential"
+
+
+def test_gate_ci_2_keyless_ci_asks_for_the_audience_the_exchange_validates(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A JWT minted for the wrong audience is refused at the exchange, after the job has started.
+
+    The framework hands `ANTHROPIC_IDENTITY_TOKEN` straight to the SDK's own jwt-bearer chain, so
+    what GitLab mints has to carry the audience the federation rule validates -- and that constant
+    lives in `ai/bootstrap.py`, not in this file, or the two drift and the failure is a run that
+    got as far as spending.
+    """
+    from in_lockstep.ai.bootstrap import ANTHROPIC_FEDERATION_AUDIENCE
+
+    parsed = _gitlab_scaffold(tmp_path, monkeypatch)
+    minted = parsed["work"]["id_tokens"]["ANTHROPIC_IDENTITY_TOKEN"]
+    assert minted["aud"] == ANTHROPIC_FEDERATION_AUDIENCE

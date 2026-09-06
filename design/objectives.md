@@ -83,7 +83,7 @@ to move without somebody standing in front of this table.
 |---|---|---|---|---|---|
 | `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2` | — | — |
 | `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2` | `GATE-TOOLING-3` | The same gap as before, one ecosystem-family narrower. #237 taught detection to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, so a Rust, Go or JVM adopter no longer hand-writes what was in their tree. A Ruby, PHP, Elixir, .NET, C++ or Swift adopter still does. This row did not move with O1's, and the reason is the difference between the two sentences: O1 sanctions declining in its own text -- *detection that guesses is worse than detection that declines* -- so a stack that is read or else named is O1 satisfied. O2's standard has no such clause. It is that what a person writes by hand is the thing nobody could have discovered for them, and a `Rakefile` sitting in the tree is discoverable. `GATE-TOOLING-3` is where the remainder is recorded. |
-| `O3` | The same process at a terminal and in CI | partial | `GATE-CI-1`, `GATE-RECORD-1` | `GATE-CI-2` | Every verb runs at a terminal, and on GitHub five trampolines carry the triggers and none of the logic. GitLab gets one active `review` job; the gate/work/propose split for the write verbs ships commented out, and there is no OIDC federation path, so keyless CI is GitHub-only. The scaffold says both plainly, which is the right way to ship a partial. It is still a partial. |
+| `O3` | The same process at a terminal and in CI | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-CI-2` | — | — |
 | `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5` | — | — |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-EVAL-2`, `GATE-EVAL-4` | `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-8`, `GATE-EVIDENCE-1`, `GATE-LEDGER-2`, `GATE-OUT-2` | The reading half is real and the writing half does not exist. `improve --explain` finds what recurs, attributes it to a declared body or to a dash, and prints the guard's verdict on that path; harvest turns a real session into cases and `eval run` settles them. Nothing drafts a prompt change, nothing measures a draft against the corpus, and nothing opens a pull request with the evidence attached — which is the whole second sentence of the objective. `improve` without `--explain` exits 3 saying so. This is the objective with the most complete substrate and the least surface. |
 | `O6` | The model never holds a secret | held | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-GUARD-4`, `GATE-CFG-1`, `GATE-POLICY-2` | — | — |
@@ -94,7 +94,7 @@ to move without somebody standing in front of this table.
 | `O11` | The provider and the model are the adopter's, not ours | partial | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4` | `GATE-MODEL-1` | Registering a provider is a line in `lockstep.py`: six ship behind a registry, a constructed client whose base URL does not equal its registered `endpoint` is refused, a restricted repository blocks a model that is not registered `DataPolicy.INTERNAL` (including a hand-built invoker that declared no policy, which fails closed as undeclared), and `DEFAULT_COST_PER_M` appears nowhere -- an unpriced model is refused rather than priced by a guess. What is missing is the third refusal: `ModelCaps.structured_output` is declared per model and read by nothing, so a route to a model that cannot answer with a schema is found out by a failed call rather than by a refusal that names the model and the capability. |
 | `O12` | A second engineer is served, not obstructed | unmet | — | `GATE-TEAM-1` | The objective with the least under it, which is why it is written down rather than assumed. Nothing here measures whether a second engineer arriving at a repository is served: the ledger records who asked and what it cost, and no command splits by person, so a team cannot see whether two engineers running the same process get the same results. Effects that are collaborative -- the review conversation reaching the next `/fix`, a shared history branch -- are carried by gates about provenance and about records, and citing those here would be claiming a direction is served by mechanisms built for another one. An objective no gate carries can never be `held`, and this row is what that rule looks like when it is honest rather than embarrassing. |
 
-7 of 12 are `held`. That is the number this file exists to make visible, and it should be read
+8 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -163,6 +163,21 @@ factory and constructs the invoker inside `invoke`: nothing can wrap it, and the
 not pretend otherwise. What it does instead is refuse to report a reassuring zero. That run is
 compared against its own spend and told a model was called the recorder never saw, and there is a
 test standing on that boundary rather than a sentence promising it.
+
+Eight, when #236 closed `GATE-CI-2` by shipping GitLab's gate/work/propose jobs active rather than
+commented out. This row's `held` is worth reading with its limit attached, because the limit is
+unusual: **no GitLab pipeline has ever run them.** This repository is GitHub-hosted, so it cannot
+execute them, and whether a federation rule can exist for a GitLab issuer is a question for the
+provider rather than for any file here.
+
+It is `held` anyway, on the terms `GATE-RECORD-1` established: assertions over the scaffold an
+adopter is actually given, compared against the GitHub trampoline rather than against a list
+written in the test, since a list is a third statement of the contract that can drift from both.
+O3's own sentence is what makes that sufficient — *the repository's own SCM, GitHub **or**
+GitLab* — so the objective is about an adopter's host being served, not about this repository
+running on both. Where *we run it here* lives is O10, and that row already states what this
+repository does and does not dogfood. Recording the distinction is the alternative to letting a
+`held` quietly mean more than it does.
 
 ## Claimed by no objective
 
