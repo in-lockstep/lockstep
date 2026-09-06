@@ -1,0 +1,9 @@
+{
+  "by": "Tim Pouyer <tim.pouyer@gmail.com>",
+  "commit": "adca58e73a2bdd3da47daa6086014966ce0edb66",
+  "reason": "the 2026-09-02 reconcile carried a laptop's fixed-run-id review-security record over the branch's record of the same id, before run ids carried a stamp",
+  "rewrote": [
+    "records/review-security.json was modified after being appended (commit adca58e73a2b)"
+  ],
+  "ts": "2026-09-06T23:46:37+00:00"
+}

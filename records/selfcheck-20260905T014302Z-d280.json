@@ -1,0 +1,68 @@
+{
+  "args": {},
+  "billed_fraction": null,
+  "branch": "fix/one-session-harvests-into-more-than-one-file",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "approval.required",
+        "message": "ActionCall(test, step=None) grants executes_code and no approval was granted. Locally, `--approve` says you are the human watching this run. Unattended, `--approved-by <who>` records the person a gate verified \u2014 and the stronger answer is an approval in your system of record, a review request or a CI environment approval.",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "45e12bee83a7a260359ed889cbead82d36c52d69",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": "approval.required",
+  "run_id": "selfcheck-20260905T014302Z-d280",
+  "schema": 6,
+  "status": "blocked",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "validate",
+      "verb": "validate",
+      "wall_seconds": 0.029
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": true,
+            "id": "approval.required",
+            "message": "ActionCall(test, step=None) grants executes_code and no approval was granted. Locally, `--approve` says you are the human watching this run. Unattended, `--approved-by <who>` records the person a gate verified \u2014 and the stronger answer is an approval in your system of record, a review request or a CI environment approval.",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "approval.required",
+      "status": "blocked",
+      "step": "test",
+      "verb": "test",
+      "wall_seconds": 0.0
+    }
+  ],
+  "tokens": 0,
+  "ts": "2026-09-05T01:43:02+00:00",
+  "wall_seconds": 0.029,
+  "workflow": "selfcheck"
+}
