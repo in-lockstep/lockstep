@@ -2573,6 +2573,7 @@ def review_cmd(
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         default_registry,
         table_for,
@@ -2723,6 +2724,9 @@ def review_cmd(
         return AiInvoker(
             provider,
             model=selected.name,
+            # What the registration says the model can do; a schema call or a tool-holding
+            # session is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(registry, selected),
             cost_table=table,
             spend=_ctx.spend,
             redact=Redact(),
@@ -2876,6 +2880,7 @@ def triage_cmd(
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         default_registry,
         table_for,
@@ -2924,6 +2929,9 @@ def triage_cmd(
         return AiInvoker(
             provider,
             model=selected.name,
+            # What the registration says the model can do; a schema call or a tool-holding
+            # session is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(registry, selected),
             cost_table=table,
             spend=_ctx.spend,
             redact=Redact(),
@@ -3166,6 +3174,7 @@ def rfe_cmd(
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         default_registry,
         table_for,
@@ -3223,6 +3232,9 @@ def rfe_cmd(
         return AiInvoker(
             provider,
             model=selected.name,
+            # What the registration says the model can do; a schema call or a tool-holding
+            # session is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(registry, selected),
             cost_table=table,
             spend=_ctx.spend,
             redact=Redact(),
@@ -3415,6 +3427,7 @@ def backport_cmd(
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         default_registry,
         table_for,
@@ -3481,6 +3494,9 @@ def backport_cmd(
             return AiInvoker(
                 provider,
                 model=selected.name,
+                # What the registration says the model can do; a schema call or a tool-holding
+                # session is refused by name before the first turn (GATE-MODEL-1).
+                caps=caps_for(registry, selected),
                 cost_table=table,
                 spend=_ctx.spend,
                 redact=Redact(),
@@ -4009,6 +4025,7 @@ def implement_cmd(
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         table_for,
     )
@@ -4087,6 +4104,9 @@ def implement_cmd(
         return AiInvoker(
             provider,
             model=selected.name,
+            # What the registration says the model can do; a schema call or a tool-holding
+            # session is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(providers, selected),
             cost_table=table,
             spend=_ctx.spend,
             redact=Redact(),
@@ -4779,6 +4799,7 @@ def pack_try_cmd(name: str, extra: str, model: str, record: bool, as_json_out: b
         LLMProvider,
         MissingCredential,
         Model,
+        caps_for,
         credentials_for,
         default_registry,
         table_for,
@@ -4827,6 +4848,9 @@ def pack_try_cmd(name: str, extra: str, model: str, record: bool, as_json_out: b
         return AiInvoker(
             provider,
             model=selected.name,
+            # What the registration says the model can do; a schema call or a tool-holding
+            # session is refused by name before the first turn (GATE-MODEL-1).
+            caps=caps_for(registry, selected),
             cost_table=table,
             spend=ctx.spend,
             redact=Redact(),

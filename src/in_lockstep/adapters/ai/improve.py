@@ -147,7 +147,11 @@ class AiImprove:
         invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         try:
             invocation = await invoker.run(
-                system=system, messages=messages, context=package, policy=self.policy
+                system=system,
+                messages=messages,
+                context=package,
+                policy=self.policy,
+                schema=IMPROVE_SCHEMA,
             )
             settled = await settle(
                 invoker,

@@ -428,6 +428,44 @@ def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(
     assert any(c.code == "DOC151" for c in report.checks)
 
 
+def test_doctor_flags_a_route_to_a_model_registered_without_structured_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-MODEL-1, at the place a person sees it before anything is spent. The shipped
+    registrations all declare the capability, so the one that does not is constructed here --
+    which is also the honest statement of what the check covers: the operator's declaration."""
+    from in_lockstep import doctor
+    from in_lockstep.ai import bootstrap
+    from in_lockstep.llm.interface import DataPolicy, ProviderSettings
+    from in_lockstep.llm.registry import ModelCaps, ProviderRegistry
+
+    def _registry(*args: object, **kwargs: object) -> ProviderRegistry:
+        registry = ProviderRegistry()
+        registry.register(
+            "tiny",
+            lambda settings, creds: None,  # type: ignore[arg-type,return-value]
+            settings=ProviderSettings(base_url="http://localhost:8080"),
+            data_policy=DataPolicy.INTERNAL,
+            endpoint="http://localhost:8080",
+            caps=ModelCaps(structured_output=False),
+            free=True,
+        )
+        return registry
+
+    monkeypatch.setattr(bootstrap, "default_registry", _registry)
+    _not_in_ci(monkeypatch)
+    _write_lifecycle(
+        tmp_path,
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep()\n"
+        "lockstep.models.route('review', 'tiny:t')\n",
+    )
+    report = doctor.run(tmp_path)
+    flagged = [c for c in report.checks if c.code == "DOC152"]
+    assert flagged and "tiny:t" in flagged[0].message, [c.code for c in report.checks]
+    assert not any(c.code == "DOC151" for c in report.checks), "capability is the prior question"
+
+
 def test_doctor_accepts_a_route_to_a_free_local_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

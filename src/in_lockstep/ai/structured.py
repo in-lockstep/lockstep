@@ -1,8 +1,11 @@
 """Structured output, with a bounded repair loop.
 
 Providers differ in what they can guarantee, so this degrades explicitly rather than silently:
-a strategy that needs a schema checks `ModelCaps.structured_output` and is refused a model that
-cannot honour one, instead of discovering it at parse time.
+a call that needs a schema says so -- `invoker.run(schema=...)` -- and `AiInvoker` refuses a model
+whose registration declares `ModelCaps.structured_output=False` before the first turn, naming the
+model and the capability, instead of discovering it at parse time. This paragraph promised that
+check for as long as the field existed and nothing made it (#274, `GATE-MODEL-1`); the check
+lives in the invoker rather than here because the invoker is the thing that knows the model.
 
 Where native support is absent, the request carries the schema in the prompt and the answer is
 repaired — once, and then once more with the parse error quoted back. Bounded deliberately: an
@@ -196,6 +199,7 @@ async def settle(
         context=context,
         # One answer turn and no tools: the shape is being fixed, not the work redone.
         policy=replace(policy if policy is not None else InvokePolicy(), max_turns=1),
+        schema=schema,
     )
     merged = replace(
         second,

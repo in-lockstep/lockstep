@@ -263,12 +263,22 @@ class PhaseError(Exception):
         self.outcome = outcome
 
 
-async def run_phase(session: Any, system: str, messages: Any, package: Any, *, prefix: str) -> Any:
+async def run_phase(
+    session: Any,
+    system: str,
+    messages: Any,
+    package: Any,
+    *,
+    prefix: str,
+    schema: dict[str, Any] | None = None,
+) -> Any:
     """One model turn-loop, with its three failure modes mapped to a `PhaseError`.
 
     A refused control raises BLOCKED; infrastructure failure or a truncated answer, ERRORED — the
     handling every strategy repeated inline. Returns the Invocation otherwise. `prefix` namespaces
-    the truncation reason (`implement.truncated`, `fix.truncated`).
+    the truncation reason (`implement.truncated`, `fix.truncated`). `schema` is the shape the
+    phase's cover note must take, handed to the invoker so a model registered as not answering
+    with one is refused before the loop starts rather than after every turn of it is paid for.
     """
     try:
         invocation = await session.invoker.run(
@@ -278,6 +288,7 @@ async def run_phase(session: Any, system: str, messages: Any, package: Any, *, p
             tools=session.tools,
             run_tool=session.run_tool,
             policy=session.policy,
+            schema=schema,
         )
     except (InvocationBlocked, EgressRefused, InvocationFailed) as e:
         # `failure_outcome` rather than two inline constructions, so this and the backport resolver

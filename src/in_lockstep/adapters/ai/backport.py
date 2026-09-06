@@ -106,6 +106,7 @@ class AiBackportResolver:
                 messages=messages,
                 context=package,
                 policy=self.policy,
+                schema=BACKPORT_SCHEMA,
             )
             settled = await settle(
                 invoker,

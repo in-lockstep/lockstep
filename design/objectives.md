@@ -97,10 +97,10 @@ to move without somebody standing in front of this table.
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3`, `GATE-DOCS-1` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5`, `GATE-LENS-1` | — | — |
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
-| `O11` | The provider and the model are the adopter's, not ours | partial | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1` | `GATE-MODEL-1` | Registering a provider is a line in `lockstep.py`: six ship behind a registry, a constructed client whose base URL does not equal its registered `endpoint` is refused, a restricted repository blocks a model that is not registered `DataPolicy.INTERNAL` (including a hand-built invoker that declared no policy, which fails closed as undeclared), and `DEFAULT_COST_PER_M` appears nowhere -- an unpriced model is refused rather than priced by a guess. What is missing is the third refusal: `ModelCaps.structured_output` is declared per model and read by nothing, so a route to a model that cannot answer with a schema is found out by a failed call rather than by a refusal that names the model and the capability. |
+| `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1` | — | — |
 | `O12` | A second engineer is served, not obstructed | partial | `GATE-TEAM-1` | `GATE-TEAM-2` | The objective with the least under it, and since #164 no longer nothing. `history --explain` names who approved a run and who asked for it, and `report --by actor` splits the ledger by asker and prints the spread between askers with every number carrying its runs -- pseudonymously, with a `—` row for runs nobody is recorded as asking for. What it cannot yet do is ask the question of the runs a team mostly makes: a local run carries no identity, so on this repository forty-five of fifty-six records are under the dash and the spread it prints is between two spellings of one person. `GATE-TEAM-2` names the remedy the issue refused to make a default: an opt-in local identity. Until then the row is honest about being one gate wide, and about the dogfood ledger holding one engineer. |
 
-8 of 12 are `held`. That is the number this file exists to make visible, and it should be read
+9 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -216,6 +216,20 @@ on this repository is between spellings, not people. Rather than let one gate ca
 an opt-in local identity, which the issue itself refused to make a default. That is the third
 time this ledger has kept a row short of `held` by naming the gate underneath, and the first time
 it did so on the way up from `unmet`.
+
+Nine, when #274 closed `GATE-MODEL-1` and O11 moved to `held`. Its gap had named exactly one
+thing -- the third refusal, a capability declared per model and read by nothing -- and closing it
+exposed nothing underneath, so the row finished the way O7's did. Two things about the closure
+are worth keeping. The field could not be wired as it was declared: `local` said
+`structured_output=False` from when the flag meant a native JSON mode the framework never used,
+and a refusal keyed on that value would have refused this repository's own `triage` route, the
+`$0` path the docs show. So the flag was given the meaning the framework can check -- answers a
+schema when asked -- and the registration was corrected before the check went live, which is the
+order the ledger asks for: a control that reads as in force has to be true of the thing it reads.
+And the row is `held` on a refusal no shipped registration triggers, the same standing
+`GATE-AUTH-2` has had all along: the check runs before every call, and the refusal is exercised
+against a registration constructed to declare the incapacity, because the declaration is the
+operator's and the shipped ones make none.
 
 ## Claimed by no objective
 

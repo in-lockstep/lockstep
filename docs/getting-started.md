@@ -387,11 +387,16 @@ from in_lockstep import Verb
 lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")
 ```
 
-Two things to know. The shipped registration declares `structured_output=False`, so lenses
-depending on strict output shapes may want a larger model than the one that fits on a laptop.
-And `in-lockstep doctor` warns (`DOC150`/`DOC151`) when a routed model names an unregistered
-provider or an unpriced model. A route that a run would refuse at its first call is something you
-see beforehand, where nothing has been spent, rather than after a wait.
+Two things to know. Every shipped verb asks the model for its answer in a schema, and a small
+model may not honour one; the framework repairs the reply once and then reports
+`*.unparseable`, which is two paid calls to learn what the registration could have said. A
+registration that declares `ModelCaps(structured_output=False)` is refused by name before
+anything is sent, and `in-lockstep doctor` warns (`DOC152`) about a route to one. The shipped
+`local` registration declares it capable, because it covers every Ollama model and cannot know
+which of them a repository runs; register the one that cannot under a name of your own if you
+want the refusal. `doctor` also warns (`DOC150`/`DOC151`) when a routed model names an
+unregistered provider or an unpriced model. A route that a run would refuse at its first call
+is something you see beforehand, where nothing has been spent, rather than after a wait.
 
 ## Before running unattended
 

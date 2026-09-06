@@ -652,6 +652,27 @@ lockstep.bind(Review, AiReview(invoker_factory("house:acme-7b", registry=registr
 provider nothing registered or a model nothing prices. The failure happens where it costs nothing,
 not at the first call.
 
+A registration also declares what its models can do, and two of those declarations are checked
+before a call is made. Every shipped AI verb asks for its answer in a schema, and the
+implementing verbs hand the model tools; a registration with `caps=ModelCaps(structured_output=False)`
+or `tool_use=False` is refused by name for the call that needs the capability, before the first
+turn is paid for, and `doctor` warns about a route to the first. Both default to capable, so a
+registration that says nothing is not refused: `False` is a statement you make on purpose about a
+model you know.
+
+```python
+from in_lockstep.llm.registry import ModelCaps
+
+registry.register(
+    "tiny",
+    lambda settings, creds: OpenAIProvider(settings, creds),
+    settings=ProviderSettings(base_url="http://localhost:8080"),
+    data_policy=DataPolicy.INTERNAL,
+    endpoint="http://localhost:8080",
+    caps=ModelCaps(tool_use=False, structured_output=False),   # refused by name, not charged twice
+)
+```
+
 **Your provider is still recorded.** The framework cannot reach inside your factory, but it holds
 the invoker your factory returns, and it wraps the provider on that — so an adapter bound this way
 keeps what it pays for without you doing anything, and O4's *every model call is recorded* means

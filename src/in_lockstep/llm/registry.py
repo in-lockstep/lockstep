@@ -46,9 +46,32 @@ class Model:
 
 @dataclass(frozen=True)
 class ModelCaps:
+    """What a registration declares its models can do, read where a call needs it.
+
+    Declarations, not measurements: the operator who registers a provider says what its models
+    honour, the way `data_policy` says where the bytes go and `free` says what they cost. Two of
+    these are consulted before a call is made (#274, `GATE-MODEL-1`). `tool_use` is checked when a
+    session hands the model tools, because a loop over tool calls cannot run against a model that
+    does not make them. `structured_output` is checked when a call asks for its answer in a
+    schema, which every shipped AI verb does: the framework puts the schema in the prompt and
+    repairs the reply once rather than using a provider's native mode, so what the flag declares
+    is not "has JSON mode" but "answers a schema when asked" -- and a registration that says it
+    does not is refused by name before anything is sent, instead of being charged twice to find
+    out.
+
+    Both default to capable, deliberately. A registration that says nothing has not declared an
+    incapacity, and a default of `False` would refuse every shipped verb for every adopter who
+    registers a gateway without reading this class. `False` is a statement the operator makes on
+    purpose, and it earns a refusal that names the model and the capability.
+
+    `context_window` and `vision` are read by nothing yet, and are left declared rather than
+    removed because the curator's token budget is the obvious reader of the first; the honest
+    status is stated here rather than implied by their presence.
+    """
+
     context_window: int = 0
     tool_use: bool = True
-    structured_output: bool = False
+    structured_output: bool = True
     vision: bool = False
 
 
