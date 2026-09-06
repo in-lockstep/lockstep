@@ -638,11 +638,48 @@ def test_the_learning_loops_own_runs_are_counted_apart_from_what_it_reads() -> N
 
 
 def _asked(who: str, *, ts: str, via: str = "ci", **over: Any) -> dict[str, Any]:
-    """A record somebody asked for, by the host's word (`ci_actor`) or a person's (`approval`)."""
-    identity: dict[str, Any] = (
-        {"ci_actor": who} if via == "ci" else {"approval": {"by": who, "attended": False}}
+    """A record somebody asked for, by the host's word (`ci_actor`), a person's (`approval`), or
+    the git author a repository opted into recording on its local runs (`git`)."""
+    sources: dict[str, dict[str, Any]] = {
+        "ci": {"ci_actor": who},
+        "approval": {"approval": {"by": who, "attended": False}},
+        "git": {"identity": who},
+    }
+    return _record(ts=ts, **sources[via], **over)
+
+
+def test_gate_team_2_a_local_run_that_opted_in_is_an_asker_like_any_other() -> None:
+    """GATE-TEAM-2, the counting half. Two engineers' local runs, each carrying the git author
+    their repository opted into recording: both are askers, the spread is between them, and the
+    pseudonym rule applies unchanged -- nobody is named unless asked for."""
+    records = [
+        _asked("Amy <amy@example.test>", ts="2026-09-01T00:00:00+00:00", via="git", cost_usd=0.10),
+        _asked("Zed <zed@example.test>", ts="2026-09-02T00:00:00+00:00", via="git", cost_usd=0.30),
+        _record(),
+    ]
+    team = build(records).team
+    assert [(row.name, row.runs) for row in team.actors] == [("actor-1", 1), ("actor-2", 1)]
+    assert team.nobody is not None and team.nobody.runs == 1, "a run that did not opt in stays a dash"
+    assert [s.metric for s in team.spreads], "two askers with a measured value have a spread"
+    text = "\n".join(as_text(build(records), actors=True))
+    assert "amy@" not in text and "zed@" not in text
+    assert "GitAuthor()" in text, "the dash row says what would end it"
+    assert build(records, names=True).team.actors[0].name == "Amy <amy@example.test>"
+
+
+def test_gate_team_2_the_identity_is_the_least_specific_claim_and_reads_last() -> None:
+    """A grant names the person a trigger acted for; a host login is what the host computed; the
+    git author is a claim with nobody to corroborate it. Where a record carries more than one, the
+    more specific wins, and the git author is only ever what is left."""
+    assert metrics.actor_of({"identity": "Amy <amy@example.test>"}) == "Amy <amy@example.test>"
+    assert metrics.actor_of({"identity": "Amy <amy@example.test>", "ci_actor": "amy"}) == "amy"
+    assert (
+        metrics.actor_of(
+            {"identity": "Amy <amy@example.test>", "ci_actor": "amy", "approval": {"by": "labeled:amy"}}
+        )
+        == "labeled:amy"
     )
-    return _record(ts=ts, **identity, **over)
+    assert metrics.actor_of({"identity": ""}) == "", "empty is absent, not an asker called nothing"
 
 
 def test_askers_are_pseudonyms_by_default_numbered_by_first_appearance() -> None:

@@ -26,6 +26,7 @@ from in_lockstep.core.spend import Budget
 from in_lockstep.improver import CorpusImprover
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
+from in_lockstep.platform.identity import GitAuthor
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -231,6 +232,15 @@ lockstep.bind(EgressPolicy, egress)
 # `usd` is the ceiling that bounds all of it, and it is the one checked against a projection
 # before each turn.
 lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
+
+# -- who ran it, for the runs made at a terminal -------------------------------------
+#
+# A run under CI carries the host's actor and a granted run carries the grant. A local run carried
+# nothing, so forty-five of this repository's fifty-six records sat under `—` in `report --by
+# actor` and in no spread. This line records the configured git author on every local run made
+# here (#289). It is opt-in and this file is where the choice is made: the same `Name <email>` is
+# already on every commit the same person makes, so the ledger names nobody the log does not.
+lockstep.identity = GitAuthor()
 
 # -- what a recurring finding could be about ----------------------------------------
 #
