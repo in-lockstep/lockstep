@@ -23,6 +23,8 @@ from click.testing import CliRunner
 from in_lockstep.ai.builtins import ToolRunnerImpl, Workspace, read_only, read_write
 from in_lockstep.cli import main
 from in_lockstep.core.verbs import Capability
+from in_lockstep.llm.interface import LLMProvider
+from in_lockstep.llm.types import LLMInput, LLMOutput, ToolCall
 
 # One list, three enforcement points. A path protected in one place and not another is the failure
 # mode a single shared list is here to make impossible.
@@ -150,7 +152,9 @@ def _artifact(tmp_path: Path, path: str) -> Path:
 
 
 @pytest.mark.parametrize("path", TIER_1)
-def test_apply_inline_refuses_a_protected_write(tmp_path: Path, monkeypatch, path: str) -> None:
+def test_apply_inline_refuses_a_protected_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
     work = tmp_path / "repo"
     work.mkdir()
     monkeypatch.chdir(work)
@@ -167,7 +171,9 @@ def test_apply_from_artifact_refuses_a_protected_write(tmp_path: Path, path: str
     assert result.exit_code == 3, result.output
 
 
-def test_apply_inline_actually_writes_an_allowed_change(tmp_path: Path, monkeypatch) -> None:
+def test_apply_inline_actually_writes_an_allowed_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The local default has to work, or people will reach past it."""
     work = tmp_path / "repo"
     work.mkdir()
@@ -179,7 +185,7 @@ def test_apply_inline_actually_writes_an_allowed_change(tmp_path: Path, monkeypa
     assert (work / "src" / "ok.py").read_text() == "x"
 
 
-def test_apply_inline_dry_run_writes_nothing(tmp_path: Path, monkeypatch) -> None:
+def test_apply_inline_dry_run_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     work = tmp_path / "repo"
     work.mkdir()
     monkeypatch.chdir(work)
@@ -225,7 +231,7 @@ def test_a_model_that_asks_for_a_protected_write_is_refused_and_can_continue(tmp
     from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
     from in_lockstep.ai.pricing import CostTable, Rate
     from in_lockstep.core.spend import Budget, Spend
-    from in_lockstep.llm.types import LLMOutput, Message, ToolCall
+    from in_lockstep.llm.types import LLMOutput, Message
     from in_lockstep.privileged.egress import UnsandboxedEgress
 
     workspace = Workspace(root=tmp_path)
@@ -234,7 +240,7 @@ def test_a_model_that_asks_for_a_protected_write_is_refused_and_can_continue(tmp
     table = CostTable()
     table.add("m", Rate(1.0, 1.0))
 
-    class Scripted:
+    class Scripted(LLMProvider):
         """Asks for lockstep.py, is refused, then writes somewhere it may."""
 
         def __init__(self) -> None:
@@ -243,7 +249,7 @@ def test_a_model_that_asks_for_a_protected_write_is_refused_and_can_continue(tmp
         def name(self) -> str:
             return "scripted"
 
-        async def generate(self, input):
+        async def generate(self, input: LLMInput) -> LLMOutput:
             self.seen.append(input.messages[-1].content if input.messages else "")
             if len(self.seen) == 1:
                 return LLMOutput(
@@ -283,7 +289,9 @@ def test_a_model_that_asks_for_a_protected_write_is_refused_and_can_continue(tmp
     assert staged == ["src/ok.py"], f"a refused write must stage nothing: {staged}"
 
 
-def test_the_staged_set_then_crosses_the_guard_again_at_apply(tmp_path: Path, monkeypatch) -> None:
+def test_the_staged_set_then_crosses_the_guard_again_at_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Twice on the privileged path, and the second time treating the first as untrusted.
 
     A previous turn having produced a change is not a reason to trust it: a third-party MCP server

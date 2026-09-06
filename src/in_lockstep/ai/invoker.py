@@ -193,6 +193,28 @@ def _failure_reason(error: LLMError) -> str:
     return "provider.error"
 
 
+class Invoker(Protocol):
+    """What a strategy needs from the thing that talks to the model: `run`, with this signature.
+
+    `AiInvoker` is the one this package ships, and the adapters named it in their factory types,
+    which claimed more than they use: an adapter calls `run` and reads the `Invocation` back, and
+    the factory a repository binds (O11) or a test substitutes returns whatever does that.
+    Structural so that substitution needs no inheritance; the signature is `AiInvoker.run`'s
+    exactly, so the shipped one satisfies it without saying so (#248).
+    """
+
+    async def run(
+        self,
+        *,
+        system: str,
+        messages: list[Message],
+        context: ContextPackage | None = None,
+        tools: ToolSet | None = None,
+        run_tool: ToolRunner | None = None,
+        policy: InvokePolicy | None = None,
+    ) -> Invocation: ...
+
+
 class AiInvoker:
     def __init__(
         self,

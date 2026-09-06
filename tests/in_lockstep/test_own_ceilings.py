@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+from in_lockstep import Lockstep
 from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.workflow import restore, snapshot
 from in_lockstep.loader import load
@@ -42,7 +43,7 @@ def lockstep():
     restore(state)
 
 
-def test_the_turn_ceiling_the_file_declares_is_the_one_a_run_is_given(lockstep) -> None:
+def test_the_turn_ceiling_the_file_declares_is_the_one_a_run_is_given(lockstep: Lockstep) -> None:
     """The trap that makes raising a limit a no-op.
 
     `InvokePolicy.under` takes the lowest of the workshop's `max_turns` and the policy floor's,
@@ -63,7 +64,7 @@ def test_the_turn_ceiling_the_file_declares_is_the_one_a_run_is_given(lockstep) 
     assert effective.max_tokens == workshop.max_tokens
 
 
-def test_the_run_budget_leaves_room_for_more_than_one_invocation(lockstep) -> None:
+def test_the_run_budget_leaves_room_for_more_than_one_invocation(lockstep: Lockstep) -> None:
     """`Spend` is run-scoped: turns and tokens accumulate across every invocation.
 
     TDD runs two model phases in one run. A run-scoped ceiling equal to the per-invocation cap is
@@ -125,7 +126,7 @@ def test_no_workflow_shadows_the_ceiling_the_lifecycle_declares() -> None:
     )
 
 
-def test_the_run_still_declares_a_ceiling_in_dollars(lockstep) -> None:
+def test_the_run_still_declares_a_ceiling_in_dollars(lockstep: Lockstep) -> None:
     """The one that has to be set. `UndeclaredBudget` refuses at startup for a lifecycle that
     binds something which spends and names no ceiling, and this file binds three such verbs — so
     an all-`None` budget here is a refusal at run time rather than a test failure at commit time,
@@ -167,7 +168,7 @@ def test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_run
 # -- GATE-EVIDENCE-1: the promoted corpus is not a path an agent of ours can write --------------
 
 
-def test_gate_evidence_1_this_repositorys_guard_refuses_the_promoted_corpus(lockstep) -> None:  # noqa: ANN001
+def test_gate_evidence_1_this_repositorys_guard_refuses_the_promoted_corpus(lockstep: Lockstep) -> None:  # noqa: ANN001
     """`evidence/README.md` says no agent here can write there. Asserted, because it once did not.
 
     The prose made the claim while `evidence/` appeared in neither deny tier, so `check_path`
@@ -184,7 +185,7 @@ def test_gate_evidence_1_this_repositorys_guard_refuses_the_promoted_corpus(lock
     assert refusal.tier == 1, f"a grant could lift it: {refusal}"
 
 
-def test_extending_the_deny_list_did_not_drop_what_it_already_protected(lockstep) -> None:
+def test_extending_the_deny_list_did_not_drop_what_it_already_protected(lockstep: Lockstep) -> None:
     """The trap `_matches` documents, checked on the repository that walked into its invitation.
 
     Adding a path means constructing a new tuple, and the tier-1 basename and suffix rules used to
@@ -198,7 +199,7 @@ def test_extending_the_deny_list_did_not_drop_what_it_already_protected(lockstep
 
 
 def test_gate_improve_3_this_repositorys_prompts_are_writable_by_grant_and_never_by_omission(
-    lockstep,
+    lockstep: Lockstep,
 ) -> None:  # noqa: ANN001
     """GATE-IMPROVE-3, on the repository that actually holds the bodies.
 
@@ -218,7 +219,7 @@ def test_gate_improve_3_this_repositorys_prompts_are_writable_by_grant_and_never
     assert lockstep.guard.check_path(".lockstep/lockstep.py", workflow_id="improve/propose") is not None
 
 
-def test_this_repository_binds_the_learning_loop_it_dogfoods(lockstep) -> None:  # noqa: ANN001
+def test_this_repository_binds_the_learning_loop_it_dogfoods(lockstep: Lockstep) -> None:  # noqa: ANN001
     """O10. The loop is registered and its two ports are bound here, so the trampoline's
     `in-lockstep run improve/measure` resolves to what this file says and not to a CLI default."""
     from in_lockstep.adapters.ai import Draft, Measure

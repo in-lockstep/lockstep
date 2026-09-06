@@ -20,7 +20,7 @@ from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..core.types import Resolution, Test, TestReport
 from ..core.verbs import Capability, Verb
 from . import tooling
-from .sandbox import Sandbox
+from .sandbox import Runner, Sandbox
 
 __all__ = ["PytestTest", "Test"]
 
@@ -38,7 +38,7 @@ class PytestTest:
         self,
         args: list[str] | None = None,
         cwd: str | None = None,
-        sandbox: Sandbox | None = None,
+        sandbox: Runner | None = None,
     ) -> None:
         self.args = args or ["-q"]
         self.cwd = cwd

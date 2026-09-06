@@ -42,7 +42,9 @@ def test_the_written_body_carries_the_marker_that_finds_it_again(bare: Path) -> 
     assert marker("review:security") in body
 
 
-def test_a_body_file_is_posted_under_the_marker_it_carries(bare: Path, monkeypatch) -> None:
+def test_a_body_file_is_posted_under_the_marker_it_carries(
+    bare: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The posting half, with the host stubbed. The marker is read out of the body rather than
     passed as a flag, so nothing in a workflow file ever names an aspect."""
     import in_lockstep.platform.hosted as hosted
@@ -62,7 +64,9 @@ def test_a_body_file_is_posted_under_the_marker_it_carries(bare: Path, monkeypat
     assert posted == [(199, body.read_text(), "<!-- in-lockstep:review:security -->")]
 
 
-def test_a_body_with_no_marker_is_refused_rather_than_posted_unanchored(bare: Path, monkeypatch) -> None:
+def test_a_body_with_no_marker_is_refused_rather_than_posted_unanchored(
+    bare: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An unanchored comment cannot be found again, so the next run posts a second one beside it
     instead of editing it. Two comments that disagree is worse than one that is out of date."""
     import in_lockstep.platform.hosted as hosted
@@ -79,7 +83,7 @@ def test_a_body_with_no_marker_is_refused_rather_than_posted_unanchored(bare: Pa
     assert "marker" in result.output.lower(), result.output
 
 
-def test_the_posting_command_needs_no_provider_at_all(bare: Path, monkeypatch) -> None:
+def test_the_posting_command_needs_no_provider_at_all(bare: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The reason it is a separate command in a separate job. It must be constructible and runnable
     with no provider SDK installed and no key present — a fact about the environment, not a property
     of the code path taken. `test_the_writing_job_does_not_install_a_provider_sdk` asserts the other
@@ -97,7 +101,9 @@ def test_the_posting_command_needs_no_provider_at_all(bare: Path, monkeypatch) -
     assert CliRunner().invoke(main, ["comment", "--pr", "1", "--body-file", str(body)]).exit_code == 0
 
 
-def test_the_reviewing_command_writes_the_body_instead_of_posting_it(bare: Path, monkeypatch) -> None:
+def test_the_reviewing_command_writes_the_body_instead_of_posting_it(
+    bare: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CI form. `--comment` posts from the process that called the model; `--comment-out` hands
     it to a job that holds no key. A stub host that explodes proves nothing was posted."""
     import in_lockstep.platform.hosted as hosted

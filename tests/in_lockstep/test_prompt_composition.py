@@ -9,11 +9,18 @@ from __future__ import annotations
 import dataclasses
 import json
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
 from in_lockstep.ai.prompt import Body, BodyNotFound, Prompt, parse_frontmatter
 from in_lockstep.prompts.review import LENSES, review_layers
+
+
+def _never(ctx: object) -> NoReturn:
+    """A factory for a test that must not reach the model: if it does, say so, not AttributeError."""
+    raise AssertionError("this test expected no model call")
+
 
 CORPUS = Path(__file__).resolve().parents[1] / "characterization" / "corpus.json"
 
@@ -51,7 +58,7 @@ def test_bodies_are_files_not_python_literals() -> None:
 
 
 def test_body_resolution_is_lazy_so_import_performs_no_io() -> None:
-    class Missing(Prompt):
+    class Missing(Prompt[Any, Any]):
         body = Body.from_file("does/not/exist.md", package="in_lockstep.prompts")
 
     # Constructing is fine; only rendering touches the filesystem.
@@ -180,8 +187,8 @@ def test_every_ai_adapter_takes_injected_layers_and_defaults_to_the_shipped_set(
     fix = DiagnoseThenFix(lambda ctx: None, layers=custom)
     assert fix._session(object()).layers.guardrails == custom.guardrails
 
-    assert AiReview(lambda ctx: None, layers=custom).layers is custom
-    assert AiTriage(lambda ctx: None, layers=custom).layers is custom
+    assert AiReview(_never, layers=custom).layers is custom
+    assert AiTriage(_never, layers=custom).layers is custom
 
 
 def test_a_house_prompt_gets_a_body_label_without_inventing_a_convention() -> None:

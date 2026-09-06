@@ -20,9 +20,12 @@ them would be noise that trains people to add exemptions.
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from in_lockstep.privileged.redact import Redact
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "in_lockstep"
 
@@ -182,7 +185,7 @@ def test_every_exemption_gives_a_reason() -> None:
 
 
 @pytest.fixture
-def secret() -> str:
+def secret() -> Iterator[str]:
     from in_lockstep.privileged.redact import redact_registry
 
     value = "sk-ant-api03-NOTAREALKEYbutlongenough"
@@ -191,7 +194,7 @@ def secret() -> str:
     redact_registry.clear()
 
 
-def test_stdout_is_masked_without_the_caller_knowing(secret: str, capsys) -> None:
+def test_stdout_is_masked_without_the_caller_knowing(secret: str, capsys: pytest.CaptureFixture[str]) -> None:
     """The whole point of wrapping the stream: `print` did not have to be taught anything."""
     from in_lockstep.privileged.sink import redacted_streams
 
@@ -202,7 +205,7 @@ def test_stdout_is_masked_without_the_caller_knowing(secret: str, capsys) -> Non
     assert "***" in out
 
 
-def test_click_echo_is_masked_too(secret: str, capsys) -> None:
+def test_click_echo_is_masked_too(secret: str, capsys: pytest.CaptureFixture[str]) -> None:
     import click
 
     from in_lockstep.privileged.sink import redacted_streams
@@ -348,7 +351,7 @@ def test_what_is_deliberately_not_masked_is_written_down(why: str, text: str) ->
     assert _unseeded().text(text) == text, f"masked {why!r}, which is noise claiming to be safety"
 
 
-def _unseeded():  # noqa: ANN202 - a redactor with an EMPTY registry, so this tests the patterns
+def _unseeded() -> Redact:  # a redactor with an EMPTY registry, so this tests the patterns
     """No seeded values, so these assert the structural half and nothing else.
 
     With a seeded registry the literal would be masked whatever the patterns did, and the test

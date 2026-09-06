@@ -8,10 +8,11 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
+from in_lockstep import doctor
 from in_lockstep.adapters.sandbox import Sandbox, UnsandboxedRun
 from in_lockstep.core.changes import ChangeGuard
 from in_lockstep.core.container import Container
@@ -85,7 +86,7 @@ def test_restricted_repo_makes_enforcement_mandatory() -> None:
         policy.check(capabilities=frozenset(), untrusted_context=False)
 
 
-def test_the_restricted_classification_is_read_from_the_environment(monkeypatch) -> None:
+def test_the_restricted_classification_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """`restricted_repo` was a parameter nothing set — a trigger with no finger on it."""
     monkeypatch.setenv("IN_LOCKSTEP_RESTRICTED", "1")
     assert EgressPolicy.detect().restricted_repo is True
@@ -130,7 +131,7 @@ def test_the_opt_out_is_named_after_what_it_does() -> None:
     assert "Unsandboxed" in UnsandboxedEgress.__name__
 
 
-def test_mode_is_read_from_the_environment(monkeypatch) -> None:
+def test_mode_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IN_LOCKSTEP_EGRESS", "enforced")
     assert EgressPolicy.detect().mode is EgressMode.ENFORCED_EXTERNAL
     monkeypatch.delenv("IN_LOCKSTEP_EGRESS")
@@ -194,7 +195,7 @@ def test_approval_gate_admits_a_granted_action() -> None:
 # -- GATE-SANDBOX --------------------------------------------------------------------
 
 
-def test_gate_sandbox_1_a_child_cannot_read_the_parents_credentials(monkeypatch) -> None:
+def test_gate_sandbox_1_a_child_cannot_read_the_parents_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """pytest executes repository conftest.py; in-process it would reach live Credentials.
 
     `sys.executable` rather than the bare name `python`, here and below, for the reason #112
@@ -215,7 +216,7 @@ def test_gate_sandbox_1_a_child_cannot_read_the_parents_credentials(monkeypatch)
     assert "ABSENT" in result.stdout
 
 
-def test_the_named_opt_out_does_leak_which_is_why_it_is_named(monkeypatch) -> None:
+def test_the_named_opt_out_does_leak_which_is_why_it_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-leaks-here")
     result = asyncio.run(
         UnsandboxedRun().run(
@@ -237,7 +238,7 @@ def test_a_sandboxed_command_that_hangs_is_killed() -> None:
     assert result.exit_code == 124
 
 
-def test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started(tmp_path) -> None:
+def test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started(tmp_path: Path) -> None:
     """`npm start` is `sh -c "node server.js"`. Killing npm alone left the server bound to its
     port after the run had reported 124, so the child runs in its own session and the whole
     group is killed."""
@@ -260,14 +261,16 @@ def test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started(
         raise AssertionError("the sleep the shell started outlived the run")
 
 
-def test_a_containers_variables_travel_as_flags_and_never_reach_the_runtimes_client(monkeypatch) -> None:
+def test_a_containers_variables_travel_as_flags_and_never_reach_the_runtimes_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`extra_env` used to land on the docker/podman client's environment, which a container does
     not inherit, so a `Run.env` was honoured by the subprocess fallback and dropped by the
     stronger path. Worse, `DOCKER_HOST` there would have pointed the whole run at another daemon.
     The variables go in as `-e` flags; the client sees only the pass-through set."""
     from in_lockstep.adapters import sandbox as sandbox_module
 
-    seen: dict = {}
+    seen: dict[str, Any] = {}
 
     async def fake_exec(argv, *, cwd, env, timeout):  # noqa: ANN001
         seen["argv"], seen["env"] = list(argv), dict(env)
@@ -316,7 +319,7 @@ def test_an_agent_writing_the_ledger_is_still_refused() -> None:
 # -- doctor --------------------------------------------------------------------------
 
 
-def test_doctor_fails_without_an_attested_spend_limit(monkeypatch) -> None:
+def test_doctor_fails_without_an_attested_spend_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     """GATE-COST-5. The per-day ceiling is gone; this is what notices."""
     from in_lockstep import doctor
 
@@ -325,7 +328,7 @@ def test_doctor_fails_without_an_attested_spend_limit(monkeypatch) -> None:
     assert any(c.code == "DOC101" for c in report.errors)
 
 
-def test_doctor_records_an_attestation_as_an_attestation(monkeypatch) -> None:
+def test_doctor_records_an_attestation_as_an_attestation(monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep import doctor
 
     monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "500")
@@ -334,7 +337,7 @@ def test_doctor_records_an_attestation_as_an_attestation(monkeypatch) -> None:
     assert "not a verification" in note.hint
 
 
-def test_gate_cfg_2_doctor_refuses_a_review_with_no_base_ref(monkeypatch) -> None:
+def test_gate_cfg_2_doctor_refuses_a_review_with_no_base_ref(monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep import doctor
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
@@ -345,7 +348,7 @@ def test_gate_cfg_2_doctor_refuses_a_review_with_no_base_ref(monkeypatch) -> Non
     assert any(c.code == "DOC110" for c in report.errors)
 
 
-def test_gate_cfg_2_engages_on_a_gitlab_merge_request_pipeline(monkeypatch) -> None:
+def test_gate_cfg_2_engages_on_a_gitlab_merge_request_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     """The check once read GITHUB_* directly, so a GitLab MR pipeline passed silently —
     configuration loading from the ref under review, with nothing reporting it."""
     from in_lockstep import doctor
@@ -358,7 +361,7 @@ def test_gate_cfg_2_engages_on_a_gitlab_merge_request_pipeline(monkeypatch) -> N
     assert any(c.code == "DOC110" for c in report.errors)
 
 
-def test_gate_cfg_2_stays_quiet_outside_any_ci(monkeypatch) -> None:
+def test_gate_cfg_2_stays_quiet_outside_any_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("GITHUB_ACTIONS", "GITLAB_CI", "GITHUB_EVENT_NAME"):
         monkeypatch.delenv(var, raising=False)
     from in_lockstep import doctor
@@ -367,7 +370,7 @@ def test_gate_cfg_2_stays_quiet_outside_any_ci(monkeypatch) -> None:
     assert not any(c.code == "DOC110" for c in report.checks)
 
 
-def test_doctor_warns_about_pull_request_target(monkeypatch) -> None:
+def test_doctor_warns_about_pull_request_target(monkeypatch: pytest.MonkeyPatch) -> None:
     from in_lockstep import doctor
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
@@ -378,12 +381,12 @@ def test_doctor_warns_about_pull_request_target(monkeypatch) -> None:
     assert any(c.code == "DOC111" for c in report.checks)
 
 
-def _write_lifecycle(tmp_path, body: str) -> None:
+def _write_lifecycle(tmp_path: Path, body: str) -> None:
     (tmp_path / ".lockstep").mkdir()
     (tmp_path / ".lockstep" / "lockstep.py").write_text(body)
 
 
-def _not_in_ci(monkeypatch) -> None:
+def _not_in_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     """Doctor's route check loads config from the trusted BASE ref when it detects CI — correct
     in a real PR pipeline, but these tests point doctor at a bare tmp_path that has no `main` to
     resolve. Cleared here so the check loads the working-tree module the test actually wrote;
@@ -393,7 +396,9 @@ def _not_in_ci(monkeypatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
-def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path, monkeypatch) -> None:
+def test_doctor_flags_a_route_to_an_unregistered_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _not_in_ci(monkeypatch)
@@ -407,7 +412,9 @@ def test_doctor_flags_a_route_to_an_unregistered_provider(tmp_path, monkeypatch)
     assert any(c.code == "DOC150" for c in report.checks)
 
 
-def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_path, monkeypatch) -> None:
+def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _not_in_ci(monkeypatch)
@@ -421,7 +428,9 @@ def test_doctor_flags_an_unpriced_route_before_a_run_pays_for_the_lesson(tmp_pat
     assert any(c.code == "DOC151" for c in report.checks)
 
 
-def test_doctor_accepts_a_route_to_a_free_local_model(tmp_path, monkeypatch) -> None:
+def test_doctor_accepts_a_route_to_a_free_local_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The dogfood config routes triage to local:qwen3-8b; doctor must not call that a problem."""
     from in_lockstep import doctor
 
@@ -436,7 +445,7 @@ def test_doctor_accepts_a_route_to_a_free_local_model(tmp_path, monkeypatch) -> 
     assert not any(c.code in ("DOC150", "DOC151") for c in report.checks)
 
 
-def test_doctor_strict_reads_the_loader_location_not_the_deprecated_root(tmp_path) -> None:
+def test_doctor_strict_reads_the_loader_location_not_the_deprecated_root(tmp_path: Path) -> None:
     from in_lockstep import doctor
 
     (tmp_path / ".lockstep").mkdir()
@@ -445,7 +454,7 @@ def test_doctor_strict_reads_the_loader_location_not_the_deprecated_root(tmp_pat
     assert not any(c.code in ("DOC160", "DOC161") for c in report.checks)
 
 
-def test_doctor_strict_flags_a_legacy_root_module(tmp_path) -> None:
+def test_doctor_strict_flags_a_legacy_root_module(tmp_path: Path) -> None:
     from in_lockstep import doctor
 
     (tmp_path / "lockstep.py").write_text("lockstep = None\n")
@@ -552,7 +561,7 @@ def test_writing_a_new_test_is_untouched() -> None:
 # -- GATE-APPROVAL-1: refused at startup, not at call time ------------------------------------
 
 
-def _ai_writer():
+def _ai_writer() -> type[Any]:
     from in_lockstep.core.verbs import Capability, Verb
 
     class AiImplement:
@@ -660,14 +669,16 @@ def test_a_read_only_ai_verb_does_not_need_approval() -> None:
 # -- doctor --strict: the org baseline (item 19) ---------------------------------------
 
 
-def _baseline_env(monkeypatch) -> None:
+def _baseline_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """No inherited baseline: these tests assert exactly what they set."""
     _not_in_ci(monkeypatch)
     for var in ("IN_LOCKSTEP_REQUIRED_POLICIES", "IN_LOCKSTEP_MAX_BUDGET_USD", "IN_LOCKSTEP_MAX_TURNS"):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_strict_errors_on_a_missing_required_policy_layer(tmp_path, monkeypatch) -> None:
+def test_strict_errors_on_a_missing_required_policy_layer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The KISS answer to the Tier.MANDATE debate: a deleted standard is a visible diff, and the
     required check the organisation controls is what sees it."""
     from in_lockstep import doctor
@@ -687,7 +698,9 @@ def test_strict_errors_on_a_missing_required_policy_layer(tmp_path, monkeypatch)
     assert "sec-base" in missing[0].message
 
 
-def test_strict_without_a_stated_baseline_adds_nothing(tmp_path, monkeypatch) -> None:
+def test_strict_without_a_stated_baseline_adds_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _baseline_env(monkeypatch)
@@ -696,7 +709,9 @@ def test_strict_without_a_stated_baseline_adds_nothing(tmp_path, monkeypatch) ->
     assert not any(c.code in ("DOC162", "DOC163") for c in report.checks)
 
 
-def test_strict_errors_when_the_budget_exceeds_the_org_maximum(tmp_path, monkeypatch) -> None:
+def test_strict_errors_when_the_budget_exceeds_the_org_maximum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _baseline_env(monkeypatch)
@@ -712,7 +727,9 @@ def test_strict_errors_when_the_budget_exceeds_the_org_maximum(tmp_path, monkeyp
     assert any(c.code == "DOC163" and "$2.00 exceeds" in c.message for c in report.errors)
 
 
-def test_strict_errors_when_the_org_caps_and_no_budget_is_declared(tmp_path, monkeypatch) -> None:
+def test_strict_errors_when_the_org_caps_and_no_budget_is_declared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An absent ceiling is not a compliant ceiling."""
     from in_lockstep import doctor
 
@@ -723,7 +740,9 @@ def test_strict_errors_when_the_org_caps_and_no_budget_is_declared(tmp_path, mon
     assert any(c.code == "DOC163" and "declares no budget" in c.message for c in report.errors)
 
 
-def test_strict_accepts_a_budget_at_or_under_the_org_maximum(tmp_path, monkeypatch) -> None:
+def test_strict_accepts_a_budget_at_or_under_the_org_maximum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _baseline_env(monkeypatch)
@@ -739,7 +758,9 @@ def test_strict_accepts_a_budget_at_or_under_the_org_maximum(tmp_path, monkeypat
     assert not any(c.code == "DOC163" for c in report.checks)
 
 
-def test_strict_errors_when_the_turn_ceiling_is_unbounded_or_over(tmp_path, monkeypatch) -> None:
+def test_strict_errors_when_the_turn_ceiling_is_unbounded_or_over(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _baseline_env(monkeypatch)
@@ -758,7 +779,9 @@ def test_strict_errors_when_the_turn_ceiling_is_unbounded_or_over(tmp_path, monk
     assert not any(c.code == "DOC163" for c in report.checks), "12 <= 20 complies"
 
 
-def test_strict_names_the_egress_opt_out_where_the_fleet_looks(tmp_path, monkeypatch) -> None:
+def test_strict_names_the_egress_opt_out_where_the_fleet_looks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Visibility, not impossibility: the greppable line in the diff becomes a named finding in
     the check an organisation requires."""
     from in_lockstep import doctor
@@ -775,7 +798,9 @@ def test_strict_names_the_egress_opt_out_where_the_fleet_looks(tmp_path, monkeyp
     assert not any(c.code == "DOC165" for c in doctor.run(tmp_path).checks), "strict-only"
 
 
-def test_strict_names_unsandboxed_run_even_inside_a_worktree_wrapper(tmp_path, monkeypatch) -> None:
+def test_strict_names_unsandboxed_run_even_inside_a_worktree_wrapper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor
 
     _baseline_env(monkeypatch)
@@ -795,7 +820,9 @@ def test_strict_names_unsandboxed_run_even_inside_a_worktree_wrapper(tmp_path, m
     assert any(c.code == "DOC166" and "Verb" in c.message for c in report.checks)
 
 
-def test_strict_errors_when_a_spending_writing_adapter_has_no_approval_path(tmp_path, monkeypatch) -> None:
+def test_strict_errors_when_a_spending_writing_adapter_has_no_approval_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`Lockstep.context` refuses this at run time; the required check says so before a trigger
     finds out."""
     from in_lockstep import doctor
@@ -822,7 +849,9 @@ def test_strict_errors_when_a_spending_writing_adapter_has_no_approval_path(tmp_
     assert not any(c.code == "DOC164" for c in report.checks)
 
 
-def test_doctor_format_json_is_the_fleet_scanners_shape(tmp_path, monkeypatch) -> None:
+def test_doctor_format_json_is_the_fleet_scanners_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import json as _json
 
     from click.testing import CliRunner
@@ -843,7 +872,7 @@ def test_doctor_format_json_is_the_fleet_scanners_shape(tmp_path, monkeypatch) -
 # -- doctor: the escalation labels are a control -------------------------------------------------
 
 
-def _repo_with_the_loop_wired(tmp_path, *, labels: tuple[str, ...]):  # noqa: ANN001, ANN202
+def _repo_with_the_loop_wired(tmp_path: Path, *, labels: tuple[str, ...]) -> Path:
     """A repository whose trampoline routes on `ai-generated`, plus a `gh` that lists `labels`."""
     (tmp_path / ".git").mkdir()
     workflows = tmp_path / ".github" / "workflows"
@@ -863,7 +892,7 @@ def _repo_with_the_loop_wired(tmp_path, *, labels: tuple[str, ...]):  # noqa: AN
     return bin_dir
 
 
-def test_doctor_reports_a_missing_ai_generated_label(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_reports_a_missing_ai_generated_label(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """The label is the trigger AND the authorization, so its absence is not cosmetic.
 
     Without it a failed run pays for a model call and then cannot file the follow-up, and nothing
@@ -880,7 +909,9 @@ def test_doctor_reports_a_missing_ai_generated_label(tmp_path, monkeypatch) -> N
     assert "gh label create ai-generated" in finding.hint
 
 
-def test_doctor_reports_missing_attempt_labels_by_name(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_reports_missing_attempt_labels_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """One per attempt the cap allows, because `escalate` names the label after the number."""
     from in_lockstep import doctor
 
@@ -895,7 +926,9 @@ def test_doctor_reports_missing_attempt_labels_by_name(tmp_path, monkeypatch) ->
     assert "stops bounding anything" in finding.hint
 
 
-def test_doctor_is_quiet_when_every_escalation_label_exists(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_is_quiet_when_every_escalation_label_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     from in_lockstep import doctor
 
     bin_dir = _repo_with_the_loop_wired(
@@ -907,7 +940,9 @@ def test_doctor_is_quiet_when_every_escalation_label_exists(tmp_path, monkeypatc
     assert not any(c.code in ("DOC123", "DOC124") for c in report.checks)
 
 
-def test_doctor_says_nothing_to_a_repository_that_never_wired_the_loop(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_says_nothing_to_a_repository_that_never_wired_the_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """A finding invented for a hook nobody asked for is how a code teaches people to ignore it."""
     from in_lockstep import doctor
 
@@ -975,7 +1010,7 @@ def test_every_model_job_outlives_the_session_deadline_it_runs() -> None:
 # -- doctor: a propose job that cannot propose ---------------------------------------------------
 
 
-def _repo_that_opens_changes(tmp_path, *, payload: str):  # noqa: ANN001, ANN202
+def _repo_that_opens_changes(tmp_path: Path, *, payload: str) -> Path:
     """A repository with a propose job, and a `gh` that answers with `payload`."""
     (tmp_path / ".git").mkdir()
     workflows = tmp_path / ".github" / "workflows"
@@ -998,7 +1033,9 @@ def _repo_that_opens_changes(tmp_path, *, payload: str):  # noqa: ANN001, ANN202
     return bin_dir
 
 
-def test_doctor_reports_that_actions_may_not_open_a_change(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_reports_that_actions_may_not_open_a_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """The setting that let a paid run do all its work and die on its last call.
 
     `fix/propose` pushed its branch, then failed with `GitHub Actions is not permitted to create or
@@ -1016,7 +1053,9 @@ def test_doctor_reports_that_actions_may_not_open_a_change(tmp_path, monkeypatch
     assert "Allow GitHub Actions to create and approve pull requests" in finding.hint
 
 
-def test_doctor_is_quiet_when_actions_may_open_a_change(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_is_quiet_when_actions_may_open_a_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     from in_lockstep import doctor
 
     bin_dir = _repo_that_opens_changes(tmp_path, payload='{"can_approve_pull_request_reviews": true}')
@@ -1026,7 +1065,9 @@ def test_doctor_is_quiet_when_actions_may_open_a_change(tmp_path, monkeypatch) -
     assert not any(c.code in ("DOC125", "DOC126") for c in report.checks)
 
 
-def test_doctor_does_not_read_a_missing_field_as_a_refusal(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_does_not_read_a_missing_field_as_a_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """Absent is unknown, not false. A host that stops reporting this must not manufacture an
     error about a setting nobody can see."""
     from in_lockstep import doctor
@@ -1039,7 +1080,9 @@ def test_doctor_does_not_read_a_missing_field_as_a_refusal(tmp_path, monkeypatch
     assert any(c.code == "DOC125" and c.severity is doctor.Severity.NOTE for c in report.checks)
 
 
-def test_doctor_says_nothing_to_a_repository_that_opens_no_changes(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_doctor_says_nothing_to_a_repository_that_opens_no_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """A repository whose trampolines only review never reaches `open_change`."""
     from in_lockstep import doctor
 
@@ -1081,7 +1124,7 @@ def test_gate_guard_1_tightening_the_path_policy_cannot_weaken_it() -> None:
 # -- DOC168: what is recorded, and whether git would commit it ---------------------------------
 
 
-def _repo_holding_a_recording(root, *, ignored: bool):  # noqa: ANN001, ANN202
+def _repo_holding_a_recording(root: Path, *, ignored: bool) -> Path:
     """A git repository with one cassette on disk, ignored or not as asked."""
     import subprocess
 
@@ -1093,7 +1136,7 @@ def _repo_holding_a_recording(root, *, ignored: bool):  # noqa: ANN001, ANN202
     return root
 
 
-def test_doc168_says_what_is_recorded_when_git_is_ignoring_it(tmp_path) -> None:  # noqa: ANN001
+def test_doc168_says_what_is_recorded_when_git_is_ignoring_it(tmp_path: Path) -> None:  # noqa: ANN001
     """A note, not a finding: recordings in the directory the CLI writes to, out of git's way."""
     from in_lockstep import doctor
 
@@ -1104,7 +1147,7 @@ def test_doc168_says_what_is_recorded_when_git_is_ignoring_it(tmp_path) -> None:
     assert "1 recording" in found[0].message
 
 
-def test_doc168_warns_when_a_recording_is_not_ignored(tmp_path) -> None:  # noqa: ANN001
+def test_doc168_warns_when_a_recording_is_not_ignored(tmp_path: Path) -> None:  # noqa: ANN001
     """The case worth catching. A cassette holds the whole composed prompt and the whole diff, so
     a commit from that tree publishes both -- and redaction masks credentials, not source."""
     from in_lockstep import doctor
@@ -1116,7 +1159,7 @@ def test_doc168_warns_when_a_recording_is_not_ignored(tmp_path) -> None:  # noqa
     assert "NOT ignoring" in found[0].message
 
 
-def test_doc168_never_fails_a_run(tmp_path) -> None:  # noqa: ANN001
+def test_doc168_never_fails_a_run(tmp_path: Path) -> None:  # noqa: ANN001
     """Recording is on by default now, and a default must not turn every doctor exit non-zero."""
     from in_lockstep import doctor
 
@@ -1124,7 +1167,7 @@ def test_doc168_never_fails_a_run(tmp_path) -> None:  # noqa: ANN001
     assert not [c for c in report.errors if c.code == "DOC168"]
 
 
-def test_doc168_is_silent_when_nothing_was_recorded(tmp_path) -> None:  # noqa: ANN001
+def test_doc168_is_silent_when_nothing_was_recorded(tmp_path: Path) -> None:  # noqa: ANN001
     """A note about an empty directory is noise, and noise is how a report stops being read."""
     from in_lockstep import doctor
 
@@ -1141,30 +1184,32 @@ def test_doc168_is_silent_when_nothing_was_recorded(tmp_path) -> None:  # noqa: 
 # that cries wolf gets its verdict discarded, and then gates nothing at all.
 
 
-def _protection_says(monkeypatch, *, branch_rc: int = 0, branch_out: str = "", name: str = "main"):
+def _protection_says(
+    monkeypatch: pytest.MonkeyPatch, *, branch_rc: int = 0, branch_out: str = "", name: str = "main"
+) -> doctor.Report:
     """Drive `_branch_protection` with a stubbed `gh`, keyed on which subcommand is called."""
     import subprocess
 
-    from in_lockstep import doctor
-
-    def fake_run(argv, **kwargs):
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if argv[:2] == ["gh", "repo"]:
             return subprocess.CompletedProcess(argv, 0 if name else 1, name, "")
         return subprocess.CompletedProcess(argv, branch_rc, "", branch_out)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     report = doctor.Report()
-    doctor._branch_protection(report, doctor.Path("."))
+    doctor._branch_protection(report, Path("."))
     return report
 
 
-def test_gate_ci_3_an_unprotected_default_branch_is_an_error(monkeypatch) -> None:
+def test_gate_ci_3_an_unprotected_default_branch_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The finding this check exists for, and the only answer that earns an ERROR."""
     report = _protection_says(monkeypatch, branch_rc=1, branch_out="gh: Branch not protected (HTTP 404)")
     assert any(c.code == "DOC121" for c in report.errors)
 
 
-def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(monkeypatch) -> None:
+def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Absent is not zero, in the check that made this repository discard doctor's verdict.
 
     A job token gets `Resource not accessible by integration` for a branch that is fully
@@ -1180,13 +1225,13 @@ def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(m
     assert "Resource not accessible" in note.hint, "what gh said is quoted, not paraphrased"
 
 
-def test_gate_ci_3_a_protected_default_branch_reports_nothing(monkeypatch) -> None:
+def test_gate_ci_3_a_protected_default_branch_reports_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     """The control: a check that fired on success too would be noise on every green run."""
     report = _protection_says(monkeypatch, branch_rc=0)
     assert not [c for c in report.checks if c.code in ("DOC120", "DOC121")]
 
 
-def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch) -> None:
+def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch: pytest.MonkeyPatch) -> None:
     """This asked about `branches/main/protection` literally, so a repository whose default is
     `master` got `Branch not found` — and, under the old reporting, an ERROR about a rule it may
     well have had."""
@@ -1202,7 +1247,7 @@ def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch) -> N
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    doctor._branch_protection(doctor.Report(), doctor.Path("."))
+    doctor._branch_protection(doctor.Report(), Path("."))
     assert any("branches/master/protection" in a for a in asked), asked
 
 
@@ -1231,7 +1276,7 @@ def test_a_sandbox_that_refuses_is_blocked_in_every_command_adapter() -> None:
     sandbox.runtime = lambda: None  # type: ignore[method-assign]
     ctx = types.SimpleNamespace(repo=types.SimpleNamespace(root="."))
 
-    cases = [
+    cases: list[tuple[Any, Any]] = [
         (c.CommandTest(["pytest"], sandbox=sandbox), Test(paths=())),
         (c.CommandValidate(["ruff", "check"], sandbox=sandbox), Validate(paths=())),
         (c.CommandBuild(["make", "build"], sandbox=sandbox), Build()),
@@ -1311,7 +1356,7 @@ def test_a_ceiling_on_the_test_is_not_reported_as_a_test_that_disagreed() -> Non
     from in_lockstep.core.outcome import Finding, Outcome, Severity, Status
 
     ceiling = Finding(id="cost.budget_exceeded", message="ceiling", severity=Severity.ERROR)
-    blocked = Outcome.blocked_by("cost.budget_exceeded", findings=(ceiling,))
+    blocked: Outcome[Any] = Outcome.blocked_by("cost.budget_exceeded", findings=(ceiling,))
     passed = not_a_verdict(blocked)
     assert passed is not None and passed.status is Status.BLOCKED
     assert passed.findings[0].id == "cost.budget_exceeded", "the refusal must travel as itself"
@@ -1333,7 +1378,7 @@ def test_a_pack_refused_by_a_control_is_not_a_pack_that_broke() -> None:
 # -- one cached answer counted thirty times (issue 259) -----------------------------------------
 
 
-def _replay(run: str, finding: str = "review.security") -> dict:
+def _replay(run: str, finding: str = "review.security") -> dict[str, Any]:
     return {
         "run_id": run,
         "status": "succeeded",
@@ -1344,7 +1389,7 @@ def _replay(run: str, finding: str = "review.security") -> dict:
     }
 
 
-def _paid(run: str, finding: str = "review.security") -> dict:
+def _paid(run: str, finding: str = "review.security") -> dict[str, Any]:
     # No `billed_fraction`: this repository's eight paid records carry `cost_usd` and not that
     # field, which is exactly why reading one signal could not tell these populations apart.
     return {

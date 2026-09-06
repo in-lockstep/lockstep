@@ -8,9 +8,11 @@ point: a staged change becomes a red-or-green verdict.
 from __future__ import annotations
 
 import asyncio
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -22,7 +24,7 @@ from in_lockstep.adapters.worktree import (
     materialize,
     verdict_over_staged,
 )
-from in_lockstep.core.outcome import Status
+from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.types import ChangeSet, FileChange, Test, TestReport, TestVerdict
 
 
@@ -266,7 +268,7 @@ class _Ctx:
 
         self.container = _Container()
 
-    async def do(self, request: Test):  # noqa: ANN202
+    async def do(self, request: Test) -> Outcome[Any]:
         return await PytestTest(args=["-q"]).invoke(self, request)
 
 
@@ -312,8 +314,9 @@ class _WritingInner:
         self.cwd: str | None = None
         self.head_view: str | None = None
 
-    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001, ANN202
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
         self.cwd = cwd
+        assert cwd is not None, "the worktree runner names the materialized tree as cwd"
         tree = Path(cwd)
         self.head_view = (tree / "app.py").read_text()  # the copy carries HEAD
         (tree / "scratch.txt").write_text("junk")  # an ordinary in-tree write
@@ -407,7 +410,7 @@ class _CwdRecordingSandbox:
     def __init__(self) -> None:
         self.cwd: str | None = None
 
-    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
         self.cwd = cwd
         return type("R", (), {"exit_code": 0, "stdout": "", "stderr": ""})()
 
@@ -432,9 +435,18 @@ class _CommandRecordingSandbox(_CwdRecordingSandbox):
         super().__init__()
         self.command: list[str] = []
 
-    async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
         self.command = list(command)
         return await super().run(command, cwd=cwd, timeout=timeout)
+
+
+class _Containerized(_CommandRecordingSandbox):
+    """What `tooling._containerized` asks of a runner: an image, and a runtime it can find."""
+
+    image = "docker.io/library/python:3.12-slim"
+
+    def runtime(self) -> str:
+        return "/usr/bin/docker"
 
 
 def _ctx(root: Path) -> object:
@@ -449,7 +461,7 @@ def _executable(path: Path, body: str = "#!/bin/sh\nexit 0\n") -> Path:
 
 
 def test_gate_tooling_1_the_repositorys_venv_runs_the_suite_not_the_interpreter_running_us(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """GATE-TOOLING-1. `sys.executable` was the rule, on the reasoning that the interpreter running
     this process is the one set up for the repository. Under `uv tool install` it is the tool's
@@ -457,10 +469,10 @@ def test_gate_tooling_1_the_repositorys_venv_runs_the_suite_not_the_interpreter_
     a repository whose `.venv` had one (#167). The repository's environment comes first, and the
     materialized worktree (`Test.root`) is where the suite runs, not where the venv is looked for.
     """
-    import in_lockstep.adapters.tooling as tooling
 
     venv_python = _executable(tmp_path / ".venv" / "bin" / "python")
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/opt/homebrew/bin/python3")
+    # `tooling` does `import shutil`, so patching the module patches what it consults.
+    monkeypatch.setattr(shutil, "which", lambda name: "/opt/homebrew/bin/python3")
     sandbox = _CommandRecordingSandbox()
 
     outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test(root="/materialized")))
@@ -471,47 +483,47 @@ def test_gate_tooling_1_the_repositorys_venv_runs_the_suite_not_the_interpreter_
 
 
 def test_this_process_runs_the_suite_only_when_it_lives_inside_the_repository(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """`uv run` in the checkout, tox, a virtualenv under the tree: the process is the repository's
     (GATE-TOOLING-1). An installed tool's interpreter is not, and PATH is the fallback then."""
-    import in_lockstep.adapters.tooling as tooling
 
     inside = _executable(tmp_path / ".tox" / "py" / "bin" / "python")
-    monkeypatch.setattr(tooling.sys, "executable", str(inside))
-    monkeypatch.setattr(
-        tooling.shutil, "which", lambda name: "/usr/bin/python3" if name == "python3" else None
-    )
+    monkeypatch.setattr(sys, "executable", str(inside))
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/python3" if name == "python3" else None)
     sandbox = _CommandRecordingSandbox()
     asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
     assert sandbox.command[0] == str(inside)
 
-    monkeypatch.setattr(tooling.sys, "executable", "/opt/tool/bin/python")
+    monkeypatch.setattr(sys, "executable", "/opt/tool/bin/python")
     asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
     assert sandbox.command[0] == "/usr/bin/python3", "outside the repository, PATH is what is left"
 
 
-def test_nothing_found_is_a_refusal_that_names_every_place_it_looked(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_nothing_found_is_a_refusal_that_names_every_place_it_looked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """Absent is not guessed, and it is not a red suite either (GATE-TOOLING-1)."""
-    import in_lockstep.adapters.tooling as tooling
 
-    monkeypatch.setattr(tooling.sys, "executable", "")
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", "")
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     sandbox = _CommandRecordingSandbox()
 
     outcome = asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
 
     assert outcome.status is Status.ERRORED
+    assert outcome.reason is not None
     assert ".venv/bin/python" in outcome.reason and "python3 on PATH" in outcome.reason
     assert sandbox.command == [], "nothing ran"
 
 
-def test_this_process_is_the_last_resort_when_path_has_no_python_at_all(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_this_process_is_the_last_resort_when_path_has_no_python_at_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
     """Better than nothing only when PATH has nothing: the tool's own interpreter, named as such."""
-    import in_lockstep.adapters.tooling as tooling
 
-    monkeypatch.setattr(tooling.sys, "executable", "/opt/tool/bin/python")
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", "/opt/tool/bin/python")
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     (found,) = PytestTest().locations(str(tmp_path))
     assert found.path == "/opt/tool/bin/python"
     assert "PATH has no python" in found.how
@@ -519,18 +531,17 @@ def test_this_process_is_the_last_resort_when_path_has_no_python_at_all(tmp_path
 
 
 def test_a_symlinked_venv_interpreter_inside_the_repository_counts_as_inside(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """A venv's python is a symlink to the base interpreter outside the tree. Resolving it said
     every venv lived outside the repository and the branch never fired for a real one; the
     interpreter's directory is what places it (GATE-TOOLING-1)."""
-    import in_lockstep.adapters.tooling as tooling
 
     link = tmp_path / "venv" / "bin" / "python"
     link.parent.mkdir(parents=True)
     link.symlink_to(sys.executable)
-    monkeypatch.setattr(tooling.sys, "executable", str(link))
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: "/usr/bin/python3")
+    monkeypatch.setattr(sys, "executable", str(link))
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/python3")
     sandbox = _CommandRecordingSandbox()
 
     asyncio.run(PytestTest(sandbox=sandbox).invoke(_ctx(tmp_path), Test()))
@@ -538,35 +549,31 @@ def test_a_symlinked_venv_interpreter_inside_the_repository_counts_as_inside(
 
 
 def test_pytest_missing_from_the_resolved_interpreter_is_an_error_not_a_red_suite(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: ANN001
     """The interpreter exists and has no pytest. Reading `No module named pytest` as a failed
     suite blamed the change for the environment (GATE-TOOLING-1)."""
-    import in_lockstep.adapters.tooling as tooling
 
     venv_python = _executable(tmp_path / ".venv" / "bin" / "python")
 
     class _NoPytest(_CommandRecordingSandbox):
-        async def run(self, command, *, cwd=None, timeout=900.0):  # noqa: ANN001
+        async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
             await super().run(command, cwd=cwd, timeout=timeout)
             return type(
                 "R", (), {"exit_code": 1, "stdout": "", "stderr": "python: No module named pytest\n"}
             )()
 
-    monkeypatch.setattr(tooling.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     outcome = asyncio.run(PytestTest(sandbox=_NoPytest()).invoke(_ctx(tmp_path), Test()))
     assert outcome.status is Status.ERRORED
     assert outcome.reason == f"pytest is not installed in {venv_python} (the repository's .venv)"
 
 
-def test_a_containerized_run_does_not_probe_this_host(monkeypatch) -> None:  # noqa: ANN001
+def test_a_containerized_run_does_not_probe_this_host(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     """The image resolves the name, so what is or is not on THIS host says nothing about it."""
-    import in_lockstep.adapters.pytest_adapter as adapter_mod
 
-    monkeypatch.setattr(adapter_mod.shutil, "which", lambda name: None)
-    sandbox = _CommandRecordingSandbox()
-    sandbox.image = "docker.io/library/python:3.12-slim"
-    sandbox.runtime = lambda: "/usr/bin/docker"
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    sandbox = _Containerized()
 
     asyncio.run(PytestTest(sandbox=sandbox).invoke(object(), Test(root="/materialized")))
 

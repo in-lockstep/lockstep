@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -26,6 +27,7 @@ from in_lockstep.cli import main
 from in_lockstep.core.spend import Spend
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, Message, TokenUsage, ToolCall
+from in_lockstep.lockstep import Lockstep
 from in_lockstep.platform.ledger import GitLedger, InRepoLedger
 from in_lockstep.platform.ledger.store import SCHEMA
 from in_lockstep.privileged.egress import UnsandboxedEgress
@@ -84,7 +86,9 @@ def test_a_run_record_says_when_against_what_and_under_which_config(hermetic: Pa
     assert "base" not in record, "no CI, no base ref — absent, never fabricated"
 
 
-def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(monkeypatch, tmp_path: Path) -> None:
+def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """`head` on a dirty tree does not describe what the run saw, and the record must say so;
     on CI, the base ref and host-computed actor corroborate the approval trail."""
     from in_lockstep.cli import _provenance
@@ -110,7 +114,7 @@ def test_provenance_marks_a_dirty_tree_and_carries_the_ci_base(monkeypatch, tmp_
 # -- report ---------------------------------------------------------------------------
 
 
-def _seed(ledger: InRepoLedger, run_id: str, record: dict) -> None:
+def _seed(ledger: InRepoLedger, run_id: str, record: dict[str, Any]) -> None:
     asyncio.run(ledger.append(run_id, record))
 
 
@@ -267,7 +271,7 @@ def test_history_explain_refuses_an_unknown_run_by_name(hermetic: Path) -> None:
 
 
 class _Provider(LLMProvider):
-    def __init__(self, replies: list) -> None:
+    def __init__(self, replies: list[LLMOutput | Exception]) -> None:
         self.replies = list(replies)
 
     def name(self) -> str:
@@ -338,7 +342,7 @@ def test_an_exhausted_session_records_every_turn_and_tool_result(tmp_path: Path)
     writer = TranscriptWriter("run-3", root=tmp_path)
     ai = _invoker(_Provider([_answer("looking", tool_calls=[call])]), writer)
 
-    async def run_tool(server: str, name: str, args: dict) -> str:
+    async def run_tool(server: str, name: str, args: dict[str, Any]) -> str:
         return "file contents"
 
     asyncio.run(
@@ -417,7 +421,7 @@ def test_spent_in_window_sums_only_placeable_recent_records() -> None:
     from in_lockstep.platform.ledger import spent_in_window
 
     now = datetime(2026, 8, 29, 12, 0, 0, tzinfo=UTC)
-    records = [
+    records: list[dict[str, object]] = [
         {"ts": "2026-08-29T11:00:00+00:00", "cost_usd": 0.30},  # inside the window
         {"ts": "2026-08-29T11:30:00+00:00", "cost_usd": 0.20},  # inside
         {"ts": "2026-08-28T11:00:00+00:00", "cost_usd": 5.00},  # 25h old: outside
@@ -428,7 +432,7 @@ def test_spent_in_window_sums_only_placeable_recent_records() -> None:
     assert spent_in_window(records, now=now) == pytest.approx(0.50)
 
 
-def _spending_lockstep():
+def _spending_lockstep() -> Lockstep:
     """A lifecycle the ceiling is in scope for: one bound adapter that declares it spends, and a
     declared budget so GATE-BUDGET-1 stays satisfied."""
     from in_lockstep.core.spend import Budget
@@ -447,7 +451,9 @@ def _spending_lockstep():
     return lockstep
 
 
-def test_the_daily_ceiling_refuses_a_run_pre_start_and_the_window_rolls(hermetic: Path, monkeypatch) -> None:
+def test_the_daily_ceiling_refuses_a_run_pre_start_and_the_window_rolls(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The partition the crosswalk row said was Lost: per repository, per rolling day, refused
     before the run starts — from the same store every run writes."""
     from datetime import UTC, datetime, timedelta
@@ -475,7 +481,9 @@ def test_the_daily_ceiling_refuses_a_run_pre_start_and_the_window_rolls(hermetic
     assert lockstep.context(run_id="next") is not None
 
 
-def test_the_daily_ceiling_lets_a_run_with_a_zero_ceiling_start(hermetic: Path, monkeypatch) -> None:
+def test_the_daily_ceiling_lets_a_run_with_a_zero_ceiling_start(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A replay or a dry run declares a ceiling of zero, and cannot add to the window.
 
     Scoped like GATE-BUDGET-1 and for the same reason: refusing a free replay because yesterday's
@@ -496,7 +504,9 @@ def test_the_daily_ceiling_lets_a_run_with_a_zero_ceiling_start(hermetic: Path, 
     assert lockstep.context(run_id="replay") is not None
 
 
-def test_no_declared_daily_limit_means_no_ledger_read(hermetic: Path, monkeypatch) -> None:
+def test_no_declared_daily_limit_means_no_ledger_read(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Advisory-first, resolved tension #4: the ceiling is an opt-in an organisation states, not
     a default that surprises every laptop."""
     monkeypatch.delenv("IN_LOCKSTEP_DAILY_LIMIT", raising=False)
@@ -504,7 +514,9 @@ def test_no_declared_daily_limit_means_no_ledger_read(hermetic: Path, monkeypatc
     assert _spending_lockstep().context(run_id="r") is not None
 
 
-def test_a_lifecycle_that_cannot_spend_is_not_gated_by_the_spend_ceiling(hermetic: Path, monkeypatch) -> None:
+def test_a_lifecycle_that_cannot_spend_is_not_gated_by_the_spend_ceiling(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Scoped like GATE-BUDGET-1: refusing a free selfcheck because yesterday's agent runs were
     expensive teaches people the refusal is noise."""
     from datetime import UTC, datetime
@@ -518,14 +530,18 @@ def test_a_lifecycle_that_cannot_spend_is_not_gated_by_the_spend_ceiling(hermeti
     assert Lockstep.detect().context(run_id="r") is not None
 
 
-def test_a_malformed_daily_limit_is_loud_not_silently_unenforced(hermetic: Path, monkeypatch, capsys) -> None:
+def test_a_malformed_daily_limit_is_loud_not_silently_unenforced(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setenv("IN_LOCKSTEP_DAILY_LIMIT", "one dollar")
     _repo(hermetic)
     assert _spending_lockstep().context(run_id="r") is not None
     assert "not a number; ceiling not enforced" in capsys.readouterr().out
 
 
-def test_the_cli_exits_blocked_when_the_ceiling_refuses(hermetic: Path, monkeypatch) -> None:
+def test_the_cli_exits_blocked_when_the_ceiling_refuses(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """BLOCKED, not failed: the exit code is how a trampoline's `if` tells 'over the daily
     window' from 'broken'."""
     from datetime import UTC, datetime
@@ -584,7 +600,9 @@ def test_the_page_is_written_through_the_redacting_sink(hermetic: Path, tmp_path
     assert "http://" not in html and "https://" not in html and "<script" not in html
 
 
-def test_the_report_degrades_with_a_reason_when_the_host_cannot_answer(hermetic: Path, monkeypatch) -> None:
+def test_the_report_degrades_with_a_reason_when_the_host_cannot_answer(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A metrics page is a document somebody reads. The alternative to "we could not reach the
     host" is not "no page" — it is a page that quietly omits a section, which is the failure
     `Measured` exists to prevent, one level up."""
@@ -602,7 +620,9 @@ def test_the_report_degrades_with_a_reason_when_the_host_cannot_answer(hermetic:
     assert "outcomes" in result.stdout, "the rest of the report still printed"
 
 
-def test_a_host_that_raises_does_not_take_the_report_with_it(hermetic: Path, monkeypatch) -> None:
+def test_a_host_that_raises_does_not_take_the_report_with_it(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
 
     class _Angry:
@@ -617,7 +637,9 @@ def test_a_host_that_raises_does_not_take_the_report_with_it(hermetic: Path, mon
     assert "outcomes" in result.stdout
 
 
-def test_delivery_reaches_the_report_when_the_host_answers(hermetic: Path, monkeypatch) -> None:
+def test_delivery_reaches_the_report_when_the_host_answers(
+    hermetic: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _seed(InRepoLedger(), "r1", {"kind": "review", "status": "succeeded"})
 
     class _Host:

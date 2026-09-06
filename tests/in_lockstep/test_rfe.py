@@ -11,12 +11,13 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from in_lockstep.adapters.ai.rfe import AiRfe, Rfe, RfeDraft
-from in_lockstep.ai.context import Provenance
-from in_lockstep.ai.invoker import AiInvoker
+from in_lockstep.ai.context import ContextPackage, Provenance
+from in_lockstep.ai.invoker import AiInvoker, Invoker
 from in_lockstep.ai.retry import RetryPolicy
 from in_lockstep.core.outcome import Status
 from in_lockstep.core.spend import Spend
@@ -159,7 +160,7 @@ def test_the_shipped_prompt_and_schema_agree_on_the_required_shape() -> None:
     from in_lockstep.prompts.rfe import RFE_SCHEMA
 
     skill = (Path(__file__).resolve().parents[2] / "src/in_lockstep/prompts/skills/rfe-format.md").read_text()
-    for field in RFE_SCHEMA["properties"]:  # type: ignore[union-attr]
+    for field in RFE_SCHEMA["properties"]:
         assert f'"{field}"' in skill, f"schema field {field!r} missing from the format skill"
 
 
@@ -168,14 +169,15 @@ def test_untrusted_provenance_is_the_one_the_adapter_uses() -> None:
 
     captured: dict[str, object] = {}
     original = adapter.invoker_factory
+    assert original is not None
 
-    def capture_factory(ctx: object) -> AiInvoker:
+    def capture_factory(ctx: object) -> Invoker:
         invoker = original(ctx)
         run = invoker.run
 
-        async def wrapped(**kwargs: object):
+        async def wrapped(**kwargs: Any) -> Any:
             captured["context"] = kwargs.get("context")
-            return await run(**kwargs)  # type: ignore[arg-type]
+            return await run(**kwargs)
 
         invoker.run = wrapped  # type: ignore[method-assign]
         return invoker
@@ -183,7 +185,8 @@ def test_untrusted_provenance_is_the_one_the_adapter_uses() -> None:
     adapter.invoker_factory = capture_factory
     asyncio.run(adapter.invoke(None, _spec()))
     package = captured["context"]
-    assert package.items[0].provenance is Provenance.UNTRUSTED_EXTERNAL  # type: ignore[union-attr]
+    assert isinstance(package, ContextPackage)
+    assert package.items[0].provenance is Provenance.UNTRUSTED_EXTERNAL
 
 
 # -- the CLI: draft printed, filing is the human step ----------------------------------------

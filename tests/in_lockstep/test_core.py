@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
@@ -85,7 +85,9 @@ class Spender:
         return Outcome.errored("provider 500")
 
 
-def ctx_with(*bindings, middleware=None) -> tuple[RunContext, Container]:
+def ctx_with(
+    *bindings: tuple[type[Any], Any], middleware: list[Any] | None = None
+) -> tuple[RunContext, Container]:
     container = Container()
     for iface, impl in bindings:
         container.bind(iface, impl)
@@ -123,8 +125,8 @@ def test_parked_exists_but_nothing_produces_it_at_1_0() -> None:
 
 def test_decided_is_orthogonal_to_status() -> None:
     """A successful run that judged nothing is not a cache hit, and must not look like one."""
-    undecided = Outcome(status=Status.SUCCEEDED, decided=False)
-    cache_hit = Outcome.skipped()
+    undecided: Outcome[Any] = Outcome(status=Status.SUCCEEDED, decided=False)
+    cache_hit: Outcome[Any] = Outcome.skipped()
     assert undecided.succeeded and not undecided.decided
     assert cache_hit.status is Status.SKIPPED and cache_hit.decided
 
@@ -173,7 +175,7 @@ def test_ceilings_merge_lowest_not_last() -> None:
 # -- the kill switch ----------------------------------------------------------------
 
 
-def test_killswitch_halts_before_any_adapter_runs(monkeypatch) -> None:
+def test_killswitch_halts_before_any_adapter_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     """GATE-ASYNC-3 (P1 form). Checked before the chain, so --no-middleware cannot reach past it."""
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter))
@@ -184,7 +186,7 @@ def test_killswitch_halts_before_any_adapter_runs(monkeypatch) -> None:
     assert adapter.calls == 0, "the adapter must not have executed"
 
 
-def test_killswitch_is_not_middleware(monkeypatch) -> None:
+def test_killswitch_is_not_middleware(monkeypatch: pytest.MonkeyPatch) -> None:
     """It must hold with an empty chain, which is what --no-middleware produces."""
     adapter = Ok()
     ctx, _ = ctx_with((Thing, adapter), middleware=[])
@@ -273,7 +275,8 @@ def test_container_ignores_a_lower_priority_rebind() -> None:
     explicit = Ok()
     container.bind(Thing, explicit, tier=Tier.EXPLICIT)
     container.bind(Thing, Ok(), tier=Tier.PLUGIN)
-    assert container.resolve(Thing) is explicit
+    resolved: object = container.resolve(Thing)
+    assert resolved is explicit
 
 
 def test_unbound_interface_says_so() -> None:
@@ -621,7 +624,7 @@ def test_a_verb_is_immutable() -> None:
     from in_lockstep.core.verbs import Verb
 
     with pytest.raises(AttributeError):
-        Verb.TEST.value = "something else"  # type: ignore[misc]
+        Verb.TEST.value = "something else"
 
 
 def test_a_verb_survives_a_round_trip_with_its_identity() -> None:
@@ -655,7 +658,7 @@ def test_a_custom_verb_labels_its_own_telemetry() -> None:
 # would have been a downgrade wearing the name of a port, so it refuses at startup.
 
 
-def _spender():
+def _spender() -> type[Any]:
     from in_lockstep.core.verbs import Capability, Verb
 
     class Spender:
@@ -697,7 +700,7 @@ def test_a_deterministic_lifecycle_needs_no_budget() -> None:
     assert Iface is not None
 
 
-def _deterministic():
+def _deterministic() -> type[Any]:
     from in_lockstep.core.verbs import Capability, Verb
 
     class Cheap:
@@ -728,7 +731,7 @@ def test_a_ceiling_declared_as_middleware_counts() -> None:
 
 
 @pytest.mark.parametrize("ceiling", [{"usd": 1.0}, {"tokens": 1000}, {"wall_seconds": 60}, {"turns": 4}])
-def test_any_declared_ceiling_satisfies_it(ceiling: dict) -> None:
+def test_any_declared_ceiling_satisfies_it(ceiling: dict[str, Any]) -> None:
     """Four dimensions, any one of which is a decision about how much is too much."""
     from in_lockstep.core.spend import Budget
     from in_lockstep.lockstep import Lockstep
@@ -864,9 +867,9 @@ def test_re_importing_a_module_is_not_a_duplicate_workflow() -> None:
     state = snapshot()
     try:
 
-        def make():  # noqa: ANN202 - a stand-in for module execution
+        def make() -> Callable[..., Any]:  # a stand-in for module execution
             @workflow(id="demo/reimport")
-            async def run(ctx):  # noqa: ANN001, ANN202
+            async def run(ctx: Any) -> None:
                 return None
 
             return run
@@ -877,7 +880,7 @@ def test_re_importing_a_module_is_not_a_duplicate_workflow() -> None:
         with pytest.raises(DuplicateWorkflow, match="already registered"):
 
             @workflow(id="demo/reimport")
-            async def different(ctx):  # noqa: ANN001, ANN202
+            async def different(ctx: Any) -> None:
                 return None
     finally:
         restore(state)
@@ -886,7 +889,7 @@ def test_re_importing_a_module_is_not_a_duplicate_workflow() -> None:
 # -- the run's verdict, derived from its steps (GATE-LEDGER-9) --------------------------------
 
 
-def _context_with(*statuses, decided=True, reason=None):
+def _context_with(*statuses: Status, decided: bool = True, reason: str | None = None) -> RunContext:
     from in_lockstep.core.container import Container
     from in_lockstep.core.context import RepoInfo, RunContext, StepOutcome
     from in_lockstep.core.outcome import Outcome

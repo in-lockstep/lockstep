@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from ...ai.context import ContextItem, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy
+from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy, Invoker
 from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.replay import request_from
 from ...ai.structured import schema_instruction, settle
@@ -88,9 +88,9 @@ class AiImprove:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker] | None = None,
+        invoker_factory: Callable[[Any], Invoker] | None = None,
         *,
-        probe_factory: Callable[[str], Callable[[Any], AiInvoker]] | None = None,
+        probe_factory: Callable[[str], Callable[[Any], Invoker]] | None = None,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[ImprovePrompt]] | None = None,
         layers: PromptLayers | None = None,
@@ -144,7 +144,7 @@ class AiImprove:
         )
         params = ImproveParams(label=inp.label, finding=inp.finding, runs=inp.runs, considered=inp.considered)
         messages = prompt.render(params, package)
-        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         try:
             invocation = await invoker.run(
                 system=system, messages=messages, context=package, policy=self.policy
@@ -208,19 +208,22 @@ class AiImprove:
         from ...ai.bootstrap import recorded
 
         answers: list[Answered] = []
-        invokers: dict[str, AiInvoker] = {}
+        invokers: dict[str, Any] = {}
         total = Cost()
         for probe in inp.probes:
             invoker = invokers.get(probe.model)
             if invoker is None:
                 factory = (self.probe_factory or routed_factory)(probe.model)
-                invoker = factory(ctx)
-                # The same wrap `resolve_invoker` applies: the framework holds what the factory
-                # returned, and the recording is not something a custom factory can decline.
+                # `Any`, not `Invoker`: the wrap below reaches for a `provider` the protocol does
+                # not name, on purpose -- it is applied to whatever the factory returned that has
+                # one, the way `resolve_invoker` applies it, and the recording is not something a
+                # custom factory can decline.
+                built: Any = factory(ctx)
                 log = getattr(ctx, "recording", None)
-                if log is not None and getattr(invoker, "provider", None) is not None:
-                    invoker.provider = recorded(invoker.provider, log)
-                invokers[probe.model] = invoker
+                if log is not None and getattr(built, "provider", None) is not None:
+                    built.provider = recorded(built.provider, log)
+                invokers[probe.model] = built
+                invoker = built
             request = request_from(probe.request)
             # The recorded request's own ceilings, so the after arm answers under the terms the
             # before arm was recorded under. One turn: a review recorded with no tools has nothing

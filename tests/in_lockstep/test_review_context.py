@@ -15,7 +15,9 @@ run.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any, NoReturn, TypeVar
 
 import pytest
 
@@ -25,8 +27,10 @@ from in_lockstep.platform.scm import GitHubScm, GitLocal
 from in_lockstep.platform.scm.base import MAX_REMARKS, Remark, branch_for, is_run_branch_for
 from in_lockstep.platform.tickets import Ticket
 
+T = TypeVar("T")
 
-def _run(coro):
+
+def _run(coro: Coroutine[Any, Any, T]) -> T:
     return asyncio.run(coro)
 
 
@@ -87,11 +91,13 @@ def test_gate_review_1_only_branches_this_framework_wrote_are_gathered() -> None
 # -- reading GitHub -------------------------------------------------------------------------
 
 
-def _github(tmp_path: Path, *, prs: object = None, view: object = None, notes: object = None):
+def _github(
+    tmp_path: Path, *, prs: object = None, view: object = None, notes: object = None
+) -> tuple[GitHubScm, list[tuple[str, ...]]]:
     scm = GitHubScm(tmp_path)
     calls: list[tuple[str, ...]] = []
 
-    def fake_json(*args: str):
+    def fake_json(*args: str) -> object:
         calls.append(args)
         if args[:2] == ("pr", "list"):
             return prs
@@ -252,15 +258,15 @@ def test_losing_the_line_notes_does_not_lose_the_thread(tmp_path: Path) -> None:
 
 
 class _Host:
-    def __init__(self, changes=(), remarks=()) -> None:
+    def __init__(self, changes: Any = (), remarks: Any = ()) -> None:
         self._changes, self._remarks = changes, remarks
 
-    async def changes_for(self, ticket: str):
+    async def changes_for(self, ticket: str) -> Any:
         if isinstance(self._changes, Exception):
             raise self._changes
         return self._changes
 
-    async def remarks(self, number: int):
+    async def remarks(self, number: int) -> Any:
         if isinstance(self._remarks, Exception):
             raise self._remarks
         return self._remarks
@@ -368,7 +374,7 @@ def test_ticket_of_prefers_the_record_and_falls_back_to_the_branch(tmp_path: Pat
 def test_ticket_of_says_not_a_change_request_rather_than_erroring(tmp_path: Path) -> None:
     """`gh pr view` on an issue number fails, and that failure IS the answer."""
 
-    def boom(*a: str):
+    def boom(*a: str) -> NoReturn:
         raise RuntimeError("gh pr view 218 failed: no pull requests found")
 
     scm = GitHubScm(tmp_path)
@@ -379,10 +385,10 @@ def test_ticket_of_says_not_a_change_request_rather_than_erroring(tmp_path: Path
 class _Numbered:
     shared_numbering = True
 
-    def __init__(self, answer) -> None:
+    def __init__(self, answer: Any) -> None:
         self.answer = answer
 
-    async def ticket_of(self, number: int):
+    async def ticket_of(self, number: int) -> Any:
         if isinstance(self.answer, Exception):
             raise self.answer
         return self.answer

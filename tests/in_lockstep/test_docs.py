@@ -13,6 +13,9 @@ import inspect
 import re
 import sys
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,7 +24,7 @@ def _python_blocks(path: Path) -> list[str]:
     return re.findall(r"```python\n(.*?)```", path.read_text(), re.DOTALL)
 
 
-def test_the_readme_front_door_actually_runs(tmp_path, monkeypatch) -> None:
+def test_the_readme_front_door_actually_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Executed, not linted: an import that resolves but binds the wrong thing passes a parse.
 
     The chdir keeps `Lockstep.detect()` hermetic — the snippet must work in a directory that is
@@ -53,7 +56,9 @@ def test_every_documented_snippet_is_at_least_valid_python() -> None:
             compile(block, f"{doc.name}[{index}]", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
 
 
-def test_the_cookbook_snippets_execute_not_merely_parse(tmp_path, monkeypatch) -> None:
+def test_the_cookbook_snippets_execute_not_merely_parse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The cookbook promises its `lockstep.py` snippets are executed by the suite. This is that.
 
     One shared namespace, in order: recipe 1 defines `lockstep` and later recipes bind into it,
@@ -69,7 +74,7 @@ def test_the_cookbook_snippets_execute_not_merely_parse(tmp_path, monkeypatch) -
 
     blocks = _python_blocks(ROOT / "docs" / "cookbook.md")
     assert len(blocks) >= 5, "the cookbook lost its snippets"
-    namespace: dict = {}
+    namespace: dict[str, Any] = {}
     for index, block in enumerate(blocks):
         exec(compile(block, f"cookbook.md[{index}]", "exec"), namespace)
 
@@ -147,7 +152,7 @@ def _page_module(doc: Path) -> str:
     return _PRELUDE + "\n".join(body or ["    pass"]) + "\n"
 
 
-def test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy(tmp_path) -> None:
+def test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy(tmp_path: Path) -> None:
     """GATE-DOCS-1. The same `mypy --strict` an adopter runs, over every page, with exactly the
     two names the page says it assumes. Written to a temporary directory rather than the tree,
     so `test_checked_tree.py`'s ratchet over checked paths is not asked to cover generated files.
@@ -177,7 +182,7 @@ def test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy(tmp_
     )
 
 
-def test_the_typecheck_gate_would_notice_a_bare_outcome(tmp_path) -> None:
+def test_the_typecheck_gate_would_notice_a_bare_outcome(tmp_path: Path) -> None:
     """The positive control, and the exact shape #252 filed: a bare `Outcome` on a documented
     workflow. The gate passes over the real pages, so without this a checker that had silently
     stopped finding anything would go on passing."""
@@ -210,7 +215,7 @@ def test_the_typecheck_gate_would_notice_a_bare_outcome(tmp_path) -> None:
     assert "type-arg" in result.stdout, result.stdout
 
 
-def test_the_typecheck_gate_would_notice_a_missing_import(tmp_path) -> None:
+def test_the_typecheck_gate_would_notice_a_missing_import(tmp_path: Path) -> None:
     """The other positive control, and the one that keeps the prelude honest: a snippet using a
     framework name it never imported must fail, so the prelude can never quietly grow the import
     a reader needs. The README front door once raised NameError for months on exactly this."""
@@ -374,7 +379,9 @@ def _importable(module: str, attr: str) -> bool:
         return False
 
 
-def test_the_quickstart_outputs_match_the_tool_that_ships(tmp_path, monkeypatch) -> None:
+def test_the_quickstart_outputs_match_the_tool_that_ships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """getting-started shows literal command output. The stable lines of those captures are
     asserted against the real commands, so the page cannot describe a previous version.
 

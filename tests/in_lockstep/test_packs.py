@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -79,7 +80,7 @@ def test_gate_pack_1_an_installed_pack_binds_nothing(monkeypatch: pytest.MonkeyP
 
     asked: list[str] = []
 
-    def fake_entry_points(*, group: str):
+    def fake_entry_points(*, group: str) -> list[Any]:
         asked.append(group)
         return [_example_entry()] if group == GROUP else []
 

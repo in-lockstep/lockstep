@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from in_lockstep.platform.ledger import (
     summarize,
 )
 from in_lockstep.platform.scm import DirectPushRefused, GitHubScm, GitLocal, branch_for
-from in_lockstep.platform.scm.base import GuardRefused
+from in_lockstep.platform.scm.base import ChangeRequest, GuardRefused
 from in_lockstep.platform.tickets import (
     GitHubIssues,
     TicketDraft,
@@ -217,8 +218,8 @@ def test_the_shipped_adapters_pass_their_own_conformance_kit(tmp_path: Path) -> 
     assert_scm(GitLocal(root))
 
 
-def _recording(calls: list, stdout: str = ""):
-    def fake(*args: str):
+def _recording(calls: list[tuple[str, ...]], stdout: str = "") -> Callable[..., tuple[int, str, str]]:
+    def fake(*args: str) -> tuple[int, str, str]:
         calls.append(args)
         return (0, stdout, "")
 
@@ -228,7 +229,7 @@ def _recording(calls: list, stdout: str = ""):
 def test_github_create_reads_the_ticket_back_from_the_url() -> None:
     """What returns is what the tracker holds, not a reconstruction of the draft."""
     issues = GitHubIssues()
-    calls: list = []
+    calls: list[tuple[str, ...]] = []
     issues._gh_raw = _recording(calls, "https://github.com/o/r/issues/12\n")  # type: ignore[method-assign]
     issues._gh_json = lambda *args: {  # type: ignore[method-assign]
         "number": 12,
@@ -258,7 +259,7 @@ def test_github_search_maps_rows_to_tickets() -> None:
 
 def test_github_add_labels_batches_one_edit_and_skips_an_empty_call() -> None:
     issues = GitHubIssues()
-    calls: list = []
+    calls: list[tuple[str, ...]] = []
     issues._gh_raw = _recording(calls)  # type: ignore[method-assign]
     asyncio.run(issues.add_labels(Ticket(key="#4", title="t"), "triaged", "p2"))
     assert calls[-1] == ("issue", "edit", "4", "--add-label", "triaged", "--add-label", "p2")
@@ -271,7 +272,7 @@ def test_github_transition_maps_coarse_and_refuses_what_it_cannot_mean() -> None
     from in_lockstep.core.ports import Unsupported as PortsUnsupported
 
     issues = GitHubIssues()
-    calls: list = []
+    calls: list[tuple[str, ...]] = []
     issues._gh_raw = _recording(calls)  # type: ignore[method-assign]
     asyncio.run(issues.transition(Ticket(key="#4", title="t"), TicketState.DONE))
     assert calls[-1] == ("issue", "close", "4")
@@ -303,7 +304,7 @@ def test_github_open_change_can_open_a_draft(tmp_path: Path) -> None:
     subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=root, check=True)
 
     scm = GitHubScm(root)
-    calls: list = []
+    calls: list[tuple[str, ...]] = []
     scm._gh = _recording(calls, "https://github.com/o/r/pull/5\n")  # type: ignore[method-assign]
     cs = ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),), summary="s")
 
@@ -327,7 +328,7 @@ def test_github_mark_ready_takes_the_pr_out_of_draft() -> None:
     from in_lockstep.platform.scm.base import ChangeRequest
 
     scm = GitHubScm(".")
-    calls: list = []
+    calls: list[tuple[str, ...]] = []
     scm._gh = _recording(calls)  # type: ignore[method-assign]
 
     asyncio.run(scm.mark_ready(ChangeRequest(id="u", url="u", branch="b", title="t", number=5)))
@@ -356,7 +357,7 @@ class _RecordingScm:
         self.opened_draft: bool | None = None
         self.marked_ready = False
 
-    async def open_change(self, cs: object, *, draft: bool = False, **kwargs: object):  # noqa: ANN202
+    async def open_change(self, cs: object, *, draft: bool = False, **kwargs: object) -> ChangeRequest:
         from in_lockstep.platform.scm.base import ChangeRequest
 
         self.opened_draft = draft
@@ -399,10 +400,10 @@ class _RecordingTickets:
     """Records create/comment so the escalation decision is testable without a tracker."""
 
     def __init__(self) -> None:
-        self.created: list = []
-        self.comments: list = []
+        self.created: list[Any] = []
+        self.comments: list[str] = []
 
-    async def get(self, key: str):  # noqa: ANN202
+    async def get(self, key: str) -> Ticket:
         from in_lockstep.platform.tickets import Ticket
 
         return Ticket(key=key, title="t")
@@ -410,7 +411,7 @@ class _RecordingTickets:
     async def comment(self, ticket: object, body: str) -> None:
         self.comments.append(body)
 
-    async def create(self, draft: object):  # noqa: ANN202
+    async def create(self, draft: object) -> Ticket:
         from in_lockstep.platform.tickets import Ticket
 
         self.created.append(draft)
@@ -596,8 +597,8 @@ def test_a_measured_zero_is_distinguishable_from_an_absent_one() -> None:
 
 
 def test_too_few_runs_reports_no_trend_rather_than_a_number() -> None:
-    before = [{"epoch": "in-process", "kind": "r", "status": "succeeded"}] * 2
-    after = [{"epoch": "in-process", "kind": "r", "status": "succeeded"}] * 2
+    before: list[dict[str, object]] = [{"epoch": "in-process", "kind": "r", "status": "succeeded"}] * 2
+    after: list[dict[str, object]] = [{"epoch": "in-process", "kind": "r", "status": "succeeded"}] * 2
     assert compare(before, after)[0]["verdict"] == "too few runs"
 
 
@@ -641,13 +642,13 @@ def test_unknown_tracker_state_keeps_the_raw_value() -> None:
 # -- CI detection ------------------------------------------------------------------------
 
 
-def test_detection_returns_none_outside_ci(monkeypatch) -> None:
+def test_detection_returns_none_outside_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("GITHUB_ACTIONS", "GITLAB_CI"):
         monkeypatch.delenv(var, raising=False)
     assert detect() is None
 
 
-def test_github_actions_is_detected(monkeypatch) -> None:
+def test_github_actions_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_REPOSITORY", "acme/app")
     monkeypatch.setenv("GITHUB_BASE_REF", "main")
@@ -660,7 +661,7 @@ def test_github_actions_is_detected(monkeypatch) -> None:
     assert env.reviewing, "which decides where configuration is loaded from"
 
 
-def test_a_push_build_is_not_reviewing(monkeypatch) -> None:
+def test_a_push_build_is_not_reviewing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
     env = detect()

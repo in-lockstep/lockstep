@@ -302,7 +302,7 @@ def _helper_statements(path: Path) -> int:
                 continue
             # A docstring is an expression statement holding a string, and this codebase writes
             # long ones on purpose. Counting them would make the rule argue against the style.
-            if isinstance(inner, ast.Expr) and isinstance(getattr(inner, "value", None), ast.Constant):
+            if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Constant):
                 if isinstance(inner.value.value, str):
                     continue
             total += 1

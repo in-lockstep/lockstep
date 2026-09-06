@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from in_lockstep.adapters.ai import AiReview, Review
@@ -164,7 +165,7 @@ def test_policy_layers_keep_their_source(tmp_path: Path) -> None:
     assert receipt["policy"]["resolved"]["max_turns"] == 8
 
 
-def test_cli_describe_prints_json_that_round_trips(tmp_path: Path, monkeypatch) -> None:
+def test_cli_describe_prints_json_that_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`--json` is the artifact an index would store; the digest must survive a parse."""
     monkeypatch.chdir(tmp_path)
     for name in [k for k in __import__("os").environ if k.startswith("GITHUB_")]:
@@ -177,7 +178,9 @@ def test_cli_describe_prints_json_that_round_trips(tmp_path: Path, monkeypatch) 
     assert payload["digest"] == digest(payload)
 
 
-def test_cli_describe_reads_the_repositorys_own_module(tmp_path: Path, monkeypatch) -> None:
+def test_cli_describe_reads_the_repositorys_own_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The subject is the configuration, so the module has to be the thing described."""
     monkeypatch.chdir(tmp_path)
     for name in [k for k in __import__("os").environ if k.startswith("GITHUB_")]:

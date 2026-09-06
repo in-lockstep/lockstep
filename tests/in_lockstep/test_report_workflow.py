@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 
+from in_lockstep import Lockstep
 from in_lockstep.core.workflow import get, restore, snapshot
 from in_lockstep.loader import load, lockstep_from
 
@@ -111,7 +112,9 @@ def _run(entry: Any, **kwargs: Any) -> Any:
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_a_failed_run_says_so_on_the_ticket(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_a_failed_run_says_so_on_the_ticket(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The whole point. A reason a person can act on, not silence."""
     entry = get(f"{verb}/report")
     assert entry is not None, f"{verb}/report is not registered"
@@ -145,7 +148,9 @@ def test_a_failed_run_says_so_on_the_ticket(verb: str, workflows, tmp_path, monk
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_it_still_answers_when_the_run_recorded_nothing(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_it_still_answers_when_the_run_recorded_nothing(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A run that died before writing a record is the case most likely to go quiet, so it is the
     case worth checking. Saying "the job log is the only account of it" beats saying nothing."""
     monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: _ledger_with(tmp_path))
@@ -158,7 +163,9 @@ def test_it_still_answers_when_the_run_recorded_nothing(verb: str, workflows, tm
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_a_successful_run_is_not_reported_as_a_failure(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The report job runs on `failure()`, but the record it reads is found by matching the ticket
     — so a ticket whose only runs succeeded must not have one of them described as the failure."""
     ledger = _ledger_with(
@@ -182,7 +189,9 @@ def test_a_successful_run_is_not_reported_as_a_failure(verb: str, workflows, tmp
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_another_tickets_failure_is_not_borrowed(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Records are matched on the ticket they carry. Reporting #7's failure onto #139 would be a
     confident, specific, wrong answer — worse than the silence this replaced."""
     ledger = _ledger_with(
@@ -207,7 +216,9 @@ def test_another_tickets_failure_is_not_borrowed(verb: str, workflows, tmp_path,
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_reporting_a_failure_is_not_itself_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_reporting_a_failure_is_not_itself_a_failure(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A second red mark on a run whose failure is already recorded would hide the one thing this
     job is for: whether the answer actually reached the ticket."""
     from in_lockstep.core.outcome import Status
@@ -220,7 +231,7 @@ def test_reporting_a_failure_is_not_itself_a_failure(verb: str, workflows, tmp_p
 # -- a failed run leaves its work behind ---------------------------------------------------------
 
 
-def test_the_evidence_path_is_not_the_one_propose_reads(workflows) -> None:
+def test_the_evidence_path_is_not_the_one_propose_reads(workflows: Lockstep) -> None:
     """`tdd.not_green` returns the change deliberately — `test_implement_tdd.py` asserts it, in
     those words: "the change is still carried so a person can see what it tried".
 
@@ -241,7 +252,9 @@ def test_the_evidence_path_is_not_the_one_propose_reads(workflows) -> None:
     assert ATTEMPT not in (CHANGESET, FIX_CHANGESET)
 
 
-def test_reading_the_proposable_path_does_not_find_an_attempt(workflows, tmp_path, monkeypatch) -> None:
+def test_reading_the_proposable_path_does_not_find_an_attempt(
+    workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The separation, exercised rather than asserted about the source. A change written as
     evidence must be invisible to the reader `propose` uses, or the separate constant is decoration.
     """
@@ -262,7 +275,7 @@ def test_reading_the_proposable_path_does_not_find_an_attempt(workflows, tmp_pat
         read_changeset(CHANGESET)
 
 
-def test_the_evidence_path_is_uploaded_by_both_workflows(workflows) -> None:
+def test_the_evidence_path_is_uploaded_by_both_workflows(workflows: Lockstep) -> None:
     """Written and then not collected would be the same loss with more steps."""
     from in_lockstep.platform.artifacts import ATTEMPT
 
@@ -274,7 +287,7 @@ def test_the_evidence_path_is_uploaded_by_both_workflows(workflows) -> None:
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
 def test_the_propose_workflow_says_on_the_ticket_that_it_opened_the_change(
-    verb: str, workflows, tmp_path
+    verb: str, workflows: Lockstep, tmp_path: Path
 ) -> None:
     """Issue 196. The success path — the one that runs whenever the work actually worked.
 
@@ -314,7 +327,9 @@ def test_the_propose_workflow_says_on_the_ticket_that_it_opened_the_change(
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_a_blocked_run_is_not_announced_as_a_failure(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_a_blocked_run_is_not_announced_as_a_failure(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """CLAUDE.md forbids folding `blocked` into a failure, and this is where it was folded.
 
     Not hypothetical. `lockstep-history` carries three real `implement/from-ticket` records on
@@ -386,7 +401,9 @@ def test_the_other_verbs_run_is_not_borrowed(verb, other, status, workflows, tmp
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
-def test_its_own_family_is_still_found(verb: str, workflows, tmp_path, monkeypatch) -> None:
+def test_its_own_family_is_still_found(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The control for the test above. A filter that matched nothing would satisfy it perfectly,
     and every report would quietly become "the job log is the only account of it"."""
     ledger = _ledger_with(

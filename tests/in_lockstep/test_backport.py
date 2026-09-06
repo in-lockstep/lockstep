@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -24,6 +25,7 @@ from in_lockstep.adapters.backport import (
     Conflict,
     GitBackport,
 )
+from in_lockstep.ai.invoker import Invocation
 from in_lockstep.cli import main
 from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
 from in_lockstep.core.types import FileChange
@@ -70,7 +72,7 @@ def repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return _repo(tmp_path)
 
 
-def _run(adapter: GitBackport, spec: Backport) -> Outcome:
+def _run(adapter: GitBackport, spec: Backport) -> Outcome[Any]:
     return asyncio.run(adapter.invoke(None, spec))
 
 
@@ -87,6 +89,7 @@ def test_discovers_commits_by_ticket_trailer_and_stages_the_pick(repo: Path) -> 
     outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", ticket=_Ticket("#7")))
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
+    assert report is not None
     assert [p.sha for p in report.picked] == [sha]
     assert report.resolved == ()
     assert outcome.cost.usd == 0.0
@@ -107,7 +110,7 @@ def test_explicit_commits_need_no_ticket(repo: Path) -> None:
     sha = _commit_fix(repo)
     outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED
-    assert outcome.value.picked[0].sha == sha
+    assert outcome.value is not None and outcome.value.picked[0].sha == sha
 
 
 def test_a_deletion_travels_as_a_deletion(repo: Path) -> None:
@@ -119,6 +122,7 @@ def test_a_deletion_travels_as_a_deletion(repo: Path) -> None:
 
     outcome = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
     (change,) = outcome.value.changeset.changes
     assert change.path == "README.md"
     assert change.deleted
@@ -137,7 +141,7 @@ def test_a_pick_already_on_the_target_succeeds_with_nothing_staged(repo: Path) -
 
     again = _run(GitBackport(str(repo)), Backport(target="release-1.0", commits=(sha,)))
     assert again.status is Status.SUCCEEDED
-    assert again.value.empty
+    assert again.value is not None and again.value.empty
     assert any(f.id == "backport.already_present" for f in again.findings)
 
 
@@ -193,6 +197,7 @@ def test_conflict_without_resolver_stops_with_the_manual_commands(repo: Path) ->
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.conflict"
     report = outcome.value
+    assert report is not None
     assert report.conflict is not None and report.conflict.paths == ("app.py",)
     blocking = next(f for f in outcome.findings if f.id == "backport.conflict")
     assert "git cherry-pick -x" in blocking.message
@@ -207,7 +212,7 @@ class _StubResolver:
         self.files = files
         self.seen: list[Conflict] = []
 
-    async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+    async def resolve(self, ctx: object, conflict: Conflict) -> Outcome[Any]:
         self.seen.append(conflict)
         return Outcome(status=Status.SUCCEEDED, value=self.files, cost=Cost(usd=0.01))
 
@@ -222,6 +227,7 @@ def test_conflict_with_resolver_merges_and_marks_the_model_authored_paths(repo: 
     outcome = _run(GitBackport(str(repo), resolver=resolver), Backport(target="release-1.0", commits=(sha,)))
     assert outcome.status is Status.SUCCEEDED, outcome.findings
     report = outcome.value
+    assert report is not None
     assert report.resolved == ("app.py",)
     assert {c.path: c.contents for c in report.changeset.changes} == {"app.py": merged}
     assert any(f.id == "backport.resolved_by_model" and f.path == "app.py" for f in outcome.findings)
@@ -249,7 +255,7 @@ def test_a_resolution_may_only_touch_conflicted_paths(repo: Path) -> None:
 
 def test_a_refused_resolution_reports_the_conflict_it_could_not_clear(repo: Path) -> None:
     class _Refusing:
-        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome[Any]:
             return Outcome(status=Status.FAILED, reason="backport.empty_resolution", cost=Cost(usd=0.005))
 
     sha = _diverge(repo)
@@ -258,7 +264,7 @@ def test_a_refused_resolution_reports_the_conflict_it_could_not_clear(repo: Path
     )
     assert outcome.status is Status.FAILED
     assert outcome.reason == "backport.empty_resolution"
-    assert outcome.value.conflict is not None
+    assert outcome.value is not None and outcome.value.conflict is not None
     assert outcome.cost.usd == pytest.approx(0.005), "spend on a failed resolution is still spend"
 
 
@@ -274,7 +280,7 @@ def test_capabilities_follow_composition() -> None:
     assert plain.verb is Verb.BACKPORT
 
     class _R:
-        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:  # pragma: no cover
+        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome[Any]:  # pragma: no cover
             raise NotImplementedError
 
     armed = GitBackport(".", resolver=_R())
@@ -285,21 +291,12 @@ def test_capabilities_follow_composition() -> None:
 # -- the resolver adapter -------------------------------------------------------------
 
 
-class _StubInvocation:
-    def __init__(self, content: str) -> None:
-        self.content = content
-        self.truncated = False
-        self.cost = Cost(usd=0.02)
-        self.findings = ()
-        self.exhausted = False
-
-
 class _StubInvoker:
     def __init__(self, content: str) -> None:
         self.content = content
 
-    async def run(self, **kwargs: object) -> _StubInvocation:
-        return _StubInvocation(self.content)
+    async def run(self, **kwargs: Any) -> Invocation:
+        return Invocation(content=self.content, cost=Cost(usd=0.02))
 
 
 def _conflict() -> Conflict:
@@ -517,7 +514,7 @@ class _StoppedResolver:
         self.status = status
         self.reason = reason
 
-    async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+    async def resolve(self, ctx: object, conflict: Conflict) -> Outcome[Any]:
         return Outcome(
             status=self.status,
             reason=self.reason,
@@ -536,7 +533,7 @@ class _StoppedResolver:
         (Status.ERRORED, "backport.unparseable"),
     ],
 )
-def test_a_resolver_that_never_answered_keeps_its_own_status(repo: Path, status, reason) -> None:
+def test_a_resolver_that_never_answered_keeps_its_own_status(repo: Path, status: Status, reason: str) -> None:
     """`_conflict_outcome` is hard-coded FAILED, and that is right for the caller with no resolver
     bound. Where one WAS consulted, the reason survived and the status did not — so a budget
     ceiling arrived as `failed`, which is exit 1 instead of 3, a ledger record saying `failed`,
@@ -581,7 +578,7 @@ def test_a_resolver_that_succeeded_with_no_files_is_a_failed_backport(repo: Path
     sha = _diverge(repo)
 
     class _Empty:
-        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome:
+        async def resolve(self, ctx: object, conflict: Conflict) -> Outcome[Any]:
             return Outcome(status=Status.SUCCEEDED, value=(), cost=Cost(usd=0.0))
 
     outcome = _run(GitBackport(str(repo), resolver=_Empty()), Backport(target="release-1.0", commits=(sha,)))

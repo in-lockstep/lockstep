@@ -30,6 +30,7 @@ from in_lockstep.llm import (
     TransientError,
 )
 from in_lockstep.llm._errors import classify
+from in_lockstep.llm.types import LLMOutput
 
 LLM_ROOT = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "llm"
 PROVIDERS = sorted((LLM_ROOT / "providers").glob("*.py"))
@@ -212,7 +213,7 @@ class _Stub(LLMProvider):
         self.settings = settings
         self.creds = creds
 
-    async def generate(self, input: LLMInput):  # type: ignore[override]
+    async def generate(self, input: LLMInput) -> LLMOutput:
         raise NotImplementedError
 
     def name(self) -> str:
@@ -328,7 +329,7 @@ def test_bedrock_requests_aws_keys_so_wired_ones_reach_it_and_seed_redact() -> N
     assert _CLOUD_KEYS["vertex"] == () and _CLOUD_KEYS["gemini"] == ()
 
 
-def test_gcp_location_env_is_read_for_the_region(monkeypatch) -> None:
+def test_gcp_location_env_is_read_for_the_region(monkeypatch: pytest.MonkeyPatch) -> None:
     """google-genai's own documented variable, not just CLOUD_ML_REGION — a user who set the
     standard one must not silently get an empty region and a malformed endpoint."""
     from in_lockstep.ai.bootstrap import default_registry
@@ -445,7 +446,7 @@ def test_the_shipped_local_registration_is_free() -> None:
     assert default_registry().registration_for(Model("local:qwen3-8b")).free
 
 
-def test_local_is_free_only_when_its_endpoint_is_actually_local(monkeypatch) -> None:
+def test_local_is_free_only_when_its_endpoint_is_actually_local(monkeypatch: pytest.MonkeyPatch) -> None:
     """`Registration.free`'s stated invariant: an env var pointing 'local' at a hosted endpoint
     must not make hosted tokens read as free. The flag follows the address, not the name."""
     from in_lockstep.ai.bootstrap import default_registry
@@ -481,7 +482,7 @@ def test_an_anthropic_workspace_id_travels_as_a_header_not_a_credential() -> Non
     from in_lockstep.llm.interface import Credentials, ProviderSettings, SecretStr
     from in_lockstep.llm.providers.anthropic import AnthropicProvider
 
-    captured: dict = {}
+    captured: dict[str, typing.Any] = {}
 
     class Fake(AnthropicProvider):
         def _make_client(self, settings, creds):
@@ -515,7 +516,7 @@ def test_no_workspace_id_sends_no_header() -> None:
             os.environ["ANTHROPIC_WORKSPACE_ID"] = had
 
 
-def test_a_workspace_name_is_refused_before_the_call(monkeypatch) -> None:
+def test_a_workspace_name_is_refused_before_the_call(monkeypatch: pytest.MonkeyPatch) -> None:
     """ "Default" is what the Console shows, and the natural thing to paste.
 
     Paying a network round-trip to be told the header is invalid teaches nothing about where the
@@ -532,7 +533,7 @@ def test_a_workspace_name_is_refused_before_the_call(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("value", ["wrkspc_01ABC", "  wrkspc_01ABC  ", ""])
-def test_a_tagged_id_or_an_absent_one_is_accepted(monkeypatch, value: str) -> None:
+def test_a_tagged_id_or_an_absent_one_is_accepted(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     """Narrow by design: only a value missing the documented prefix is refused.
 
     Absent is a legitimate state — a key that is not identity-linked needs no workspace and must

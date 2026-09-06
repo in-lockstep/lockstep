@@ -183,7 +183,9 @@ def test_a_qualified_ref_is_never_given_a_second_remote_prefix() -> None:
 # -- the refusal a person can act on (issue 206) --------------------------------------------
 
 
-def test_an_unfetched_base_ref_is_a_message_and_not_a_traceback(tmp_path: Path, monkeypatch) -> None:
+def test_an_unfetched_base_ref_is_a_message_and_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Serves O2. `UnresolvableConfigRef` was written to be read: it names the cause and gives the
     exact remedy for both hosts. Nothing caught it, so it arrived as an uncaught exception and the
     remedy reached nobody.
@@ -216,7 +218,9 @@ def test_an_unfetched_base_ref_is_a_message_and_not_a_traceback(tmp_path: Path, 
     assert "fetch-depth" in result.output, "the remedy is the whole point of the message"
 
 
-def test_a_repository_with_no_module_still_runs_on_detected_defaults(tmp_path: Path, monkeypatch) -> None:
+def test_a_repository_with_no_module_still_runs_on_detected_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The negative control, and the distinction the refusal must not swallow. `NoLifecycle` is
     legitimate — a repository with no lockstep.py is every adopter's first run — and it must stay a
     note on stderr rather than becoming a refusal alongside the unreadable ref."""

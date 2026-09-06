@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -22,7 +24,7 @@ EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "wayfinder-implemen
 
 
 @pytest.fixture(autouse=True)
-def _importable() -> None:
+def _importable() -> Iterator[None]:
     sys.path.insert(0, str(EXAMPLE))
     yield
     sys.path.remove(str(EXAMPLE))
@@ -56,7 +58,7 @@ def _map() -> tuple[Ticket, ...]:
     )
 
 
-def _spec(target: str, request=None, **kw):
+def _spec(target: str, request: Any = None, **kw: Any) -> Any:
     from wayfinder import Implement
 
     request = request or Implement
@@ -75,6 +77,7 @@ def test_charting_succeeds_and_delivers_nothing() -> None:
     assert outcome.status is Status.SUCCEEDED
     assert outcome.decided is True
     assert outcome.cost.usd == 0.0, "charting is deterministic here and must not spend"
+    assert outcome.value is not None
     assert outcome.value.frontier == ("MAP-2", "MAP-3")
 
 
@@ -91,6 +94,7 @@ def test_fog_is_read_off_the_ticket_not_guessed() -> None:
     from wayfinder import Chart, WayfinderChart
 
     outcome = asyncio.run(WayfinderChart().invoke(None, _spec("MAP-1", request=Chart)))
+    assert outcome.value is not None
     assert outcome.value.fog == ("MAP-3",)
     fog = [f for f in outcome.findings if f.id == "wayfinder.fog"]
     assert [f.message for f in fog] == ["MAP-3 is not sharp enough to phrase precisely yet; left as fog."]

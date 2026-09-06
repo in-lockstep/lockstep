@@ -22,7 +22,7 @@ import pytest
 
 from in_lockstep.adapters.ai import AiImprove, Draft, Measure
 from in_lockstep.adapters.ai.improve import split_header
-from in_lockstep.ai.invoker import InvocationBlocked, InvocationFailed
+from in_lockstep.ai.invoker import Invocation, InvocationBlocked, InvocationFailed
 from in_lockstep.ai.replay import key_of, request_from
 from in_lockstep.core.changes import DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
 from in_lockstep.core.container import Container
@@ -88,7 +88,7 @@ def _request(body: str) -> dict[str, Any]:
 
 def _case(root: Path, name: str, *, body: str = BODY, extra_contains: tuple[str, ...] = ()) -> None:
     request = _request(body)
-    case = {
+    case: dict[str, Any] = {
         "input": {"request": request},
         "expect": {
             "schema": ["findings"],
@@ -148,13 +148,10 @@ def _repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, runs: int = 6) -> 
     return tmp_path
 
 
-class _Invocation:
-    def __init__(self, content: str, *, truncated: bool = False) -> None:
-        self.content = content
-        self.cost = Cost(usd=0.001, input_tokens=10, output_tokens=5)
-        self.truncated = truncated
-        self.exhausted = False
-        self.findings: tuple[Any, ...] = ()
+def _invocation(content: str, *, truncated: bool = False) -> Invocation:
+    return Invocation(
+        content=content, cost=Cost(usd=0.001, input_tokens=10, output_tokens=5), truncated=truncated
+    )
 
 
 class _Stub:
@@ -164,15 +161,15 @@ class _Stub:
         self.replies = list(replies)
         self.asked: list[dict[str, Any]] = []
 
-    async def run(self, **kwargs: Any) -> _Invocation:
+    async def run(self, **kwargs: Any) -> Invocation:
         self.asked.append(kwargs)
         reply = self.replies.pop(0) if self.replies else self.replies_default()
         if isinstance(reply, Exception):
             raise reply
-        return reply if isinstance(reply, _Invocation) else _Invocation(str(reply))
+        return reply if isinstance(reply, Invocation) else _invocation(str(reply))
 
-    def replies_default(self) -> _Invocation:
-        return _Invocation(BETTER)
+    def replies_default(self) -> Invocation:
+        return _invocation(BETTER)
 
 
 def _drafter(revised: str = BODY + "\nQuote the exact variable, and say whether it is quoted.\n") -> _Stub:
@@ -213,7 +210,7 @@ def _measure(ctx: RunContext, root: Path) -> Any:
 
 
 def test_a_qualifying_trend_is_attributed_to_the_declared_body_by_exact_membership(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path, monkeypatch)
     records = [json.loads(p.read_text()) for p in sorted((root / ".lockstep" / "ledger").glob("*.json"))]
@@ -228,14 +225,18 @@ def test_a_qualifying_trend_is_attributed_to_the_declared_body_by_exact_membersh
     assert "none answers to a declared" in improver.attribute(records, (other,)).reason
 
 
-def test_a_trend_below_the_thresholds_attributes_nothing(tmp_path, monkeypatch) -> None:
+def test_a_trend_below_the_thresholds_attributes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = _repo(tmp_path, monkeypatch, runs=2)
     records = [json.loads(p.read_text()) for p in sorted((root / ".lockstep" / "ledger").glob("*.json"))]
     chosen = CorpusImprover(root / "evidence" / "cases").attribute(records, (IMPROVABLE,))
     assert chosen.body is None and "nothing recurs yet" in chosen.reason
 
 
-def test_only_cases_carrying_the_body_verbatim_are_the_denominator(tmp_path, monkeypatch) -> None:
+def test_only_cases_carrying_the_body_verbatim_are_the_denominator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A case recorded against an older body is not evidence about this one: not failed, not
     counted, and said so."""
     root = _repo(tmp_path, monkeypatch)
@@ -246,7 +247,7 @@ def test_only_cases_carrying_the_body_verbatim_are_the_denominator(tmp_path, mon
     assert [f.case for f in baseline.arm.failures] == ["tightened"]
 
 
-def test_a_probe_swaps_the_body_and_nothing_else(tmp_path, monkeypatch) -> None:
+def test_a_probe_swaps_the_body_and_nothing_else(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _repo(tmp_path, monkeypatch)
     draft = HEADER + BODY + "\nAnd one more sentence.\n"
     probes = CorpusImprover(root / "evidence" / "cases").probes(IMPROVABLE, HEADER + BODY, draft)
@@ -270,16 +271,21 @@ def test_a_probe_swaps_the_body_and_nothing_else(tmp_path, monkeypatch) -> None:
         ([None, False], [None, True], IMPROVED),
     ],
 )
-def test_what_better_means(before, after, verdict) -> None:
+def test_what_better_means(before: list[bool | None], after: list[bool | None], verdict: str) -> None:
     """Stated once and read both ways: one lost case is a regression whatever else was gained."""
-    rows = lambda flags: [{"deterministic_passed": f} for f in flags]  # noqa: E731
+
+    def rows(flags: list[bool | None]) -> list[dict[str, Any]]:
+        return [{"deterministic_passed": f} for f in flags]
+
     assert verdict_of(rows(before), rows(after)) == verdict
 
 
 # -- the measuring workflow ------------------------------------------------------------------
 
 
-def test_gate_improve_3_a_body_writable_by_omission_is_refused_before_spending(tmp_path, monkeypatch) -> None:
+def test_gate_improve_3_a_body_writable_by_omission_is_refused_before_spending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """GATE-IMPROVE-3. `PathPolicy()` names no tier for `house/`, so the guard permits it -- by
     absence. That is not a grant, and the loop refuses before its first model call."""
     root = _repo(tmp_path, monkeypatch)
@@ -289,7 +295,9 @@ def test_gate_improve_3_a_body_writable_by_omission_is_refused_before_spending(t
     assert not drafter.asked and not prober.asked
 
 
-def test_gate_improve_3_a_body_a_tier_names_but_no_grant_lifts_is_refused(tmp_path, monkeypatch) -> None:
+def test_gate_improve_3_a_body_a_tier_names_but_no_grant_lifts_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = _repo(tmp_path, monkeypatch)
     named = ChangeGuard(PathPolicy(deny_unless_granted=(*DENY_UNLESS_GRANTED, "house/")))
     outcome = _measure(_ctx(root, guard=named, drafter=_drafter(), prober=_Stub()), root)
@@ -307,7 +315,9 @@ def test_gate_improve_3_a_body_a_tier_names_but_no_grant_lifts_is_refused(tmp_pa
     assert outcome.status is Status.BLOCKED and outcome.reason == "improve.body_not_granted"
 
 
-def test_a_corpus_at_its_ceiling_is_refused_before_spending(tmp_path, monkeypatch) -> None:
+def test_a_corpus_at_its_ceiling_is_refused_before_spending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The pre-spend refusal. A harvested case passes the answer it came from by construction, so
     a corpus nobody tightened can only measure a draft level or down."""
     root = _repo(tmp_path, monkeypatch)
@@ -320,7 +330,7 @@ def test_a_corpus_at_its_ceiling_is_refused_before_spending(tmp_path, monkeypatc
 
 
 def test_gate_improve_2_and_4_an_improving_draft_is_staged_as_one_change_to_the_declared_body(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """GATE-IMPROVE-4: measured before it is opened, both arms over the same two cases, and it
     improved -- the tightened case flipped, the passing one held. GATE-IMPROVE-2: the change is to
@@ -347,7 +357,9 @@ def test_gate_improve_2_and_4_an_improving_draft_is_staged_as_one_change_to_the_
     assert ctx.spend.charged.usd == pytest.approx(0.003)
 
 
-def test_gate_improve_4_a_draft_that_regresses_is_not_opened(tmp_path, monkeypatch) -> None:
+def test_gate_improve_4_a_draft_that_regresses_is_not_opened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """One case lost decides it, however many were gained. The draft is kept as evidence on the
     path `propose` never reads."""
     root = _repo(tmp_path, monkeypatch)
@@ -360,7 +372,9 @@ def test_gate_improve_4_a_draft_that_regresses_is_not_opened(tmp_path, monkeypat
     assert (root / ATTEMPT).exists()
 
 
-def test_gate_improve_4_both_arms_share_one_denominator(tmp_path, monkeypatch) -> None:
+def test_gate_improve_4_both_arms_share_one_denominator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A probe the provider could not answer leaves the case out of BOTH arms, named, rather than
     counting against either."""
     root = _repo(tmp_path, monkeypatch)
@@ -371,7 +385,9 @@ def test_gate_improve_4_both_arms_share_one_denominator(tmp_path, monkeypatch) -
     assert len(scorecard.dropped) == 1 and "timed out" in scorecard.dropped[0][1]
 
 
-def test_a_ceiling_reached_mid_measurement_is_blocked_not_scored(tmp_path, monkeypatch) -> None:
+def test_a_ceiling_reached_mid_measurement_is_blocked_not_scored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A budget refusing on the second probe is a control working; a scorecard over the one case
     it allowed would be a denominator the ceiling chose."""
     root = _repo(tmp_path, monkeypatch)
@@ -381,7 +397,9 @@ def test_a_ceiling_reached_mid_measurement_is_blocked_not_scored(tmp_path, monke
     assert not (root / CHANGESET).exists()
 
 
-def test_a_draft_identical_to_the_body_is_refused_before_the_probes(tmp_path, monkeypatch) -> None:
+def test_a_draft_identical_to_the_body_is_refused_before_the_probes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = _repo(tmp_path, monkeypatch)
     drafter, prober = _drafter(revised=BODY), _Stub()
     outcome = _measure(_ctx(root, guard=_granted(), drafter=drafter, prober=prober), root)
@@ -435,7 +453,9 @@ def _propose(root: Path, host: Any, *, max_open: int = 1) -> Any:
     return asyncio.run(improve_propose(ctx, host, artifact=str(root / CHANGESET)))
 
 
-def test_gate_improve_8_the_ceiling_is_enforced_where_the_proposal_is_opened(tmp_path, monkeypatch) -> None:
+def test_gate_improve_8_the_ceiling_is_enforced_where_the_proposal_is_opened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """GATE-IMPROVE-8. Not a preflight: the count is taken by the workflow that opens, from the
     host it opens on, and a host that cannot count is refused rather than read as zero."""
     monkeypatch.chdir(tmp_path)
@@ -462,7 +482,7 @@ def test_gate_improve_8_the_ceiling_is_enforced_where_the_proposal_is_opened(tmp
 
 
 def test_gate_improve_2_a_proposal_that_is_not_one_declared_body_is_refused_at_the_open(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The artifact came from another job and is untrusted, so the property is checked again where
     the write token is."""
@@ -479,7 +499,7 @@ def test_gate_improve_2_a_proposal_that_is_not_one_declared_body_is_refused_at_t
 
 
 def test_gate_improve_4_a_scorecard_that_did_not_improve_is_not_opened_even_if_staged(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
     host = _Host()
@@ -489,7 +509,9 @@ def test_gate_improve_4_a_scorecard_that_did_not_improve_is_not_opened_even_if_s
     assert not host.opened
 
 
-def test_a_proposal_opens_as_a_draft_with_both_arms_and_the_run_id_in_its_body(tmp_path, monkeypatch) -> None:
+def test_a_proposal_opens_as_a_draft_with_both_arms_and_the_run_id_in_its_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     host = _Host()
     _staged(tmp_path)
@@ -505,7 +527,7 @@ def test_a_proposal_opens_as_a_draft_with_both_arms_and_the_run_id_in_its_body(t
     assert "Judged by:** a person" in body
 
 
-def test_gate_improve_8_a_local_host_counts_its_own_run_branches(tmp_path) -> None:
+def test_gate_improve_8_a_local_host_counts_its_own_run_branches(tmp_path: Path) -> None:
     """O3: the ceiling is a ceiling at a terminal too. Local git has no pull requests, so an open
     proposal is a run branch that still exists."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
@@ -530,7 +552,7 @@ def test_the_header_is_carried_verbatim_and_the_model_never_sees_it() -> None:
     assert split_header(BODY) == ("", BODY)
 
 
-def test_the_drafter_returns_the_whole_file_with_its_header(tmp_path) -> None:
+def test_the_drafter_returns_the_whole_file_with_its_header(tmp_path: Path) -> None:
     drafter = _drafter()
     adapter = AiImprove(invoker_factory=lambda ctx: drafter)
     ctx = RunContext(
@@ -547,13 +569,14 @@ def test_the_drafter_returns_the_whole_file_with_its_header(tmp_path) -> None:
     )
     outcome = asyncio.run(adapter.invoke(ctx, request))
     assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
     assert outcome.value.text.startswith(HEADER) and "Quote the exact variable" in outcome.value.text
     (asked,) = drafter.asked
     assert HEADER not in asked["system"] and "name: security-reviewer" not in asked["messages"][-1].content
     assert "Unquoted variable" in asked["messages"][-1].content
 
 
-def test_measure_asks_each_probe_on_its_own_model_and_keeps_going_past_an_errored_one(tmp_path) -> None:
+def test_measure_asks_each_probe_on_its_own_model_and_keeps_going_past_an_errored_one(tmp_path: Path) -> None:
     built: list[str] = []
     stub = _Stub(InvocationFailed("provider.down", "no"), BETTER)
 
@@ -568,6 +591,7 @@ def test_measure_asks_each_probe_on_its_own_model_and_keeps_going_past_an_errore
     probes = (Probe("a", "stub:one", _request(BODY)), Probe("b", "stub:one", _request(BODY)))
     outcome = asyncio.run(adapter.invoke(ctx, Measure(probes=probes)))
     assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
     a, b = outcome.value
     assert (
         isinstance(a, Answered) and a.status == "errored" and b.status == "answered" and b.content == BETTER

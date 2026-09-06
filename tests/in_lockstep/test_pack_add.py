@@ -16,6 +16,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -245,7 +246,7 @@ def test_an_unpinned_pack_is_called_out(repo: Path, monkeypatch: pytest.MonkeyPa
 # -- doctor --------------------------------------------------------------------------------
 
 
-def _codes(report) -> dict[str, str]:
+def _codes(report: doctor.Report) -> dict[str, str]:
     return {check.code: check.severity.value for check in report.checks}
 
 
@@ -361,7 +362,7 @@ def test_compare_ignores_the_machine_that_derived_the_receipt() -> None:
     assert compare(published, derived).clean
 
 
-def _published(entry: FakeEntry) -> dict:
+def _published(entry: FakeEntry) -> dict[str, Any]:
     """The receipt an author would publish: derived from the same `Pack` an install resolves to.
 
     Built through `installed()` rather than by hand, because a `Pack` constructed without the
@@ -374,7 +375,7 @@ def _published(entry: FakeEntry) -> dict:
     return receipt_for_pack(installed(entries=[entry])[0])
 
 
-def _catalogued(repo: Path, receipt: dict) -> None:
+def _catalogued(repo: Path, receipt: dict[str, Any]) -> None:
     """A catalog registered in this repository, publishing `receipt` for the pack."""
     (repo / "receipts").mkdir(exist_ok=True)
     (repo / "receipts" / "acme.json").write_text(json.dumps(receipt))

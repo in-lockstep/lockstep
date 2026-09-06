@@ -8,13 +8,23 @@ thread each run.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
+from typing import Any
 
 from in_lockstep.core.outcome import Cost, Finding, Outcome, Severity, Status
 from in_lockstep.core.types import ChangeSet, TestReport, TestVerdict
 from in_lockstep.platform.report import fix_body, implement_body, marker, review_comment
+from in_lockstep.platform.scm import GitHubScm
 
 
-def _outcome(findings=(), *, decided=True, status=Status.SUCCEEDED, usd=0.02, billed=1.0) -> Outcome:
+def _outcome(
+    findings: Sequence[Finding] = (),
+    *,
+    decided: bool = True,
+    status: Status = Status.SUCCEEDED,
+    usd: float = 0.02,
+    billed: float = 1.0,
+) -> Outcome[Any]:
     return Outcome(
         status=status,
         findings=tuple(findings),
@@ -136,11 +146,11 @@ class _FakeGh:
     """Records gh invocations and answers the comment-list call, so the upsert logic is tested
     without a network or a real repository."""
 
-    def __init__(self, existing: list | None = None) -> None:
+    def __init__(self, existing: list[dict[str, Any]] | None = None) -> None:
         self.existing = existing or []
         self.calls: list[tuple[str, ...]] = []
 
-    def __call__(self, *args: str):
+    def __call__(self, *args: str) -> tuple[int, str, str]:
         self.calls.append(args)
         if args and args[0] == "api" and "comments" in args[-1] and "-X" not in args:
             import json
@@ -153,9 +163,7 @@ class _FakeGh:
         return [c for c in self.calls if c and c[0] == "api" and "comments" in c[-1] and "-X" not in c]
 
 
-def _scm(fake: _FakeGh):
-    from in_lockstep.platform.scm import GitHubScm
-
+def _scm(fake: _FakeGh) -> GitHubScm:
     scm = GitHubScm(root=".")
     scm._gh = fake  # type: ignore[method-assign]
     return scm

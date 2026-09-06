@@ -26,7 +26,9 @@ from in_lockstep.platform.chatops import DEFAULT_RESUME_DEPTH, ResumeDepthRefuse
 
 
 class _Verdict:
-    def __init__(self, total=0, passed=0, failed=0, skipped=0, cases=()) -> None:
+    def __init__(
+        self, total: int = 0, passed: int = 0, failed: int = 0, skipped: int = 0, cases: tuple[Any, ...] = ()
+    ) -> None:
         self.total, self.passed, self.failed, self.skipped, self.cases = total, passed, failed, skipped, cases
 
 

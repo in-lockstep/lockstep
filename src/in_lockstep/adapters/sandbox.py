@@ -24,6 +24,7 @@ import os
 import shutil
 import signal
 from dataclasses import dataclass, field
+from typing import Protocol
 
 # Passed through to a sandboxed child. Everything else — every credential — is dropped.
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "PYTHONPATH", "CI")
@@ -51,6 +52,26 @@ class SandboxResult:
     stderr: str
     sandboxed: bool
     how: str
+
+
+class Runner(Protocol):
+    """Whatever an adapter hands its command to: `run`, and nothing more.
+
+    `Sandbox` is the shipped one and `UnsandboxedRun` the named opt-out, and every command adapter
+    was annotated `Sandbox | None` while accepting either -- the opt-out only ever type-checked
+    because nothing type-checked its callers (#248). Structural rather than a base class so that
+    an adopter's own runner satisfies it without inheriting from ours (O8), and so a test's
+    recording stand-in does the same. `ai.builtins.CommandRunner` is this shape seen from the
+    model's tool, where `ai` may not import this package.
+
+    What is NOT here is deliberate. `image`, `allow_network` and `runtime()` are `Sandbox`'s own;
+    the adapters that care -- `CommandProvision`'s network refusal, tooling's in-container name
+    resolution -- ask with `isinstance` or `getattr` rather than demanding them of everything.
+    """
+
+    async def run(
+        self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0
+    ) -> SandboxResult: ...
 
 
 @dataclass

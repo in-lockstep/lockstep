@@ -129,7 +129,7 @@ def test_tools_and_run_tool_are_a_real_seam_not_just_a_docstring() -> None:
     captured: dict[str, object] = {}
 
     class _Capture(_Answer):
-        async def generate(self, input):  # type: ignore[override]
+        async def generate(self, input: LLMInput) -> LLMOutput:
             captured["tools"] = [t.name for t in input.tools]
             return await super().generate(input)
 
@@ -171,6 +171,7 @@ def test_missing_items_surface_as_findings_and_block_actionability() -> None:
     adapter, _provider = _adapter(answer)
     outcome = asyncio.run(adapter.invoke(None, _spec()))
     assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
     assert not outcome.value.actionable, "something is missing"
     assert any(f.id == "triage.missing" for f in outcome.findings)
 

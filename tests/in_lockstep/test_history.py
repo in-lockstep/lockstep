@@ -160,7 +160,7 @@ def test_absorbing_keeps_what_the_receiving_clone_already_had(tmp_path: Path) ->
     GitLedger(root=recorder).bundle(tmp_path / "history.bundle")
 
     GitLedger(root=publisher).absorb(tmp_path / "history.bundle")
-    assert sorted(r["run_id"] for r in GitLedger(root=publisher).records()) == [
+    assert sorted(str(r["run_id"]) for r in GitLedger(root=publisher).records()) == [
         "ci-run",
         "local-run",
     ]
@@ -204,7 +204,7 @@ def test_a_rejected_push_is_reconciled_rather_than_reported(tmp_path: Path) -> N
         check=True,
         capture_output=True,
     )
-    assert sorted(r["run_id"] for r in GitLedger(root=landed).records()) == ["run-a", "run-b"]
+    assert sorted(str(r["run_id"]) for r in GitLedger(root=landed).records()) == ["run-a", "run-b"]
 
 
 # -- GATE-LEDGER-8: tamper-evidence ----------------------------------------------------------
@@ -322,7 +322,9 @@ def test_doctor_fails_on_a_rewritten_ledger(tmp_path: Path, monkeypatch: pytest.
     assert "force-push" in tampered.hint, "the check's blind spot is stated where it fires"
 
 
-def test_doctor_says_nothing_about_a_repo_that_never_recorded(tmp_path: Path, monkeypatch) -> None:
+def test_doctor_says_nothing_about_a_repo_that_never_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from in_lockstep import doctor as doctor_module
 
     monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "100")

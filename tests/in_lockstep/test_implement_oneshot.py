@@ -134,8 +134,11 @@ def test_a_session_explores_then_stages_a_change(repo: Path) -> None:
 
     assert outcome.status is Status.SUCCEEDED
     assert outcome.decided
+    assert outcome.value is not None
     assert outcome.value.summary == "greet now returns hello"
+    assert outcome.value is not None
     assert outcome.value.changeset.paths() == ("src/greet.py",)
+    assert outcome.value is not None
     assert outcome.value.turns == 4
     # The search saw the file and the read returned it: the model was working from the repository
     # rather than from the ticket alone, which is the whole difference between this and a one-shot
@@ -159,6 +162,7 @@ def test_staging_nothing_is_a_failure_rather_than_an_empty_success(repo: Path) -
     )
     assert outcome.status is Status.FAILED
     assert outcome.reason == "implement.no_changes"
+    assert outcome.value is not None
     assert outcome.value.summary == "nothing to do"
 
 
@@ -185,7 +189,9 @@ def test_a_reply_that_is_not_json_keeps_the_change(repo: Path) -> None:
     outcome = asyncio.run(_adapter(provider, repo).invoke(Ctx(), Implement(ticket=_ticket())))
 
     assert outcome.status is Status.SUCCEEDED
+    assert outcome.value is not None
     assert outcome.value.changeset.paths() == ("a.py",)
+    assert outcome.value is not None
     assert outcome.value.summary == "I changed a.py."
     assert any(f.id == "implement.unstructured" for f in outcome.findings)
 
@@ -210,6 +216,7 @@ def test_what_the_model_could_not_do_travels_with_the_outcome(repo: Path) -> Non
         ]
     )
     outcome = asyncio.run(_adapter(provider, repo).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.value is not None
     assert outcome.value.unfinished == ("criterion 2 needs a DB",)
     assert any(f.id == "implement.unfinished" for f in outcome.findings)
 
@@ -434,7 +441,7 @@ def test_with_no_invoker_the_model_comes_from_the_routed_context(repo: Path) -> 
     class Unrouted(Ctx):
         def __init__(self) -> None:
             super().__init__()
-            self.models = {}
+            self.models: dict[str, str] = {}
             self.repo = type("R", (), {"root": str(repo)})()
 
     session = adapter._session(Routed())
@@ -664,7 +671,7 @@ def test_the_shipped_strategies_sit_on_the_bases_they_advertise() -> None:
 # -- lockstep.use ---------------------------------------------------------------------------------
 
 
-def _module_with_workshop():  # noqa: ANN202
+def _module_with_workshop() -> Lockstep:
     from in_lockstep import Lockstep, Workshop
     from in_lockstep.adapters.sandbox import Sandbox
 

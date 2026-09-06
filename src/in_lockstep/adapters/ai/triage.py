@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from ...ai.context import ContextItem, ContextPackage, Provenance
-from ...ai.invoker import AiInvoker, InvocationBlocked, InvocationFailed, InvokePolicy, ToolRunner
+from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy, Invoker, ToolRunner
 from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import schema_instruction, settle
 from ...ai.tools import ToolSet
@@ -105,7 +105,7 @@ class AiTriage:
 
     def __init__(
         self,
-        invoker_factory: Callable[[Any], AiInvoker] | None = None,
+        invoker_factory: Callable[[Any], Invoker] | None = None,
         *,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[TriagePrompt]] | None = None,
@@ -169,7 +169,7 @@ class AiTriage:
 
         from .strategy import resolve_invoker
 
-        invoker: AiInvoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
+        invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx)
         try:
             invocation = await invoker.run(
                 system=system,

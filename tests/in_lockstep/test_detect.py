@@ -174,6 +174,7 @@ def test_command_test_reads_a_junit_report_for_per_test_cases(tmp_path: Path) ->
     ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})})()
     outcome = asyncio.run(adapter.invoke(ctx, Test()))
     report = outcome.value
+    assert report is not None
     assert report.total == 3 and report.failed == 1 and report.skipped == 1
     assert {c.id for c in report.cases} == {"a::ok", "a::bad", "a::skip"}
     assert any(c.outcome == "failed" and c.message == "boom" for c in report.cases)
@@ -397,7 +398,9 @@ def test_command_build_passes_the_target_and_args_and_does_not_guess_artifacts()
     )
     assert sandbox.commands == [["make", "build", "release", "-j", "2"]]
     assert outcome.succeeded and outcome.decided
+    assert outcome.value is not None
     assert outcome.value.artifacts == (), "what a build produced is not guessed from the tree"
+    assert outcome.value is not None
     assert outcome.value.log == "ok"
 
 
@@ -428,6 +431,7 @@ def test_command_run_maps_a_nonzero_exit_to_a_blocking_finding_and_keeps_the_exi
     sandbox = _FakeSandbox(3, stderr="boom")
     outcome = asyncio.run(CommandRun(["npm", "start"], sandbox=sandbox).invoke(None, Run()))
     assert outcome.failed
+    assert outcome.value is not None
     assert outcome.value.exit_code == 3 and outcome.value.stderr == "boom"
     assert outcome.findings[0].id == "run.command_failed" and outcome.findings[0].blocking
 
@@ -509,11 +513,13 @@ def test_a_failure_tail_keeps_stdout_and_stderr_apart_and_ends_where_the_text_do
     glued = _FakeSandbox(2, stdout="building", stderr="error: x")
     outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=glued).invoke(None, Build()))
     assert outcome.findings[0].message == "make build exited 2\nbuilding\nerror: x"
+    assert outcome.value is not None
     assert outcome.value.log == "building\nerror: x"
 
     silent = _FakeSandbox(2)
     outcome = asyncio.run(CommandBuild(["make", "build"], sandbox=silent).invoke(None, Build()))
     assert outcome.findings[0].message == "make build exited 2"
+    assert outcome.value is not None
     assert outcome.value.log == ""
 
 
