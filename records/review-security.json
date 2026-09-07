@@ -1,7 +1,7 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.026745,
+  "cost_usd": 0.028488,
   "decided": true,
   "epoch": "in-process",
   "findings": {
@@ -11,29 +11,29 @@
         "blocking": false,
         "id": "review.security",
         "line": 79,
-        "message": "WorktreeRunner silently discards the `cwd` argument passed by the caller, with no validation that `repo_root` is canonical or that it hasn't been manipulated before reaching this point.",
+        "message": "WorktreeRunner silently ignores the caller-supplied `cwd` argument. If callers pass a `cwd` that is not the live tree root (e.g. a per-session workspace subdirectory), the worktree is still materialised from `repo_root`, which may not match. The real concern is that the contract 'we always run in a throwaway copy of HEAD' depends entirely on `materialize` succeeding and the `async with` block completing cleanly. If `materialize` raises before the worktree is ready, the `inner.run` call never hap\u2026[truncated]",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 82,
-        "message": "The throwaway worktree materialised by `materialize(self.repo_root, ChangeSet())` is passed as `cwd` to the inner runner, which for `Sandbox` means it becomes the bind-mount root. If `materialize` creates the worktree under a world-readable temp directory, a concurrent local process could read or race-write into it during the command's execution window.",
+        "line": 74,
+        "message": "`repo_root` is accepted as a plain `str` and passed directly to `materialize` with no validation. An attacker who can influence `repo_root` (e.g. via a symlink, a crafted config value, or a `--repo-root` flag) can point `WorktreeRunner` at an arbitrary directory. If that directory is not a git repository, the error is caught and surfaced as `WorktreeError`; if it is a git repository they control, the 'throwaway copy' becomes a copy of their chosen tree, not the real project HEAD. This is lower-s\u2026[truncated]",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 6695,
+  "input_tokens": 6611,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 444,
+  "output_tokens": 577,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 7139,
-  "wall_seconds": 13.334
+  "tokens": 7188,
+  "wall_seconds": 15.946
 }
