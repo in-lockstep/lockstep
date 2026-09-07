@@ -348,13 +348,20 @@ def test_a_policy_field_that_enforces_nothing_is_not_offered() -> None:
 
     from in_lockstep.core.policy import ResolvedPolicy
 
-    assert {f.name for f in fields(ResolvedPolicy)} == {"deny_tools", "scan_input", "max_turns"}
+    assert {f.name for f in fields(ResolvedPolicy)} == {
+        "deny_tools",
+        "scan_input",
+        "max_turns",
+        "max_idle_turns",
+    }
     assert {f.name for f in fields(Policy)} == {
         "name",
         "source",
         "deny_tools",
         "scan_input",
         "max_turns",
+        # Composed by `under()` like `max_turns`, and printed by `ls` beside it (#337).
+        "max_idle_turns",
     }
 
 

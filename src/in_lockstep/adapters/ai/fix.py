@@ -68,6 +68,8 @@ class FixReport:
     unfinished: tuple[str, ...] = ()
     strategy: str = ""
     turns: int = 0
+    #: Consecutive turns at the end that staged nothing and tested nothing new (#337).
+    idle_turns: int = 0
 
     @property
     def changeset(self) -> ChangeSet:
@@ -239,6 +241,7 @@ class DiagnoseThenFix(FixStrategy):
             unfinished=unfinished,
             strategy=self.id,
             turns=repro_inv.turn_count + fix_inv.turn_count,
+            idle_turns=fix_inv.idle_turns,
         )
         findings = reported(full, malformed=malformed, invocations=(repro_inv, fix_inv), prefix="fix")
 
@@ -284,7 +287,15 @@ class DiagnoseThenFix(FixStrategy):
         lens = session.prompts[prompt_id]()
         system = lens.system(session.layers) + "\n\n" + _schema_instruction(FIX_SCHEMA)
         return await run_phase(
-            session, system, lens.render(params, package), package, prefix="fix", schema=FIX_SCHEMA
+            session,
+            system,
+            lens.render(params, package),
+            package,
+            prefix="fix",
+            schema=FIX_SCHEMA,
+            # Whatever is staged is the reproducer or the reproducer plus the fix; `changeset`
+            # merges the two, so the whole attempt travels under `reproducer` alone.
+            stalled_report=lambda staged: FixReport(reproducer=staged, strategy=self.id),
         )
 
 

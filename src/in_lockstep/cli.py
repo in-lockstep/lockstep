@@ -1222,6 +1222,7 @@ def ls_cmd() -> None:
             f"  = scan={resolved.scan_input or '(unset)'}"
             f" deny_tools={len(resolved.deny_tools)}"
             f" max_turns={resolved.max_turns if resolved.max_turns is not None else '(unset)'}"
+            f" max_idle_turns={resolved.max_idle_turns if resolved.max_idle_turns is not None else '(unset)'}"
         )
 
     routes = lockstep.models.routes
@@ -4534,7 +4535,11 @@ def implement_cmd(
 
     cost = outcome.cost
     click.echo("")
-    click.echo(f"turns     {report.turns if report is not None else 0}")
+    idle = getattr(report, "idle_turns", 0) if report is not None else 0
+    click.echo(
+        f"turns     {report.turns if report is not None else 0}"
+        + (f"  ({idle} idle at the end)" if idle else "")
+    )
     click.echo(f"tokens    {cost.input_tokens} in, {cost.output_tokens} out")
     click.echo(f"cost      ${cost.usd:.4f}{_billing_note(cost)}")
     # Where the tape went, on the same terms `run` reports it. A recording nobody is told about is

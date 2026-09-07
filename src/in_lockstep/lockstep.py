@@ -59,6 +59,9 @@ class Workshop:
     max_turns: int = 30
     max_tokens: int = 8192
     deadline_seconds: float = 1800.0
+    #: Consecutive turns that stage nothing and test nothing new before the session stops
+    #: `blocked` as `<verb>.no_progress` (#337). `InvokePolicy.max_idle_turns` says why twenty.
+    max_idle_turns: int = 20
 
 
 class Lockstep:

@@ -265,6 +265,10 @@ lockstep.bind(EgressPolicy, egress)
 # roughly turn 25 and roughly twenty minutes, short of both the 3600-second wall and the 100 turns
 # the workshop grants.
 #
+# The ceiling that actually stops a wandering session is `max_idle_turns` (#337): twenty turns
+# in a row that stage nothing and test nothing new end it `blocked`, whatever the turn cap and
+# the wall say. The shipped default is kept here; `Workshop(max_idle_turns=...)` is the knob.
+#
 # So `max_turns=100` below is a runaway backstop and not a promise of 100 turns. If a session
 # needs to explore further than it currently gets, THIS is the number that buys it; raising the
 # turn cap alone buys nothing, because it is not what stops the run.

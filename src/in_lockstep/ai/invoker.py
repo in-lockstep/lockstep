@@ -89,6 +89,16 @@ class InvokePolicy:
     max_tokens: int = 16384
     temperature: float = 0.0
     deadline_seconds: float | None = None
+    # Consecutive turns that make no progress before the loop stops (#337). Progress is what the
+    # tool runner reports -- a write it accepted, a suite run over a change set it had not run
+    # before -- never what the model says. A session that reads, searches and reruns the same
+    # suite for this many turns in a row is not getting anywhere, and every one of those turns
+    # resends the whole history: five `/fix` runs on this repository's own #319 staged a correct
+    # fix in 68 turns once and spent 159 and 161 turns twice, ending at the wall ceiling both
+    # times. Twenty, because the third of those runs read for most of its turns before it wrote
+    # and was right to; a reading phase at the start is not cut off, a reading phase that never
+    # ends is. `under` takes the lower of this and what the policy stack contributed.
+    max_idle_turns: int = 20
     # How many times a session may run the suite. Beside `max_turns` because it is the same kind of
     # ceiling — a bound on what one invocation may consume — and because a repository that wants a
     # model to iterate harder should raise it in the same place it raises the turn cap.
@@ -108,6 +118,7 @@ class InvokePolicy:
         max_turns: int,
         max_tokens: int | None = None,
         deadline_seconds: float | None = None,
+        max_idle_turns: int | None = None,
     ) -> InvokePolicy:
         """An adapter's own needs, tightened by whatever the policy stack contributed.
 
@@ -120,10 +131,13 @@ class InvokePolicy:
         `deny_tools` or `scan_input="block"` was writing a comment.
         """
         ceiling = resolved.max_turns
+        idle = max_idle_turns if max_idle_turns is not None else cls.max_idle_turns
+        idle_ceiling = resolved.max_idle_turns
         return cls(
             max_turns=min(max_turns, ceiling) if ceiling is not None else max_turns,
             max_tokens=max_tokens if max_tokens is not None else cls.max_tokens,
             deadline_seconds=deadline_seconds,
+            max_idle_turns=min(idle, idle_ceiling) if idle_ceiling is not None else idle,
             deny_tools=tuple(resolved.deny_tools),
             scan_input=resolved.scan_input or "warn",
         )
@@ -135,6 +149,9 @@ class Turn:
     output: LLMOutput
     cost: Cost
     tool_calls: tuple[str, ...] = ()
+    #: Whether the tool runner reported progress for this turn's calls. A turn with no calls is
+    #: the answer, and is neither.
+    productive: bool = False
 
 
 @dataclass
@@ -151,6 +168,14 @@ class Invocation:
     # symptom does not: both produce an answer that looks complete and is not.
     truncated: bool = False
     findings: tuple[injection.Finding, ...] = ()
+    # The loop stopped because `max_idle_turns` consecutive turns made no progress (#337). A
+    # distinct terminal state from `exhausted`, the way `truncated` is: the remedy for a session
+    # that used every turn is more turns, and the remedy for one that stopped moving is not.
+    stalled: bool = False
+    #: Consecutive turns without progress at the end, whatever ended the loop.
+    idle_turns: int = 0
+    #: What the last productive turn did, from the tool runner: "turn 41: wrote src/x.py".
+    last_progress: str = ""
 
     @property
     def turn_count(self) -> int:
@@ -360,6 +385,12 @@ class AiInvoker:
         findings: list[injection.Finding] = []
         total = Cost()
         last: LLMOutput | None = None
+        # Progress is a counter the tool runner keeps and this loop reads, before and after each
+        # turn's calls. A runner that keeps none -- an adopter's own -- reports nothing, and a
+        # ceiling over nothing does not fire: it is stated in the row rather than guessed at.
+        idle = 0
+        last_progress = ""
+        progressed = getattr(run_tool, "progress", None) if run_tool is not None else None
 
         # A denied tool is removed from the dispatch table, so it cannot be called rather than
         # being refused when called. `ToolSet` IS the dispatch table; there is nothing to reach.
@@ -430,6 +461,8 @@ class AiInvoker:
                     turns=tuple(turns),
                     cost=total,
                     findings=tuple(findings),
+                    idle_turns=idle,
+                    last_progress=last_progress,
                 )
 
             if run_tool is None:
@@ -445,6 +478,7 @@ class AiInvoker:
                     tool_calls=list(output.tool_calls),
                 )
             )
+            before = getattr(run_tool, "progress", None)
             for call in output.tool_calls:
                 result, call_findings = await self._dispatch(call, tools, run_tool, policy)
                 findings.extend(call_findings)
@@ -455,6 +489,32 @@ class AiInvoker:
                         tool_call_id=call.id,
                         tool_name=call.name,
                     )
+                )
+            after = getattr(run_tool, "progress", None)
+            if progressed is None:
+                productive = True
+            else:
+                productive = isinstance(before, int) and isinstance(after, int) and after > before
+            turns[-1].productive = productive
+            if productive:
+                idle = 0
+                last_progress = f"turn {index}: {getattr(run_tool, 'last_progress', '') or 'progressed'}"
+            else:
+                idle += 1
+            if idle >= policy.max_idle_turns:
+                # Stopped, not exhausted: the turns were there and the session was not using
+                # them. The staged change survives in the workspace for the strategy to return,
+                # so a run stopped for idling still hands a person its attempt (#337).
+                self._persist(system=system, history=history, final=last, ended="stalled")
+                return Invocation(
+                    content=last.content if last else "",
+                    output=last,
+                    turns=tuple(turns),
+                    cost=total,
+                    findings=tuple(findings),
+                    stalled=True,
+                    idle_turns=idle,
+                    last_progress=last_progress,
                 )
 
         # The cap is a distinct terminal state. Returning the provider's own stop reason here
@@ -467,6 +527,8 @@ class AiInvoker:
             cost=total,
             exhausted=True,
             findings=tuple(findings),
+            idle_turns=idle,
+            last_progress=last_progress,
         )
 
     def _persist(self, *, system: str, history: list[Message], final: LLMOutput | None, ended: str) -> None:

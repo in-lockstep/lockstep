@@ -155,6 +155,24 @@ def test_gate_sandbox_2_the_reproducer_is_not_asked_for_when_its_runner_would_be
     assert provider.calls == []
 
 
+def test_gate_progress_1_a_reproduce_phase_that_stops_moving_is_blocked_with_its_reproducer_intact(
+    repo: Path,
+) -> None:
+    """GATE-PROGRESS-1 through the fixing verb: `fix.no_progress`, the reproducer returned."""
+    provider = Scripted(
+        [_call("write_file", path="test_calc.py", contents=_REPRODUCER), _call("read_file", path="calc.py")]
+    )
+    adapter = DiagnoseThenFix(
+        lambda ctx: _invoker(provider, spend=getattr(ctx, "spend", None)),
+        repo_root=str(repo),
+        policy=InvokePolicy(max_turns=12, max_tokens=1024, max_idle_turns=2),
+    )
+    outcome = asyncio.run(adapter.invoke(Ctx(), Fix(ticket=_ticket())))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "fix.no_progress"
+    assert outcome.value is not None and outcome.value.changeset.paths() == ("test_calc.py",)
+    assert len(provider.calls) == 3
+
+
 def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path) -> None:
     provider = Scripted(
         [

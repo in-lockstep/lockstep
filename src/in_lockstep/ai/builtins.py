@@ -425,6 +425,15 @@ class ToolRunnerImpl:
     #: finishes. Set from `InvokePolicy.max_test_runs` at the binding site.
     max_test_runs: int = DEFAULT_TEST_RUNS
     _test_runs: int = 0
+    #: How many calls have moved the session forward: a write or delete the workspace accepted,
+    #: or a suite run over a change set it had not run before. `AiInvoker` reads it before and
+    #: after each turn's calls and counts the turns where it did not move (#337). What the model
+    #: SAYS never moves it, and neither does a write `ChangeGuard` refused or a `run_tests` over
+    #: the same staged set as the last one, which costs a container run to learn nothing.
+    progress: int = 0
+    #: What the last productive call did, for the finding that names it.
+    last_progress: str = ""
+    _last_tested: tuple[tuple[str, str | None], ...] | None = None
 
     async def __call__(self, server: str, name: str, args: dict[str, object]) -> str:
         if server != BUILTIN_SERVER:  # pragma: no cover - ToolSet resolves before this
@@ -478,6 +487,10 @@ class ToolRunnerImpl:
                     f"paths only, so pass the file or directory and let the runner choose its flags."
                 )
         self._test_runs += 1
+        staged = tuple((c.path, c.contents) for c in self.workspace.changes)
+        if staged != self._last_tested:
+            self._last_tested = staged
+            self._advance(f"ran the suite over {len(staged)} staged change(s)")
         try:
             return await self.tests(paths)
         except Exception as e:  # noqa: BLE001 - a tool result is a message, never a crash
@@ -581,10 +594,22 @@ class ToolRunnerImpl:
         return "\n".join(matches) + suffix
 
     def _write(self, args: dict[str, object]) -> str:
-        return self.workspace.record(str(args.get("path", "")), str(args.get("contents", "")))
+        path = str(args.get("path", ""))
+        answer = self.workspace.record(path, str(args.get("contents", "")))
+        if answer.startswith("ok:"):
+            self._advance(f"wrote {path}")
+        return answer
 
     def _delete(self, args: dict[str, object]) -> str:
-        return self.workspace.record(str(args.get("path", "")), None)
+        path = str(args.get("path", ""))
+        answer = self.workspace.record(path, None)
+        if answer.startswith("ok:"):
+            self._advance(f"deleted {path}")
+        return answer
+
+    def _advance(self, what: str) -> None:
+        self.progress += 1
+        self.last_progress = what
 
     async def _script(self, args: dict[str, object]) -> str:
         """Run a command, or say precisely why not.

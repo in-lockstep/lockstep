@@ -21,6 +21,7 @@ from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse
 from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
+from ...core.types import ChangeSet
 from ...core.verbs import Capability, Verb
 from ...privileged.egress import EgressRefused
 from .instructions import house_rules
@@ -196,6 +197,7 @@ class AiStrategy:
                 self.policy = InvokePolicy.under(
                     lockstep.policy.resolve(),
                     max_turns=workshop.max_turns,
+                    max_idle_turns=workshop.max_idle_turns,
                     max_tokens=workshop.max_tokens,
                     deadline_seconds=workshop.deadline_seconds,
                 )
@@ -271,14 +273,21 @@ async def run_phase(
     *,
     prefix: str,
     schema: dict[str, Any] | None = None,
+    stalled_report: Callable[[ChangeSet], Any] | None = None,
 ) -> Any:
-    """One model turn-loop, with its three failure modes mapped to a `PhaseError`.
+    """One model turn-loop, with its four failure modes mapped to a `PhaseError`.
 
     A refused control raises BLOCKED; infrastructure failure or a truncated answer, ERRORED — the
     handling every strategy repeated inline. Returns the Invocation otherwise. `prefix` namespaces
     the truncation reason (`implement.truncated`, `fix.truncated`). `schema` is the shape the
     phase's cover note must take, handed to the invoker so a model registered as not answering
     with one is refused before the loop starts rather than after every turn of it is paid for.
+
+    The fourth: a loop that stopped because `max_idle_turns` turns in a row moved nothing is
+    BLOCKED as `<prefix>.no_progress` -- a ceiling stopping a run is the control working -- and
+    the outcome carries what the session had staged, through `stalled_report`, which is the
+    verb's own report over a change set: a run stopped for idling still hands a person its
+    attempt, as one stopped at the turn cap does (#337).
     """
     try:
         invocation = await session.invoker.run(
@@ -295,6 +304,30 @@ async def run_phase(
         # cannot come to disagree about whether a refused control is BLOCKED or FAILED.
         raise PhaseError(failure_outcome(e)) from e
 
+    if invocation.stalled:
+        staged = session.workspace.changeset() if hasattr(session, "workspace") else ChangeSet()
+        raise PhaseError(
+            Outcome(
+                status=Status.BLOCKED,
+                reason=f"{prefix}.no_progress",
+                value=stalled_report(staged) if stalled_report is not None else None,
+                cost=invocation.cost,
+                findings=(
+                    Finding(
+                        id=f"{prefix}.no_progress",
+                        message=(
+                            f"stopped after {invocation.idle_turns} turn(s) in a row that staged "
+                            f"nothing and tested nothing new (the ceiling is "
+                            f"{session.policy.max_idle_turns}); the last productive one was "
+                            f"{invocation.last_progress or 'none: nothing was ever staged'}. "
+                            f"{len(staged.changes)} staged change(s) are returned unproposed."
+                        ),
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
+                ),
+            )
+        )
     if invocation.truncated:
         raise PhaseError(
             Outcome(
