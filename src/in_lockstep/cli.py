@@ -2388,10 +2388,11 @@ def _workflow_function(module: Any, workflow_id: str) -> Any:
     "--body-file",
     required=True,
     type=click.Path(exists=True),
-    help="The comment body, carrying the marker that anchors it.",
+    help="The comment body, carrying the marker that anchors it — or a directory of them, one per lens.",
 )
 def comment_cmd(number: int, body_file: str) -> None:
-    """Post a body somebody else composed, as a sticky comment.
+    """Post a body somebody else composed, as a sticky comment — or every body in a directory,
+    each as its own.
 
     Its own command, and its own job, because of the one split this framework's trampoline design
     rests on: the process that calls a model must not also hold the token that writes the
@@ -2407,25 +2408,39 @@ def comment_cmd(number: int, body_file: str) -> None:
 
     Matched with the writer's own pattern, not a copy. The copy this command kept excluded `-`,
     so a body a hyphenated lens had written was refused here as carrying no marker at all (#275).
+
+    A directory is what the required check's several lenses wrote — `review --aspect a --aspect b
+    --comment-out <dir>` leaves `<dir>/a.md` and `<dir>/b.md` — and each is posted under its own
+    marker, so four lenses are four comments a reader can tell apart and a later run edits each in
+    place. Every body is checked for its marker BEFORE any is posted: a directory with one
+    unanchored file posts nothing, rather than three comments and a refusal.
     """
     from pathlib import Path as _Path
 
     from .platform.hosted import hosted_scm
 
-    body = _Path(body_file).read_text()
-    found = _MARKER.search(body)
-    if found is None:
-        raise click.ClickException(
-            f"{body_file} carries no in-lockstep marker, so a later run could not find this comment "
-            f"to edit and would post a second one beside it. Two comments that disagree is worse "
-            f"than one that is out of date."
-        )
+    given = _Path(body_file)
+    files = sorted(given.glob("*.md")) if given.is_dir() else [given]
+    if not files:
+        raise click.ClickException(f"{body_file} holds no .md body to post")
+    anchored: list[tuple[_Path, str, str]] = []
+    for file in files:
+        body = file.read_text()
+        found = _MARKER.search(body)
+        if found is None:
+            raise click.ClickException(
+                f"{file} carries no in-lockstep marker, so a later run could not find this comment "
+                f"to edit and would post a second one beside it. Two comments that disagree is worse "
+                f"than one that is out of date."
+            )
+        anchored.append((file, body, found.group(0)))
 
     scm: Any = hosted_scm(".")
     if not hasattr(scm, "upsert_comment"):
         raise click.ClickException(f"{type(scm).__name__} cannot post comments")
-    asyncio.run(scm.upsert_comment(number, body, found.group(0)))
-    click.echo(f"comment   posted to #{number} under {found.group(0)}")
+    for _file, body, mark in anchored:
+        asyncio.run(scm.upsert_comment(number, body, mark))
+        click.echo(f"comment   posted to #{number} under {mark}")
 
 
 @main.command(name="doctor")
@@ -2789,7 +2804,10 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...] | None:
     "comment_out",
     default="",
     type=click.Path(),
-    help="Write the comment body for another job to post. The CI form of --comment.",
+    help=(
+        "Write the comment body for another job to post — a .md file for one lens, else a directory "
+        "that gets <lens>.md per lens. The CI form of --comment."
+    ),
 )
 @click.option(
     "--pr", "pr_number", type=int, default=None, help="The PR to comment on (else detected from CI)."
@@ -2886,10 +2904,22 @@ def review_cmd(
         # stopped a run that was otherwise going to happen, and a name that is not a lens is not
         # a run somebody may not have. Nothing is recorded either way, so no rate moves.
         raise click.ClickException(str(refused)) from None
-    if len(aspects) > 1 and (comment_out or post_comment):
-        # A comment is one lens's findings for one thread; four lenses in one body is a wall.
-        # The required check runs several and posts none, and a lens on request runs one.
-        raise click.ClickException("--comment and --comment-out take one --aspect; run the lenses separately")
+    if len(aspects) > 1 and comment_out and comment_out.endswith(".md"):
+        # A comment is one lens's findings for one thread; four lenses in one body is a wall. So
+        # several lenses write several bodies, one per lens into a directory `--comment-out`
+        # names, each anchored by its own marker — and a path that says it is one file is refused
+        # rather than overwritten three times. `--comment` needs no such rule: it posts per lens
+        # already, under `review:<lens>`, which is how the required check's four verdicts reach
+        # the thread as four comments a reader can tell apart rather than one wall or, as before
+        # #345, nothing but a job log.
+        raise click.ClickException(
+            f"--comment-out {comment_out} is one file and {len(aspects)} lenses were asked for; "
+            f"name a directory and each lens writes <lens>.md into it"
+        )
+    if comment_out and not comment_out.endswith(".md"):
+        # A directory for one lens too, so a scaffold that names `review-comments` and later gains
+        # a second `--aspect` keeps working without renaming anything on either side.
+        Path(comment_out).mkdir(parents=True, exist_ok=True)
 
     if pr_number and source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
         # `--pr` already meant "the change request this review is about" — it is what `--comment`
@@ -3000,7 +3030,11 @@ def review_cmd(
                 if record
                 else "live"
             ),
-            comment_out=comment_out,
+            comment_out=(
+                str(Path(comment_out) / f"{aspect}.md")
+                if comment_out and not comment_out.endswith(".md")
+                else comment_out
+            ),
             post_comment=post_comment,
             pr_number=pr_number,
         )
@@ -6570,7 +6604,8 @@ jobs:
             --aspect security \
             --budget 0.75 \
             --record \
-            --cassette "${RUNNER_TEMP}/review.json"
+            --cassette "${RUNNER_TEMP}/review.json" \
+            --comment-out review-comments
         env:
           IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.
@@ -6610,6 +6645,7 @@ jobs:
           name: lockstep-run
           path: |
             history.bundle
+            review-comments/
             .lockstep/
           if-no-files-found: ignore
           # `.lockstep/` is a dotted path and upload-artifact@v4 excludes hidden files by DEFAULT,
@@ -6636,6 +6672,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      # For the comment below. Here and not in `review`: the job that calls a model must not also
+      # hold a token that writes to the repository, and a comment is a write.
+      pull-requests: write
       actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -6653,6 +6692,17 @@ jobs:
             --from-bundle "${RUNNER_TEMP}/review/history.bundle" \
             --push
         continue-on-error: true
+      # The lens's verdict and findings as a sticky comment on the pull request, one per lens,
+      # each found again by the marker inside its body so a re-review edits it in place. Without
+      # this the review is a green check and a job log.
+      - run: |
+          uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep comment \
+            --pr "$PR" \
+            --body-file "${RUNNER_TEMP}/review/review-comments"
+        continue-on-error: true
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
 """
 
 _SCAFFOLD_GITLAB_TRAMPOLINE = """\
@@ -6722,7 +6772,8 @@ review:
           --aspect security \\
           --budget 0.75 \\
           --record \\
-          --cassette /tmp/review.json
+          --cassette /tmp/review.json \\
+          --comment-out review-comments
         in-lockstep eval harvest \\
           --from /tmp/review.json \\
           --into .lockstep/cases \\
@@ -6737,7 +6788,7 @@ review:
     - in-lockstep history --bundle history.bundle || true
   artifacts:
     when: always
-    paths: [.lockstep/, history.bundle]
+    paths: [.lockstep/, history.bundle, review-comments/]
     # Said out loud rather than inherited: the instance default is measured in weeks or forever
     # depending on how this GitLab is configured, and this artifact can hold prompts and diffs.
     expire_in: 14 days
@@ -6764,6 +6815,9 @@ publish:
     - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
     - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
     - in-lockstep history --from-bundle history.bundle --push || true
+    # The lens's verdict and findings as a note on the merge request, one per lens, edited in
+    # place on a re-review. `|| true` for the reason the push has it.
+    - in-lockstep comment --pr "$CI_MERGE_REQUEST_IID" --body-file review-comments || true
 
 # -- write-capable verbs: the gate/work/propose credential split --------------------------------
 #

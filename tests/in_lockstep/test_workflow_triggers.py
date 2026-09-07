@@ -312,7 +312,7 @@ MAX_STATEMENTS = {
     "implement.yml": 14,
     "fix.yml": 14,
     "ai-generated.yml": 10,
-    "lockstep.yml": 8,
+    "lockstep.yml": 9,
     "improve.yml": 11,
     "review.yml": 10,
     "reconcile.yml": 2,
@@ -588,6 +588,49 @@ def test_gate_ledger_10_the_review_record_is_published_by_a_job_holding_write_an
         assert re.search(r"in-lockstep history\s+--from-bundle\s+\S*history\.bundle\"?\s+--push", runs), (
             f"{name}: publish does not absorb and push the bundle: {runs}"
         )
+
+
+def test_gate_review_6_each_lens_is_posted_as_its_own_comment_by_the_job_holding_write_and_no_key() -> None:
+    """GATE-REVIEW-6. Four lenses read every pull request here and, until #345, said nothing on
+    it: their verdicts and findings went to the job log, and a later `/fix` on the ticket -- which
+    gathers what was said on the change request -- gathered none of it. The review job writes one
+    body per lens into a directory the artifact carries, and the publish job -- write token, no
+    provider credential, the split `GATE-LEDGER-10` already made -- posts each under its own
+    marker. In this repository's workflow and in the one an adopter is given."""
+    for name, spec in _review_trampolines().items():
+        if "jobs" not in spec:
+            script = " ".join(" ".join(spec["review"]["script"]).split())
+            assert "--comment-out review-comments" in script, f"{name}: the review job writes no comment body"
+            assert "review-comments/" in spec["review"]["artifacts"]["paths"], (
+                f"{name}: the artifact carries none"
+            )
+            publish = " ".join(spec["publish"]["script"])
+            assert (
+                'in-lockstep comment --pr "$CI_MERGE_REQUEST_IID" --body-file review-comments' in publish
+            ), name
+            continue
+        review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
+        reviewed = re.sub(r"\\\s*\n\s*", " ", " ".join(s.get("run", "") for s in review["steps"]))
+        assert re.search(r"in-lockstep review .*--comment-out review-comments\b", reviewed), (
+            f"{name}: the review job writes no comment body"
+        )
+        upload = next(s for s in review["steps"] if "upload-artifact" in str(s.get("uses", "")))
+        assert "review-comments/" in str(upload["with"]["path"]).split(), f"{name}: the artifact carries none"
+        assert publish["permissions"].get("pull-requests") == "write", f"{name}: publish cannot comment"
+        assert not _spends(publish), f"{name}: the commenting job can reach a model"
+        posts = [
+            s
+            for s in publish["steps"]
+            if re.search(
+                r"in-lockstep comment\s+--pr\s+\"\$PR\"\s+--body-file\s+\S*review-comments\"?",
+                re.sub(r"\\\s*\n\s*", " ", s.get("run", "")),
+            )
+        ]
+        assert len(posts) == 1, f"{name}: publish does not post the bodies: {publish['steps']}"
+        assert posts[0].get("continue-on-error") is True, (
+            f"{name}: a comment that could not post turns the verdict red"
+        )
+        assert posts[0]["env"]["PR"] == "${{ github.event.pull_request.number }}", name
 
 
 def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:

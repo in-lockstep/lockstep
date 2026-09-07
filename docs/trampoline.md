@@ -51,8 +51,10 @@ should say so in a comment at the top of its trampoline rather than quietly weak
 
 ## The job split, by verb
 
-A read-only verb (review) needs **one job**: provider key, read access, nothing else. A
-write-capable verb (implement, fix) needs **three**:
+A read-only verb (review) needs **two jobs**: the review itself, with the provider key and read
+access and nothing else, and a `publish` job with the write token and no provider, which pushes
+the review's record and posts each lens's verdict and findings as its own sticky comment from
+the bodies `--comment-out` wrote. A write-capable verb (implement, fix) needs **three**:
 
 | Job | Credential | Access | Does |
 |---|---|---|---|

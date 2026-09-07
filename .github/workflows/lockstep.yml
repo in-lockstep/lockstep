@@ -134,7 +134,8 @@ jobs:
             --aspect security --aspect intent --aspect performance --aspect tests \
             --budget 0.75 \
             --record \
-            --cassette "${RUNNER_TEMP}/review.json"
+            --cassette "${RUNNER_TEMP}/review.json" \
+            --comment-out review-comments
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
@@ -181,6 +182,7 @@ jobs:
           name: lockstep-run
           path: |
             history.bundle
+            review-comments/
             .lockstep/
           if-no-files-found: ignore
           # `.lockstep/` is a dotted path, and upload-artifact@v4 excludes hidden files by
@@ -213,6 +215,10 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      # The comments below. Held here and not in `review`, for the reason review.yml splits its
+      # `post` job from its reviewer: the process that calls a model must not also hold a token
+      # that writes to the repository, and a comment is a write.
+      pull-requests: write
       actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -231,3 +237,19 @@ jobs:
             --from-bundle "${RUNNER_TEMP}/review/history.bundle" \
             --push
         continue-on-error: true
+      # Each lens's verdict and findings, as its own sticky comment on the pull request. Until
+      # #345 they were printed into this run's log and nowhere else, so the reader of a pull
+      # request that four lenses had read saw a green check and nothing they said -- and a later
+      # `/fix` on the ticket, which gathers what was said on the change request, gathered none of
+      # it. One comment per lens rather than one wall, anchored by the marker inside each body,
+      # so a re-review edits four comments in place. `continue-on-error`, like the push above: a
+      # comment that could not be posted must not turn the review's verdict red.
+      - run: |
+          uv run in-lockstep comment \
+            --pr "$PR" \
+            --body-file "${RUNNER_TEMP}/review/review-comments"
+        continue-on-error: true
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          # `gh` reads this; the adapter shells out to it rather than holding an API client.
+          GH_TOKEN: ${{ github.token }}
