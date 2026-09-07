@@ -12,22 +12,22 @@
     "items": [
       {
         "blocking": true,
-        "id": "provider.authentication",
-        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CeXxrpZkxTKE8MAHYPXQy]",
+        "id": "provider.error",
+        "message": "Token exchange failed (HTTP 400): {'error': {'message': 'Request validation failed', 'reason': 'service_account_id: does not have prefix `svac_`', 'type': 'invalid_request_error'}} [request_id=req_011CeXwqBDZQHGM1aNKSZYSH]",
         "severity": "error"
       }
     ]
   },
-  "head": "3e226e287cab29c8cfc971f026f4600d73efbac8",
+  "head": "7966648f51f1b9504ec25f151bb6aa34ccc97de4",
   "input_tokens": 0,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
   "output_tokens": 0,
-  "reason": "provider.authentication",
+  "reason": "provider.error",
   "run_id": "review-security",
   "schema": 4,
   "status": "errored",
   "tokens": 0,
-  "ts": "2026-08-30T00:11:18+00:00",
-  "wall_seconds": 1.943
+  "ts": "2026-08-29T23:57:49+00:00",
+  "wall_seconds": 1.596
 }
