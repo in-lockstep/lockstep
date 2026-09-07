@@ -1,78 +1,39 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.033891,
+  "cost_usd": 0.023562,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 8,
+    "count": 2,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 2179,
-        "message": "Issue title/body flows into PR title and body without sanitisation at the boundary visible in this diff",
-        "path": "src/in_lockstep/cli.py",
+        "line": 117,
+        "message": "Error message from `gh pr ready` reflects the PR number from the caller-supplied `ChangeRequest`, but also reflects the raw `err` string from the subprocess, which could contain attacker-influenced content if the GitHub API or gh CLI echoes back a PR title or body. The number itself originates from a prior `open_change` call so is not externally injectable here, but `err.strip()` is passed verbatim into a `RuntimeError` that may be logged or surfaced upstream. This is low severity \u2014 the content \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/github.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 2168,
-        "message": "Compiled-but-never-executed code path: `compile()` check does not prevent execution of attacker-influenced text that passes syntax validation",
-        "path": "src/in_lockstep/cli.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 2601,
-        "message": "ISSUE number interpolated into artifact name without validation \u2014 low-severity but worth noting",
-        "path": ".github/workflows/fix.yml (in _SCAFFOLD_FIX_TRAMPOLINE)",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "message": "Diff truncation notice: `fix/from-issue` and `fix/propose` workflow implementations are in the scaffold string constant, not in separately reviewed Python modules. The `ChangeGuard` behaviour referenced in comments on the propose workflow is not visible in this diff. If `Scm.open_change` does not enforce branch-prefix constraints independently of the changeset content, the trust boundary described in the scaffold comment would not hold. I cannot confirm or deny this from what was provided.",
-        "path": "src/in_lockstep/cli.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
+        "line": 146,
+        "message": "The option-confusion guard (`if ref.startswith(\"-\")`) is added only in `_resolve_base_ref` (the `GitLocal` path). The `GitHubScm.open_change` also accepts a `base` parameter and appends it to the `gh pr create` argument list (`args += [\"--base\", base]` on line 84). Because `_gh` is called with a list rather than a shell string, this is not shell injection; however, a `base` value beginning with `--` (e.g. `--upload-pack=attacker`) would be interpreted as an option by the `gh` CLI rather than as \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/base.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 7322,
+  "input_tokens": 5634,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 795,
+  "output_tokens": 444,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 8117,
-  "wall_seconds": 22.467
+  "tokens": 6078,
+  "wall_seconds": 12.836
 }
