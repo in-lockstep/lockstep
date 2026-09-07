@@ -5,24 +5,49 @@
   "branch": "HEAD",
   "ci_actor": "tpouyer",
   "config": "base branch (not the ref under review)",
-  "cost_usd": 0.007578,
+  "cost_usd": 0.039903,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 0,
-    "items": []
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 204,
+        "message": "The daily limit is read from an environment variable and parsed with `float()`. An attacker or misconfigured environment that sets `IN_LOCKSTEP_DAILY_LIMIT` to a very large value (e.g., `1e308` or `inf`) silently means no practical ceiling \u2014 the check `spent < limit` will always pass. The code handles non-numeric values loudly, but does not validate that the parsed float is a finite, positive, sane number. A user who sets `IN_LOCKSTEP_DAILY_LIMIT=inf` (or `IN_LOCKSTEP_DAILY_LIMIT=1e999`) bypasse\u2026[truncated]",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 167,
+        "message": "Floating-point accumulation without overflow guard: if `cost_usd` values in ledger records are attacker-influenced and extremely large (e.g., a corrupted or maliciously written ledger record contains `cost_usd: 1e308`), `total` can reach `inf`. `inf < limit` is `False` for any finite limit, so the ceiling fires correctly in that case \u2014 but `inf >= limit` causes a refusal that cannot be cleared without deleting ledger records. More concretely: a ledger record with a negative `cost_usd` (which pas\u2026[truncated]",
+        "path": "src/in_lockstep/platform/ledger/store.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 55,
+        "message": "`store_for` calls `subprocess.run([\"git\", \"rev-parse\", \"--is-inside-work-tree\"], cwd=root, ...)` where `root` is passed in from `lockstep.repo.root`. If `repo.root` is derived from user-supplied input or an environment variable that an attacker controls, `cwd` can be set to an arbitrary path. This is lower severity than a shell-injection (the argument list is not shell-expanded), but it does mean git runs with a working directory the caller controls, and git's own config-loading (`.git/config`, \u2026[truncated]",
+        "path": "src/in_lockstep/platform/ledger/__init__.py",
+        "severity": "warning"
+      }
+    ]
   },
-  "head": "4a95e7798692905105db875e3bb1a11353892bbc",
-  "input_tokens": 2151,
+  "head": "1f65585a33f78fdc0c772efc0ccad87bfafe8725",
+  "input_tokens": 9446,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 75,
+  "output_tokens": 771,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 4,
   "status": "succeeded",
-  "tokens": 2226,
-  "ts": "2026-08-29T21:39:33+00:00",
-  "wall_seconds": 4.43
+  "tokens": 10217,
+  "ts": "2026-08-29T21:06:50+00:00",
+  "wall_seconds": 21.2
 }
