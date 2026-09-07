@@ -1468,6 +1468,24 @@ def test_gate_guard_4_a_listing_does_not_map_what_is_protected(tmp_path: Path) -
     assert ".env" not in listed and ".git/" not in listed
 
 
+def test_gate_guard_4_a_symlink_out_of_the_tree_is_refused_by_every_tool_that_reads(tmp_path: Path) -> None:
+    """GATE-GUARD-4. `check_read` judges the path the model NAMED, and a symlink is where the name
+    and the file disagree: `link.txt -> ../outside.txt` is inside the root by name and outside it
+    on disk. `_read` followed it, `_search` read whatever `rglob` yielded, and the write side had
+    refused exactly this since GATE-GUARD-2 (#308). Resolved once, in `Workspace.inside`."""
+    outside = tmp_path / "outside.txt"
+    outside.write_text("PRIVATE_TOKEN=must-not-be-read\n")
+    root = tmp_path / "repo"
+    runner = _tree_with_secrets(root)
+    (root / "link.txt").symlink_to(outside)
+
+    read = runner._read({"path": "link.txt"})
+    assert read.startswith("refused:") and "outside-repo-root" in read, read
+    assert "must-not-be-read" not in runner._search({"pattern": "PRIVATE_TOKEN"})
+    assert "link.txt" not in runner._list({"glob": "*"})
+    assert "src/app.py" in runner._list({"glob": "*"}), "the listing stopped working"
+
+
 @pytest.mark.parametrize("path", ["src/app.py", ".github/ci.yml", ".lockstep/lockstep.py"])
 def test_a_read_refusal_that_refused_everything_would_be_the_same_defect(tmp_path: Path, path: str) -> None:
     """The other direction, and the reason the read list is SHORTER than the write tiers.

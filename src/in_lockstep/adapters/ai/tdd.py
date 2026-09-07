@@ -32,7 +32,7 @@ from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
-from ..worktree import head_state, materialize
+from ..worktree import head_state, materialize, staged_refusal
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import PhaseError, not_a_verdict, read_reply, reported, run_phase, test_findings
 
@@ -133,6 +133,10 @@ class TDD(ImplementStrategy):
                 "so it needs a Test verb bound. Bind Test (e.g. PytestTest), or bind "
                 "Oneshot, which does not require one.",
             )
+        # Before the first model call, not before the first worktree: a red phase that will be
+        # refused at its Test is a phase whose spend buys nothing (GATE-SANDBOX-2).
+        if (why := staged_refusal(ctx)) is not None:
+            return _blocked("sandbox.host_fallback", why)
 
         session = self._session(ctx)
         lens = session.prompts.get(self.id)

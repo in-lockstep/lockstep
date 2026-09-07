@@ -309,7 +309,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: decide. What detection finds -- the lint script, the lockfiles, the manifests one level down --
 #: lives in `lockstep.py` and `core/context.py`, where `test_detect.py` reaches it without a
 #: CliRunner.
-CLI_HELPER_STATEMENTS = 1086
+#: 1086 -> 1090 with #308, rendering: `_verb_config` writes the Test rebind with a container as
+#: the commented line an adopter completes, and the things-to-decide list names the image a
+#: model-staged test needs. Whether a runner would put a staged file on the host is decided in
+#: `adapters/sandbox.py` (`host_fallback`) and `adapters/worktree.py` (`staged_refusal`), where
+#: `test_controls.py` and the strategy tests reach it without a CliRunner.
+CLI_HELPER_STATEMENTS = 1090
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

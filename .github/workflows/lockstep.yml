@@ -59,6 +59,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           python-version: '3.11'

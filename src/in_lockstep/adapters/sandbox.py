@@ -86,13 +86,24 @@ class Sandbox:
     extra_env: dict[str, str] = field(default_factory=dict)
     #: Refuse rather than fall back to a bare subprocess when no container runtime is available.
     #:
-    #: The fallback is the right default for the repository's own test suite: that code is already
-    #: trusted enough to be in the repository, and dropping credentials is the whole win. It is
-    #: the wrong default for a command a MODEL chose, on a host whose egress is unconstrained —
-    #: there the fallback quietly removes the only thing standing between an injected ticket and
-    #: an outbound connection. So the caller says which situation it is in, and gets a refusal
-    #: instead of a weaker guarantee it did not ask for.
+    #: The fallback is the right default for the repository's own test suite run by a person: that
+    #: code is already trusted enough to be in the repository, and dropping credentials is the
+    #: whole win. It is the wrong default for anything a MODEL chose -- a `run_script` command, and
+    #: equally a test file it staged for `run_tests` or a red/green run, which is repository-shaped
+    #: code that no person has read yet (#308). On a host whose egress is unconstrained the
+    #: fallback quietly removes the only thing standing between an injected ticket and an outbound
+    #: connection. So the caller says which situation it is in, and gets a refusal instead of a
+    #: weaker guarantee it did not ask for; `host_fallback` below is how the model-staged callers
+    #: ask BEFORE materialising anything.
     require_container: bool = False
+    #: Extra bind mounts, `(host_path, container_path)`, mounted READ-ONLY beside the working tree.
+    #:
+    #: A Test container has to carry the suite's dependencies, and a stack image does not: the
+    #: worktree a staged change is materialised into is a copy of HEAD, so `.venv` and
+    #: `node_modules` -- ignored by git -- are not in it. Mounting the environment the host already
+    #: built is what lets `python:3.11-slim` run a repository's suite at all; read-only, so a
+    #: staged test cannot rewrite the interpreter the next run uses.
+    mounts: tuple[tuple[str, str], ...] = ()
 
     def clean_env(self) -> dict[str, str]:
         """What a subprocess sees: the pass-through set plus `extra_env`. Not what a container
@@ -153,6 +164,11 @@ class Sandbox:
         # `DOCKER_HOST` or `CONTAINER_HOST` there points the whole "sandboxed" run at another
         # daemon. The client gets the same pass-through set a subprocess would, and nothing else.
         env_flags = [item for key, value in self.extra_env.items() for item in ("-e", f"{key}={value}")]
+        # `:ro` on every extra mount and never on the tree: the tree is a throwaway copy the
+        # command may write, the environment is the host's and the command may only read it.
+        mount_flags = [
+            item for host, inside in self.mounts for item in ("-v", f"{os.path.abspath(host)}:{inside}:ro")
+        ]
         argv = [
             runtime,
             "run",
@@ -162,6 +178,7 @@ class Sandbox:
             *env_flags,
             "-v",
             f"{mount}:/work",
+            *mount_flags,
             "-w",
             "/work",
             self.image,
@@ -178,6 +195,34 @@ class Sandbox:
         # Honest about what this is: a separate process with no inherited credentials. It is not
         # a kernel sandbox, and calling it one would be the sort of claim this codebase avoids.
         return SandboxResult(code, out, err, sandboxed=False, how="subprocess:no-credentials")
+
+
+def host_fallback(runner: object) -> str | None:
+    """Why a file a MODEL staged would run on this host under `runner`, or None when it would not.
+
+    Asked before a worktree is materialised, so a refusal costs nothing and leaks nothing. The
+    answer is about what the runner DECLARES, not what it would do on this machine: a `Sandbox`
+    with an image and `require_container` either runs in a container or refuses at run time
+    (`refused:no-container`), so it is contained by construction. One probe is real -- an image
+    without `require_container` falls back to a subprocess when no runtime is on PATH, and that
+    fallback is the hole this exists to close, so it is checked here rather than discovered by
+    the staged file having already run. A runner that is not ours is judged by the same
+    attribute `tooling` asks for: `image`. One that names none is refused by its type, because a
+    runner nothing here can vouch for is not assumed to contain anything (O11).
+    """
+    if runner is None:
+        return "the bound Test adapter exposes no sandbox, so nothing says where a staged file would run"
+    if isinstance(runner, UnsandboxedRun):
+        return "the bound Test adapter runs through UnsandboxedRun, which is this host by name"
+    image = getattr(runner, "image", "")
+    if not image:
+        return f"the bound Test adapter's {type(runner).__name__} names no container image"
+    if isinstance(runner, Sandbox) and not runner.require_container and runner.runtime() is None:
+        return (
+            f"the bound Test adapter names {image} but neither {' nor '.join(CONTAINER_RUNTIMES)} is "
+            f"on PATH, so it would fall back to a subprocess on this host"
+        )
+    return None
 
 
 class UnsandboxedRun:

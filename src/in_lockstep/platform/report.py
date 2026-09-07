@@ -171,6 +171,13 @@ def fix_body(changeset: Any, verdict: Any) -> str:
 def _verdict_line(verdict: Any) -> str:
     if verdict is None:
         return "not run — no test verb is bound, so this change is unverified."
+    if verdict.status == "blocked":
+        # Before the `decided` branch, which would call this "collected nothing": nothing was
+        # collected because nothing was run, and the reason is a control (#308), not the suite.
+        return (
+            "🚫 not run — the bound Test runner would have put the staged files on the host "
+            "(sandbox.host_fallback), so this change is unverified."
+        )
     if not verdict.decided:
         return "ran, but collected nothing — neither red nor green."
     if verdict.green:

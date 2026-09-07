@@ -118,6 +118,35 @@ async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> 
     return state
 
 
+def staged_refusal(ctx: Any) -> str | None:
+    """Why the bound Test runner may not be handed a MODEL-staged tree, or None when it may.
+
+    One question, asked at every place a staged change is materialised for `Test` -- `run_tests`,
+    a strategy's red and green runs, and the verdict below -- and asked BEFORE the worktree
+    exists. A staged test file is code the model wrote on a ticket that is untrusted by
+    construction, and `Sandbox()` with no image runs it as a subprocess on this host with `HOME`
+    and an open socket (#308): `~/.ssh` readable, the persisted CI token in a linked worktree's
+    `.git` file one `git config` away. The repository's OWN suite run by a person is a different
+    situation and keeps the fallback; this is scoped to what a model staged. The reason is spelled
+    so a refusal names the line to add, because a control that says "no" without saying what
+    would make it "yes" is one somebody switches off.
+    """
+    from .sandbox import host_fallback
+
+    container = getattr(ctx, "container", None)
+    if container is None or not container.has(Test):
+        return None
+    adapter = container.resolve(Test)
+    why = host_fallback(getattr(adapter, "sandbox", None))
+    if why is None:
+        return None
+    return (
+        f"{why}. A test a model staged runs only in a container: bind Test with "
+        f'Sandbox(image="...", require_container=True), with `mounts=` for the environment the '
+        f"suite needs (see docs/extending.md), or run this verb where a container runtime is."
+    )
+
+
 async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) -> TestVerdict | None:
     """Run the bound suite against HEAD-plus-`changeset`, and report how it came out.
 
@@ -125,9 +154,17 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
     lets an implement run see whether its own change works before proposing it: the change is not on
     disk, so materialising it into a throwaway worktree is the only way to run a suite over it, and
     the worktree is discarded so nothing the suite does reaches the real tree.
+
+    A runner that would put the staged files on this host is a `blocked` verdict rather than a
+    run: the worktree is never made, and the verdict says `sandbox.host_fallback` so the
+    proposal it rides into reads as a control working rather than a suite that failed.
     """
     if not ctx.container.has(Test):
         return None
+    if staged_refusal(ctx) is not None:
+        # The reason is not carried: `TestVerdict` is counts and a status so it serialises on the
+        # redacted side of the artifact, and `implement_body` renders `blocked` as the sentence.
+        return TestVerdict.of("blocked", False, TestReport())
     async with materialize(repo_root, changeset) as tree:
         outcome = await ctx.do(Test(root=tree))
     report = outcome.value if outcome.value is not None else TestReport()
