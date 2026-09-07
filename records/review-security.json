@@ -1,7 +1,7 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.023562,
+  "cost_usd": 0.021978,
   "decided": true,
   "epoch": "in-process",
   "findings": {
@@ -10,30 +10,30 @@
       {
         "blocking": false,
         "id": "review.security",
-        "line": 117,
-        "message": "Error message from `gh pr ready` reflects the PR number from the caller-supplied `ChangeRequest`, but also reflects the raw `err` string from the subprocess, which could contain attacker-influenced content if the GitHub API or gh CLI echoes back a PR title or body. The number itself originates from a prior `open_change` call so is not externally injectable here, but `err.strip()` is passed verbatim into a `RuntimeError` that may be logged or surfaced upstream. This is low severity \u2014 the content \u2026[truncated]",
+        "line": 107,
+        "message": "Error message from `gh pr ready` reflects `err.strip()` from subprocess stderr. If the GitHub CLI returns a message containing the PR number or branch name derived from attacker-controlled input (e.g. a crafted branch name or title), that text reaches the RuntimeError and propagates to callers \u2014 potentially logs or API responses. This is a low-severity information-leak path rather than injection, but worth noting given the pattern already present in `open_change`. I cannot see how callers surfac\u2026[truncated]",
         "path": "src/in_lockstep/platform/scm/github.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 146,
-        "message": "The option-confusion guard (`if ref.startswith(\"-\")`) is added only in `_resolve_base_ref` (the `GitLocal` path). The `GitHubScm.open_change` also accepts a `base` parameter and appends it to the `gh pr create` argument list (`args += [\"--base\", base]` on line 84). Because `_gh` is called with a list rather than a shell string, this is not shell injection; however, a `base` value beginning with `--` (e.g. `--upload-pack=attacker`) would be interpreted as an option by the `gh` CLI rather than as \u2026[truncated]",
-        "path": "src/in_lockstep/platform/scm/base.py",
+        "line": 86,
+        "message": "The `--draft` flag is appended as a flag with no argument, so there is no injection vector there. However, `base` (line 84) is appended as a positional value to `args` without any constraint visible in this diff. A `base` value containing shell metacharacters or a leading `--` could influence `gh` argument parsing. This existed before this change but the diff touches those lines and adds a sibling code path, making it worth flagging: if `base` is user-supplied and reaches `args += [\"--base\", bas\u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/github.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 5634,
+  "input_tokens": 5226,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 444,
+  "output_tokens": 420,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 6078,
-  "wall_seconds": 12.836
+  "tokens": 5646,
+  "wall_seconds": 13.683
 }
