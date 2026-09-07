@@ -176,6 +176,35 @@ def test_a_number_that_is_not_a_change_request_reports_nothing_rather_than_guess
     assert asyncio.run(scm.change_refs(199)) is None
 
 
+def test_a_gh_that_could_not_ask_is_raised_with_its_words_not_read_as_not_a_pull_request() -> None:
+    """Issue 346. The first `/review security` that ever matched the gate ran in a job with no
+    `GH_TOKEN`; `gh pr view` said `Not logged in`, `change_refs` said `None`, and the command
+    refused the number as not a change request. Absent is not zero: a failure to ask is raised
+    with what gh said, and the number is refused only when gh says it is not a pull request."""
+    import asyncio
+
+    from in_lockstep.platform.scm import GitHubScm
+
+    scm = GitHubScm(".")
+
+    def _unauthenticated(*_a: str) -> object:
+        raise RuntimeError(
+            "gh pr view 346 failed: gh: To get started with GitHub CLI, please run: gh auth login"
+        )
+
+    scm._gh_json = _unauthenticated  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="gh auth login"):
+        asyncio.run(scm.change_refs(346))
+
+    def _not_one(*_a: str) -> object:
+        raise RuntimeError(
+            "gh pr view 346 failed: GraphQL: Could not resolve to a PullRequest with the number of 346."
+        )
+
+    scm._gh_json = _not_one  # type: ignore[method-assign]
+    assert asyncio.run(scm.change_refs(346)) is None
+
+
 def test_a_change_request_missing_either_ref_is_not_half_an_answer() -> None:
     import asyncio
 

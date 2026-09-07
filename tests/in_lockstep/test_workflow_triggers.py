@@ -518,6 +518,29 @@ def _scaffolds() -> dict[str, str]:
     }
 
 
+def test_the_review_on_request_job_hands_gh_the_read_token_it_asks_the_host_with() -> None:
+    """Issue 346. `change_refs` asks the host what the pull request points at, through `gh`, and
+    `gh` reads `GH_TOKEN`. The scaffold set it and this repository's own `review.yml` did not, so
+    the first `/review security` that matched the gate failed one step in. Checked in both."""
+    from in_lockstep.cli import _SCAFFOLD_REVIEW_TRAMPOLINE
+
+    files = {
+        "review.yml": _load("review.yml"),
+        "scaffold: review.yml": yaml.load(
+            _SCAFFOLD_REVIEW_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader
+        ),
+    }
+    for name, spec in files.items():
+        review = spec["jobs"]["review"]
+        asking = [s for s in review["steps"] if "in-lockstep review" in (s.get("run") or "")]
+        assert len(asking) == 1, f"{name}: which step reviews?"
+        token = str((asking[0].get("env") or {}).get("GH_TOKEN", ""))
+        assert token in ("${{ github.token }}", "${{ secrets.GITHUB_TOKEN }}"), (
+            f"{name}: the reviewing step hands gh no token, so it cannot ask what the pull request points at"
+        )
+        assert review["permissions"].get("pull-requests") == "read", name
+
+
 def _review_trampolines() -> dict[str, dict[str, Any]]:
     """This repository's review-on-pull-request workflow and the ones `init` scaffolds, loaded --
     the GitLab one too, since #314: its review job's record died with the job (#294 re-shipped),

@@ -72,18 +72,14 @@ def test_gate_ledger_8_a_reconcile_refuses_when_a_run_id_collides_with_different
     GitLedger(root=first_clone).push()
 
     # The content the remote holds for the run id after the first push.
-    remote_blob_before = _git(
-        origin, "show", f"{DEFAULT_BRANCH}:records/{shared_run_id}.json"
-    )
+    remote_blob_before = _git(origin, "show", f"{DEFAULT_BRANCH}:records/{shared_run_id}.json")
 
     # The second push must be refused because its run id collides with different content.
     with pytest.raises(HistoryError, match=shared_run_id):
         GitLedger(root=second_clone).push()
 
     # The remote's record must be exactly what the first clone wrote — untouched.
-    remote_blob_after = _git(
-        origin, "show", f"{DEFAULT_BRANCH}:records/{shared_run_id}.json"
-    )
+    remote_blob_after = _git(origin, "show", f"{DEFAULT_BRANCH}:records/{shared_run_id}.json")
     assert remote_blob_before == remote_blob_after, (
         "the remote's record was replaced by the second push even though content differed"
     )
