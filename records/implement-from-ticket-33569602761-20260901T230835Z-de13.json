@@ -1,0 +1,37 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#139"
+  },
+  "branch": "main",
+  "ci_actor": "tpouyer",
+  "config": "local working tree",
+  "cost_usd": 33.80451,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "provider.authentication",
+        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CedaE4CE79GojXUcBpMLc]",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "d751ee827189bad8bb9ac8187ef5731b65feebad",
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "reason": "provider.authentication",
+  "run_id": "implement-from-ticket-33569602761-20260901T230835Z-de13",
+  "schema": 4,
+  "status": "errored",
+  "tokens": 2148566,
+  "ts": "2026-09-01T23:18:03+00:00",
+  "wall_seconds": 589.346,
+  "workflow": "implement/from-ticket"
+}

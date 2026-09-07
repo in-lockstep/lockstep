@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.050623,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 226,
+        "message": "The `--registered` test asserts `mine.exit_code == 0` but never asserts what `show-workflow --registered` prints when the lifecycle module is NOT loaded \u2014 the negative path (nothing registered) goes untested.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 255,
+        "message": "`test_the_id_discovery_is_not_vacuous` asserts exact sets of workflow ids for `implement` and `fix`, which is good, but `_workflow_function` is only tested for reachability (callable), not that it returns the right function.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1953,
+        "message": "`_workflow_ids` parses `register()`'s source with a regex that requires the call to be on a single line (`workflow(id=\"...\")(...)`). A `ruff format` run that wraps arguments across lines would silently return an empty set. `test_the_id_discovery_is_not_vacuous` covers the happy path but no test asserts behaviour when the regex matches nothing \u2014 which is the quiet failure mode the test's own docstring describes.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0aec03f0456acfa67c9936492a6c6159a83cafcc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 930,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T164156Z-c4e9",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 933,
+  "ts": "2026-09-05T16:42:17+00:00",
+  "wall_seconds": 21.409
+}

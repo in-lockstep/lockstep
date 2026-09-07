@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.047868,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2813,
+        "message": "Prompt text from bound adapters flows into `difflib.unified_diff` and then into `click.echo` without sanitization. A malicious lockstep.py (or a house prompt body file) can inject terminal escape sequences \u2014 including OSC 8 hyperlinks, cursor repositioning, or color codes \u2014 into the diff output, which some terminals interpret and execute. The attack path is: attacker supplies a repository whose lifecycle file or prompt `.md` body contains ANSI/OSC sequences \u2192 user runs `show-prompt security --di\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2825,
+        "message": "The error message in `_resolve_prompt` echoes the user-supplied `name` argument directly into a `ClickException` message via an f-string (`f\"{name!r} is ambiguous\"`). The `!r` repr quoting limits injection into surrounding prose, but the raw value also appears in the second branch (`f\"no prompt named {name!r}\"`). Combined with the `sorted(index)` dump of all known labels, this is primarily an information-disclosure concern (full prompt inventory on any bad name) rather than injection. Low severi\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2770,
+        "message": "`_bound_compositions` iterates `lockstep.container.resolved()` and calls `.compositions()` on every instance satisfying `Inspectable`. If a third-party adapter's `compositions()` raises or returns a malformed dict, the exception propagates unhandled to the CLI. More concretely, if `compositions()` returns a `Composition` whose `prompt.system(layers)` performs file I/O (reading an arbitrary path via `Body.from_path`), calling `.text()` later in `show-prompt` reads that path. A lifecycle file coul\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7f6a7f0289463db06ed1e094c9855545324405e7",
+  "input_tokens": 13161,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 559,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T101542Z-8376",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 13720,
+  "ts": "2026-08-31T10:15:58+00:00",
+  "wall_seconds": 16.933
+}

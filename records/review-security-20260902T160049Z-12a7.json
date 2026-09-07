@@ -1,0 +1,55 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.045823,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 284,
+        "message": "Zero-ceiling bypass of daily spend gate may be exploitable by a caller who controls `declared_ceiling().usd`",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "01457f7fa42559a261ba2650c6d6061e04356eff",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 417,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T160049Z-12a7",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 420,
+  "ts": "2026-09-02T16:01:11+00:00",
+  "wall_seconds": 21.864
+}

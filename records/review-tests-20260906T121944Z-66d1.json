@@ -1,0 +1,60 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066808,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 193,
+        "message": "The merged invocation's `findings` drops the second call's findings unconditionally.",
+        "path": "src/in_lockstep/ai/structured.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1799,
+        "message": "`test_gate_shape_1_a_second_failure_names_both_attempts_and_bills_both_and_stops` would pass with the fix reverted.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "No test reaches the path where the second call itself is truncated.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: tests/in_lockstep/test_ai.py:1843 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "33528d5939d7768adba45d978b202c813f84d24a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 932,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T121944Z-66d1",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 935,
+  "ts": "2026-09-06T12:20:09+00:00",
+  "wall_seconds": 24.753
+}

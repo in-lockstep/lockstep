@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.061385,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 186,
+        "message": "GATE-MODEL-1 is added as `unmet` and blocks O11, but the diff contains no change to `ai/bootstrap.py`, `ai/structured.py`, or any routing code \u2014 the gap it describes (ModelCaps.structured_output declared but read by nothing) is unchanged by this PR.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 184,
+        "message": "The new 'Held, and cited by nothing' section references #273 as the fix for held gates that serve no stated direction, but the diff does not show any change that closes or advances #273 \u2014 only that it is filed.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 77,
+        "message": "The `resolve()` loop previously applied `max_turns` in the same `replace()` call as the three credit fields; after deletion, `max_turns` is applied alone. This is correct, but the method now silently drops any `max_turns` contributed before the `deny_tools`/`scan_input` block because the per-layer logic processes `deny_tools` and `scan_input` conditionally and then unconditionally replaces `max_turns` \u2014 so a layer with no `deny_tools` or `scan_input` still applies its `max_turns`. That behavior \u2026[truncated]",
+        "path": "src/in_lockstep/core/policy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 371,
+        "message": "The shape assertion pins the exact field set of Policy and ResolvedPolicy. This is the right instrument for GATE-POLICY-2, and it will catch a new inert field immediately. One gap: it does not assert that every field in ResolvedPolicy is actually consumed by InvokePolicy.under() \u2014 the structural check is necessary but not sufficient for the gate's claim.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5691a1294354dd709d48a5335c928948cdcab68c",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1003,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T000430Z-1006",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1006,
+  "ts": "2026-09-06T00:04:57+00:00",
+  "wall_seconds": 26.653
+}

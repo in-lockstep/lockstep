@@ -1,0 +1,64 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34068474238",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.092724,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 182,
+        "message": "`divergence()` always returns `read=self.ref` when both refs exist, even if the read actually came from the remote-tracking ref.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 466,
+        "message": "`pull()` silently returns success when `fetch` exits non-zero but the remote-tracking ref already exists from a prior fetch.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 316,
+        "message": "Tamper-detection `verify()` was changed to pass `head` instead of `self.ref` to `git log`; this is a behaviour change not mentioned in the PR description.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1793,
+        "message": "`_ledger_line` uses `getattr` to duck-type `divergence`, making it silently degrade when a real `GitLedger` is passed but `divergence` has a different signature in future.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b55c478e291c5232b04097862f766429ca2623c3",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1314,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T000118Z-3598",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1317,
+  "ts": "2026-09-07T00:01:52+00:00",
+  "wall_seconds": 33.784
+}

@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.07692,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1296,
+        "message": "Exception message from a failed SCM/network call is echoed to stderr without filtering",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 243,
+        "message": "comment author is not checked: first comment on an issue could be from anyone, including the bot itself",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 476,
+        "message": "Group name and finding IDs from ledger records are interpolated into HTML through `_esc`, which correctly escapes \u2014 no injection found on the rendering path",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0667b4cb6dc2151047207224e26bf6e89e1bf319",
+  "input_tokens": 22620,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 604,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T005718Z-4644",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 23224,
+  "ts": "2026-09-02T00:57:37+00:00",
+  "wall_seconds": 18.606
+}

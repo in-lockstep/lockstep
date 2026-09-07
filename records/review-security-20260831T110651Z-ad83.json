@@ -1,0 +1,61 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.079728,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 200,
+        "message": "AST-walk of files under `root` follows symlinks via `rglob`. A pack whose distribution root contains a symlink pointing outside its own tree (e.g. to `/etc/passwd` or to a site-packages module with executable code) would be walked and its content parsed. The practical consequence is two-fold: (1) the `imports()` result could be forced to `modules` or `unknown` by a crafted symlink in a distribution an attacker controls, and (2) `path.read_text()` on an attacker-placed symlink reads an arbitrary \u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 245,
+        "message": "Path traversal in `_module_root`: `dist.locate_file(recorded)` is called for every path in `dist.files` whose first component matches the top-level module name. `recorded` comes from distribution metadata, which an attacker-controlled distribution can set to any value including `../../outside`. The result is `.resolve()`d, which follows symlinks and canonicalises, but the resolved path is then returned directly as the pack's `root`. Downstream callers (`read`, `file`, `corpus`, `cassettes`) join\u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 396,
+        "message": "Arbitrary module import via `importlib.import_module(module_name)` where `module_name` is taken verbatim from the entry-point value of an installed distribution (`Pack.module`). Entry-point values in a distribution's metadata are attacker-controlled for any distribution an attacker can cause to be installed. The import runs the module's top-level code unconditionally. This is only reached when `imports()` returned `'modules'` and `load=True`, so the AST check is a gate, but the gate only checks \u2026[truncated]",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 118,
+        "message": "In `guardrails()`, `self.read(f'prompts/{name}.md')` constructs a path by interpolating the caller-supplied `name` directly. A `name` of `../../lockstep` would resolve to `self.root / 'prompts/../../lockstep.md'`, i.e. `self.root / 'lockstep.md'` \u2014 outside the `prompts/` subdirectory. For a `lockstep.py` author this is self-harm, but if `name` ever originates from untrusted input (e.g. a ticket body reaching a bind expression through template expansion), it becomes a file-read from an arbitrary \u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "8d3edebf29a52362567e28e1ea59fbb7d6825c15",
+  "input_tokens": 21986,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 918,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T110651Z-ad83",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 22904,
+  "ts": "2026-08-31T11:07:16+00:00",
+  "wall_seconds": 25.486
+}

@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34074406265",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.047792,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 242,
+        "message": "Exception text from a failed probe factory is included verbatim in a user-visible Finding message.",
+        "path": "src/in_lockstep/adapters/ai/improve.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a9e9c0287f877218b33fb4ae424f408bbfb2fe22",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 426,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T015245Z-7013",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 429,
+  "ts": "2026-09-07T01:53:00+00:00",
+  "wall_seconds": 15.37
+}

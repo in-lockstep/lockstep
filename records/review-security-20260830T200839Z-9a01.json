@@ -1,0 +1,109 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.043665,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 12,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 46,
+        "message": "Gate check passes actor name to output but comment body is not re-examined",
+        "path": ".github/workflows/fix.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 55,
+        "message": "ANTHROPIC_ORGANIZATION_ID and related federation identifiers are hardcoded in the workflow",
+        "path": ".github/workflows/ai-generated.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 361,
+        "message": "Artifact path interpolated into shell via RUNNER_TEMP without quoting validation",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 336,
+        "message": "Ticket issue body is passed to the model as trusted input for fix/from-ticket",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a747e167273e4c01e8b486e711e005d987e112bd",
+  "input_tokens": 9840,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 943,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T200839Z-9a01",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 10783,
+  "ts": "2026-08-30T20:09:04+00:00",
+  "wall_seconds": 25.356
+}

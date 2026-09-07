@@ -1,0 +1,95 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.047655,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 272,
+        "message": "find_spec fallback returns the first entry from submodule_search_locations without validating it is inside the expected package root. An attacker or malicious pack author controlling sys.path could place a directory with the same top-level module name earlier in the path, causing _located_without_importing to resolve to that directory instead of the installed pack. This would cause pack.toml, imports(), and manifest() to be read from the wrong directory \u2014 a pack that describes itself as a harmle\u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 147,
+        "message": "The TypeError raised by __init_subclass__ includes cls.__name__ in the message and a suggested path derived from cls.__name__.lower(). Both come from the class being defined at import time and are not attacker-controlled in normal use. No finding \u2014 noting this for completeness, but the inputs here are class names from source code, not external data.",
+        "path": "src/in_lockstep/ai/prompt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 201,
+        "message": "The fix correctly removes the identity-test guard and replaces it with the explicit `always` flag. The test added at line 1002 of test_controls.py covers the previously silently-broken case. No remaining vulnerability is visible in the touched lines, but I cannot see the full PathPolicy dataclass or how deny_always is validated on construction \u2014 if PathPolicy accepts arbitrary strings as prefixes without normalizing them (e.g. a prefix with embedded null bytes or a Windows-style path separator),\u2026[truncated]",
+        "path": "src/in_lockstep/core/changes.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "ced1d228910a7f82c9c2d58b59fa9c13cf6d2025",
+  "input_tokens": 12975,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 582,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T142309Z-088c",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 13557,
+  "ts": "2026-08-31T14:23:28+00:00",
+  "wall_seconds": 18.618
+}

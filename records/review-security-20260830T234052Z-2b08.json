@@ -1,0 +1,71 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.013599,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4ca26150a3bba05056d88feb2dd11a2e24817720",
+  "input_tokens": 3768,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 153,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T234052Z-2b08",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 3921,
+  "ts": "2026-08-30T23:41:00+00:00",
+  "wall_seconds": 7.299
+}

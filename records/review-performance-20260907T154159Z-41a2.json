@@ -1,0 +1,28 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34139585501",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.024568,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "46b77a0d5e1dcbc6d340355b6c3c35979d02068f",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 67,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260907T154159Z-41a2",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 70,
+  "ts": "2026-09-07T15:42:04+00:00",
+  "wall_seconds": 4.14
+}

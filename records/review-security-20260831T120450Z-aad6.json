@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.068034,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 181,
+        "message": "read_catalog allows local filesystem reads when the URL does not start with 'http', gated only by `root is not None`. A Source registered via market.toml with a relative or absolute path URL bypasses check_url entirely, since add_source enforces https but sources() reads market.toml without re-validating URLs. An attacker who can write or influence .lockstep/market.toml (e.g., via a malicious PR or a compromised dependency that writes to the repo) can set url = \"/etc/passwd\" or url = \"../../../s\u2026[truncated]",
+        "path": "src/in_lockstep/market.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 155,
+        "message": "fetch reads the response with response.read(MAX_INDEX_BYTES + 1) and then checks length, but the full over-limit read has already occurred in memory before the check fires. For a 1 MB limit this is a bounded issue (1 MB + 1 byte held), but the pattern means the size check does not bound peak allocation \u2014 it only detects the violation after the fact.",
+        "path": "src/in_lockstep/market.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 139,
+        "message": "add_source writes name and url directly into the TOML output via an f-string without escaping: `f'[source.\"{key}\"]\nurl = \"{value}\"\n\n'`. A name or URL containing a double-quote or newline can break out of the quoted TOML value and inject arbitrary TOML structure into market.toml.",
+        "path": "src/in_lockstep/market.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "584dfd4c55dea17f87221236e9ac51fd1e382c34",
+  "input_tokens": 18403,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 855,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T120450Z-aad6",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 19258,
+  "ts": "2026-08-31T12:05:14+00:00",
+  "wall_seconds": 24.391
+}

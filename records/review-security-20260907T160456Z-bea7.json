@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34141503862",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.013734,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 170,
+        "message": "Resolved binary path passed to subprocess without inspection; trustworthiness depends on `tooling.binary` and PATH resolution.",
+        "path": "tests/in_lockstep/test_own_ceilings.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "cc6757aaf57ef74fb3d8d3662fbaefa444d7a166",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 343,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T160456Z-bea7",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 346,
+  "ts": "2026-09-07T16:05:07+00:00",
+  "wall_seconds": 10.969
+}

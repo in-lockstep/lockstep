@@ -1,0 +1,88 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34123898485",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.121022,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 197,
+        "message": "host_fallback treats an unknown runner type with a non-empty `image` attribute as contained, which is not verified.",
+        "path": "src/in_lockstep/adapters/sandbox.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: .ssh/",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: id_ed25519",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "727f997ace2f8c52d3164698eb31fac5c1270000",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 437,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T124847Z-4e8d",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 440,
+  "ts": "2026-09-07T12:49:02+00:00",
+  "wall_seconds": 14.181
+}

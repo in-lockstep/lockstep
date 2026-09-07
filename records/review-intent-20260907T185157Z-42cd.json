@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34153328285",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.02828,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 321,
+        "message": "Message still quotes only `max_idle_turns`; it does not reflect the doubled pre-write allowance accurately.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 228,
+        "message": "New test reuses `repo` and `policy` across two separate `asyncio.run()` calls in the same function body.",
+        "path": "tests/in_lockstep/test_implement_oneshot.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "3eb1c6f99a4b3674bac2d39fb884088edd30fd66",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 575,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T185157Z-42cd",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 578,
+  "ts": "2026-09-07T18:52:12+00:00",
+  "wall_seconds": 14.878
+}

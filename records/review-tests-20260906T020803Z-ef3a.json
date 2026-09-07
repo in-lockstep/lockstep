@@ -1,0 +1,85 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.089402,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 737,
+        "message": "test_a_sidecar_never_replaces_a_request_the_tape_recorded passes even if _with_sidecar opens and attempts to apply the sidecar",
+        "path": "tests/in_lockstep/test_harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 776,
+        "message": "test_an_unreadable_sidecar_is_refused_by_name_only_when_it_is_needed: first assertion does not verify the sidecar was skipped, only that harvest succeeded",
+        "path": "tests/in_lockstep/test_harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 241,
+        "message": "_with_sidecar reads only the first key/request pair from the sidecar; a sidecar with multiple entries silently fills at most one",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a85830134ce54fbe5132f4f65b10c56b9c50d41b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 812,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T020803Z-ef3a",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 815,
+  "ts": "2026-09-06T02:08:24+00:00",
+  "wall_seconds": 21.428
+}

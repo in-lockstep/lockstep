@@ -1,0 +1,40 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34068474238",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.080615,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 163,
+        "message": "`divergence()` runs two `git ls-tree` subprocesses and builds two full sets of record names on every `report` call.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b55c478e291c5232b04097862f766429ca2623c3",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 492,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260907T000153Z-ab22",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "b58dfabe1eb0c285b8f358da8186259e",
+  "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 495,
+  "ts": "2026-09-07T00:02:06+00:00",
+  "wall_seconds": 13.509
+}

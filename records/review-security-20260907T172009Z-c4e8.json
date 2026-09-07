@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34147157078",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.031183,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 231,
+        "message": "Podman detection uses only the basename of the runtime path, which an attacker-controlled path could spoof.",
+        "path": "src/in_lockstep/adapters/sandbox.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "37cc9eec6c5351de74e47f5b406a169f84adb6f8",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 434,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T172009Z-c4e8",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 437,
+  "ts": "2026-09-07T17:20:25+00:00",
+  "wall_seconds": 15.935
+}

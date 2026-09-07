@@ -1,0 +1,46 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.035525,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 125,
+        "message": "Replacement test asserts status equality but not that `decided=False` is actually `False`.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "`test_an_undecided_outcome_is_distinguishable_from_a_cache_hit` deleted without a replacement in this file.",
+        "path": "tests/in_lockstep/test_knowledge.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e760d242f10911a25cc9fb2cb413640fe778ddfa",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 536,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T153059Z-2dea",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 539,
+  "ts": "2026-09-06T15:31:22+00:00",
+  "wall_seconds": 22.892
+}

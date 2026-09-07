@@ -1,0 +1,83 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.069039,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 779,
+        "message": "The audience assertion references `ANTHROPIC_FEDERATION_AUDIENCE` from `ai/bootstrap.py`, but that module is not in the diff. The test claims to guard against audience drift by reading the constant rather than hardcoding it \u2014 which is correct \u2014 but the diff does not show what `ANTHROPIC_FEDERATION_AUDIENCE` is set to, so it is not possible to confirm the audience in the scaffold (`https://api.anthropic.com`) matches it. If the constant differs from the string in `_SCAFFOLD_GITLAB_TRAMPOLINE`, th\u2026[truncated]",
+        "path": "tests/in_lockstep/test_gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 759,
+        "message": "The credential-split test asserts `'ANTHROPIC_IDENTITY_TOKEN' in work` by serialising the parsed job back to YAML with `yaml.safe_dump`. This will match if the string appears anywhere in the job's YAML \u2014 including in a comment. Comments are stripped by `yaml.safe_load`, so `id_tokens:` is the only mechanism that would survive the round-trip. This is fine, but the assertion is weaker than it looks: it confirms the key name appears in the serialised output, not that the `id_tokens:` block is corre\u2026[truncated]",
+        "path": "tests/in_lockstep/test_gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5855,
+        "message": "The `gate` job is now active but the comment block directly above it still says 'ACTIVE, and inert until asked for' and explains the rationale for shipping it uncommented. This is consistent. However, the `aud:` value for `ANTHROPIC_IDENTITY_TOKEN` is written as the literal string `https://api.anthropic.com` in the scaffold template. The description claims the audience is 'asserted equal to ANTHROPIC_FEDERATION_AUDIENCE rather than written twice' \u2014 but the scaffold itself is a string template, n\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 94,
+        "message": "O3 is promoted from `partial` to `held` and the gap column is cleared. The change is internally consistent with GATE-CI-2 moving to `held`. The description is transparent about the untested limit (no GitLab pipeline has ever run). No gap between what the diff says and what it does.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 757,
+        "message": "The `git remote set-url` assertion checks that the work job cannot push by scanning `yaml.safe_dump(parsed['work'])`. `git remote set-url` does not appear in the work job's script in the scaffold, so this assertion will pass. But it is a negative assertion on serialised YAML: if the command were placed in an artifact path name or a variable value, `safe_dump` would still include it and the assertion would fire correctly. The approach is sound for the actual threat (a script line), and the test d\u2026[truncated]",
+        "path": "tests/in_lockstep/test_gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2c020738479ce060216e173c6eecd1d2759be177",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1095,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T002205Z-e0aa",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1098,
+  "ts": "2026-09-06T00:22:32+00:00",
+  "wall_seconds": 27.473
+}

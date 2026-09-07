@@ -1,0 +1,37 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.036738,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 82,
+        "message": "issue.title flows into a pull-request title without sanitisation; a ticket title containing newlines, null bytes, or GraphQL-special characters reaches the host API directly.",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e713cb2db0431555d46b50c6bf48563cb4222740",
+  "input_tokens": 10301,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 389,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T014053Z-6cc2",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 10690,
+  "ts": "2026-09-02T01:41:07+00:00",
+  "wall_seconds": 13.73
+}

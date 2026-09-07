@@ -1,0 +1,48 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34073611160",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.060302,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 186,
+        "message": "ANTHROPIC_BASE_URL is read and stored in registration settings before the monkeypatched-empty environment is restored, but the timing depends on when default_registry() is called relative to GATE-AUTH-1's env-empty window.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 307,
+        "message": "Unknown-destination check precedes the data-policy check, so a restricted repo with endpoint=None and DataPolicy.INTERNAL raises residency.unknown_destination; this is the intended behavior per the gate description, but the error message could expose the internal registration reason string to callers.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9e33d7b08ef018cd34224688137eae667076453b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 785,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T013734Z-b009",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 788,
+  "ts": "2026-09-07T01:37:58+00:00",
+  "wall_seconds": 24.902
+}

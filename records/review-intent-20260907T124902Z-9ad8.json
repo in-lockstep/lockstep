@@ -1,0 +1,104 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34123898485",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.124723,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 168,
+        "message": "verdict_over_staged drops the refusal reason before it can reach the PR body.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 137,
+        "message": "DiagnoseThenFix checks staged_refusal after the no-Test-bound guard but before any model call \u2014 description says 'before the reproducer is asked for' and the code matches \u2014 however the `_blocked` helper here is not shown in the diff; confirm it exists in this file.",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 188,
+        "message": "The 'spending >= 4' floor is a guess; the description says 'at least 8 checkouts' elsewhere but uses 4 here for spending jobs.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: .ssh/",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: id_ed25519",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "727f997ace2f8c52d3164698eb31fac5c1270000",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 705,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T124902Z-9ad8",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 708,
+  "ts": "2026-09-07T12:49:23+00:00",
+  "wall_seconds": 20.888
+}

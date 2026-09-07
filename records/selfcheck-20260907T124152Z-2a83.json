@@ -1,0 +1,73 @@
+{
+  "approval": {
+    "attended": true,
+    "by": "tpouyer"
+  },
+  "args": {},
+  "billed_fraction": null,
+  "branch": "fix/sandbox-model-staged-tests",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "test.no_summary",
+        "message": "pytest exited 125 without a summary line; the suite did not report, so nothing was decided about the change",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "6fcb04581713e68bba5e32945486ec10b237ccc6",
+  "identity": "Tim Pouyer <tim.pouyer@gmail.com>",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": "test.no_summary",
+  "run_id": "selfcheck-20260907T124152Z-2a83",
+  "schema": 8,
+  "status": "errored",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "validate",
+      "verb": "validate",
+      "wall_seconds": 0.02
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "test.no_summary",
+            "message": "pytest exited 125 without a summary line; the suite did not report, so nothing was decided about the change",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "test.no_summary",
+      "status": "errored",
+      "step": "test",
+      "verb": "test",
+      "wall_seconds": 0.783
+    }
+  ],
+  "tokens": 0,
+  "ts": "2026-09-07T12:41:53+00:00",
+  "wall_seconds": 0.804,
+  "workflow": "selfcheck"
+}
