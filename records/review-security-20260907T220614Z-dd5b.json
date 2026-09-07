@@ -1,0 +1,48 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34165474040",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.077709,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 551,
+        "message": "killswitch_engaged() reads an environment variable that any subprocess or os.environ mutation can set, and a cancelled branch silently becomes BLOCKED/killswitch rather than propagating the cancellation.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 130,
+        "message": "Spend reservation fields are plain floats/ints on a shared mutable dataclass with no locking; the atomicity guarantee rests entirely on asyncio's cooperative scheduling.",
+        "path": "src/in_lockstep/core/spend.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6b19dc04afe2d89f46ca62b207a708c56bab22d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 693,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T220614Z-dd5b",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 696,
+  "ts": "2026-09-07T22:06:36+00:00",
+  "wall_seconds": 21.996
+}
