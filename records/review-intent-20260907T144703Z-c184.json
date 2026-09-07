@@ -1,0 +1,53 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34134795314",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.064753,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 218,
+        "message": "Piece-matching walk assumes MASK never appears in the literal file text between two masked values.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 203,
+        "message": "`cases` tuple is built before the reversed summary-line scan, so `report.cases` and `report.failed` are computed in two independent passes over the same text.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 226,
+        "message": "Staged-count scan searches `findings.items` but the ledger may truncate that list.",
+        "path": "src/in_lockstep/workflows/fix.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "fa8452c49bb34a445de7bf47982d159f551fec9b",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 811,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T144703Z-c184",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 814,
+  "ts": "2026-09-07T14:47:26+00:00",
+  "wall_seconds": 23.037
+}
