@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,13 @@ from .base import (
     ticket_from_branch,
     title_line,
     trailers_from,
+)
+
+#: What `gh pr view <n>` says when `<n>` is an issue or nothing at all -- the one failure that is
+#: an answer. Anything else it says (`Not logged in`, `Bad credentials`, a timeout) is a failure
+#: to ask, and `change_refs` raises it rather than reading it as "not a pull request".
+_NOT_A_PULL_REQUEST = re.compile(
+    r"no pull requests? found|not a pull request|Could not resolve to a PullRequest|HTTP 404", re.I
 )
 
 
@@ -412,10 +420,16 @@ class GitHubScm:
         """
         try:
             raw = self._gh_json("pr", "view", str(number), "--json", "baseRefName,headRefOid")
-        except RuntimeError:
+        except RuntimeError as e:
             # `gh pr view` on an issue number fails, which is the answer rather than an error —
-            # the same three-way reading `ticket_of` above documents.
-            return None
+            # the same three-way reading `ticket_of` above documents. Only that failure, though:
+            # a `gh` that could not ask at all (no token, no network, a revoked credential) is
+            # not an answer about the number, and folding it into `None` had the first real
+            # `/review` here refused as "not a change request" when the job simply carried no
+            # `GH_TOKEN` (#346). Absent is not zero: that one is raised with gh's own words.
+            if _NOT_A_PULL_REQUEST.search(str(e)):
+                return None
+            raise
         data = raw if isinstance(raw, dict) else {}
         base, head = str(data.get("baseRefName") or ""), str(data.get("headRefOid") or "")
         return (base, head) if base and head else None

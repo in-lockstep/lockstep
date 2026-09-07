@@ -2942,7 +2942,15 @@ def review_cmd(
         # for a change it never read. An explicit `--base`/`--head` still wins, so nothing that
         # works today changes.
         scm: Any = _bound_scm(lockstep)
-        refs = asyncio.run(scm.change_refs(pr_number)) if hasattr(scm, "change_refs") else None
+        try:
+            refs = asyncio.run(scm.change_refs(pr_number)) if hasattr(scm, "change_refs") else None
+        except RuntimeError as e:
+            # Could not ask, which is a different sentence from "asked and it is not one": the
+            # first names the token or the network, the second names the number (#346).
+            raise click.ClickException(
+                f"could not ask {type(scm).__name__} what change request {pr_number} points at "
+                f"({str(e).strip()[:200]}). Nothing was reviewed."
+            ) from None
         if refs is None:
             raise click.ClickException(
                 f"{type(scm).__name__} could not say what change request {pr_number} points at. "

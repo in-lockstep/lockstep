@@ -117,6 +117,11 @@ jobs:
         env:
           BODY: ${{ github.event.comment.body }}
           ISSUE: ${{ github.event.issue.number }}
+          # `gh` reads this to ask the host what the pull request points at. The read token, not
+          # a write one: this job's `permissions` above are what bound it. The scaffold had this
+          # line and this file did not, and the first `/review security` that ever matched the
+          # gate (run 34163733667, on #346) failed one step in for want of it.
+          GH_TOKEN: ${{ github.token }}
           ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
           ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
           ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj
