@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.073937,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 340,
+        "message": "The `_billing` helper uses two signals (`billed_fraction` and `cost_usd`) but applies them asymmetrically: any positive value in either marks the record BILLED, and zero in either marks it REPLAYED. A record with `billed_fraction=0.0` and `cost_usd=9.61` (billed fraction not yet populated for that run format) would be BILLED because `cost_usd > 0` wins \u2014 which is the intended behaviour per the docstring. However, a record with `cost_usd=0.0` and no `billed_fraction` key would be REPLAYED (cost i\u2026[truncated]",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 506,
+        "message": "In `not_a_verdict`, when the caller supplies `cost=None` (the default), the function falls back to `outcome.cost`. For the `tdd.py` red-phase call (`not_a_verdict(red, cost=red.cost)`), that is fine. For the `fix.py` repro call (`not_a_verdict(red, cost=repro_inv.cost)`), cost is explicitly supplied. The concern is the green-phase calls, which supply `cost=cost` \u2014 an accumulated variable that may differ from `outcome.cost`. The logic is intentional (carry the accumulated cost forward), but if `c\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 194,
+        "message": "The new `BLOCKED` guard is inserted before the existing `status is not Status.SUCCEEDED` guard, which is correct. However, the description (and issue reference) is about `REFUSED` being its own state so that a blocked outcome does not inflate the `errored` count. The `summary()` method already emits `refused` as a key. Nothing in the diff shows whether the display layer (if any) that renders `trial` output was updated to label or explain `refused` runs \u2014 that code is not in the diff, so this obs\u2026[truncated]",
+        "path": "src/in_lockstep/trial.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1214,
+        "message": "The sandbox-refusal test patches `sandbox.runtime` with `lambda: None` to simulate no container engine, then calls `adapter.invoke`. This works only if `invoke` calls `sandbox.runtime()` before `sandbox.run()`. If that ordering is implementation-defined rather than contractual, the test is coupled to the current call sequence. This is an observation about test fragility, not about correctness of the production change.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "54265dd059ab6f0c3c9ba7951faf0537def8e4c8",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 851,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T012025Z-0c5a",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 854,
+  "ts": "2026-09-06T01:20:49+00:00",
+  "wall_seconds": 24.506
+}
