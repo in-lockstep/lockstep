@@ -1,85 +1,55 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.037389,
+  "cost_usd": 0.055041,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 9,
+    "count": 4,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 120,
-        "message": "Comment ID from API response used in URL without validation",
-        "path": "src/in_lockstep/platform/scm/github.py",
+        "line": 109,
+        "message": "Error messages include Jira's response body (up to 500 chars). The code comment asserts the token is safe because it travels in a request header, not the body. That is true for the Jira API token itself, but Jira's error responses can echo back fields from the request or carry project keys, user account IDs, or permission scopes that a caller may prefer not to have in logs or exception traces. This is a low-severity concern, but the 500-char truncation is the only limit on what surfaces.",
+        "path": "src/in_lockstep/platform/tickets/jira.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 76,
-        "message": "Finding messages from model output reach the PR comment body without a length cap on injections",
-        "path": "src/in_lockstep/platform/report.py",
+        "line": 165,
+        "message": "The `key` parameter in `get`, `comment`, `create` (via `self.project`), `add_labels`, and `transition` is interpolated directly into URL paths without validation or encoding. A `key` value containing path separators (e.g. `../`) would traverse the URL path.",
+        "path": "src/in_lockstep/platform/tickets/jira.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 116,
-        "message": "--paginate on the comment-list API call fetches all comments into memory with no size bound",
-        "path": "src/in_lockstep/platform/scm/github.py",
+        "line": 125,
+        "message": "The JQL query passed to `search` is accepted as a raw string and forwarded to Jira in a POST body without any escaping or validation. The call sites visible in this diff pass caller-controlled strings directly.",
+        "path": "src/in_lockstep/platform/tickets/jira.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 131,
-        "message": "Error message from gh stderr echoed to the user without sanitization",
-        "path": "src/in_lockstep/platform/scm/github.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- in-lockstep:{kind} -->",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- in-lockstep:review:security -->",
+        "line": 84,
+        "message": "The `JiraSource` dataclass stores the `token` field as a plain string attribute. Any code that serialises a `JiraSource` instance (repr, dataclass `asdict`, logging of the object) will include the token in its output.",
+        "path": "src/in_lockstep/platform/tickets/jira.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 8448,
+  "input_tokens": 12912,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 803,
+  "output_tokens": 1087,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 9251,
-  "wall_seconds": 23.839
+  "tokens": 13999,
+  "wall_seconds": 28.997
 }
