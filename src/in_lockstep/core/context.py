@@ -22,7 +22,7 @@ from typing import Any, TypeVar
 from .container import Container
 from .middleware import ActionCall, Middleware, Next, compose
 from .outcome import VERDICT_PRECEDENCE, JoinResult, Outcome, Status
-from .ports import InferenceLog, StepStore
+from .ports import InferenceLog, LedgerStore, StepStore
 from .spend import Spend
 from .verbs import Verb, capabilities_of, verb_of
 
@@ -329,6 +329,11 @@ class RunContext:
     #: same tape would lose whichever wrote first. `None` is a run that records nothing, which is
     #: every run that did not ask.
     recording: InferenceLog | None = None
+    #: The store this run's record goes to, as the port and never an implementation: what a
+    #: branch that parks will write its barrier record through, and what `fan_out` refuses to
+    #: park on when its `scope` is LOCAL (`GATE-OUT-5`, `GATE-OUT-6`). None on a hand-built
+    #: context, which is a run that records nowhere and can park nowhere.
+    ledger: LedgerStore | None = None
     recovering: bool = False
     #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
     approval: Approval = field(default_factory=Approval)

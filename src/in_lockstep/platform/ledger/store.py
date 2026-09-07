@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ...core.ports import LedgerScope
 from ...privileged import sink
 
 # 3: `findings` became {count, items} instead of a bare count. Bumped rather than added beside,
@@ -62,11 +63,6 @@ class LedgerError(RuntimeError):
 
 class Unsupported(LedgerError):
     """A store was asked for a capability its scope cannot provide."""
-
-
-class LedgerScope:
-    LOCAL = "local"
-    SHARED = "shared"
 
 
 def current_epoch() -> str:
