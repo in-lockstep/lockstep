@@ -106,7 +106,16 @@ lockstep.bind(
         sandbox=Sandbox(
             image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
             mounts=((_VENV, "/venv"),),
-            extra_env={"PYTHONPATH": f"/venv/lib/python{_PY}/site-packages"},
+            # `src` on the path as well as the venv's packages, because this repository is
+            # installed editable and an editable install is a `.pth` file, which Python reads in a
+            # site directory and not on PYTHONPATH -- so `python -m mypy` and the CLI run as a
+            # subprocess could not import the package inside the container. The venv's `bin`
+            # LAST on PATH, so `python` is the image's (the venv's is a symlink to a host path)
+            # and `ruff`, which the suite resolves by name, is the one the host built.
+            extra_env={
+                "PYTHONPATH": f"/venv/lib/python{_PY}/site-packages:/work/src",
+                "PATH": "/usr/local/bin:/usr/bin:/bin:/venv/bin",
+            },
         ),
     ),
 )
