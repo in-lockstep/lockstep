@@ -1,39 +1,55 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.021978,
+  "cost_usd": 0.061455,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 2,
+    "count": 4,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 107,
-        "message": "Error message from `gh pr ready` reflects `err.strip()` from subprocess stderr. If the GitHub CLI returns a message containing the PR number or branch name derived from attacker-controlled input (e.g. a crafted branch name or title), that text reaches the RuntimeError and propagates to callers \u2014 potentially logs or API responses. This is a low-severity information-leak path rather than injection, but worth noting given the pattern already present in `open_change`. I cannot see how callers surfac\u2026[truncated]",
+        "line": 358,
+        "message": "Model-controlled content reaches prompt without truncation in the reproduction step",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 224,
+        "message": "Ticket content (untrusted) embedded in prompts in two separate invocations",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 115,
+        "message": "Error message from gh CLI includes raw stderr, which may contain token or URL fragments",
         "path": "src/in_lockstep/platform/scm/github.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 86,
-        "message": "The `--draft` flag is appended as a flag with no argument, so there is no injection vector there. However, `base` (line 84) is appended as a positional value to `args` without any constraint visible in this diff. A `base` value containing shell metacharacters or a leading `--` could influence `gh` argument parsing. This existed before this change but the diff touches those lines and adds a sibling code path, making it worth flagging: if `base` is user-supplied and reaches `args += [\"--base\", bas\u2026[truncated]",
-        "path": "src/in_lockstep/platform/scm/github.py",
+        "line": 84,
+        "message": "FixSession.context passes ticket.as_context() directly; ticket is declared untrusted",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 5226,
+  "input_tokens": 16005,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 420,
+  "output_tokens": 896,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 5646,
-  "wall_seconds": 13.683
+  "tokens": 16901,
+  "wall_seconds": 25.124
 }
