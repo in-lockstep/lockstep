@@ -224,7 +224,13 @@ def _run_as_host_user(runtime: str) -> list[str]:
     flags = ["--user", f"{getuid()}:{getgid()}"]
     if os.path.basename(runtime) == "podman":
         flags = ["--userns=keep-id", *flags]
-    return flags
+    # A name for that uid, because the image's passwd file has none: `getpass.getuser()`, which
+    # `--approve` calls to record who watched a run, reads LOGNAME and USER before it asks passwd,
+    # and asking passwd for a uid the image never heard of is a KeyError -- seven tests of this
+    # repository's fifth `/fix` on itself failed on exactly that (#312). A neutral name and not
+    # the host user's: the tree is a model's staging ground and nothing of the host's identity
+    # belongs in it.
+    return [*flags, "-e", "LOGNAME=sandbox", "-e", "USER=sandbox"]
 
 
 def host_fallback(runner: object) -> str | None:
