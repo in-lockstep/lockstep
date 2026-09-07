@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34158055704",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.024151,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 326,
+        "message": "Head-start note appended after the failure text rather than integrated into it, which may read oddly when `_failure_text` ends mid-sentence.",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 171,
+        "message": "`early` paths are computed once and never re-computed if the fix step stages more changes before reading them.",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "77948bda4bbd4b89f80d85b45f17faa1e97d932c",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 458,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T200552Z-09ee",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 461,
+  "ts": "2026-09-07T20:06:05+00:00",
+  "wall_seconds": 12.73
+}
