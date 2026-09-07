@@ -1,22 +1,22 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.011235,
+  "cost_usd": 0.02142,
   "decided": true,
   "epoch": "in-process",
   "findings": {
     "count": 0,
     "items": []
   },
-  "input_tokens": 3085,
+  "input_tokens": 6410,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 132,
+  "output_tokens": 146,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 3217,
-  "wall_seconds": 6.386
+  "tokens": 6556,
+  "wall_seconds": 6.915
 }
