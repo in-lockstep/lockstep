@@ -1,89 +1,22 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.099609,
+  "cost_usd": 0.012024,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 10,
-    "items": [
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 175,
-        "message": "Error responses from the GitLab API are surfaced with up to 500 characters of the response body (`response.text[:500]`). GitLab's error bodies can include context that reproduces field values from the request \u2014 for example, a `422` on a merge-request creation includes the `source_branch` and `target_branch` that were rejected. If those values ever contain user-controlled strings (issue titles embedded in branch names, ticket content in MR descriptions), the error message that propagates through \u2026[truncated]",
-        "path": "src/in_lockstep/platform/scm/gitlab.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 40,
-        "message": "`detect_host` calls `subprocess.run([\"git\", \"config\", \"--get\", \"remote.origin.url\"], cwd=path, ...)` where `path` comes from the `root` argument, which is `str | Path = \".\"`. In `init_cmd`, the call is `detect_host()` with no argument, so `path` is the current working directory at CLI invocation time \u2014 controlled by whoever invokes the CLI. In a CI context the CWD is the checked-out repository, which is expected. On a developer machine or in a scenario where the CLI is invoked from an attacker-i\u2026[truncated]",
-        "path": "src/in_lockstep/platform/hosted.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 137,
-        "message": "The `_project_path` method calls `self._remote()` (a `git config --get remote.origin.url` subprocess) and passes the result to `project_from_remote`, then to `quote(project, safe=\"\")`. The `quote` call URL-encodes the path before it is interpolated into API endpoint strings like `/projects/{self._project_path()}/merge_requests`. This is correct for the happy path. However, `project_from_remote` returns whatever follows the `:` or the first `/` after the host in the URL, with no further validatio\u2026[truncated]",
-        "path": "src/in_lockstep/platform/scm/gitlab.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- marker -->",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- marker -->",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- m -->",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- m -->",
-        "severity": "warning"
-      }
-    ]
+    "count": 0,
+    "items": []
   },
-  "input_tokens": 28848,
+  "input_tokens": 3968,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 871,
+  "output_tokens": 8,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 29719,
-  "wall_seconds": 24.155
+  "tokens": 3976,
+  "wall_seconds": 3.642
 }
