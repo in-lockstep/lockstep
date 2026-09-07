@@ -95,6 +95,14 @@ write token absorbs what the host still holds, once each. `in-lockstep report --
 are outstanding, and without `--scm` it says it did not ask rather than presenting the branch as the
 whole record.
 
+**The second engineer reads it without doing anything.** A fresh clone has no local
+`lockstep-history`; it has `origin/lockstep-history`, and the ledger reads that when there is no
+local branch, so `report` and `history --explain` on a colleague's clone show the runs the branch
+holds rather than "no records yet". Nothing is created by reading. `report` ends with a `ledger`
+line naming the ref it read and how many records each side holds that the other does not, and
+`in-lockstep history --pull` is the act that brings the remote's records onto a local branch,
+record by record, without pushing.
+
 ## The module is the configuration
 
 `init` detected pytest, ruff and a `uv.lock` above, so the scaffold it wrote already binds them:

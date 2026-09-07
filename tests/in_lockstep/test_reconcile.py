@@ -121,6 +121,43 @@ def test_gate_ledger_10_the_sweep_absorbs_each_outstanding_artifact_once(tmp_pat
     assert [a.id for a in again.expired] == [2], "still gone, still said"
 
 
+def test_gate_ledger_12_a_fresh_checkout_sweeps_once_too(tmp_path: Path) -> None:
+    """The sweep on the machine that runs it: a checkout with only the remote-tracking ref. For as
+    long as the ledger read the local ref alone, every artifact was outstanding every night and
+    yesterday's absorb notes were never read (#307). The first sweep reads the remote copy and
+    creates the local branch with its absorbs; the second, on another fresh checkout after a
+    push, downloads nothing."""
+    bundle = _bundle_from_a_runner(tmp_path, ci_run="77")
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    seed = GitLedger(root=_repo(tmp_path / "seed"))
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=seed.root, check=True)
+    subprocess.run(
+        ["git", "push", "-q", "origin", "HEAD:main"], cwd=seed.root, check=True, capture_output=True
+    )
+    asyncio.run(seed.append("local-1", {"kind": "review"}))
+    seed.push()
+
+    def checkout(name: str) -> GitLedger:
+        root = tmp_path / name
+        subprocess.run(["git", "clone", "-q", str(origin), str(root)], check=True, capture_output=True)
+        return GitLedger(root=root)
+
+    forge = _Forge(bundle)
+    first = checkout("runner-1")
+    assert first.resolved() == ("refs/remotes/origin/lockstep-history", first.head())
+    swept = absorb_outstanding(first, forge)
+    assert [a.id for a in swept.taken] == [1] and [a.id for a in swept.empty] == [3]
+    assert sorted(str(r["run_id"]) for r in first.records()) == ["local-1", "review-security-77"], (
+        "the seed's record survived the absorb"
+    )
+    first.push()
+
+    again = absorb_outstanding(checkout("runner-2"), forge)
+    assert again.taken == () and again.empty == (), "once means once, across checkouts"
+    assert forge.downloads == [1, 3], "the second checkout fetched nothing"
+
+
 def test_an_absorb_into_a_branch_that_already_exists_names_the_run_in_its_commit(tmp_path: Path) -> None:
     """The second half of once. A bundle merged into an existing branch leaves a merge commit, and
     the run it came from is in that commit's subject rather than only in the records it carried —

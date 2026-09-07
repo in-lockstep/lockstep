@@ -18,6 +18,15 @@ the middle of whatever the developer had going on.
 **Pushing is a separate act.** A local run appends to a local ref and stops. Reaching a remote
 needs credentials and is a side effect nobody asked for when they typed a command in a terminal;
 `push()` is called when a caller means it, which in practice is CI.
+
+**Reading falls back to the remote-tracking ref.** A CI checkout and a fresh clone create no local
+branch for a ref that is not HEAD, so `refs/heads/lockstep-history` is absent on every machine
+except the one that wrote it -- and for as long as the ledger read that ref and nothing else, every
+reader in CI read nothing: the nightly sweep found every artifact outstanding, the learning loop
+found no trend in an empty census, and a second engineer's `report` said "no records yet" while
+the shared branch held thirty-four paid runs (#307). So a read that finds no local ref reads
+`refs/remotes/<remote>/<branch>` instead, says which it read, and creates nothing: the local ref
+comes into being by a write or by `pull()`, both of which are acts somebody asked for.
 """
 
 from __future__ import annotations
@@ -55,6 +64,29 @@ class Acknowledgement:
     reason: str
     ts: str
     lines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Divergence:
+    """Which ref a read came from, and how the local and remote-tracking refs differ in records.
+
+    Counted in records, not commits, because a reconcile or a pull adds commits that carry nothing
+    new. `None` on either count means one of the two refs does not exist, which a reader renders
+    as a dash: a clone that never fetched the branch is not "0 behind".
+    """
+
+    read: str
+    local_only: int | None
+    remote_only: int | None
+
+
+@dataclass(frozen=True)
+class Pulled:
+    """What one `pull()` did: the commit the local ref ended on, and how many records it gained."""
+
+    commit: str
+    gained: int
+    created: bool
 
 
 class HistoryError(RuntimeError):
@@ -98,9 +130,56 @@ class GitLedger:
     def ref(self) -> str:
         return f"refs/heads/{self.branch}"
 
+    @property
+    def remote_ref(self) -> str:
+        """Where a fetch leaves the remote's copy of the branch. Read when the local ref is absent."""
+        return f"refs/remotes/{self.remote}/{self.branch}"
+
+    def _commit_at(self, ref: str) -> str | None:
+        return self._try("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}") or None
+
+    def resolved(self) -> tuple[str, str] | None:
+        """`(ref, commit)` a read comes from: the local branch, or the remote-tracking ref when no
+        local branch exists, or None when neither does. The fallback is the read path for every
+        checkout that did not write the branch -- CI, a fresh clone, a second engineer -- and it
+        creates nothing: a read that left a ref behind would be a write nobody asked for (#307)."""
+        for ref in (self.ref, self.remote_ref):
+            commit = self._commit_at(ref)
+            if commit:
+                return ref, commit
+        return None
+
     def head(self) -> str | None:
-        """The commit the history branch points at, or None if it does not exist yet."""
-        return self._try("rev-parse", "--verify", "--quiet", f"{self.ref}^{{commit}}") or None
+        """The commit a read starts from, or None if neither the local nor the remote-tracking
+        ref exists yet. Writers advance the LOCAL ref from it; see `_advance`."""
+        found = self.resolved()
+        return found[1] if found else None
+
+    def _advance(self, commit: str, parent: str | None) -> None:
+        """Move the local ref to `commit`, compare-and-swap against what it was.
+
+        `parent` is what `head()` returned when the write began. When that came from the local
+        ref, the swap is against it, so two runs finishing at once cannot silently drop one
+        another's record. When it came from the remote-tracking ref there is no local ref, and
+        `""` says "must not exist": the first write on such a checkout creates the local branch
+        from the remote's commit plus the new record, in one step, or fails if something else
+        created it first.
+        """
+        expected = parent if parent and self._commit_at(self.ref) else ""
+        self._git("update-ref", self.ref, commit, expected)
+
+    def divergence(self) -> Divergence:
+        """How the local and remote-tracking refs differ, in records, and which one a read uses."""
+        found = self.resolved()
+        local = self._commit_at(self.ref)
+        remote = self._commit_at(self.remote_ref)
+        if local is None or remote is None:
+            return Divergence(read=found[0] if found else "", local_only=None, remote_only=None)
+        mine, theirs = self._record_names(local), self._record_names(remote)
+        return Divergence(read=self.ref, local_only=len(mine - theirs), remote_only=len(theirs - mine))
+
+    def _record_names(self, commit: str) -> set[str]:
+        return set((self._try("ls-tree", "--name-only", f"{commit}:{RECORDS}") or "").splitlines())
 
     def path_for(self, run_id: str) -> str:
         """Where a record lives inside the branch. Not a working-tree path — it has none."""
@@ -142,10 +221,7 @@ class GitLedger:
             args += ["-p", parent]
         commit = self._git(*args)
 
-        # The old value is passed, so this is a compare-and-swap rather than a blind write: two
-        # runs finishing at once cannot silently drop one another's record. `""` means "must not
-        # exist", which is how the first commit on an orphan branch is created safely.
-        self._git("update-ref", self.ref, commit, parent or "")
+        self._advance(commit, parent)
 
     def _identity(self) -> list[str]:
         """`-c` overrides only when the repository has no identity of its own.
@@ -240,7 +316,7 @@ class GitLedger:
         head = self.head()
         if head is None:
             return []
-        raw = self._git("log", "--format=%H", "--name-status", "--diff-filter=MD", self.ref)
+        raw = self._git("log", "--format=%H", "--name-status", "--diff-filter=MD", head)
         problems: list[tuple[str, str]] = []
         commit = ""
         for line in raw.splitlines():
@@ -316,7 +392,7 @@ class GitLedger:
             tree = self._git("write-tree", index=index)
         subject = f"acknowledge {full[:12]}: rewrote {len(rewrote)} record(s)"
         made = self._git(*self._identity(), "commit-tree", tree, "-p", head, "-m", subject)
-        self._git("update-ref", self.ref, made, head)
+        self._advance(made, head)
         return Acknowledgement(
             commit=full, by=by.strip(), reason=reason.strip(), ts=stamp, lines=tuple(rewrote)
         )
@@ -331,8 +407,10 @@ class GitLedger:
         trigger has concurrent runs by design — so a rejection is reconciled once rather than
         reported as a failure the user has to resolve by hand.
         """
-        if self.head() is None:
-            raise HistoryError("there is no history to push")
+        if self._commit_at(self.ref) is None:
+            # The local ref, not `head()`: a checkout reading the remote-tracking ref has nothing
+            # of its own to publish, and pushing the remote's commit back at it would say "pushed".
+            raise HistoryError("there is no history here to push")
         try:
             self._git("push", self.remote, f"{self.ref}:{self.ref}")
         except HistoryError:
@@ -388,6 +466,33 @@ class GitLedger:
         )
         self._git("update-ref", self.ref, commit)
 
+    def pull(self) -> Pulled:
+        """Bring the remote's records onto the local ref, and push nothing.
+
+        The other half of `push()`, for the engineer who did not write the records: a fetch, then
+        the same record-by-record fold `_merge_ref` does, so a run id both sides carry is kept
+        once and an acknowledgement either side made travels. Nothing to fold is nothing done --
+        no merge commit is made for a remote the local ref already contains -- and a clone with
+        no local branch gets one pointing at the remote's commit, because that is what pulling
+        means. Reading never does this; `report` says how far the two refs differ instead (#307).
+        """
+        fetched = self._try("fetch", self.remote, f"+{self.ref}:{self.remote_ref}")
+        if fetched is None:
+            raise HistoryError(f"could not fetch {self.branch} from {self.remote}")
+        theirs = self._commit_at(self.remote_ref)
+        if theirs is None:
+            raise HistoryError(f"{self.remote} has no {self.branch} to pull")
+        mine = self._commit_at(self.ref)
+        before = self._record_names(mine) if mine else set()
+        if mine is None:
+            self._git("update-ref", self.ref, theirs, "")
+            return Pulled(commit=theirs, gained=len(self._record_names(theirs)), created=True)
+        if self._try("merge-base", "--is-ancestor", theirs, mine) is not None:
+            return Pulled(commit=mine, gained=0, created=False)
+        self._merge_ref(self.remote_ref, subject=f"pull history from {self.remote}")
+        after = self._git("rev-parse", self.ref)
+        return Pulled(commit=after, gained=len(self._record_names(after) - before), created=False)
+
     # -- moving history between machines --------------------------------------------
 
     def bundle(self, path: str | Path) -> Path:
@@ -436,15 +541,16 @@ class GitLedger:
             return
         tree = self._git("rev-parse", f"{head}^{{tree}}")
         commit = self._git(*self._identity(), "commit-tree", tree, "-p", head, "-m", _absorb_subject(run_id))
-        self._git("update-ref", self.ref, commit, head)
+        self._advance(commit, head)
 
     def absorbed_runs(self) -> set[str]:
         """Which runs' artifacts this branch has already taken in, read from the absorb commits'
         own subjects — the second half of "once", beside the `ci_run` a record carries."""
-        log = self._try("log", "--format=%s", self.ref) or ""
+        head = self.head()
+        log = (self._try("log", "--format=%s", head) or "") if head else ""
         return set(_ABSORBED.findall(log))
 
-    def _merge_ref(self, other: str, *, run_id: str = "") -> None:
+    def _merge_ref(self, other: str, *, run_id: str = "", subject: str = "") -> None:
         """Fold another history's records into this one. Same rule as `_reconcile`."""
         head = self.head()
         listing = (self._try("ls-tree", "--name-only", f"{other}:{RECORDS}") or "").splitlines()
@@ -471,9 +577,9 @@ class GitLedger:
             "-p",
             self._git("rev-parse", other),
             "-m",
-            _absorb_subject(run_id),
+            subject or _absorb_subject(run_id),
         )
-        self._git("update-ref", self.ref, commit, str(head))
+        self._advance(commit, head)
 
     def _carry(self, index: Path, source: str, subdir: str) -> None:
         """Copy every entry of `subdir` from `source`'s tree into the index being built."""

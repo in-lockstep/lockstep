@@ -293,7 +293,11 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: 994 -> 997 with #295, rendering: `_history_line` names the rewrites somebody acknowledged
 #: beside the ones nobody has. What an acknowledgement is, and what it covers, lives in
 #: `platform/ledger/history.py`, where `test_history.py` reaches it without a CliRunner.
-CLI_HELPER_STATEMENTS = 997
+#: 997 -> 1008 with #307, rendering: `_ledger_line` names the ref `report` read and the records
+#: each side holds that the other does not, or a dash. Which ref a read resolves to, what a pull
+#: does and how divergence is counted live in `platform/ledger/history.py` (`resolved`, `pull`,
+#: `divergence`), where `test_history.py` reaches them over a bare origin without a CliRunner.
+CLI_HELPER_STATEMENTS = 1008
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

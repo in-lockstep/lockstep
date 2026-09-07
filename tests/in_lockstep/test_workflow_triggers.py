@@ -476,6 +476,18 @@ def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:
         assert any(p.match(statement) for p in ALLOWED_STATEMENTS), f"`{statement}` is not an invocation"
 
 
+def test_gate_ledger_12_every_job_that_reads_the_ledger_fetches_the_branch_first() -> None:
+    """`actions/checkout` at depth 1 brings neither a local `lockstep-history` nor a remote copy
+    of it, and the ledger's fallback reads `origin/lockstep-history` -- so a job that reads the
+    ledger checks out at full depth, or it reads nothing and calls that a census (#307). No shell
+    `git fetch`: the allowlist admits invocations of the framework only."""
+    for name, job in (("reconcile.yml", "reconcile"), ("improve.yml", "measure")):
+        steps = _load(name)["jobs"][job]["steps"]
+        checkout = next(s for s in steps if "actions/checkout" in str(s.get("uses", "")))
+        assert (checkout.get("with") or {}).get("fetch-depth") == 0, f"{name}: {job} reads at depth 1"
+        assert not any("git fetch" in s.get("run", "") for s in steps), f"{name}: a shell fetch"
+
+
 def test_gate_record_1_every_scaffolded_upload_declares_what_it_keeps() -> None:
     """Retention and hidden files, on every trampoline an adopter is given rather than two of five.
 
