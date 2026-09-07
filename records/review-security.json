@@ -5,67 +5,49 @@
   "branch": "HEAD",
   "ci_actor": "tpouyer",
   "config": "base branch (not the ref under review)",
-  "cost_usd": 0.046587,
+  "cost_usd": 0.043251,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 6,
+    "count": 3,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 126,
-        "message": "Unsanitized environment variable key used in `monkeypatch.delenv`",
-        "path": "tests/in_lockstep/test_docs.py",
+        "line": 80,
+        "message": "Arbitrary code execution via installed entry points: `entry.load()` followed by `hook(Standards(...))` executes whatever function is registered under `in_lockstep.standards` in any installed package, with no signature validation, no sandbox, and no allowlist.",
+        "path": "src/in_lockstep/core/standards.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 113,
-        "message": "`exec` over documentation-sourced Python blocks without a restricted namespace",
-        "path": "tests/in_lockstep/test_docs.py",
+        "line": 70,
+        "message": "Entry-point `dist` metadata is trusted for display without sanitisation: `label` is constructed from `dist.name` and `dist.version` and printed verbatim by `ls`.",
+        "path": "src/in_lockstep/core/standards.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 148,
-        "message": "subprocess call to `in_lockstep.cli` in a `tmp_path` that was initialised with `git init` \u2014 stdout/stderr returned without size bound",
-        "path": "tests/in_lockstep/test_docs.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.html_comment",
-        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "line": 152,
+        "message": "Test temporarily prepends a local example directory to `sys.path`, which persists for the duration of the test session if cleanup fails; not a production finding but worth noting for test isolation.",
+        "path": "tests/in_lockstep/test_standards.py",
         "severity": "warning"
       }
     ]
   },
-  "head": "16da4159c91dbe721c4250e48b22b2ceb632b38a",
-  "input_tokens": 11959,
+  "head": "9bc0e49ff44a9123ba955460ee52d3bfe4ceeef8",
+  "input_tokens": 9707,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 714,
+  "output_tokens": 942,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 4,
   "status": "succeeded",
-  "tokens": 12673,
-  "ts": "2026-08-30T02:55:32+00:00",
-  "wall_seconds": 19.573
+  "tokens": 10649,
+  "ts": "2026-08-30T01:25:34+00:00",
+  "wall_seconds": 25.801
 }
