@@ -1,0 +1,39 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.015474,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 129,
+        "message": "isinstance assertion placed after the code whose correctness depends on it.",
+        "path": "tests/in_lockstep/test_tooling.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4f6b6466e3a8a784812e48edea109c51642dcf09",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 282,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T143253Z-da39",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 285,
+  "ts": "2026-09-06T14:33:09+00:00",
+  "wall_seconds": 15.625
+}
