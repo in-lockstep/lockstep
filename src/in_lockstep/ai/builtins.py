@@ -382,6 +382,16 @@ class ToolRunnerImpl:
             )
         raw = args.get("paths") or ()
         paths = tuple(str(p) for p in raw if str(p).strip()) if isinstance(raw, (list, tuple)) else ()
+        # Option-confusion, the rule the worktree applies to a ref: a path reaches pytest as an
+        # argv token, so `-p module`, `-c other.ini` or `-o cache_dir=/elsewhere` would be options
+        # the model chose. A test path never begins with a dash, so one that does is refused by
+        # name before anything runs (#313).
+        for token in paths:
+            if token.startswith("-"):
+                return (
+                    f"refused: {token!r} looks like a pytest option, not a test path; run_tests takes "
+                    f"paths only, so pass the file or directory and let the runner choose its flags."
+                )
         self._test_runs += 1
         try:
             return await self.tests(paths)

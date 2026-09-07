@@ -87,7 +87,15 @@ class TestVerdict:
 
     @property
     def green(self) -> bool:
-        return self.decided and self.status == "succeeded" and self.failed == 0
+        """The suite ran something, and everything it ran passed.
+
+        `passed > 0`, not only `failed == 0`: a verdict whose counts are all zero is a suite that
+        ran nothing, and the writing verbs turn a change into a pull request on this property.
+        The adapter already declines to decide such a run, so the guard here is the second lock
+        on the same door -- a verdict read back from an artifact somebody else wrote does not get
+        to be green on a status alone (#313).
+        """
+        return self.decided and self.status == "succeeded" and self.failed == 0 and self.passed > 0
 
     @property
     def red(self) -> bool:

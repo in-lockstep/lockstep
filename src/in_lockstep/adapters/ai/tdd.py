@@ -56,7 +56,7 @@ async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]
     report = probe.value
     if report is None:
         return ()
-    return paths if report.total == 0 else ()
+    return paths if report.passed + report.failed == 0 else ()
 
 
 def _not_red_finding(uncollected: tuple[str, ...]) -> Finding:
@@ -185,14 +185,15 @@ class TDD(ImplementStrategy):
 
             async with materialize(session.repo_root, tests) as tree:
                 red = await ctx.do(Test(root=tree, expect="fail"))
-                # Which of the three it was has to be decided while the worktree still exists.
-                uncollected = (
-                    await _uncollected(ctx, tree, tests) if red.status is not Status.SUCCEEDED else ()
-                )
+                # Red means the suite ran and failed, so a run that decided nothing -- collected
+                # nothing, or never reported -- is not red however it exited. Which of the three
+                # it was has to be decided while the worktree still exists.
+                went_red = red.status is Status.SUCCEEDED and red.decided
+                uncollected = await _uncollected(ctx, tree, tests) if not went_red else ()
             if (stopped := not_a_verdict(red, cost=red.cost)) is not None:
                 # A ceiling or a broken runner, not a test that passed when it should have failed.
                 return stopped
-            if red.status is not Status.SUCCEEDED:
+            if not went_red:
                 # The test did not fail, and the three reasons for that are not one finding.
                 #
                 # It passed against the current code — the model tested something that already
@@ -272,7 +273,7 @@ class TDD(ImplementStrategy):
             green = await ctx.do(Test(root=tree, expect="pass"))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
-        if green.status is not Status.SUCCEEDED:
+        if green.status is not Status.SUCCEEDED or not green.decided:
             return Outcome(
                 status=Status.FAILED,
                 reason="tdd.not_green",

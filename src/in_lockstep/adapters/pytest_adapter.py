@@ -85,7 +85,7 @@ class PytestTest:
 
         exit_code = result.exit_code
         text = result.stdout + result.stderr
-        report = _parse(text)
+        report, summarized = _parse(text)
         # An interpreter without pytest is not a red suite. Reading it as one blamed the change
         # for the environment, which is the wrong number that gets acted on. The shape, not the
         # substring: `python -m pytest` with no pytest prints exactly one line and no summary,
@@ -99,18 +99,37 @@ class PytestTest:
         # the reassuring number — a suite that ran nothing looking exactly like a suite that
         # passed everything.
         if exit_code == NO_TESTS_COLLECTED:
-            return Outcome(
-                status=Status.SUCCEEDED,
-                value=report,
-                decided=False,
-                findings=(
-                    Finding(
-                        id="test.no_tests_collected",
-                        message="no tests were collected; nothing was decided",
-                        severity=Severity.NOTE,
+            return _undecided(report, "test.no_tests_collected", "no tests were collected")
+
+        # No summary line at all is not a suite that ran and reported nothing wrong; it is a run
+        # that never reported. A staged module calling `os._exit(0)` at import, or output that
+        # never reached stdout, used to read as a green suite of zero tests -- and with
+        # `expect="fail"`, `os._exit(1)` read as red -- so the number the writing verbs turn on
+        # was a script's claim about a run that ran nothing (#313, GATE-VERDICT-1). A clean exit
+        # with no summary decides nothing; a non-zero exit with no summary is the runner failing,
+        # which is `errored` and not evidence about the change.
+        if not summarized:
+            if exit_code != 0:
+                return Outcome(
+                    status=Status.ERRORED,
+                    reason="test.no_summary",
+                    value=report,
+                    findings=(
+                        Finding(
+                            id="test.no_summary",
+                            message=(
+                                f"pytest exited {exit_code} without a summary line; the suite did not "
+                                f"report, so nothing was decided about the change"
+                            ),
+                            severity=Severity.ERROR,
+                        ),
                     ),
-                ),
-            )
+                )
+            return _undecided(report, "test.no_summary", "pytest exited 0 without a summary line")
+        if report.passed + report.failed == 0:
+            # A summary that counts nothing executed -- every test skipped or deselected -- is the
+            # exit-5 case wearing a different exit code.
+            return _undecided(report, "test.nothing_ran", "no test passed or failed")
 
         # A reproducer that does not fail proves nothing: `expect="fail"` inverts the verdict, so
         # a pipeline can assert red before a fix and green after it.
@@ -137,13 +156,32 @@ class PytestTest:
         )
 
 
-def _parse(text: str) -> TestReport:
-    """Read pytest's terminal summary. Deliberately tolerant: a missing count is 0, not a crash."""
+def _undecided(report: TestReport, finding: str, why: str) -> Outcome[TestReport]:
+    """A suite that ran nothing is neither red nor green. Reporting it as SUCCEEDED with
+    `decided=True` would be the reassuring number -- a suite that ran nothing looking exactly
+    like a suite that passed everything -- which is why `decided` is on Outcome at all."""
+    return Outcome(
+        status=Status.SUCCEEDED,
+        value=report,
+        decided=False,
+        findings=(Finding(id=finding, message=f"{why}; nothing was decided", severity=Severity.NOTE),),
+    )
+
+
+def _parse(text: str) -> tuple[TestReport, bool]:
+    """Read pytest's terminal summary, and say whether one was there to read.
+
+    Tolerant about counts -- a missing count is 0, not a crash -- and strict about the line: the
+    second value is False when no summary line was found at all, and the caller treats that as a
+    run that never reported rather than as zeros (#313).
+    """
     passed = failed = skipped = 0
     duration = 0.0
+    summarized = False
     for line in reversed(text.splitlines()):
         stripped = line.strip("= ")
-        if " passed" in stripped or " failed" in stripped or " error" in stripped:
+        if any(word in stripped for word in (" passed", " failed", " error", " skipped", " deselected")):
+            summarized = True
             parts = stripped.replace(",", "").split()
             for i, token in enumerate(parts):
                 if not token.isdigit():
@@ -160,10 +198,11 @@ def _parse(text: str) -> TestReport:
                 if token.endswith("s") and token[:-1].replace(".", "", 1).isdigit():
                     duration = float(token[:-1])
             break
-    return TestReport(
+    report = TestReport(
         total=passed + failed + skipped,
         passed=passed,
         failed=failed,
         skipped=skipped,
         duration_seconds=duration,
     )
+    return report, summarized
