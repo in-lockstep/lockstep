@@ -1,47 +1,55 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.040836,
+  "cost_usd": 0.044547,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 4,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 101,
-        "message": "Test verdict counts from the artifact are interpolated directly into the PR body markdown without escaping or bounds checking.",
-        "path": "src/in_lockstep/platform/report.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 131,
-        "message": "`read_verdict` casts artifact fields to int with no upper-bound check; a maliciously large value is accepted silently.",
-        "path": "src/in_lockstep/platform/artifacts.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 48,
-        "message": "`verdict_over_staged` materialises the changeset into a throwaway worktree and runs the test suite there; test code in the changeset executes in that process.",
+        "line": 88,
+        "message": "Symlink escape via intermediate symlink planted in an earlier change: lexical pre-check passes, post-creation check catches it, but only after the link exists on disk",
         "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 75,
+        "message": "Symlink pre-check is lexical and does not follow existing in-tree symlinks",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 40,
+        "message": "git error output reaches WorktreeError message which may surface to logs or UI",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 25,
+        "message": "`root: str = ''` accepted from callers without validation in the adapter layer",
+        "path": "src/in_lockstep/core/types.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 9802,
+  "input_tokens": 9614,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 762,
+  "output_tokens": 1047,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 10564,
-  "wall_seconds": 22.035
+  "tokens": 10661,
+  "wall_seconds": 28.516
 }
