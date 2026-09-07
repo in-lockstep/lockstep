@@ -413,7 +413,10 @@ class AiInvoker:
             self._guard_turn(policy, started, index)
 
             projected = self._project(system, history, policy)
-            crossed = self.spend.would_exceed(projected)
+            # Reserved, not merely checked: between this check and the charge below another
+            # branch of a fan-out, or a session this one delegated to, asks the same `Spend` the
+            # same question, and a check alone would answer each of them yes (GATE-COST-6).
+            crossed = self.spend.reserve(projected)
             if crossed is not None:
                 raise InvocationBlocked(
                     "cost.budget_exceeded",
@@ -438,10 +441,16 @@ class AiInvoker:
                 # The provider broke mid-session. What the session had said up to here is exactly
                 # the evidence a person debugging it needs, and it dies with this raise unless it
                 # is written now.
+                self.spend.release(projected)
                 self._persist(system=system, history=history, final=None, ended="provider_error")
                 raise
+            except BaseException:
+                # Whatever else stopped the call -- a refusal, a cancellation from a fan-out's
+                # kill switch -- the reservation is for a turn that will not be charged.
+                self.spend.release(projected)
+                raise
             cost = self._price(output)
-            self.spend.charge_turn(cost)
+            self.spend.charge_turn(cost, reserved=projected)
             total = total + cost
             last = output
             turns.append(

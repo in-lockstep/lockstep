@@ -190,6 +190,14 @@ class Cost:
         )
 
 
+#: How a set of outcomes is read as one: any blocked makes the whole blocked, else any errored,
+#: else any failed, else succeeded. `RunContext.verdict()` reads a run's steps this way and
+#: `JoinResult.status` reads a fan-out's branches the same way, and it is defined once, here,
+#: because two precedences that could drift apart is how a run and its branches would come to
+#: disagree about what happened.
+VERDICT_PRECEDENCE: tuple[Status, ...] = (Status.BLOCKED, Status.ERRORED, Status.FAILED)
+
+
 @dataclass(frozen=True)
 class Outcome(Generic[ValueT]):
     status: Status
@@ -262,3 +270,69 @@ class Outcome(Generic[ValueT]):
         """
         kw.setdefault("decided", False)
         return cls(status=Status.BLOCKED, reason=reason, **kw)
+
+
+@dataclass(frozen=True)
+class JoinResult:
+    """What a `fan_out` came to: branch name -> the branch's `Outcome`, read as one.
+
+    A mapping and not a status, because the barrier answers "is everyone done" and what the mix
+    means is the continuation's decision (design §4.7): `status` is the precedence a run's steps
+    already use, `decided` is `all(...)` -- one branch that judged nothing is a join that judged
+    nothing (`GATE-OUT-3`) -- `cost` is the sum, and `as_outcome()` is for the workflow that has
+    no more to say than the join did. Frozen, like `Outcome`, so a continuation reads the same
+    result the barrier produced.
+    """
+
+    branches: tuple[tuple[str, Outcome[Any]], ...] = ()
+
+    def __getitem__(self, name: str) -> Outcome[Any]:
+        for branch, outcome in self.branches:
+            if branch == name:
+                return outcome
+        raise KeyError(name)
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(name for name, _ in self.branches)
+
+    def outcomes(self) -> tuple[Outcome[Any], ...]:
+        return tuple(outcome for _, outcome in self.branches)
+
+    @property
+    def decided(self) -> bool:
+        return all(outcome.decided for outcome in self.outcomes())
+
+    @property
+    def status(self) -> Status:
+        for status in VERDICT_PRECEDENCE:
+            if any(outcome.status is status for outcome in self.outcomes()):
+                return status
+        return Status.SUCCEEDED
+
+    @property
+    def reason(self) -> str | None:
+        """The deciding branch's reason: the first branch whose status decided the join's."""
+        status = self.status
+        for _, outcome in self.branches:
+            if outcome.status is status and outcome.reason:
+                return outcome.reason
+        return None
+
+    @property
+    def cost(self) -> Cost:
+        total = Cost()
+        for outcome in self.outcomes():
+            total = total + outcome.cost
+        return total
+
+    def as_outcome(self) -> Outcome[JoinResult]:
+        """The join as one `Outcome`: every branch's findings, the summed cost, the deciding
+        branch's reason, `decided` only if every branch decided, and the join itself as value."""
+        return Outcome(
+            status=self.status,
+            value=self,
+            findings=tuple(f for outcome in self.outcomes() for f in outcome.findings),
+            cost=self.cost,
+            reason=self.reason,
+            decided=self.decided,
+        )

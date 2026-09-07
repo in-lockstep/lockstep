@@ -10,6 +10,7 @@ have to be re-plumbed later to allow it.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import time
@@ -20,7 +21,7 @@ from typing import Any, TypeVar
 
 from .container import Container
 from .middleware import ActionCall, Middleware, Next, compose
-from .outcome import Outcome, Status
+from .outcome import VERDICT_PRECEDENCE, JoinResult, Outcome, Status
 from .ports import InferenceLog, StepStore
 from .spend import Spend
 from .verbs import Verb, capabilities_of, verb_of
@@ -308,7 +309,6 @@ _call_depth: ContextVar[int] = ContextVar("in_lockstep_call_depth", default=0)
 #: The order in which a step's status decides the run's: a control stopping a step is the fact
 #: about the run, above infrastructure breaking, above the domain saying no. A step that
 #: succeeded decides nothing on its own.
-_VERDICT_PRECEDENCE = (Status.BLOCKED, Status.ERRORED, Status.FAILED)
 
 
 @dataclass
@@ -371,7 +371,7 @@ class RunContext:
         reason is the deciding step's; and the run decided something only if every step did. A run
         that ran no steps succeeded at nothing in particular, which is still not a failure.
         """
-        for status in _VERDICT_PRECEDENCE:
+        for status in VERDICT_PRECEDENCE:
             for step in self.steps:
                 if step.outcome.status is status:
                     return status, step.outcome.reason, all(s.outcome.decided for s in self.steps)
@@ -482,6 +482,92 @@ class RunContext:
         """
         return await self.run_call(self.call(request, via=via, step=step, middleware=middleware))
 
+    # -- fan-out over machine branches ------------------------------------------------
+
+    async def fan_out(
+        self,
+        *,
+        resume: str | None = None,
+        max_parallel: int | None = None,
+        **branches: ActionCall,
+    ) -> JoinResult:
+        """Run declared branches concurrently and return when every one is terminal.
+
+        Machine branches only (design §4.7; `GATE-OUT-6` records that nothing here parks): a
+        branch is an `ActionCall` from `ctx.call`, each runs as its own task over a shallow copy
+        of this context -- its own `scope_path` and its own step list, the SAME `spend`,
+        `recording`, `container`, `state` and middleware -- so four branches share one budget,
+        one tape and one kill switch rather than multiplying any of them. The budget is joint by
+        construction (`GATE-COST-6`): `Spend.reserve` checks and reserves in one synchronous step,
+        and a branch that would cross the ceiling is refused before its call, the same primitive a
+        nested session a model delegates to will use (#332). Bounded by `max_parallel` through a
+        semaphore; unbounded means every branch at once.
+
+        The kill switch reaches in-flight work (`GATE-ASYNC-3b`): a watcher polls
+        `killswitch_engaged()` and cancels what has not finished, and a cancelled branch joins as
+        `BLOCKED`/`killswitch` rather than as an exception, because the switch is a control
+        working and a join has to be able to say so per branch. A branch not yet started when the
+        switch is thrown is refused by `run_call` the way any step is.
+
+        Nothing is written to a ledger here (`GATE-OUT-7`): an all-machine join returns inline
+        and the run continues; the barrier record is for a branch that parks, which is the
+        deferred half. `resume=` names that continuation and is refused until then rather than
+        accepted and ignored. No task outlives the call: the watcher is cancelled and awaited,
+        every branch is awaited, and what returns is the whole result or a raised cancellation.
+        """
+        if resume is not None:
+            raise ValueError(
+                f"resume={resume!r} names a continuation for a fan-out that parks, and no branch "
+                f"here can park (GATE-OUT-6, deferred): every branch is a machine branch, and the "
+                f"join is returned to this call"
+            )
+        if not branches:
+            return JoinResult()
+        gate = asyncio.Semaphore(max_parallel) if max_parallel and max_parallel > 0 else None
+
+        async def branch(name: str, call: ActionCall) -> Outcome[Any]:
+            scoped = replace(
+                self,
+                scope_path=f"{self.scope_path}/{name}" if self.scope_path else name,
+                steps=[],
+                _step_counts={},
+            )
+            try:
+                if gate is None:
+                    return await scoped.run_call(call)
+                async with gate:
+                    return await scoped.run_call(call)
+            except asyncio.CancelledError:
+                if killswitch_engaged():
+                    return Outcome.blocked_by("killswitch")
+                raise
+
+        tasks = {name: asyncio.create_task(branch(name, call)) for name, call in branches.items()}
+
+        async def watch() -> None:
+            while True:
+                if killswitch_engaged():
+                    for task in tasks.values():
+                        if not task.done():
+                            task.cancel()
+                    return
+                await asyncio.sleep(_KILLSWITCH_POLL_SECONDS)
+
+        watcher = asyncio.create_task(watch())
+        try:
+            results = await asyncio.gather(*tasks.values())
+        finally:
+            watcher.cancel()
+            try:
+                await watcher
+            except asyncio.CancelledError:
+                pass
+        joined = tuple(zip(tasks.keys(), results, strict=True))
+        for name, outcome in joined:
+            call = branches[name]
+            self.steps.append(StepOutcome(step=name, verb=_verb_name(call), outcome=outcome))
+        return JoinResult(branches=joined)
+
     # -- step identity -------------------------------------------------------------
 
     def _step_id(self, call: ActionCall) -> StepId:
@@ -506,12 +592,19 @@ def _verb_name(call: ActionCall) -> str:
     return call.verb.value if call.verb else call.iface.__name__.lower()
 
 
+#: How often a fan-out's watcher asks whether the switch has been thrown. `GATE-ASYNC-3b` asks
+#: for a terminal join within two seconds of the switch; fifty milliseconds is far inside that
+#: and costs nothing a branch would notice.
+_KILLSWITCH_POLL_SECONDS = 0.05
+
+
 def killswitch_engaged() -> bool:
     return bool(os.environ.get(DISABLE_ENV))
 
 
 __all__ = [
     "DISABLE_ENV",
+    "JoinResult",
     "RepoInfo",
     "RunContext",
     "StepId",

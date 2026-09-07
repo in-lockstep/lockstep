@@ -1013,6 +1013,12 @@ it and declares `LOCAL` scope), `TestReport` carries `flaky`, step ids are scope
 `ctx.run_call` exist so branches can be declared rather than started. `ctx.park` and `ctx.fan_out`
 are not on `RunContext` at 1.0.
 
+*Amended 2026-09-07.* `ctx.fan_out` is on `RunContext`, over machine branches only: each branch a
+task over a copy of the context sharing the run's `Spend`, tape and kill switch, bounded by
+`max_parallel`, joined inline as a `JoinResult` (`GATE-OUT-3`, `GATE-OUT-7`, `GATE-COST-6`,
+`GATE-ASYNC-3b`). `ctx.park`, `ctx.human()` and the barrier record stay deferred (`GATE-OUT-5`,
+`GATE-OUT-6`); `fan_out(resume=...)` is refused until they land.
+
 ### 17.12 Rounds 5–7 review record
 
 | ID | Finding | Disposition |

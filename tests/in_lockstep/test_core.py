@@ -1001,3 +1001,226 @@ def test_an_improvable_that_names_no_finding_answers_nothing() -> None:
     assert body.answers == ()
     assert not body.answers_for("review.security")
     assert not body.answers_for("")
+
+
+# -- Phase 5: fan-out over machine branches ----------------------------------------------------
+
+
+class _Slow:
+    """An adapter that takes as long as it is told, and says which branch it ran under."""
+
+    verb: ClassVar[Verb] = Verb.TEST
+    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+
+    def __init__(
+        self, seconds: float = 0.0, *, decided: bool = True, status: Status = Status.SUCCEEDED
+    ) -> None:
+        self.seconds = seconds
+        self.decided = decided
+        self.status = status
+        self.scopes: list[str] = []
+
+    async def invoke(self, ctx, inp):
+        import asyncio
+
+        self.scopes.append(ctx.scope_path)
+        if self.seconds:
+            await asyncio.sleep(self.seconds)
+        return Outcome(status=self.status, value=inp, decided=self.decided, cost=Cost(usd=0.01))
+
+
+def test_gate_out_3_a_join_is_decided_only_when_every_branch_decided() -> None:
+    """GATE-OUT-3. `JoinResult.decided == all(branch.decided)`: one branch that judged nothing is
+    a join that judged nothing, whatever the other three found. Status by the precedence a run's
+    steps already use, cost summed, and `as_outcome()` carrying every branch's findings."""
+    import asyncio
+
+    from in_lockstep.core.context import JoinResult
+
+    ctx, container = ctx_with()
+    sure, unsure = _Slow(decided=True), _Slow(decided=False)
+    container.bind(Thing, sure)
+    join = asyncio.run(
+        ctx.fan_out(a=ctx.call(Thing("a")), b=ctx.call(Thing("b"), via=unsure), c=ctx.call(Thing("c")))
+    )
+    assert isinstance(join, JoinResult)
+    assert join.names() == ("a", "b", "c")
+    assert join["b"].decided is False and join["a"].decided is True
+    assert join.decided is False, "one undecided branch makes the join undecided"
+    assert join.status is Status.SUCCEEDED
+    assert round(join.cost.usd, 2) == 0.03
+    assert join.as_outcome().decided is False and join.as_outcome().value is join
+
+    all_sure = asyncio.run(ctx.fan_out(a=ctx.call(Thing("a")), b=ctx.call(Thing("b"))))
+    assert all_sure.decided is True
+
+    # Precedence: blocked over errored over failed over succeeded, and the deciding branch's reason.
+    failed = _Slow(status=Status.FAILED)
+    mixed = asyncio.run(ctx.fan_out(ok=ctx.call(Thing("x")), red=ctx.call(Thing("y"), via=failed)))
+    assert mixed.status is Status.FAILED and mixed.as_outcome().status is Status.FAILED
+    with pytest.raises(KeyError):
+        mixed["nobody"]
+
+
+def test_a_fan_out_runs_each_branch_under_its_own_scope_and_records_one_step_per_branch() -> None:
+    """Each branch is a step of the parent run, named for the branch, so the record derives the
+    run's verdict from the join the way it does from any step; and each ran under its own scope
+    path so a checkpoint or a cassette for `security` cannot be confused with one for `tests`."""
+    import asyncio
+
+    ctx, container = ctx_with()
+    adapter = _Slow(0.01)
+    container.bind(Thing, adapter)
+    ctx.scope_path = "release"
+    join = asyncio.run(ctx.fan_out(max_parallel=2, security=ctx.call(Thing()), tests=ctx.call(Thing())))
+    assert sorted(adapter.scopes) == ["release/security", "release/tests"]
+    assert [s.step for s in ctx.steps] == ["security", "tests"]
+    assert ctx.verdict()[0] is Status.SUCCEEDED
+    assert join.status is Status.SUCCEEDED
+    assert len(asyncio.all_tasks(asyncio.new_event_loop())) == 0
+
+    with pytest.raises(ValueError, match="GATE-OUT-6"):
+        asyncio.run(ctx.fan_out(resume="release/after", a=ctx.call(Thing())))
+    assert asyncio.run(ctx.fan_out()).names() == ()
+
+
+def test_a_fan_out_leaves_no_task_pending_after_it_returns() -> None:
+    """The watcher and every branch are awaited before the join is returned: a task that outlived
+    the call would be a branch still spending after the workflow moved on."""
+    import asyncio
+
+    async def run() -> int:
+        ctx, container = ctx_with()
+        container.bind(Thing, _Slow(0.02))
+        await ctx.fan_out(a=ctx.call(Thing()), b=ctx.call(Thing()), c=ctx.call(Thing()))
+        return len([t for t in asyncio.all_tasks() if t is not asyncio.current_task()])
+
+    assert asyncio.run(run()) == 0
+
+
+def test_gate_out_7_all_machine_fan_out_writes_no_ledger() -> None:
+    """GATE-OUT-7. An all-machine `fan_out` on the bound store performs zero ledger writes: the
+    join is returned inline and the run's one record is written by the run, after it, as ever.
+    The barrier record is for a branch that parks, which nothing here can (GATE-OUT-6)."""
+    import asyncio
+
+    from in_lockstep.core.ports import LedgerStore
+
+    class _Counting:
+        scope = "LOCAL"
+
+        def __init__(self) -> None:
+            self.writes = 0
+
+        async def append(self, run_id: str, record: dict[str, object]) -> None:
+            self.writes += 1
+
+        async def read(self, run_id: str) -> dict[str, object] | None:
+            return None
+
+        async def compare_and_set(self, *a, **k):
+            self.writes += 1
+            return True
+
+    store = _Counting()
+    ctx, container = ctx_with((LedgerStore, store))
+    container.bind(Thing, _Slow(0.01))
+    join = asyncio.run(ctx.fan_out(a=ctx.call(Thing()), b=ctx.call(Thing()), c=ctx.call(Thing())))
+    assert join.status is Status.SUCCEEDED and len(join.names()) == 3
+    assert store.writes == 0
+
+
+class _Spender:
+    """An adapter shaped like a model turn: reserve, wait, charge -- or refuse before the wait."""
+
+    verb: ClassVar[Verb] = Verb.TEST
+    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+
+    def __init__(self, usd: float, *, reserving: bool = True) -> None:
+        self.usd = usd
+        self.reserving = reserving
+
+    async def invoke(self, ctx, inp):
+        import asyncio
+
+        projected = Cost(usd=self.usd)
+        crossed = ctx.spend.reserve(projected) if self.reserving else ctx.spend.would_exceed(projected)
+        if crossed is not None:
+            return Outcome(status=Status.BLOCKED, reason="cost.budget_exceeded")
+        await asyncio.sleep(0.02)  # the provider call, during which the other branches ask too
+        if self.reserving:
+            ctx.spend.charge_turn(projected, reserved=projected)
+        else:
+            ctx.spend.charge_turn(projected)
+        return Outcome(status=Status.SUCCEEDED)
+
+
+def test_gate_cost_6_four_branches_share_one_dollar() -> None:
+    """GATE-COST-6. A 4-branch `fan_out` under a joint $1.00 `Spend`, each branch projecting $0.30,
+    charges at most $1.00 in aggregate: three go and the fourth is refused before its call. The
+    negative control is the primitive this replaced -- `would_exceed` then charge -- under which
+    all four see the same remaining dollar, all four go, and $1.20 is charged against $1.00."""
+    import asyncio
+
+    from in_lockstep.core.spend import Spend
+
+    ctx, container = ctx_with()
+    ctx.spend = Spend(budget=Budget(usd=1.00))
+    container.bind(Thing, _Spender(0.30))
+    join = asyncio.run(
+        ctx.fan_out(
+            b0=ctx.call(Thing("0")), b1=ctx.call(Thing("1")), b2=ctx.call(Thing("2")), b3=ctx.call(Thing("3"))
+        )
+    )
+    statuses = sorted(o.status.value for o in join.outcomes())
+    assert statuses == ["blocked", "succeeded", "succeeded", "succeeded"], statuses
+    assert ctx.spend.charged.usd <= 1.00 + 1e-9, ctx.spend.charged.usd
+    assert ctx.spend.reserved_usd == 0.0, "every reservation was released by its charge"
+    assert join.status is Status.BLOCKED and join.reason == "cost.budget_exceeded"
+
+    # The control: a check that does not reserve lets every branch through.
+    loose, loose_container = ctx_with()
+    loose.spend = Spend(budget=Budget(usd=1.00))
+    loose_container.bind(Thing, _Spender(0.30, reserving=False))
+    asyncio.run(
+        loose.fan_out(
+            b0=loose.call(Thing("0")),
+            b1=loose.call(Thing("1")),
+            b2=loose.call(Thing("2")),
+            b3=loose.call(Thing("3")),
+        )
+    )
+    assert loose.spend.charged.usd > 1.00, "the control did not overspend, so this test proves nothing"
+
+
+def test_gate_async_3b_killswitch_reaches_in_flight_branches_within_2s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-ASYNC-3b. With `IN_LOCKSTEP_DISABLE` set mid-run, an in-flight 3-branch `fan_out`
+    reaches a terminal join within 2s: the watcher cancels what has not finished, each cancelled
+    branch joins as `BLOCKED`/`killswitch`, and no task is left running."""
+    import asyncio
+    import time
+
+    class _Thrower(_Slow):
+        async def invoke(self, ctx, inp):
+            await asyncio.sleep(0.1)
+            monkeypatch.setenv(DISABLE_ENV, "1")
+            await asyncio.sleep(10)
+            return Outcome(status=Status.SUCCEEDED)
+
+    monkeypatch.delenv(DISABLE_ENV, raising=False)
+    ctx, container = ctx_with()
+    container.bind(Thing, _Slow(10))
+    started = time.monotonic()
+    join = asyncio.run(
+        ctx.fan_out(
+            a=ctx.call(Thing("a")), b=ctx.call(Thing("b")), thrower=ctx.call(Thing("t"), via=_Thrower())
+        )
+    )
+    assert time.monotonic() - started < 2.0
+    assert all(o.terminal for o in join.outcomes())
+    assert {o.status for o in join.outcomes()} == {Status.BLOCKED}
+    assert {o.reason for o in join.outcomes()} == {"killswitch"}
+    assert join.as_outcome().status is Status.BLOCKED
+    assert [s.outcome.reason for s in ctx.steps] == ["killswitch"] * 3
