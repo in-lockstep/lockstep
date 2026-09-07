@@ -1,0 +1,51 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34164212271",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.026304,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 204,
+        "message": "The CLI-layer `RuntimeError \u2192 ClickException` path added in `cli.py` has no test.",
+        "path": "tests/in_lockstep/test_review_from_a_comment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 538,
+        "message": "Token-presence check accepts either of two spellings; the allowed set may need to grow.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "997ec81561dd0fd81726298fe62b8e9780914b6b",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 557,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T214511Z-2a32",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 560,
+  "ts": "2026-09-07T21:45:25+00:00",
+  "wall_seconds": 13.999
+}
