@@ -720,6 +720,30 @@ def test_gate_residency_1_an_undeclared_policy_fails_closed() -> None:
     assert provider.calls == []
 
 
+def test_gate_residency_1_an_unknown_destination_is_refused_by_its_reason() -> None:
+    """A registration that could not state where the bytes go (`endpoint=None`) is not thereby
+    exempt from a policy about where the bytes go: refused before the first call, naming the
+    reason the registration gave (#309)."""
+    from in_lockstep.llm.interface import DataPolicy
+    from in_lockstep.privileged.egress import UnsandboxedEgress
+
+    provider = Stub(replies=[LLMOutput(content="never reached")])
+    ai = AiInvoker(
+        provider,
+        model="bedrock:m",
+        cost_table=table(),
+        spend=Spend(),
+        egress=UnsandboxedEgress(restricted_repo=True),
+        data_policy=DataPolicy.INTERNAL,
+        destination_unknown="no AWS region is set, so the Bedrock host cannot be stated",
+    )
+    with pytest.raises(InvocationBlocked) as exc:
+        asyncio.run(ai.run(system="s", messages=[Message(role="user", content="hi")]))
+    assert exc.value.reason == "residency.unknown_destination"
+    assert "no AWS region is set" in str(exc.value)
+    assert provider.calls == []
+
+
 def test_an_internal_model_serves_a_restricted_repo() -> None:
     from in_lockstep.llm.interface import DataPolicy
 

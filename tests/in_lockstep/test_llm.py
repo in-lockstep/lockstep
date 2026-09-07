@@ -287,6 +287,172 @@ def test_gate_auth_2_endpoint_must_match_what_the_client_dials() -> None:
         registry.provider_for(Model("drifted:m"))
 
 
+def test_gate_auth_2_a_base_url_set_through_the_environment_is_refused_by_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The refusal that never fired: `ANTHROPIC_BASE_URL` was read by the SDK and by nothing of
+    ours, so a proxy dialled while the registration, residency and the manifest said
+    `api.anthropic.com` (#309). Now the resolved base URL reaches the comparison, and the shipped
+    registration refuses before any call, naming both hosts."""
+    pytest.importorskip("anthropic", reason="constructing the shipped client needs the provider extra")
+    from in_lockstep.ai.bootstrap import default_registry
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.example.test")
+    registry = default_registry()
+    creds = Credentials(values={"api_key": SecretStr("sk-ant-test")}, source="test")
+    with pytest.raises(ProviderRegistrationError) as refused:
+        registry.provider_for(Model("anthropic:claude-x"), creds)
+    assert "https://api.anthropic.com" in str(refused.value)
+    assert "https://proxy.example.test" in str(refused.value)
+    # And the framework resolved it, not the SDK: the settings carry the URL the client is handed,
+    # so a provider never reads the environment for its destination (GATE-AUTH-1).
+    assert (
+        registry.registration_for(Model("anthropic:claude-x")).settings.base_url
+        == "https://proxy.example.test"
+    )
+
+
+def test_gate_auth_2_with_no_override_the_shipped_registration_dials_its_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The positive control: what the client reports is the registered endpoint, read off the
+    client and not off the settings, so the comparison above compares two things."""
+    pytest.importorskip("anthropic", reason="constructing the shipped client needs the provider extra")
+    from in_lockstep.ai.bootstrap import ANTHROPIC_ENDPOINT, default_registry
+
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    creds = Credentials(values={"api_key": SecretStr("sk-ant-test")}, source="test")
+    provider = default_registry().provider_for(Model("anthropic:claude-x"), creds)
+    assert provider.base_url() == ANTHROPIC_ENDPOINT
+
+
+def test_gate_auth_2_bedrock_and_vertex_report_the_host_their_region_decides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SDK builds the cloud host from the region; the registration derives the same host, and
+    the constructed client is compared against it rather than against an empty string."""
+    from in_lockstep.ai.bootstrap import default_registry
+
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setenv("GOOGLE_CLOUD_REGION", "us-east5")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "p")
+    registry = default_registry()
+    assert registry.registration_for(Model("bedrock:m")).endpoint == (
+        "https://bedrock-runtime.us-east-1.amazonaws.com"
+    )
+    assert (
+        registry.registration_for(Model("vertex:m")).endpoint == "https://us-east5-aiplatform.googleapis.com"
+    )
+    assert (
+        registry.registration_for(Model("gemini:m")).endpoint == "https://us-east5-aiplatform.googleapis.com"
+    )
+    pytest.importorskip("anthropic", reason="constructing the Bedrock client needs the provider extra")
+    aws = Credentials(
+        values={"access_key_id": SecretStr("a"), "secret_access_key": SecretStr("b")}, source="t"
+    )
+    assert registry.provider_for(Model("bedrock:m"), aws).base_url() == (
+        "https://bedrock-runtime.us-east-1.amazonaws.com"
+    )
+
+
+def test_gate_auth_2_the_resolved_base_url_is_in_the_settings_the_client_is_handed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the SDK installed, the half that is ours: the variable is read in `bootstrap` and
+    lands in the settings beside a registration that still says `api.anthropic.com`, so the
+    comparison has two different things to compare (GATE-AUTH-1 kept: no provider reads it)."""
+    from in_lockstep.ai.bootstrap import ANTHROPIC_ENDPOINT, default_registry
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.example.test")
+    registration = default_registry().registration_for(Model("anthropic:claude-x"))
+    assert registration.settings.base_url == "https://proxy.example.test"
+    assert registration.endpoint == ANTHROPIC_ENDPOINT
+    monkeypatch.delenv("ANTHROPIC_BASE_URL")
+    assert (
+        default_registry().registration_for(Model("anthropic:claude-x")).settings.base_url
+        == ANTHROPIC_ENDPOINT
+    )
+
+
+def test_gate_auth_2_a_claude_transport_reports_the_client_it_built_and_a_divergence_is_refused() -> None:
+    """The transport half, with the SDK client stood in for: `base_url()` is what the client
+    holds, not what the settings said, and a registration whose endpoint differs is refused
+    naming both before any call."""
+    from in_lockstep.llm.providers._claude_base import ClaudeTransport
+
+    class _Transport(ClaudeTransport):
+        def _make_client(self, settings: ProviderSettings, creds: Credentials) -> typing.Any:
+            return type("C", (), {"base_url": settings.base_url + "/"})()
+
+    registry = ProviderRegistry()
+    registry.register(
+        "proxied",
+        _Transport,
+        settings=ProviderSettings(base_url="https://proxy.example.test"),
+        data_policy=DataPolicy.EXTERNAL,
+        endpoint="https://api.anthropic.com",
+    )
+    with pytest.raises(ProviderRegistrationError) as refused:
+        registry.provider_for(Model("proxied:m"))
+    assert "https://api.anthropic.com" in str(refused.value) and "https://proxy.example.test" in str(
+        refused.value
+    )
+    registry.register(
+        "direct",
+        _Transport,
+        settings=ProviderSettings(base_url="https://api.anthropic.com"),
+        data_policy=DataPolicy.EXTERNAL,
+        endpoint="https://api.anthropic.com",
+    )
+    assert registry.provider_for(Model("direct:m")).base_url() == "https://api.anthropic.com"
+
+
+def test_gate_auth_2_a_cloud_route_without_a_region_states_it_has_no_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not an empty string the comparison skips: `endpoint=None` with the reason, which the
+    manifest names and a restricted repository refuses."""
+    from in_lockstep.ai.bootstrap import default_registry
+
+    for var in (
+        "AWS_REGION",
+        "AWS_DEFAULT_REGION",
+        "GOOGLE_CLOUD_REGION",
+        "GOOGLE_CLOUD_LOCATION",
+        "CLOUD_ML_REGION",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    registry = default_registry()
+    for name in ("bedrock", "vertex", "gemini"):
+        registration = registry.registration_for(Model(f"{name}:m"))
+        assert registration.endpoint is None and "region" in registration.endpoint_reason, name
+    assert set(registry.unknown_endpoints()) == {"bedrock", "vertex", "gemini"}
+    assert not any("amazonaws" in e or "googleapis" in e for e in registry.endpoints())
+
+
+def test_gate_auth_2_a_registration_that_cannot_state_a_destination_must_say_why() -> None:
+    registry = ProviderRegistry()
+    with pytest.raises(ProviderRegistrationError, match="empty endpoint"):
+        registry.register(
+            "blank", _Stub, settings=ProviderSettings(), data_policy=DataPolicy.UNKNOWN, endpoint=""
+        )
+    with pytest.raises(ProviderRegistrationError, match="endpoint_reason"):
+        registry.register(
+            "mute", _Stub, settings=ProviderSettings(), data_policy=DataPolicy.UNKNOWN, endpoint=None
+        )
+    registry.register(
+        "honest",
+        _Stub,
+        settings=ProviderSettings(),
+        data_policy=DataPolicy.UNKNOWN,
+        endpoint=None,
+        endpoint_reason="the gateway picks a backend per request",
+    )
+    assert registry.unknown_endpoints() == {"honest": "the gateway picks a backend per request"}
+    assert registry.endpoints() == ()
+    registry.provider_for(Model("honest:m")), "nothing to compare is not a mismatch"
+
+
 def test_unqualified_model_id_is_refused() -> None:
     with pytest.raises(ProviderRegistrationError, match="unqualified"):
         _registry().provider_for(Model("just-a-name"))

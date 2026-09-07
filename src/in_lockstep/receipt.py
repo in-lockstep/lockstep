@@ -218,9 +218,13 @@ def _egress(lockstep: Lockstep) -> list[str]:
         routes = dict(getattr(lockstep.models, "routes", None) or {})
         if routes:
             endpoints = [
-                registry.registration_for(selected).endpoint
-                for selected in (Model(model_id) for model_id in routes.values())
-                if selected.provider in registry.names()
+                endpoint
+                for endpoint in (
+                    registry.registration_for(selected).endpoint
+                    for selected in (Model(model_id) for model_id in routes.values())
+                    if selected.provider in registry.names()
+                )
+                if endpoint
             ]
         else:
             endpoints = list(registry.endpoints())

@@ -2511,16 +2511,24 @@ def egress_manifest_cmd() -> None:
         else EgressPolicy.detect()
     )
     routes = dict(getattr(lockstep.models, "routes", None) or {})
+    unknown = registry.unknown_endpoints()
     if routes:
-        endpoints = [
-            registry.registration_for(selected).endpoint
-            for selected in (Model(model_id) for model_id in routes.values())
-            if selected.provider in registry.names()
+        routed = {selected.provider for selected in (Model(m) for m in routes.values())}
+        registrations = [
+            registry.registration_for(Model(m))
+            for m in routes.values()
+            if Model(m).provider in registry.names()
         ]
+        endpoints = [r.endpoint for r in registrations if r.endpoint]
+        unknown = {name: why for name, why in unknown.items() if name in routed}
     else:
         endpoints = list(registry.endpoints())
     for host in policy.manifest(endpoints):
         click.echo(host)
+    # On stderr, so the list a proxy is fed stays a list of hosts -- and said, so a manifest with
+    # a route missing from it is not read as complete (#309).
+    for name, why in unknown.items():
+        click.echo(f"unknown   {name}: {why}", err=True)
 
 
 @main.command(name="apply")

@@ -2646,13 +2646,46 @@ def test_init_scaffolds_into_the_lockstep_directory(repo: Path) -> None:
 # -- egress-manifest --------------------------------------------------------------------------
 
 
-def test_egress_manifest_narrows_to_the_routed_providers(repo: Path) -> None:
-    """With routes declared, the list is what this repository dials, not the whole default set."""
+def test_egress_manifest_narrows_to_the_routed_providers(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With routes declared, the list is what this repository dials, not the whole default set.
+    The negative control is a host the cloud route WOULD contribute: it used to be a host no
+    registration ever named, so the assertion held for nothing (#309)."""
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
     _write(repo, model="anthropic:claude-haiku-4-5")
     result = CliRunner().invoke(main, ["egress-manifest"])
     assert result.exit_code == 0, result.output
     assert "api.anthropic.com" in result.output
-    assert "generativelanguage.googleapis.com" not in result.output
+    assert "bedrock-runtime.us-east-1.amazonaws.com" not in result.output
+
+
+def test_gate_auth_2_every_routed_cloud_provider_contributes_its_host_to_the_manifest(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setenv("GOOGLE_CLOUD_REGION", "us-east5")
+    for model, host in (
+        ("bedrock:us.anthropic.claude-sonnet-4-6", "bedrock-runtime.us-east-1.amazonaws.com"),
+        ("vertex:claude-sonnet-4-6@x", "us-east5-aiplatform.googleapis.com"),
+        ("gemini:gemini-2.5-pro", "us-east5-aiplatform.googleapis.com"),
+    ):
+        _write(repo, model=model)
+        result = CliRunner().invoke(main, ["egress-manifest"])
+        assert result.exit_code == 0, result.output
+        assert host in result.output.splitlines(), (model, result.output)
+
+
+def test_gate_auth_2_a_routed_provider_with_no_host_is_named_not_dropped(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manifest fed to a proxy stays a list of hosts on stdout; the route it could not list is
+    said on stderr, so fewer hosts is not read as the whole picture."""
+    for var in ("AWS_REGION", "AWS_DEFAULT_REGION"):
+        monkeypatch.delenv(var, raising=False)
+    _write(repo, model="bedrock:us.anthropic.claude-sonnet-4-6")
+    result = CliRunner().invoke(main, ["egress-manifest"])
+    assert result.exit_code == 0, result.output
+    assert "amazonaws" not in result.stdout
+    assert "unknown   bedrock: no AWS region is set" in result.stderr
 
 
 def test_egress_manifest_includes_the_bound_policys_extras(repo: Path) -> None:

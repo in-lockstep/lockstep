@@ -81,7 +81,12 @@ class Registration:
     factory: ProviderFactory
     settings: ProviderSettings
     data_policy: DataPolicy
-    endpoint: str
+    #: Where the bytes go, as the operator declares it. `None` is the one other shape allowed: a
+    #: destination the registration genuinely cannot state, with `endpoint_reason` saying why,
+    #: which residency and the egress manifest then treat as unknown by name. An empty string is
+    #: neither, and is refused at `register`: three shipped registrations carried `""` for as
+    #: long as it was accepted, and the endpoint comparison had nothing to compare (#309).
+    endpoint: str | None
     auth_target: str
     caps: ModelCaps = field(default_factory=ModelCaps)
     #: The operator's declaration that this destination bills nothing — a local runtime,
@@ -90,6 +95,7 @@ class Registration:
     #: registration for the same reason `data_policy` does — an env var pointing "local" at a
     #: hosted endpoint must not be able to make hosted tokens read as free.
     free: bool = False
+    endpoint_reason: str = ""
 
 
 class ProviderRegistry:
@@ -106,13 +112,24 @@ class ProviderRegistry:
         *,
         settings: ProviderSettings,
         data_policy: DataPolicy,
-        endpoint: str,
+        endpoint: str | None,
         auth_target: str = "",
         caps: ModelCaps | None = None,
         free: bool = False,
+        endpoint_reason: str = "",
     ) -> None:
         if name in self._registrations:
             raise ProviderRegistrationError(f"provider {name!r} is already registered")
+        if endpoint == "":
+            raise ProviderRegistrationError(
+                f"provider {name!r} registers an empty endpoint; declare where the bytes go, or pass "
+                f"endpoint=None with endpoint_reason saying why the destination cannot be stated"
+            )
+        if endpoint is None and not endpoint_reason.strip():
+            raise ProviderRegistrationError(
+                f"provider {name!r} registers no endpoint and no reason; endpoint=None needs "
+                f"endpoint_reason, so residency can refuse the unknown destination by name"
+            )
         self._registrations[name] = Registration(
             name=name,
             factory=factory,
@@ -122,6 +139,7 @@ class ProviderRegistry:
             auth_target=auth_target,
             caps=caps or ModelCaps(),
             free=free,
+            endpoint_reason=endpoint_reason.strip() if endpoint is None else "",
         )
 
     def registration_for(self, model: Model) -> Registration:
@@ -156,6 +174,13 @@ class ProviderRegistry:
 
         `endpoint` is what residency policy keys on. If the constructed client dials somewhere
         else, the policy is describing a different system than the one being used.
+
+        Compared for every registration that states an endpoint and every provider that reports
+        a base URL. A registration with `endpoint=None` has declared it cannot state one, and is
+        refused elsewhere by that reason; a provider whose `base_url()` is empty is a custom
+        transport that never overrode it, and is left uncompared rather than refused, because an
+        adopter's provider must not fail on a method the docs never asked them to write. The
+        shipped transports all report what their client will dial (#309).
         """
         actual = provider.base_url()
         if actual and registration.endpoint and actual.rstrip("/") != registration.endpoint.rstrip("/"):
@@ -170,3 +195,10 @@ class ProviderRegistry:
     def endpoints(self) -> tuple[str, ...]:
         """Every registered destination, for the egress manifest when no routes narrow it."""
         return tuple(sorted({r.endpoint for r in self._registrations.values() if r.endpoint}))
+
+    def unknown_endpoints(self) -> dict[str, str]:
+        """The registrations that could not state a destination, by name, with their reason --
+        so a manifest says which hosts it does not list rather than listing fewer (#309)."""
+        return {
+            name: r.endpoint_reason for name, r in sorted(self._registrations.items()) if r.endpoint is None
+        }

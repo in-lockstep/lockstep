@@ -188,7 +188,7 @@ def test_the_registrations_capabilities_reach_the_invoker_the_factory_builds():
         lambda settings, creds: _Counting(),
         settings=ProviderSettings(base_url="http://localhost:8080"),
         data_policy=DataPolicy.INTERNAL,
-        endpoint="",
+        endpoint="http://localhost:8080",
         caps=ModelCaps(structured_output=False),
     )
     table = CostTable()
