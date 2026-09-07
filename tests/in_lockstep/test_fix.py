@@ -173,6 +173,32 @@ def test_gate_progress_1_a_reproduce_phase_that_stops_moving_is_blocked_with_its
     assert len(provider.calls) == 3
 
 
+def test_a_fix_staged_in_the_reproduce_step_is_a_head_start_not_a_failed_reproduction(repo: Path) -> None:
+    """The eighth `/fix` on #319 staged the reproducer, the fix and a ledger row in the reproduce
+    step; the red run passed over all three and the run ended `fix.not_reproduced` about a bug
+    it had reproduced and fixed (#337). Red is a claim about the tests alone: the test-shaped
+    changes go red on their own, and the rest travel into the fix step, which sees them."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_REPRODUCER),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),  # eager
+            _done("reproduced and fixed"),
+            _call("read_file", path="calc.py"),
+            _done("kept the fix"),
+        ]
+    )
+    outcome = _run(provider, repo)
+    assert outcome.status is Status.SUCCEEDED, (outcome.reason, outcome.findings)
+    report = outcome.value
+    assert report is not None
+    assert report.reproducer.paths() == ("test_calc.py",)
+    assert report.fix.paths() == ("calc.py",)
+    fix_prompt = provider.calls[3].messages[0].content
+    assert "already staged changes to `calc.py`" in fix_prompt
+    shown = next(m.content for m in provider.calls[4].messages if m.role == "tool_result")
+    assert "return a + b" in shown, "the fix step reads its own staged fix, not the disk"
+
+
 def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path) -> None:
     provider = Scripted(
         [

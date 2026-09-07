@@ -532,6 +532,16 @@ class ToolRunnerImpl:
         refusal = self.workspace.guard.check_read(path)
         if refusal is not None:
             return f"refused: {path} is protected ({refusal.rule})"
+        # This session's own staged version first. A model that writes and then reads was shown
+        # the disk, which is the file as it was, and reasoned from that: the fix step of this
+        # repository's eighth `/fix` on itself would have read the unfixed file over the fix it
+        # had staged one step earlier (#337). What a session staged is what it sees.
+        for change in reversed(self.workspace.changes):
+            if change.path == path:
+                if change.contents is None:
+                    return f"error: no file at {path} (you staged its deletion)"
+                text = change.contents
+                return text[:MAX_READ_CHARS] + "\n…[truncated]" if len(text) > MAX_READ_CHARS else text
         target = self.workspace.resolve(path)
         if not target.is_file():
             return f"error: no file at {path}"

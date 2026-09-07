@@ -9,6 +9,10 @@ It is run before any fix exists, and the pipeline **requires it to fail**. A tes
 has not reproduced anything, and the run stops there rather than going on to produce a fix nobody
 can verify.
 
+Do not fix the bug in this step, even when you can see the fix. The test has to be run against the
+code as it is and be seen to fail; a fix staged beside it makes that run pass and proves nothing.
+The next step is the fix, and it will have your test in front of it.
+
 So: assert the correct behaviour, not the buggy one. The test says what should happen; today it does
 not, which is the failure. A test asserting the current wrong output would pass now and fail after
 the fix, which is exactly backwards.
