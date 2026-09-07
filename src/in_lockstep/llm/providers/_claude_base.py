@@ -29,7 +29,15 @@ class ClaudeTransport(LLMProvider):
         return self._name
 
     def base_url(self) -> str:
-        return self._settings.base_url
+        """What the constructed client will dial, read off the client rather than the settings.
+
+        The SDK resolves the destination itself for the cloud transports -- the region decides
+        Bedrock's and Vertex's host -- and, for the direct one, honours a base URL the operator
+        never passed through us. Reporting the settings back would compare a declaration with
+        itself; this is what makes GATE-AUTH-2's comparison real for these three (#309).
+        """
+        url = getattr(self._client, "base_url", None)
+        return str(url).rstrip("/") if url else self._settings.base_url
 
     async def generate(self, input: LLMInput) -> LLMOutput:
         try:

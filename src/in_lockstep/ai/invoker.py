@@ -232,6 +232,7 @@ class AiInvoker:
         transcript: Any = None,
         data_policy: DataPolicy | None = None,
         caps: ModelCaps | None = None,
+        destination_unknown: str = "",
     ) -> None:
         self.provider = provider
         self.model = model
@@ -253,6 +254,9 @@ class AiInvoker:
         # by hand rather than through `invoker_factory` — is treated as UNKNOWN on a restricted
         # repository, because residency is the one control where "nobody said" must fail closed.
         self.data_policy = data_policy
+        #: Why the registration could not state where the bytes go, when it could not. Empty for
+        #: a registration that did; residency refuses a non-empty one by that reason (#309).
+        self.destination_unknown = destination_unknown
         # What the model's registration declares it can do (`ModelCaps`), for the two refusals in
         # `run` that need it. `None` is an invoker built by hand rather than through the factory,
         # and it is NOT treated as incapable: a capability nobody declared is not a capability
@@ -300,6 +304,13 @@ class AiInvoker:
         # egress opt-out says "my network is my business", not "this repository is unrestricted".
         # A cassette or dry-run provider transmits nothing, so it is exempt for the same reason
         # `--offline` needs no firewall.
+        if self.egress.restricted_repo and transmits and self.destination_unknown:
+            raise InvocationBlocked(
+                "residency.unknown_destination",
+                f"this repository is classified restricted and model {self.model!r} is registered "
+                f"without a destination: {self.destination_unknown}; a policy about where the bytes "
+                f"land cannot be checked against a host nobody can name",
+            )
         if self.egress.restricted_repo and transmits and self.data_policy is not DataPolicy.INTERNAL:
             stated = self.data_policy.name if self.data_policy is not None else "undeclared"
             raise InvocationBlocked(

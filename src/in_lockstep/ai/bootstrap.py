@@ -37,6 +37,26 @@ from .auth import Auth, AuthRequest, AuthTarget, OidcResolver
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com"
 
 
+def bedrock_endpoint(region: str) -> str | None:
+    """The host the Anthropic SDK's Bedrock client dials for a region, or None without one."""
+    return f"https://bedrock-runtime.{region}.amazonaws.com" if region else None
+
+
+def vertex_endpoint(region: str) -> str | None:
+    """The host the Anthropic SDK's Vertex client dials for a region, or None without one.
+
+    The SDK's own rule, restated so the declaration is what the client will dial: `global` and
+    the two data-residency pseudo-regions have their own hosts.
+    """
+    if not region:
+        return None
+    if region == "global":
+        return "https://aiplatform.googleapis.com"
+    if region in ("us", "eu"):
+        return f"https://aiplatform.{region}.rep.googleapis.com"
+    return f"https://{region}-aiplatform.googleapis.com"
+
+
 def _anthropic(settings: ProviderSettings, creds: Credentials) -> LLMProvider:
     from ..llm.providers.anthropic import AnthropicProvider
 
@@ -163,11 +183,18 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         )
         if value
     }
+    # The base URL is resolved HERE, where the environment is already read, and handed to the
+    # settings -- never left for the SDK to read `ANTHROPIC_BASE_URL` itself (GATE-AUTH-1). With
+    # it left blank the SDK dialled whatever that variable said while the registration, residency
+    # and the egress manifest all said `api.anthropic.com`, and the endpoint comparison had
+    # nothing to compare. Now a proxy set through the environment is refused by name at
+    # `provider_for`, and the way to use one is a registration that declares it (#309).
+    anthropic_base = os.environ.get("ANTHROPIC_BASE_URL", "").strip() or ANTHROPIC_ENDPOINT
     registry.register(
         "anthropic",
         lambda s, c: _anthropic(s, c),
         settings=ProviderSettings(
-            base_url="",
+            base_url=anthropic_base,
             timeout_seconds=600.0,
             extra={
                 **({"anthropic-workspace-id": workspace} if workspace else {}),
@@ -227,14 +254,19 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
     # repository states its rate, which `doctor` refuses before the run spends anything. See
     # docs/extending.md. Gemini is the exception only because `gemini-2.5-pro` is both a Vertex id
     # and a shipped rate.
+    # Each cloud endpoint is derived from the region the SDK will use, so residency and the
+    # egress manifest name the host the bytes reach. Without a region there is no host to
+    # name, and the registration says so rather than carrying an empty string the comparison
+    # would skip: a restricted repository refuses the route by that reason (#309).
+    aws_region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "")
     registry.register(
         "bedrock",
         lambda s, c: _bedrock(s, c),
-        settings=ProviderSettings(
-            region=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "")
-        ),
+        settings=ProviderSettings(region=aws_region),
         data_policy=DataPolicy.EXTERNAL,
-        endpoint="",
+        endpoint=bedrock_endpoint(aws_region),
+        endpoint_reason="no AWS region is set (AWS_REGION or AWS_DEFAULT_REGION), so the Bedrock host "
+        "cannot be stated",
         auth_target=AuthTarget.MODEL_PROVIDER.value,
         caps=ModelCaps(context_window=200_000, tool_use=True, structured_output=True),
     )
@@ -246,21 +278,31 @@ def default_registry(auth: Auth | None = None) -> ProviderRegistry:
         or os.environ.get("GOOGLE_CLOUD_LOCATION")
         or os.environ.get("CLOUD_ML_REGION", "")
     )
+    gcp_reason = (
+        "no GCP region is set (GOOGLE_CLOUD_REGION, GOOGLE_CLOUD_LOCATION or CLOUD_ML_REGION), so the "
+        "Vertex host cannot be stated"
+    )
     registry.register(
         "vertex",
         lambda s, c: _vertex(s, c),
         settings=ProviderSettings(project_id=gcp_project, region=gcp_region),
         data_policy=DataPolicy.EXTERNAL,
-        endpoint="",
+        endpoint=vertex_endpoint(gcp_region),
+        endpoint_reason=gcp_reason,
         auth_target=AuthTarget.MODEL_PROVIDER.value,
         caps=ModelCaps(context_window=200_000, tool_use=True, structured_output=True),
     )
+    # Gemini's client derives its host from the same region; google-genai does not expose the
+    # URL it built, so the declaration is passed as the settings' base URL and reported back by
+    # the provider. Declared, then, not read off the client -- the row says so.
+    gemini_endpoint = vertex_endpoint(gcp_region)
     registry.register(
         "gemini",
         lambda s, c: _gemini(s, c),
-        settings=ProviderSettings(project_id=gcp_project, region=gcp_region),
+        settings=ProviderSettings(project_id=gcp_project, region=gcp_region, base_url=gemini_endpoint or ""),
         data_policy=DataPolicy.EXTERNAL,
-        endpoint="",
+        endpoint=gemini_endpoint,
+        endpoint_reason=gcp_reason,
         auth_target=AuthTarget.MODEL_PROVIDER.value,
         caps=ModelCaps(context_window=1_000_000, tool_use=True, structured_output=True),
     )
@@ -597,6 +639,9 @@ def invoker_factory(
             # And what the registration says its models can do, so a call that needs a schema or
             # hands tools is refused by name before the first turn (GATE-MODEL-1).
             caps=caps_for(registry, selected),
+            # A registration that could not state its destination says why, and a restricted
+            # repository refuses the route by that reason rather than reading absence as fine.
+            destination_unknown=registry.registration_for(selected).endpoint_reason,
         )
 
     return build

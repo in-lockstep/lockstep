@@ -652,6 +652,17 @@ lockstep.bind(Review, AiReview(invoker_factory("house:acme-7b", registry=registr
 provider nothing registered or a model nothing prices. The failure happens where it costs nothing,
 not at the first call.
 
+`endpoint` is compared, at the first use of the provider, with the base URL the constructed client
+reports it will dial, and a mismatch is refused naming both. That is why the shipped `anthropic`
+registration refuses when `ANTHROPIC_BASE_URL` points anywhere but `api.anthropic.com`: the
+variable is read once, in the framework, and handed to the client, so a proxy set through the
+environment cannot be dialled under a declaration that says otherwise. To run through a proxy or a
+gateway, register it as above, with its address as the endpoint and its residency as the policy.
+Bedrock and Vertex derive their endpoint from the region; without one the registration carries
+`endpoint=None` and a reason, the manifest names the route it could not list, and a restricted
+repository refuses it by that reason. A registration of your own may do the same, and only that:
+`endpoint=None` needs `endpoint_reason`, and an empty endpoint is refused.
+
 A registration also declares what its models can do, and two of those declarations are checked
 before a call is made. Every shipped AI verb asks for its answer in a schema, and the
 implementing verbs hand the model tools; a registration with `caps=ModelCaps(structured_output=False)`
