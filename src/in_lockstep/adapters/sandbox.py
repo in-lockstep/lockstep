@@ -37,8 +37,14 @@ SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "PYTHONPATH", "C
 # worth avoiding in a security control: not refusing, but quietly doing less.
 CONTAINER_RUNTIMES = ("docker", "podman")
 
-# The floor the compiler applied to every executor job, kept.
+# The floor the compiler applied to every executor job, kept -- plus `--init`, which is not a
+# security flag and is here for a reason found by running a suite in one of these: the command
+# is PID 1 in the container, PID 1 reaps orphans or nobody does, and pytest does not. A test that
+# starts a process and kills it then finds the child still there as a zombie, `os.kill(pid, 0)`
+# succeeding, and reports that the kill failed (#312's second run named it). `--init` puts a
+# real init at PID 1, on docker and podman alike.
 DOCKER_FLAGS = (
+    "--init",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges",
     "--network=none",

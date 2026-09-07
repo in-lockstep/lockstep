@@ -278,6 +278,7 @@ def test_gate_sandbox_2_the_container_has_no_network_one_writable_mount_and_read
     asyncio.run(box.run(["python", "-m", "pytest"], cwd=str(tmp_path / "tree")))
     argv = seen["argv"]
     assert "--network=none" in argv and "--cap-drop=ALL" in argv
+    assert "--init" in argv, "without an init at PID 1 a staged test's killed children stay as zombies"
     volumes = [argv[i + 1] for i, flag in enumerate(argv) if flag == "-v"]
     writable = [v for v in volumes if not v.endswith(":ro")]
     assert writable == [f"{tmp_path / 'tree'}:/work"], volumes
