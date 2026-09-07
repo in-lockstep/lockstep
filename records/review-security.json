@@ -1,47 +1,39 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.034917,
+  "cost_usd": 0.032202,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 2,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 101,
-        "message": "Symlink target is written without any containment check, allowing a change to plant a symlink whose target points outside the worktree.",
-        "path": "src/in_lockstep/adapters/worktree.py",
+        "line": 183,
+        "message": "Environment variables are read at module-import time (when `default_registry()` is first called), not at invocation time. A process that sets `AWS_REGION`, `GOOGLE_CLOUD_PROJECT`, or `GOOGLE_CLOUD_LOCATION` after the registry is built will silently use stale or empty values. This is not directly exploitable, but it creates a window where a forked or initialised-early process routes to a different region than the operator intended \u2014 affecting data-residency claims that the docs present as authori\u2026[truncated]",
+        "path": "src/in_lockstep/ai/bootstrap.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 88,
-        "message": "Path containment check uses `resolve()` on a path that may not exist yet, with a narrow membership test that excludes the worktree root itself as a valid destination.",
-        "path": "src/in_lockstep/adapters/worktree.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 119,
-        "message": "The `ref` parameter is passed directly to `git worktree add` with no validation, and it originates from callers who may supply it from untrusted content.",
-        "path": "src/in_lockstep/adapters/worktree.py",
+        "line": 299,
+        "message": "When Bedrock credentials are wired through `Auth`, `credentials_for` returns them without raising `MissingCredential` even if the result is empty \u2014 the comment says empty is the ambient-chain signal. This means a misconfigured `Auth` (one that returns empty for the Bedrock keys) silently falls through to ambient AWS credentials rather than failing loudly. An operator who intended to pin credentials gets ambient chain access with no error.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 7854,
+  "input_tokens": 7994,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 757,
+  "output_tokens": 548,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 8611,
-  "wall_seconds": 19.252
+  "tokens": 8542,
+  "wall_seconds": 15.146
 }
