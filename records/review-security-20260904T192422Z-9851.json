@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.030781,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 148,
+        "message": "Content written into `recorded.content` originates from the cassette entry without any size bound. An attacker or insider who controls a cassette file (or a CI artifact that feeds into harvest) can embed an arbitrarily large string that then travels into a case file stored in the repository and is later read back in full by `eval run`. This is a storage/resource concern that crosses a trust boundary, not a sanitisation absence \u2014 but the same field also flows through `_as_answer(str(case.recorded\u2026[truncated]",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1038,
+        "message": "The tamper-detection check (declared key vs actual key) is skipped when `declared` is empty, meaning a case with no `harvested.key` field but with a `recorded` block is graded without verifying that the request and answer belong together. An editor who removes or omits the `key` field from a case file causes the integrity check to be silently bypassed on line 1041 (`if declared and declared != actual`).",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f3fb80e688085ce1b717fb3f5b0af440920420df",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 505,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260904T192422Z-9851",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 508,
+  "ts": "2026-09-04T19:24:39+00:00",
+  "wall_seconds": 16.715
+}
