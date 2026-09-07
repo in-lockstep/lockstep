@@ -1,162 +1,47 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.128835,
+  "cost_usd": 0.070842,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 22,
+    "count": 3,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 69,
-        "message": "_LOOPBACK_HOSTS includes '0.0.0.0', which is the wildcard-bind address, not a loopback. On most systems, connecting to 0.0.0.0 is not the same as connecting to localhost, and some hosted environments bind a public service on 0.0.0.0. Including it in the 'free' set means OLLAMA_URL=http://0.0.0.0:11434 is treated as local and priced at zero even when the service is externally reachable. The invariant the code states \u2014 'an env var pointing local at a hosted endpoint must not make hosted tokens rea\u2026[truncated]",
-        "path": "src/in_lockstep/ai/bootstrap.py",
+        "line": 40,
+        "message": "The `label` parameter is passed directly to `gh issue list --label <label>` via `subprocess.run`. If `label` arrives from an untrusted caller (e.g., the workflow arg `label: str = \"wayfinder\"` in `lockstep.py`), a value like `wayfinder --jq .[] --exec some_command` could inject additional `gh` flags or abuse gh's own flag parsing. However, because `subprocess.run` receives a list rather than a shell string, shell metacharacters are not interpreted; the risk is limited to gh's own argument parsin\u2026[truncated]",
+        "path": "examples/wayfinder-implement/github_map.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 78,
-        "message": "comment() now swallows all non-zero exit codes from 'gh issue comment' silently, including authentication failures, permission errors, and network errors. The prior code raised on failure. The change is deliberate ('best-effort'), but the silent swallow extends to cases where the comment failing is a signal worth surfacing \u2014 e.g., the GH_TOKEN is expired or the issue was locked. An attacker who can cause the comment to fail (by locking the issue or revoking the token) would prevent the '/impleme\u2026[truncated]",
-        "path": "src/in_lockstep/platform/tickets/github.py",
+        "line": 40,
+        "message": "Issue body text returned by `gh issue list` is placed directly into `Ticket.description` and then parsed by `blockers_in()` for `Blocked by:` lines. Anyone who can write a GitHub issue body (i.e., any repo collaborator, or an attacker who has filed an issue) controls which ticket keys appear in `blocked_by`, and therefore which tickets the adapter considers blocked or on the frontier. This is a trust-boundary crossing: external, user-controlled text is driving authorization decisions (\"may this \u2026[truncated]",
+        "path": "examples/wayfinder-implement/github_map.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 1740,
-        "message": "_scaffold_implement checks whether 'lockstep' appears in the module text before appending Python that calls lockstep.bind(...). This is a text search, not a parse. A module containing the string 'lockstep' in a comment or a string literal would pass the check and receive appended code that references a name that may not be bound, causing a NameError at import time. The compile() call that follows would catch a SyntaxError but not a NameError, so the guard and the safety net do not cover the same\u2026[truncated]",
-        "path": "src/in_lockstep/cli.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "message": "The scaffolded implement.yml gates on 'startsWith(github.event.comment.body, \\'/implement\\')' but the gate job's authorization check runs 'in-lockstep gate --actor $ACTOR --association $ASSOCIATION'. The ASSOCIATION value comes from github.event.comment.author_association, which GitHub sets. The security property depends on the gate command correctly refusing NONE/FIRST_TIME_CONTRIBUTOR associations. This is not a finding about the diff itself but about what the scaffold generates: if the gate c\u2026[truncated]",
-        "path": ".github/workflows/implement.yml (scaffold, cli.py line ~1900)",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
+        "line": 19,
+        "message": "`sys.path.insert(0, str(Path(__file__).resolve().parent.parent))` prepends the example directory \u2014 a user-controlled location \u2014 to the module search path. Any `.py` file named `wayfinder`, `in_lockstep`, `github_map`, or any other name imported later that is placed in that directory will shadow the intended module. In a shared or CI environment where the working tree can be influenced by a pull request, this is a PATH-hijack for Python imports. The existing codebase uses this pattern deliberatel\u2026[truncated]",
+        "path": "examples/wayfinder-implement/.lockstep/lockstep.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 38595,
+  "input_tokens": 20259,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 870,
+  "output_tokens": 671,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 39465,
-  "wall_seconds": 26.325
+  "tokens": 20930,
+  "wall_seconds": 20.416
 }
