@@ -1,0 +1,48 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34156453992",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.034742,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 661,
+        "message": "Unsanitized `path` argument echoed in error messages returned to the model.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 653,
+        "message": "`_current` calls `target.read_text()` without an encoding argument; UnicodeDecodeError is silenced and returns None, masking binary files silently.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e945c786bb917929842078037856d7b029b17175",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 578,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T194051Z-d9e2",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 581,
+  "ts": "2026-09-07T19:41:09+00:00",
+  "wall_seconds": 17.393
+}
