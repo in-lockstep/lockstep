@@ -333,3 +333,44 @@ def test_github_says_why_when_it_cannot_list_artifacts() -> None:
     scm._gh = lambda *a: (1, "", "gh: not logged in")  # type: ignore[method-assign]
     with pytest.raises(RuntimeError, match="not logged in"):
         scm.run_artifacts("lockstep-run")
+
+
+def test_a_sweep_that_absorbed_nothing_on_a_fresh_checkout_pushes_nothing_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue 312. The first scheduled sweep after #307 found no artifact, had no local branch to
+    push, and went red with `there is no history here to push` on a night nothing happened. Nothing
+    to publish is the quiet outcome, said in the log, with exit 0."""
+    import in_lockstep.platform.hosted as hosted
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    seed = GitLedger(root=_repo(tmp_path / "seed"))
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=seed.root, check=True)
+    subprocess.run(
+        ["git", "push", "-q", "origin", "HEAD:main"], cwd=seed.root, check=True, capture_output=True
+    )
+    asyncio.run(seed.append("local-1", {"kind": "review"}))
+    seed.push()
+    root = tmp_path / "runner"
+    subprocess.run(["git", "clone", "-q", str(origin), str(root)], check=True, capture_output=True)
+    (root / ".lockstep").mkdir()
+    (root / ".lockstep" / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
+    )
+    for var in [v for v in os.environ if v.startswith("GITHUB_")] + ["GITLAB_CI"]:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(root)
+
+    class _Quiet:
+        def run_artifacts(self, name: str) -> tuple[RunArtifact, ...]:
+            return ()
+
+        def download_artifact(self, artifact_id: int, into: Path) -> Path:
+            raise AssertionError("nothing to download")
+
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: _Quiet())
+    result = CliRunner().invoke(main, ["history", "--from-artifacts", "lockstep-run", "--push"])
+    assert result.exit_code == 0, result.output
+    assert "artifacts 0 absorbed, 0 empty, 0 failed, 0 expired" in result.output
+    assert "pushed    nothing" in result.output and "no history here to push" not in result.output

@@ -1566,6 +1566,16 @@ def history_cmd(
             f"artifacts {len(swept.taken)} absorbed, {len(swept.empty)} empty, "
             f"{len(swept.failed)} failed, {len(swept.expired)} expired"
         )
+        found_local = ledger.resolved()
+        if push and found_local is not None and found_local[0] != ledger.ref:
+            # A sweep that took nothing on a checkout with only the remote-tracking ref made no
+            # local branch, and `push()` rightly refuses to send the remote's own commit back at
+            # it. The first scheduled sweep after #307 did exactly this and went red on a night
+            # nothing happened (#312): nothing to publish is the ordinary quiet outcome, said.
+            click.echo(
+                "pushed    nothing: the sweep absorbed nothing and this checkout has no history of its own"
+            )
+            push = False
 
     if acknowledge:
         # A person's act, by name. `--by` defaults to the configured git author whether or not the

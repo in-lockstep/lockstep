@@ -10,14 +10,23 @@ on:
 
 permissions:
   contents: read
+  # `GATE-DOGFOOD-1` asks the host whether this framework has merged a change here. Read-only, and
+  # the token reaches `gh` alone: nothing in `make ci` writes.
+  pull-requests: read
 
 jobs:
   check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # Every branch, so `origin/lockstep-history` exists here and the dogfood gate reads the
+          # ledger rather than skipping; a depth-1 checkout of the pull request has no such ref.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           python-version: '3.11'
       - run: uv sync
       - run: make ci
+        env:
+          GH_TOKEN: ${{ github.token }}

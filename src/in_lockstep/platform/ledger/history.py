@@ -36,6 +36,7 @@ import os
 import re
 import subprocess
 import tempfile
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -91,6 +92,41 @@ class Pulled:
 
 class HistoryError(RuntimeError):
     """Git refused, and continuing would mean claiming a record was kept when it was not."""
+
+
+#: Run ids that only a test or a worked example mints. Two shapes, and exactly the two that have
+#: reached this repository's real ledger: `triage-412` is the id `tests/in_lockstep/test_cli.py`
+#: records under, and `wayfinder-*-local` are the example's own runs; both arrived on
+#: `lockstep-history` in the 2026-09-02 reconcile and `report` counted `triage 1 run(s)` for a
+#: verb that has never run here (#312). Enumerated rather than inferred from the id's shape,
+#: because a rule that refused every id without the CLI's timestamp would refuse the records this
+#: module's own tests push, and the ids the framework mints are a convention, not a contract.
+FIXTURE_RUN_ID = re.compile(r"^(?:triage-\d+|[A-Za-z0-9_.-]+-local)$")
+
+
+def refuse_fixture_ids(run_ids: Iterable[str], *, already: Collection[str] = ()) -> None:
+    """Raise if any run id about to be PUBLISHED is one only a fixture mints.
+
+    Publishing means crossing to a branch other clones read: a push, the reconcile a rejected push
+    makes, and a bundle absorbed on the way to one. A local append accepts anything, because a
+    test's own tmp-root ledger is exactly where a fixture id belongs. `already` exempts ids the
+    destination holds, so a branch that still carries the four that leaked can be pushed to and
+    pulled from until the person who removes them does -- a refusal that also blocked the cleanup
+    would be a refusal nobody could clear.
+    """
+    # Both sides may be record file names (`<run id>.json`) or bare run ids; compare bare ids.
+    held = {_bare(name) for name in already}
+    offending = sorted({_bare(r) for r in run_ids if FIXTURE_RUN_ID.match(_bare(r)) and _bare(r) not in held})
+    if offending:
+        raise HistoryError(
+            f"refusing to publish {len(offending)} record(s) whose run id only a fixture mints: "
+            f"{', '.join(offending)}. A test or example wrote to this repository's ledger instead "
+            f"of its own tmp root; delete the record(s) locally and fix the test."
+        )
+
+
+def _bare(name: str) -> str:
+    return name[: -len(".json")] if name.endswith(".json") else name
 
 
 @dataclass
@@ -411,6 +447,13 @@ class GitLedger:
             # The local ref, not `head()`: a checkout reading the remote-tracking ref has nothing
             # of its own to publish, and pushing the remote's commit back at it would say "pushed".
             raise HistoryError("there is no history here to push")
+        # Before the push and not only inside the reconcile a rejection triggers: a first push to
+        # an empty remote is fast-forward and would carry a fixture record straight through.
+        theirs = self._commit_at(self.remote_ref)
+        refuse_fixture_ids(
+            (str(r.get("run_id", "")) for r in self.records()),
+            already=self._record_names(theirs) if theirs else (),
+        )
         try:
             self._git("push", self.remote, f"{self.ref}:{self.ref}")
         except HistoryError:
@@ -435,6 +478,7 @@ class GitLedger:
         remote_head = self._git("rev-parse", _REMOTE_SCRATCH)
         self._git("update-ref", "-d", _REMOTE_SCRATCH)
         mine = self.records()
+        refuse_fixture_ids((str(r.get("run_id", "")) for r in mine), already=self._record_names(remote_head))
 
         with tempfile.TemporaryDirectory() as tmp:
             index = Path(tmp) / "index"
@@ -532,7 +576,14 @@ class GitLedger:
         if not source.is_file():
             raise HistoryError(f"no history bundle at {source}")
         if self.head() is None:
-            self._git("fetch", str(source), f"{self.ref}:{self.ref}")
+            # Through the scratch ref even here, so a bundle that would create the branch is
+            # checked the same way one that merges into it is.
+            self._git("fetch", str(source), f"+{self.ref}:{_INCOMING_SCRATCH}")
+            try:
+                refuse_fixture_ids(self._record_names(self._git("rev-parse", _INCOMING_SCRATCH)))
+                self._git("update-ref", self.ref, self._git("rev-parse", _INCOMING_SCRATCH), "")
+            finally:
+                self._try("update-ref", "-d", _INCOMING_SCRATCH)
             if run_id:
                 self.note_absorbed(run_id)
         else:
@@ -544,6 +595,11 @@ class GitLedger:
             # absorbs nobody meant.
             self._git("fetch", str(source), f"+{self.ref}:{_INCOMING_SCRATCH}")
             try:
+                head = self.head()
+                refuse_fixture_ids(
+                    self._record_names(self._git("rev-parse", _INCOMING_SCRATCH)),
+                    already=self._record_names(head) if head else (),
+                )
                 self._merge_ref(_INCOMING_SCRATCH, run_id=run_id)
             finally:
                 self._try("update-ref", "-d", _INCOMING_SCRATCH)

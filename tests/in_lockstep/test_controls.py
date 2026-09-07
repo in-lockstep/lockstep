@@ -1383,6 +1383,90 @@ def _protection_says(
     return report
 
 
+def _bypasses_say(
+    monkeypatch: pytest.MonkeyPatch, *, protection: dict[str, Any], rulesets: list[dict[str, Any]]
+) -> doctor.Report:
+    """`_branch_protection` with a rule that reads, plus whatever rulesets the host lists."""
+    import json
+    import subprocess
+
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["gh", "repo"]:
+            return subprocess.CompletedProcess(argv, 0, "main", "")
+        target = argv[2]
+        if target.endswith("/protection"):
+            return subprocess.CompletedProcess(argv, 0, json.dumps(protection), "")
+        if target.endswith("/rulesets"):
+            return subprocess.CompletedProcess(argv, 0, json.dumps(rulesets), "")
+        wanted = target.rsplit("/", 1)[-1]
+        found = [r for r in rulesets if str(r.get("id")) == wanted]
+        return subprocess.CompletedProcess(argv, 0 if found else 1, json.dumps(found[0]) if found else "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    report = doctor.Report()
+    doctor._branch_protection(report, Path("."))
+    return report
+
+
+def test_an_admin_who_can_step_around_the_required_check_is_warned_about_by_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue 312. Both were true here: `enforce_admins` off on the classic rule, and the active
+    ruleset carrying a bypass for the admin role -- so `required` was enforceable only by choice,
+    and doctor said nothing. WARNINGs naming the setting, the way DOC121 names a missing rule."""
+    report = _bypasses_say(
+        monkeypatch,
+        protection={"enforce_admins": {"enabled": False}},
+        rulesets=[
+            {
+                "id": 21300993,
+                "name": "Protect Main",
+                "enforcement": "active",
+                "rules": [{"type": "deletion"}, {"type": "pull_request"}],
+                "bypass_actors": [
+                    {"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}
+                ],
+            },
+            {
+                "id": 7,
+                "name": "Disabled",
+                "enforcement": "disabled",
+                "rules": [{"type": "pull_request"}],
+                "bypass_actors": [{"actor_id": 1, "actor_type": "Integration"}],
+            },
+        ],
+    )
+    codes = {f.code: f for f in report.checks}
+    assert codes["DOC127"].severity is doctor.Severity.WARNING
+    assert "enforce_admins" in codes["DOC127"].message
+    assert codes["DOC128"].severity is doctor.Severity.WARNING
+    assert (
+        "'Protect Main'" in codes["DOC128"].message
+        and "RepositoryRole 5 (pull_request)" in codes["DOC128"].message
+    )
+    assert "pull_request" in codes["DOC128"].message
+    assert [f.code for f in report.checks].count("DOC128") == 1, "a disabled ruleset is not a bypass"
+
+
+def test_a_rule_enforced_for_everyone_and_a_ruleset_nobody_bypasses_warn_of_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = _bypasses_say(
+        monkeypatch,
+        protection={"enforce_admins": {"enabled": True}},
+        rulesets=[
+            {
+                "id": 1,
+                "name": "r",
+                "enforcement": "active",
+                "rules": [{"type": "pull_request"}],
+                "bypass_actors": [],
+            }
+        ],
+    )
+    assert [f.code for f in report.checks] == []
+
+
 def test_gate_ci_3_an_unprotected_default_branch_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The finding this check exists for, and the only answer that earns an ERROR."""
     report = _protection_says(monkeypatch, branch_rc=1, branch_out="gh: Branch not protected (HTTP 404)")
