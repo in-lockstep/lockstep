@@ -1,33 +1,79 @@
 {
   "aspect": "security",
   "base": "main",
+  "billed_fraction": 1.0,
   "branch": "HEAD",
   "ci_actor": "tpouyer",
   "config": "base branch (not the ref under review)",
-  "cost_usd": 0.0,
+  "cost_usd": 0.031929,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 1,
+    "count": 7,
     "items": [
       {
-        "blocking": true,
-        "id": "provider.error",
-        "message": "Token exchange failed (HTTP 400): {'error': {'message': 'Request validation failed', 'reason': 'service_account_id: does not have prefix `svac_`', 'type': 'invalid_request_error'}} [request_id=req_011CeXwqBDZQHGM1aNKSZYSH]",
-        "severity": "error"
+        "blocking": false,
+        "id": "review.security",
+        "line": 56,
+        "message": "The `claude` job fetches a GitHub OIDC token and writes it to `/tmp/gha-jwt`, but the job has no `if:` condition and no `needs:` on `gate`. It therefore runs unconditionally on every `issue_comment` event \u2014 including comments from untrusted actors \u2014 before the gate job can reject them. The token itself is short-lived and audience-scoped to `api.anthropic.com`, so the blast radius is limited to that federation trust, but the job also does `actions/checkout@v4` from an unvetted ref in this context\u2026[truncated]",
+        "path": ".github/workflows/implement.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 53,
+        "message": "Same issue as in `implement.yml`: the `claude` job runs unconditionally on `pull_request` events with no `needs:` dependency. For `pull_request` from forks, `id-token: write` is typically suppressed by GitHub, so the risk is lower there, but on `push` or internal PRs the job mints and writes an OIDC token to `/tmp/gha-jwt` before any gating step can run.",
+        "path": ".github/workflows/lockstep.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 55,
+        "message": "The fetched OIDC token is written to `/tmp/gha-jwt` as a plain file with default permissions (world-readable on a Linux runner). Any subsequent step running in the same job \u2014 including a malicious action injected via a compromised dependency \u2014 can read it with `cat /tmp/gha-jwt`. Prefer writing to `$RUNNER_TEMP` with an explicit `chmod 600`, or passing the value through a masked environment variable rather than a file.",
+        "path": ".github/workflows/implement.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 84,
+        "message": "The `ACTIONS_ID_TOKEN_REQUEST_URL` value is used without any validation of its scheme or host before being passed to `urllib.request.urlopen`. If an attacker can influence that environment variable (e.g. via a workflow that sets it), they can redirect the OIDC token request to an arbitrary URL, causing the runner to send its `ACTIONS_ID_TOKEN_REQUEST_TOKEN` bearer credential to an attacker-controlled endpoint. This is worth noting even though the variable originates from GitHub's own runner envi\u2026[truncated]",
+        "path": "src/in_lockstep/ai/auth.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
       }
     ]
   },
-  "head": "7966648f51f1b9504ec25f151bb6aa34ccc97de4",
-  "input_tokens": 0,
+  "head": "1f0727a46d7c1ebc4f346f2d57e865a8c4e22064",
+  "input_tokens": 6018,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 0,
-  "reason": "provider.error",
+  "output_tokens": 925,
+  "priced_fraction": 1.0,
+  "reason": null,
   "run_id": "review-security",
   "schema": 4,
-  "status": "errored",
-  "tokens": 0,
-  "ts": "2026-08-29T23:57:49+00:00",
-  "wall_seconds": 1.596
+  "status": "succeeded",
+  "tokens": 6943,
+  "ts": "2026-08-29T23:43:02+00:00",
+  "wall_seconds": 24.385
 }
