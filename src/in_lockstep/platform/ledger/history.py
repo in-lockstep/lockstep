@@ -425,14 +425,15 @@ class GitLedger:
         means "put mine into their tree". Anything the remote has and this clone does not is
         preserved by starting from the remote tree; anything only this clone has is added.
         """
-        fetched = self._try("fetch", self.remote, f"{self.ref}:refs/lockstep/remote-history")
+        fetched = self._try("fetch", self.remote, f"+{self.ref}:{_REMOTE_SCRATCH}")
         if fetched is None:
             # The remote has no such branch, so the rejection was about something else and
             # pretending otherwise would loop.
             raise HistoryError(
                 f"could not push {self.branch} and could not fetch it from {self.remote} either"
             )
-        remote_head = self._git("rev-parse", "refs/lockstep/remote-history")
+        remote_head = self._git("rev-parse", _REMOTE_SCRATCH)
+        self._git("update-ref", "-d", _REMOTE_SCRATCH)
         mine = self.records()
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -525,8 +526,17 @@ class GitLedger:
             if run_id:
                 self.note_absorbed(run_id)
         else:
-            self._git("fetch", str(source), f"{self.ref}:refs/lockstep/incoming")
-            self._merge_ref("refs/lockstep/incoming", run_id=run_id)
+            # Forced, and deleted once folded. Each bundle is a different runner's orphan
+            # history, so the second bundle of a sweep is never a descendant of the first, and a
+            # plain fetch into a ref the first left behind is refused non-fast-forward: the first
+            # dispatched sweep absorbed one bundle and reported 219 failures (#323). The scratch
+            # ref is a temporary, and a temporary that outlives its use is a dependency between
+            # absorbs nobody meant.
+            self._git("fetch", str(source), f"+{self.ref}:{_INCOMING_SCRATCH}")
+            try:
+                self._merge_ref(_INCOMING_SCRATCH, run_id=run_id)
+            finally:
+                self._try("update-ref", "-d", _INCOMING_SCRATCH)
         return self._git("rev-parse", self.ref)
 
     def note_absorbed(self, run_id: str) -> None:
@@ -588,6 +598,11 @@ class GitLedger:
             blob = self._git("rev-parse", f"{source}:{subdir}/{name}")
             self._git("update-index", "--add", "--cacheinfo", f"100644,{blob},{subdir}/{name}", index=index)
 
+
+#: Scratch refs a fetch lands on before its commits are folded in. Written with a forced refspec
+#: and deleted afterwards, so no fold depends on the one before it (#323).
+_INCOMING_SCRATCH = "refs/lockstep/incoming"
+_REMOTE_SCRATCH = "refs/lockstep/remote-history"
 
 #: The absorb commit's subject, with the run it took in when the caller knew it. Read back by
 #: `absorbed_runs`, so the subject is a format and not prose: change both or neither.

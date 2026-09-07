@@ -206,6 +206,11 @@ def test_a_rejected_push_is_reconciled_rather_than_reported(tmp_path: Path) -> N
         capture_output=True,
     )
     assert sorted(str(r["run_id"]) for r in GitLedger(root=landed).records()) == ["run-a", "run-b"]
+    for clone in (first, second):
+        left = subprocess.run(
+            ["git", "for-each-ref", "refs/lockstep/"], cwd=clone, capture_output=True, text=True
+        )
+        assert left.stdout == "", f"a reconcile left a scratch ref behind: {left.stdout}"
 
 
 # -- GATE-LEDGER-12: the ledger is readable on a checkout that never wrote it --------------------
