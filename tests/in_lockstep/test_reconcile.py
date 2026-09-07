@@ -171,6 +171,55 @@ def test_an_absorb_into_a_branch_that_already_exists_names_the_run_in_its_commit
     assert publisher.verify() == [], "an absorb never rewrites a record"
 
 
+def test_gate_ledger_10_two_bundles_from_two_runners_are_both_absorbed_and_no_scratch_ref_remains(
+    tmp_path: Path,
+) -> None:
+    """The first dispatched sweep absorbed one bundle and reported 219 failures: each bundle is a
+    different runner's orphan history, and a plain fetch into the scratch ref the first absorb
+    left behind is refused non-fast-forward (#323). Two unrelated bundles, both taken, nothing
+    left under `refs/lockstep/`."""
+    first = _bundle_from_a_runner(tmp_path, ci_run="77")
+    second = _bundle_from_a_runner(tmp_path / "other", ci_run="78")
+    publisher = GitLedger(root=_repo(tmp_path / "publisher"))
+    asyncio.run(publisher.append("local-1", {"kind": "review"}))
+
+    class _Two(_Forge):
+        def run_artifacts(self, name: str) -> tuple[RunArtifact, ...]:
+            return (RunArtifact(1, "77"), RunArtifact(2, "78"))
+
+        def download_artifact(self, artifact_id: int, into: Path) -> Path:
+            shutil.copy(first if artifact_id == 1 else second, into / "history.bundle")
+            return into
+
+    swept = absorb_outstanding(publisher, _Two(first))
+    assert swept.failed == (), swept.failed
+    assert [a.id for a in swept.taken] == [1, 2]
+    assert publisher.absorbed_runs() == {"77", "78"}
+    assert sorted(str(r["run_id"]) for r in publisher.records()) == [
+        "local-1",
+        "review-security-77",
+        "review-security-78",
+    ]
+    assert publisher.verify() == []
+    left = subprocess.run(
+        ["git", "for-each-ref", "refs/lockstep/"], cwd=publisher.root, capture_output=True, text=True
+    ).stdout
+    assert left == "", f"a scratch ref outlived its absorb: {left}"
+
+
+def test_gate_ledger_10_a_scratch_ref_left_by_an_older_version_does_not_refuse_the_next_absorb(
+    tmp_path: Path,
+) -> None:
+    """A clone that absorbed before #323 still carries `refs/lockstep/incoming`. Deleting the ref
+    after each fold does not help that clone's first absorb; forcing the fetch does."""
+    bundle = _bundle_from_a_runner(tmp_path, ci_run="77")
+    publisher = GitLedger(root=_repo(tmp_path / "publisher"))
+    asyncio.run(publisher.append("local-1", {"kind": "review"}))
+    subprocess.run(["git", "update-ref", "refs/lockstep/incoming", "HEAD"], cwd=publisher.root, check=True)
+    publisher.absorb(bundle, run_id="77")
+    assert sorted(str(r["run_id"]) for r in publisher.records()) == ["local-1", "review-security-77"]
+
+
 def test_one_failing_artifact_does_not_hold_the_rest_behind_it(tmp_path: Path) -> None:
     bundle = _bundle_from_a_runner(tmp_path, ci_run="77")
     publisher = GitLedger(root=_repo(tmp_path / "publisher"))
