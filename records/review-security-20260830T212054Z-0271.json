@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.020139,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 296,
+        "message": "Workflow file contents are read and interpolated into subprocess arguments, then the `gh` binary is resolved from PATH \u2014 neither is a finding on its own, but the `proposers` list is assembled by grepping for a string in files under `.github/workflows`. A workflow file a contributor writes could contain arbitrary strings; however, the only sink is `', '.join(proposers)` into a report message, not a shell or query, so exploitation is limited to influencing the diagnostic text. Not a high-severity \u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 305,
+        "message": "The `gh` binary is resolved from the ambient PATH of the process calling `doctor.run`. An attacker who can place a `gh` binary earlier on PATH than the real one \u2014 e.g. a developer's local `./bin/gh` committed to the repo, or a compromised entry in a CI runner's PATH \u2014 controls what JSON is returned and therefore what the doctor reports (or suppresses). The test fixture itself demonstrates this exact technique. In a local developer context this is low-risk; in a CI context where the working direc\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2746f977cea58807d7fdade7a7f60434740c37ca",
+  "input_tokens": 4838,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 375,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T212054Z-0271",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5213,
+  "ts": "2026-08-30T21:21:06+00:00",
+  "wall_seconds": 12.103
+}
