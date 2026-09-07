@@ -1,61 +1,47 @@
 {
   "aspect": "security",
-  "base": "main",
   "billed_fraction": 1.0,
-  "branch": "HEAD",
-  "ci_actor": "tpouyer",
-  "config": "base branch (not the ref under review)",
-  "cost_usd": 0.058503,
+  "cost_usd": 0.038205,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 4,
+    "count": 3,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 72,
-        "message": "Write failure is printed to stdout, silently continuing. An attacker or a misconfigured environment that makes `.lockstep/transcripts/` unwritable (wrong permissions, read-only mount, disk full) will suppress the transcript silently except for a `print()` to stdout that may go unnoticed in CI. The security concern is the inverse: the transcript is the artifact that carries full message history including tool results; if redaction itself raises (e.g. a bug in `Redact.text`), the exception propaga\u2026[truncated]",
-        "path": "src/in_lockstep/ai/transcript.py",
+        "line": 346,
+        "message": "Error message reflects back the raw env-var value `ceiling` into a user-facing report without sanitisation. If `IN_LOCKSTEP_MAX_BUDGET_USD` contains control characters or very long attacker-controlled content, it is embedded verbatim into `report.add(...)` and then emitted to stdout or JSON output. In a fleet-scanner context where the JSON is consumed by dashboards or log aggregators, this is a log-injection / content-injection vector: an attacker who controls that environment variable (e.g. via\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 388,
-        "message": "CI actor and config source are written verbatim from environment variables (`GITHUB_ACTOR`) and the `config_source` string into ledger records without length or character constraints. A CI environment where `GITHUB_ACTOR` is attacker-controlled (e.g. a fork PR triggering a workflow) can embed arbitrary content into the ledger record's `ci_actor` field. The field is serialised as JSON and later rendered directly via `click.echo` in `_explain_run`. If anything downstream consumes these records as \u2026[truncated]",
-        "path": "src/in_lockstep/cli.py",
+        "line": 330,
+        "message": "The list of required policy names (`IN_LOCKSTEP_REQUIRED_POLICIES`) is split on commas and each stripped name is compared against present layers, then the present-layer set is embedded in the error message: `', '.join(sorted(present))`. The `present` set is derived from `lockstep.policy.layers`, which comes from the repository module loaded via `_load_configured`. If a layer's `name` attribute contains a comma, newline, or other delimiter, `', '.join(sorted(present))` faithfully includes it in t\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 56,
-        "message": "The transcript path is derived from `run_id` via `_safe()`, which replaces non-alphanumeric characters with `-` and strips leading/trailing `-` and `.`. The resulting filename is always under the fixed `root` (`.lockstep/transcripts/`), so path traversal via `run_id` is blocked. No finding \u2014 recording this as reviewed and not a concern.",
-        "path": "src/in_lockstep/ai/transcript.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 118,
-        "message": "The new `append_text` uses `path.open('a')` (unbuffered append mode) without an `fcntl.flock` or similar advisory lock. The docstring calls out the race for concurrent strategy phases; on filesystems where POSIX append-mode atomicity does not hold for writes larger than PIPE_BUF (notably NFS), two concurrent invokers could interleave partial JSONL lines, producing a transcript that fails to parse. This is a data-integrity concern for the security artifact itself \u2014 a corrupted transcript is no tr\u2026[truncated]",
-        "path": "src/in_lockstep/privileged/sink.py",
+        "line": 84,
+        "message": "The broad `except Exception: return None` in `_load_configured` silently swallows all load errors, including import errors that may themselves be caused by the repository module attempting side-effects at import time. This is noted in the docstring as intentional (load failures are loud elsewhere). No security finding per se, but worth noting that the silence means a deliberately broken module evades all strict checks \u2014 an attacker-controlled lockstep.py that raises on import would cause `_load_\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
         "severity": "warning"
       }
     ]
   },
-  "head": "d9fcfe788dc0cc26154a582caadeda9e7a4b1bfb",
-  "input_tokens": 16191,
+  "input_tokens": 8890,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 662,
+  "output_tokens": 769,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
-  "schema": 4,
+  "schema": 3,
   "status": "succeeded",
-  "tokens": 16853,
-  "ts": "2026-08-29T20:53:05+00:00",
-  "wall_seconds": 19.935
+  "tokens": 9659,
+  "wall_seconds": 21.966
 }
