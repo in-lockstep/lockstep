@@ -245,6 +245,26 @@ def test_gate_sandbox_2_an_image_with_no_runtime_and_no_requirement_is_the_same_
     assert "fall back to a subprocess" in outcome.findings[0].message
 
 
+def test_gate_progress_1_a_red_phase_that_stops_moving_is_blocked_with_its_test_intact(repo: Path) -> None:
+    """GATE-PROGRESS-1 through TDD: the red phase stages its test and then reads until the idle
+    ceiling; `implement.no_progress`, the test in the outcome, and no green phase asked for."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),
+            _call("read_file", path="README.md"),
+        ]
+    )
+    adapter = TDD(
+        lambda ctx: _invoker(provider, spend=getattr(ctx, "spend", None)),
+        repo_root=str(repo),
+        policy=InvokePolicy(max_turns=12, max_tokens=1024, max_idle_turns=2),
+    )
+    outcome = asyncio.run(adapter.invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "implement.no_progress"
+    assert outcome.value is not None and outcome.value.changeset.paths() == ("test_calc.py",)
+    assert len(provider.calls) == 3
+
+
 def test_tdd_fails_when_the_staged_test_does_not_go_red(repo: Path) -> None:
     """A test that passes before anything is written has specified nothing to implement."""
     provider = Scripted(

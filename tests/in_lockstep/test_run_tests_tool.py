@@ -291,6 +291,34 @@ def test_gate_sandbox_2_the_verdict_over_a_staged_change_is_blocked_not_run_on_t
     assert "sandbox.host_fallback" in implement_body(staged, verdict)
 
 
+def test_gate_progress_1_the_runner_counts_a_suite_run_over_a_new_change_set_and_not_a_repeat(
+    tmp_path: Path,
+) -> None:
+    """GATE-PROGRESS-1, what counts. A write the workspace accepted, and a `run_tests` over a
+    change set it had not run before, move the counter; a `run_tests` over the same staged set
+    costs a container run to learn nothing and does not (#337)."""
+    from in_lockstep.ai.tools import BUILTIN_SERVER
+
+    async def fake(paths: tuple[str, ...] = ()) -> str:
+        return "1 passed"
+
+    runner = _runner(tmp_path, tests=fake, max_test_runs=10)
+    assert runner.progress == 0
+    asyncio.run(runner(BUILTIN_SERVER, "write_file", {"path": "a.py", "contents": "x = 1\n"}))
+    assert runner.progress == 1 and runner.last_progress == "wrote a.py"
+    asyncio.run(runner(BUILTIN_SERVER, "run_tests", {}))
+    assert runner.progress == 2 and "1 staged change" in runner.last_progress
+    asyncio.run(runner(BUILTIN_SERVER, "run_tests", {}))
+    assert runner.progress == 2, "the same staged set again is not progress"
+    asyncio.run(runner(BUILTIN_SERVER, "write_file", {"path": "a.py", "contents": "x = 2\n"}))
+    asyncio.run(runner(BUILTIN_SERVER, "run_tests", {}))
+    assert runner.progress == 4, "a changed set is"
+    asyncio.run(runner(BUILTIN_SERVER, "write_file", {"path": ".lockstep/lockstep.py", "contents": "x\n"}))
+    assert runner.progress == 4, "a refused write is not"
+    asyncio.run(runner(BUILTIN_SERVER, "delete_file", {"path": "a.py"}))
+    assert runner.progress == 5 and runner.last_progress == "deleted a.py"
+
+
 @pytest.mark.parametrize("name", ["run_tests"])
 def test_the_description_warns_that_a_subset_is_not_a_verdict(tmp_path: Path, name: str) -> None:
     """The one dangerous affordance here: a model can run a passing subset and talk itself into

@@ -37,6 +37,9 @@ class Policy:
     deny_tools: tuple[str, ...] = ()
     scan_input: str = ""
     max_turns: int | None = None
+    #: Consecutive turns that stage nothing and test nothing new before a session stops (#337).
+    #: A ceiling like `max_turns`: a contribution can only lower it.
+    max_idle_turns: int | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,7 @@ class ResolvedPolicy:
     deny_tools: tuple[str, ...] = ()
     scan_input: str = ""
     max_turns: int | None = None
+    max_idle_turns: int | None = None
 
 
 def _lowest(a: int | None, b: int | None) -> int | None:
@@ -78,4 +82,5 @@ class PolicyStack:
             if SCAN_STRENGTH.get(layer.scan_input, 0) > SCAN_STRENGTH.get(merged.scan_input, 0):
                 merged = replace(merged, scan_input=layer.scan_input)
             merged = replace(merged, max_turns=_lowest(merged.max_turns, layer.max_turns))
+            merged = replace(merged, max_idle_turns=_lowest(merged.max_idle_turns, layer.max_idle_turns))
         return merged

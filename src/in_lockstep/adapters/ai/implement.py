@@ -67,6 +67,8 @@ class ImplementReport:
     #: key on the approach that produced this change.
     strategy: str = ""
     turns: int = 0
+    #: Consecutive turns at the end that staged nothing and tested nothing new (#337).
+    idle_turns: int = 0
 
     @property
     def empty(self) -> bool:

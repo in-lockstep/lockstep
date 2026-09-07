@@ -1036,6 +1036,18 @@ def test_gate_policy_1_a_contributed_turn_ceiling_tightens_the_loop() -> None:
     assert policy.max_turns == 2, "a ceiling that does not lower the adapter's need is not a ceiling"
 
 
+def test_gate_progress_1_a_contributed_idle_ceiling_tightens_and_never_loosens() -> None:
+    """The fourth ceiling composes like the other three: the lower of the adapter's and the
+    stack's, so a repository contributing a looser one gets the tighter (#337)."""
+    assert (
+        InvokePolicy.under(_resolved(max_idle_turns=5), max_turns=10, max_idle_turns=30).max_idle_turns == 5
+    )
+    assert (
+        InvokePolicy.under(_resolved(max_idle_turns=50), max_turns=10, max_idle_turns=3).max_idle_turns == 3
+    )
+    assert InvokePolicy.under(_resolved(), max_turns=10).max_idle_turns == InvokePolicy.max_idle_turns
+
+
 def test_a_ceiling_never_raises_what_the_adapter_asked_for() -> None:
     """Monotone: contributions tighten. A floor allowing twelve does not grant twelve."""
     assert InvokePolicy.under(_resolved(max_turns=12), max_turns=1).max_turns == 1

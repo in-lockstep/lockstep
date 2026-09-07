@@ -70,7 +70,13 @@ class Oneshot(ImplementStrategy):
         # the Outcome to return — the mapping every strategy shared, now in one place.
         try:
             invocation = await run_phase(
-                session, system, messages, package, prefix="implement", schema=IMPLEMENT_SCHEMA
+                session,
+                system,
+                messages,
+                package,
+                prefix="implement",
+                schema=IMPLEMENT_SCHEMA,
+                stalled_report=lambda staged: ImplementReport(changeset=staged, strategy=self.id),
             )
         except PhaseError as e:
             return e.outcome
@@ -108,6 +114,7 @@ class Oneshot(ImplementStrategy):
             unfinished=unfinished,
             strategy=self.id,
             turns=invocation.turn_count,
+            idle_turns=invocation.idle_turns,
         )
 
         findings = reported(

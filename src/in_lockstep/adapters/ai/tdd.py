@@ -167,6 +167,7 @@ class TDD(ImplementStrategy):
                 package,
                 prefix="implement",
                 schema=IMPLEMENT_SCHEMA,
+                stalled_report=lambda staged: ImplementReport(changeset=staged, strategy=self.id),
             )
 
             tests = session.workspace.changeset(ticket=ticket.key)
@@ -231,6 +232,7 @@ class TDD(ImplementStrategy):
                 package,
                 prefix="implement",
                 schema=IMPLEMENT_SCHEMA,
+                stalled_report=lambda staged: ImplementReport(changeset=staged, strategy=self.id),
             )
         except PhaseError as e:
             return e.outcome
@@ -264,6 +266,7 @@ class TDD(ImplementStrategy):
             unfinished=unfinished,
             strategy=self.id,
             turns=red_inv.turn_count + green_inv.turn_count,
+            idle_turns=green_inv.idle_turns,
         )
         findings = reported(
             report.changeset,

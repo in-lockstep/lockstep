@@ -181,6 +181,50 @@ def test_the_turn_cap_leaves_the_run_undecided(repo: Path) -> None:
     assert len(provider.calls) == 3
 
 
+def test_gate_progress_1_a_session_that_stops_moving_is_stopped_with_its_change_intact(repo: Path) -> None:
+    """GATE-PROGRESS-1. One write, then reads until the idle ceiling: `blocked` as
+    `implement.no_progress`, the staged file in the outcome, the finding naming the last
+    productive turn, and the provider called once past the ceiling and no more (#337)."""
+    provider = Scripted(
+        [_call("write_file", path="a.py", contents="x = 1\n"), _call("read_file", path="src/greet.py")]
+    )
+    policy = InvokePolicy(max_turns=12, max_tokens=1024, max_idle_turns=3)
+    outcome = asyncio.run(_adapter(provider, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.BLOCKED
+    assert outcome.reason == "implement.no_progress"
+    assert outcome.value is not None and outcome.value.changeset.paths() == ("a.py",)
+    (finding,) = [f for f in outcome.findings if f.id == "implement.no_progress"]
+    assert "3 turn(s) in a row" in finding.message and "turn 0: wrote a.py" in finding.message
+    assert len(provider.calls) == 1 + 3, "the write, three idle turns, and nothing after the ceiling"
+
+
+def test_gate_progress_1_a_refused_write_is_not_progress(repo: Path) -> None:
+    """A `write_file` the guard refused staged nothing, so it does not reset the count."""
+    provider = Scripted([_call("write_file", path=".lockstep/lockstep.py", contents="lockstep = 1\n")])
+    policy = InvokePolicy(max_turns=12, max_tokens=1024, max_idle_turns=2)
+    outcome = asyncio.run(_adapter(provider, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "implement.no_progress"
+    assert outcome.value is not None and outcome.value.changeset.paths() == ()
+    assert "nothing was ever staged" in outcome.findings[0].message
+    assert len(provider.calls) == 2
+
+
+def test_a_session_that_keeps_moving_is_not_stopped_by_the_idle_ceiling(repo: Path) -> None:
+    """The other direction: a write every other turn resets the count, so a ceiling of two
+    never fires over four productive-then-idle pairs."""
+    replies = []
+    for i in range(4):
+        replies.append(_call("write_file", path=f"f{i}.py", contents=f"x = {i}\n"))
+        replies.append(_call("read_file", path="src/greet.py"))
+    replies.append(_done())
+    provider = Scripted(replies)
+    policy = InvokePolicy(max_turns=20, max_tokens=1024, max_idle_turns=2)
+    outcome = asyncio.run(_adapter(provider, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.SUCCEEDED, outcome.reason
+    assert outcome.value is not None and len(outcome.value.changeset.paths()) == 4
+    assert outcome.value.idle_turns == 1, "the read before the answer is the one idle turn at the end"
+
+
 def test_a_reply_that_is_not_json_keeps_the_change(repo: Path) -> None:
     """The files came through the tool boundary. Losing them over a formatting rule is expensive."""
     provider = Scripted(
