@@ -13,7 +13,7 @@
       {
         "blocking": true,
         "id": "provider.authentication",
-        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CeXy7Y6EK5vbodQnGvMnY]",
+        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CeXxrpZkxTKE8MAHYPXQy]",
         "severity": "error"
       }
     ]
@@ -28,6 +28,6 @@
   "schema": 4,
   "status": "errored",
   "tokens": 0,
-  "ts": "2026-08-30T00:14:37+00:00",
-  "wall_seconds": 1.38
+  "ts": "2026-08-30T00:11:18+00:00",
+  "wall_seconds": 1.943
 }
