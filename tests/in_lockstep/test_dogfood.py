@@ -101,3 +101,34 @@ def test_gate_dogfood_1_no_fixture_record_is_published_after_the_cleanup() -> No
     assert set(leaked) <= known, (
         f"a fixture record reached the published ledger: {sorted(set(leaked) - known)}"
     )
+
+
+def test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_jobs() -> None:
+    """The chat-ops clause. `/review security` on #348 (run 34167168362, 2026-09-07) was the first
+    comment that matched `review.yml`'s gate and ran through gate, review and post to a sticky
+    comment; the first that matched at all, 34163733667, failed for want of a token (#347)."""
+    listed = subprocess.run(
+        [
+            "gh",
+            "run",
+            "list",
+            "--workflow=review.yml",
+            "--status",
+            "success",
+            "--limit",
+            "5",
+            "--json",
+            "databaseId",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode != 0:
+        said = (listed.stderr or listed.stdout).strip().splitlines()
+        pytest.skip(f"GATE-DOGFOOD-1 not checked: gh could not list runs ({said[0][:120] if said else '?'})")
+    try:
+        runs = json.loads(listed.stdout)
+    except ValueError:
+        pytest.skip("GATE-DOGFOOD-1 not checked: gh returned no JSON")
+    assert runs, "no review-on-request run has ever succeeded on this repository"

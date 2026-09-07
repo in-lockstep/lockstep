@@ -7159,7 +7159,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
-          name: implement-${{ github.event.issue.number }}
+          name: lockstep-run
           path: |
             changeset/
             history.bundle
@@ -7198,7 +7198,7 @@ jobs:
       # into the commit open_change makes.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          name: implement-${{ github.event.issue.number }}
+          name: lockstep-run
           path: ${{ runner.temp }}/implement
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run implement/propose \\
@@ -7325,7 +7325,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
-          name: fix-${{ github.event.issue.number }}
+          name: lockstep-run
           path: |
             fix-changeset/
             history.bundle
@@ -7357,7 +7357,7 @@ jobs:
           python-version: '3.11'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          name: fix-${{ github.event.issue.number }}
+          name: lockstep-run
           path: ${{ runner.temp }}/fix
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
@@ -7467,7 +7467,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
-          name: fix-${{ github.event.issue.number }}
+          name: lockstep-run
           path: |
             fix-changeset/
             history.bundle
@@ -7499,7 +7499,7 @@ jobs:
           python-version: '3.11'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          name: fix-${{ github.event.issue.number }}
+          name: lockstep-run
           path: ${{ runner.temp }}/fix
       - run: |
           uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep run fix/propose \\
@@ -7665,7 +7665,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
-          name: review-${{ github.event.issue.number }}
+          name: lockstep-run
           path: |
             findings.md
             history.bundle
@@ -7696,7 +7696,7 @@ jobs:
           python-version: '3.11'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          name: review-${{ github.event.issue.number }}
+          name: lockstep-run
       # The marker that anchors the sticky comment is INSIDE the body `review` composed, so
       # nothing here names a lens. That is not economy: the lens came out of an untrusted comment
       # and was resolved in the other job, and naming it here would put it back in YAML.
