@@ -1,47 +1,168 @@
 {
   "aspect": "security",
-  "billed_fraction": 1.0,
-  "cost_usd": 0.070842,
+  "cost_usd": 0.23517,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 21,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 40,
-        "message": "The `label` parameter is passed directly to `gh issue list --label <label>` via `subprocess.run`. If `label` arrives from an untrusted caller (e.g., the workflow arg `label: str = \"wayfinder\"` in `lockstep.py`), a value like `wayfinder --jq .[] --exec some_command` could inject additional `gh` flags or abuse gh's own flag parsing. However, because `subprocess.run` receives a list rather than a shell string, shell metacharacters are not interpreted; the risk is limited to gh's own argument parsin\u2026[truncated]",
-        "path": "examples/wayfinder-implement/github_map.py",
+        "line": 395,
+        "message": "run_script allowlist bypass via path traversal in argv[0]",
+        "path": "src/in_lockstep/ai/builtins.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 40,
-        "message": "Issue body text returned by `gh issue list` is placed directly into `Ticket.description` and then parsed by `blockers_in()` for `Blocked by:` lines. Anyone who can write a GitHub issue body (i.e., any repo collaborator, or an attacker who has filed an issue) controls which ticket keys appear in `blocked_by`, and therefore which tickets the adapter considers blocked or on the frontier. This is a trust-boundary crossing: external, user-controlled text is driving authorization decisions (\"may this \u2026[truncated]",
-        "path": "examples/wayfinder-implement/github_map.py",
+        "line": 290,
+        "message": "run_id used as a filesystem path component without sufficient sanitisation",
+        "path": "src/in_lockstep/platform/ledger/history.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 19,
-        "message": "`sys.path.insert(0, str(Path(__file__).resolve().parent.parent))` prepends the example directory \u2014 a user-controlled location \u2014 to the module search path. Any `.py` file named `wayfinder`, `in_lockstep`, `github_map`, or any other name imported later that is placed in that directory will shadow the intended module. In a shared or CI environment where the working tree can be influenced by a pull request, this is a PATH-hijack for Python imports. The existing codebase uses this pattern deliberatel\u2026[truncated]",
-        "path": "examples/wayfinder-implement/.lockstep/lockstep.py",
+        "line": 60,
+        "message": "CODEOWNERS team membership silently not checked, decision reported as authoritative",
+        "path": "src/in_lockstep/platform/actors.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 68,
+        "message": "ACTOR output from gate job flows into shell command without quoting",
+        "path": ".github/workflows/implement.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 376,
+        "message": "Ticket-supplied timeout_seconds reaches the runner without an upper bound",
+        "path": "src/in_lockstep/adapters/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_cli.py",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_core.py",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_history.py",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_implement_oneshot.py",
+        "path": "tests/in_lockstep/test_implement_oneshot.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_knowledge.py",
+        "path": "tests/in_lockstep/test_knowledge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_layering.py",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_platform.py",
+        "path": "tests/in_lockstep/test_platform.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_sinks.py",
+        "path": "tests/in_lockstep/test_sinks.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_toolrunner.py",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.not_reviewed",
+        "message": "not included in this review: tests/in_lockstep/test_workflow_triggers.py",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 20259,
+  "input_tokens": 72940,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 671,
+  "output_tokens": 1090,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 20930,
-  "wall_seconds": 20.416
+  "tokens": 74030,
+  "wall_seconds": 35.099
 }
