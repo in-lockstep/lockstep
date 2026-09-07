@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.060226,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 737,
+        "message": "The in-repository path check for --cassette compares resolved Path objects, but an attacker (or a misconfigured caller) who supplies a path that resolves to exactly the repository root would be caught, while a path pointing to a symlink target outside the tree but whose canonical path lands inside would bypass the check. More concretely: if `lockstep.repo.root` itself is a symlink, `Path(lockstep.repo.root).resolve()` resolves it, but a cassette path that reaches the same real directory through \u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 498,
+        "message": "The guard `getattr(chosen, 'transmits', True) is False` uses identity comparison (`is`) with the boolean `False`. If an adapter sets `transmits = 0` or any other falsy non-False value, the guard passes and a replaying provider is wrapped in RecordingProvider, potentially writing a tape of a replay session and reporting fabricated inference counts. This is a logic flaw rather than a direct injection vector, but it undermines the 'kept 0 means no model was called' invariant the gate row claims to \u2026[truncated]",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "addf63a5590e77e1ad54193ffa0e3f102bf83ed5",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 496,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T015511Z-f0b5",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 499,
+  "ts": "2026-09-05T01:55:28+00:00",
+  "wall_seconds": 16.009
+}
