@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.062496,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 294,
+        "message": "Text search used to check lockfile membership is susceptible to substring collision",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 627,
+        "message": "Pack-supplied strings written to the committed record without sanitisation beyond the redacting sink",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2876,
+        "message": "Pack name used as a filesystem path component without normalisation",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "44548985e79b1f58c369c44346d4c47d1ad5dad8",
+  "input_tokens": 16937,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 779,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T114255Z-b2bc",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 17716,
+  "ts": "2026-08-31T11:43:17+00:00",
+  "wall_seconds": 21.936
+}
