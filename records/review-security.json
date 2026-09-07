@@ -1,157 +1,33 @@
 {
   "aspect": "security",
   "base": "main",
-  "billed_fraction": 1.0,
   "branch": "HEAD",
   "ci_actor": "tpouyer",
   "config": "base branch (not the ref under review)",
-  "cost_usd": 0.053931,
+  "cost_usd": 0.0,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 20,
+    "count": 1,
     "items": [
       {
-        "blocking": false,
-        "id": "review.security",
-        "line": 134,
-        "message": "Three workload-identity federation identifiers are hardcoded as plaintext constants in the workflow file: `ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu`, `ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f`, and `ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01XV2Kosdrf72doqBts86VZj`. The diff and its comments assert these are identifiers rather than secrets. That claim may be correct if the token-exchange endpoint enforces the GitHub OIDC subject claim and other constraints ind\u2026[truncated]",
-        "path": ".github/workflows/implement.yml",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 348,
-        "message": "In `_federation_credentials`, the check for an operator-supplied token uses `os.environ.get(\"ANTHROPIC_IDENTITY_TOKEN\")` and `os.environ.get(\"ANTHROPIC_IDENTITY_TOKEN_FILE\")`. Both environment variables are read directly here rather than through `Auth`/`EnvResolver`. The concern is narrow: if `ANTHROPIC_IDENTITY_TOKEN` contains a value that should be redacted, reading it here bypasses the redaction-seeding path that `Auth.credentials_for` provides. An attacker or misconfigured environment cannot\u2026[truncated]",
-        "path": "src/in_lockstep/ai/bootstrap.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 369,
-        "message": "The federation fallback in `credentials_for` triggers when `not creds.secret_values() and provider == 'anthropic' and _anthropic_federation_configured()`. `_anthropic_federation_configured()` checks only `ANTHROPIC_FEDERATION_RULE_ID` and `ANTHROPIC_ORGANIZATION_ID`, not whether the runner actually has `id-token: write` permission. On a GitHub Actions runner that lacks that permission (e.g. a fork PR, or a workflow that did not grant it), `_federation_credentials` will call `OidcResolver.resolve\u2026[truncated]",
-        "path": "src/in_lockstep/ai/bootstrap.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 237,
-        "message": "The fake OIDC `opener` used in `test_federation_mints_a_token_with_the_rules_audience_when_no_key_exists` captures `req.full_url` to assert the audience query parameter. The assertion is `'audience=https://api.anthropic.com' in seen['url']`. This is a substring check against a URL; a URL like `audience=https://api.anthropic.com.evil.example/` would also satisfy it. The test is for correctness, not security, and this is a test file rather than production code \u2014 but a subtly wrong audience in the \u2026[truncated]",
-        "path": "tests/in_lockstep/test_oidc_auth.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
+        "blocking": true,
+        "id": "provider.authentication",
+        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CeXy7Y6EK5vbodQnGvMnY]",
+        "severity": "error"
       }
     ]
   },
   "head": "3e226e287cab29c8cfc971f026f4600d73efbac8",
-  "input_tokens": 12262,
+  "input_tokens": 0,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 1143,
-  "priced_fraction": 1.0,
-  "reason": null,
+  "output_tokens": 0,
+  "reason": "provider.authentication",
   "run_id": "review-security",
   "schema": 4,
-  "status": "succeeded",
-  "tokens": 13405,
-  "ts": "2026-08-30T00:22:57+00:00",
-  "wall_seconds": 31.079
+  "status": "errored",
+  "tokens": 0,
+  "ts": "2026-08-30T00:14:37+00:00",
+  "wall_seconds": 1.38
 }
