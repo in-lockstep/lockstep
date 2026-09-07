@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066849,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 488,
+        "message": "Rust `run_command` detection checks `\"[[bin]]\" in cargo` as a substring match on raw TOML text.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 491,
+        "message": "`go run .` is bound when `main.go` exists at the root, but the description acknowledges that Go commands under `cmd/` are not found.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 155,
+        "message": "The `servable` predicate treats any non-empty `provision_commands` as meaning the repository can be served, which suppresses the decline message even when no test, lint, build or run binding is possible.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 639,
+        "message": "The `test_every_advertised_manifest_is_one_detection_actually_reads` test asserts `facts.summary()` is non-empty, but `pom.xml` alone (no wrapper) sets `stack = 'jvm'` and produces no bindable command \u2014 so `summary()` may be empty for it.",
+        "path": "tests/in_lockstep/test_detect.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "537926d1332ac058a845bef2e2c2683a2ca8bd8a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 855,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T211709Z-8aa2",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 858,
+  "ts": "2026-09-05T21:17:32+00:00",
+  "wall_seconds": 22.417
+}
