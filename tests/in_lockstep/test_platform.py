@@ -1028,3 +1028,31 @@ def test_start_point_resolves_a_base_whose_name_contains_a_slash(tmp_path: Path)
         ["git", "checkout", "-b", "probe", resolved], cwd=clone, capture_output=True, text=True
     )
     assert made.returncode == 0, made.stderr
+
+
+def test_a_parked_pull_request_carries_the_label_and_the_fenced_json_and_loses_them_on_resume() -> None:
+    """Design §13.1: the park goes where the person acts. The `lockstep:parked` label is what a
+    resume trampoline filters on; the JSON rides a sticky comment under its own marker, so a
+    resume edits it in place rather than leaving two."""
+    scm = GitHubScm(".")
+    calls: list[tuple[str, ...]] = []
+    scm._gh = _recording(calls, "[]")  # type: ignore[method-assign]
+    scm._gh_json = lambda *a: []  # type: ignore[method-assign]
+    asyncio.run(scm.mark_parked(41, "run-1", "release/after", "a review of #41 by tim"))
+    assert (
+        "label",
+        "create",
+        "lockstep:parked",
+        "--force",
+        "--description",
+        "an in-lockstep run is waiting here",
+    ) in calls
+    assert ("pr", "edit", "41", "--add-label", "lockstep:parked") in calls
+    posted = next(c for c in calls if c[:2] == ("api", "repos/{owner}/{repo}/issues/41/comments"))
+    body = posted[-1]
+    assert '"In-Lockstep-Run": "run-1"' in body and "<!-- in-lockstep:parked -->" in body
+    assert "in-lockstep resume --run run-1 --as approved" in body
+    calls.clear()
+    asyncio.run(scm.clear_parked(41, "run-1"))
+    assert ("pr", "edit", "41", "--remove-label", "lockstep:parked") in calls
+    assert any("resumed" in c[-1] and "<!-- in-lockstep:parked -->" in c[-1] for c in calls)

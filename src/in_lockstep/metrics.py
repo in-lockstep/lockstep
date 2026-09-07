@@ -40,7 +40,7 @@ FAILED = ("failed", "errored")
 #: Every status a record can honestly carry. A record outside this set has no verdict the report
 #: can count, and it is counted as exactly that rather than as "not failed": schema-4 workflow
 #: records stamped `"completed"` read as 0% failed over eleven red selfchecks (#166).
-VERDICTS = ("succeeded", "failed", "errored", "blocked")
+VERDICTS = ("succeeded", "failed", "errored", "blocked", "parked")
 
 #: How many entries a "what does it keep finding" list shows. Long enough to see a pattern, short
 #: enough that the tail does not read as though it mattered.

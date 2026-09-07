@@ -20,8 +20,17 @@ from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar
 
 from .container import Container
+from .human import (
+    HumanBoundary,
+    HumanBranch,
+    LocalStoreCannotPark,
+    Parked,
+    barrier_key,
+    barrier_record,
+    dumps,
+)
 from .middleware import ActionCall, Middleware, Next, compose
-from .outcome import VERDICT_PRECEDENCE, JoinResult, Outcome, Status
+from .outcome import VERDICT_PRECEDENCE, Finding, JoinResult, Outcome, Severity, Status
 from .ports import InferenceLog, LedgerStore, StepStore
 from .spend import Spend
 from .verbs import Verb, capabilities_of, verb_of
@@ -489,12 +498,93 @@ class RunContext:
 
     # -- fan-out over machine branches ------------------------------------------------
 
+    def human(self, boundary: HumanBoundary, *, expires_seconds: float | None = None) -> HumanBranch:
+        """Declare a fan-out branch a person completes (`ctx.human(HumanBoundary.pr_review(41))`)."""
+        return HumanBranch(boundary=boundary, expires_seconds=expires_seconds)
+
+    def _shared_store(self) -> Any | None:
+        """The bound store if a person can park on it, else None. LOCAL is the one scope a park
+        must refuse: a claim on a ref one machine can see is a claim nobody else can answer."""
+        store = self.ledger
+        if store is None or getattr(store, "scope", "local") != "shared":
+            return None
+        return store
+
+    async def park(
+        self,
+        boundary: HumanBoundary,
+        *,
+        resume: str,
+        payload: dict[str, Any] | None = None,
+        expires_seconds: float | None = None,
+    ) -> Outcome[Parked]:
+        """End this run at a human boundary; a continuation starts when the person acts (§13.1).
+
+        Writes the barrier record -- the boundary, the continuation id, the head this run stood
+        on, the payload -- into the shared store under `barrier/<run_id>` as a create-if-absent,
+        and returns `PARKED`. The process exits on that status, the CLI prints the resume command
+        and places the host marker, and `resume` applies the person's event through the tick.
+        On a LOCAL store, or none, `BLOCKED`/`park.local_store` naming the store (`GATE-OUT-6`):
+        a park nobody on another machine could resume is a run that would wait forever.
+        """
+        store = self._shared_store()
+        if store is None:
+            return self._cannot_park(boundary)
+        record = barrier_record(
+            self.run_id,
+            resume=resume,
+            head=self.repo.head,
+            payload=payload,
+            human={"": HumanBranch(boundary=boundary, expires_seconds=expires_seconds)},
+        )
+        if not await store.compare_and_set(barrier_key(self.run_id), None, dumps(record)):
+            return Outcome.blocked_by(
+                "park.already_parked",
+                findings=(
+                    Finding(
+                        id="park.already_parked",
+                        message=f"run {self.run_id} already holds a barrier record; a run parks once",
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
+                ),
+            )
+        parked = Parked(
+            run_id=self.run_id, resume=resume, boundaries=(("", boundary),), key=barrier_key(self.run_id)
+        )
+        outcome: Outcome[Parked] = Outcome(
+            status=Status.PARKED, reason=f"human.{boundary.kind}", value=parked
+        )
+        self.steps.append(StepOutcome(step="park", verb="", outcome=outcome))
+        return outcome
+
+    def _cannot_park(self, boundary: HumanBoundary) -> Outcome[Any]:
+        store = self.ledger
+        name = type(store).__name__ if store is not None else "no LedgerStore"
+        scope = getattr(store, "scope", "none") if store is not None else "none"
+        return Outcome.blocked_by(
+            "park.local_store",
+            findings=(
+                Finding(
+                    id="park.local_store",
+                    message=(
+                        f"cannot park on {boundary.describe()}: the run's ledger is {name} at "
+                        f"scope {scope!r}, which only this machine can see. Bind a SHARED store "
+                        f"(GitLedger(shared=True)) as LedgerStore so a person's event on another "
+                        f"machine can resume this run."
+                    ),
+                    severity=Severity.ERROR,
+                    blocking=True,
+                ),
+            ),
+        )
+
     async def fan_out(
         self,
         *,
         resume: str | None = None,
         max_parallel: int | None = None,
-        **branches: ActionCall,
+        **branches: ActionCall | HumanBranch,
     ) -> JoinResult:
         """Run declared branches concurrently and return when every one is terminal.
 
@@ -520,14 +610,82 @@ class RunContext:
         accepted and ignored. No task outlives the call: the watcher is cancelled and awaited,
         every branch is awaited, and what returns is the whole result or a raised cancellation.
         """
-        if resume is not None:
+        human = {name: b for name, b in branches.items() if isinstance(b, HumanBranch)}
+        machine = {name: b for name, b in branches.items() if not isinstance(b, HumanBranch)}
+        if human:
+            # Pre-flight, before any branch starts (GATE-OUT-5): a human branch on a store one
+            # machine can see is a barrier nobody on another machine could complete, and finding
+            # that out after three machine branches have spent is finding it out too late. Raised
+            # at the call site rather than returned, because it is a programming error about the
+            # lifecycle's bindings, not an outcome of the run.
+            if self._shared_store() is None:
+                store = self.ledger
+                raise LocalStoreCannotPark(
+                    f"fan_out declares human branch(es) {sorted(human)} but the run's ledger is "
+                    f"{type(store).__name__ if store is not None else 'no LedgerStore'} at scope "
+                    f"{getattr(store, 'scope', 'none') if store is not None else 'none'!r}; a "
+                    f"barrier needs a SHARED store (GitLedger(shared=True)) bound as LedgerStore. "
+                    f"No branch was started."
+                )
+            if resume is None:
+                raise ValueError(
+                    f"fan_out with human branch(es) {sorted(human)} needs resume=<continuation id>: "
+                    f"the run ends PARKED and that is what the person's event starts"
+                )
+        elif resume is not None:
             raise ValueError(
-                f"resume={resume!r} names a continuation for a fan-out that parks, and no branch "
-                f"here can park (GATE-OUT-6, deferred): every branch is a machine branch, and the "
-                f"join is returned to this call"
+                f"resume={resume!r} names a continuation for a fan-out that parks, and every branch "
+                f"here is a machine branch: the join is returned to this call"
             )
         if not branches:
             return JoinResult()
+        joined = await self._run_machine_branches(machine, max_parallel)
+        if not human:
+            return JoinResult(branches=joined)
+        return await self._park_join(joined, human, resume or "")
+
+    async def _park_join(
+        self,
+        joined: tuple[tuple[str, Outcome[Any]], ...],
+        human: dict[str, HumanBranch],
+        resume: str,
+    ) -> JoinResult:
+        """Write the barrier record with every machine branch terminal and every human branch
+        parked, and return the join with the human branches `PARKED` so the run ends there."""
+        store = self._shared_store()
+        assert store is not None  # the pre-flight above refused otherwise  # noqa: S101
+        record = barrier_record(
+            self.run_id,
+            resume=resume,
+            head=self.repo.head,
+            machine={
+                name: {"status": o.status.value, "reason": o.reason, "decided": o.decided}
+                for name, o in joined
+            },
+            human=human,
+        )
+        if not await store.compare_and_set(barrier_key(self.run_id), None, dumps(record)):
+            refused: Outcome[Any] = Outcome.blocked_by("park.already_parked")
+            return JoinResult(branches=(*joined, *((name, refused) for name in human)))
+        parked = Parked(
+            run_id=self.run_id,
+            resume=resume,
+            boundaries=tuple((name, b.boundary) for name, b in human.items()),
+            key=barrier_key(self.run_id),
+        )
+        waiting = tuple(
+            (name, Outcome(status=Status.PARKED, reason=f"human.{b.boundary.kind}", value=parked))
+            for name, b in human.items()
+        )
+        for name, outcome in waiting:
+            self.steps.append(StepOutcome(step=name, verb="", outcome=outcome))
+        return JoinResult(branches=(*joined, *waiting))
+
+    async def _run_machine_branches(
+        self, branches: dict[str, ActionCall], max_parallel: int | None
+    ) -> tuple[tuple[str, Outcome[Any]], ...]:
+        if not branches:
+            return ()
         gate = asyncio.Semaphore(max_parallel) if max_parallel and max_parallel > 0 else None
 
         async def branch(name: str, call: ActionCall) -> Outcome[Any]:
@@ -571,7 +729,7 @@ class RunContext:
         for name, outcome in joined:
             call = branches[name]
             self.steps.append(StepOutcome(step=name, verb=_verb_name(call), outcome=outcome))
-        return JoinResult(branches=joined)
+        return joined
 
     # -- step identity -------------------------------------------------------------
 
@@ -609,7 +767,11 @@ def killswitch_engaged() -> bool:
 
 __all__ = [
     "DISABLE_ENV",
+    "HumanBoundary",
+    "HumanBranch",
     "JoinResult",
+    "LocalStoreCannotPark",
+    "Parked",
     "RepoInfo",
     "RunContext",
     "StepId",

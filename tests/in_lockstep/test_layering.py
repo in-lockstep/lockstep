@@ -321,7 +321,15 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: branch in `_exit_for`, each a decision that used to be shell in a workflow and now has a
 #: test; `_gitlab_things_to_decide` renders facts the scaffold already states. What a blocked
 #: run means stays `_workflow_verdict`'s; what a lens is stays `platform/chatops.py`'s.
-CLI_HELPER_STATEMENTS = 1166
+#: 1166 -> 1238 with Phase 5's park (PR-12), composing and rendering: `resume` is a command, but
+#: `_continuation_for` resolves the id a barrier names against the registry and refuses by name,
+#: `_resumption_kwargs` finds the continuation's `Resumption` parameter by annotation,
+#: `_mark_parked`/`_clear_parked` put the park where the person acts and take it off again, and
+#: `_ls_parked` renders the barriers the shared store holds. What a park means, what a tick does
+#: to a record and which write launches the continuation live in `core/human.py` and
+#: `platform/barrier.py`, where `test_core.py` and `test_barrier.py` reach them over a bare origin
+#: without a CliRunner.
+CLI_HELPER_STATEMENTS = 1238
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

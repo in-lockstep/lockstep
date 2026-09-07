@@ -4413,3 +4413,115 @@ def test_an_adapter_that_declares_no_lenses_is_handed_the_name_to_refuse_itself(
     )
     assert result.exit_code == EXIT_BLOCKED, result.output
     assert "opaque: no lens named 'style'" in result.output, result.output
+
+
+# -- Phase 5: park, resume, and the parked inventory --------------------------------------------
+
+
+_PARKING_MODULE = """
+import asyncio
+from pathlib import Path
+
+from in_lockstep import Lockstep, workflow
+from in_lockstep.core.human import HumanBoundary, Resumption
+from in_lockstep.core.outcome import Outcome, Status
+from in_lockstep.core.ports import LedgerStore
+from in_lockstep.core.spend import Budget
+from in_lockstep.platform.ledger import GitLedger
+
+lockstep = Lockstep.detect()
+lockstep.budget = Budget(usd=1.0)
+lockstep.bind(LedgerStore, GitLedger(root=Path(lockstep.repo.root), shared={shared}))
+
+
+@workflow(id="demo/park")
+async def park(ctx):
+    boundary = HumanBoundary.pr_review(41, reviewer="tim")
+    return await ctx.park(boundary, resume="demo/after", payload={{"pr": 41}})
+
+
+@workflow(id="demo/after")
+async def after(ctx, r: Resumption):
+    seen = f"{{r.actor}} {{r.verdict}} {{r.payload['pr']}} {{r.join['']['status']}} {{ctx.parent_run_id}}"
+    Path("resumed.txt").write_text(seen)
+    return Outcome(status=Status.SUCCEEDED if r.affirmative else Status.FAILED)
+"""
+
+
+def _git_repo_with_origin(root: Path) -> None:
+    import subprocess
+
+    origin = root / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.test"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+    (root / "app.py").write_text("x = 1\n")
+    subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=root, check=True)
+
+
+def test_gate_out_6_a_run_parks_lists_as_waiting_and_a_persons_resume_starts_the_continuation(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-OUT-6, end to end at the command line. A workflow parks on a review: the process exits
+    `EXIT_PARKED` printing the resume command, `ls --parked` lists what it waits for, and
+    `resume --run --as --by` applies the event through the tick and runs the continuation as a
+    fresh run carrying `parent_run_id`, handed a `Resumption` by annotation. A second resume of
+    the same event is a duplicate that applies nothing."""
+    import asyncio
+    import json
+
+    import in_lockstep.platform.hosted as hosted
+    from in_lockstep.cli import EXIT_PARKED
+    from in_lockstep.platform.ledger import GitLedger
+
+    _git_repo_with_origin(repo)
+    _lifecycle(repo).write_text(_PARKING_MODULE.format(shared="True"))
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: object())  # no host to mark
+
+    parked = CliRunner().invoke(main, ["run", "demo/park"])
+    assert parked.exit_code == EXIT_PARKED, parked.output
+    assert "demo/park  parked  (human.pr_review)" in parked.output
+    assert "resume with `in-lockstep resume --run demo-park-" in parked.output
+    run_id = next(w for w in parked.output.split() if w.startswith("demo-park-"))
+
+    listed = CliRunner().invoke(main, ["ls", "--parked"])
+    assert listed.exit_code == 0, listed.output
+    assert f"{run_id:<40} waiting   -> demo/after" in listed.output
+    assert "(park)       parked   a review of #41 by tim" in listed.output
+
+    resumed = CliRunner().invoke(
+        main, ["resume", "--run", run_id, "--as", "approved", "--by", "ann", "--event", "review-1"]
+    )
+    assert resumed.exit_code == 0, resumed.output
+    assert f"resuming  {run_id} -> demo/after  (by ann, approved)" in resumed.output
+    assert "demo/after  succeeded" in resumed.output
+    assert (repo / "resumed.txt").read_text() == f"ann approved 41 succeeded {run_id}"
+    records = GitLedger(root=repo).records()
+    child = next(r for r in records if str(r.get("workflow")) == "demo/after")
+    assert child["parent_run_id"] == run_id and child["status"] == "succeeded"
+    parent = next(r for r in records if r["run_id"] == run_id)
+    assert parent["status"] == "parked" and parent["reason"] == "human.pr_review"
+
+    again = CliRunner().invoke(
+        main, ["resume", "--run", run_id, "--as", "approved", "--by", "ann", "--event", "review-1"]
+    )
+    assert again.exit_code == 0 and "was already applied" in again.output, again.output
+    held = asyncio.run(GitLedger(root=repo, shared=True).state(f"barrier/{run_id}"))
+    assert held is not None and json.loads(held)["complete"] is True
+
+
+def test_resume_and_park_refuse_a_local_store_by_name(repo: Path) -> None:
+    from in_lockstep.cli import EXIT_BLOCKED
+
+    _git_repo_with_origin(repo)
+    _lifecycle(repo).write_text(_PARKING_MODULE.format(shared="False"))
+    parked = CliRunner().invoke(main, ["run", "demo/park"])
+    assert parked.exit_code == EXIT_BLOCKED, parked.output
+    assert "blocked  (park.local_store)" in parked.output and "GitLedger(shared=True)" in parked.output
+    resumed = CliRunner().invoke(main, ["resume", "--run", "x", "--as", "approved", "--by", "ann"])
+    assert resumed.exit_code != 0 and "SHARED store" in resumed.output
+    listed = CliRunner().invoke(main, ["ls", "--parked"])
+    assert "nothing parks on it" in listed.output

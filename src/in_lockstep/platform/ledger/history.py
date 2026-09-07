@@ -325,18 +325,27 @@ class GitLedger:
         blob = self._git("hash-object", "-w", "--stdin", stdin=new)
         lease = self._git("hash-object", "--stdin", stdin=expected) if expected is not None else ""
         result = subprocess.run(
-            ["git", "push", "--quiet", self.remote, f"{blob}:{ref}", f"--force-with-lease={ref}:{lease}"],
+            ["git", "push", "--porcelain", self.remote, f"{blob}:{ref}", f"--force-with-lease={ref}:{lease}"],
             cwd=self.root,
             capture_output=True,
             text=True,
             timeout=60,
         )
-        if result.returncode == 0:
+        # `--porcelain`, and the flag character read, because a plain exit code tells a lie in
+        # one case: two ticks that compute the same new value push the same blob, the second
+        # push finds the ref already there and reports success having updated nothing -- and
+        # "nothing updated" is precisely "somebody else won". `=` is that case; `*` (created)
+        # and `+` (forced) are this caller's own write; `!` is the lease failing. The second
+        # barrier test's control found this: eight serialised ticks all "won".
+        flags = {line[0] for line in result.stdout.splitlines() if line and line[0] in "=*+!- "}
+        if result.returncode == 0 and flags & {"*", "+", " "}:
             return True
-        said = result.stderr
+        if result.returncode == 0 and flags == {"="}:
+            return False
+        said = result.stderr + result.stdout
         # The lease failing is the answer this method exists to give; anything else the remote
         # said is an error about reaching it, and is raised with its words.
-        if "stale info" in said or "[rejected]" in said or "failed to push some refs" in said:
+        if "!" in flags or "stale info" in said or "[rejected]" in said or "failed to push some refs" in said:
             return False
         raise HistoryError(f"git push {ref} failed: {said.strip()}")
 
@@ -357,7 +366,39 @@ class GitLedger:
         # Into FETCH_HEAD only: a local copy of the ref would be a stale read waiting to happen,
         # and the reconcile leaves nothing under `refs/lockstep/` by design.
         self._git("fetch", "--quiet", self.remote, ref)
-        return self._git("cat-file", "-p", sha)
+        return self._blob(sha)
+
+    def _blob(self, sha: str) -> str:
+        """A blob's bytes exactly. `_git` strips its output, and a value read back without its
+        trailing newline hashes to a different blob than the one the remote holds -- so a swap
+        whose lease was built from that read would lose every time (the first barrier test did)."""
+        result = subprocess.run(
+            ["git", "cat-file", "-p", sha], cwd=self.root, capture_output=True, text=True, timeout=60
+        )
+        if result.returncode != 0:
+            raise HistoryError(f"git cat-file -p {sha} failed: {result.stderr.strip()}")
+        return result.stdout
+
+    async def states(self, prefix: str) -> dict[str, str]:
+        """Every key under `prefix` the remote holds, with its value -- `ls --parked` reads the
+        barriers this way. SHARED only, for the reason `state` is."""
+        if not self.shared:
+            from .store import Unsupported
+
+            raise Unsupported("this GitLedger is LOCAL-scoped; construct it GitLedger(shared=True)")
+        return await asyncio.to_thread(self._states, prefix)
+
+    def _states(self, prefix: str) -> dict[str, str]:
+        base = f"refs/lockstep/state/{_safe(prefix)}"
+        listed = self._try("ls-remote", self.remote, f"{base}*") or ""
+        out: dict[str, str] = {}
+        for line in listed.splitlines():
+            sha, _sep, ref = line.partition("\t")
+            if not ref.startswith("refs/lockstep/state/"):
+                continue
+            self._git("fetch", "--quiet", self.remote, ref)
+            out[ref[len("refs/lockstep/state/") :]] = self._blob(sha)
+        return out
 
     @staticmethod
     def _state_ref(key: str) -> str:

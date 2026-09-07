@@ -1016,8 +1016,14 @@ are not on `RunContext` at 1.0.
 *Amended 2026-09-07.* `ctx.fan_out` is on `RunContext`, over machine branches only: each branch a
 task over a copy of the context sharing the run's `Spend`, tape and kill switch, bounded by
 `max_parallel`, joined inline as a `JoinResult` (`GATE-OUT-3`, `GATE-OUT-7`, `GATE-COST-6`,
-`GATE-ASYNC-3b`). `ctx.park`, `ctx.human()` and the barrier record stay deferred (`GATE-OUT-5`,
-`GATE-OUT-6`); `fan_out(resume=...)` is refused until they land.
+`GATE-ASYNC-3b`).
+
+*Amended 2026-09-07, later the same day.* `ctx.park`, `ctx.human()` and the barrier record are on
+`RunContext` (`GATE-OUT-5`, `GATE-OUT-6`): a park writes `barrier/<run id>` into a SHARED store by
+compare-and-set and ends the run `PARKED`; `in-lockstep resume` is the tick, and the write that
+completes the barrier launches the continuation. Not built: the webhook resume trampoline and §14
+notifications (resume is a command), `sweep`'s expiry ladder (§13.6), and `Resumption.staleness`
+(§13.5, always None).
 
 ### 17.12 Rounds 5–7 review record
 

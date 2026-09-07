@@ -39,10 +39,11 @@ from . import __version__
 from .ai.prompt import BodyNotFound, Composition, Inspectable
 from .ai.replay import CASSETTE_DIR
 from .core.context import DISABLE_ENV, RunContext
+from .core.human import PARKED_LABEL, Resumption
 from .core.outcome import Status
 from .core.types import Locatable, Test, Validate
 from .core.verbs import SHIPPED_VERBS, Verb, verb_of
-from .core.workflow import inject_ports, injectable_parameters, registered, workflow
+from .core.workflow import get, inject_ports, injectable_parameters, registered, workflow
 from .lockstep import Lockstep
 from .middleware.otel import Recorder, otel
 from .platform.report import MARKER as _MARKER
@@ -52,6 +53,10 @@ from .privileged.redact import Redact, redact_registry
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_BLOCKED = 3
+#: A run that ended at a human boundary (§13): not failed, not blocked, waiting. Distinct so a
+#: trampoline's `if` can tell "somebody has to act" from "something is wrong", and the run
+#: prints the command that resumes it on the way out.
+EXIT_PARKED = 4
 
 
 def _default_lockstep() -> tuple[Lockstep, Recorder | None]:
@@ -405,6 +410,8 @@ def _run_registered(
     asked: bool = False,
     cassette: str = "",
     blocked_ok: bool = False,
+    parent_run_id: str = "",
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """Dispatch a workflow the repository registered.
 
@@ -433,8 +440,13 @@ def _run_registered(
     # the run id exists. `implement` and `fix` arrive through this function and nowhere else.
     tape = _run_cassette(lockstep, run_id, cassette) if record else None
     ctx = _context(lockstep, run_id, approval, recording=tape)
+    if parent_run_id:
+        # A continuation: the child carries the parked run's id, so the ledger chains the two
+        # and `history --explain` shows the lifecycle across the park (§13.4).
+        ctx.parent_run_id = parent_run_id
+    handed: dict[str, Any] = {**parsed, **(extra or {})}
     try:
-        result = asyncio.run(entry.fn(ctx, **inject_ports(entry.fn, ctx, parsed)))
+        result = asyncio.run(entry.fn(ctx, **inject_ports(entry.fn, ctx, handed)))
     except TypeError as e:
         # A signature mismatch is the common mistake here, and the traceback for it points at
         # asyncio rather than at the workflow the user named.
@@ -466,7 +478,64 @@ def _run_registered(
         if _report_what_was_kept(tape, ctx, asked=asked):
             _harvest_in_process(tape, entry.id, lockstep)
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
+    if getattr(result, "status", None) is Status.PARKED:
+        _mark_parked(lockstep, result)
     _exit_for(result, ctx, blocked_ok=blocked_ok)
+
+
+def _ls_parked(lockstep: Any) -> None:
+    """Parked inventory is first-class (§13.6): every barrier the shared store holds, with what
+    each branch waits for and who resumed what."""
+    import json
+
+    from .core.human import HumanBoundary
+
+    store: Any = _ledger(lockstep)
+    if getattr(store, "scope", "local") != "shared":
+        scope = getattr(store, "scope", "none")
+        click.echo(
+            f"parked    — (the ledger here is {type(store).__name__}, scope {scope!r}; nothing parks on it)"
+        )
+        return
+    held = asyncio.run(store.states("barrier/"))
+    if not held:
+        click.echo("parked    0 run(s)")
+        return
+    for _key, text in sorted(held.items()):
+        record = json.loads(text)
+        state = "complete" if record.get("complete") else "waiting"
+        click.echo(f"{record.get('run_id', '?'):<40} {state:<9} -> {record.get('resume', '?')}")
+        for name, branch in (record.get("branches") or {}).items():
+            if branch.get("kind") != "human":
+                continue
+            what = HumanBoundary.from_record(branch.get("boundary") or {}).describe()
+            who = (
+                f"  ({branch.get('actor')}: {branch.get('reason')})"
+                if branch.get("state") == "resumed"
+                else ""
+            )
+            click.echo(f"    {name or '(park)':<12} {branch.get('state'):<8} {what}{who}")
+
+
+def _mark_parked(lockstep: Any, result: Any) -> None:
+    """Put the park where the person will act (§13.1): the `lockstep:parked` label and the
+    barrier's JSON on the pull request a `pr_review` boundary names. Best effort and said: a
+    marker that could not be placed does not un-park the run, whose record is on the ledger."""
+    parked = getattr(result, "value", None)
+    if parked is None:
+        return
+    boundaries = getattr(parked, "boundaries", ())
+    scm: Any = _bound_scm(lockstep)
+    for _name, boundary in boundaries:
+        if boundary.kind != "pr_review" or not hasattr(scm, "mark_parked"):
+            continue
+        try:
+            asyncio.run(
+                scm.mark_parked(int(boundary.target), parked.run_id, parked.resume, boundary.describe())
+            )
+            click.echo(f"marked    #{boundary.target} {PARKED_LABEL}")
+        except (RuntimeError, OSError, ValueError) as e:
+            click.echo(f"marked    could not mark #{boundary.target}: {str(e).strip()[:160]}", err=True)
 
 
 def _ledger(lockstep: Any = None) -> Any:
@@ -579,6 +648,8 @@ def _write_workflow_ledger(
             "workflow": workflow_id,
             **_provenance(lockstep),
             "args": dict(args),
+            # The park this run continued from, so the two records chain (§13.4).
+            **({"parent_run_id": ctx.parent_run_id} if getattr(ctx, "parent_run_id", None) else {}),
             # Who asked, and whether they watched. Absent when nobody did, which is the
             # ordinary case for a workflow needing no grant.
             **({"approval": ctx.approval.as_record()} if ctx.approval.granted else {}),
@@ -662,6 +733,12 @@ def _describe(result: Any, ctx: Any) -> str:
 
 def _exit_for(result: Any, ctx: Any, *, blocked_ok: bool = False) -> None:
     status, reason, _, _ = _workflow_verdict(result, ctx)
+    if status == Status.PARKED.value:
+        click.echo(
+            f"parked    {reason or 'at a human boundary'}; resume with "
+            f"`in-lockstep resume --run {ctx.run_id} --as approved --by <you>`"
+        )
+        raise SystemExit(EXIT_PARKED)
     if status == Status.BLOCKED.value:
         if blocked_ok:
             # A scheduled job whose run was refused before it spent -- nothing recurs yet, the
@@ -1112,14 +1189,140 @@ def run_cmd(
     _exit_for(result, ctx, blocked_ok=blocked_ok)
 
 
+@main.command(name="resume")
+@click.option("--run", "run_id", required=True, help="The parked run.")
+@click.option(
+    "--as", "verdict", required=True, help="What the person did: approved, changes_requested, chosen:2, ..."
+)
+@click.option("--by", "actor", required=True, help="Who did it.")
+@click.option("--branch", default="", help="The fan-out branch the event is for (a plain park has one).")
+@click.option(
+    "--event",
+    "event_id",
+    default="",
+    help="The host's event id; defaults to a stamp, so two manual resumes are two events.",
+)
+@click.option("--text", default="", help="What they said, if anything.")
+def resume_cmd(run_id: str, verdict: str, actor: str, branch: str, event_id: str, text: str) -> None:
+    """Apply a person's event to a parked run, and start its continuation if that completes it.
+
+    The local form of the resume trampoline (§13.3): `--event pr_review:41` from a webhook is the
+    hosted one and is not built. Reads the barrier record from the SHARED store, applies the event
+    through the tick -- deduped on the event id, swapped under the remote's ref lock, so a
+    redelivered event or a second engineer's simultaneous resume applies once -- and, when this
+    was the write that completed the barrier, runs the continuation the record names as a fresh
+    run carrying `parent_run_id`. Refused by name on a LOCAL store: nothing parks there.
+    """
+    from .platform.barrier import BarrierError, tick
+
+    lockstep, recorder = _default_lockstep()
+    store: Any = _ledger(lockstep)
+    if getattr(store, "scope", "local") != "shared":
+        raise click.ClickException(
+            f"the ledger here is {type(store).__name__} at scope {getattr(store, 'scope', 'none')!r}; "
+            f"a parked run lives on a SHARED store (GitLedger(shared=True) bound as LedgerStore)"
+        )
+    event = Resumption(
+        parent_run_id=run_id,
+        branch=branch,
+        event_id=event_id or _run_id("manual"),
+        actor=actor,
+        verdict=verdict,
+        text=text,
+    )
+
+    # The tick decides whether this event completed the barrier and hands the resumption out;
+    # the continuation runs after the tick's loop has closed, because a run is its own event loop
+    # (`_run_registered` starts one) and a loop cannot be started inside another.
+    handed: list[Resumption] = []
+
+    async def launch(resumption: Resumption) -> None:
+        handed.append(resumption)
+
+    try:
+        done = asyncio.run(tick(store, event=event, launch=launch))
+    except BarrierError as e:
+        raise click.ClickException(str(e)) from None
+    if done.duplicate:
+        click.echo(f"resume    event {event.event_id} was already applied to {run_id}; nothing to do")
+        return
+    if not done.launched:
+        waiting = [n or "(park)" for n, b in done.record["branches"].items() if b.get("state") == "parked"]
+        click.echo(f"resume    applied to {run_id}; still waiting on {', '.join(waiting)}")
+        return
+    (resumption,) = handed
+    entry = _continuation_for(run_id, store)
+    click.echo(f"resuming  {run_id} -> {entry.id}  (by {actor}, {verdict})")
+    _clear_parked(lockstep, resumption)
+    _run_registered(
+        lockstep,
+        recorder,
+        entry,
+        (),
+        False,
+        parent_run_id=run_id,
+        extra=_resumption_kwargs(entry.fn, resumption),
+    )
+
+
+def _continuation_for(run_id: str, store: Any) -> Any:
+    """The registered workflow the barrier names, or a refusal that names the id."""
+    from .platform.barrier import read_barrier
+
+    record = asyncio.run(read_barrier(store, run_id)) or {}
+    wanted = str(record.get("resume", ""))
+    entry = get(wanted)
+    if entry is None:
+        raise click.ClickException(
+            f"run {run_id} parked naming continuation {wanted!r}, which nothing registers here "
+            f"(known: {', '.join(sorted(r.id for r in registered())) or '(none)'}). A park record "
+            f"references an id, never a function name, so register the id."
+        )
+    return entry
+
+
+def _resumption_kwargs(fn: Any, resumption: Resumption) -> dict[str, Any]:
+    """The continuation's `Resumption` parameter, found by annotation rather than by name."""
+    import inspect
+    import typing
+
+    try:
+        hints = typing.get_type_hints(fn)
+    except Exception:  # noqa: BLE001 - an unresolvable annotation is the workflow's problem to report
+        hints = {}
+    for name in inspect.signature(fn).parameters:
+        if hints.get(name) is Resumption:
+            return {name: resumption}
+    return {}
+
+
+def _clear_parked(lockstep: Any, resumption: Resumption) -> None:
+    """Take the marker off the pull request the resumed branch named, best effort."""
+    scm: Any = _bound_scm(lockstep)
+    if not hasattr(scm, "clear_parked"):
+        return
+    branch = resumption.join.get(resumption.branch) or {}
+    boundary = branch.get("boundary") or {}
+    if boundary.get("kind") != "pr_review":
+        return
+    try:
+        asyncio.run(scm.clear_parked(int(boundary.get("target", 0)), resumption.parent_run_id))
+    except (RuntimeError, OSError, ValueError) as e:
+        click.echo(f"marked    could not clear #{boundary.get('target')}: {str(e).strip()[:160]}", err=True)
+
+
 @main.command(name="ls")
-def ls_cmd() -> None:
+@click.option("--parked", is_flag=True, help="List the runs waiting on a person, from the SHARED store.")
+def ls_cmd(parked: bool) -> None:
     """Print the resolved container and policy stack.
 
     Config as code can hide the effective setup in a way a YAML file cannot — you can read a
     manifest, but you cannot read a container. This is the answer to "what will actually run".
     """
     lockstep, _ = _default_lockstep()
+    if parked:
+        _ls_parked(lockstep)
+        return
 
     click.echo(f"repo      {lockstep.repo.root}")
     click.echo(
