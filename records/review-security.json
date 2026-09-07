@@ -1,7 +1,7 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.037392,
+  "cost_usd": 0.034917,
   "decided": true,
   "epoch": "in-process",
   "findings": {
@@ -10,38 +10,38 @@
       {
         "blocking": false,
         "id": "review.security",
-        "line": 108,
-        "message": "Symlink target containment check is only lexical for non-existent paths, and can be bypassed with a symlink planted earlier in the same changeset.",
+        "line": 101,
+        "message": "Symlink target is written without any containment check, allowing a change to plant a symlink whose target points outside the worktree.",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 76,
-        "message": "`repo_root` is passed unsanitized as the `-C` argument to `git`; a value starting with `-` would be interpreted as a git option.",
+        "line": 88,
+        "message": "Path containment check uses `resolve()` on a path that may not exist yet, with a narrow membership test that excludes the worktree root itself as a valid destination.",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 83,
-        "message": "Error messages include `err.decode()` from git stderr, which may echo the `ref` or `repo_root` values into logs or exception chains.",
+        "line": 119,
+        "message": "The `ref` parameter is passed directly to `git worktree add` with no validation, and it originates from callers who may supply it from untrusted content.",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 8824,
+  "input_tokens": 7854,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 728,
+  "output_tokens": 757,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 9552,
-  "wall_seconds": 19.816
+  "tokens": 8611,
+  "wall_seconds": 19.252
 }
