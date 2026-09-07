@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.049816,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 195,
+        "message": "The `--registered` assertion is coupled to a specific module path string and will silently pass if the set of registered workflows changes.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 170,
+        "message": "The isolation assertion for `show-workflow implement/report` depends on the set of sibling function names remaining stable; a rename would silently weaken it.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1961,
+        "message": "`_workflow_ids` uses a regex over `inspect.getsource(module.register)` to discover workflow ids; `test_the_id_discovery_is_not_vacuous` asserts the exact expected set, which is the right test, but no test covers what happens when `register()` source is unavailable (e.g. a `.pyc`-only install).",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 207,
+        "message": "No test covers `show-workflow <family>` when the family has no discoverable ids (i.e. the regex returns an empty set for a reformatted `register()`).",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "01c4ba584af863d463b82aa7d3059b45a9b4c3c9",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 961,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T163400Z-0433",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 964,
+  "ts": "2026-09-05T16:34:26+00:00",
+  "wall_seconds": 25.533
+}
