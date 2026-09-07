@@ -1,0 +1,49 @@
+# Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
+#
+# The resume trampoline in its dispatch form (design §13.3): a person who acted on a parked run --
+# reviewed the proposal, moved the ticket -- starts its continuation from here, naming the run.
+# The webhook form, which would filter host events on the `lockstep:parked` label, is not built;
+# resume is a command, and this is the job that runs it with the write token the continuation's
+# record and the pull request's label need. No provider credential: what runs here is decided by
+# the tick and the continuation the barrier names, and nothing in it calls a model.
+name: resume
+
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: The parked run id (from `in-lockstep ls --parked`).
+        required: true
+      verdict:
+        description: What you did -- approved, changes_requested, chosen:2, ...
+        required: false
+        default: approved
+
+permissions: {}
+
+jobs:
+  resume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # Every branch, so `lockstep-history` and the barrier's state refs are reachable.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      # RUN and VERDICT travel as environment variables and are never interpolated into this
+      # script, for the reason every trampoline here gives.
+      - run: uv run in-lockstep resume --run "$RUN" --as "$VERDICT" --by "$GITHUB_ACTOR"
+        env:
+          RUN: ${{ github.event.inputs.run }}
+          VERDICT: ${{ github.event.inputs.verdict }}
+          GH_TOKEN: ${{ github.token }}
+      - run: uv run in-lockstep history --push
+        if: always()
+        continue-on-error: true

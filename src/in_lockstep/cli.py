@@ -410,6 +410,7 @@ def _run_registered(
     asked: bool = False,
     cassette: str = "",
     blocked_ok: bool = False,
+    parked_ok: bool = False,
     parent_run_id: str = "",
     extra: dict[str, Any] | None = None,
 ) -> None:
@@ -480,7 +481,30 @@ def _run_registered(
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
     if getattr(result, "status", None) is Status.PARKED:
         _mark_parked(lockstep, result)
-    _exit_for(result, ctx, blocked_ok=blocked_ok)
+    _exit_for(result, ctx, blocked_ok=blocked_ok, parked_ok=parked_ok)
+
+
+def _ensure_review_bound(lockstep: Any) -> None:
+    """Bind the shipped `AiReview` under the module's own ceilings when the module bound no
+    `Review`, the way `review` does before it runs a lens. The model comes from the route and
+    the tape from the run context, through the seam every adapter goes through."""
+    from .adapters.ai.review import AiReview, Review
+    from .ai.invoker import InvokePolicy
+
+    if lockstep.container.has(Review):
+        return
+    lockstep.bind(
+        Review,
+        AiReview(
+            repo_root=lockstep.repo.root,
+            policy=InvokePolicy.under(
+                lockstep.policy.resolve(),
+                max_turns=_REVIEW_TURNS,
+                max_tokens=_REVIEW_MAX_TOKENS,
+                deadline_seconds=300,
+            ),
+        ),
+    )
 
 
 def _ls_parked(lockstep: Any) -> None:
@@ -731,13 +755,18 @@ def _describe(result: Any, ctx: Any) -> str:
     return status + (f"  ({reason})" if reason else "") + ("" if decided else "  (decided nothing)")
 
 
-def _exit_for(result: Any, ctx: Any, *, blocked_ok: bool = False) -> None:
+def _exit_for(result: Any, ctx: Any, *, blocked_ok: bool = False, parked_ok: bool = False) -> None:
     status, reason, _, _ = _workflow_verdict(result, ctx)
     if status == Status.PARKED.value:
         click.echo(
             f"parked    {reason or 'at a human boundary'}; resume with "
             f"`in-lockstep resume --run {ctx.run_id} --as approved --by <you>`"
         )
+        if parked_ok:
+            # A proposing job whose run is meant to end waiting on a person: the park is the
+            # outcome, said, and the job that opened the draft is not red for it.
+            click.echo("exit      0: parked, and --parked-ok says that is the outcome this job wants")
+            return
         raise SystemExit(EXIT_PARKED)
     if status == Status.BLOCKED.value:
         if blocked_ok:
@@ -1052,6 +1081,11 @@ def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
     is_flag=True,
     help="Exit 0 when the run is blocked: for a scheduled job whose refusal is the control working.",
 )
+@click.option(
+    "--parked-ok",
+    is_flag=True,
+    help="Exit 0 when the run parked: for a job whose run is meant to end waiting on a person.",
+)
 def run_cmd(
     target: str,
     paths: tuple[str, ...],
@@ -1065,6 +1099,7 @@ def run_cmd(
     record: bool | None,
     cassette: str,
     blocked_ok: bool,
+    parked_ok: bool,
 ) -> None:
     """Run a workflow, by the id it was registered under.
 
@@ -1114,6 +1149,10 @@ def run_cmd(
         )
 
     if target != "selfcheck":
+        # The shipped Review, when the module bound none: `review` binds it a few lines into its
+        # own body, and a workflow that does `ctx.do(Review(...))` -- `review/all-lenses` is the
+        # required check here -- reached an empty container through this command instead.
+        _ensure_review_bound(lockstep)
         _run_registered(
             lockstep,
             recorder,
@@ -1125,6 +1164,7 @@ def run_cmd(
             asked=record is True,
             cassette=cassette,
             blocked_ok=blocked_ok,
+            parked_ok=parked_ok,
         )
         return
     if no_middleware:

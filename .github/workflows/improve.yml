@@ -125,7 +125,9 @@ jobs:
           path: improve
       # No `hashFiles` guard: `improve_propose` reads the artifact and refuses by name when there
       # is no proposal in it, which is the decision, made once, in Python (#314).
-      - run: uv run in-lockstep run improve/propose --arg artifact=improve/changeset --blocked-ok
+      # `--parked-ok` beside it: a proposal that opened parks on its own review (§13), and a run
+      # that ended waiting on a person is this job's intended outcome, not its failure.
+      - run: uv run in-lockstep run improve/propose --arg artifact=improve/changeset --blocked-ok --parked-ok
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: |

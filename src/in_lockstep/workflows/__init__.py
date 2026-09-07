@@ -12,6 +12,6 @@ runs. There is deliberately no flag that writes a copy into an adopter's module:
 and every fix to it then lands twice and reaches nobody who scaffolded before it.
 """
 
-from . import fix, implement
+from . import fix, implement, improve, review
 
-__all__ = ["fix", "implement"]
+__all__ = ["fix", "implement", "improve", "review"]

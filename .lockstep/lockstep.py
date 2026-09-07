@@ -14,6 +14,7 @@ from whichever branch is under review.
 """
 
 import sys
+from pathlib import Path
 
 from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
@@ -24,11 +25,13 @@ from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.core.changes import DENY_ALWAYS, DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
 from in_lockstep.core.improve import Improvable, Improver
 from in_lockstep.core.policy import Policy
+from in_lockstep.core.ports import LedgerStore
 from in_lockstep.core.spend import Budget
 from in_lockstep.improver import CorpusImprover
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.identity import GitAuthor
+from in_lockstep.platform.ledger import GitLedger
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
@@ -330,6 +333,11 @@ lockstep.improve = (
 # passing its own or rebinding, without touching the process.
 lockstep.bind(TicketSource, GitHubIssues())
 lockstep.bind(Scm, GitHubScm())
+# The ledger this repository already publishes, declared SHARED: the same `lockstep-history`
+# branch and the same records, plus compare-and-set as a swap on the remote's own ref
+# (`GATE-OUT-4`), which is what lets `improve/propose` park on its own draft and a person's
+# review resume it from any machine (`GATE-OUT-6`). Nothing here moves to a second store.
+lockstep.bind(LedgerStore, GitLedger(root=Path(lockstep.repo.root), shared=True))
 
 # -- models -------------------------------------------------------------------------
 #
@@ -498,7 +506,11 @@ lockstep.bind(Improver, CorpusImprover("evidence/cases"))
 from in_lockstep.workflows import fix as fix_workflows  # noqa: E402
 from in_lockstep.workflows import implement as implement_workflows  # noqa: E402
 from in_lockstep.workflows import improve as improve_workflows  # noqa: E402
+from in_lockstep.workflows import review as review_workflows  # noqa: E402
 
 implement_workflows.register()
 fix_workflows.register()
 improve_workflows.register()
+# `review/all-lenses`: the required check, as one fan-out over every lens the bound adapter
+# declares (GATE-REVIEW-5, GATE-COST-6). `lockstep.yml` invokes it and nothing else.
+review_workflows.register()
