@@ -183,6 +183,13 @@ class ChangeSet:
     changes: tuple[FileChange, ...] = ()
     summary: str = ""
     ticket: str = ""
+    #: The rest of the cover note: what the model said a reviewer should know about the approach.
+    #: On the change set rather than only on the strategy's report, because the report stops at the
+    #: work job and the change set is what crosses the artifact into `propose` — where a pull
+    #: request body is written. The first fix this repository's own loop opened (#343) arrived
+    #: titled `Fix #319` over a body that said nothing, while the model's two-sentence summary and
+    #: four notes sat in a report nothing downstream read.
+    notes: tuple[str, ...] = ()
 
     def paths(self) -> tuple[str, ...]:
         return tuple(c.path for c in self.changes)

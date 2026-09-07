@@ -135,11 +135,17 @@ async def fix_propose(
     # bound, or a runner that never started — this opens a draft: the reproducer passing is a fact
     # about the bug, and nobody has checked the rest of the repository.
     ready = verdict is not None and verdict.green
+    # Fetched before the change is opened, because the title comes from it now.
+    issue = await tickets.get(ticket)
     change = await open_reviewable(
         scm,
         changeset,
         ready=ready,
-        title=changeset.summary or f"Fix {ticket}",
+        # The ticket's title, the way `implement/propose` does it and for the reason its comment
+        # gives: a title wants a person's one line about the bug, and the model's summary is prose
+        # of any length. `Fix #319` is what this read when the summary was empty (#343) — the
+        # fallback of a fallback, and the one a reader of the history actually saw.
+        title=issue.title or changeset.summary or f"Fix {ticket}",
         body=fix_body(changeset, verdict),
         ticket=ticket,
         workflow="fix",
@@ -150,7 +156,7 @@ async def fix_propose(
     # every successful fix opened its pull request and then died with a NameError before saying so
     # on the ticket, recording the run as errored (#196).
     await tickets.comment(
-        await tickets.get(ticket),
+        issue,
         f"`/fix` opened {change.url or change.branch} as "
         f"{'ready for review' if ready else 'a draft — the suite has not confirmed it'}. "
         "Nobody has read it yet.",

@@ -218,6 +218,29 @@ def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path)
     # And the combined view is what apply would write.
     assert set(report.changeset.paths()) == {"test_calc.py", "calc.py"}
     assert not (repo / "test_calc.py").exists(), "nothing touched the real tree"
+    # The cover note travels on the combined view: `write_changeset` serialises that and nothing
+    # else, and the first fix this loop opened on its own repository was titled by its ticket
+    # number over an empty body because the merge of two halves with no summary had none (#343).
+    assert report.changeset.summary == "fixed the sign"
+    assert report.changeset.ticket == "#9"
+
+
+def test_a_fix_report_proposes_under_its_own_cover_note_whichever_half_holds_it() -> None:
+    """A report built by hand with a bare `fix` set and a `summary` of its own — the shape every
+    caller before #343 produced — still hands its summary and notes to the artifact."""
+    from in_lockstep.adapters.ai.fix import FixReport
+    from in_lockstep.core.types import ChangeSet, FileChange
+
+    report = FixReport(
+        reproducer=ChangeSet(changes=(FileChange(path="test_x.py", contents="assert 1\n"),)),
+        fix=ChangeSet(changes=(FileChange(path="x.py", contents="x = 1\n"),)),
+        summary="what changed, and why",
+        notes=("a thing the reviewer should know",),
+    )
+    merged = report.changeset
+    assert set(merged.paths()) == {"test_x.py", "x.py"}
+    assert merged.summary == "what changed, and why"
+    assert merged.notes == ("a thing the reviewer should know",)
 
 
 def test_the_fix_step_is_shown_the_reproducer_it_must_pass(repo: Path) -> None:

@@ -281,6 +281,32 @@ def test_fix_body_keeps_the_reproducer_and_the_suite_apart() -> None:
     assert marker("implement") not in body
 
 
+def test_a_body_opens_with_the_models_summary_and_lists_its_notes() -> None:
+    """The first fix this loop opened on its own repository (#343) had a two-sentence summary and
+    four notes in its cover note and a body that said nothing about the change, because the body
+    had no slot for either. Both verbs' bodies now open with the summary and list the notes, ahead
+    of the framework's own provenance lines, and a change with neither reads exactly as before."""
+    noted = ChangeSet(
+        summary="Refuse a colliding run id\ninstead of  replacing the record.",
+        notes=("the check uses plumbing the file already uses", "  ", "the row names both tests"),
+    )
+    for render in (fix_body, implement_body):
+        body = render(noted, None)
+        first, *_rest = body.split("\n")
+        assert first == "Refuse a colliding run id instead of replacing the record.", first
+        listed = "- the check uses plumbing the file already uses\n- the row names both tests"
+        assert f"**Notes from the run:**\n{listed}" in body
+        assert body.index("Notes from the run") < body.index("untrusted input"), "the note comes first"
+        bare = render(ChangeSet(), None)
+        assert "Notes from the run" not in bare and not bare.startswith("\n")
+        assert bare.split("\n")[0] in (
+            "A reproducer for this bug was written, confirmed red, and this change makes it pass.",
+            "The ticket body is untrusted input to a model that held write tools, so review this as you "
+            "would a change from a stranger who had read your repository — the controls bound where it "
+            "could write, not what it thought.",
+        ), bare.split("\n")[0]
+
+
 def test_fix_body_says_unverified_rather_than_implying_a_green() -> None:
     body = fix_body(_cs(), None)
     assert "not run" in body and "unverified" in body
