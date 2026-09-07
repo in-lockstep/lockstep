@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import Resolution, Test, TestReport
+from ..core.types import Resolution, Test, TestCase, TestReport
 from ..core.verbs import Capability, Verb
 from . import tooling
 from .command import _refused
@@ -146,10 +146,22 @@ class PytestTest:
         status = Status.SUCCEEDED if satisfied else Status.FAILED
         findings: tuple[Finding, ...] = ()
         if not satisfied:
+            # The failing tests by name, because the number alone is not something anybody can
+            # act on: this repository's first `/fix` on itself reported "9 failed of 2495" into
+            # the ledger, the ticket and the log, and which nine was recoverable from none of
+            # them (#312). The model's own `run_tests` result already listed them; the verdict
+            # the record carries is for the next engineer (O12), who was told less.
+            failed_ids = [c.id for c in report.cases if c.outcome in ("failed", "error")]
+            named = ", ".join(failed_ids[:10]) + (
+                f" (+{len(failed_ids) - 10} more)" if len(failed_ids) > 10 else ""
+            )
             findings = (
                 Finding(
                     id="test.expectation_unmet",
-                    message=(f"expected the suite to {inp.expect}, {report.failed} failed of {report.total}"),
+                    message=(
+                        f"expected the suite to {inp.expect}, {report.failed} failed of {report.total}"
+                        + (f": {named}" if named else "")
+                    ),
                     severity=Severity.ERROR,
                     blocking=True,
                 ),
@@ -185,6 +197,13 @@ def _parse(text: str) -> tuple[TestReport, bool]:
     passed = failed = skipped = 0
     duration = 0.0
     summarized = False
+    # The short test summary pytest prints by default (`-r fE`): one `FAILED <id> - <why>` or
+    # `ERROR <id>` line per test that did not pass. Names, so the verdict can say WHICH nine.
+    cases = tuple(
+        TestCase(id=line.split(" - ", 1)[0].split(maxsplit=1)[1].strip(), outcome=line.split()[0].lower())
+        for line in text.splitlines()
+        if line.startswith(("FAILED ", "ERROR ")) and len(line.split()) > 1
+    )
     for line in reversed(text.splitlines()):
         stripped = line.strip("= ")
         if any(word in stripped for word in (" passed", " failed", " error", " skipped", " deselected")):
@@ -211,5 +230,6 @@ def _parse(text: str) -> tuple[TestReport, bool]:
         failed=failed,
         skipped=skipped,
         duration_seconds=duration,
+        cases=cases,
     )
     return report, summarized

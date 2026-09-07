@@ -42,6 +42,7 @@ from typing import Any, Protocol, runtime_checkable
 from ..core.changes import ChangeGuard
 from ..core.types import ChangeAuthor, ChangeSet, FileChange
 from ..core.verbs import Capability
+from ..privileged.redact import MASK, Redact
 from .tools import BUILTIN_SERVER, Tool, ToolSet
 
 # A read that returns a whole vendored tree is a prompt nobody budgeted for.
@@ -132,6 +133,9 @@ class Workspace:
     guard: ChangeGuard = field(default_factory=ChangeGuard)
     workflow_id: str = ""
     changes: list[FileChange] = field(default_factory=list)
+    #: The same redaction the tool results went through on their way to the model, so a write
+    #: can put back what a read took out (see `record`).
+    redact: Redact = field(default_factory=Redact)
 
     def changeset(self, *, summary: str = "", ticket: str = "") -> ChangeSet:
         return ChangeSet(changes=tuple(self.changes), summary=summary, ticket=ticket)
@@ -158,6 +162,21 @@ class Workspace:
 
     def record(self, path: str, contents: str | None) -> str:
         """Stage a write, or say why not. The return value is what the model sees."""
+        restored = 0
+        if contents is not None and MASK in contents:
+            # The model reads through a redacting sink, so a key-shaped string in a file reached
+            # it as `***` -- and a model that edits one line and writes the file back writes the
+            # mask over the value, which is how this repository's first `/fix` on itself turned a
+            # test's fake credential into `***` and failed the suite it had otherwise fixed (run
+            # 34129809277, #312). The mask is what the model was shown in place of a value it was
+            # never allowed to see, so a write is the one place the value can go back: every mask
+            # is matched to the value the file holds at that position, and the file's own
+            # redaction is what says where those are. A count that does not match is refused,
+            # because then a mask is one the model typed, and nothing here guesses which.
+            restore = _restore_masked(self.resolve(path), contents, self.redact)
+            if isinstance(restore, str):
+                return restore
+            contents, restored = restore
         change = FileChange(path=path, contents=contents, author=ChangeAuthor.AGENT)
         refusal = self.guard.check_change(change, workflow_id=self.workflow_id)
         if refusal is not None:
@@ -171,7 +190,56 @@ class Workspace:
         self.changes = [c for c in self.changes if c.path != path]
         self.changes.append(change)
         verb = "staged deletion of" if contents is None else "staged write to"
-        return f"ok: {verb} {path} ({len(self.changes)} change(s) pending)"
+        note = (
+            f"; {restored} value(s) shown to you as {MASK} were put back from the file, unchanged"
+            if restored
+            else ""
+        )
+        return f"ok: {verb} {path} ({len(self.changes)} change(s) pending{note})"
+
+
+def _restore_masked(target: Path, contents: str, redact: Redact) -> tuple[str, int] | str:
+    """`contents` with each `***` replaced by the value the file holds there, and how many; or
+    the refusal to hand the model.
+
+    The file's own redaction says where its masked values are: splitting the redacted file on the
+    mask gives the text between them, and walking the real file along those pieces recovers each
+    value. The model's contents split on the mask the same way; the same number of pieces means
+    the masks are the ones it was shown, in order, and the values go back between them.
+    """
+    try:
+        original = target.read_text() if target.is_file() else ""
+    except (OSError, UnicodeDecodeError):
+        original = ""
+    masked = redact.text(original) if original else ""
+    pieces = masked.split(MASK)
+    if len(pieces) == 1:
+        return (
+            f"refused: the contents carry {MASK}, which is the mask shown in place of a value you "
+            f"may not see, and {target.name} holds no such value; writing the mask would put it in "
+            f"the file as text. Write what you mean there, or leave the file alone."
+        )
+    values: list[str] = []
+    position = 0
+    for index, piece in enumerate(pieces[:-1]):
+        if not original.startswith(piece, position):
+            return f"refused: {target.name} changed while you were reading it; read it again."
+        position += len(piece)
+        following = pieces[index + 1]
+        end = original.find(following, position) if following else len(original)
+        if end < 0:
+            return f"refused: {target.name} changed while you were reading it; read it again."
+        values.append(original[position:end])
+        position = end
+    parts = contents.split(MASK)
+    if len(parts) != len(values) + 1:
+        return (
+            f"refused: {target.name} holds {len(values)} value(s) shown to you as {MASK} and your "
+            f"contents carry {len(parts) - 1} mask(s). Keep every masked value exactly where it "
+            f"was, as {MASK}, and it is put back for you; do not write the mask anywhere else."
+        )
+    rebuilt = parts[0] + "".join(value + part for value, part in zip(values, parts[1:], strict=True))
+    return rebuilt, len(values)
 
 
 def read_only(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:

@@ -148,6 +148,42 @@ def test_a_failed_run_says_so_on_the_ticket(
 
 
 @pytest.mark.parametrize("verb", ["implement", "fix"])
+def test_a_run_that_staged_and_did_not_propose_is_not_reported_as_having_staged_nothing(
+    verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run 34129809277 listed two `fix.staged` lines under a sentence saying nothing was staged
+    (#312). Counted from every finding, not the five shown."""
+    ledger = _ledger_with(
+        tmp_path,
+        {
+            "run_id": f"{verb}-from-ticket-2",
+            "kind": "workflow",
+            "workflow": f"{verb}/from-ticket",
+            "args": {"ticket": "#319"},
+            "status": "blocked",
+            "reason": "budget:wall:2196.9>1800.0",
+            "cost_usd": 7.8962,
+            "ts": "2026-09-07T13:52:37+00:00",
+            "findings": {
+                "count": 3,
+                "items": [
+                    {"id": f"{verb}.not_fixed", "message": "the change did not make the reproducer pass"},
+                    {"id": f"{verb}.staged", "message": "wrote a.py", "path": "a.py"},
+                    {"id": f"{verb}.staged", "message": "wrote b.py", "path": "b.py"},
+                ],
+            },
+        },
+    )
+    monkeypatch.setattr("in_lockstep.platform.ledger.store_for", lambda *a, **k: ledger)
+    tracker = _Tracker()
+    _run(get(f"{verb}/report"), ticket="#319", tickets=tracker, scm=_Host())
+    (said,) = tracker.said
+    assert "2 change(s) were staged and not proposed" in said, said
+    assert "Nothing was staged" not in said
+    assert "no pull request was opened" in said
+
+
+@pytest.mark.parametrize("verb", ["implement", "fix"])
 def test_it_still_answers_when_the_run_recorded_nothing(
     verb: str, workflows: Lockstep, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

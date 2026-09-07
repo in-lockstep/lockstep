@@ -1486,6 +1486,57 @@ def test_gate_guard_4_a_symlink_out_of_the_tree_is_refused_by_every_tool_that_re
     assert "src/app.py" in runner._list({"glob": "*"}), "the listing stopped working"
 
 
+# -- GATE-REDACT-3: a write does not carry a mask a read put there -------------------------------
+
+
+def _file_with_a_key(root: Path) -> tuple[Any, str]:
+    from in_lockstep.ai.builtins import ToolRunnerImpl, Workspace
+    from in_lockstep.core.changes import ChangeGuard
+
+    root.mkdir(exist_ok=True)
+    original = (
+        "def test_secrets_do_not_leak():\n"
+        '    registry.add("sk-abcdefghijklmnopqrstuvwxyz")\n'
+        '    assert "sk-abcdefghijklmnopqrstuvwxyz" not in shown\n'
+    )
+    (root / "test_x.py").write_text(original)
+    return ToolRunnerImpl(workspace=Workspace(root=root, guard=ChangeGuard(), workflow_id="fix")), original
+
+
+def test_gate_redact_3_a_masked_value_the_model_writes_back_is_restored_from_the_file(tmp_path: Path) -> None:
+    """GATE-REDACT-3. The model read the file through the redacting sink, so the fake key reached
+    it as `***`; it edited a different line and wrote the whole file back, mask included. This
+    repository's first `/fix` on itself did exactly that (run 34129809277, #312) and failed the
+    suite it had otherwise fixed. The values go back into the staged change, and the tool result
+    says so."""
+    runner, original = _file_with_a_key(tmp_path / "repo")
+    shown = runner._read({"path": "test_x.py"})
+    assert "sk-abcdefghijklmnopqrstuvwxyz" not in runner.workspace.redact.text(shown)
+    edited = runner.workspace.redact.text(original).replace("not in shown", "not in shown  # edited")
+    assert edited.count("***") == 2
+    answer = runner._write({"path": "test_x.py", "contents": edited})
+    assert answer.startswith("ok:") and "2 value(s)" in answer, answer
+    (change,) = runner.workspace.changes
+    assert change.contents == original.replace("not in shown", "not in shown  # edited")
+    assert "***" not in str(change.contents)
+
+
+def test_gate_redact_3_a_mask_the_model_typed_is_refused_by_count(tmp_path: Path) -> None:
+    runner, original = _file_with_a_key(tmp_path / "repo")
+    masked = runner.workspace.redact.text(original)
+    answer = runner._write({"path": "test_x.py", "contents": masked + "print('***')\n"})
+    assert answer.startswith("refused:") and "2 value(s)" in answer and "3 mask(s)" in answer, answer
+    assert runner.workspace.changes == []
+
+
+def test_gate_redact_3_a_mask_written_into_a_file_that_holds_no_value_is_refused(tmp_path: Path) -> None:
+    runner, _ = _file_with_a_key(tmp_path / "repo")
+    (tmp_path / "repo" / "plain.py").write_text("x = 1\n")
+    answer = runner._write({"path": "plain.py", "contents": "x = '***'\n"})
+    assert answer.startswith("refused:") and "holds no such value" in answer
+    assert runner._write({"path": "new.py", "contents": "y = '***'\n"}).startswith("refused:")
+
+
 @pytest.mark.parametrize("path", ["src/app.py", ".github/ci.yml", ".lockstep/lockstep.py"])
 def test_a_read_refusal_that_refused_everything_would_be_the_same_defect(tmp_path: Path, path: str) -> None:
     """The other direction, and the reason the read list is SHORTER than the write tiers.

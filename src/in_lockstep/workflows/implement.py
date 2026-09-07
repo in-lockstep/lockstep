@@ -229,10 +229,22 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
         }
         with_reason, without = told.get(str(record.get("status") or ""), ("failed with", "failed"))
         what = f"{with_reason} `{reason}`" if reason else without
-        body = (
-            f"`/implement` did not produce a change — the run {what}.{spent} "
-            f"Nothing was staged and no pull request was opened.{detail}"
+        # What was staged is counted from every finding, not the five shown: run 34129809277
+        # listed two `fix.staged` lines under a sentence saying nothing was staged (#312). A
+        # change that was staged and not proposed is in the run's artifact, and saying so is
+        # the difference between "it did nothing" and "it did something a person can read".
+        staged = sum(
+            1
+            for f in (record.get("findings") or {}).get("items", [])
+            if isinstance(f, dict) and str(f.get("id", "")).endswith(".staged")
         )
+        outcome = (
+            f"{staged} change(s) were staged and not proposed -- the run's artifact holds them -- "
+            f"and no pull request was opened."
+            if staged
+            else "Nothing was staged and no pull request was opened."
+        )
+        body = f"`/implement` did not open a pull request — the run {what}.{spent} {outcome}{detail}"
 
     await tickets.comment(source, body)
     print(f"commented {key}")
