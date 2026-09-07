@@ -1079,7 +1079,7 @@ def test_a_fan_out_runs_each_branch_under_its_own_scope_and_records_one_step_per
     assert join.status is Status.SUCCEEDED
     assert len(asyncio.all_tasks(asyncio.new_event_loop())) == 0
 
-    with pytest.raises(ValueError, match="GATE-OUT-6"):
+    with pytest.raises(ValueError, match="machine branch"):
         asyncio.run(ctx.fan_out(resume="release/after", a=ctx.call(Thing())))
     assert asyncio.run(ctx.fan_out()).names() == ()
 
@@ -1224,3 +1224,211 @@ def test_gate_async_3b_killswitch_reaches_in_flight_branches_within_2s(
     assert {o.reason for o in join.outcomes()} == {"killswitch"}
     assert join.as_outcome().status is Status.BLOCKED
     assert [s.outcome.reason for s in ctx.steps] == ["killswitch"] * 3
+
+
+# -- Phase 5: park and human branches ----------------------------------------------------------
+
+
+class _SharedStub:
+    """A SHARED store in memory: enough compare-and-set for a park to write its record."""
+
+    scope = "shared"
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.writes = 0
+
+    async def append(self, run_id: str, record: dict[str, object]) -> None:
+        pass
+
+    async def read(self, run_id: str) -> dict[str, object] | None:
+        return None
+
+    async def compare_and_set(self, key: str, expected: str | None, new: str) -> bool:
+        self.writes += 1
+        if self.values.get(key) != expected:
+            return False
+        self.values[key] = new
+        return True
+
+    async def state(self, key: str) -> str | None:
+        return self.values.get(key)
+
+
+def test_gate_out_5_a_human_branch_on_a_local_store_is_refused_before_any_branch_starts() -> None:
+    """GATE-OUT-5. `fan_out` with a `ctx.human()` branch on a LOCAL-scope store raises at the call
+    site, before any machine branch starts: the adapter's call count stays zero, because finding
+    out after three branches have spent that nobody could complete the barrier is too late."""
+    import asyncio
+
+    from in_lockstep.core.context import HumanBoundary, LocalStoreCannotPark
+
+    ctx, container = ctx_with()
+    adapter = _Slow()
+    container.bind(Thing, adapter)
+    for store in (None, _CountingLocal()):
+        ctx.ledger = store
+        with pytest.raises(LocalStoreCannotPark, match="SHARED"):
+            asyncio.run(
+                ctx.fan_out(
+                    resume="after",
+                    a=ctx.call(Thing("a")),
+                    b=ctx.call(Thing("b")),
+                    tim=ctx.human(HumanBoundary.pr_review(41, reviewer="tim")),
+                )
+            )
+    assert adapter.scopes == [], "a branch started before the refusal"
+    assert ctx.steps == []
+
+
+class _CountingLocal(_SharedStub):
+    scope = "local"
+
+
+def test_gate_out_6_park_on_a_local_store_is_blocked_naming_the_store() -> None:
+    """GATE-OUT-6, first clause. A park nobody on another machine could resume is a run that
+    would wait forever, so it is `BLOCKED`/`park.local_store` and the finding names the store and
+    the construction that would fix it."""
+    import asyncio
+
+    from in_lockstep.core.context import HumanBoundary
+
+    ctx, _ = ctx_with()
+    for store, name in ((None, "no LedgerStore"), (_CountingLocal(), "_CountingLocal")):
+        ctx.ledger = store
+        outcome = asyncio.run(ctx.park(HumanBoundary.pr_review(41), resume="after"))
+        assert outcome.status is Status.BLOCKED and outcome.reason == "park.local_store"
+        (finding,) = outcome.findings
+        assert name in finding.message and "GitLedger(shared=True)" in finding.message
+    assert ctx.steps == [], "a refused park is not a step of the run"
+
+
+def test_a_park_on_a_shared_store_writes_the_barrier_once_and_ends_the_run_parked() -> None:
+    """The record carries the boundary, the continuation id, the head and the payload; the
+    outcome is `PARKED` with the boundary kind as its reason, a step of the run so the record
+    derives `parked`; and a second park of the same run is refused, because a run parks once."""
+    import asyncio
+    import json
+
+    from in_lockstep.core.context import HumanBoundary, Parked
+
+    ctx, _ = ctx_with()
+    store = _SharedStub()
+    ctx.ledger = store
+    outcome = asyncio.run(
+        ctx.park(
+            HumanBoundary.ticket_transition("PROJ-7", to="Approved"),
+            resume="release/after",
+            payload={"pr": 41},
+        )
+    )
+    assert outcome.status is Status.PARKED and outcome.reason == "human.ticket_transition"
+    assert isinstance(outcome.value, Parked) and outcome.value.key == "barrier/t"
+    record = json.loads(store.values["barrier/t"])
+    assert record["resume"] == "release/after" and record["payload"] == {"pr": 41}
+    assert record["branches"][""]["boundary"] == {
+        "kind": "ticket_transition",
+        "target": "PROJ-7",
+        "detail": ["Approved"],
+        "reviewer": "",
+    }
+    assert record["complete"] is False
+    assert ctx.verdict()[0] is Status.PARKED and [s.step for s in ctx.steps] == ["park"]
+    again = asyncio.run(ctx.park(HumanBoundary.pr_review(1), resume="release/after"))
+    assert again.status is Status.BLOCKED and again.reason == "park.already_parked"
+
+
+def test_a_fan_out_with_a_human_branch_runs_the_machines_then_parks_the_join() -> None:
+    """Machine branches run to terminal first and their verdicts are in the record; the human
+    branch is `PARKED`, the join reads `PARKED` whatever the machines found, and `resume=` is
+    required because the run ends here."""
+    import asyncio
+    import json
+
+    from in_lockstep.core.context import HumanBoundary
+
+    ctx, container = ctx_with()
+    container.bind(Thing, _Slow(0.01))
+    store = _SharedStub()
+    ctx.ledger = store
+    with pytest.raises(ValueError, match="resume="):
+        asyncio.run(ctx.fan_out(a=ctx.call(Thing()), tim=ctx.human(HumanBoundary.pr_review(41))))
+    join = asyncio.run(
+        ctx.fan_out(
+            resume="release/after",
+            security=ctx.call(Thing("s")),
+            red=ctx.call(Thing("r"), via=_Slow(status=Status.FAILED)),
+            tim=ctx.human(HumanBoundary.pr_review(41, reviewer="tim"), expires_seconds=3600),
+        )
+    )
+    assert join["security"].status is Status.SUCCEEDED and join["red"].status is Status.FAILED
+    assert join["tim"].status is Status.PARKED and join["tim"].reason == "human.pr_review"
+    assert join.status is Status.PARKED, "a branch waiting on a person outranks a failed one"
+    assert join.as_outcome().status is Status.PARKED
+    record = json.loads(store.values["barrier/t"])
+    assert record["branches"]["security"] == {
+        "kind": "machine",
+        "state": "terminal",
+        "status": "succeeded",
+        "reason": None,
+        "decided": True,
+    }
+    assert record["branches"]["red"]["status"] == "failed"
+    assert (
+        record["branches"]["tim"]["state"] == "parked"
+        and record["branches"]["tim"]["expires_seconds"] == 3600
+    )
+    assert [s.step for s in ctx.steps] == ["security", "red", "tim"]
+    assert ctx.verdict()[0] is Status.PARKED
+
+
+def test_a_barrier_tick_is_a_pure_transition_deduped_on_the_event_and_completing_once() -> None:
+    """`apply_event` decides what a tick means without a store: a redelivered event is a
+    duplicate that applies nothing; the event that makes every branch terminal completes the
+    barrier once, and applying another event to a complete barrier does not complete it again."""
+    from in_lockstep.core.human import (
+        HumanBoundary,
+        HumanBranch,
+        Resumption,
+        apply_event,
+        barrier_record,
+        join_view,
+    )
+
+    record = barrier_record(
+        "r1",
+        resume="after",
+        head="abc",
+        machine={"security": {"status": "succeeded", "reason": None, "decided": True}},
+        human={
+            "tim": HumanBranch(HumanBoundary.pr_review(41)),
+            "ann": HumanBranch(HumanBoundary.pr_review(41)),
+        },
+    )
+    approve = Resumption(parent_run_id="r1", branch="tim", event_id="e1", actor="tim", verdict="approved")
+    one, dup, done = apply_event(record, branch="tim", event=approve)
+    assert not dup and not done and one["branches"]["tim"]["status"] == "succeeded"
+    assert one["branches"]["tim"]["state"] == "resumed" and one["complete"] is False
+    _same, dup, done = apply_event(one, branch="tim", event=approve)
+    assert dup and not done, "a redelivered event is a duplicate"
+    reject = Resumption(
+        parent_run_id="r1", branch="ann", event_id="e2", actor="ann", verdict="changes_requested"
+    )
+    two, dup, done = apply_event(one, branch="ann", event=reject)
+    assert not dup and done, "the write that makes every branch terminal completes the barrier"
+    assert two["complete"] is True and two["branches"]["ann"]["status"] == "failed"
+    assert join_view(two)["ann"] == {
+        "status": "failed",
+        "reason": "human.changes_requested",
+        "decided": True,
+        "kind": "human",
+        "boundary": HumanBoundary.pr_review(41).as_record(),
+    }
+    with pytest.raises(ValueError, match="machine branch"):
+        apply_event(two, branch="security", event=approve)
+    with pytest.raises(KeyError):
+        apply_event(two, branch="nobody", event=approve)
+    assert HumanBoundary.from_record(
+        HumanBoundary.choice(["a", "b"], on="#3").as_record()
+    ) == HumanBoundary.choice(["a", "b"], on="#3")
+    assert "review of #41 by tim" in HumanBoundary.pr_review(41, reviewer="tim").describe()

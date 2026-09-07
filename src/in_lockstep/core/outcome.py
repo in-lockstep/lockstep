@@ -35,10 +35,11 @@ class Status(Enum):
     adapter with nothing to do says so as a `BLOCKED` refusal with a reason, or a `SUCCEEDED`
     that decided nothing, both of which the ledger already tells apart.
 
-    `PARKED` stays with no producer, and the difference is that its absence is a recorded
-    deferral: `design/in-lockstep-design.md` §17.11 puts `ctx.park` past the 1.0 cut line, and
-    `GATE-OUT-6` carries that. Adding to a closed enum later is breaking; keeping a member a
-    decision reserved is not.
+    `PARKED` was reserved at 1.0 with no producer, by a recorded deferral rather than a comment
+    (`design/in-lockstep-design.md` §17.11), because adding to a closed enum later is breaking
+    and keeping a member a decision reserved is not. It has producers now: `ctx.park` and a
+    `fan_out` with a human branch (`GATE-OUT-6`). Not terminal, on purpose: a barrier answers "is
+    everyone done", and a branch waiting on a person is not.
     """
 
     SUCCEEDED = "succeeded"
@@ -190,12 +191,13 @@ class Cost:
         )
 
 
-#: How a set of outcomes is read as one: any blocked makes the whole blocked, else any errored,
+#: How a set of outcomes is read as one: any parked makes the whole parked -- a run waiting on a
+#: person has not ended, whatever its other branches did -- else any blocked, else any errored,
 #: else any failed, else succeeded. `RunContext.verdict()` reads a run's steps this way and
 #: `JoinResult.status` reads a fan-out's branches the same way, and it is defined once, here,
 #: because two precedences that could drift apart is how a run and its branches would come to
 #: disagree about what happened.
-VERDICT_PRECEDENCE: tuple[Status, ...] = (Status.BLOCKED, Status.ERRORED, Status.FAILED)
+VERDICT_PRECEDENCE: tuple[Status, ...] = (Status.PARKED, Status.BLOCKED, Status.ERRORED, Status.FAILED)
 
 
 @dataclass(frozen=True)

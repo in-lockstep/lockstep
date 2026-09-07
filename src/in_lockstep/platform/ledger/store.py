@@ -121,7 +121,7 @@ class InRepoLedger:
 
 #: Every status a record can honestly carry. Duplicated in `metrics.py`, which is a leaf and may
 #: import nothing of ours; the two must agree.
-VERDICTS = ("succeeded", "failed", "errored", "blocked")
+VERDICTS = ("succeeded", "failed", "errored", "blocked", "parked")
 
 
 @dataclass

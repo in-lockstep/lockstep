@@ -179,6 +179,42 @@ class GitHubScm:
                 return
         self._api_write(f"repos/{{owner}}/{{repo}}/issues/{target}/comments", "-f", f"body={marked}")
 
+    async def mark_parked(self, number: int, run_id: str, resume: str, waiting_for: str) -> None:
+        """The park, where the person will act (§13.1): the `lockstep:parked` label -- what a
+        resume trampoline filters on -- and the park as fenced JSON in a sticky comment. A comment
+        rather than the body: the pull request may be a person's, and its body is their text."""
+        import json
+
+        from ...core.human import PARKED_LABEL
+        from ..report import marker
+
+        # The label has to exist before it can be applied; `--force` makes creating it idempotent.
+        self._gh(
+            "label", "create", PARKED_LABEL, "--force", "--description", "an in-lockstep run is waiting here"
+        )
+        code, _out, err = self._gh("pr", "edit", str(number), "--add-label", PARKED_LABEL)
+        if code != 0:
+            raise RuntimeError(f"could not label #{number}: {err.strip()}")
+        block = json.dumps(
+            {"In-Lockstep-Run": run_id, "Resume": resume, "Waiting-For": waiting_for}, indent=2
+        )
+        body = (
+            f"## in-lockstep is waiting here\n\n{waiting_for}. When that has happened, the run continues as "
+            f"`{resume}`; locally, `in-lockstep resume --run {run_id} --as approved --by <you>`.\n\n"
+            f"```json\n{block}\n```"
+        )
+        await self.upsert_comment(number, body, marker("parked"))
+
+    async def clear_parked(self, number: int, run_id: str) -> None:
+        """The person acted: the label comes off and the sticky comment says so, in place."""
+        from ...core.human import PARKED_LABEL
+        from ..report import marker
+
+        self._gh("pr", "edit", str(number), "--remove-label", PARKED_LABEL)
+        await self.upsert_comment(
+            number, f"## in-lockstep resumed\n\nRun `{run_id}` continued.", marker("parked")
+        )
+
     async def changes_for(self, ticket: str) -> tuple[ChangeRequest, ...]:
         """The OPEN pull requests this framework opened for `ticket`, newest first.
 
