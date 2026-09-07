@@ -62,7 +62,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
     _actions_may_open_changes(report, path)
     _history_integrity(report, path)
     _egress(report)
-    _prompt_bodies(report)
+    _prompt_bodies(report, lockstep)
     _packs(report, path)
     _cassettes(report, path)
     if lockstep is not None:
@@ -536,11 +536,15 @@ def _egress(report: Report) -> None:
         )
 
 
-def _prompt_bodies(
-    report: Report,
-) -> None:
-    """A prompt body is a file. A missing one should fail here, not on a first run."""
-    from .ai.prompt import BodyNotFound
+def _prompt_bodies(report: Report, lockstep: Any = None) -> None:
+    """A prompt body is a file. A missing one should fail here, not on a first run.
+
+    Two walks. The shipped maps, so a packaging mistake is caught before anybody routes to it;
+    and every bound adapter's `compositions()`, the seam `Inspectable` exists for, so the body a
+    repository pointed at is checked too -- which is the promise this function's docstring made
+    for as long as it walked only the shipped maps, and the first thing an adopter tries (#311).
+    """
+    from .ai.prompt import BodyNotFound, Inspectable
     from .prompts.implement import PROMPTS
     from .prompts.review import LENSES
     from .prompts.triage import TRIAGE_PROMPTS
@@ -555,6 +559,22 @@ def _prompt_bodies(
             lens().body_text()
         except BodyNotFound as e:
             report.add("DOC140", Severity.ERROR, f"prompt body missing for {aspect}: {e}")
+    if lockstep is None:
+        return
+    for binding in lockstep.container.resolved():
+        if isinstance(binding.impl, type) or not isinstance(binding.impl, Inspectable):
+            continue
+        for label, composition in sorted(binding.impl.compositions().items()):
+            try:
+                composition.prompt.body_text()
+            except BodyNotFound as e:
+                report.add(
+                    "DOC140",
+                    Severity.ERROR,
+                    f"prompt body missing for {label} (bound by {composition.source}): {e}",
+                    "A house body lives in `prompts/` at the repository root, as `Body.from_path`; "
+                    "`in-lockstep show-prompt <name>` renders it once it resolves.",
+                )
 
 
 def _tooling(report: Report, lockstep: Any, root: Path) -> None:

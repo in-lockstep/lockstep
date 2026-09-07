@@ -1264,6 +1264,80 @@ def test_show_prompt_renders_what_is_bound_not_what_ships(repo: Path) -> None:
     assert "Never touch migrations." in result.output, "and so is the house guardrail"
 
 
+MISSING_BODY_LENS = """
+from in_lockstep import Lockstep
+from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.ai.prompt import Body
+from in_lockstep.prompts.review import LENSES, ReviewPrompt
+
+class OurReview(ReviewPrompt):
+    aspect = "ours"
+    version = "team-1"
+    body = Body.from_path("prompts/ours.md")
+
+lockstep = Lockstep.detect()
+lockstep.bind(Review, AiReview(lenses={**LENSES, "ours": OurReview}))
+"""
+
+
+def test_gate_body_1_doctor_names_a_bound_lens_whose_body_does_not_resolve(repo: Path) -> None:
+    """The promise `prompt.py` made -- caught by doctor, not at first run -- held only for the
+    shipped maps; a bound lens pointing at a missing file was invisible to it (#311)."""
+    from in_lockstep import doctor
+
+    _lifecycle(repo).write_text(MISSING_BODY_LENS)
+    report = doctor.run(repo)
+    (found,) = [c for c in report.checks if c.code == "DOC140"]
+    assert "review/ours" in found.message and "prompts/ours.md" in found.message
+    assert "AiReview" in found.message
+    (repo / "prompts").mkdir()
+    (repo / "prompts" / "ours.md").write_text("Review this diff for what we care about.\n")
+    assert not any(c.code == "DOC140" for c in doctor.run(repo).checks), "resolves once the file exists"
+
+
+def test_gate_body_1_show_prompt_refuses_an_unresolvable_body_in_one_line(repo: Path) -> None:
+    _lifecycle(repo).write_text(MISSING_BODY_LENS)
+    result = CliRunner().invoke(main, ["show-prompt", "ours"])
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "review/ours" in result.output and "prompts/ours.md" in result.output
+    assert "prompts/" in result.output, "the fix is named"
+
+
+def test_gate_body_1_a_from_file_body_in_the_lifecycle_module_is_refused_naming_from_path(
+    repo: Path,
+) -> None:
+    """The documented spelling until #311: it resolved inside `in_lockstep` and failed with a
+    traceback naming the wrong package. Now it is refused with the two constructors named."""
+    _lifecycle(repo).write_text(
+        MISSING_BODY_LENS.replace('Body.from_path("prompts/ours.md")', 'Body.from_file("prompts/ours.md")')
+    )
+    result = CliRunner().invoke(main, ["show-prompt", "ours"])
+    assert result.exit_code == 1 and "Traceback" not in result.output
+    assert "names no package" in result.output and "Body.from_path('prompts/ours.md')" in result.output
+    assert "in_lockstep" not in result.output.split("Error:")[-1], (
+        "the framework's package is never where it looked"
+    )
+
+
+def test_gate_body_1_a_house_body_under_prompts_is_grantable_and_one_under_dot_lockstep_never_is() -> None:
+    """Where a house body lives, and why: `prompts/` is tier 2, lifted for the proposing workflow
+    by a named grant; `.lockstep/` is tier 1 and no grant reaches it, so a lens there is out of
+    the learning loop's reach by construction (#311)."""
+    from in_lockstep.core.changes import DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
+
+    granted = ChangeGuard(
+        PathPolicy(
+            deny_unless_granted=(*DENY_UNLESS_GRANTED, "prompts/"),
+            grants=frozenset({"prompts/"}),
+            granted_to_workflow="improve/propose",
+        )
+    )
+    assert granted.check_path("prompts/license.md", workflow_id="improve/propose") is None
+    refused = granted.check_path(".lockstep/prompts/license.md", workflow_id="improve/propose")
+    assert refused is not None and refused.tier == 1
+
+
 def test_show_prompt_keeps_the_baseline_ahead_of_a_house_guardrail(repo: Path) -> None:
     """`plus` appends, so extending the stack cannot quietly drop the shipped constraints."""
     _lifecycle(repo).write_text(HOUSE_LENS)

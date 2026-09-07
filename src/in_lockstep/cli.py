@@ -36,7 +36,7 @@ import click
 from click.core import ParameterSource
 
 from . import __version__
-from .ai.prompt import Composition, Inspectable
+from .ai.prompt import BodyNotFound, Composition, Inspectable
 from .ai.replay import CASSETTE_DIR
 from .core.context import DISABLE_ENV, RunContext
 from .core.outcome import Status
@@ -2148,6 +2148,13 @@ def improve_cmd(
             click.echo(f"guard     granted to improve/propose — tier {refusal.tier}, rule {refusal.rule}")
         elif refusal is not None:
             click.echo(f"guard     refused — tier {refusal.tier}, rule {refusal.rule}; no grant lifts it")
+            if refusal.tier == 1:
+                # `.lockstep/prompts/` was the documented home for a house body, and it is
+                # deny-always: a lens there is out of the loop's reach by construction (#311).
+                click.echo(
+                    "          a tier-1 path can never be granted; a body the loop may propose to "
+                    "lives in `prompts/` at the repository root"
+                )
         else:
             # Said this way on purpose. `prompts/` in tier 2 is anchored at the repository root, so
             # a body under `src/in_lockstep/prompts/` matches neither tier and is writable because
@@ -2995,6 +3002,10 @@ def review_cmd(
     ctx = _context(lockstep, _run_id(f"review-{aspect}"), recording=tape if record else None)
     try:
         outcome = asyncio.run(ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff)))
+    except BodyNotFound as e:
+        # The bound lens points at a body that is not there. A setup problem is a message naming
+        # the fix, and `doctor` would have said the same before a credential was resolved (#311).
+        raise click.ClickException(str(e)) from None
     except LookupError as e:
         raise click.ClickException(
             f"{e} If this is the shipped fixture, it no longer matches the prompt it was recorded "
@@ -5366,8 +5377,6 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
     shipped or house prompt. `--shipped` renders the framework's version of it and `--diff` shows
     what a repository changed, which is the review question rather than the rendering one.
     """
-    import difflib
-
     shipped = _shipped_compositions()
     index = dict(shipped)
     if not shipped_only:
@@ -5377,10 +5386,26 @@ def show_prompt_cmd(name: str, projection: bool, diff_shipped: bool, shipped_onl
     label = _resolve_prompt(index, name)
     composed = shipped[label] if shipped_only else index[label]
 
-    if projection:
-        for section in composed.projection():
-            click.echo(section)
-        return
+    # A body that cannot be read is one line naming the body and the fix, not a traceback from
+    # inside the composer: the most likely adopter mistake, met by the one command whose job is
+    # showing what a run would send (#311).
+    from .ai.prompt import BodyNotFound
+
+    try:
+        if projection:
+            for section in composed.projection():
+                click.echo(section)
+            return
+        _show_prompt_text(shipped, label, composed, diff_shipped=diff_shipped)
+    except BodyNotFound as e:
+        raise click.ClickException(f"{label}: {e}") from None
+
+
+def _show_prompt_text(
+    shipped: dict[str, Composition], label: str, composed: Composition, *, diff_shipped: bool
+) -> None:
+    """The rendering half of `show-prompt`, split out so one `BodyNotFound` handler covers it."""
+    import difflib
 
     if diff_shipped:
         origin = shipped.get(label)

@@ -123,8 +123,16 @@ from in_lockstep.prompts.review import ReviewPrompt
 
 class OurReview(ReviewPrompt):
     version = "team-1"
-    body = Body.from_file("prompts/our-review.md")
+    body = Body.from_path("prompts/our-review.md")
 ```
+
+`Body.from_path` is a file in this repository, read as given. `Body.from_file` is a resource
+inside a package, for a body a pack ships beside its classes, and it needs `package=`: without
+one it refuses naming `from_path`, rather than look inside the framework. A house body lives in
+`prompts/` at the repository root. Not under `.lockstep/`: that directory is deny-always for
+every writing verb, so a body there can be reviewed with but never proposed to by the learning
+loop, and `improve --explain` says so. `doctor` checks that every bound body resolves, and
+`show-prompt` refuses in one line when one does not.
 
 Writing one is half the job. Installing it goes through `bind`, like every other extension. A
 prompt is not a separate kind of thing with a separate registration mechanism:
@@ -267,6 +275,35 @@ that decision.
 `emphasis` on a prompt subclass still exists and is the right place for style guidance. A
 guardrail is for constraints, and the difference is where it sits: emphasis rides after the body,
 guardrails before it.
+
+## House skills and contexts
+
+The two layers after the body take the same road. A *skill* is how the model should go about a
+kind of work; a *context* is what it should know about this repository. Both are named text, both
+are appended through `plus`, and both land after the body and its emphasis: skills first, then
+contexts, in the order given.
+
+```python
+from pathlib import Path
+
+from in_lockstep.prompts.implement import implement_layers
+
+knowing = implement_layers().plus(
+    skills=(("acme/migrations", Path("prompts/skills/migrations.md").read_text()),),
+    contexts=(("acme/architecture", Path("prompts/context/architecture.md").read_text()),),
+)
+```
+
+```python
+from in_lockstep.adapters.ai import Implement, Oneshot
+
+lockstep.bind(Implement, Oneshot(layers=knowing))
+```
+
+`in-lockstep show-prompt implement/oneshot --projection` prints the stack with each layer named
+in its position, `skill:acme/migrations` before `context:acme/architecture`, both after the body.
+A skill body is part of the eval subject a run records, so editing one moves the subject the way
+editing a prompt body does.
 
 ## The learning loop
 
@@ -747,7 +784,29 @@ from in_lockstep.adapters.ai import AGENCY, AiStrategy
 ```
 
 Declare `id`, which lands on the report so an eval subject and a ledger record can key on the
-approach that ran, and `verb`.
+approach that ran. Subclass the per-verb base rather than `AiStrategy` itself: `ImplementStrategy`
+and `FixStrategy` carry `verb`, `request` (the key `lockstep.use` binds under) and `capabilities`,
+so a strategy of yours states only what is its own.
+
+```python
+from typing import Any
+
+from in_lockstep import Outcome, RunContext
+from in_lockstep.adapters.ai import Implement, ImplementStrategy
+
+class Careful(ImplementStrategy):
+    id = "implement/careful"
+
+    async def invoke(self, ctx: RunContext, request: Implement) -> Outcome[Any]:
+        return Outcome.errored("not written yet")
+```
+
+```python
+careful = lockstep.use(Careful)
+```
+
+A subclass of bare `AiStrategy` has to declare all three itself, `request: ClassVar[Any]` included,
+or `use` refuses it for want of a key to bind under.
 
 `capabilities` is the load-bearing frozenset every gate reads off the bound object, and it is not
 optional: subclassing `AiStrategy` means being handed `write_file`, `delete_file` and `run_script`

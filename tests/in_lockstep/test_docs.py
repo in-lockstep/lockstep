@@ -68,7 +68,7 @@ def test_the_cookbook_snippets_execute_not_merely_parse(
     # Recipe 9's lens points at a body file, because a prompt body is a file. A reader following
     # the cookbook writes it; so does this test, which is the difference between asserting the
     # snippet parses and asserting the thing it builds can be rendered.
-    body = tmp_path / ".lockstep" / "prompts" / "license.md"
+    body = tmp_path / "prompts" / "license.md"
     body.parent.mkdir(parents=True)
     body.write_text("Review this diff ONLY for license and copyright problems.\n")
 
@@ -100,6 +100,74 @@ def test_the_cookbook_snippets_execute_not_merely_parse(
             assert composed.strip(), f"cookbook prompt {name} composed to nothing"
             rendered += 1
     assert rendered, "no cookbook snippet defines a prompt — has recipe 9 gone?"
+
+
+def _defined_prompts(namespace: dict[str, Any]) -> list[tuple[str, type]]:
+    """Every `Prompt` subclass a snippet defined, and none it merely imported."""
+    from in_lockstep.ai.prompt import Prompt
+
+    return [
+        (name, value)
+        for name, value in namespace.items()
+        if isinstance(value, type)
+        and issubclass(value, Prompt)
+        and not value.__module__.startswith("in_lockstep")
+    ]
+
+
+def test_gate_docs_1_every_prompt_extending_md_defines_can_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The render pass, over the page that teaches the first thing an adopter tries. The page
+    showed `Body.from_file("prompts/our-review.md")` for months, which resolved inside the
+    framework's own package and failed on first run; the type gate passed it because the shape
+    was fine (#311). Each block that defines a prompt is executed in a scratch repository holding
+    the body file the block names, and the prompt it defines is composed."""
+    import re
+
+    from in_lockstep.prompts.review import review_layers
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "prompts").mkdir()
+    (tmp_path / "prompts" / "our-review.md").write_text("Review this diff for what the team cares about.\n")
+    rendered = 0
+    for index, block in enumerate(_python_blocks(ROOT / "docs" / "extending.md")):
+        if not re.search(r"^class \w+\((\w+Prompt|\w+Lens)\):", block, re.M):
+            continue
+        if "in_lockstep.packs" in block:
+            # A body a pack ships needs the pack installed; that block is covered by the pack
+            # tests over a built fixture, and this pass says so rather than installing one.
+            continue
+        namespace: dict[str, Any] = {}
+        exec(compile(block, f"extending.md[{index}]", "exec"), namespace)
+        for name, cls in _defined_prompts(namespace):
+            assert cls().system(review_layers()).strip(), f"extending.md prompt {name} composed to nothing"
+            rendered += 1
+    assert rendered >= 2, "extending.md lost its house-prompt snippets"
+
+
+def test_the_extending_md_strategy_example_is_accepted_by_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`use` refuses a strategy that names no `request`; the example must not be one."""
+    import re
+
+    from in_lockstep import Lockstep
+
+    monkeypatch.chdir(tmp_path)
+    blocks = [
+        b
+        for b in _python_blocks(ROOT / "docs" / "extending.md")
+        if re.search(r"^class \w+\(\w+Strategy\):", b, re.M)
+    ]
+    assert blocks, "extending.md lost its strategy example"
+    namespace: dict[str, Any] = {"lockstep": Lockstep.detect()}
+    exec(compile(blocks[0], "extending.md[strategy]", "exec"), namespace)
+    strategy = next(
+        v for v in namespace.values() if isinstance(v, type) and getattr(v, "id", "") == "implement/careful"
+    )
+    bound = namespace["lockstep"].use(strategy)
+    assert type(bound) is strategy
 
 
 # -- GATE-DOCS-1: what the docs show type-checks under what an adopter runs ---------------------

@@ -31,6 +31,11 @@ P = TypeVar("P")
 S = TypeVar("S")
 
 
+#: Where the loader puts `.lockstep/lockstep.py`. Named here rather than imported from `loader`,
+#: which this layer may not reach; `test_prompt_composition.py` holds the two equal.
+LIFECYCLE_MODULE = "in_lockstep._lifecycle"
+
+
 class BodyNotFound(Exception):
     """A prompt names a body file that does not exist. Caught by `doctor`, not at first run."""
 
@@ -52,20 +57,35 @@ class Body:
         return cls(package="", resource=str(path), path=Path(path))
 
     def resolve(self, default_package: str = "") -> str:
+        """The text, or `BodyNotFound` naming what was looked for and where.
+
+        Two constructors, two rules, and no third. `from_path` is a file in the repository, read
+        as given. `from_file` is a resource inside a package -- the one named, or the package the
+        prompt class itself lives in, which is how a pack ships bodies beside its classes. A
+        `from_file` with no package to look in is refused naming `from_path`, rather than read
+        from the working directory or from the framework's own package: `docs/extending.md`
+        showed `Body.from_file("prompts/our-review.md")` in a lifecycle module for as long as the
+        fallback existed, and it resolved inside `in_lockstep`, failing on first run with a
+        traceback that named the wrong package (#311).
+        """
         package = self.package or default_package
         if self.path is not None:
             if not self.path.exists():
-                raise BodyNotFound(f"prompt body {self.path} does not exist")
+                raise BodyNotFound(
+                    f"prompt body {self.path} does not exist; a house body lives in `prompts/` at the "
+                    f"repository root, and `doctor` checks every bound one"
+                )
             return self.path.read_text()
-        if package:
-            try:
-                return (resources.files(package) / self.resource).read_text()
-            except (FileNotFoundError, ModuleNotFoundError, AttributeError) as e:
-                raise BodyNotFound(f"prompt body {self.resource!r} not found in package {package!r}") from e
-        candidate = Path(self.resource)
-        if not candidate.exists():
-            raise BodyNotFound(f"prompt body {self.resource} does not exist")
-        return candidate.read_text()
+        if not package:
+            raise BodyNotFound(
+                f"prompt body {self.resource!r} names no package to resolve in. A file in this "
+                f"repository is `Body.from_path({self.resource!r})`; a file shipped inside a pack is "
+                f"`Body.from_file({self.resource!r}, package='your_pack')`"
+            )
+        try:
+            return (resources.files(package) / self.resource).read_text()
+        except (FileNotFoundError, ModuleNotFoundError, AttributeError) as e:
+            raise BodyNotFound(f"prompt body {self.resource!r} not found in package {package!r}") from e
 
 
 @dataclass(frozen=True)
@@ -164,13 +184,23 @@ class Prompt(Generic[P, S]):
                 f"{cls.__name__}.body is a string. A prompt body is a file, not a literal — "
                 f"prompt text is data a non-programmer edits and a diff can review, which is the "
                 f"reason it lives outside the module. Use:\n\n"
-                f"    body = Body.from_path('.lockstep/prompts/{cls.__name__.lower()}.md')\n\n"
+                f"    body = Body.from_path('prompts/{cls.__name__.lower()}.md')\n\n"
                 f"or, for a body shipped inside a package:\n\n"
                 f"    body = Body.from_file('review/security.md', package='your_pack')\n"
             )
 
     def package(self) -> str:
-        return type(self).__module__.rsplit(".", 1)[0]
+        """The package a `from_file` body with no package of its own resolves in.
+
+        Empty for a class defined in the lifecycle module: the loader imports `.lockstep/lockstep.py`
+        as `in_lockstep._lifecycle`, so its "package" would be the framework's own, and a body the
+        repository wrote would be looked for among the ones we ship (#311). A pack's classes keep
+        their package, which is where a pack's bodies are.
+        """
+        module = type(self).__module__
+        if module.startswith(LIFECYCLE_MODULE):
+            return ""
+        return module.rsplit(".", 1)[0]
 
     def meta(self) -> Frontmatter:
         """What the body file says about itself. Empty when there is no body or no header."""
