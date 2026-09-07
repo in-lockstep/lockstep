@@ -32,6 +32,8 @@ from in_lockstep.core.outcome import Cost, Status
 from in_lockstep.core.spend import Budget, Spend
 from in_lockstep.core.types import ChangeSet, FileChange
 from in_lockstep.improver import CorpusImprover, verdict_of
+from in_lockstep.llm.interface import LLMProvider
+from in_lockstep.llm.types import LLMInput, LLMOutput
 from in_lockstep.platform.artifacts import ATTEMPT, CHANGESET, read_changeset, read_scorecard, write_changeset
 from in_lockstep.platform.scm.base import ChangeRequest, GitLocal
 from in_lockstep.workflows.improve import PROPOSE, improve_measure, improve_propose
@@ -410,6 +412,111 @@ def test_gate_improve_2_and_4_an_improving_draft_is_staged_as_one_change_to_the_
     assert read_scorecard(CHANGESET) == scorecard.as_record()
     # Paid for, and charged to the run: the budget middleware sees the measurement.
     assert ctx.spend.charged.usd == pytest.approx(0.003)
+
+
+class _Provider(LLMProvider):
+    """A provider the registry can build, answering `BETTER` to every probe."""
+
+    def __init__(self, *_args: Any) -> None:
+        self.calls = 0
+
+    def name(self) -> str:
+        return "canned"
+
+    async def generate(self, input: LLMInput) -> LLMOutput:
+        self.calls += 1
+        return LLMOutput(content=BETTER)
+
+
+def test_gate_improve_4_the_after_arm_is_re_asked_through_the_shipped_factory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No `probe_factory`: the arm resolves each case's qualified model through the registry the
+    adapter was given, the way the drafter resolves its route -- the join every earlier test of
+    the arm stubbed past, and the one that raised `MissingCredential` after a paid draft on this
+    repository's own promoted case (#310). One answer per probe, none dropped."""
+    from in_lockstep.ai.bootstrap import default_registry
+    from in_lockstep.llm.interface import DataPolicy, ProviderSettings
+    from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+
+    root = _repo(tmp_path, monkeypatch)
+    # A key, because the shipped factory resolves one per provider name; that a keyless provider
+    # cannot be registered without a dummy is #309's recorded out-of-scope, not this test's subject.
+    monkeypatch.setenv("STUB_API_KEY", "not-a-secret")
+    registry = default_registry()
+    registry.register(
+        "stub",
+        lambda settings, creds: _Provider(),
+        settings=ProviderSettings(),
+        data_policy=DataPolicy.INTERNAL,
+        endpoint="http://stub.test",
+        free=True,
+    )
+    adapter = AiImprove(invoker_factory=lambda ctx: _drafter(), registry=registry)
+    container = Container()
+    container.bind(Draft, adapter)
+    container.bind(Measure, adapter)
+    container.bind(EgressPolicy, UnsandboxedEgress())
+    ctx = RunContext(
+        run_id="improve-test",
+        repo=RepoInfo(root=str(root)),
+        container=container,
+        spend=Spend(budget=Budget(usd=5.0)),
+        improvable=(IMPROVABLE,),
+        guard=_granted(),
+        max_open_proposals=1,
+    )
+    outcome = _measure(ctx, root)
+    assert outcome.status is Status.SUCCEEDED, outcome
+    scorecard = read_scorecard(root / CHANGESET)
+    assert scorecard is not None and scorecard["after"]["measured"] == 2
+    assert scorecard["dropped"] == [], "one answer per probe, none refused for want of a credential"
+
+
+def test_gate_improve_4_a_case_with_no_provider_is_refused_before_the_drafter_is_paid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The promoted case under `evidence/` carried `claude-sonnet-4-6` with no provider for as
+    long as harvest stored the bare id. Refused by name, naming the case and the fix, with the
+    drafter never asked (#310)."""
+    root = _repo(tmp_path, monkeypatch)
+    for path in (root / "evidence" / "cases" / "review").glob("*.json"):
+        case = json.loads(path.read_text())
+        case["harvested"]["model"] = "model-1"
+        path.write_text(json.dumps(case))
+    drafter = _drafter()
+    outcome = _measure(_ctx(root, guard=_granted(), drafter=drafter, prober=_Stub()), root)
+    assert outcome.status is Status.BLOCKED and outcome.reason == "improve.model_unqualified"
+    message = outcome.findings[0].message
+    assert message.startswith("passing, tightened: ")
+    assert "<provider>:<model>" in message and "eval harvest" in message
+    assert drafter.asked == [], "refused before the drafter was invoked"
+
+
+def test_gate_improve_4_a_probe_factory_that_cannot_be_built_is_a_refusal_carrying_the_answers(
+    tmp_path: Path,
+) -> None:
+    """Not an exception after spend: the answers gathered so far travel with the refusal, as they
+    do when a ceiling stops the measurement (#310)."""
+    from in_lockstep.core.improve import Probe
+
+    def factory(model: str) -> Any:
+        if model == "stub:model-2":
+            raise RuntimeError("no credential for provider 'stub'")
+        return lambda ctx: _Stub(BETTER)
+
+    adapter = AiImprove(probe_factory=factory)
+    ctx = RunContext(
+        run_id="t", repo=RepoInfo(root=str(tmp_path)), container=Container(), spend=Spend(Budget(usd=1))
+    )
+    probes = (
+        Probe(case="one", model="stub:model-1", request=_request(BODY)),
+        Probe(case="two", model="stub:model-2", request=_request(BODY)),
+    )
+    outcome = asyncio.run(adapter.invoke(ctx, Measure(probes=probes)))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "improve.probe_unbuildable"
+    assert [a.case for a in outcome.value or ()] == ["one"], "the answer gathered before the refusal travels"
+    assert "two" in outcome.findings[0].message and "no credential" in outcome.findings[0].message
 
 
 def test_gate_improve_4_a_draft_that_regresses_is_not_opened(

@@ -326,6 +326,15 @@ improve.register()
 The judge is the person on the pull request. A rubric expectation is `outstanding` on both arms,
 and the body says so rather than printing a pass.
 
+A harvested case records the model it was answered by as `<registration>:<model>`: the
+registration name the run routed to, and the bare id that registration was sent. The after arm
+re-asks the case through the same registration, so the name has to be there. It comes from the
+registry, which stamps it on every provider it builds and which a recording keeps beside the
+request; harvest never guesses a provider from a model's name. A case that names no provider, one
+harvested from a tape recorded outside the registry, is refused before the drafter is paid, and the
+refusal says which case and what to set. A repository on its own registry hands it to the adapter
+as `AiImprove(registry=...)`, the way it hands one to `invoker_factory`.
+
 ## Middleware
 
 Cross-cutting behaviour (tracing, budgets, retries, approval) is a middleware chain around every

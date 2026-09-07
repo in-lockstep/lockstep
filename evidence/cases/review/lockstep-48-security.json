@@ -18,7 +18,7 @@
     "cassette": "src/in_lockstep/cassettes/review-security.json",
     "filed_under": "96eba8a53f622851373b6eecb6840f8b037a5728ea8ab47183a055ede3fa48b0",
     "key": "96eba8a53f622851373b6eecb6840f8b037a5728ea8ab47183a055ede3fa48b0",
-    "model": "claude-sonnet-4-6"
+    "model": "anthropic:claude-sonnet-4-6"
   },
   "input": {
     "request": {

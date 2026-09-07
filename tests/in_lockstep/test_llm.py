@@ -453,6 +453,15 @@ def test_gate_auth_2_a_registration_that_cannot_state_a_destination_must_say_why
     registry.provider_for(Model("honest:m")), "nothing to compare is not a mismatch"
 
 
+def test_gate_improve_4_the_registry_stamps_its_name_on_the_provider_it_builds() -> None:
+    """The one writer of `registered_as`: a transport cannot know which name routes to it, and a
+    recording needs the name so a harvested case can be re-asked through the same registration
+    (#310). A provider built by hand carries none, and says so rather than guessing."""
+    provider = _registry().provider_for(Model("acme:m"))
+    assert provider.registered_as == "acme"
+    assert _Stub(ProviderSettings(), Credentials.none()).registered_as == ""
+
+
 def test_unqualified_model_id_is_refused() -> None:
     with pytest.raises(ProviderRegistrationError, match="unqualified"):
         _registry().provider_for(Model("just-a-name"))

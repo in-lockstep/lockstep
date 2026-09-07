@@ -165,6 +165,9 @@ class ProviderRegistry:
         if provider is None:
             provider = registration.factory(registration.settings, credentials)
             self._assert_endpoint_matches(registration, provider)
+            # Stamped here and nowhere else: the transport cannot know which name routes to it,
+            # and a recording needs the name to say which registration answered (#310).
+            provider.registered_as = registration.name
             self._cache[key] = provider
         return provider
 

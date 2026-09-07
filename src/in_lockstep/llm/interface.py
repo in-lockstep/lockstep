@@ -119,6 +119,14 @@ class LLMProvider(ABC):
     # people to disable the control locally, which is how a control dies.
     transmits: bool = True
 
+    #: The registration name this provider was constructed under -- `anthropic`, `local`, a
+    #: gateway's own -- set by `ProviderRegistry.provider_for`, the one place that knows it. A
+    #: transport does not know which name routes to it, and `LLMInput.model` is unqualified by
+    #: design, so this is what lets a recording say which registration answered and a harvested
+    #: case be re-asked through the same one (#310). Empty for a provider built outside the
+    #: registry, and a harvested case from such a tape says so rather than guessing.
+    registered_as: str = ""
+
     @abstractmethod
     async def generate(self, input: LLMInput) -> LLMOutput:
         """Send a prompt to the LLM and return the response."""
