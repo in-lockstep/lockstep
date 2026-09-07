@@ -656,6 +656,34 @@ def test_gate_review_6_each_lens_is_posted_as_its_own_comment_by_the_job_holding
         assert posts[0]["env"]["PR"] == "${{ github.event.pull_request.number }}", name
 
 
+def test_gate_ledger_10_every_workflow_that_bundles_a_record_uploads_it_under_the_name_the_sweep_lists() -> (
+    None
+):
+    """The sweep lists artifacts by ONE name (`reconcile.yml` names it), so a workflow that bundles
+    its record under any other name has made a record nothing absorbs. `review.yml` did, as
+    `review-<n>`: the first `/review security` that ran here left its record on a 30-day clock
+    (#312). Every lifecycle workflow here and every scaffold that bundles is checked."""
+    swept = re.search(r"--from-artifacts\s+(\S+)", " ".join(_statements("reconcile.yml")))
+    assert swept, "reconcile.yml no longer sweeps by artifact name"
+    name = swept.group(1)
+    specs = {w: _load(w) for w in LIFECYCLE_WORKFLOWS}
+    for label, text in _scaffolds().items():
+        if "jobs" in text:
+            specs[label] = yaml.load(text.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)
+    for label, spec in specs.items():
+        for job, body in (spec.get("jobs") or {}).items():
+            steps = body.get("steps") or []
+            if not any("history --bundle" in (s.get("run") or "") for s in steps):
+                continue
+            uploads = [s for s in steps if "upload-artifact" in str(s.get("uses", ""))]
+            assert uploads, f"{label}:{job} bundles a record and uploads nothing"
+            for upload in uploads:
+                uploaded = upload["with"]["name"]
+                assert uploaded == name, (
+                    f"{label}:{job} uploads its bundle as {uploaded!r}; the sweep lists {name!r}"
+                )
+
+
 def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:
     """`cancel-in-progress` cancels a run when the next push lands, and a push can be refused, so
     the publish job can miss a bundle. The sweep takes in each outstanding artifact once, from a

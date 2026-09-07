@@ -142,7 +142,11 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
-          name: review-${{ github.event.issue.number }}
+          # `lockstep-run`, the name every workflow that bundles a record uploads under, because
+          # that is the name the scheduled sweep lists (`reconcile.yml`). Named `review-<n>` until
+          # the first `/review security` that ran here (34167168362) left its record in an
+          # artifact nothing would ever absorb. Per-run on the host, so the number added nothing.
+          name: lockstep-run
           path: |
             findings.md
             history.bundle
@@ -174,7 +178,7 @@ jobs:
       - run: uv sync
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          name: review-${{ github.event.issue.number }}
+          name: lockstep-run
       # The marker that anchors the comment is INSIDE the body `review` composed, so nothing here
       # names a lens. That is not economy: the lens came out of an untrusted comment and was
       # resolved in the other job, and naming it here would put it back in YAML.
