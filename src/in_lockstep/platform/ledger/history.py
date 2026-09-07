@@ -447,6 +447,16 @@ class GitLedger:
                 run_id = str(record.get("run_id", "run"))
                 payload = json.dumps(record, indent=2, sort_keys=True, default=repr) + "\n"
                 blob = self._git("hash-object", "-w", "--stdin", stdin=payload)
+                # Refuse to replace an existing record the remote already holds. Identical content
+                # produces the same blob, which is a no-op; different content means two runs
+                # shared a run id and one would silently overwrite the other (#319).
+                remote_existing = self._try("rev-parse", f"{remote_head}:{self.path_for(run_id)}")
+                if remote_existing is not None and remote_existing != blob:
+                    raise HistoryError(
+                        f"run id {run_id!r} already exists on the remote with different content"
+                        f" — the remote holds {remote_existing[:12]}, this clone has {blob[:12]};"
+                        f" re-record under a distinct run id to publish this record"
+                    )
                 self._git(
                     "update-index",
                     "--add",
@@ -569,6 +579,17 @@ class GitLedger:
             self._git("read-tree", str(head), index=index)
             for name in sorted(listing):
                 blob = self._git("rev-parse", f"{other}:{RECORDS}/{name}")
+                # Refuse to replace a record already present with different content. Identical
+                # blobs are the same file and require no action; different blobs mean two distinct
+                # runs shared a run id and one would silently erase the other (#319).
+                local_existing = self._try("rev-parse", f"{head}:{RECORDS}/{name}")
+                if local_existing is not None and local_existing != blob:
+                    incoming_run_id = name[: -len(".json")] if name.endswith(".json") else name
+                    raise HistoryError(
+                        f"run id {incoming_run_id!r} already exists locally with different content"
+                        f" — local holds {local_existing[:12]}, incoming has {blob[:12]};"
+                        f" re-record under a distinct run id to publish this record"
+                    )
                 self._git(
                     "update-index",
                     "--add",
