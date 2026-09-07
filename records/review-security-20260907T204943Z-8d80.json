@@ -1,0 +1,48 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34160858308",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.03863,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 183,
+        "message": "Model-supplied `notes` items are rendered into PR body HTML as Markdown list items with no length bound enforced at this layer.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 178,
+        "message": "Model-supplied `summary` is whitespace-collapsed but otherwise interpolated verbatim into the PR body as the opening paragraph.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0bb1326820f3c34b451a329653b6011389b3e9ba",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 642,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T204943Z-8d80",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 645,
+  "ts": "2026-09-07T20:50:03+00:00",
+  "wall_seconds": 19.701
+}
