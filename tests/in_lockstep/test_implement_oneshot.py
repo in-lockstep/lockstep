@@ -199,14 +199,33 @@ def test_gate_progress_1_a_session_that_stops_moving_is_stopped_with_its_change_
 
 
 def test_gate_progress_1_a_refused_write_is_not_progress(repo: Path) -> None:
-    """A `write_file` the guard refused staged nothing, so it does not reset the count."""
+    """A `write_file` the guard refused staged nothing, so it does not reset the count -- and
+    with nothing ever staged the allowance is twice the ceiling, so four calls, not two."""
     provider = Scripted([_call("write_file", path=".lockstep/lockstep.py", contents="lockstep = 1\n")])
     policy = InvokePolicy(max_turns=12, max_tokens=1024, max_idle_turns=2)
     outcome = asyncio.run(_adapter(provider, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
     assert outcome.status is Status.BLOCKED and outcome.reason == "implement.no_progress"
     assert outcome.value is not None and outcome.value.changeset.paths() == ()
     assert "nothing was ever staged" in outcome.findings[0].message
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 4
+
+
+def test_gate_progress_1_a_reading_phase_gets_twice_the_ceiling_before_the_first_write(repo: Path) -> None:
+    """The sixth `/fix` on #319 was stopped at turn 20 with nothing staged, 88 seconds in, still
+    reading the code it was about to change (#337). Reading before writing is the job; a session
+    that has read for twice the ceiling and written nothing is the case the ceiling is for."""
+    replies = [_call("read_file", path="src/greet.py")] * 5
+    replies.append(_call("write_file", path="a.py", contents="x = 1\n"))
+    replies.append(_done())
+    provider = Scripted(replies)
+    policy = InvokePolicy(max_turns=20, max_tokens=1024, max_idle_turns=3)
+    outcome = asyncio.run(_adapter(provider, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.SUCCEEDED, outcome.reason
+    assert outcome.value is not None and outcome.value.changeset.paths() == ("a.py",)
+    stalled = Scripted([_call("read_file", path="src/greet.py")])
+    outcome = asyncio.run(_adapter(stalled, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "implement.no_progress"
+    assert len(stalled.calls) == 6, "twice the ceiling of three, then no more"
 
 
 def test_a_session_that_keeps_moving_is_not_stopped_by_the_idle_ceiling(repo: Path) -> None:

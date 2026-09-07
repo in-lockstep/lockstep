@@ -318,7 +318,8 @@ async def run_phase(
                         message=(
                             f"stopped after {invocation.idle_turns} turn(s) in a row that staged "
                             f"nothing and tested nothing new (the ceiling is "
-                            f"{session.policy.max_idle_turns}); the last productive one was "
+                            f"{session.policy.max_idle_turns}, and twice that before anything is "
+                            f"staged); the last productive one was "
                             f"{invocation.last_progress or 'none: nothing was ever staged'}. "
                             f"{len(staged.changes)} staged change(s) are returned unproposed."
                         ),
