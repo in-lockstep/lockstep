@@ -1,55 +1,47 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.061455,
+  "cost_usd": 0.049089,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 4,
+    "count": 3,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 358,
-        "message": "Model-controlled content reaches prompt without truncation in the reproduction step",
+        "line": 90,
+        "message": "Ticket content flows untrusted into the fix prompt's user message with only a prose warning, not structural isolation.",
+        "path": "src/in_lockstep/prompts/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 290,
+        "message": "Test runner output reaches a prompt via `_failure_text` with only a 1000-character truncation, no sanitisation.",
         "path": "src/in_lockstep/adapters/ai/fix.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 224,
-        "message": "Ticket content (untrusted) embedded in prompts in two separate invocations",
-        "path": "src/in_lockstep/adapters/ai/fix.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 115,
-        "message": "Error message from gh CLI includes raw stderr, which may contain token or URL fragments",
-        "path": "src/in_lockstep/platform/scm/github.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 84,
-        "message": "FixSession.context passes ticket.as_context() directly; ticket is declared untrusted",
+        "line": 275,
+        "message": "Reproducer file contents are embedded verbatim in the fix prompt without escaping the Markdown/code-fence boundary.",
         "path": "src/in_lockstep/adapters/ai/fix.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 16005,
+  "input_tokens": 12733,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 896,
+  "output_tokens": 726,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 16901,
-  "wall_seconds": 25.124
+  "tokens": 13459,
+  "wall_seconds": 20.341
 }
