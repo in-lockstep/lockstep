@@ -1,47 +1,39 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.04857,
+  "cost_usd": 0.026745,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 2,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 84,
-        "message": "Prompt tells the model to treat ticket content as untrusted but does not enforce it",
-        "path": "src/in_lockstep/prompts/fix.py",
+        "line": 79,
+        "message": "WorktreeRunner silently discards the `cwd` argument passed by the caller, with no validation that `repo_root` is canonical or that it hasn't been manipulated before reaching this point.",
+        "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 334,
-        "message": "Failure text from AI-generated test output is injected into the next model invocation without structural isolation",
-        "path": "src/in_lockstep/adapters/ai/fix.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 441,
-        "message": "Injection findings are surfaced in output but not used to gate the fix step",
-        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "line": 82,
+        "message": "The throwaway worktree materialised by `materialize(self.repo_root, ChangeSet())` is passed as `cwd` to the inner runner, which for `Sandbox` means it becomes the bind-mount root. If `materialize` creates the worktree under a world-readable temp directory, a concurrent local process could read or race-write into it during the command's execution window.",
+        "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 12030,
+  "input_tokens": 6695,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 832,
+  "output_tokens": 444,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 12862,
-  "wall_seconds": 23.172
+  "tokens": 7139,
+  "wall_seconds": 13.334
 }
