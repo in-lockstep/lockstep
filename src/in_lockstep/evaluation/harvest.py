@@ -37,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,18 @@ class Harvested:
 
     def path_in(self, root: Path) -> Path:
         return root / f"{self.name}.json"
+
+
+def _qualified(entry: Mapping[str, Any], request: Mapping[str, Any]) -> str:
+    """`<registration>:<model>` when the tape says which registration answered; the bare id
+    otherwise. Never guessed from the model's name: a case carrying `anthropic:` because its
+    model was called `claude-…` would route a gateway's recording back to Anthropic, and the
+    improve loop refuses a bare id by name instead (#310)."""
+    model = str(request.get("model", ""))
+    registered_as = str(entry.get("provider", "") or "")
+    if not registered_as or ":" in model:
+        return model
+    return f"{registered_as}:{model}"
 
 
 def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
@@ -189,7 +202,7 @@ def harvest(cassette: Path | str, *, family: str = "") -> list[Harvested]:
                     "harvested": {
                         "cassette": str(path),
                         "filed_under": key,
-                        "model": str(request.get("model", "")),
+                        "model": _qualified(entry, request),
                     },
                 },
             )

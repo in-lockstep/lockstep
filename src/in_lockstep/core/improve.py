@@ -131,6 +131,10 @@ class Baseline:
     corpus: int
     unattributable: int
     models: tuple[str, ...] = ()
+    #: The attributable cases whose recorded model names no provider. Such a case cannot be
+    #: re-asked through the registry, and a loop that found out after paying for a draft found
+    #: out too late (#310); the workflow refuses on this before the drafter is invoked.
+    unqualified: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

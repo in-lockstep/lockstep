@@ -167,6 +167,26 @@ def test_provenance_is_kept_and_is_not_graded(tmp_path: Path) -> None:
     assert "harvested" not in case.expect
 
 
+def test_gate_improve_4_a_case_from_a_registry_built_provider_carries_the_qualified_model(
+    tmp_path: Path,
+) -> None:
+    """The join the after arm rests on: the registry stamps the registration name on the provider
+    it builds, the tape keeps it beside the bare id the provider was sent, and the case carries
+    `<registration>:<model>` so it can be re-asked through the same registration (#310). A tape
+    from a provider built outside the registry keeps the bare id, and harvest never guesses."""
+    tape = Cassette(path=tmp_path / "c.json")
+    inner = _Model(ANSWER)
+    inner.registered_as = "house"
+    asyncio.run(RecordingProvider(inner, tape, Redact(SecretRegistry())).generate(_request()))
+    ((_key, entry),) = json.loads(tape.path.read_text())["provider_calls"].items()
+    assert entry["provider"] == "house" and entry["request"]["model"] == "claude-sonnet-4-6"
+    (harvested,) = harvest(tape.path)
+    assert harvested.case["harvested"]["model"] == "house:claude-sonnet-4-6"
+    assert harvested.case["input"]["request"]["model"] == "claude-sonnet-4-6", "the request is as sent"
+    (bare,) = harvest(_record(tmp_path))
+    assert bare.case["harvested"]["model"] == "claude-sonnet-4-6", "no registration named: not guessed"
+
+
 def test_short_strings_are_not_used_as_expectations(tmp_path: Path) -> None:
     """A `contains` on "bug" is a check that cannot fail, and a check that cannot fail is worse
     than no check because it counts toward a total."""

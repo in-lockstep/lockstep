@@ -136,9 +136,16 @@ class Cassette:
             },
         )
 
-    def record_provider(self, request: LLMInput, output: LLMOutput, redact: Redact) -> None:
+    def record_provider(
+        self, request: LLMInput, output: LLMOutput, redact: Redact, *, registered_as: str = ""
+    ) -> None:
         key = _key(request)
         self.provider_calls[key] = {
+            # Which registration answered, when the provider was built through the registry. The
+            # request's `model` is the bare id the provider was sent, and the improve loop's after
+            # arm needs the qualified one to route the same question back to the same place;
+            # `eval harvest` reads this and refuses to guess when it is absent (#310).
+            **({"provider": registered_as} if registered_as else {}),
             # The request, beside its answer. A cassette used to keep only the hash, which is
             # enough to look a recording up and not enough to do anything else with it: it could
             # not be read, diffed against what the code composes now, or turned into a case. That
@@ -245,7 +252,9 @@ class RecordingProvider(LLMProvider):
 
     async def generate(self, input: LLMInput) -> LLMOutput:
         output = await self.inner.generate(input)
-        self.cassette.record_provider(input, output, self.redact)
+        self.cassette.record_provider(
+            input, output, self.redact, registered_as=getattr(self.inner, "registered_as", "")
+        )
         self.cassette.save()
         return output
 

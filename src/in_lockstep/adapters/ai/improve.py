@@ -91,6 +91,7 @@ class AiImprove:
         invoker_factory: Callable[[Any], Invoker] | None = None,
         *,
         probe_factory: Callable[[str], Callable[[Any], Invoker]] | None = None,
+        registry: Any = None,
         policy: InvokePolicy | None = None,
         prompts: Mapping[str, type[ImprovePrompt]] | None = None,
         layers: PromptLayers | None = None,
@@ -102,6 +103,10 @@ class AiImprove:
         # default is `ai.bootstrap.invoker_factory`, which attaches the run's recording itself.
         self.invoker_factory = invoker_factory
         self.probe_factory = probe_factory
+        # The registry the after arm resolves a case's model against, when it is not the default
+        # set: the seam `invoker_factory(..., registry=)` already is for the drafting call, so a
+        # repository on its own gateway measures through the same registrations it records on.
+        self.registry = registry
         self.policy = policy or InvokePolicy(max_turns=1, max_tokens=_DRAFT_MAX_TOKENS)
         self.prompts: Mapping[str, type[ImprovePrompt]] = (
             dict(prompts) if prompts is not None else dict(PROMPTS)
@@ -217,12 +222,35 @@ class AiImprove:
         for probe in inp.probes:
             invoker = invokers.get(probe.model)
             if invoker is None:
-                factory = (self.probe_factory or routed_factory)(probe.model)
-                # `Any`, not `Invoker`: the wrap below reaches for a `provider` the protocol does
-                # not name, on purpose -- it is applied to whatever the factory returned that has
-                # one, the way `resolve_invoker` applies it, and the recording is not something a
-                # custom factory can decline.
-                built: Any = factory(ctx)
+                # Built inside the arm's own failure handling. A factory that cannot be built --
+                # no registration for the case's provider, no credential for it -- used to escape
+                # as an exception after the drafter had been paid; it is a refusal carrying the
+                # answers so far, like a ceiling met mid-measurement (#310).
+                try:
+                    factory = (
+                        self.probe_factory(probe.model)
+                        if self.probe_factory is not None
+                        else routed_factory(probe.model, registry=self.registry)
+                    )
+                    # `Any`, not `Invoker`: the wrap below reaches for a `provider` the protocol
+                    # does not name, on purpose -- it is applied to whatever the factory returned
+                    # that has one, the way `resolve_invoker` applies it, and the recording is not
+                    # something a custom factory can decline.
+                    built: Any = factory(ctx)
+                except Exception as e:  # noqa: BLE001 - whatever refused, the answers so far travel
+                    return Outcome.blocked_by(
+                        "improve.probe_unbuildable",
+                        value=tuple(answers),
+                        cost=total,
+                        findings=(
+                            Finding(
+                                id="improve.probe_unbuildable",
+                                message=f"{probe.case}: no invoker could be built for {probe.model!r}: {e}",
+                                severity=Severity.ERROR,
+                                blocking=True,
+                            ),
+                        ),
+                    )
                 log = getattr(ctx, "recording", None)
                 if log is not None and getattr(built, "provider", None) is not None:
                     built.provider = recorded(built.provider, log)

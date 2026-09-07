@@ -103,6 +103,18 @@ async def improve_measure(ctx: RunContext, improver: Improver) -> Outcome[Any]:
         f"before    {baseline.arm.passed} passed, {baseline.arm.failed} failed, "
         f"{baseline.arm.outstanding or '—'} outstanding"
     )
+    if baseline.unqualified:
+        # Before the drafter is paid. The after arm routes each case back to the registration it
+        # was recorded on, and a case whose model carries no registration name cannot be routed
+        # anywhere: the shipped factory refused it with a credential error after a paid draft, on
+        # this repository's own promoted case (#310).
+        named = ", ".join(baseline.unqualified)
+        return blocked(
+            "improve.model_unqualified",
+            f"{named}: the recorded model names no provider, so the after arm cannot re-ask it. "
+            f"Re-harvest from a tape recorded through the registry (`eval harvest`), or set "
+            f"`harvested.model` to `<provider>:<model>` -- the registration the case was recorded on",
+        )
     if baseline.arm.failed == 0:
         # The pre-spend refusal, and the honest heart of the loop. A harvested case passes against
         # the answer it was harvested with by construction, so a corpus nobody has tightened is a

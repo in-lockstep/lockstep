@@ -111,6 +111,7 @@ class CorpusImprover:
             corpus=len(cases),
             unattributable=len(cases) - len(mine),
             models=tuple(sorted({_model_of(c) for c in mine if _model_of(c)})),
+            unqualified=tuple(c.name for c in mine if ":" not in _model_of(c)),
         )
 
     def probes(self, body: Improvable, current: str, draft: str) -> tuple[Probe, ...]:
