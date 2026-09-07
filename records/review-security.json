@@ -1,53 +1,39 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.015993,
+  "cost_usd": 0.024006,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 5,
+    "count": 2,
     "items": [
       {
         "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
+        "id": "review.security",
+        "line": 56,
+        "message": "`failure` string sourced from ticket data reaches issue description without sanitisation",
+        "path": "src/in_lockstep/platform/propose.py",
         "severity": "warning"
       },
       {
         "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: GITHUB_TOKEN",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "injection.exfil_token_names",
-        "message": "high: ANTHROPIC_API_KEY",
+        "id": "review.security",
+        "line": 37,
+        "message": "`attempt_of` parses label strings it does not own; a label like `ai-attempt-9999999` is accepted without bound",
+        "path": "src/in_lockstep/platform/propose.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 4466,
+  "input_tokens": 5522,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 173,
+  "output_tokens": 496,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 4639,
-  "wall_seconds": 10.544
+  "tokens": 6018,
+  "wall_seconds": 15.511
 }
