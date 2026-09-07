@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.086252,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 470,
+        "message": "The probe command in _tooling() is constructed from Resolution.probe, which is populated by tooling.py from user-controlled data (the `root` path and the resolved binary path). Although the probe is run with a restricted environment and a neutral cwd, the argv itself\u2014specifically the resolved binary path\u2014comes from the repository's filesystem. An attacker who controls the repository's .venv/bin/python (or any binary beside the interpreter) controls what is executed by subprocess.run during `doct\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 86,
+        "message": "binary() passes a relative path as argv0 without resolving it when os.sep appears in the name and the path is not absolute. The comment says 'relative to the working directory the sandbox runs in', and the sandbox's cwd is not this process's, so the path is reported as 'as bound' and not probed. This is documented behaviour, not a bug\u2014but it means that a user-supplied command like './gradlew' or 'scripts/test.sh' receives no _runnable() check and no doctor probe, so a misconfigured adapter that \u2026[truncated]",
+        "path": "src/in_lockstep/adapters/tooling.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "300575cb997a7b0f9aa919138b481d7363db6da2",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 577,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T224658Z-1224",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 580,
+  "ts": "2026-09-02T22:47:16+00:00",
+  "wall_seconds": 18.453
+}
