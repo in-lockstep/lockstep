@@ -167,26 +167,69 @@ def test_gate_ci_4_review_runs_every_lens_named_as_its_own_run_and_exits_with_th
     assert _ledger_record(repo, "review-security").exists() and _ledger_record(repo, "review-tests").exists()
 
 
-def test_review_refuses_to_post_one_comment_for_several_lenses(repo: Path) -> None:
+def test_gate_review_6_several_lenses_write_one_comment_body_each_and_refuse_to_share_a_file(
+    repo: Path,
+) -> None:
+    """GATE-REVIEW-6. Four lenses in one body is a wall, and until #345 the required check wrote
+    none: each lens's verdict and findings went to the job log. A directory gets `<lens>.md` per
+    lens, each anchored by its own marker so `comment` posts and later edits each on its own; a
+    path that says it is one file is refused rather than overwritten once per lens."""
     _write(repo)
-    result = CliRunner().invoke(
-        main,
-        [
-            "review",
-            "--dry-run",
-            "--diff",
-            _diff(repo),
-            "--aspect",
-            "security",
-            "--aspect",
-            "tests",
-            "--comment-out",
-            "x.md",
-        ],
-    )
-    assert result.exit_code != 0
-    assert "one --aspect" in result.output
+    args = ["review", "--dry-run", "--diff", _diff(repo), "--aspect", "security", "--aspect", "tests"]
+    refused = CliRunner().invoke(main, [*args, "--comment-out", "x.md"])
+    assert refused.exit_code != 0 and "name a directory" in refused.output, refused.output
     assert not (repo / "x.md").exists()
+
+    result = CliRunner().invoke(main, [*args, "--comment-out", "bodies"])
+    assert result.exit_code == 0, result.output
+    written = sorted(p.name for p in (repo / "bodies").glob("*.md"))
+    assert written == ["security.md", "tests.md"], written
+    for lens in ("security", "tests"):
+        body = (repo / "bodies" / f"{lens}.md").read_text()
+        assert f"in-lockstep review — {lens}" in body
+        assert f"<!-- in-lockstep:review:{lens} -->" in body, "each body carries its own marker"
+    # One lens and a directory: still `<lens>.md`, so a scaffold that names a directory keeps
+    # working when a second lens is added.
+    one = CliRunner().invoke(main, ["review", "--dry-run", "--diff", _diff(repo), "--comment-out", "single"])
+    assert one.exit_code == 0, one.output
+    assert [p.name for p in (repo / "single").glob("*.md")] == ["security.md"]
+
+
+def test_gate_review_6_comment_posts_every_body_in_a_directory_under_its_own_marker(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-REVIEW-6. The publish job hands `comment` the directory `review` wrote; each body is
+    posted under the marker inside it, and a body with no marker stops the lot before any post."""
+    from in_lockstep.platform import hosted
+
+    posted: list[tuple[int, str]] = []
+
+    class _Scm:
+        async def upsert_comment(self, target: int, body: str, marker: str) -> None:
+            posted.append((target, marker))
+
+    monkeypatch.setattr(hosted, "hosted_scm", lambda root: _Scm())
+    bodies = repo / "bodies"
+    bodies.mkdir()
+    (bodies / "tests.md").write_text("## in-lockstep review — tests\n\n<!-- in-lockstep:review:tests -->\n")
+    (bodies / "security.md").write_text(
+        "## in-lockstep review — security\n\n<!-- in-lockstep:review:security -->\n"
+    )
+    result = CliRunner().invoke(main, ["comment", "--pr", "7", "--body-file", str(bodies)])
+    assert result.exit_code == 0, result.output
+    assert posted == [(7, "<!-- in-lockstep:review:security -->"), (7, "<!-- in-lockstep:review:tests -->")]
+
+    posted.clear()
+    # Sorted LAST, so a command that posted as it read would have posted two before refusing.
+    (bodies / "zz-unanchored.md").write_text("no marker here\n")
+    result = CliRunner().invoke(main, ["comment", "--pr", "7", "--body-file", str(bodies)])
+    assert result.exit_code != 0 and "carries no in-lockstep marker" in result.output
+    assert posted == [], "one unanchored body must not let the others post first"
+
+    empty = repo / "nothing"
+    empty.mkdir()
+    result = CliRunner().invoke(main, ["comment", "--pr", "7", "--body-file", str(empty)])
+    assert result.exit_code != 0 and "no .md body" in result.output
 
 
 def test_gate_ci_4_run_blocked_ok_exits_zero_on_a_blocked_run_and_says_so(repo: Path) -> None:
@@ -471,7 +514,7 @@ def test_the_scaffold_uploads_a_path_something_writes(repo: Path) -> None:
         for s in j["steps"]
         if "upload-artifact" in str(s.get("uses", ""))
     ]
-    assert paths == [["history.bundle", ".lockstep/"]], paths
+    assert paths == [["history.bundle", "review-comments/", ".lockstep/"]], paths
 
 
 def test_the_scaffold_carries_a_timeout(repo: Path) -> None:
