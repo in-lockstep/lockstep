@@ -53,7 +53,7 @@ still advertises.
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
 | Flaky-test adapter | planned | roadmap item 26 |
 | GitHub | runs | SCM, issues, chat-ops gate, trampolines |
-| GitLab | partial | `GitLabScm`/`GitLabIssues` and host-aware `init` ship; no live dogfooded pipeline yet |
+| GitLab | partial | `GitLabScm`/`GitLabIssues` and `init --host gitlab` ship a file with the four verbs and a published review record, parity-tested against the GitHub trampolines in both directions; no pipeline has ever run it, and only an instance would move this row |
 | Keyless CI (federation) | runs | GitHub OIDC exchanged at Anthropic; no `ANTHROPIC_API_KEY` in secrets |
 | Org standards as a package | runs | `in_lockstep.standards` entry points at `Tier.PLUGIN`; worked example in `examples/acme-standards` |
 | Extension packs | runs | `in_lockstep.extensions` entry points that **offer** rather than apply; `pack describe` derives a receipt, `add` records what you accepted, `pack try` measures it for `$0` |

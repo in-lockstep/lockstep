@@ -78,10 +78,11 @@ jobs:
       - run: uv run in-lockstep doctor
         env:
           IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
-      - run: |
-          uv run in-lockstep run improve/measure --record || status=$?
-          test "${status:-0}" -eq 3 && echo "refused before spending; the ledger record says why" && exit 0
-          exit "${status:-0}"
+      # `--blocked-ok`: a scheduled measurement refused before spending -- nothing recurs yet, the
+      # ceiling is reached -- is the control working, and the ledger record says which. That
+      # translation was a `test "$status" -eq 3 && exit 0` here, a decision about what a run
+      # MEANS made in YAML (#314); it is a flag on `run` now, with a test (GATE-CI-4).
+      - run: uv run in-lockstep run improve/measure --record --blocked-ok
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
@@ -122,8 +123,9 @@ jobs:
         with:
           name: improve-${{ github.run_id }}
           path: improve
-      - if: ${{ hashFiles('improve/changeset/changeset.json') != '' }}
-        run: uv run in-lockstep run improve/propose --arg artifact=improve/changeset
+      # No `hashFiles` guard: `improve_propose` reads the artifact and refuses by name when there
+      # is no proposal in it, which is the decision, made once, in Python (#314).
+      - run: uv run in-lockstep run improve/propose --arg artifact=improve/changeset --blocked-ok
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: |

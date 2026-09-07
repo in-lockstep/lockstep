@@ -142,6 +142,74 @@ def test_review_loads_the_repositorys_own_module(repo: Path) -> None:
     assert "haiku" in _ledger_record(repo, "review-security").read_text()
 
 
+def test_gate_ci_4_review_runs_every_lens_named_as_its_own_run_and_exits_with_the_worst(repo: Path) -> None:
+    """GATE-CI-4. The four-lens loop was `status=0; for aspect in …; do … || status=$?; done;
+    exit $status` in `lockstep.yml`, lifecycle logic in the one file nothing tests (#314). It is
+    `review`'s own loop now: each lens is a run with its own record, and the worst status exits."""
+    _write(repo)
+    result = CliRunner().invoke(
+        main,
+        [
+            "review",
+            "--dry-run",
+            "--base",
+            "HEAD",
+            "--diff",
+            _diff(repo),
+            "--aspect",
+            "security",
+            "--aspect",
+            "tests",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "review/security  " in result.output and "review/tests  " in result.output
+    assert _ledger_record(repo, "review-security").exists() and _ledger_record(repo, "review-tests").exists()
+
+
+def test_review_refuses_to_post_one_comment_for_several_lenses(repo: Path) -> None:
+    _write(repo)
+    result = CliRunner().invoke(
+        main,
+        [
+            "review",
+            "--dry-run",
+            "--diff",
+            _diff(repo),
+            "--aspect",
+            "security",
+            "--aspect",
+            "tests",
+            "--comment-out",
+            "x.md",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "one --aspect" in result.output
+    assert not (repo / "x.md").exists()
+
+
+def test_gate_ci_4_run_blocked_ok_exits_zero_on_a_blocked_run_and_says_so(repo: Path) -> None:
+    """GATE-CI-4. `improve.yml` translated exit 3 to 0 in shell -- `test "$status" -eq 3 && exit 0`
+    -- a decision about what a scheduled run MEANS living in YAML (#314). A flag on `run`, and the
+    log says a refusal happened rather than showing a green step that did nothing."""
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep, workflow\n"
+        "from in_lockstep.core.outcome import Outcome\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=1.0)\n"
+        "@workflow(id='demo/refused')\n"
+        "async def demo(ctx):\n"
+        "    return Outcome.blocked_by('demo.nothing_recurs')\n"
+    )
+    blocked = CliRunner().invoke(main, ["run", "demo/refused"])
+    assert blocked.exit_code == 3, blocked.output
+    result = CliRunner().invoke(main, ["run", "demo/refused", "--blocked-ok"])
+    assert result.exit_code == 0, result.output
+    assert "blocked (demo.nothing_recurs)" in result.output and "--blocked-ok" in result.output
+
+
 def test_an_untyped_model_flag_does_not_outrank_a_declared_route(repo: Path) -> None:
     _write(repo, model="google:gemini-2.5-flash")
     CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])

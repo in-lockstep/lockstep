@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -518,7 +519,7 @@ def test_init_on_a_gitlab_repository_writes_a_gitlab_trampoline(
     assert f"in-lockstep[anthropic]=={__version__}" in text, "pinned to the version that wrote it"
 
     parsed = yaml.safe_load(text)
-    assert parsed["stages"] == ["gate", "review", "work", "propose"]
+    assert parsed["stages"] == ["gate", "review", "publish", "work", "propose"]
     review = parsed["review"]
     assert review["rules"] == [{"if": '$CI_PIPELINE_SOURCE == "merge_request_event"'}]
     assert review["variables"]["GIT_DEPTH"] == "0", "the diff needs full history"
@@ -760,32 +761,157 @@ def _gitlab_scaffold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[st
     return scaffold
 
 
-def test_gate_ci_2_the_write_verbs_run_the_same_framework_commands_on_both_hosts(
+_RUN = re.compile(r'in-lockstep run "?\$?\{?([\w-]+)\}?"?/([\w-]+)')
+
+
+def _run_steps(text: str) -> set[str]:
+    """Every `in-lockstep run <family>/<step>` a trampoline invokes, with a `${LOCKSTEP_VERB}`
+    family expanded to the two verbs the GitLab scaffold documents for it."""
+    found: set[str] = set()
+    for family, step in _RUN.findall(re.sub(r"\\\s*\n\s*", " ", text)):
+        families = ("implement", "fix") if family == "LOCKSTEP_VERB" else (family,)
+        found.update(f"{f}/{step}" for f in families)
+    return found
+
+
+def _github_side() -> dict[str, str]:
+    """The GitHub half of O3's claim: every trampoline `init` writes there, plus this repository's
+    own `improve.yml`, which is the learning loop's only GitHub spelling (no scaffold writes one)."""
+    from in_lockstep.cli import (
+        _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        _SCAFFOLD_FIX_TRAMPOLINE,
+        _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        _SCAFFOLD_TRAMPOLINE,
+    )
+
+    root = Path(__file__).resolve().parents[2]
+    return {
+        "scaffold: lockstep.yml": _SCAFFOLD_TRAMPOLINE,
+        "scaffold: implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "scaffold: fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "scaffold: ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        "improve.yml": (root / ".github" / "workflows" / "improve.yml").read_text(),
+    }
+
+
+def _parity_gaps(github: dict[str, str], gitlab: str) -> list[str]:
+    """Each `run <family>/<step>` one host invokes and the other does not, as sentences."""
+    on_github = {step for text in github.values() for step in _run_steps(text)}
+    on_gitlab = _run_steps(gitlab)
+    return sorted(
+        [f"GitLab has no job running {step}" for step in on_github - on_gitlab]
+        + [f"{step} is a GitLab-only invention" for step in on_gitlab - on_github]
+    )
+
+
+def test_gate_ci_2_every_run_step_a_github_trampoline_invokes_has_a_gitlab_job_and_vice_versa(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """O3's actual claim: the same process, not a similar one.
+    """GATE-CI-2. O3's actual claim: the same process, not a similar one -- walked from the
+    GitHub trampolines rather than a list written here, because the six-string list this used to
+    be never noticed that `fix/` appeared nowhere in the GitLab file (#314)."""
+    from in_lockstep.cli import _SCAFFOLD_GITLAB_TRAMPOLINE
 
-    Compared against the GitHub trampoline rather than against a list written here, because a
-    list written here is a third statement of the contract that can drift from both files.
-    """
-    from in_lockstep.cli import _SCAFFOLD_IMPLEMENT_TRAMPOLINE
+    _gitlab_scaffold(tmp_path, monkeypatch)  # the file `init` writes parses and loads
+    assert _parity_gaps(_github_side(), _SCAFFOLD_GITLAB_TRAMPOLINE) == []
+    on_gitlab = _run_steps(_SCAFFOLD_GITLAB_TRAMPOLINE)
+    assert {"implement/from-ticket", "fix/from-ticket", "improve/measure", "improve/propose"} <= on_gitlab
+    assert "LOCKSTEP_VERB=fix" in _SCAFFOLD_GITLAB_TRAMPOLINE, "the file has to say how fix is asked for"
 
-    parsed = _gitlab_scaffold(tmp_path, monkeypatch)
-    gitlab = " ".join(
-        " ".join(job["script"]) for name, job in parsed.items() if name != "stages" and "script" in job
+
+def test_gate_ci_2_the_parity_walk_fails_on_a_verb_only_one_host_runs() -> None:
+    """The negative control: a GitHub trampoline running a step the GitLab file has no job for."""
+    from in_lockstep.cli import _SCAFFOLD_GITLAB_TRAMPOLINE
+
+    github = {**_github_side(), "fixture": "run: uv run in-lockstep run backport/from-ticket --arg x=y\n"}
+    assert _parity_gaps(github, _SCAFFOLD_GITLAB_TRAMPOLINE) == [
+        "GitLab has no job running backport/from-ticket"
+    ]
+    assert _parity_gaps(_github_side(), "- in-lockstep run rfe/draft") != []
+
+
+def test_gate_ci_2_init_fix_on_gitlab_names_the_jobs_that_run_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`init --fix` used to print that the jobs were "already in .gitlab-ci.yml" while the file
+    ran implement and nothing else (#314)."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, ["init", "--fix"])
+    assert result.exit_code == 0, result.output
+    assert "fix/from-ticket" in result.output and "fix/propose" in result.output
+    assert "LOCKSTEP_VERB=fix" in result.output
+    text = (tmp_path / ".gitlab-ci.yml").read_text()
+    assert "fix/from-ticket" in _run_steps(text) and "fix/propose" in _run_steps(text)
+    assert not (tmp_path / ".github").exists()
+
+
+def _corp_clone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://git.corp.example/x/y.git"], cwd=tmp_path, check=True
     )
-    for verb in (
-        "in-lockstep gate",
-        "in-lockstep run implement/from-ticket",
-        "in-lockstep run implement/propose",
-        "in-lockstep provision",
-        "in-lockstep doctor",
-        "in-lockstep history",
-    ):
-        assert verb in gitlab, f"GitLab does not run {verb!r}"
-        assert verb in _SCAFFOLD_IMPLEMENT_TRAMPOLINE or verb in _github_review_scaffold(), (
-            f"{verb!r} is a GitLab-only invention; the hosts must run the same process"
-        )
+
+
+def test_init_writes_no_trampoline_for_a_remote_that_names_neither_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A self-hosted GitLab at `git.corp.example` used to get a GitHub workflow its host ignores,
+    silently (#314). The module and the ignore lines are written; the trampoline is not, and the
+    two flags that would write one are named."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    _corp_clone(tmp_path, monkeypatch)
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".lockstep" / "lockstep.py").exists()
+    assert not (tmp_path / ".github").exists() and not (tmp_path / ".gitlab-ci.yml").exists()
+    assert "--host github" in result.output and "--host gitlab" in result.output
+    assert "origin remote" in result.output
+
+
+def test_init_host_gitlab_writes_the_gitlab_trampoline_where_nothing_placed_the_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    _corp_clone(tmp_path, monkeypatch)
+    result = CliRunner().invoke(main, ["init", "--host", "gitlab", "--implement"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".gitlab-ci.yml").exists() and not (tmp_path / ".github").exists()
+    assert "implement/from-ticket" in result.output, "the --implement message names the verb the jobs run"
+    assert "Things to decide" in result.output and "LOCKSTEP_IMPROVE" in result.output
+
+
+def test_init_with_no_remote_at_all_keeps_the_github_default_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repository that has said nothing yet is not a repository that said "not GitHub"."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".github" / "workflows" / "lockstep.yml").exists()
+    assert "no origin remote yet" in result.output
 
 
 def _github_review_scaffold() -> str:

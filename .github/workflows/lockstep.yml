@@ -119,25 +119,22 @@ jobs:
         # errored — a budget ceiling, an egress refusal, a schema mismatch. Nothing here can turn
         # a note about performance into a merge block, which is how a team learns to ignore red.
         #
-        # Every lens runs even after one fails, and the step exits with the worst status. Failing
-        # fast would let one transient refusal cost the recordings of the three lenses behind it,
-        # and this check is where most of the eval corpus comes from.
+        # Every lens runs even after one fails, and the command exits with the worst status. That
+        # loop used to be four shell statements here -- `status=0; for …; do … || status=$?; done;
+        # exit $status` -- which is lifecycle logic in the one file nothing tests (#314). It is
+        # `review`'s own loop now, and this file names the lenses and nothing else (GATE-CI-4).
         #
         # One tape for all four. A cassette is keyed on the whole composed prompt and each lens
         # composes a different one, so they accumulate into the same file rather than overwrite
         # each other — and one harvest at the end covers the lot.
         run: |
-          status=0
-          for aspect in security intent performance tests; do
-            uv run in-lockstep review \
-              --base "origin/${GITHUB_BASE_REF}" \
-              --head "${GITHUB_SHA}" \
-              --aspect "$aspect" \
-              --budget 0.75 \
-              --record \
-              --cassette "${RUNNER_TEMP}/review.json" || status=$?
-          done
-          exit $status
+          uv run in-lockstep review \
+            --base "origin/${GITHUB_BASE_REF}" \
+            --head "${GITHUB_SHA}" \
+            --aspect security --aspect intent --aspect performance --aspect tests \
+            --budget 0.75 \
+            --record \
+            --cassette "${RUNNER_TEMP}/review.json"
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
