@@ -208,6 +208,214 @@ def test_a_rejected_push_is_reconciled_rather_than_reported(tmp_path: Path) -> N
     assert sorted(str(r["run_id"]) for r in GitLedger(root=landed).records()) == ["run-a", "run-b"]
 
 
+# -- GATE-LEDGER-12: the ledger is readable on a checkout that never wrote it --------------------
+#
+# A CI checkout and a fresh clone create no local branch for a ref that is not HEAD, so every
+# reader in CI read nothing for as long as the ledger read `refs/heads/lockstep-history` and
+# nothing else (#307). The read falls back to the remote-tracking ref and creates no ref of its
+# own; `pull()` is the act that makes a local branch.
+
+
+def _shared(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A bare origin, a clone that records and pushes, and a `git clone` that never recorded.
+
+    The second is a real clone rather than `_repo` plus a remote: `git clone` is what a second
+    engineer and `actions/checkout` at full depth actually produce -- a remote-tracking ref and no
+    local branch -- and a test that set the refs up by hand would prove the ledger reads what the
+    test wrote.
+    """
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    writer = _repo(tmp_path / "a")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=writer, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=writer, check=True, capture_output=True)
+    asyncio.run(GitLedger(root=writer).append("review-a", {"kind": "review", "cost_usd": 0.19}))
+    GitLedger(root=writer).push()
+    reader = tmp_path / "b"
+    subprocess.run(["git", "clone", "-q", str(origin), str(reader)], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "b@example.test"], cwd=reader, check=True)
+    subprocess.run(["git", "config", "user.name", "b"], cwd=reader, check=True)
+    return origin, writer, reader
+
+
+def test_gate_ledger_12_a_clone_that_never_recorded_reads_the_remote_copy_and_creates_no_ref(
+    tmp_path: Path,
+) -> None:
+    """B reads A's record without pushing, pulling or writing anything, and says which ref it read."""
+    _origin, _writer, reader = _shared(tmp_path)
+    ledger = GitLedger(root=reader)
+    assert _git(reader, "rev-parse", "--verify", "--quiet", f"refs/heads/{DEFAULT_BRANCH}") == ""
+
+    assert [r["run_id"] for r in ledger.records()] == ["review-a"]
+    assert asyncio.run(ledger.read("review-a")) is not None
+    assert ledger.resolved() == (
+        f"refs/remotes/origin/{DEFAULT_BRANCH}",
+        _git(reader, "rev-parse", "origin/lockstep-history"),
+    )
+    assert ledger.verify() == [] and ledger.absorbed_runs() == set()
+    assert _git(reader, "rev-parse", "--verify", "--quiet", f"refs/heads/{DEFAULT_BRANCH}") == "", (
+        "a read left a local branch behind"
+    )
+    diverged = ledger.divergence()
+    assert diverged.read == f"refs/remotes/origin/{DEFAULT_BRANCH}"
+    assert diverged.local_only is None and diverged.remote_only is None, "no local branch: not 0 behind"
+
+
+def test_gate_ledger_12_a_clone_with_neither_ref_reads_nothing_and_says_so(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    ledger = GitLedger(root=root)
+    assert ledger.resolved() is None and ledger.records() == []
+    assert ledger.divergence().read == ""
+
+
+def test_gate_ledger_12_the_first_write_on_such_a_clone_creates_the_local_branch_on_the_remote_commit(
+    tmp_path: Path,
+) -> None:
+    """A record appended where only the remote-tracking ref exists lands on a local branch whose
+    parent is the remote's commit, so the record sits beside A's and not on a second orphan
+    history that a later push would have to reconcile."""
+    _origin, _writer, reader = _shared(tmp_path)
+    ledger = GitLedger(root=reader)
+    asyncio.run(ledger.append("review-b", {"kind": "review"}))
+    assert ledger.resolved() == (f"refs/heads/{DEFAULT_BRANCH}", ledger.head())
+    assert _git(reader, "rev-parse", f"{DEFAULT_BRANCH}^") == _git(
+        reader, "rev-parse", "origin/lockstep-history"
+    )
+    assert sorted(str(r["run_id"]) for r in ledger.records()) == ["review-a", "review-b"]
+    diverged = ledger.divergence()
+    assert (diverged.local_only, diverged.remote_only) == (1, 0)
+
+
+def test_gate_ledger_12_a_clone_reading_the_remote_copy_has_nothing_of_its_own_to_push(
+    tmp_path: Path,
+) -> None:
+    _origin, _writer, reader = _shared(tmp_path)
+    with pytest.raises(HistoryError, match="no history"):
+        GitLedger(root=reader).push()
+
+
+def test_gate_ledger_12_pull_brings_both_sides_records_onto_the_local_branch_without_pushing(
+    tmp_path: Path,
+) -> None:
+    """Local-only and remote-only records end up together on the local ref, `verify()` is empty,
+    and the origin is exactly where A left it."""
+    origin, writer, reader = _shared(tmp_path)
+    ledger = GitLedger(root=reader)
+    asyncio.run(ledger.append("review-b", {"kind": "review"}))
+    asyncio.run(GitLedger(root=writer).append("review-a2", {"kind": "implement"}))
+    GitLedger(root=writer).push()
+    at_origin = _git(origin, "rev-parse", DEFAULT_BRANCH)
+
+    pulled = ledger.pull()
+    assert pulled.gained == 1 and not pulled.created
+    assert sorted(str(r["run_id"]) for r in ledger.records()) == ["review-a", "review-a2", "review-b"]
+    assert ledger.verify() == []
+    assert _git(origin, "rev-parse", DEFAULT_BRANCH) == at_origin, "pull pushed"
+    assert ledger.divergence().remote_only == 0 and ledger.divergence().local_only == 1
+    assert ledger.pull().gained == 0, "nothing new: nothing folded"
+
+
+def test_gate_ledger_12_pull_on_a_clone_with_no_local_branch_creates_one(tmp_path: Path) -> None:
+    _origin, _writer, reader = _shared(tmp_path)
+    pulled = GitLedger(root=reader).pull()
+    assert pulled.created and pulled.gained == 1
+    assert _git(reader, "rev-parse", DEFAULT_BRANCH) == _git(reader, "rev-parse", "origin/lockstep-history")
+
+
+def test_gate_ledger_12_pull_from_a_remote_without_the_branch_refuses_by_name(tmp_path: Path) -> None:
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    root = _repo(tmp_path / "a")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=root, check=True)
+    with pytest.raises(HistoryError, match="could not fetch lockstep-history from origin"):
+        GitLedger(root=root).pull()
+
+
+def _second_engineer(reader: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import os
+
+    (reader / ".lockstep").mkdir()
+    (reader / ".lockstep" / "lockstep.py").write_text(
+        "from in_lockstep import Lockstep\nlockstep = Lockstep.detect()\n"
+    )
+    for var in [v for v in os.environ if v.startswith("GITHUB_")] + ["GITLAB_CI"]:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(reader)
+
+
+def test_gate_ledger_12_report_and_explain_serve_the_second_engineer_and_name_the_ref_they_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command-line half: `report` and `history --explain` on a clone that never recorded
+    show A's run instead of "no records yet", and say the numbers came from the remote copy."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    _origin, _writer, reader = _shared(tmp_path)
+    _second_engineer(reader, monkeypatch)
+
+    report = CliRunner().invoke(main, ["report"])
+    assert report.exit_code == 0, report.output
+    assert "no records yet" not in report.output
+    assert f"ledger    read refs/remotes/origin/{DEFAULT_BRANCH}; no local branch yet" in report.output
+    assert "`history --pull` creates one" in report.output
+
+    explain = CliRunner().invoke(main, ["history", "--explain", "review-a"])
+    assert explain.exit_code == 0, explain.output
+    assert "review-a" in explain.output
+
+    listing = CliRunner().invoke(main, ["history"])
+    assert f"1 record(s), read from refs/remotes/origin/{DEFAULT_BRANCH})" in listing.output
+    assert _git(reader, "rev-parse", "--verify", "--quiet", f"refs/heads/{DEFAULT_BRANCH}") == "", (
+        "a command that only reads created the local branch"
+    )
+
+
+def test_gate_ledger_12_history_pull_then_report_shows_the_divergence_both_ways(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    _origin, writer, reader = _shared(tmp_path)
+    _second_engineer(reader, monkeypatch)
+
+    pulled = CliRunner().invoke(main, ["history", "--pull"])
+    assert pulled.exit_code == 0, pulled.output
+    assert "pulled    created the local branch from origin/lockstep-history  (+1 record(s))" in pulled.output
+
+    # A moves on and B records: one record each way, and the footer counts both directions.
+    asyncio.run(GitLedger(root=writer).append("review-a2", {"kind": "review"}))
+    GitLedger(root=writer).push()
+    asyncio.run(GitLedger(root=reader).append("review-b", {"kind": "review"}))
+    subprocess.run(["git", "fetch", "-q", "origin"], cwd=reader, check=True, capture_output=True)
+    report = CliRunner().invoke(main, ["report"])
+    assert (
+        f"ledger    read refs/heads/{DEFAULT_BRANCH}; 1 record(s) here not on origin/lockstep-history, "
+        "1 there not here  (`history --pull` brings them)"
+    ) in report.output, report.output
+
+
+def test_the_ledger_line_is_a_dash_when_no_remote_copy_was_fetched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A laptop with a local branch and no fetched remote copy is not "0 behind"."""
+    from click.testing import CliRunner
+
+    from in_lockstep.cli import main
+
+    root = _repo(tmp_path)
+    _second_engineer(root, monkeypatch)
+    asyncio.run(GitLedger(root=root).append("review-1", {"kind": "review"}))
+    report = CliRunner().invoke(main, ["report"])
+    assert (
+        f"ledger    read refs/heads/{DEFAULT_BRANCH}; origin/lockstep-history — (not fetched)"
+        in report.output
+    )
+
+
 # -- GATE-LEDGER-8: tamper-evidence ----------------------------------------------------------
 #
 # The auditor's first question after "when did this run" is "how do I know this wasn't

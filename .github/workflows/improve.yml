@@ -64,6 +64,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
+          # Every branch, so `origin/lockstep-history` is here for the ledger to read: a checkout
+          # has no local copy, and a census over nothing refuses `improve.no_trend` forever (#307).
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:

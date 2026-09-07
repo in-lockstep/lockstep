@@ -1445,6 +1445,11 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
 @main.command(name="history")
 @click.option("--push", is_flag=True, help="Publish the branch. Needs push access; never automatic.")
 @click.option(
+    "--pull",
+    is_flag=True,
+    help="Fetch the remote's records onto the local branch, record by record. Pushes nothing.",
+)
+@click.option(
     "--bundle", default="", type=click.Path(), help="Write the branch to a file to travel as an artifact."
 )
 @click.option("--from-bundle", default="", type=click.Path(), help="Take in history another job recorded.")
@@ -1471,6 +1476,7 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
 )
 def history_cmd(
     push: bool,
+    pull: bool,
     bundle: str,
     from_bundle: str,
     from_artifacts: str,
@@ -1493,6 +1499,17 @@ def history_cmd(
         return
 
     ledger = GitLedger()
+
+    if pull:
+        # The second engineer's act: what a colleague pushed comes onto this clone's branch. A
+        # read never does this by itself -- a network call nobody asked for -- so `report` says how
+        # far the two refs differ and this is the command that closes the gap (#307).
+        try:
+            pulled = ledger.pull()
+        except HistoryError as e:
+            raise click.ClickException(str(e)) from None
+        what = "created the local branch from" if pulled.created else "folded into the local branch from"
+        click.echo(f"pulled    {what} {ledger.remote}/{ledger.branch}  (+{pulled.gained} record(s))")
 
     # Absorb first, so `--from-bundle --push` in one invocation does what it reads like.
     if from_bundle:
@@ -1547,13 +1564,17 @@ def history_cmd(
         for line in note.lines:
             click.echo(f"              {line}")
 
-    head = ledger.head()
-    if head is None:
+    found = ledger.resolved()
+    if found is None:
         click.echo(f"no history yet on {ledger.branch}; it is created by the first run that records one")
         return
 
+    ref, head = found
     records = ledger.records()
-    click.echo(f"branch    {ledger.branch}  ({head[:12]}, {len(records)} record(s))")
+    # Which ref was read, when it was not the local branch: a fresh clone reading the remote's
+    # copy is served, and told so, rather than told there is nothing here (#307).
+    where = "" if ref == ledger.ref else f", read from {ref}"
+    click.echo(f"branch    {ledger.branch}  ({head[:12]}, {len(records)} record(s){where})")
     click.echo("")
     for record in records[-limit:]:
         kind = str(record.get("kind", "run"))
@@ -1741,6 +1762,30 @@ def _history_line(verify: Any, tampered: list[Any], acknowledged: list[Any] = []
             f"acknowledged by name (see above)"
         )
     return "history   append-only across the retained chain"
+
+
+def _ledger_line(ledger: Any) -> str:
+    """Which ref the numbers above were read from, and how far it is from the other one.
+
+    A clone that never wrote the branch reads the remote-tracking ref, and a laptop that never
+    pulled reads a local branch the remote has moved past; either way the page is honest only if
+    it says so. A count it cannot take -- no remote copy fetched, or no local branch -- renders as
+    a dash, never as "0 behind" (#307).
+    """
+    diverged = getattr(ledger, "divergence", None)
+    if not callable(diverged):
+        return "ledger    file store (one directory; nothing to diverge from)"
+    found = diverged()
+    remote = f"{ledger.remote}/{ledger.branch}"
+    if found.read != ledger.ref:
+        return f"ledger    read {found.read}; no local branch yet (`history --pull` creates one)"
+    if found.local_only is None or found.remote_only is None:
+        return f"ledger    read {found.read}; {remote} — (not fetched)"
+    return (
+        f"ledger    read {found.read}; {found.local_only} record(s) here not on {remote}, "
+        f"{found.remote_only} there not here"
+        + ("  (`history --pull` brings them)" if found.remote_only else "")
+    )
 
 
 def _report_host() -> tuple[Any, str]:
@@ -1936,6 +1981,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
         # asserts, and a richer report that quietly stopped saying whether the history behind it
         # is append-only would be a page of numbers with the one caveat about them removed.
         click.echo(_history_line(verify, tampered, acknowledged))
+        click.echo(_ledger_line(ledger))
         click.echo(_bundles_line(host, records, ledger, reason=reason))
         if html_path:
             # Written HERE and not by `metrics`, which is a leaf that may not reach `privileged`.
@@ -1990,6 +2036,7 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
     click.echo("")
     click.echo(f"{len(records)} record(s); `in-lockstep history --explain <run>` for any one of them")
     click.echo(_history_line(verify, tampered, acknowledged))
+    click.echo(_ledger_line(ledger))
     click.echo(_bundles_line(host, records, ledger, reason=reason))
 
 

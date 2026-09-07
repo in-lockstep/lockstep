@@ -225,6 +225,61 @@ def test_a_qualifying_trend_is_attributed_to_the_declared_body_by_exact_membersh
     assert "none answers to a declared" in improver.attribute(records, (other,)).reason
 
 
+def test_gate_ledger_12_measure_over_records_that_live_only_on_the_remote_reads_the_same_census(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The scheduled loop runs on a checkout that never recorded. Its census must be the branch's,
+    not the empty ledger a checkout has locally -- or the first scheduled run refuses
+    `improve.no_trend` before any body is consulted, forever (#307)."""
+    from in_lockstep.platform.ledger import GitLedger
+
+    records = [
+        json.loads(p.read_text())
+        for p in sorted((_repo(tmp_path, monkeypatch) / ".lockstep" / "ledger").glob("*.json"))
+    ]
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    writer = tmp_path / "writer"
+    writer.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=writer, check=True)
+    (writer / "x").write_text("x\n")
+    subprocess.run(["git", "add", "-A"], cwd=writer, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "base"], cwd=writer, check=True
+    )
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=writer, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=writer, check=True, capture_output=True)
+    for record in records:
+        asyncio.run(GitLedger(root=writer).append(str(record["run_id"]), record))
+    GitLedger(root=writer).push()
+
+    reader = tmp_path / "reader"
+    subprocess.run(["git", "clone", "-q", str(origin), str(reader)], check=True, capture_output=True)
+    (reader / "house").mkdir()
+    (reader / "house" / "security.md").write_text(HEADER + BODY)
+    _corpus(reader)
+    monkeypatch.chdir(reader)
+    ungranted = ChangeGuard(PathPolicy())
+
+    remote_only = _measure(_ctx(reader, guard=ungranted, drafter=_drafter(), prober=_Stub()), reader)
+    read_remote = capsys.readouterr().out
+    local = _measure(_ctx(writer, guard=ungranted, drafter=_drafter(), prober=_Stub()), writer)
+    read_local = capsys.readouterr().out
+    assert remote_only.status is Status.BLOCKED and remote_only.reason == "improve.permitted_by_omission"
+    assert local.reason == remote_only.reason
+    trend = "trend     review.security  (6 of 6 run(s), 6 billed, 2 week(s))"
+    assert trend in read_remote and trend in read_local
+
+    # Control: with the remote copy gone, the checkout is the empty census the fallback replaced.
+    subprocess.run(
+        ["git", "update-ref", "-d", "refs/remotes/origin/lockstep-history"], cwd=reader, check=True
+    )
+    assert (
+        _measure(_ctx(reader, guard=ungranted, drafter=_drafter(), prober=_Stub()), reader).reason
+        == "improve.no_trend"
+    )
+
+
 def test_a_trend_below_the_thresholds_attributes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
