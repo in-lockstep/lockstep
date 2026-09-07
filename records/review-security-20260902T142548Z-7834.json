@@ -1,0 +1,35 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.19109,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "74e2d806f779643ae994f516bcd0ecca1c332cc5",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 69,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T142548Z-7834",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 72,
+  "ts": "2026-09-02T14:25:57+00:00",
+  "wall_seconds": 8.754
+}
