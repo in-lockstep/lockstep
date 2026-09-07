@@ -1,7 +1,7 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.028488,
+  "cost_usd": 0.027753,
   "decided": true,
   "epoch": "in-process",
   "findings": {
@@ -10,30 +10,30 @@
       {
         "blocking": false,
         "id": "review.security",
-        "line": 79,
-        "message": "WorktreeRunner silently ignores the caller-supplied `cwd` argument. If callers pass a `cwd` that is not the live tree root (e.g. a per-session workspace subdirectory), the worktree is still materialised from `repo_root`, which may not match. The real concern is that the contract 'we always run in a throwaway copy of HEAD' depends entirely on `materialize` succeeding and the `async with` block completing cleanly. If `materialize` raises before the worktree is ready, the `inner.run` call never hap\u2026[truncated]",
+        "line": 75,
+        "message": "The `path` component of the `git show {ref}:{path}` argument is not validated before being interpolated into the argv token passed to `git`.",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 74,
-        "message": "`repo_root` is accepted as a plain `str` and passed directly to `materialize` with no validation. An attacker who can influence `repo_root` (e.g. via a symlink, a crafted config value, or a `--repo-root` flag) can point `WorktreeRunner` at an arbitrary directory. If that directory is not a git repository, the error is caught and surfaced as `WorktreeError`; if it is a git repository they control, the 'throwaway copy' becomes a copy of their chosen tree, not the real project HEAD. This is lower-s\u2026[truncated]",
+        "line": 62,
+        "message": "The `ref` guard checks only `startswith(\"-\")`, not a colon in the ref name or other git object-name characters that could ambiguate `{ref}:{path}`.",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 6611,
+  "input_tokens": 6266,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 577,
+  "output_tokens": 597,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 7188,
-  "wall_seconds": 15.946
+  "tokens": 6863,
+  "wall_seconds": 17.883
 }
