@@ -268,6 +268,34 @@ def test_a_staged_test_that_really_passes_is_still_reported_as_not_red(
     assert "python_classes" not in outcome.findings[0].message
 
 
+def test_gate_verdict_1_a_staged_test_that_exits_clean_at_import_is_not_red(repo: Path) -> None:
+    """`os._exit(0)` before pytest prints a line: a green suite of zero tests, which used to satisfy
+    nothing in the red phase and let the strategy proceed to implement against no test (#313)."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_exit.py", contents="import os\n\nos._exit(0)\n"),
+            _done("staged a test"),
+        ]
+    )
+    outcome = _run(provider, repo)
+    assert outcome.status is Status.FAILED, outcome
+    assert outcome.reason in ("tdd.not_red", "tdd.test_not_collected")
+    assert not outcome.decided
+
+
+def test_gate_verdict_1_a_staged_test_that_exits_failing_at_import_is_errored_not_red(repo: Path) -> None:
+    """`os._exit(1)` used to read as red -- exit 1, zero counts. A runner that never reported is a
+    broken run, and the strategy passes that through as itself rather than as a verdict."""
+    provider = Scripted(
+        [
+            _call("write_file", path="test_exit.py", contents="import os\n\nos._exit(1)\n"),
+            _done("staged a test"),
+        ]
+    )
+    outcome = _run(provider, repo)
+    assert outcome.status is Status.ERRORED and outcome.reason == "test.no_summary", outcome
+
+
 def test_tdd_fails_when_the_implementation_leaves_the_test_red(repo: Path) -> None:
     """A change that does not make its own test pass is returned, not proposed."""
     provider = Scripted(
