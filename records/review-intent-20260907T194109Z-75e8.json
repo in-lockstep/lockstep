@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34156453992",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.036591,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 654,
+        "message": "`_current` calls `self.workspace.guard.check_read` but `_edit` also calls `self._current` before passing the result to `self.workspace.record`; a symlink whose target is outside the tree returns `None` from `_current` (the `inside` check), which surfaces as 'no file at' rather than a read refusal.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 813,
+        "message": "Docs say a bare `AiStrategy` subclass is 'handed `write_file`, `edit_file`, `delete_file` and `run_script`' but no corresponding update to any capability-check or registration test confirms `edit_file` is part of the `AGENCY` capability set.",
+        "path": "docs/extending.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e945c786bb917929842078037856d7b029b17175",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 703,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T194109Z-75e8",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 706,
+  "ts": "2026-09-07T19:41:26+00:00",
+  "wall_seconds": 17.565
+}
