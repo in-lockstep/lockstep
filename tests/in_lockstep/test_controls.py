@@ -290,6 +290,9 @@ def test_gate_sandbox_2_the_container_has_no_network_one_writable_mount_and_read
     # dropped cannot write a tree the host user owns, which is what the runner handed it (#312).
     assert f"{os.getuid()}:{os.getgid()}" in argv and "--userns=keep-id" in argv
     assert argv.index("--user") < argv.index("-v")
+    # A name the image's passwd file cannot supply for that uid, and not the host user's.
+    assert "USER=sandbox" in argv and "LOGNAME=sandbox" in argv
+    assert not any(item.startswith(("USER=", "LOGNAME=")) and not item.endswith("=sandbox") for item in argv)
 
 
 def test_gate_sandbox_2_a_refused_container_is_a_blocked_test_not_a_broken_suite(
