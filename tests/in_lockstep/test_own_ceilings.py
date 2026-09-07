@@ -155,10 +155,19 @@ def test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_run
     imported for its symbols, so an undefined name is a runtime failure in a workflow rather than
     an import error anyone would see first."""
     import subprocess
-    import sys
 
+    from in_lockstep.adapters import tooling
+    from in_lockstep.adapters.sandbox import Sandbox
+
+    # The ruff selfcheck runs, resolved the way `RuffValidate` resolves it -- the repository's
+    # `.venv` first, then PATH -- rather than `python -m ruff`, which asks the interpreter's own
+    # scripts directory for the binary and finds none when this suite runs inside the Test
+    # container, where the interpreter is the image's and ruff is the host-built one on PATH.
+    # That was the last of 2502 to fail in this repository's third `/fix` on itself (#312).
+    ruff = tooling.binary("ruff", str(ROOT), Sandbox())
+    assert ruff.path is not None, f"no ruff for the repository; looked for {', '.join(ruff.tried)}"
     result = subprocess.run(
-        [sys.executable, "-m", "ruff", "check", "--select", "I,E4,E7,E9,F", str(ROOT / ".lockstep")],
+        [ruff.path, "check", "--select", "I,E4,E7,E9,F", str(ROOT / ".lockstep")],
         capture_output=True,
         text=True,
     )
