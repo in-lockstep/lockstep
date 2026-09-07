@@ -1,7 +1,7 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.044547,
+  "cost_usd": 0.043242,
   "decided": true,
   "epoch": "in-process",
   "findings": {
@@ -10,46 +10,46 @@
       {
         "blocking": false,
         "id": "review.security",
-        "line": 88,
-        "message": "Symlink escape via intermediate symlink planted in an earlier change: lexical pre-check passes, post-creation check catches it, but only after the link exists on disk",
+        "line": 107,
+        "message": "Symlink escape via resolved intermediate symlinks may not be fully blocked on all TOCTOU paths",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 75,
-        "message": "Symlink pre-check is lexical and does not follow existing in-tree symlinks",
+        "line": 121,
+        "message": "Worktree contents passed to `os.chmod` without constraining mode bits \u2014 a change could set setuid/setgid bits",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 40,
-        "message": "git error output reaches WorktreeError message which may surface to logs or UI",
+        "line": 60,
+        "message": "Git error output from `_git` is included verbatim in `WorktreeError` messages",
         "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 25,
-        "message": "`root: str = ''` accepted from callers without validation in the adapter layer",
-        "path": "src/in_lockstep/core/types.py",
+        "line": 136,
+        "message": "`ref` option-injection guard is prefix-only; a ref containing shell metacharacters is not relevant here but embedded NUL or newline is not checked",
+        "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 9614,
+  "input_tokens": 9334,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 1047,
+  "output_tokens": 1016,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 10661,
-  "wall_seconds": 28.516
+  "tokens": 10350,
+  "wall_seconds": 24.86
 }
