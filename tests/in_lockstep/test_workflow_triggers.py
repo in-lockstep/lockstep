@@ -150,6 +150,35 @@ def test_the_actor_gate_runs_before_anything_holding_a_credential() -> None:
         )
 
 
+def _spends(job: dict[str, Any]) -> bool:
+    """Whether a job can hold a provider credential: `id-token: write` (the federated path mints
+    one from it) or a provider key under `env`, at the job or at any step.
+
+    Keys, not text. The first version decided `spends` from `"ANTHROPIC_API_KEY" in yaml.dump(job)`,
+    and every occurrence of that name in these files is now a YAML comment, which parsing drops --
+    so `spends` was false for every job and the split below was asserted over nothing (#308). A
+    dead gate reads exactly like a held one, which is why the negative control below exists.
+    """
+    permissions = job.get("permissions") or {}
+    if permissions.get("id-token") == "write":
+        return True
+    envs = [job.get("env") or {}, *(step.get("env") or {} for step in job.get("steps") or [])]
+    return any(key.startswith("ANTHROPIC_") or key.endswith("_API_KEY") for env in envs for key in env)
+
+
+def _credential_split_violations(spec: dict[str, Any], name: str) -> list[str]:
+    """Every job that can hold a provider credential AND a write grant, as sentences."""
+    violations = []
+    for job_name, job in (spec.get("jobs") or {}).items():
+        permissions = job.get("permissions") or {}
+        granted = sorted(k for k, v in permissions.items() if v == "write" and k != "id-token")
+        if _spends(job) and granted:
+            violations.append(
+                f"{name}:{job_name} holds a provider credential and {granted} write access in one process"
+            )
+    return violations
+
+
 def test_no_job_holds_a_provider_key_and_write_access() -> None:
     """The split the whole two-job design exists for, asserted rather than reviewed.
 
@@ -159,15 +188,65 @@ def test_no_job_holds_a_provider_key_and_write_access() -> None:
     the model; what must never sit beside a provider credential is the ability to write the
     repository, and that is what this asserts.
     """
+    spending = 0
     for path in ALL_WORKFLOWS:
-        for name, job in (_load(path.name).get("jobs") or {}).items():
-            body = yaml.dump(job)
-            spends = "ANTHROPIC_API_KEY" in body
-            permissions = job.get("permissions") or {}
-            granted = sorted(k for k, v in permissions.items() if v == "write" and k != "id-token")
-            assert not (spends and granted), (
-                f"{path.name}:{name} holds a provider credential and {granted} write access in one process"
-            )
+        spec = _load(path.name)
+        assert _credential_split_violations(spec, path.name) == []
+        spending += sum(_spends(job) for job in (spec.get("jobs") or {}).values())
+    # The gate has to SEE a spending job to be asserting anything; zero would be the dead gate again.
+    assert spending >= 4, f"only {spending} job(s) read as holding a credential; the predicate is blind"
+
+
+_WRITE_JOB_WITH_IDENTITY = """\
+on: push
+jobs:
+  propose:
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - run: echo
+  measure:
+    permissions:
+      contents: read
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - run: echo
+"""
+
+
+def test_the_credential_split_fails_on_a_write_job_that_can_mint_a_credential() -> None:
+    """The negative control: a fixture the assertion above must fail on, or it is not asserting."""
+    spec = yaml.load(_WRITE_JOB_WITH_IDENTITY, Loader=_Loader)
+    (violation,) = _credential_split_violations(spec, "fixture.yml")
+    assert "propose" in violation and "['contents']" in violation
+    assert _spends(spec["jobs"]["measure"]), "a key under env is a credential too"
+
+
+def test_gate_sandbox_2_a_job_that_runs_a_model_checks_out_without_persisting_the_token() -> None:
+    """GATE-SANDBOX-2, the CI half. `actions/checkout` writes the job's `GITHUB_TOKEN` into
+    `.git/config` by default, and a linked worktree's `.git` file points at that config, so
+    `git config --get http.https://github.com/.extraheader` from a test the model staged returned
+    the token (#308). Every checkout in a job that can hold a provider credential -- this
+    repository's workflows and every trampoline `init` writes -- says `persist-credentials: false`.
+    The propose and publish jobs are not here: they push, and hold no model."""
+    specs = {path.name: _load(path.name) for path in ALL_WORKFLOWS}
+    for name, text in _scaffolds().items():
+        specs[name] = yaml.load(text.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader)
+    checked = 0
+    for name, spec in specs.items():
+        for job_name, job in (spec.get("jobs") or {}).items():
+            if not _spends(job):
+                continue
+            for step in job.get("steps") or []:
+                if not str(step.get("uses", "")).startswith("actions/checkout"):
+                    continue
+                checked += 1
+                assert (step.get("with") or {}).get("persist-credentials") is False, (
+                    f"{name}:{job_name} persists the token into a tree a model's test can read"
+                )
+    assert checked >= 8, f"only {checked} model-job checkout(s) found; the predicate is blind"
 
 
 def test_the_writing_job_does_not_install_a_provider_sdk() -> None:

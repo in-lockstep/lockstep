@@ -13,6 +13,8 @@ first entry in the protected-path deny list, and why it is loaded from a trusted
 from whichever branch is under review.
 """
 
+import sys
+
 from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
 from in_lockstep.adapters.ai import TDD, AiImprove, DiagnoseThenFix, Draft, Measure
@@ -71,7 +73,37 @@ lockstep.guard = ChangeGuard(
 # Both run out of process. pytest executes conftest.py from this repository and ruff loads its
 # configuration, so an in-process run would hand repository-authored Python the credentials this
 # process holds.
-lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], sandbox=Sandbox()))
+#
+# Test runs in a CONTAINER, and this repository is the reason the framework insists on it (#308):
+# `run_tests` and TDD's red/green runs hand the suite a test file the MODEL staged, on a ticket
+# that is untrusted by construction, and `Sandbox()` ran that file on the host with `HOME` and an
+# open socket -- `~/.ssh` readable, and on a runner the token `actions/checkout` persists into
+# `.git/config` one `git config` away. A staged test now runs under `--network=none` with a single
+# writable mount, the throwaway worktree, or the run is refused by name (`sandbox.host_fallback`).
+#
+# The image is the base interpreter this process runs on, and the ENVIRONMENT is the `.venv` the
+# host already built, mounted read-only and put on `PYTHONPATH`: a slim image carries no pytest,
+# and the worktree a staged change is materialised into is a copy of HEAD, so `.venv` (ignored by
+# git) is not in it. Right where this repository's write verbs run -- a linux runner whose venv the
+# `Provision` line below built for this interpreter -- and right on a laptop for as long as every
+# package the suite imports is pure Python, which this repository's are; a compiled dependency built
+# for macOS would fail at import inside the container, naming the module rather than passing
+# anything. `require_container` stays off so that `run selfcheck`,
+# which runs THIS repository's own committed suite for a person, keeps the credential-dropped
+# subprocess where no runtime is; the model-staged callers refuse before materialising instead.
+_PY = f"{sys.version_info.major}.{sys.version_info.minor}"
+_VENV = f"{lockstep.repo.root}/.venv"
+lockstep.bind(
+    Test,
+    PytestTest(
+        args=["-q", "--no-header"],
+        sandbox=Sandbox(
+            image=f"docker.io/library/python:{_PY}-slim",
+            mounts=((_VENV, "/venv"),),
+            extra_env={"PYTHONPATH": f"/venv/lib/python{_PY}/site-packages"},
+        ),
+    ),
+)
 lockstep.bind(Validate, RuffValidate(sandbox=Sandbox()))
 
 # The environment the two above run in. Detection would derive this same line from `uv.lock`, and
@@ -169,12 +201,14 @@ lockstep.contribute(
 # What it costs: an injection that succeeds has somewhere to send what it read. `injection.py`'s
 # own docstring is blunt about this — a scanner "is not a substitute for tool deny-lists, egress
 # rules. Those are what actually bound a successful injection." The compensating controls here are
-# that the review ToolSet is empty, that the one shipped tool which could carry bytes outward —
-# `run_script` — executes inside a container with `--network=none` and refuses rather than falling
-# back to this host, and that `ChangeGuard` stands at all three write paths.
+# that the review ToolSet is empty, that the two shipped paths which could carry bytes outward —
+# `run_script`, and a test file the model staged for `run_tests` or a red/green run — execute
+# inside a container with `--network=none` and refuse rather than falling back to this host (the
+# Test binding above, and #308 for why it used to say `run_script` alone), and that `ChangeGuard`
+# stands at all three write paths.
 #
-# The container IS an egress rule, for the one process that could use one. It is narrower than the
-# firewall this binding gave up, which covered the whole run rather than one child process.
+# The container IS an egress rule, for the two processes that could use one. It is narrower than
+# the firewall this binding gave up, which covered the whole run rather than child processes.
 #
 # The floor above used to deny `write_file` instead, which had it backwards: a staged write cannot
 # transmit anything, and a process on a host with an open network can.

@@ -34,7 +34,7 @@ from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
-from ..worktree import materialize
+from ..worktree import materialize, staged_refusal
 from .strategy import (
     AGENCY,
     AiStrategy,
@@ -133,6 +133,10 @@ class DiagnoseThenFix(FixStrategy):
                 "DiagnoseThenFix writes a reproducer and runs it to confirm the bug before "
                 "fixing, so it needs a Test verb bound. Bind Test (e.g. PytestTest).",
             )
+        # As in TDD: refused before the reproducer is asked for, so nothing is spent on a test that
+        # would then be refused a runner (GATE-SANDBOX-2).
+        if (why := staged_refusal(ctx)) is not None:
+            return _blocked("sandbox.host_fallback", why)
 
         session = self._session(ctx)
         ticket = inp.ticket

@@ -22,6 +22,7 @@ import pytest
 from in_lockstep.adapters.ai.implement import Implement
 from in_lockstep.adapters.ai.tdd import TDD
 from in_lockstep.adapters.pytest_adapter import PytestTest
+from in_lockstep.adapters.sandbox import Runner, Sandbox
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Outcome, Status
@@ -76,21 +77,48 @@ def _adapter(provider: LLMProvider, root: Path) -> TDD:
     )
 
 
+class Declared(Sandbox):
+    """Declares a container and runs on the host: the second scripted seam beside the model.
+
+    The strategy refuses a Test runner that would put a MODEL-staged file on this host
+    (GATE-SANDBOX-2), and it decides that from what the runner declares -- an image and
+    `require_container` -- because a runner so constructed either runs in a container or refuses
+    at run time. These tests need the pytest run to be REAL, and a container would need an
+    image that carries pytest; so this one declares what a contained runner declares and runs
+    the credential-dropped subprocess, which is exactly what `Sandbox()` did before. `runtime()`
+    is None so `tooling.interpreter` resolves the host's Python rather than the bare name a
+    container would get.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(image="declared-for-this-test", require_container=True)
+
+    def runtime(self) -> str | None:
+        return None
+
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+        return await self._subprocess(command, cwd=cwd, timeout=timeout)
+
+
 class Ctx:
     """A ctx whose Test verb is a real PytestTest, so the red/green runs are real."""
 
-    def __init__(self, *, test_bound: bool = True) -> None:
+    def __init__(self, *, test_bound: bool = True, sandbox: Runner | None = None) -> None:
         self.spend = Spend(budget=Budget(usd=5.0))
         self.run_id = "t"
+        self.adapter = PytestTest(args=["-q"], sandbox=sandbox or Declared())
 
         class _Container:
-            def has(self, _verb: object) -> bool:
+            def has(_self, _verb: object) -> bool:
                 return test_bound
+
+            def resolve(_self, _verb: object) -> PytestTest:
+                return self.adapter
 
         self.container = _Container()
 
     async def do(self, request: Test) -> Outcome[Any]:
-        return await PytestTest(args=["-q"]).invoke(self, request)
+        return await self.adapter.invoke(self, request)
 
 
 def _ticket() -> Ticket:
@@ -126,9 +154,13 @@ def repo(tmp_path: Path) -> Path:
 _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n"
 
 
-def _run(provider: Scripted, repo: Path, *, test_bound: bool = True) -> Outcome[Any]:
+def _run(
+    provider: Scripted, repo: Path, *, test_bound: bool = True, sandbox: Runner | None = None
+) -> Outcome[Any]:
     return asyncio.run(
-        _adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Implement(ticket=_ticket()))
+        _adapter(provider, repo).invoke(
+            Ctx(test_bound=test_bound, sandbox=sandbox), Implement(ticket=_ticket())
+        )
     )
 
 
@@ -176,6 +208,41 @@ def test_tdd_refuses_when_no_test_verb_is_bound(repo: Path) -> None:
     outcome = _run(Scripted([_done()]), repo, test_bound=False)
     assert outcome.status is Status.BLOCKED
     assert outcome.reason == "tdd.no_test"
+
+
+def test_gate_sandbox_2_a_test_runner_that_would_use_the_host_is_refused_before_the_model_is_asked(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-SANDBOX-2. `Sandbox()` with no image is the runner `init` scaffolded and this repository
+    bound, and it ran a test file the model wrote as a subprocess on the host with `HOME` and an
+    open socket (#308). TDD asks before its first model call: nothing spent, nothing materialised."""
+    from in_lockstep.adapters import worktree
+
+    async def never(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("a worktree was materialised for a run that should have been refused")
+
+    monkeypatch.setattr(worktree, "materialize", never)
+    provider = Scripted([_call("write_file", path="test_calc.py", contents=_FAILING_TEST), _done()])
+    outcome = _run(provider, repo, sandbox=Sandbox())
+    assert outcome.status is Status.BLOCKED
+    assert outcome.reason == "sandbox.host_fallback"
+    assert provider.calls == [], (
+        "the red phase was asked for a test that would then have been refused a runner"
+    )
+    message = outcome.findings[0].message
+    assert "names no container image" in message
+    assert 'Sandbox(image="..."' in message, "the refusal must name the line that would make it a yes"
+
+
+def test_gate_sandbox_2_an_image_with_no_runtime_and_no_requirement_is_the_same_refusal(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The one real probe: an image WITHOUT `require_container` falls back to a subprocess when
+    no runtime is on PATH, which is the hole, so it is refused before the fallback can happen."""
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: None)
+    outcome = _run(Scripted([_done()]), repo, sandbox=Sandbox(image="ghcr.io/x/ci:1"))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "sandbox.host_fallback"
+    assert "fall back to a subprocess" in outcome.findings[0].message
 
 
 def test_tdd_fails_when_the_staged_test_does_not_go_red(repo: Path) -> None:

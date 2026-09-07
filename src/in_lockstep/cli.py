@@ -5740,8 +5740,16 @@ def _verb_config(template: str, facts: Any, *, guarded: bool) -> str:
     test_bind = _bind_line(facts, "Test", imports)
     if test_bind.startswith("lockstep.bind(Test,"):
         # The plain scaffold already wrote this line above; repeating it would rebind. `startswith`,
-        # because the stub's own example line is a commented `lockstep.bind(Test, ...)`.
-        test_bind = "# Test is bound above, from what detection found (`in-lockstep ls` prints it)."
+        # because the stub's own example line is a commented `lockstep.bind(Test, ...)`. What is
+        # written is the rebind with a container, commented: the image is the adopter's to name.
+        contained = test_bind[:-2] + ', sandbox=Sandbox(image="ghcr.io/you/ci:tag", require_container=True))'
+        test_bind = (
+            "# Test is bound above, from what detection found (`in-lockstep ls` prints it), on the host\n"
+            "# runner. A test a model stages is refused there until Test is rebound with a container\n"
+            "# whose image carries the suite's dependencies:\n"
+            "#   from in_lockstep.adapters.sandbox import Sandbox\n"
+            f"#   {contained}"
+        )
     image = _sandbox_image(facts)
     if image:
         # Two lines at two positions, because ruff's isort sorts `in_lockstep` before
@@ -5958,17 +5966,21 @@ lockstep.use(Oneshot)
 
 # Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
 # its verdict rides the artifact into the PR body, so a reviewer sees whether the change passed
-# before opening it. The default Sandbox runs the suite in a subprocess with credentials dropped,
-# enough that repository (and staged) test code cannot read the provider key out of this job. It
-# does not cut network the way run_script's container does; a host that can enforce egress should
-# pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
-# for run_script.
+# before opening it. The suite that runs there contains a file the MODEL wrote, on a ticket
+# nobody vetted, so the framework runs it only in a container with no network and a single
+# writable mount; a Test whose runner would put it on this host is refused by name
+# (`sandbox.host_fallback`) before the worktree is made. The default Sandbox the section above
+# binds is that host runner -- right for `run selfcheck` over your own committed suite, and not
+# enough here.
 #
 # Nothing is bound here. The section above binds whatever detection found -- `CommandTest(["npm",
 # "test"])` on a Node repository -- and this block used to fall back to pytest when it found
 # nothing, which was a runner invented for a stack detection could not place: the wrong default
-# that runs. A verdict over no runner is "unverified", which is honest, and the stub below says
-# how to bind one.
+# that runs. The image a container needs is the one that carries your suite's dependencies, which
+# a stack's base image does not (the worktree is a copy of HEAD, so `.venv` and `node_modules`
+# are not in it), and detection cannot know its name -- so it is named below as the line to
+# write, not written. `mounts=` on `Sandbox` puts an environment the host built inside the
+# container read-only; docs/extending.md shows both shapes.
 __TEST_BIND__
 
 # EGRESS, and read this before shipping the implement verb. The review scaffold above already
@@ -6003,7 +6015,8 @@ from in_lockstep.platform.tickets import TicketSource
 # scaffold without binding TicketSource, Scm or the approval gate a second time. `hosted_*`
 # bind the detected host's adapters — GitHub or GitLab — so the block runs unedited on either.
 # Test is not bound here: the section above binds what detection found, and a runner detection
-# could not place is not invented (the stub below says how to bind one).
+# could not place is not invented (the stub below says how to bind one). The reproducer the model
+# stages runs only in a container -- see the implement block, or the stub, for the line.
 if not lockstep.container.has(TicketSource):
     lockstep.bind(TicketSource, hosted_tickets())
 if not lockstep.container.has(Scm):
@@ -6102,14 +6115,17 @@ def _scaffold_implement(module: Path, facts: Any, *, provider: str, host: str = 
     click.echo("     provider console: `doctor` is a required step and refuses without it.")
     image = _sandbox_image(facts)
     if image:
-        click.echo(f"  3. The sandbox image is {image}, derived from the detected stack; change it if")
-        click.echo("     the suite needs more than the base image carries.")
+        click.echo(f"  3. The run_script image is {image}, derived from the detected stack; change it if")
+        click.echo("     a model's command needs more than the base image carries.")
     else:
-        click.echo("  3. Name the container image `run_script` and the suite run in; the appended block")
-        click.echo("     says why none was derived and where the line goes.")
-    click.echo("  4. Optionally add required reviewers to the `implement` environment in repository")
+        click.echo("  3. Name the container image `run_script` runs in; the appended block says why none")
+        click.echo("     was derived and where the line goes.")
+    click.echo("  4. Name the image a model-staged test runs in: one that carries the suite's own")
+    click.echo("     dependencies, which no stack image does. Until Test is rebound with it (the appended")
+    click.echo("     block has the line), a run that stages a test is refused: sandbox.host_fallback.")
+    click.echo("  5. Optionally add required reviewers to the `implement` environment in repository")
     click.echo("     settings — that makes the propose job an approval in the system of record.")
-    click.echo("  5. Read the EGRESS note in the appended block: the review scaffold's")
+    click.echo("  6. Read the EGRESS note in the appended block: the review scaffold's")
     click.echo("     UnsandboxedEgress binding is global, so this write-capable verb inherits it.")
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
@@ -6354,6 +6370,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           python-version: '3.11'
@@ -6748,6 +6767,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           # The framework's interpreter, not the repository's. A uv-driven `provision` below
@@ -6921,6 +6943,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           # The framework's interpreter, not the repository's. A uv-driven `provision` below
@@ -7058,6 +7083,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           # The framework's interpreter, not the repository's. A uv-driven `provision` below
@@ -7254,6 +7282,9 @@ jobs:
           # The base ref has to be a commit this checkout has. Without it, configuration cannot be
           # loaded from the trusted ref and the diff cannot be taken.
           fetch-depth: 0
+          # The token `actions/checkout` would otherwise leave in `.git/config` is one `git config`
+          # away from a test the model staged into a linked worktree; this job pushes nothing (#308).
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           python-version: '3.11'

@@ -869,6 +869,7 @@ capability declaration rather than anything the strategy configures:
 | `ApprovalGate` … `UngatedAgency` | A model that can write and spend needs a human in the loop. | Add `ApprovalGate()` to your middleware, or pass `--approve` for an attended local run. |
 | `egress.unenforced` | The tool set declares `EXECUTES_CODE`, which makes egress enforcement mandatory. | Run under a host that constrains egress with `IN_LOCKSTEP_EGRESS=enforced`, or `lockstep.bind(EgressPolicy, UnsandboxedEgress())`. |
 | `UndeclaredBudget` | Something bound spends money and no ceiling was declared. A replay cannot spend, so `--offline` and `--dry-run` state a ceiling of zero for you. | `lockstep.budget = Budget(usd=2.00)`, or `--budget`. |
+| `sandbox.host_fallback` | The bound `Test` runner would run a file the model staged as a subprocess on this host. The repository's own suite may run that way; a model's test may not. | Bind `Test` with `Sandbox(image=..., require_container=True)`, where the image carries the suite's dependencies -- see the `TDD` section below for the `mounts=` shape. |
 
 The egress one is the surprise on a laptop, and the opt-out is a binding rather than a flag on
 purpose: `UnsandboxedEgress` is named after what it does, so it greps and it reviews.
@@ -934,6 +935,57 @@ untested oneshot.
 Bind it with `lockstep.bind(Implement, TDD(...))` and `in-lockstep ls` prints `Implement -> TDD`,
 so how implementing happens is one visible line. The CLI's `--strategy tdd` does the same for a
 repository that has bound nothing.
+
+**The test it runs is one the model wrote**, on a ticket nobody vetted, so the `Test` runner it
+hands that file to has to be a container: `--network=none`, the throwaway worktree as the only
+writable mount, no `HOME`. A `Test` bound with the default `Sandbox()` -- a credential-dropped
+subprocess on this host, which is right for `in-lockstep run selfcheck` over your own committed
+suite -- is refused before the worktree is made, as `sandbox.host_fallback`, by `TDD`,
+`DiagnoseThenFix`, the model's `run_tests` tool and the workflow's verdict over a staged change
+alike. The refusal names the line to write.
+
+The image is yours to name, because it has to carry the suite's dependencies and no stack image
+does: the worktree is a copy of HEAD, so `.venv` and `node_modules` are not in it. Two shapes. A
+CI image that already has everything installed:
+
+```python
+from in_lockstep.adapters import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+
+lockstep.bind(
+    Test,
+    PytestTest(args=["-q"], sandbox=Sandbox(image="ghcr.io/acme/ci:py312", require_container=True)),
+)
+```
+
+Or a base image with the environment the host already built mounted read-only beside the tree,
+which is what this repository does for itself. It works wherever the packages in that environment
+import inside the container: always on a linux runner, and on a laptop for as long as they are
+pure Python; a compiled dependency built for macOS fails at import there, naming the module.
+
+```python
+import sys
+
+from in_lockstep.adapters import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+
+PY = f"{sys.version_info.major}.{sys.version_info.minor}"
+lockstep.bind(
+    Test,
+    PytestTest(
+        args=["-q"],
+        sandbox=Sandbox(
+            image=f"docker.io/library/python:{PY}-slim",
+            mounts=((f"{lockstep.repo.root}/.venv", "/venv"),),
+            extra_env={"PYTHONPATH": f"/venv/lib/python{PY}/site-packages"},
+        ),
+    ),
+)
+```
+
+`require_container` is off in the second shape on purpose: with it, `run selfcheck` would refuse
+on a laptop with no runtime, and that run is a person's, not a model's. The model-staged callers
+probe for the runtime themselves and refuse when it is missing.
 
 ## Reading the process you are running
 

@@ -3267,7 +3267,8 @@ def test_gate_tooling_2_two_stacks_derive_no_image_and_say_so(repo: Path) -> Non
 def test_gate_tooling_2_the_post_init_list_names_the_image_either_way(repo: Path) -> None:
     (repo / "go.mod").write_text("module x\n")
     derived = CliRunner().invoke(main, ["init", "--implement"]).output
-    assert "The sandbox image is docker.io/library/golang:1.23" in derived
+    assert "The run_script image is docker.io/library/golang:1.23" in derived
+    assert "Name the image a model-staged test runs in" in derived, "the Test container is a decision too"
     assert "IN_LOCKSTEP_ORG_SPEND_LIMIT" in derived, (
         "doctor is a required step now, and the variable it reads is named"
     )
@@ -3334,6 +3335,23 @@ def _rendered_scaffolds() -> dict[str, str]:
         "review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
     }
     return {name: _render_trampoline(text, "anthropic") for name, text in templates.items()}
+
+
+def test_gate_sandbox_2_the_scaffold_names_the_test_container_rather_than_inventing_one(repo: Path) -> None:
+    """GATE-SANDBOX-2, what `init` hands an adopter. The plain Test line runs the suite on the host,
+    which is right for `run selfcheck` and refused for a model-staged test; the image a container
+    needs carries the suite's dependencies, which no stack image does, so `init` writes the
+    rebind as the line to write and says so in the things-to-decide list (#308)."""
+    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\n[tool.pytest.ini_options]\n")
+    result = CliRunner().invoke(main, ["init", "--implement"])
+    assert result.exit_code == 0, result.output
+    module = (repo / ".lockstep/lockstep.py").read_text()
+    live = [line for line in module.splitlines() if line.startswith("lockstep.bind(Test,")]
+    assert len(live) == 1 and "Sandbox(" not in live[0], live
+    assert "#   lockstep.bind(Test, PytestTest(args=" in module
+    assert 'sandbox=Sandbox(image="ghcr.io/you/ci:tag", require_container=True)' in module
+    assert "sandbox.host_fallback" in result.output
+    assert "carries the suite's own" in result.output
 
 
 def test_gate_ci_3_no_scaffolded_run_states_a_budget_and_every_doctor_verdict_is_acted_on() -> None:

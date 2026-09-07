@@ -261,15 +261,32 @@ class _Ctx:
 
     def __init__(self, root: Path, *, test_bound: bool = True) -> None:
         self.repo = type("R", (), {"root": str(root)})()
+        # Declares a container and runs the host subprocess: `verdict_over_staged` refuses a runner
+        # that would put a MODEL-staged file on the host (GATE-SANDBOX-2) from what the runner
+        # declares, and these tests need the pytest run to be real. `test_implement_tdd.Declared`
+        # is the same shape with the argument in full.
+        from in_lockstep.adapters.sandbox import Sandbox
+
+        class _Declared(Sandbox):
+            def runtime(self) -> str | None:
+                return None
+
+            async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+                return await self._subprocess(command, cwd=cwd, timeout=timeout)
+
+        self.adapter = PytestTest(args=["-q"], sandbox=_Declared(image="declared", require_container=True))
 
         class _Container:
-            def has(self, _verb: object) -> bool:
+            def has(_self, _verb: object) -> bool:
                 return test_bound
+
+            def resolve(_self, _verb: object) -> PytestTest:
+                return self.adapter
 
         self.container = _Container()
 
     async def do(self, request: Test) -> Outcome[Any]:
-        return await PytestTest(args=["-q"]).invoke(self, request)
+        return await self.adapter.invoke(self, request)
 
 
 def test_verdict_over_staged_reports_green_for_a_passing_staged_change(tmp_path: Path) -> None:

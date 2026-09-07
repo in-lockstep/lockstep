@@ -19,6 +19,7 @@ import pytest
 
 from in_lockstep.adapters.ai.fix import DiagnoseThenFix, Fix
 from in_lockstep.adapters.pytest_adapter import PytestTest
+from in_lockstep.adapters.sandbox import Runner, Sandbox
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Outcome, Status
@@ -67,21 +68,39 @@ def _adapter(provider: LLMProvider, root: Path) -> DiagnoseThenFix:
     )
 
 
+class Declared(Sandbox):
+    """Declares a container and runs on the host. `test_implement_tdd.Declared` says why: the
+    strategy judges the runner by what it declares (GATE-SANDBOX-2), and these runs must be real."""
+
+    def __init__(self) -> None:
+        super().__init__(image="declared-for-this-test", require_container=True)
+
+    def runtime(self) -> str | None:
+        return None
+
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+        return await self._subprocess(command, cwd=cwd, timeout=timeout)
+
+
 class Ctx:
     """A ctx whose Test verb is a real PytestTest, so reproduce/fix run for real."""
 
-    def __init__(self, *, test_bound: bool = True) -> None:
+    def __init__(self, *, test_bound: bool = True, sandbox: Runner | None = None) -> None:
         self.spend = Spend(budget=Budget(usd=5.0))
         self.run_id = "t"
+        self.adapter = PytestTest(args=["-q"], sandbox=sandbox or Declared())
 
         class _Container:
-            def has(self, _verb: object) -> bool:
+            def has(_self, _verb: object) -> bool:
                 return test_bound
+
+            def resolve(_self, _verb: object) -> PytestTest:
+                return self.adapter
 
         self.container = _Container()
 
     async def do(self, request: Test) -> Outcome[Any]:
-        return await PytestTest(args=["-q"]).invoke(self, request)
+        return await self.adapter.invoke(self, request)
 
 
 def _ticket() -> Ticket:
@@ -117,8 +136,23 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
-def _run(provider: Scripted, repo: Path, *, test_bound: bool = True) -> Outcome[Any]:
-    return asyncio.run(_adapter(provider, repo).invoke(Ctx(test_bound=test_bound), Fix(ticket=_ticket())))
+def _run(
+    provider: Scripted, repo: Path, *, test_bound: bool = True, sandbox: Runner | None = None
+) -> Outcome[Any]:
+    return asyncio.run(
+        _adapter(provider, repo).invoke(Ctx(test_bound=test_bound, sandbox=sandbox), Fix(ticket=_ticket()))
+    )
+
+
+def test_gate_sandbox_2_the_reproducer_is_not_asked_for_when_its_runner_would_be_the_host(
+    repo: Path,
+) -> None:
+    """GATE-SANDBOX-2, the fixing verb's half: a reproducer is a test the model wrote, and it is
+    refused a host runner before the reproduce step spends anything (#308)."""
+    provider = Scripted([_done()])
+    outcome = _run(provider, repo, sandbox=Sandbox())
+    assert outcome.status is Status.BLOCKED and outcome.reason == "sandbox.host_fallback"
+    assert provider.calls == []
 
 
 def test_fix_reproduces_the_bug_then_fixes_it_and_reports_them_apart(repo: Path) -> None:

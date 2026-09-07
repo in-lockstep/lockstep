@@ -223,6 +223,74 @@ def test_nothing_staged_is_a_refusal_rather_than_a_pointless_run(tmp_path: Path)
     assert out.startswith("refused:")
 
 
+def test_gate_sandbox_2_run_tests_refuses_a_host_runner_and_materialises_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-SANDBOX-2, the tool's half. `run_tests` materialised the model's staged files into a
+    worktree and handed them to whatever Test was bound; bound with `Sandbox()`, that was a
+    subprocess on this host (#308). The refusal comes back as a tool result the model can read,
+    before any worktree exists, and names the line that would make it a yes."""
+    from in_lockstep.adapters import worktree
+    from in_lockstep.adapters.ai.oneshot import Oneshot
+    from in_lockstep.adapters.pytest_adapter import PytestTest
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.core.types import Test
+
+    async def never(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("materialised a worktree for a refused run")
+
+    monkeypatch.setattr(worktree, "materialize", never)
+
+    class _Container:
+        def has(self, verb: object) -> bool:
+            return verb is Test
+
+        def resolve(self, _verb: object) -> PytestTest:
+            return PytestTest(sandbox=Sandbox())
+
+    class _Ctx:
+        container = _Container()
+
+    session = Oneshot(lambda ctx: None, repo_root=str(tmp_path))._session(_Ctx())
+    session.workspace.record("test_x.py", "def test_x():\n    assert False\n")
+    out = asyncio.run(session.run_tool.tests(()))
+    assert out.startswith("refused (sandbox.host_fallback)"), out
+    assert "names no container image" in out and 'Sandbox(image="..."' in out
+
+
+def test_gate_sandbox_2_the_verdict_over_a_staged_change_is_blocked_not_run_on_the_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The third place a staged tree meets Test: the workflow's own verdict after Oneshot, which
+    has no red phase to refuse at. Blocked, with no worktree, and the PR body says why."""
+    from in_lockstep.adapters import worktree
+    from in_lockstep.adapters.pytest_adapter import PytestTest
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.core.types import ChangeSet, FileChange, Test
+    from in_lockstep.platform.report import implement_body
+
+    async def never(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("materialised a worktree for a refused run")
+
+    monkeypatch.setattr(worktree, "materialize", never)
+
+    class _Container:
+        def has(self, verb: object) -> bool:
+            return verb is Test
+
+        def resolve(self, _verb: object) -> PytestTest:
+            return PytestTest(sandbox=Sandbox())
+
+    class _Ctx:
+        container = _Container()
+
+    staged = ChangeSet(changes=(FileChange(path="test_x.py", contents="x = 1\n"),))
+    verdict = asyncio.run(worktree.verdict_over_staged(_Ctx(), str(tmp_path), staged))
+    assert verdict is not None and verdict.status == "blocked"
+    assert not verdict.green and not verdict.red, "a refusal is neither a pass nor a failure"
+    assert "sandbox.host_fallback" in implement_body(staged, verdict)
+
+
 @pytest.mark.parametrize("name", ["run_tests"])
 def test_the_description_warns_that_a_subset_is_not_a_verdict(tmp_path: Path, name: str) -> None:
     """The one dangerous affordance here: a model can run a passing subset and talk itself into

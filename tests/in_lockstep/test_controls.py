@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -214,6 +215,139 @@ def test_gate_sandbox_1_a_child_cannot_read_the_parents_credentials(monkeypatch:
     )
     assert "sk-must-not-leak" not in result.stdout
     assert "ABSENT" in result.stdout
+
+
+# -- GATE-SANDBOX-2: a file the MODEL staged runs in a container, or the run refuses by name ------
+
+
+@pytest.mark.parametrize(
+    "runner,why",
+    [
+        (None, "exposes no sandbox"),
+        (Sandbox(), "names no container image"),
+        (UnsandboxedRun(), "this host by name"),
+    ],
+)
+def test_gate_sandbox_2_a_runner_that_would_use_the_host_is_named_before_anything_is_staged(
+    runner: object, why: str
+) -> None:
+    """GATE-SANDBOX-2. `Sandbox()` -- the runner `init` scaffolded and this repository bound --
+    ran a test the model wrote as a subprocess with `HOME` and an open socket (#308). The
+    question is asked of what the runner DECLARES, so it costs nothing and materialises nothing."""
+    from in_lockstep.adapters.sandbox import host_fallback
+
+    answer = host_fallback(runner)
+    assert answer is not None and why in answer
+
+
+def test_gate_sandbox_2_a_runner_that_contains_by_construction_is_not_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An image plus `require_container` either runs in a container or refuses at run time, so
+    it is contained whatever this machine has; an image alone is contained when a runtime is here
+    and the fallback hole when one is not -- the one case that is probed rather than declared."""
+    from in_lockstep.adapters.sandbox import host_fallback
+
+    assert host_fallback(Sandbox(image="ghcr.io/x/ci:1", require_container=True)) is None
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: "/usr/bin/podman")
+    assert host_fallback(Sandbox(image="ghcr.io/x/ci:1")) is None
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: None)
+    assert "fall back to a subprocess" in str(host_fallback(Sandbox(image="ghcr.io/x/ci:1")))
+
+
+def test_gate_sandbox_2_the_container_has_no_network_one_writable_mount_and_read_only_extras(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """What "cannot read outside the worktree and cannot open a socket" rests on, asserted on the
+    argv the runtime is handed: `--network=none`, the tree as the only read-write mount, every
+    `mounts=` entry `:ro`, and no `HOME` reaching the container -- the client's pass-through set
+    is the client's."""
+    from in_lockstep.adapters import sandbox as sandbox_module
+
+    seen: dict[str, Any] = {}
+
+    async def fake_exec(argv, *, cwd, env, timeout):  # noqa: ANN001
+        seen["argv"] = list(argv)
+        return 0, "", ""
+
+    monkeypatch.setattr(sandbox_module, "_exec", fake_exec)
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: "/usr/bin/podman")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    venv = tmp_path / ".venv"
+    box = Sandbox(image="python:3.11-slim", mounts=((str(venv), "/venv"),), extra_env={"PYTHONPATH": "/venv"})
+    asyncio.run(box.run(["python", "-m", "pytest"], cwd=str(tmp_path / "tree")))
+    argv = seen["argv"]
+    assert "--network=none" in argv and "--cap-drop=ALL" in argv
+    volumes = [argv[i + 1] for i, flag in enumerate(argv) if flag == "-v"]
+    writable = [v for v in volumes if not v.endswith(":ro")]
+    assert writable == [f"{tmp_path / 'tree'}:/work"], volumes
+    assert f"{venv}:/venv:ro" in volumes
+    assert not any(item.startswith("HOME=") for item in argv), "the host's HOME reached the container"
+
+
+def test_gate_sandbox_2_a_refused_container_is_a_blocked_test_not_a_broken_suite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`Sandbox(require_container=True)` finding no runtime ran nothing, and `PytestTest` read that
+    exit as "no summary, errored" -- a sentence about the suite for what was the control working.
+    `CommandTest` had the guard since #256; the pytest adapter now maps the same `how`."""
+    from in_lockstep.adapters.pytest_adapter import PytestTest
+    from in_lockstep.core.outcome import Status
+    from in_lockstep.core.types import Test
+
+    monkeypatch.setattr(Sandbox, "runtime", lambda self: None)
+    adapter = PytestTest(sandbox=Sandbox(image="ghcr.io/x/ci:1", require_container=True))
+    outcome = asyncio.run(adapter.invoke(object(), Test(root=str(tmp_path))))
+    assert outcome.status is Status.BLOCKED, outcome
+    assert "refusing to run outside a container" in str(outcome.reason)
+
+
+def _image_present(image: str) -> str | None:
+    """The runtime that already holds `image`, or None. A pull is a network act this suite does
+    not make; the live half of GATE-SANDBOX-2 runs where somebody has pulled the image and skips
+    by name everywhere else, which is the honest state and is written in the row."""
+    runtime = Sandbox().runtime()
+    if runtime is None:
+        return None
+    done = subprocess.run([runtime, "image", "exists", image], capture_output=True)
+    if done.returncode != 0:
+        done = subprocess.run([runtime, "image", "inspect", image], capture_output=True)
+    return runtime if done.returncode == 0 else None
+
+
+_LIVE_IMAGE = "docker.io/library/python:3.12-slim"
+
+
+def test_gate_sandbox_2_a_staged_test_in_the_container_reaches_neither_the_host_nor_a_socket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live half: the file a model staged, run under the shipped flags, cannot read a path
+    outside its tree and cannot open a socket. `os.getuid` differs between runtimes, so it reads
+    what is universal -- a file the test planted beside the tree, and a connect() to a loopback
+    port nothing listens on, which under `--network=none` fails before it is refused."""
+    if _image_present(_LIVE_IMAGE) is None:
+        pytest.skip(f"{_LIVE_IMAGE} is not pulled here; the live half of GATE-SANDBOX-2 runs where it is")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("must-not-be-readable\n")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "probe.py").write_text(
+        "import os, socket, sys\n"
+        f"print('outside:', os.path.exists({str(outside)!r}))\n"
+        "print('home:', os.environ.get('HOME', 'ABSENT'))\n"
+        "try:\n"
+        "    socket.create_connection(('127.0.0.1', 9), timeout=1)\n"
+        "    print('socket: opened')\n"
+        "except OSError as e:\n"
+        "    print('socket: refused', type(e).__name__)\n"
+    )
+    result = asyncio.run(
+        Sandbox(image=_LIVE_IMAGE, require_container=True).run(["python", "probe.py"], cwd=str(tree))
+    )
+    assert result.sandboxed, result
+    assert "outside: False" in result.stdout, result.stdout
+    assert "socket: refused" in result.stdout, result.stdout
+    assert str(tmp_path) not in result.stdout, "the host's HOME reached the container"
 
 
 def test_the_named_opt_out_does_leak_which_is_why_it_is_named(monkeypatch: pytest.MonkeyPatch) -> None:

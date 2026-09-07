@@ -20,6 +20,7 @@ from ..core.outcome import Cost, Finding, Outcome, Severity, Status
 from ..core.types import Resolution, Test, TestReport
 from ..core.verbs import Capability, Verb
 from . import tooling
+from .command import _refused
 from .sandbox import Runner, Sandbox
 
 __all__ = ["PytestTest", "Test"]
@@ -82,6 +83,12 @@ class PytestTest:
             )
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)
+
+        # A runner constructed to require a container and finding none ran nothing; that is the
+        # control working, and reading its exit as "no summary, errored" told a strategy the
+        # suite broke. `CommandTest` had this guard (#256) and this adapter did not.
+        if (declined := _refused(result)) is not None:
+            return declined
 
         exit_code = result.exit_code
         text = result.stdout + result.stderr

@@ -410,7 +410,7 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
     HEAD, and the reason this tool exists at all.
     """
     from ...core.types import Test
-    from ..worktree import materialize
+    from ..worktree import materialize, staged_refusal
 
     async def run(paths: tuple[str, ...] = ()) -> str:
         container = getattr(ctx, "container", None)
@@ -422,6 +422,11 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
                 "refused: nothing is staged yet, so this would test the code exactly as it already "
                 "is. Write your change first, then run."
             )
+        # Before the worktree exists. The model reads this as a tool result and can carry on
+        # without the suite; the strategy's own final run refuses the same way, so a session that
+        # ends here is not a session that quietly ran its test on the host (GATE-SANDBOX-2).
+        if (why := staged_refusal(ctx)) is not None:
+            return f"refused (sandbox.host_fallback): {why}"
         async with materialize(root, staged) as tree:
             outcome = await ctx.do(Test(root=tree, paths=paths))
         return _rendered(outcome)

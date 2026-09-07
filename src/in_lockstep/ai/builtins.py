@@ -139,6 +139,23 @@ class Workspace:
     def resolve(self, path: str) -> Path:
         return self.root / posixpath.normpath(path.replace("\\", "/"))
 
+    def inside(self, target: Path) -> bool:
+        """Whether `target`, followed through every symlink, still lies under the root.
+
+        `check_read` is string-based on purpose -- it judges the path the model NAMED -- and a
+        symlink is the case where the name and the file disagree: `link -> ../../.ssh/id_ed25519`
+        is inside the root by name and outside it on disk. The write side has refused exactly
+        this since GATE-GUARD-2; the read side followed the link (#308). Resolved here, once, for
+        the three tools that open files, and compared as paths rather than prefixes so that a
+        sibling directory sharing the root's name as a prefix is not mistaken for inside.
+        """
+        try:
+            resolved = target.resolve()
+            root = self.root.resolve()
+        except OSError:
+            return False
+        return resolved == root or root in resolved.parents
+
     def record(self, path: str, contents: str | None) -> str:
         """Stage a write, or say why not. The return value is what the model sees."""
         change = FileChange(path=path, contents=contents, author=ChangeAuthor.AGENT)
@@ -415,6 +432,10 @@ class ToolRunnerImpl:
         target = self.workspace.resolve(path)
         if not target.is_file():
             return f"error: no file at {path}"
+        if not self.workspace.inside(target):
+            # The same rule as the string guard's `outside-repo-root`, applied to where the file
+            # IS rather than what it is called (GATE-GUARD-4).
+            return f"refused: {path} is protected (outside-repo-root: it resolves outside the repository)"
         try:
             text = target.read_text()
         except (OSError, UnicodeDecodeError) as e:
@@ -433,6 +454,8 @@ class ToolRunnerImpl:
             if p.is_file()
             and fnmatch.fnmatch(rel := str(p.relative_to(self.workspace.root)), pattern)
             and self.workspace.guard.check_read(rel) is None
+            # A link out of the tree is not a file in it, whatever `rglob` yields.
+            and self.workspace.inside(p)
         )
         if not matches:
             return "(no matches)"
@@ -465,6 +488,10 @@ class ToolRunnerImpl:
             # Skipped silently rather than refused: a search is over the tree, and naming every
             # protected file it declined would be a listing of exactly what is worth reading.
             if self.workspace.guard.check_read(rel) is not None:
+                continue
+            # Skipped like a guarded path, and for the same reason: `rglob` yields the link by
+            # its in-tree name and `read_text` would follow it out.
+            if not self.workspace.inside(path):
                 continue
             try:
                 text = path.read_text()
