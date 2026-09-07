@@ -238,7 +238,7 @@ class TDD(ImplementStrategy):
             return e.outcome
 
         summary, notes, unfinished, malformed = read_reply(green_inv.content)
-        full = session.workspace.changeset(summary=summary, ticket=ticket.key)
+        full = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
         cost = red_inv.cost + green_inv.cost
 
         refusals = session.guard.check(full, workflow_id=session.workspace.workflow_id)

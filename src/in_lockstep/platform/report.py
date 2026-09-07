@@ -137,6 +137,7 @@ def implement_body(changeset: Any, verdict: Any) -> str:
     unverified and the body says exactly that rather than implying a green it never earned.
     """
     lines = [
+        *_cover_note(changeset),
         _UNTRUSTED_WARNING,
         "",
         f"**Tests:** {_verdict_line(verdict)}",
@@ -157,6 +158,7 @@ def fix_body(changeset: Any, verdict: Any) -> str:
     exactly the run this function was written after.
     """
     lines = [
+        *_cover_note(changeset),
         "A reproducer for this bug was written, confirmed red, and this change makes it pass.",
         "",
         _UNTRUSTED_WARNING,
@@ -166,6 +168,30 @@ def fix_body(changeset: Any, verdict: Any) -> str:
         marker("fix"),
     ]
     return "\n".join(lines)
+
+
+def _cover_note(changeset: Any) -> list[str]:
+    """The model's own account of the change, first: its summary as the opening paragraph and its
+    notes as a list, or nothing when it wrote neither.
+
+    First rather than after the provenance lines because a reviewer opens a pull request to learn
+    what it does, and until #343 a framework-opened one never said. The two provenance sentences
+    that follow are the framework's claims; these are the model's, which is why they are set under
+    a heading that says whose they are — and why they stay after the untrusted-input warning in
+    the reader's mind, if not on the page. Model prose, so the artifact masked it already, and a
+    cover note that was not JSON arrives as up to a thousand characters of the reply, which is
+    the bound on how long this paragraph can be.
+    """
+    summary = " ".join(str(getattr(changeset, "summary", "") or "").split())
+    notes = [str(n).strip() for n in getattr(changeset, "notes", ()) or () if str(n).strip()]
+    if not summary and not notes:
+        return []
+    lines: list[str] = []
+    if summary:
+        lines += [summary, ""]
+    if notes:
+        lines += ["**Notes from the run:**", *(f"- {note}" for note in notes), ""]
+    return lines
 
 
 def _verdict_line(verdict: Any) -> str:

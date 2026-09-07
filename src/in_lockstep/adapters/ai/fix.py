@@ -20,7 +20,7 @@ them as two things: here is the bug, made executable; here is the line that matt
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar
 
 from ...ai.builtins import ToolRunnerImpl, Workspace
@@ -73,8 +73,12 @@ class FixReport:
 
     @property
     def changeset(self) -> ChangeSet:
-        """The whole change, reproducer and fix together — what `apply`/`open_change` writes."""
-        return _merge(self.reproducer, self.fix)
+        """The whole change, reproducer and fix together — what `apply`/`open_change` writes.
+
+        The cover note is the report's, whichever half it was stored on: a report built by hand
+        with a bare `fix` set and a `summary` still proposes under that summary."""
+        merged = _merge(self.reproducer, self.fix)
+        return replace(merged, summary=self.summary or merged.summary, notes=self.notes or merged.notes)
 
     @property
     def empty(self) -> bool:
@@ -245,7 +249,16 @@ class DiagnoseThenFix(FixStrategy):
             )
 
         repro_paths = set(reproducer.paths())
-        fix_only = ChangeSet(changes=tuple(c for c in full.changes if c.path not in repro_paths))
+        # The cover note rides on the fix half, not only on the report: `changeset` below merges
+        # the two halves for `write_changeset`, and a merge of two sets that carried no summary is
+        # a set with none — which is how the first fix this loop opened here was titled by its
+        # ticket number and described by nothing (#343).
+        fix_only = ChangeSet(
+            changes=tuple(c for c in full.changes if c.path not in repro_paths),
+            summary=summary,
+            notes=notes,
+            ticket=ticket.key,
+        )
         report = FixReport(
             reproducer=reproducer,
             fix=fix_only,
@@ -353,7 +366,12 @@ def _merge(base: ChangeSet, over: ChangeSet) -> ChangeSet:
     by_path = {c.path: c for c in base.changes}
     for change in over.changes:
         by_path[change.path] = change
-    return ChangeSet(changes=tuple(by_path.values()), summary=over.summary or base.summary)
+    return ChangeSet(
+        changes=tuple(by_path.values()),
+        summary=over.summary or base.summary,
+        notes=over.notes or base.notes,
+        ticket=over.ticket or base.ticket,
+    )
 
 
 def _blocked(reason: str, message: str, *, staged: list[Any] | None = None) -> Outcome[FixReport]:

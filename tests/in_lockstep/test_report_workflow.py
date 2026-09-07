@@ -357,6 +357,12 @@ def test_the_propose_workflow_says_on_the_ticket_that_it_opened_the_change(
     assert "https://example.test/pull/1" in said, said
     assert "ready for review" in said, said
     assert host.ready, "a green verdict opens ready, not as a draft"
+    # Both verbs title the change from the ticket and open its body with the model's summary. The
+    # fix verb titled from the summary until #343, and when that was empty the pull request the
+    # loop opened on this repository was called `Fix #319` over a body that said nothing.
+    (opened,) = host.opened
+    assert opened["title"] == "a ticket", opened["title"]
+    assert opened["body"].startswith(f"{verb} the thing\n"), opened["body"]
 
 
 # -- a control that stopped a run is not a failure ------------------------------------------------

@@ -137,8 +137,8 @@ class Workspace:
     #: can put back what a read took out (see `record`).
     redact: Redact = field(default_factory=Redact)
 
-    def changeset(self, *, summary: str = "", ticket: str = "") -> ChangeSet:
-        return ChangeSet(changes=tuple(self.changes), summary=summary, ticket=ticket)
+    def changeset(self, *, summary: str = "", ticket: str = "", notes: tuple[str, ...] = ()) -> ChangeSet:
+        return ChangeSet(changes=tuple(self.changes), summary=summary, ticket=ticket, notes=notes)
 
     def resolve(self, path: str) -> Path:
         return self.root / posixpath.normpath(path.replace("\\", "/"))

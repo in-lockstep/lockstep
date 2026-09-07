@@ -10,6 +10,7 @@ format and both halves call it, which is what makes a round trip assertable at a
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,29 @@ def _changeset() -> ChangeSet:
 def test_a_changeset_survives_the_round_trip(tmp_path: Path) -> None:
     write_changeset(tmp_path / "out", _changeset())
     assert read_changeset(tmp_path / "out") == _changeset()
+
+
+def test_the_notes_ride_the_artifact_masked_and_an_older_artifact_reads_as_none(tmp_path: Path) -> None:
+    """The cover note's second half crosses into `propose` with the first (#343), under the same
+    mask — both are model prose — and an artifact written before the field existed is still read."""
+    secret = "sk-abcdefghijklmnopqrstuvwxyz"
+    registry = SecretRegistry()
+    registry.add(secret)
+    changeset = ChangeSet(
+        changes=(FileChange(path="src/a.py", contents="x = 1\n"),),
+        summary="did the thing",
+        notes=("used the plumbing the file already uses", f"the provider said {secret}"),
+    )
+    path = write_changeset(tmp_path / "out", changeset, redact=Redact(registry))
+    assert secret not in path.read_text()
+    back = read_changeset(tmp_path / "out")
+    assert back.notes[0] == "used the plumbing the file already uses"
+    assert secret not in back.notes[1] and back.notes[1].startswith("the provider said")
+
+    document = json.loads(path.read_text())
+    del document["notes"]
+    path.write_text(json.dumps(document))
+    assert read_changeset(tmp_path / "out").notes == ()
 
 
 def test_a_directory_and_a_file_are_both_accepted(tmp_path: Path) -> None:

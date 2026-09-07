@@ -83,7 +83,7 @@ class Oneshot(ImplementStrategy):
 
         summary, notes, unfinished, malformed = read_reply(invocation.content)
 
-        changeset = session.workspace.changeset(summary=summary, ticket=ticket.key)
+        changeset = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
         # The whole change set, checked as a unit. The per-file check already ran at the tool
         # boundary, and this is not a repeat of it: `check_test_shape` is a rule about the shape
         # of a change rather than a path, so it is not expressible one file at a time. It passes

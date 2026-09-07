@@ -69,6 +69,8 @@ def write_changeset(
     path.parent.mkdir(parents=True, exist_ok=True)
     document: dict[str, object] = {
         "summary": mask.text(changeset.summary),
+        # Masked like the summary: both are model prose that a pull-request body will render.
+        "notes": [mask.text(note) for note in changeset.notes],
         "ticket": mask.text(changeset.ticket),
         "changes": [
             {
@@ -117,10 +119,14 @@ def read_changeset(artifact: str | Path) -> ChangeSet:
                 symlink_target=raw.get("symlink_target"),
             )
         )
+    raw_notes = data.get("notes", [])
     return ChangeSet(
         changes=tuple(changes),
         summary=str(data.get("summary", "")),
         ticket=str(data.get("ticket", "")),
+        # Tolerant, like the rest of this reader: an artifact written before the field existed, or
+        # one carrying something other than a list, reads as a change with no notes.
+        notes=tuple(str(n) for n in raw_notes if isinstance(n, str)) if isinstance(raw_notes, list) else (),
     )
 
 
