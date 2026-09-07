@@ -1575,6 +1575,19 @@ def test_edit_file_replaces_one_passage_and_stages_the_whole_file(tmp_path: Path
     assert runner.progress == 1 and runner.last_progress == "edited big.py"
 
 
+def test_read_file_shows_this_sessions_own_staged_version(tmp_path: Path) -> None:
+    """A model that writes and then reads was shown the disk, the file as it was, and reasoned
+    from that (#337). What a session staged is what it sees; a staged deletion reads as absent."""
+    runner = _editable_tree(tmp_path / "repo")
+    runner._write({"path": "big.py", "contents": "def a():\n    return 9\n"})
+    assert runner._read({"path": "big.py"}) == "def a():\n    return 9\n"
+    runner._delete({"path": "big.py"})
+    assert "staged its deletion" in runner._read({"path": "big.py"})
+    assert (tmp_path / "repo" / "big.py").read_text().startswith("def a():\n    return 1"), (
+        "the disk is untouched"
+    )
+
+
 def test_edit_file_edits_the_version_this_session_already_staged(tmp_path: Path) -> None:
     runner = _editable_tree(tmp_path / "repo")
     runner._edit({"path": "big.py", "old": "return 1\n\n", "new": "return 10\n\n"})

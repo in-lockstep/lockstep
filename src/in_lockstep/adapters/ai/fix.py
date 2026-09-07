@@ -152,7 +152,20 @@ class DiagnoseThenFix(FixStrategy):
         try:
             # -- Reproduce ----------------------------------------------------------------------
             repro_inv = await self._run(session, "fix/reproducer", params, package)
-            reproducer = session.workspace.changeset(ticket=ticket.key)
+            staged = session.workspace.changeset(ticket=ticket.key)
+            # The reproducer is the TEST-shaped part of what the reproduce step staged. The step
+            # is asked for a test and nothing else, and with a cheap edit at hand a model fixes
+            # the bug in the same breath: the eighth `/fix` on this repository's own #319 staged
+            # the reproducer, the fix and a ledger row together, the red run passed over all
+            # three, and the run ended `fix.not_reproduced` about a bug it had reproduced and
+            # fixed (#337). The red run is over the tests alone, which is what "red" is a claim
+            # about; whatever else was staged stays staged and reaches the fix step as a head
+            # start, where the green run over everything is what decides.
+            reproducer = ChangeSet(
+                changes=tuple(c for c in staged.changes if session.guard.is_test(c.path)),
+                ticket=ticket.key,
+            )
+            early = tuple(c.path for c in staged.changes if not session.guard.is_test(c.path))
             if not reproducer.changes:
                 return Outcome(
                     status=Status.FAILED,
@@ -203,7 +216,7 @@ class DiagnoseThenFix(FixStrategy):
                 ticket=ticket.key,
                 title=ticket.title,
                 criteria=tuple(ticket.acceptance_criteria),
-                failure=_fix_specification(reproducer, red),
+                failure=_fix_specification(reproducer, red, early=early),
             )
             fix_inv = await self._run(session, "fix/fix-writer", fix_params, package)
         except PhaseError as e:
@@ -303,7 +316,7 @@ def _test_spec(tree: str, expect: str) -> Test:
     return Test(root=tree, expect=expect)
 
 
-def _fix_specification(reproducer: ChangeSet, red: Any) -> str:
+def _fix_specification(reproducer: ChangeSet, red: Any, *, early: tuple[str, ...] = ()) -> str:
     """What the fix step is fixing against: the reproducer test that fails, and how it failed.
 
     The reproducer is the specification now, so the fix step needs to see it in full — it is staged,
@@ -313,7 +326,20 @@ def _fix_specification(reproducer: ChangeSet, red: Any) -> str:
     listing = "\n\n".join(
         f"`{c.path}`:\n```\n{c.contents}\n```" for c in reproducer.changes if c.contents is not None
     )
-    return f"The reproducer, which fails against the current code:\n\n{listing}\n\n{_failure_text(red)}"
+    head_start = (
+        (
+            "\n\nYou already staged changes to "
+            + ", ".join(f"`{p}`" for p in early)
+            + " in the reproduce step. They are in the change set and `read_file` shows them; the "
+            "suite has not yet run over them together with the test. Finish the fix from there "
+            "rather than starting over."
+        )
+        if early
+        else ""
+    )
+    return (
+        f"The reproducer, which fails against the current code:\n\n{listing}\n\n{_failure_text(red)}"
+    ) + head_start
 
 
 def _failure_text(outcome: Any) -> str:
