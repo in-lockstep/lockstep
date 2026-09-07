@@ -1,47 +1,61 @@
 {
   "aspect": "security",
+  "base": "main",
   "billed_fraction": 1.0,
-  "cost_usd": 0.038205,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.062646,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 4,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 346,
-        "message": "Error message reflects back the raw env-var value `ceiling` into a user-facing report without sanitisation. If `IN_LOCKSTEP_MAX_BUDGET_USD` contains control characters or very long attacker-controlled content, it is embedded verbatim into `report.add(...)` and then emitted to stdout or JSON output. In a fleet-scanner context where the JSON is consumed by dashboards or log aggregators, this is a log-injection / content-injection vector: an attacker who controls that environment variable (e.g. via\u2026[truncated]",
-        "path": "src/in_lockstep/doctor.py",
+        "line": 75,
+        "message": "Write error is printed to stdout and swallowed, leaking internal filesystem paths",
+        "path": "src/in_lockstep/ai/transcript.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 330,
-        "message": "The list of required policy names (`IN_LOCKSTEP_REQUIRED_POLICIES`) is split on commas and each stripped name is compared against present layers, then the present-layer set is embedded in the error message: `', '.join(sorted(present))`. The `present` set is derived from `lockstep.policy.layers`, which comes from the repository module loaded via `_load_configured`. If a layer's `name` attribute contains a comma, newline, or other delimiter, `', '.join(sorted(present))` faithfully includes it in t\u2026[truncated]",
-        "path": "src/in_lockstep/doctor.py",
+        "line": 391,
+        "message": "ci_actor from environment variable written directly into the ledger record without sanitization",
+        "path": "src/in_lockstep/cli.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 84,
-        "message": "The broad `except Exception: return None` in `_load_configured` silently swallows all load errors, including import errors that may themselves be caused by the repository module attempting side-effects at import time. This is noted in the docstring as intentional (load failures are loud elsewhere). No security finding per se, but worth noting that the silence means a deliberately broken module evades all strict checks \u2014 an attacker-controlled lockstep.py that raises on import would cause `_load_\u2026[truncated]",
-        "path": "src/in_lockstep/doctor.py",
+        "line": 875,
+        "message": "_explain_run reads a record from the ledger and renders arbitrary string fields to the terminal without escaping",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 45,
+        "message": "_safe() allows dots in the filename, enabling a run_id to produce a path like '..jsonl' or traverse within the transcripts directory",
+        "path": "src/in_lockstep/ai/transcript.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 8890,
+  "head": "cae7bdc19d5d6b03490b48126d88fb39a6663f10",
+  "input_tokens": 16072,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 769,
+  "output_tokens": 962,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
-  "schema": 3,
+  "schema": 4,
   "status": "succeeded",
-  "tokens": 9659,
-  "wall_seconds": 21.966
+  "tokens": 17034,
+  "ts": "2026-08-29T20:37:15+00:00",
+  "wall_seconds": 26.104
 }
