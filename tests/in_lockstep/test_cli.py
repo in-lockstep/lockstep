@@ -539,17 +539,17 @@ def test_a_repositorys_own_import_of_the_same_name_is_not_swallowed(repo: Path) 
     means to; only an import of exactly what is already there is dropped."""
     from in_lockstep.cli import _SCAFFOLD_FIX_CONFIG, _without_duplicate_imports
 
-    mine = "from myapp.adapters import Test\nlockstep = 1\n"
+    mine = "from myapp.platform import hosted_scm\nlockstep = 1\n"
     kept = _without_duplicate_imports(mine, _SCAFFOLD_FIX_CONFIG)
-    assert "from in_lockstep.adapters.pytest_adapter import PytestTest, Test" in kept
+    assert "from in_lockstep.platform.hosted import hosted_scm, hosted_tickets" in kept
 
-    theirs = "from in_lockstep.adapters.pytest_adapter import PytestTest, Test\nlockstep = 1\n"
+    theirs = "from in_lockstep.platform.hosted import hosted_scm, hosted_tickets\nlockstep = 1\n"
     dropped = _without_duplicate_imports(theirs, _SCAFFOLD_FIX_CONFIG)
-    assert "from in_lockstep.adapters.pytest_adapter import PytestTest, Test" not in dropped
+    assert "from in_lockstep.platform.hosted import hosted_scm, hosted_tickets" not in dropped
     # A partial overlap keeps the names that are genuinely new.
-    partial = "from in_lockstep.adapters.pytest_adapter import Test\nlockstep = 1\n"
+    partial = "from in_lockstep.platform.hosted import hosted_scm\nlockstep = 1\n"
     trimmed = _without_duplicate_imports(partial, _SCAFFOLD_FIX_CONFIG)
-    assert "from in_lockstep.adapters.pytest_adapter import PytestTest\n" in trimmed
+    assert "from in_lockstep.platform.hosted import hosted_tickets\n" in trimmed
 
     # An alias is the case where module and bound name agree and the object does not, so the key
     # carries the imported name too. Both directions, and the identical line still goes.
@@ -763,8 +763,9 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch:
         lockstep = lockstep_from(module)
         assert lockstep.container.has(Scm)
         assert lockstep.container.has(TicketSource)
-        # Test is bound now too, so from-ticket can run the suite against the staged change.
-        assert lockstep.container.has(Test)
+        # No Test: nothing was detected in this empty repository, and the block declines rather
+        # than inventing a runner (#316); a Python repository gets the one detection found.
+        assert not lockstep.container.has(Test)
         assert get("implement/from-ticket") is not None
         assert get("implement/propose") is not None
     finally:
@@ -773,7 +774,8 @@ def test_init_implement_extends_the_module_and_it_loads(repo: Path, monkeypatch:
 
 def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
     """The fix scaffold binds Fix and registers its two workflows, and its guarded binds mean it
-    also loads standalone — Test, Scm and TicketSource are bound even without --implement."""
+    also loads standalone — Scm and TicketSource are bound even without --implement, and Test is
+    left to detection (#316)."""
     from in_lockstep.adapters.ai.fix import Fix
     from in_lockstep.adapters.pytest_adapter import Test
     from in_lockstep.core.workflow import get, restore, snapshot
@@ -796,7 +798,7 @@ def test_init_fix_extends_the_module_and_it_loads(repo: Path) -> None:
         assert lockstep.container.has(Fix)
         assert lockstep.container.has(Scm)
         assert lockstep.container.has(TicketSource)
-        assert lockstep.container.has(Test)
+        assert not lockstep.container.has(Test)
         assert get("fix/from-ticket") is not None
         assert get("fix/propose") is not None
     finally:
@@ -962,7 +964,8 @@ def test_every_scaffolded_invocation_runs_the_pinned_framework_under_uvx(repo: P
     for path in sorted((repo / ".github/workflows").glob("*.yml")):
         text = path.read_text()
         assert "uv run" not in text, path.name
-        for line in text.splitlines():
+        # A shell continuation is one command: the pin and the verb may sit on two lines.
+        for line in re.sub(r"\s*\\\n\s*", " ", text).splitlines():
             if line.lstrip().startswith("#") or not re.search(r"in-lockstep [a-z]", line):
                 continue
             assert pinned.search(line), f"{path.name}: {line.strip()}"
@@ -3189,22 +3192,203 @@ def test_the_implement_block_keeps_the_test_runner_detection_already_bound(repo:
         restore(state)
 
 
-def test_the_implement_block_still_binds_a_runner_when_detection_found_none(repo: Path) -> None:
-    """The other half, and the reason the bind cannot simply be deleted. With nothing detected the
-    base scaffold writes a commented stub and binds nothing, so the implement flow would dispatch
-    Test against an empty container."""
+def test_gate_tooling_2_the_implement_block_declines_a_runner_detection_did_not_find(repo: Path) -> None:
+    """The inverse of what this test pinned until #316: with nothing detected the write-verb
+    blocks bound `PytestTest()` anyway, a runner invented for a stack detection could not place.
+    Now they write the same commented stub plain `init` writes, and a verdict over no runner is
+    "unverified" rather than a pytest run against a repository that has none."""
     from in_lockstep.adapters.pytest_adapter import Test
     from in_lockstep.core.workflow import restore, snapshot
     from in_lockstep.loader import load, lockstep_from
 
-    assert CliRunner().invoke(main, ["init", "--implement"]).exit_code == 0
+    assert CliRunner().invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
+    text = (repo / ".lockstep/lockstep.py").read_text()
+    assert "PytestTest()" not in text
+    assert text.count("No test runner was detected") >= 2, "each write-verb block carries the stub"
     state = snapshot()
     try:
         lockstep = lockstep_from(load(str(repo))[0])
-        bound = lockstep.container.resolve(Test)
-        assert type(bound).__name__ == "PytestTest", type(bound).__name__
+        assert not lockstep.container.has(Test)
     finally:
         restore(state)
+
+
+def _init_with(repo: Path, files: dict[str, str], *flags: str) -> str:
+    for name, content in files.items():
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(content)
+    result = CliRunner().invoke(main, ["init", *flags])
+    assert result.exit_code == 0, result.output
+    return (repo / ".lockstep/lockstep.py").read_text()
+
+
+@pytest.mark.parametrize(
+    ("files", "image"),
+    [
+        ({"pyproject.toml": "[project]\nname = 'x'\n"}, "docker.io/library/python:3.12-slim"),
+        ({"package.json": '{"name": "x"}'}, "docker.io/library/node:22-slim"),
+        ({"go.mod": "module x\n"}, "docker.io/library/golang:1.23"),
+        ({"Cargo.toml": "[package]\nname = 'x'\n"}, "docker.io/library/rust:1-slim"),
+        ({"pom.xml": "<project/>", "mvnw": ""}, "docker.io/library/eclipse-temurin:21"),
+    ],
+    ids=["python", "node", "go", "rust", "jvm"],
+)
+def test_gate_tooling_2_the_sandbox_image_is_derived_from_the_detected_stack(
+    repo: Path, files: dict[str, str], image: str
+) -> None:
+    """`python:3.12-slim` for every stack was a Node repository getting a `run_script` container
+    with no toolchain (#316). One image per stack detection found, in both write-verb blocks."""
+    text = _init_with(repo, files, "--implement", "--fix")
+    assert text.count(f'Sandbox(image="{image}", require_container=True)') == 2, text
+    assert "No container image was derived" not in text
+    compile(text, "lockstep.py", "exec")
+
+
+def test_gate_tooling_2_a_dockerfile_wins_and_the_image_is_left_for_the_adopter_to_name(repo: Path) -> None:
+    """A Dockerfile is the repository already stating its environment, and the image it builds is
+    not a name detection can know: the block declines with the Dockerfile named, and `run_script`
+    is withheld rather than run in a base image that is not the one the repository declared."""
+    text = _init_with(
+        repo, {"pyproject.toml": "[project]\nname = 'x'\n", "Dockerfile": "FROM x\n"}, "--implement"
+    )
+    assert "a Dockerfile is here, and the image it builds is yours to name" in text
+    assert "python:3.12-slim" not in text
+    assert "from in_lockstep import Workshop" not in text.replace("#   from in_lockstep import Workshop", "")
+    compile(text, "lockstep.py", "exec")
+
+
+def test_gate_tooling_2_two_stacks_derive_no_image_and_say_so(repo: Path) -> None:
+    text = _init_with(
+        repo, {"pyproject.toml": "[project]\nname = 'x'\n", "package.json": '{"name": "x"}'}, "--fix"
+    )
+    assert "the detected stack is python, node" in text and "No container image was derived" in text
+
+
+def test_gate_tooling_2_the_post_init_list_names_the_image_either_way(repo: Path) -> None:
+    (repo / "go.mod").write_text("module x\n")
+    derived = CliRunner().invoke(main, ["init", "--implement"]).output
+    assert "The sandbox image is docker.io/library/golang:1.23" in derived
+    assert "IN_LOCKSTEP_ORG_SPEND_LIMIT" in derived, (
+        "doctor is a required step now, and the variable it reads is named"
+    )
+    stub = CliRunner().invoke(main, ["init", "--force", "--implement"], catch_exceptions=False)
+    assert stub.exit_code == 0
+
+
+def test_gate_tooling_2_the_scaffold_pytest_line_is_what_detected_bindings_installs(repo: Path) -> None:
+    """The two spelled their own arguments for as long as each had its own literal, while
+    `detected.py` said they agreed (#316). One constant, and the line is generated from it."""
+    from in_lockstep.adapters.detected import PYTEST_ARGS, detected_bindings
+    from in_lockstep.lockstep import _detect_facts
+
+    text = _init_with(repo, {"pyproject.toml": "[tool.pytest.ini_options]\n"})
+    ((_test, bound),) = [
+        (i, impl) for i, impl in detected_bindings(_detect_facts(repo)) if i.__name__ == "Test"
+    ]
+    assert f"lockstep.bind(Test, PytestTest(args={list(PYTEST_ARGS)!r}))" in text
+    assert bound.args == list(PYTEST_ARGS)
+
+
+def test_gate_tooling_2_init_refuses_to_run_outside_the_repository_root(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Detection reads the root and `init` writes where it stands; the two have to be one place."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    (repo / "backend").mkdir()
+    monkeypatch.chdir(repo / "backend")
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code != 0
+    assert "run init at the repository root" in result.output
+    assert not (repo / "backend" / ".lockstep").exists() and not (repo / ".lockstep").exists()
+
+
+def test_gate_tooling_2_a_monorepo_is_told_detection_reads_the_root_and_what_lies_below(repo: Path) -> None:
+    (repo / "backend").mkdir()
+    (repo / "backend" / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    assert "nothing at the repository root states how this repository builds" in result.output
+    assert "found backend/pyproject.toml one level down" in result.output
+
+
+def _rendered_scaffolds() -> dict[str, str]:
+    """Every trampoline `init` writes, rendered for the default provider the way `init` renders it."""
+    from in_lockstep.cli import (
+        _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        _SCAFFOLD_FIX_TRAMPOLINE,
+        _SCAFFOLD_GITLAB_TRAMPOLINE,
+        _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        _SCAFFOLD_REVIEW_TRAMPOLINE,
+        _SCAFFOLD_TRAMPOLINE,
+        _render_trampoline,
+    )
+
+    templates = {
+        "lockstep.yml": _SCAFFOLD_TRAMPOLINE,
+        ".gitlab-ci.yml": _SCAFFOLD_GITLAB_TRAMPOLINE,
+        "implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        "review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
+    }
+    return {name: _render_trampoline(text, "anthropic") for name, text in templates.items()}
+
+
+def test_gate_ci_3_no_scaffolded_run_states_a_budget_and_every_doctor_verdict_is_acted_on() -> None:
+    """What this repository's own workflows already hold (`test_own_ceilings.py`, GATE-CI-3),
+    held for the trampolines an adopter keeps: `--budget` on a `run` replaces the module's
+    ceiling rather than merging with it, and a `doctor` nobody acts on is a diagnostic nobody
+    reads (#316)."""
+    import re
+
+    for name, text in _rendered_scaffolds().items():
+        joined = re.sub(r"\\\n\s*", " ", text)
+        lines = [line for line in joined.splitlines() if not line.lstrip().startswith("#")]
+        for line in lines:
+            if "in-lockstep run " in line:
+                assert "--budget" not in line, f"{name}: {line.strip()}"
+        for index, line in enumerate(lines):
+            if "in-lockstep doctor" not in line:
+                continue
+            assert "|| true" not in line, f"{name}: {line.strip()}"
+            following = "\n".join(lines[index + 1 : index + 3])
+            assert "continue-on-error" not in following, f"{name}: doctor's verdict is discarded"
+
+
+def test_gate_tooling_2_a_module_routing_review_at_bedrock_gets_a_trampoline_for_bedrock(repo: Path) -> None:
+    """Every trampoline named `anthropic` and `ANTHROPIC_API_KEY` outright, so a module routing
+    review elsewhere got a green check that never reviewed (#316)."""
+    import yaml
+
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep.detect()\n"
+        'lockstep.models.route("review", "bedrock:us.anthropic.claude-sonnet-4-6-v1:0")\n'
+    )
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code == 0, result.output
+    text = (repo / ".github/workflows/lockstep.yml").read_text()
+    assert "in-lockstep[bedrock]==" in text and "in-lockstep[anthropic]" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+    workflow = yaml.safe_load(text)
+    review = next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
+    assert "secrets.AWS_SECRET_ACCESS_KEY" in review["if"]
+    assert set(review["env"]) >= {"AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "AWS_REGION"}
+    assert "no AWS_SECRET_ACCESS_KEY (fork pull request?)" in text
+
+
+def test_gate_tooling_2_a_route_to_a_provider_init_has_no_recipe_for_is_refused_by_name(repo: Path) -> None:
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "lockstep = Lockstep.detect()\n"
+        'lockstep.models.route("review", "local:qwen3-8b")\n'
+    )
+    result = CliRunner().invoke(main, ["init"])
+    assert result.exit_code != 0
+    assert "cannot write a CI trampoline for a route to 'local'" in result.output
+    assert not (repo / ".github/workflows/lockstep.yml").exists()
 
 
 # -- what a run keeps: the ignore lines, the disclosure, and where a recording lands ------------

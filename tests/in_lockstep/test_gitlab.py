@@ -557,7 +557,7 @@ def test_the_gitlab_work_job_provisions_before_doctor_on_an_image_that_carries_u
 
     script = parsed["work"]["script"]
     assert "in-lockstep provision" in script, "the environment is built before anything runs in it"
-    assert script.index("in-lockstep provision") < script.index("in-lockstep doctor || true")
+    assert script.index("in-lockstep provision") < script.index("in-lockstep doctor")
     assert parsed["work"]["image"] == "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
     assert parsed["review"]["image"] == "python:3.11-slim"
     for job in ("review", "gate", "propose"):

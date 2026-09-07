@@ -136,6 +136,10 @@ class RepoFacts:
     readme: bool = False
     docs: bool = False
     agent_instructions: tuple[str, ...] = ()  # names only; the contents are read per run
+    #: Build manifests found one directory below the root, as `dir/name`. Detection reads the
+    #: root and nothing else, and for as long as the decline did not say so a monorepo whose
+    #: service lives in `backend/` read as an unsupported stack (#316).
+    below: tuple[str, ...] = ()
 
     def declined(self) -> str:
         """What was looked for, when nothing found here can serve a verb. Empty otherwise.
@@ -175,7 +179,16 @@ class RepoFacts:
             return f"{self.stack} is here and named no test, lint, build or run command{hint}"
         if self.makefile:
             return "a Makefile is here with no test, lint, build or run target"
-        return f"nothing here states how this repository builds; looked for {', '.join(BUILD_MANIFESTS)}"
+        found = (
+            f"; found {', '.join(self.below)} one level down, which detection does not read -- run from "
+            f"that directory, or bind the verbs by hand"
+            if self.below
+            else ""
+        )
+        return (
+            f"nothing at the repository root states how this repository builds; looked for "
+            f"{', '.join(BUILD_MANIFESTS)}{found}"
+        )
 
     def summary(self) -> tuple[str, ...]:
         """A human-readable list of what was found, for `ls` and `doctor`."""

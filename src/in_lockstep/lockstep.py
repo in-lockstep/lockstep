@@ -15,7 +15,7 @@ from typing import Any
 
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
-from .core.context import AGENT_INSTRUCTION_FILES, Approval, RepoFacts, RepoInfo, RunContext
+from .core.context import AGENT_INSTRUCTION_FILES, BUILD_MANIFESTS, Approval, RepoFacts, RepoInfo, RunContext
 from .core.improve import Improvable
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
@@ -485,6 +485,12 @@ def _detect_facts(root: Path) -> RepoFacts:
     if not ruff:
         if "lint" in make_targets:
             lint_command = ("make", "lint")
+        elif "lint" in scripts:
+            # The same principle `test`, `build` and `start` already follow: a written script is a
+            # decision, and it beats the tool inferred from a config file -- a `biome check` or
+            # `standard` script was not linted at all for as long as only eslint's config was
+            # read (#316).
+            lint_command = ("npm", "run", "lint")
         elif eslint:
             lint_command = ("npx", "eslint", ".")
         elif clippy:
@@ -523,22 +529,26 @@ def _detect_facts(root: Path) -> RepoFacts:
     # How the repository's own environment is built, for the `provision` step a scaffolded work
     # job runs before anything else (#185). The rule is narrower than the four verbs' above,
     # because this is the one binding that writes into the tree and reaches a registry. What
-    # binds: a lockfile with a frozen install mode (`uv sync --locked` and `npm ci` each refuse to
-    # rewrite the lock they install from); a requirements.txt, into a venv of its own; or the
-    # Makefile's own `deps` target, which then speaks for the whole repository. What deliberately
-    # does not: a `[project]` pyproject with no uv.lock (it may be setuptools', PDM's, or a uv
-    # project that never committed its lock; `uv sync` there is a guess, and one that writes a
-    # uv.lock into the tree so every record the job makes afterwards says `dirty`); a
-    # poetry.lock, pdm.lock or Pipfile.lock (`uv sync` on a `[tool.poetry]`-only pyproject
-    # "succeeds" with an empty venv, the wrong default that runs); a package.json without a lock
-    # (`npm ci` refuses, and `npm install` beside a credential is unpinned); and an `install`
-    # target (by GNU convention it copies the built software onto the system). Each of those is
-    # one `lockstep.bind(Provision, CommandProvision([...]))` line in the module, as is a layout
-    # that keeps its test dependencies in an extra (`uv sync --locked --all-extras`): the shipped
-    # line installs a lockfile's default groups and nothing more. Two honest costs of what does
-    # bind: `npm ci`, and a `python -m venv` older than 3.13, write nothing that ignores itself,
-    # so a repository that does not ignore node_modules or .venv sees its run record marked
-    # dirty; and that venv is built on whatever `python` resolves to, which under uvx is the
+    # binds: a lockfile, through ITS OWN tool's frozen install -- `uv sync --locked`, `poetry
+    # install`, `pdm sync`, `pipenv sync`, `npm ci`, `yarn install --frozen-lockfile`, `pnpm
+    # install --frozen-lockfile` -- each of which installs from the lock it finds and refuses to
+    # rewrite it; a requirements.txt, into a venv of its own; or the Makefile's own `deps`
+    # target, which then speaks for the whole repository. A lockfile is as discoverable as the
+    # next, and for as long as only uv's and npm's bound, a Poetry team hand-wrote the line that
+    # was sitting in their tree (#316). Whether the tool is installed is not guessed here either
+    # way: `ls` prints where each resolved and `doctor` refuses (DOC180) when one is nowhere,
+    # which is the same answer `uv` and `npm` get. What deliberately does not bind: a `[project]`
+    # pyproject with no lock at all (it may be setuptools', or a project that never committed its
+    # lock; `uv sync` there is a guess, and one that writes a uv.lock into the tree so every
+    # record the job makes afterwards says `dirty`); a package.json without a lock (`npm ci`
+    # refuses, and `npm install` beside a credential is unpinned); and an `install` target (by
+    # GNU convention it copies the built software onto the system). Each of those is one
+    # `lockstep.bind(Provision, CommandProvision([...]))` line in the module, as is a layout that
+    # keeps its test dependencies in an extra (`uv sync --locked --all-extras`): the shipped line
+    # installs a lockfile's default groups and nothing more. Two honest costs of what does bind:
+    # `npm ci`, and a `python -m venv` older than 3.13, write nothing that ignores itself, so a
+    # repository that does not ignore node_modules or .venv sees its run record marked dirty;
+    # and that venv is built on whatever `python` resolves to, which under uvx is the
     # framework's own interpreter.
     # Cargo, Go and the JVM wrappers bind nothing here, and that is a positive answer rather than
     # a gap: `cargo test` and `go test` resolve and fetch their own dependencies as part of the
@@ -548,10 +558,15 @@ def _detect_facts(root: Path) -> RepoFacts:
     if "deps" in make_targets:
         provision.append(("make", "deps"))
     else:
-        foreign_lock = has("poetry.lock", "pdm.lock", "Pipfile.lock")
         if has("uv.lock"):
             provision.append(("uv", "sync", "--locked"))
-        elif has("requirements.txt") and not foreign_lock:
+        elif has("poetry.lock"):
+            provision.append(("poetry", "install"))
+        elif has("pdm.lock"):
+            provision.append(("pdm", "sync"))
+        elif has("Pipfile.lock"):
+            provision.append(("pipenv", "sync"))
+        elif has("requirements.txt"):
             # The venv's own interpreter, spelled from the layout `tooling` looks in, so the line
             # `ls` prints for the second step is the command that runs it.
             install = [os.path.join(*VENV_BIN, "python"), "-m", "pip", "install", "-r", "requirements.txt"]
@@ -560,6 +575,10 @@ def _detect_facts(root: Path) -> RepoFacts:
             provision += [("python", "-m", "venv", ".venv"), tuple(install)]
         if has("package-lock.json"):
             provision.append(("npm", "ci"))
+        elif has("yarn.lock"):
+            provision.append(("yarn", "install", "--frozen-lockfile"))
+        elif has("pnpm-lock.yaml"):
+            provision.append(("pnpm", "install", "--frozen-lockfile"))
 
     coverage = (
         has(".coveragerc", ".coverage-floor")
@@ -572,6 +591,17 @@ def _detect_facts(root: Path) -> RepoFacts:
     )
 
     agent_instructions = tuple(n for n in AGENT_INSTRUCTION_FILES if (root / n).exists())
+
+    # One level down and no further, and only so the decline can name what it saw: detection
+    # reads the root, and a service under `backend/` is told that rather than "unsupported".
+    below: list[str] = []
+    try:
+        for child in sorted(root.iterdir()):
+            if not child.is_dir() or child.name.startswith(".") or child.name == "node_modules":
+                continue
+            below += [f"{child.name}/{name}" for name in BUILD_MANIFESTS if (child / name).exists()]
+    except OSError:
+        pass
 
     return RepoFacts(
         stack=stack,
@@ -591,6 +621,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         readme=has("README.md", "README.rst", "README.txt", "README"),
         docs=(root / "docs").is_dir(),
         agent_instructions=agent_instructions,
+        below=tuple(below),
     )
 
 

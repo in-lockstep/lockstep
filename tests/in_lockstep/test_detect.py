@@ -541,14 +541,26 @@ def test_a_uv_lockfile_binds_a_locked_sync_and_a_project_table_without_one_binds
     assert _detect_facts(tmp_path).provision_commands[0] == ("python", "-m", "venv", ".venv")
 
 
-def test_a_foreign_lockfile_binds_no_provisioner(tmp_path: Path) -> None:
-    """`uv sync` on a Poetry project "succeeds" with an empty venv, the wrong default that runs.
-    Each of these is one `lockstep.bind(Provision, ...)` line in the module instead, and a
-    requirements.txt beside a foreign lock is that tool's export, not a second layout."""
-    for lock in ("poetry.lock", "pdm.lock", "Pipfile.lock"):
+def test_gate_provision_1_every_lockfile_binds_its_own_tools_frozen_install(tmp_path: Path) -> None:
+    """A lockfile is as discoverable as the next, and its own tool's frozen install is what each
+    guarantees; for as long as only uv's and npm's bound, a Poetry team hand-wrote the line that
+    was sitting in their tree (#316). A requirements.txt beside a foreign lock is that tool's
+    export, not a second layout, so the lock's tool wins. Whether the tool is installed is `ls`'s
+    resolution line and `doctor`'s DOC180, the same answer `uv` and `npm` get."""
+    expected = {
+        "poetry.lock": ("poetry", "install"),
+        "pdm.lock": ("pdm", "sync"),
+        "Pipfile.lock": ("pipenv", "sync"),
+    }
+    for lock, command in expected.items():
         root = tmp_path / lock.split(".")[0]
         _write(root, {"pyproject.toml": "[project]\nname = 'x'\n", lock: "", "requirements.txt": "six\n"})
-        assert _detect_facts(root).provision_commands == (), lock
+        assert _detect_facts(root).provision_commands == (command,), lock
+    _write(tmp_path / "yarn", {"package.json": "{}", "yarn.lock": ""})
+    assert _detect_facts(tmp_path / "yarn").provision_commands == (("yarn", "install", "--frozen-lockfile"),)
+    _write(tmp_path / "pnpm", {"package.json": "{}", "pnpm-lock.yaml": ""})
+    assert _detect_facts(tmp_path / "pnpm").provision_commands == (("pnpm", "install", "--frozen-lockfile"),)
+    # A pyproject with no lock at all still binds nothing: that one is a guess either way.
     _write(tmp_path / "poetry-only", {"pyproject.toml": "[tool.poetry]\nname = 'x'\n"})
     assert _detect_facts(tmp_path / "poetry-only").provision_commands == ()
 
@@ -565,6 +577,32 @@ def test_requirements_txt_provisions_a_venv_of_its_own_and_installs_into_it(tmp_
     )
     _write(tmp_path, {"requirements-dev.txt": "pytest\n"})
     assert _detect_facts(tmp_path).provision_commands[1][-2:] == ("-r", "requirements-dev.txt")
+
+
+def test_gate_tooling_2_a_written_lint_script_is_reused_before_the_configured_linter_is_inferred(
+    tmp_path: Path,
+) -> None:
+    """The principle `test`, `build` and `start` already follow: a written script is a decision.
+    A `biome check` script beside an eslint config used to bind `npx eslint .`, and a repository
+    with the script and no eslint config was not linted at all (#316)."""
+    _write(tmp_path, {"package.json": '{"scripts": {"lint": "biome check"}}', "eslint.config.js": ""})
+    assert _detect_facts(tmp_path).lint_command == ("npm", "run", "lint")
+    _write(tmp_path / "bare", {"package.json": '{"scripts": {"lint": "standard"}}'})
+    assert _detect_facts(tmp_path / "bare").lint_command == ("npm", "run", "lint")
+    _write(tmp_path / "eslint", {"package.json": "{}", "eslint.config.js": ""})
+    assert _detect_facts(tmp_path / "eslint").lint_command == ("npx", "eslint", ".")
+
+
+def test_gate_tooling_2_the_decline_names_the_root_and_the_manifests_below_it(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        {"backend/pyproject.toml": "[project]\n", "web/package.json": "{}", "node_modules/x/go.mod": ""},
+    )
+    facts = _detect_facts(tmp_path)
+    assert facts.below == ("backend/pyproject.toml", "web/package.json")
+    assert "at the repository root" in facts.declined()
+    assert "found backend/pyproject.toml, web/package.json one level down" in facts.declined()
+    assert "at the repository root" not in _detect_facts(tmp_path / "backend").declined()
 
 
 def test_a_package_lock_binds_npm_ci_and_a_package_json_alone_binds_nothing(tmp_path: Path) -> None:
