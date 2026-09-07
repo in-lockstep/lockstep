@@ -1,22 +1,53 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.012024,
+  "cost_usd": 0.015993,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 0,
-    "items": []
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
   },
-  "input_tokens": 3968,
+  "input_tokens": 4466,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 8,
+  "output_tokens": 173,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 3976,
-  "wall_seconds": 3.642
+  "tokens": 4639,
+  "wall_seconds": 10.544
 }
