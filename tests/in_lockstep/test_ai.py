@@ -2050,3 +2050,57 @@ def test_gate_shape_1_the_review_skills_example_is_the_shape_the_parser_reads() 
     (finding,) = _to_report(example, "security").findings
     assert finding.summary and finding.detail and finding.line == 84 and finding.severity == "warning"
     assert "output path" not in raw and '"comment"' not in raw, "the old contract is still in the skill"
+
+
+def test_gate_cost_6_two_sessions_on_one_spend_cannot_both_take_the_last_dollar() -> None:
+    """GATE-COST-6 at the invoker. Two sessions -- two fan-out branches, or a parent and the
+    session it delegated to (#332) -- share one `Spend` whose ceiling fits one more turn. Each
+    projects, and the projection is RESERVED in the same synchronous step it is checked in, so
+    the second session is refused before its call rather than both going and the ceiling being
+    crossed by the pair. The reservation is released by the charge, so a third turn after both
+    settled sees the true remainder."""
+    import asyncio
+
+    class _SlowStub(Stub):
+        async def generate(self, input: LLMInput) -> LLMOutput:
+            await asyncio.sleep(0.05)  # the interleaving window a check-then-charge would open
+            return await super().generate(input)
+
+    one = table().project("m", input_tokens=1, max_output_tokens=1000)
+    spend = Spend(budget=Budget(usd=one.usd * 1.5))
+    provider = _SlowStub(replies=[LLMOutput(content="a"), LLMOutput(content="b")])
+
+    async def session() -> object:
+        try:
+            return await invoker(provider, spend=spend).run(
+                system="s",
+                messages=[Message(role="user", content="go")],
+                policy=InvokePolicy(max_turns=1, max_tokens=1000),
+            )
+        except InvocationBlocked as e:
+            return e
+
+    async def both() -> list[object]:
+        return list(await asyncio.gather(session(), session()))
+
+    results = asyncio.run(both())
+    blocked = [r for r in results if isinstance(r, InvocationBlocked)]
+    assert len(blocked) == 1, [type(r).__name__ for r in results]
+    assert blocked[0].reason == "cost.budget_exceeded"
+    assert len(provider.calls) == 1, "the refused session must not have called the provider"
+    assert spend.reserved_usd == 0.0 and spend.reserved_turns == 0, "the charge released the reservation"
+    assert spend.budget.usd is not None and spend.charged.usd <= spend.budget.usd
+
+
+def test_a_reservation_is_released_when_the_call_never_happens() -> None:
+    """A provider that fails, or a call the kill switch cancelled, was reserved for and never
+    charged; the reservation must not sit against the ceiling for the rest of the run."""
+    provider = Stub(replies=[RuntimeError("boom")])
+    spend = Spend(budget=Budget(usd=1.0))
+    with pytest.raises((InvocationFailed, RuntimeError)):
+        asyncio.run(
+            invoker(provider, spend=spend).run(
+                system="s", messages=[Message(role="user", content="go")], policy=InvokePolicy(max_turns=1)
+            )
+        )
+    assert spend.reserved_usd == 0.0 and spend.reserved_turns == 0

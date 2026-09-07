@@ -103,18 +103,55 @@ class Spend:
     budget: Budget = field(default_factory=Budget)
     charged: Cost = field(default_factory=Cost)
     turns: int = 0
+    #: What concurrent callers have been promised and not yet charged. Four fan-out branches
+    #: each projecting a turn against one ceiling would each see the same remaining dollar and
+    #: all four go, which is the quadruple spend `GATE-COST-6` refuses; a reservation is counted
+    #: against the ceiling from the moment it is made until the turn is charged or released.
+    #: Scalars rather than a `Cost`, because a reservation is a projection and the only parts of
+    #: one a ceiling reads are these three.
+    reserved_usd: float = 0.0
+    reserved_tokens: int = 0
+    reserved_turns: int = 0
 
     def charge(self, cost: Cost) -> None:
         self.charged = self.charged + cost
 
-    def charge_turn(self, cost: Cost) -> None:
+    def charge_turn(self, cost: Cost, *, reserved: Cost | None = None) -> None:
+        """Charge one turn, and release the reservation it was made under, if any."""
+        if reserved is not None:
+            self.release(reserved)
         self.charge(cost)
         self.turns += 1
+
+    def reserve(self, projected: Cost) -> str | None:
+        """Check and reserve in ONE step: `None` and the projection is held against the ceiling,
+        or the ceiling that would be crossed and nothing is held.
+
+        Synchronous on purpose. Under asyncio a method with no `await` in it cannot be
+        interleaved, so the check and the reservation cannot come apart between two branches
+        the way `would_exceed` followed by a call could: each branch asked, each was told there
+        was room, and the room was the same dollar. A caller releases what it reserved by charging
+        the turn with `reserved=` or by `release()` when the call never happened. The same
+        primitive serves a workflow's fan-out and, later, a session a model delegates to (#332):
+        one `Spend`, one ceiling, however many callers.
+        """
+        crossed = self.would_exceed(projected)
+        if crossed is not None:
+            return crossed
+        self.reserved_usd += projected.usd
+        self.reserved_tokens += projected.total_tokens
+        self.reserved_turns += 1
+        return None
+
+    def release(self, projected: Cost) -> None:
+        self.reserved_usd = max(0.0, self.reserved_usd - projected.usd)
+        self.reserved_tokens = max(0, self.reserved_tokens - projected.total_tokens)
+        self.reserved_turns = max(0, self.reserved_turns - 1)
 
     def remaining_usd(self) -> float | None:
         if self.budget.usd is None:
             return None
-        return max(0.0, self.budget.usd - self.charged.usd)
+        return max(0.0, self.budget.usd - self.charged.usd - self.reserved_usd)
 
     def exceeded(self) -> str | None:
         """Which ceiling has already been crossed, if any."""
@@ -138,10 +175,13 @@ class Spend:
         """
         b = self.budget
         after = self.charged + projected
-        if b.usd is not None and after.usd > b.usd:
-            return f"usd:{after.usd:.4f}>{b.usd:.4f}"
-        if b.tokens is not None and after.total_tokens > b.tokens:
-            return f"tokens:{after.total_tokens}>{b.tokens}"
-        if b.turns is not None and self.turns + 1 > b.turns:
-            return f"turns:{self.turns + 1}>{b.turns}"
+        usd = after.usd + self.reserved_usd
+        tokens = after.total_tokens + self.reserved_tokens
+        turns = self.turns + self.reserved_turns + 1
+        if b.usd is not None and usd > b.usd:
+            return f"usd:{usd:.4f}>{b.usd:.4f}"
+        if b.tokens is not None and tokens > b.tokens:
+            return f"tokens:{tokens}>{b.tokens}"
+        if b.turns is not None and turns > b.turns:
+            return f"turns:{turns}>{b.turns}"
         return None
