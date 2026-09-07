@@ -404,6 +404,7 @@ def _run_registered(
     record: bool = False,
     asked: bool = False,
     cassette: str = "",
+    blocked_ok: bool = False,
 ) -> None:
     """Dispatch a workflow the repository registered.
 
@@ -465,7 +466,7 @@ def _run_registered(
         if _report_what_was_kept(tape, ctx, asked=asked):
             _harvest_in_process(tape, entry.id, lockstep)
     _write_workflow_ledger(lockstep, ctx, entry.id, result, parsed)
-    _exit_for(result, ctx)
+    _exit_for(result, ctx, blocked_ok=blocked_ok)
 
 
 def _ledger(lockstep: Any = None) -> Any:
@@ -659,9 +660,20 @@ def _describe(result: Any, ctx: Any) -> str:
     return status + (f"  ({reason})" if reason else "") + ("" if decided else "  (decided nothing)")
 
 
-def _exit_for(result: Any, ctx: Any) -> None:
-    status, _, _, _ = _workflow_verdict(result, ctx)
+def _exit_for(result: Any, ctx: Any, *, blocked_ok: bool = False) -> None:
+    status, reason, _, _ = _workflow_verdict(result, ctx)
     if status == Status.BLOCKED.value:
+        if blocked_ok:
+            # A scheduled job whose run was refused before it spent -- nothing recurs yet, the
+            # ceiling is reached, no proposal in the artifact -- is the control working, and the
+            # record already says which. `improve.yml` used to make this translation in shell
+            # (`test "$status" -eq 3 && exit 0`), a decision about what a run MEANS living in
+            # YAML (#314); the flag keeps it here, where a test can reach it. Said, so a log
+            # reader sees a refusal and not a green step that did nothing.
+            click.echo(
+                f"exit      0: blocked ({reason or 'no reason given'}), and --blocked-ok says that is fine"
+            )
+            return
         raise SystemExit(EXIT_BLOCKED)
     if status != Status.SUCCEEDED.value:
         raise SystemExit(EXIT_FAILED)
@@ -958,6 +970,11 @@ def _one_provider(*, dry_run: bool, offline: bool, record: bool) -> None:
     type=click.Path(),
     help="Where to keep it. Must be outside the repository; defaults to $RUNNER_TEMP or $TMPDIR.",
 )
+@click.option(
+    "--blocked-ok",
+    is_flag=True,
+    help="Exit 0 when the run is blocked: for a scheduled job whose refusal is the control working.",
+)
 def run_cmd(
     target: str,
     paths: tuple[str, ...],
@@ -970,6 +987,7 @@ def run_cmd(
     approved_by: str,
     record: bool | None,
     cassette: str,
+    blocked_ok: bool,
 ) -> None:
     """Run a workflow, by the id it was registered under.
 
@@ -1029,6 +1047,7 @@ def run_cmd(
             record=keeping,
             asked=record is True,
             cassette=cassette,
+            blocked_ok=blocked_ok,
         )
         return
     if no_middleware:
@@ -1090,7 +1109,7 @@ def run_cmd(
     # The same verdict the record just took, so the exit code cannot disagree with it. The old
     # logic here sent a blocked test step out as EXIT_FAILED while the record said blocked, and
     # CI read a control working as a failure.
-    _exit_for(result, ctx)
+    _exit_for(result, ctx, blocked_ok=blocked_ok)
 
 
 @main.command(name="ls")
@@ -2724,7 +2743,13 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...] | None:
 @main.command(name="review")
 @click.option("--base", default="origin/main", help="What to diff against.")
 @click.option("--head", default="HEAD")
-@click.option("--aspect", default="security", help="Which lens.")
+@click.option(
+    "--aspect",
+    "aspects",
+    multiple=True,
+    default=("security",),
+    help="Which lens. Repeatable: every lens named runs, each is recorded, and the worst status exits.",
+)
 @click.option(
     "--ask",
     default="",
@@ -2771,7 +2796,7 @@ def _review_lenses(lockstep: Any) -> tuple[str, ...] | None:
 def review_cmd(
     base: str,
     head: str,
-    aspect: str,
+    aspects: tuple[str, ...],
     ask: str,
     model: str,
     offline: bool,
@@ -2784,36 +2809,30 @@ def review_cmd(
     comment_out: str,
     pr_number: int | None,
 ) -> None:
-    """Review a change with one lens, in-process.
+    """Review a change with one lens or several, in-process.
 
     `--diff` reads a patch from a file rather than asking git for one. That is a real use — a
     patch that is not a commit yet, a diff produced somewhere else — and it is also what makes
     this command testable without constructing a repository with a history in it.
+
+    `--aspect` more than once runs every lens named, each as its own run with its own record and
+    its own routed model, and exits with the worst status. That loop lived in `lockstep.yml` as
+    four shell statements -- `status=0; for aspect in …; do … || status=$?; done; exit $status`
+    -- which is lifecycle logic in a file nothing tests (#314, GATE-CI-4). Here it is Python.
     """
 
     record = _recording(dry_run=dry_run, offline=offline, record=record)
-    from .adapters.ai.review import AiReview, Review
     from .ai.auth import Auth
     from .ai.bootstrap import (
-        LLMProvider,
         MissingCredential,
         Model,
-        caps_for,
-        credentials_for,
         default_registry,
         table_for,
     )
-    from .ai.invoker import AiInvoker, InvokePolicy
     from .ai.replay import (
         Cassette,
-        DryRunProvider,
-        FixtureProvider,
-        RecordingProvider,
-        ReplayProvider,
-        request_from,
     )
     from .core.spend import Budget
-    from .privileged.egress import EgressPolicy
 
     # The repository's own module, exactly as `run` and `ls` load it. Reviewing is the command
     # that spends money, so it is the last one that should be reading a different configuration
@@ -2855,13 +2874,21 @@ def review_cmd(
 
     known = _review_lenses(lockstep)
     try:
-        aspect = aspect_from(ask, known=known) if ask else resolve_aspect(aspect, known=known)
+        aspects = (
+            (aspect_from(ask, known=known),)
+            if ask
+            else tuple(resolve_aspect(aspect, known=known) for aspect in aspects)
+        )
     except AspectRefused as refused:
         # A message, not a traceback — the treatment this command already gives a missing
         # credential or a malformed provider. Exit 1 rather than 3: BLOCKED means a control
         # stopped a run that was otherwise going to happen, and a name that is not a lens is not
         # a run somebody may not have. Nothing is recorded either way, so no rate moves.
         raise click.ClickException(str(refused)) from None
+    if len(aspects) > 1 and (comment_out or post_comment):
+        # A comment is one lens's findings for one thread; four lenses in one body is a wall.
+        # The required check runs several and posts none, and a lens on request runs one.
+        raise click.ClickException("--comment and --comment-out take one --aspect; run the lenses separately")
 
     if pr_number and source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
         # `--pr` already meant "the change request this review is about" — it is what `--comment`
@@ -2882,14 +2909,6 @@ def review_cmd(
                 f"than an error."
             )
         base, head = refs
-
-    if source("model") is ParameterSource.DEFAULT:
-        # The lens's own route first, then the verb's -- `routed_model` is the one rule for which
-        # key wins, shared with the adapter's own resolution so `ls`, this command and a
-        # module-bound adapter agree about the model a lens runs on (#204).
-        from .ai.bootstrap import routed_model
-
-        model = routed_model(lockstep.models.routes, "review", aspect) or model
 
     # `--offline` with nothing else works out of the box, because both halves of a replay ship:
     # the recording, and the diff it was recorded against. A cassette is keyed on the whole
@@ -2916,7 +2935,7 @@ def review_cmd(
         source = click.get_current_context().get_parameter_source
         if source("base") is ParameterSource.DEFAULT and source("head") is ParameterSource.DEFAULT:
             demo_diff = str(fixture["diff"])
-            base, head, aspect = fixture["base"], fixture["head"], fixture["aspect"]
+            base, head, aspects = fixture["base"], fixture["head"], (str(fixture["aspect"]),)
             # Including the model. A recording is portable across provider implementations —
             # that is what the LLMInput/LLMOutput seam buys — but not across model ids, because
             # the id is part of the request being replayed. A repository's own route would
@@ -2937,17 +2956,105 @@ def review_cmd(
         # Provider registration reads configuration, so a malformed value is caught here rather
         # than at the call. Same treatment either way: a setup problem is a message.
         raise click.ClickException(str(e)) from None
-    selected = Model(model)
-    table = table_for(registry, selected, _bound_cost_table(lockstep))
     tape = Cassette.load(cassette)
+    # One tape for every lens: a cassette is keyed on the whole composed prompt and each lens
+    # composes a different one, so they accumulate rather than overwrite, and one harvest at the
+    # end covers the lot. The worst status is what exits, and every lens runs even after one
+    # fails: failing fast would let one transient refusal cost the recordings of the lenses behind
+    # it, and the required check is where most of the eval corpus comes from.
+    worst = Status.SUCCEEDED
+    for aspect in aspects:
+        if source("model") is ParameterSource.DEFAULT:
+            # The lens's own route first, then the verb's -- `routed_model` is the one rule for
+            # which key wins, shared with the adapter's own resolution so `ls`, this command and
+            # a module-bound adapter agree about the model a lens runs on (#204).
+            from .ai.bootstrap import routed_model
+
+            model = routed_model(lockstep.models.routes, "review", aspect) or model
+        selected = Model(model)
+        table = table_for(registry, selected, _bound_cost_table(lockstep))
+        outcome = _review_one(
+            lockstep,
+            recorder,
+            aspect,
+            base=base,
+            head=head,
+            diff=supplied or demo_diff,
+            selected=selected,
+            table=table,
+            tape=tape,
+            registry=registry,
+            auth=auth,
+            recorded_request=recorded_request,
+            # One word for where answers come from, decided once above by `_recording`'s refusal
+            # of a contradiction; the helper cannot be handed the pair it refused.
+            source_of_answers=(
+                "dry-run"
+                if dry_run
+                else "fixture"
+                if recorded_request is not None
+                else "offline"
+                if offline
+                else "record"
+                if record
+                else "live"
+            ),
+            comment_out=comment_out,
+            post_comment=post_comment,
+            pr_number=pr_number,
+        )
+        worst = _worse(worst, outcome.status)
+
+    if worst is Status.BLOCKED:
+        raise SystemExit(EXIT_BLOCKED)
+    if worst is not Status.SUCCEEDED:
+        raise SystemExit(EXIT_FAILED)
+
+
+def _worse(a: Status, b: Status) -> Status:
+    """The status that exits: a failure outranks a refusal outranks success, so one failed lens
+    among four is the check's verdict and a refused one is `blocked` only when nothing failed."""
+    rank = {Status.SUCCEEDED: 0, Status.BLOCKED: 1}
+    return a if rank.get(a, 2) >= rank.get(b, 2) else b
+
+
+def _review_one(
+    lockstep: Lockstep,
+    recorder: Recorder | None,
+    aspect: str,
+    *,
+    base: str,
+    head: str,
+    diff: str,
+    selected: Any,
+    table: Any,
+    tape: Any,
+    registry: Any,
+    auth: Any,
+    recorded_request: Any,
+    source_of_answers: str,
+    comment_out: str,
+    post_comment: bool,
+    pr_number: int | None,
+) -> Any:
+    """One lens, one run, one record: the body `review` runs once per `--aspect`. Returns the
+    outcome, and the caller decides the exit from the worst of them. `source_of_answers` is one
+    of dry-run, fixture, offline, record or live: `review` resolved the flags into one word, so
+    this takes no pair of flags it would have to refuse a second time."""
+    record = source_of_answers == "record"
+    from .adapters.ai.review import AiReview, Review
+    from .ai.bootstrap import LLMProvider, MissingCredential, caps_for, credentials_for
+    from .ai.invoker import AiInvoker, InvokePolicy
+    from .ai.replay import DryRunProvider, FixtureProvider, RecordingProvider, ReplayProvider, request_from
+    from .privileged.egress import EgressPolicy
 
     def build_invoker(_ctx: Any) -> AiInvoker:
         provider: LLMProvider
-        if dry_run:
+        if source_of_answers == "dry-run":
             provider = DryRunProvider()
-        elif recorded_request is not None:
+        elif source_of_answers == "fixture":
             provider = FixtureProvider(tape, request_from(recorded_request), on_drift=_say_drift)
-        elif offline:
+        elif source_of_answers == "offline":
             provider = ReplayProvider(tape)
         else:
             creds = credentials_for(auth, selected.provider)
@@ -3001,7 +3108,7 @@ def review_cmd(
     # the case where the module binds nothing, which is the case everybody tested.
     ctx = _context(lockstep, _run_id(f"review-{aspect}"), recording=tape if record else None)
     try:
-        outcome = asyncio.run(ctx.do(Review(base=base, head=head, aspect=aspect, diff=supplied or demo_diff)))
+        outcome = asyncio.run(ctx.do(Review(base=base, head=head, aspect=aspect, diff=diff)))
     except BodyNotFound as e:
         # The bound lens points at a body that is not there. A setup problem is a message naming
         # the fix, and `doctor` would have said the same before a credential was resolved (#311).
@@ -3059,10 +3166,7 @@ def review_cmd(
     if post_comment:
         _post_review_comment(lockstep, aspect, outcome, pr_number)
 
-    if outcome.status is Status.BLOCKED:
-        raise SystemExit(EXIT_BLOCKED)
-    if outcome.status is not Status.SUCCEEDED:
-        raise SystemExit(EXIT_FAILED)
+    return outcome
 
 
 _TRIAGE_DRY_RUN = (
@@ -5462,7 +5566,13 @@ def _show_prompt_text(
     is_flag=True,
     help="Also scaffold the /review <lens> chat-ops trampoline: a lens on request, posted without a key.",
 )
-def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: bool) -> None:
+@click.option(
+    "--host",
+    type=click.Choice(["github", "gitlab"]),
+    default=None,
+    help="Which host's trampoline to write, when the remote and the CI files do not say.",
+)
+def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: bool, host: str | None) -> None:
     """Scaffold a lifecycle definition and a CI trampoline.
 
     The trampoline is written once and never read back: there is no drift check on it, and no
@@ -5516,9 +5626,27 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: boo
 
     # The trampoline the detected host can actually run: a GitLab repository gets
     # `.gitlab-ci.yml`, not a `.github/workflows/` file it would silently ignore.
-    from .platform.hosted import detect_host
+    from .platform.hosted import detect_host, origin_url
 
-    host = detect_host()
+    host = host or detect_host()
+    if not host and origin_url():
+        # A self-hosted GitLab at `git.corp.example` has neither host's name in its remote and no
+        # CI file yet, and `init` used to write it a GitHub workflow its host ignores, silently
+        # (#314). The remote is a real answer that says "not GitHub", so nothing is written and
+        # the two flags that would are named. A repository with no remote at all has said nothing
+        # yet, and keeps the GitHub default below, said out loud. The module and the ignore lines
+        # above are host-neutral and stay either way.
+        click.echo("")
+        click.echo("no CI trampoline written: nothing says which host this repository runs on.")
+        click.echo("  looked for .github/workflows/, .gitlab-ci.yml, and 'github' or 'gitlab' in")
+        click.echo("  the origin remote's URL. Say which: `init --host github` or `init --host gitlab`.")
+        _disclose_what_a_run_keeps()
+        return
+    if not host:
+        click.echo(
+            "no origin remote yet, so the GitHub trampoline is written; `init --host gitlab` for the other."
+        )
+        host = "github"
     # The provider each trampoline installs and guards on is the one the module routes the verb
     # to, read now that the module exists; a module with no route gets the CLI's own default.
     try:
@@ -5530,10 +5658,13 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: boo
             Path(".gitlab-ci.yml"), _SCAFFOLD_GITLAB_TRAMPOLINE, provider=_provider_for(configured, "review")
         ):
             click.echo("")
-            click.echo("One active job, because reviewing is read-only. The gate/work/propose split")
-            click.echo("for write-capable verbs is in the same file and active -- inert until a")
-            click.echo("pipeline runs with LOCKSTEP_ISSUE set on the default branch. The file says")
-            click.echo("which credential each job needs; docs/trampoline.md is the contract.")
+            click.echo("One active job, because reviewing is read-only, and a publish job that keeps")
+            click.echo("its record. The gate/work/propose split for write-capable verbs is in the")
+            click.echo("same file and active -- inert until a pipeline runs with LOCKSTEP_ISSUE (and")
+            click.echo("LOCKSTEP_VERB=implement or fix) or LOCKSTEP_IMPROVE on the default branch.")
+            click.echo("The file says which credential each job needs; docs/trampoline.md is the")
+            click.echo("contract.")
+            _gitlab_things_to_decide(facts)
     elif _write_trampoline(
         Path(".github/workflows/lockstep.yml"),
         _SCAFFOLD_TRAMPOLINE,
@@ -5577,6 +5708,29 @@ _SCAFFOLD_IGNORE = """\
 .lockstep/transcripts/
 .lockstep/__pycache__/
 """
+
+
+def _gitlab_things_to_decide(facts: Any) -> None:
+    """What a GitLab adopter has to do by hand, printed once, the way `init --implement` prints
+    its list on GitHub. Rendering: every item is a fact the scaffold already states in a comment."""
+    stack = str(getattr(facts, "stack", "") or "")
+    click.echo("")
+    click.echo("Things to decide before it runs:")
+    click.echo("  1. Scope IN_LOCKSTEP_SECRET to the lockstep-work environment, or federate the")
+    click.echo("     provider with this GitLab's id_tokens; the work jobs say which.")
+    click.echo("  2. Set the IN_LOCKSTEP_ORG_SPEND_LIMIT CI variable to the cap you set in the")
+    click.echo("     provider console: `doctor` is a required step and refuses without it.")
+    click.echo("  3. Scope a write-capable project token (api) as GITLAB_TOKEN to lockstep-propose")
+    click.echo("     and lockstep-publish; a read_api one to lockstep-work.")
+    if stack and stack != "python":
+        click.echo("  4. Name the work jobs' image: it has to carry Python for the framework AND the")
+        click.echo(f"     {stack} toolchain for the suite; the uv image carries Python and uv only, and")
+        click.echo("     no image on a registry carries both by default.")
+    else:
+        click.echo("  4. The work jobs' image carries Python and uv, which a uv or pip repository's")
+        click.echo("     provision and suite need; change it if the suite needs more.")
+    click.echo("  5. A pipeline schedule on the default branch with LOCKSTEP_IMPROVE=1 runs the")
+    click.echo("     learning loop; without one it never runs.")
 
 
 def _write_gitignore(path: Path) -> None:
@@ -6070,9 +6224,10 @@ def _scaffold_implement(module: Path, facts: Any, *, provider: str, host: str = 
     is appended here.
     """
     if host == "gitlab":
-        click.echo("gitlab: the gate/work/propose jobs are already in .gitlab-ci.yml, and stay")
-        click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
-        click.echo("        branch. Scope their credentials first; the file says which.")
+        click.echo("gitlab: the gate/work/propose jobs in .gitlab-ci.yml run implement/from-ticket")
+        click.echo("        and implement/propose when a pipeline runs on the default branch with")
+        click.echo("        LOCKSTEP_ISSUE set (LOCKSTEP_VERB defaults to implement). Scope their")
+        click.echo("        credentials first; the file says which.")
     else:
         _write_trampoline(
             Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE, provider=provider
@@ -6139,9 +6294,13 @@ def _scaffold_fix(module: Path, facts: Any, *, provider: str, host: str = "") ->
     with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
     """
     if host == "gitlab":
-        click.echo("gitlab: the gate/work/propose jobs are already in .gitlab-ci.yml, and stay")
-        click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
-        click.echo("        branch. Scope their credentials first; the file says which.")
+        # It used to say the jobs were "already in .gitlab-ci.yml" while the file ran implement
+        # and nothing else (#314); the verb the jobs run is a pipeline variable now.
+        click.echo("gitlab: the gate/work/propose jobs in .gitlab-ci.yml run fix/from-ticket and")
+        click.echo("        fix/propose when a pipeline runs on the default branch with LOCKSTEP_ISSUE")
+        click.echo("        set and LOCKSTEP_VERB=fix. GitLab has no issue-label trigger, so the")
+        click.echo("        ai-generated loop is a pipeline run the same way. Scope the credentials")
+        click.echo("        first; the file says which.")
     else:
         _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE, provider=provider)
         _write_trampoline(
@@ -6494,11 +6653,14 @@ jobs:
 _SCAFFOLD_GITLAB_TRAMPOLINE = """\
 # Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
 #
-# The same trampoline lockstep.yml is on GitHub, in GitLab's own terms; docs/trampoline.md is the
-# host-neutral contract both are written against. One ACTIVE job, because reviewing is read-only:
-# it needs a provider credential and the read the runner already has, and nothing else. The
-# gate/work/propose split for write-capable verbs is below and active, held inert by its `rules:`
-# until a pipeline runs with LOCKSTEP_ISSUE set on the default branch.
+# The same trampolines lockstep.yml, implement.yml, fix.yml and improve.yml are on GitHub, in
+# GitLab's own terms; docs/trampoline.md is the host-neutral contract both are written against.
+# Two ACTIVE jobs on every merge request: review, which is read-only and needs a provider
+# credential and the read the runner already has, and publish, which keeps review's record and
+# holds the push token and no provider. The gate/work/propose split for write-capable verbs is
+# below and active, held inert by its `rules:` until a pipeline runs with LOCKSTEP_ISSUE set on
+# the default branch; the learning loop's measure/propose pair the same way under
+# LOCKSTEP_IMPROVE.
 #
 # One GitLab-specific warning, and it is the important one: a merge-request pipeline runs THIS
 # FILE from the source branch — the change under review can edit it. The framework's own
@@ -6508,7 +6670,7 @@ _SCAFFOLD_GITLAB_TRAMPOLINE = """\
 # location. The framework install is pinned by version for the same reason the GitHub scaffold
 # pins by version and SHA: an unpinned install feeds whatever the registry serves next to the job
 # holding the provider key. Update the pin deliberately, as a reviewed change.
-stages: [gate, review, work, propose]
+stages: [gate, review, publish, work, propose]
 
 review:
   stage: review
@@ -6535,18 +6697,19 @@ review:
     # ignore red.
     # Recording is ON. `--record` writes the request that was really sent — the whole composed
     # prompt and the whole diff — to /tmp, outside the checkout, in a container this job does
-    # not share. `paths:` below names `.lockstep/` and nothing else, so the tape never leaves.
-    # What survives is the cases harvested from it, under `.lockstep/cases/`, which `init`
-    # gitignores and the artifact keeps for the stated number of days. Delete the two lines if
-    # you would rather keep nothing; nothing else depends on them.
+    # not share. `paths:` below names `.lockstep/` and the bundle and nothing else, so the tape
+    # never leaves. What survives is the cases harvested from it, under `.lockstep/cases/`,
+    # which `init` gitignores and the artifact keeps for the stated number of days. Delete the
+    # two lines if you would rather keep nothing; nothing else depends on them.
     #
     # `|| true` on the harvest: harvest refuses rather than inventing, so a recording it cannot
     # build a case from exits non-zero, and that is the wrong reason to fail somebody's review.
     - |
       # `security` is one of four shipped lenses; `intent`, `performance` and `tests` are the
-      # others, and `--aspect <name>` runs any of them. One is scaffolded rather than four
-      # because each is a real model call against the ceiling below. `in-lockstep ls` prints the
-      # lenses your module actually has, including any of your own.
+      # others, and `--aspect <name>` runs any of them -- repeat it to run several, each its own
+      # run and record, the worst status exiting. One is scaffolded rather than four because
+      # each is a real model call against the ceiling below. `in-lockstep ls` prints the lenses
+      # your module actually has, including any of your own.
       if [ -n "$IN_LOCKSTEP_SECRET" ]; then
         in-lockstep review \\
           --base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \\
@@ -6562,40 +6725,76 @@ review:
       else
         echo "no IN_LOCKSTEP_SECRET (fork merge request?) — review skipped, nothing failed"
       fi
+    # The run's record, out of a job that cannot push: the ledger commits this job wrote, as a
+    # bundle the publish job absorbs. A review that was refused is the run most worth a record,
+    # so this runs whatever the review said; `|| true` because a job that made no record has no
+    # bundle to make, and that is not a failure of the review.
+    - in-lockstep history --bundle history.bundle || true
   artifacts:
     when: always
-    paths: [.lockstep/]
+    paths: [.lockstep/, history.bundle]
     # Said out loud rather than inherited: the instance default is measured in weeks or forever
     # depending on how this GitLab is configured, and this artifact can hold prompts and diffs.
     expire_in: 14 days
 
+# The pipe #294 found open on GitHub and this file re-shipped (#314): a review job holding a read
+# token bundled its record, and nothing downstream held the write token to push it, so every
+# GitLab review's record died with the job. The same split propose uses -- push token, no
+# provider credential, no provider SDK -- absorbs it, on every merge request, whatever review
+# said. What the file cannot do: GitLab hands protected variables only to protected refs, so a
+# token scoped to lockstep-publish as a PROTECTED variable reaches no merge-request pipeline
+# from a branch. Scope it unprotected to that environment and protect this file instead (the
+# warning at the top), or accept that only protected-ref pipelines publish; `report --scm`
+# prints a dash for what GitLab cannot list either way.
+publish:
+  stage: publish
+  image: python:3.11-slim
+  timeout: 5m
+  needs: [review]
+  environment: lockstep-publish
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  script:
+    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - in-lockstep history --from-bundle history.bundle --push || true
+
 # -- write-capable verbs: the gate/work/propose credential split --------------------------------
 #
-# The same three-part split implement.yml carries on GitHub — gate authorizes the asker holding
-# no write-capable credential; work talks to the model holding the provider key and a READ
-# token; propose opens the merge request holding the write token and no provider key — expressed
-# in GitLab's terms. Who may fire it: running a pipeline with variables already requires
-# Developer here, a check GitLab makes before the pipeline exists, but the gate job still runs
-# first so the decision (and the record of who asked) lives in the framework, where it has
-# tests, not in a `rules:` clause. Every job's rules also pin the run to the DEFAULT branch:
-# the asker picks the ref when they run a pipeline, and the gate's CODEOWNERS must come from a
-# ref the asker cannot supply.
+# The same three-part split implement.yml and fix.yml carry on GitHub — gate authorizes the asker
+# holding no write-capable credential; work talks to the model holding the provider key and a
+# READ token; propose opens the merge request holding the write token and no provider key —
+# expressed in GitLab's terms. ONE pair of jobs for both verbs rather than two, and the verb is
+# a pipeline variable: on GitHub the two files exist because the two triggers differ
+# (`/implement` and `/fix` are different comments), and on GitLab the trigger is the same
+# run-pipeline-with-variables either way, so a second copy of the jobs would be one more place
+# credential scoping has to be right and nothing else. LOCKSTEP_VERB is `implement` unless the
+# pipeline says `fix`; `in-lockstep run` refuses any other value by name, because the workflow
+# ids are what the module registered. GitLab has no issue-label trigger, so the ai-generated loop
+# (a failed fix opening the next ticket) is a pipeline run with LOCKSTEP_VERB=fix the same way.
+#
+# Who may fire it: running a pipeline with variables already requires Developer here, a check
+# GitLab makes before the pipeline exists, but the gate job still runs first so the decision (and
+# the record of who asked) lives in the framework, where it has tests, not in a `rules:` clause.
+# Every job's rules also pin the run to the DEFAULT branch: the asker picks the ref when they run
+# a pipeline, and the gate's CODEOWNERS must come from a ref the asker cannot supply.
 #
 # ACTIVE, and inert until asked for: every `rules:` below requires LOCKSTEP_ISSUE on the default
 # branch, so a repository that never runs a pipeline with that variable never runs these jobs.
 # Shipping them commented out meant an adopter's first write-verb run was a YAML editing exercise
 # against a file the framework does not regenerate, which is the opposite of what O3 asks.
 #
-# Before the first run: create environments `lockstep-work` and `lockstep-propose`; then SCOPE
-# the credentials — GitLab's default variable scope is every environment, and an unscoped
-# variable quietly puts both credentials in both jobs, which unmakes the split without any
-# visible failure. Scope IN_LOCKSTEP_SECRET and a read-only project access token (read_api, as
-# GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-ticket can fetch the
-# issue on a private project) to lockstep-work; scope a write-capable project access token
-# (api, as GITLAB_TOKEN) to lockstep-propose; mark lockstep-propose protected with required
-# approvers — the same approval-in-the-system-of-record the GitHub scaffold's `environment:
-# implement` provides. Then run a pipeline on the default branch with LOCKSTEP_ISSUE set
-# (Run pipeline, or the trigger API).
+# Before the first run: create environments `lockstep-work`, `lockstep-propose` and
+# `lockstep-publish`; then SCOPE the credentials — GitLab's default variable scope is every
+# environment, and an unscoped variable quietly puts both credentials in both jobs, which unmakes
+# the split without any visible failure. Scope IN_LOCKSTEP_SECRET and a read-only project access
+# token (read_api, as GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-ticket
+# can fetch the issue on a private project) to lockstep-work; scope a write-capable project
+# access token (api, as GITLAB_TOKEN) to lockstep-propose and lockstep-publish; mark
+# lockstep-propose protected with required approvers — the same approval-in-the-system-of-record
+# the GitHub scaffold's `environment: implement` provides. Then run a pipeline on the default
+# branch with LOCKSTEP_ISSUE set (Run pipeline, or the trigger API).
 #
 gate:
   stage: gate
@@ -6629,8 +6828,10 @@ work:
     ANTHROPIC_IDENTITY_TOKEN:
       aud: https://api.anthropic.com
   # uv's image rather than python:3.11-slim: the same slim Python plus the `uv` a uv.lock
-  # repository's Provision binding runs. A Node repository names an image that carries node
-  # too, or `provision` refuses naming every place it looked. Pin by digest as a reviewed change.
+  # repository's Provision binding runs. The framework needs Python and the suite needs the
+  # repository's toolchain, and no registry image carries both for a Node, Go, Rust or JVM
+  # repository -- `init` names this line in its list when it detected one of those, because an
+  # image detection could not know is not invented. Pin by digest as a reviewed change.
   image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
   timeout: 30m
   environment: lockstep-work
@@ -6638,6 +6839,8 @@ work:
     - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   variables:
     GIT_DEPTH: "0"
+    # A pipeline variable of the same name wins over this default: `fix` runs the fixing verb.
+    LOCKSTEP_VERB: implement
   script:
     - pip install --quiet 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION'
     # The repository's own environment, before anything runs in it; docs/trampoline.md says why
@@ -6646,7 +6849,7 @@ work:
     - in-lockstep provision
     - in-lockstep doctor
     - |
-      in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
+      in-lockstep run "${LOCKSTEP_VERB}/from-ticket" --arg ticket="#${LOCKSTEP_ISSUE}" \\
         --approved-by "${GITLAB_USER_LOGIN}"
     - in-lockstep history --bundle history.bundle || true
   artifacts:
@@ -6660,6 +6863,8 @@ propose:
   environment: lockstep-propose
   rules:
     - if: $LOCKSTEP_ISSUE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    LOCKSTEP_VERB: implement
   script:
     - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
     # Moved out of the workspace, deliberately: artifacts extract into it, and left there the
@@ -6669,7 +6874,62 @@ propose:
     # The runner's default token cannot push; the propose token can, and it is the only
     # credential this job holds.
     - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-    - in-lockstep run implement/propose --arg ticket="#${LOCKSTEP_ISSUE}" --arg artifact=/tmp/changeset
+    - |
+      in-lockstep run "${LOCKSTEP_VERB}/propose" --arg ticket="#${LOCKSTEP_ISSUE}" \\
+        --arg artifact=/tmp/changeset
+    - in-lockstep history --from-bundle /tmp/history.bundle --push || true
+
+# -- the learning loop: improve/measure and improve/propose, on the same split ------------------
+#
+# What improve.yml is on GitHub. Measure reads the ledger and the eval corpus, drafts a prompt
+# change and measures it, holding the provider credential and a read token; propose opens the
+# merge request holding the write token and no provider. Fired by a pipeline SCHEDULE on the
+# default branch that sets LOCKSTEP_IMPROVE=1 -- GitLab's `schedule` source carries variables,
+# so no second file and no `rules: - if: $CI_PIPELINE_SOURCE == "schedule"` deciding what a
+# schedule means. `--blocked-ok`: a measurement refused before spending (nothing recurs yet, the
+# ceiling is reached) is the control working, and the record says which; the flag keeps that
+# translation in the framework, where it has a test, rather than in a `test "$?" -eq 3` here.
+measure:
+  stage: work
+  id_tokens:
+    ANTHROPIC_IDENTITY_TOKEN:
+      aud: https://api.anthropic.com
+  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+  timeout: 40m
+  environment: lockstep-work
+  rules:
+    - if: $LOCKSTEP_IMPROVE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    # Every branch, so `origin/lockstep-history` is here for the census to read.
+    GIT_DEPTH: "0"
+  script:
+    - pip install --quiet 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION'
+    - in-lockstep provision
+    - in-lockstep doctor
+    - in-lockstep run improve/measure --record --blocked-ok
+    - in-lockstep history --bundle history.bundle || true
+  artifacts:
+    when: always
+    paths: [changeset/, attempt/, history.bundle, .lockstep/cases/]
+
+improve-propose:
+  stage: propose
+  image: python:3.11-slim
+  timeout: 10m
+  needs: [measure]
+  environment: lockstep-propose
+  rules:
+    - if: $LOCKSTEP_IMPROVE && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+  script:
+    - pip install --quiet 'in-lockstep==IN_LOCKSTEP_VERSION'
+    - mv changeset /tmp/changeset || true
+    - mv history.bundle /tmp/history.bundle || true
+    - git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    # No guard on whether measure staged anything: `improve_propose` reads the artifact and
+    # refuses by name when there is no proposal in it, and `--blocked-ok` reads that refusal as
+    # the scheduled nothing-to-do it is.
+    - in-lockstep run improve/propose --arg artifact=/tmp/changeset --blocked-ok
     - in-lockstep history --from-bundle /tmp/history.bundle --push || true
 """
 

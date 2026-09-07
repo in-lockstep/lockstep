@@ -302,7 +302,25 @@ ALLOWED_STATEMENTS = (
 #: is what refuses an `if`, a `case`, a composed commit message or a `gh` call, and it has never
 #: moved. This is the secondary tripwire on growth, and every one of the fourteen is still a bare
 #: invocation of the framework.
-MAX_STATEMENTS = 14
+#:
+#: One cap per lifecycle workflow since #314 (GATE-CI-4), when the allowlist stopped being applied
+#: to `implement.yml` alone: `lockstep.yml` carried a four-statement shell loop over the lenses
+#: and `improve.yml` a `test "$status" -eq 3 && exit 0`, both lifecycle logic in files nothing
+#: tests, and neither was under the rule. Sized to what each file holds today, so growth in any
+#: of them is a number somebody raises with an argument.
+MAX_STATEMENTS = {
+    "implement.yml": 14,
+    "fix.yml": 14,
+    "ai-generated.yml": 10,
+    "lockstep.yml": 8,
+    "improve.yml": 11,
+    "review.yml": 10,
+    "reconcile.yml": 2,
+}
+
+#: Every workflow the framework's lifecycle runs through; `ci.yml` and `release-python.yml` are
+#: this repository's own build and release, and are this repository's business.
+LIFECYCLE_WORKFLOWS = sorted(MAX_STATEMENTS)
 
 
 def _statements(workflow: str) -> list[str]:
@@ -318,14 +336,23 @@ def _statements(workflow: str) -> list[str]:
     return out
 
 
-def test_the_trigger_carries_no_lifecycle_logic() -> None:
-    """The claim `lockstep.yml`'s own header makes, enforced for the file most likely to break it.
+def test_every_lifecycle_workflow_this_repository_ships_is_under_the_rule() -> None:
+    """A workflow added later is under the cap or this fails, rather than joining the seven that
+    were not (GATE-CI-4)."""
+    lifecycle = sorted(p.name for p in ALL_WORKFLOWS if p.name not in ("ci.yml", "release-python.yml"))
+    assert lifecycle == LIFECYCLE_WORKFLOWS
+
+
+@pytest.mark.parametrize("workflow", LIFECYCLE_WORKFLOWS)
+def test_gate_ci_4_the_trigger_carries_no_lifecycle_logic(workflow: str) -> None:
+    """GATE-CI-4. The claim `lockstep.yml`'s own header makes, enforced for every lifecycle
+    workflow rather than the one most likely to break it (#314).
 
     A workflow is the one artifact here that nothing type-checks, nothing imports and nothing runs
     until it matters. Process that lives in it is process with no tests.
     """
-    statements = _statements("implement.yml")
-    assert len(statements) <= MAX_STATEMENTS, f"{len(statements)} statements: {statements}"
+    statements = _statements(workflow)
+    assert len(statements) <= MAX_STATEMENTS[workflow], f"{len(statements)} statements: {statements}"
     for statement in statements:
         assert any(p.match(statement) for p in ALLOWED_STATEMENTS), (
             f"`{statement}` is not an invocation of the framework. A CI file triggers a process; "
@@ -492,15 +519,39 @@ def _scaffolds() -> dict[str, str]:
 
 
 def _review_trampolines() -> dict[str, dict[str, Any]]:
-    """This repository's review-on-pull-request workflow and the one `init` scaffolds, loaded."""
-    from in_lockstep.cli import _SCAFFOLD_TRAMPOLINE
+    """This repository's review-on-pull-request workflow and the ones `init` scaffolds, loaded --
+    the GitLab one too, since #314: its review job's record died with the job (#294 re-shipped),
+    and GATE-LEDGER-10's test read GitHub files only."""
+    from in_lockstep.cli import _SCAFFOLD_GITLAB_TRAMPOLINE, _SCAFFOLD_TRAMPOLINE
 
     return {
         "lockstep.yml": _load("lockstep.yml"),
         "scaffold: lockstep.yml": yaml.load(
             _SCAFFOLD_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader
         ),
+        "scaffold: .gitlab-ci.yml": yaml.load(
+            _SCAFFOLD_GITLAB_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader
+        ),
     }
+
+
+def _gitlab_review_record_is_published(spec: dict[str, Any], name: str) -> None:
+    """GATE-LEDGER-10 in GitLab's spelling: the review job bundles into its artifact, and a
+    publish job holding the push token and no provider absorbs it whatever review said."""
+    review, publish = spec["review"], spec["publish"]
+    assert "history --bundle history.bundle" in " ".join(review["script"]), f"{name}: review bundles nothing"
+    assert "history.bundle" in review["artifacts"]["paths"], f"{name}: the artifact carries no bundle"
+    assert publish["needs"] == ["review"], name
+    assert any(rule.get("when") == "always" for rule in publish["rules"]), (
+        f"{name}: a refused review is the run most worth a record"
+    )
+    assert "GITLAB_TOKEN" in " ".join(publish["script"]), f"{name}: publish holds no push token"
+    assert "anthropic" not in yaml.dump(publish).lower() and "id_tokens" not in publish, (
+        f"{name}: the publishing job reaches for a provider"
+    )
+    assert re.search(r"history --from-bundle \S*history\.bundle --push", " ".join(publish["script"])), (
+        f"{name}: publish does not absorb and push the bundle"
+    )
 
 
 def test_gate_ledger_10_the_review_record_is_published_by_a_job_holding_write_and_no_credential() -> None:
@@ -509,6 +560,9 @@ def test_gate_ledger_10_the_review_record_is_published_by_a_job_holding_write_an
     on the split `propose` already uses -- write access, no provider credential, no provider
     SDK -- in this repository's workflow and in the one an adopter is given."""
     for name, spec in _review_trampolines().items():
+        if "jobs" not in spec:
+            _gitlab_review_record_is_published(spec, name)
+            continue
         review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
         bundled = " ".join(s.get("run", "") for s in review["steps"])
         assert "history --bundle history.bundle" in bundled, f"{name}: the review job bundles nothing"

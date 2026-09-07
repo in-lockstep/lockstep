@@ -32,8 +32,9 @@ from in_lockstep.loader import load
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "lockstep.yml"
 
-# `for aspect in security intent performance tests; do`
-FOR_LINE = re.compile(r"^\s*for\s+aspect\s+in\s+([^;]+);\s*do\s*$", re.M)
+# `--aspect security --aspect intent …`: one invocation of `review`, which loops over the lenses
+# itself and exits with the worst status. The loop used to be shell in the workflow (#314).
+ASPECT_FLAG = re.compile(r"--aspect\s+([\w-]+)")
 
 
 @pytest.fixture
@@ -61,9 +62,9 @@ def _step() -> dict[str, Any]:
 
 
 def _aspects_run() -> list[str]:
-    match = FOR_LINE.search(_step()["run"])
-    assert match, f"no aspect loop found in the review step:\n{_step()['run']}"
-    return match.group(1).split()
+    found = ASPECT_FLAG.findall(_step()["run"])
+    assert found, f"no --aspect in the review step:\n{_step()['run']}"
+    return found
 
 
 def test_the_lens_set_is_not_empty(lenses):
@@ -99,10 +100,13 @@ def test_the_check_does_not_run_a_lens_that_is_not_bound(lenses):
 
 def test_every_lens_runs_even_when_one_of_them_fails():
     """Failing fast would let a transient refusal in the first lens cost the recordings of the
-    three behind it, and this check is where most of the eval corpus comes from."""
-    run = _step()["run"]
-    assert "|| status=$?" in run, "a failing lens must not stop the ones after it"
-    assert "exit $status" in run, "the step must still exit with the worst status it saw"
+    three behind it, and this check is where most of the eval corpus comes from. The loop and
+    the worst-status rule are `review`'s own (GATE-CI-4, `test_cli.py`), so what this file has to
+    hold is that the step hands every lens to ONE invocation rather than running four steps,
+    which would stop at the first red one."""
+    run = " ".join(_step()["run"].split())
+    assert run.count("in-lockstep review") == 1, "several invocations stop at the first failure"
+    assert "||" not in run and "for " not in run and "exit " not in run, "the loop went back into shell"
 
 
 def test_the_lenses_share_one_tape_so_the_harvest_sees_them_all():

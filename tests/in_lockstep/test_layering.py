@@ -314,7 +314,14 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: model-staged test needs. Whether a runner would put a staged file on the host is decided in
 #: `adapters/sandbox.py` (`host_fallback`) and `adapters/worktree.py` (`staged_refusal`), where
 #: `test_controls.py` and the strategy tests reach it without a CliRunner.
-CLI_HELPER_STATEMENTS = 1090
+#: 1090 -> 1166 with #314, composing and rendering, and mostly an accounting change: the body of
+#: `review` -- the invoker, the bind, the run, the printed verdict, the ledger line, the comment
+#: -- moved into `_review_one` so it runs once per `--aspect`, and a command's body was never
+#: counted while a helper's is. The logic that is new is the loop, `_worse` and `--blocked-ok`'s
+#: branch in `_exit_for`, each a decision that used to be shell in a workflow and now has a
+#: test; `_gitlab_things_to_decide` renders facts the scaffold already states. What a blocked
+#: run means stays `_workflow_verdict`'s; what a lens is stays `platform/chatops.py`'s.
+CLI_HELPER_STATEMENTS = 1166
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

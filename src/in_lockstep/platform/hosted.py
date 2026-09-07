@@ -42,6 +42,13 @@ def detect_host(root: str | Path = ".") -> str:
     return ""
 
 
+def origin_url(root: str | Path = ".") -> str:
+    """The origin remote's URL, or `""` when there is none. `init` asks so it can tell "nothing
+    placed this repository" (no remote yet: the GitHub default stays, said out loud) apart from
+    "the remote names neither host" (a self-hosted GitLab: nothing is written unless a flag says)."""
+    return _origin(Path(root))
+
+
 def _origin(path: Path) -> str:
     result = subprocess.run(
         ["git", "config", "--get", "remote.origin.url"],
