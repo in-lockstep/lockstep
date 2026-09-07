@@ -42,8 +42,6 @@ Sized and genuinely wanted. Each is a roadmap item or a recorded gap:
 - **RFE workflow** (roadmap 25): rides the triage vertical rather than growing its own.
 - **Flaky-test adapter** (roadmap 26): detect, quarantine with a ticket trailer
   (`GATE-TESTGUARD-1` refuses silencing without one), report.
-- **A SHARED-scope ledger store**: `LedgerStore.compare_and_set` is declared and deliberately
-  refused at `LOCAL` scope; park/fan-out barriers need a store more than one machine can see.
 - **A hosted OpenAI-compatible provider recipe**: the seam (an explicit
   `invoker_factory(registry=...)` passed to the adapter) exists and is documented; a worked
   gateway example is not.

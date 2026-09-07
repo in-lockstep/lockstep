@@ -428,6 +428,12 @@ def test_a_planned_row_has_not_quietly_shipped() -> None:
         assert InRepoLedger().scope == "local" and GitLedger().scope == "local", (
             "a SHARED-scope store ships — flip the matrix row"
         )
+    if rows.get("Shared ledger store") == "runs":
+        from in_lockstep.platform.ledger import GitLedger
+
+        # Pinned both ways: the row says `GitLedger(shared=True)`, so that construction must
+        # declare SHARED and the default must still be LOCAL.
+        assert GitLedger(shared=True).scope == "shared" and GitLedger().scope == "local"
 
 
 def _source(module: str) -> str:

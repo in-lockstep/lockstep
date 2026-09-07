@@ -31,6 +31,7 @@ comes into being by a write or by `pull()`, both of which are acts somebody aske
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -136,8 +137,18 @@ class GitLedger:
     root: Path = field(default_factory=Path.cwd)
     branch: str = DEFAULT_BRANCH
     remote: str = "origin"
-    scope: str = "local"
+    #: Constructed `shared=True`, this store's `compare_and_set` is a swap on the REMOTE's ref,
+    #: which every runner and every clone sees; otherwise it is the LOCAL store it always was,
+    #: and `compare_and_set` refuses. Scope is derived rather than declared so a store cannot
+    #: claim `SHARED` while swapping on a ref only one machine can see.
+    shared: bool = False
     redact: Redact = field(default_factory=Redact)
+
+    @property
+    def scope(self) -> str:
+        from ...core.ports import LedgerScope
+
+        return LedgerScope.SHARED if self.shared else LedgerScope.LOCAL
 
     # -- plumbing ------------------------------------------------------------------
 
@@ -281,6 +292,76 @@ class GitLedger:
             return None
         raw = self._try("show", f"{head}:{self.path_for(run_id)}")
         return json.loads(raw) if raw else None
+
+    # -- compare-and-set over the remote ref (GATE-OUT-4, SHARED half) ---------------
+
+    async def compare_and_set(self, key: str, expected: str | None, new: str) -> bool:
+        """Swap `key` from `expected` to `new` on the remote, atomically, or report that it moved.
+
+        The swap is `git push <remote> <blob>:refs/lockstep/state/<key>
+        --force-with-lease=<ref>:<expected blob>`: the server updates the ref only if it still
+        points where the lease says, under its own ref lock, so eight runners claiming one key at
+        once produce exactly one success and seven refusals with no store of ours in between --
+        the ledger's remote IS the coordinator, which is why a park claim or a fan-out barrier
+        needs nothing this repository does not already have. A value is a blob, and a blob's id is
+        its content, so callers speak in values and never see a sha. `expected=None` is "create
+        only if absent" (`--force-with-lease=<ref>:` with nothing after the colon).
+
+        Refused, not faked, on a LOCAL store: a compare-and-set on a ref one machine can see is
+        the semantically empty one `GATE-OUT-4` names. Run in a thread because the push is a
+        network round trip and this is called from a running workflow's event loop.
+        """
+        from .store import Unsupported
+
+        if not self.shared:
+            raise Unsupported(
+                "this GitLedger is LOCAL-scoped and cannot provide compare-and-set across "
+                "machines; construct it GitLedger(shared=True) to swap on the remote's ref"
+            )
+        return await asyncio.to_thread(self._swap, key, expected, new)
+
+    def _swap(self, key: str, expected: str | None, new: str) -> bool:
+        ref = self._state_ref(key)
+        blob = self._git("hash-object", "-w", "--stdin", stdin=new)
+        lease = self._git("hash-object", "--stdin", stdin=expected) if expected is not None else ""
+        result = subprocess.run(
+            ["git", "push", "--quiet", self.remote, f"{blob}:{ref}", f"--force-with-lease={ref}:{lease}"],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            return True
+        said = result.stderr
+        # The lease failing is the answer this method exists to give; anything else the remote
+        # said is an error about reaching it, and is raised with its words.
+        if "stale info" in said or "[rejected]" in said or "failed to push some refs" in said:
+            return False
+        raise HistoryError(f"git push {ref} failed: {said.strip()}")
+
+    async def state(self, key: str) -> str | None:
+        """The value the remote holds for `key`, or None when nothing has claimed it."""
+        if not self.shared:
+            from .store import Unsupported
+
+            raise Unsupported("this GitLedger is LOCAL-scoped; construct it GitLedger(shared=True)")
+        return await asyncio.to_thread(self._state, key)
+
+    def _state(self, key: str) -> str | None:
+        ref = self._state_ref(key)
+        listed = self._git("ls-remote", self.remote, ref)
+        if not listed:
+            return None
+        sha = listed.split()[0]
+        # Into FETCH_HEAD only: a local copy of the ref would be a stale read waiting to happen,
+        # and the reconcile leaves nothing under `refs/lockstep/` by design.
+        self._git("fetch", "--quiet", self.remote, ref)
+        return self._git("cat-file", "-p", sha)
+
+    @staticmethod
+    def _state_ref(key: str) -> str:
+        return f"refs/lockstep/state/{_safe(key)}"
 
     def records(self) -> list[dict[str, object]]:
         """Every record currently on the branch, oldest run id first."""

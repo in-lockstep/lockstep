@@ -189,10 +189,18 @@ class Lockstep:
         self._refuse_undeclared_budget()
         self._refuse_ungated_agency()
         self._refuse_exhausted_daily_ceiling()
+        from typing import cast
+
+        from .core.ports import LedgerStore
+        from .platform.ledger import store_for
+
         return RunContext(
             run_id=run_id,
             repo=self.repo,
             container=self.container,
+            # The same decision `store_for` makes for the record writer, so the store a barrier
+            # would write through is the store the run's own record goes to.
+            ledger=cast(LedgerStore, store_for(self.container, self.repo.root)),
             spend=Spend(budget=self.budget),
             middleware=list(self.middleware),
             approval=approval or Approval(),

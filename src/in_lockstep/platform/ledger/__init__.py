@@ -24,11 +24,11 @@ them is how a fabricated improvement gets reported as fact.
 
 from pathlib import Path
 
+from ...core.ports import LedgerScope
 from .history import DEFAULT_BRANCH, GitLedger, HistoryError
 from .store import (
     InRepoLedger,
     LedgerError,
-    LedgerScope,
     Stat,
     Unsupported,
     compare,

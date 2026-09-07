@@ -63,7 +63,7 @@ still advertises.
 | Consistency across askers | runs | `report --by actor` splits the ledger by who asked: outcome mix, turns and spend per succeeded run, findings per run, and the spread between askers with every number carrying the runs it came from. Askers are stable pseudonyms unless `--names`; a run nobody is recorded as asking for is a `—` row, never an "unknown" bucket; a local run carries who ran it only where `lockstep.identity = GitAuthor()` opts in |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
 | Improvement loop | runs | `improve` reads the ledger for a finding that keeps coming back, drafts a change to the one declared `Improvable` body it is attributed to, measures the draft against the promoted corpus before opening anything — both arms over the same cases, `—` where nobody judged — and stages the change with its scorecard; `run improve/propose` is the job that holds the write token, and it enforces the open-proposal ceiling where the proposal is opened. It refuses before its first model call unless a trend qualifies, the body is writable by grant, and a promoted case fails against it. `improve --explain` reads the ledger and says what would stop a proposal, opening nothing and spending nothing |
-| Shared ledger store | planned | `compare_and_set` is declared and refused at `LOCAL` scope; fan-out barriers need `SHARED` |
+| Shared ledger store | runs | `GitLedger(shared=True)` provides `compare_and_set` as a swap on the remote's own ref, so eight runners claiming one key produce one success; one repository's ledger, not a workspace's. The default construction stays `LOCAL` and refuses |
 
 ## Why code rather than configuration
 

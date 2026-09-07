@@ -761,3 +761,89 @@ def test_a_fixture_id_the_branch_already_carries_does_not_block_the_cleanup(tmp_
     asyncio.run(GitLedger(root=second).append("run-new", {"kind": "review"}))
     GitLedger(root=second).push()
     assert sorted(str(r["run_id"]) for r in GitLedger(root=second).records()) == ["run-new", "triage-412"]
+
+
+# -- GATE-OUT-4, the SHARED half: compare-and-set over the remote ref --------------------------
+
+
+def _origin_and_clones(tmp_path: Path, count: int) -> tuple[Path, list[Path]]:
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    clones = []
+    for i in range(count):
+        clone = _repo(tmp_path / f"clone{i}")
+        subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=clone, check=True)
+        clones.append(clone)
+    return origin, clones
+
+
+def test_gate_out_4_a_shared_git_ledger_swaps_on_the_remote_ref_and_exactly_one_claim_wins(
+    tmp_path: Path,
+) -> None:
+    """GATE-OUT-4, SHARED. Eight clones of one bare origin claim one key at once, each expecting
+    it absent: the remote's ref lock lets exactly one create it, the other seven are told it
+    moved, and nothing of ours sat between them. A later swap with the winner's value succeeds,
+    the same swap again is stale, and every clone reads the value the remote holds."""
+    import asyncio
+
+    _origin, clones = _origin_and_clones(tmp_path, 8)
+    ledgers = [GitLedger(root=c, shared=True) for c in clones]
+    assert {ledger.scope for ledger in ledgers} == {"shared"}
+
+    async def race() -> list[bool]:
+        return list(
+            await asyncio.gather(
+                *(led.compare_and_set("park/run-1", None, f"claim-{i}") for i, led in enumerate(ledgers))
+            )
+        )
+
+    outcomes = asyncio.run(race())
+    assert outcomes.count(True) == 1, outcomes
+    winner = outcomes.index(True)
+    held = asyncio.run(ledgers[0].state("park/run-1"))
+    assert held == f"claim-{winner}"
+    assert all(asyncio.run(led.state("park/run-1")) == held for led in ledgers[1:3])
+
+    # The swap: correct expectation wins, a stale one is refused, and the value moved once.
+    assert asyncio.run(ledgers[3].compare_and_set("park/run-1", held, "resumed")) is True
+    assert asyncio.run(ledgers[4].compare_and_set("park/run-1", held, "resumed-again")) is False
+    assert asyncio.run(ledgers[5].state("park/run-1")) == "resumed"
+    assert asyncio.run(ledgers[6].compare_and_set("park/run-1", None, "late")) is False, (
+        "create-if-absent must fail once the key exists"
+    )
+    assert asyncio.run(ledgers[7].state("never-claimed")) is None
+    for clone in clones:
+        left = subprocess.run(
+            ["git", "for-each-ref", "refs/lockstep/"], cwd=clone, capture_output=True, text=True
+        )
+        assert left.stdout == "", f"a swap left a local ref behind: {left.stdout}"
+
+
+def test_gate_out_4_a_local_git_ledger_still_refuses_compare_and_set(tmp_path: Path) -> None:
+    """The default construction is the LOCAL store it always was, and its refusal names the
+    constructor that would make it shared, rather than swapping on a ref one machine can see."""
+    import asyncio
+
+    from in_lockstep.platform.ledger import Unsupported
+
+    ledger = GitLedger(root=_repo(tmp_path))
+    assert ledger.scope == "local"
+    with pytest.raises(Unsupported, match="shared=True"):
+        asyncio.run(ledger.compare_and_set("k", None, "v"))
+    with pytest.raises(Unsupported):
+        asyncio.run(ledger.state("k"))
+
+
+def test_a_run_context_carries_the_store_its_record_goes_to(tmp_path: Path) -> None:
+    """`ctx.ledger` is the port, resolved once by the same decision the record writer makes, so
+    what a parked branch would write through is where the run's own record lands."""
+    from in_lockstep import Lockstep
+    from in_lockstep.core.context import RunContext
+    from in_lockstep.core.spend import Budget
+
+    root = _repo(tmp_path)
+    lockstep = Lockstep.detect(root)
+    lockstep.budget = Budget(usd=1.0)
+    ctx = lockstep.context("r1")
+    assert isinstance(ctx.ledger, GitLedger) and ctx.ledger.scope == "local"
+    assert RunContext.__dataclass_fields__["ledger"].default is None
