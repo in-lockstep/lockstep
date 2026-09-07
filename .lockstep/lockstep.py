@@ -81,8 +81,12 @@ lockstep.guard = ChangeGuard(
 # `.git/config` one `git config` away. A staged test now runs under `--network=none` with a single
 # writable mount, the throwaway worktree, or the run is refused by name (`sandbox.host_fallback`).
 #
-# The image is the base interpreter this process runs on, and the ENVIRONMENT is the `.venv` the
-# host already built, mounted read-only and put on `PYTHONPATH`: a slim image carries no pytest,
+# The image is the base interpreter this process runs on -- the full image, not `-slim`, because
+# this suite drives `git` in forty-odd tests (the ledger, the worktree, every strategy test) and
+# the slim image has none: 42 of 42 in `test_history.py` failed inside it before this line
+# changed, which is the honest failure and also a `/fix` here that could never go green. The
+# ENVIRONMENT is the `.venv` the host already built, mounted read-only and put on `PYTHONPATH`:
+# a base image carries no pytest,
 # and the worktree a staged change is materialised into is a copy of HEAD, so `.venv` (ignored by
 # git) is not in it. Right where this repository's write verbs run -- a linux runner whose venv the
 # `Provision` line below built for this interpreter -- and right on a laptop for as long as every
@@ -98,7 +102,7 @@ lockstep.bind(
     PytestTest(
         args=["-q", "--no-header"],
         sandbox=Sandbox(
-            image=f"docker.io/library/python:{_PY}-slim",
+            image=f"docker.io/library/python:{_PY}",
             mounts=((_VENV, "/venv"),),
             extra_env={"PYTHONPATH": f"/venv/lib/python{_PY}/site-packages"},
         ),
