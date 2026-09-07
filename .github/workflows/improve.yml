@@ -57,7 +57,7 @@ jobs:
   measure:
     needs: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 65
     permissions:
       contents: read
       id-token: write

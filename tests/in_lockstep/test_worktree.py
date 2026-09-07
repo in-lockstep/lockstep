@@ -300,6 +300,19 @@ def test_verdict_over_staged_reports_green_for_a_passing_staged_change(tmp_path:
     assert not (root / "test_staged.py").exists()
 
 
+def test_an_unmet_expectation_names_the_tests_that_failed(tmp_path: Path) -> None:
+    """Run 34129809277 reported "9 failed of 2495" into the ledger, the ticket and the log, and
+    which nine was recoverable from none of them (#312). The finding names them, ten at most."""
+    root = _repo(tmp_path)
+    (root / "test_named.py").write_text(
+        "def test_one():\n    assert False\n\ndef test_two():\n    assert True\n"
+    )
+    outcome = asyncio.run(_Ctx(root).do(Test(root=str(root), expect="pass")))
+    assert outcome.status is Status.FAILED
+    (finding,) = outcome.findings
+    assert "1 failed of 2" in finding.message and "test_named.py::test_one" in finding.message
+
+
 def test_verdict_over_staged_reports_red_for_a_failing_staged_change(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     changeset = ChangeSet(

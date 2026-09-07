@@ -81,12 +81,14 @@ lockstep.guard = ChangeGuard(
 # `.git/config` one `git config` away. A staged test now runs under `--network=none` with a single
 # writable mount, the throwaway worktree, or the run is refused by name (`sandbox.host_fallback`).
 #
-# The image is the base interpreter this process runs on -- the full image, not `-slim`, because
-# this suite drives `git` in forty-odd tests (the ledger, the worktree, every strategy test) and
-# the slim image has none: 42 of 42 in `test_history.py` failed inside it before this line
-# changed, which is the honest failure and also a `/fix` here that could never go green. The
-# ENVIRONMENT is the `.venv` the host already built, mounted read-only and put on `PYTHONPATH`:
-# a base image carries no pytest,
+# The image is uv's, on the interpreter this process runs on: Python, `git` and `uv`. The slim
+# Python image has no git, and 42 of 42 in `test_history.py` failed inside it -- the honest
+# failure, and also a `/fix` here that could never go green. The full Python image has git and
+# no uv, which this repository's own Provision and the tests that scaffold and provision a
+# repository invoke; run 34129809277 (#312) failed 9 tests of 2495 in that image on the runner
+# and named none of them, so whether uv was among the reasons is what the next run's named
+# finding will say. The ENVIRONMENT is the `.venv` the host already built, mounted read-only and
+# put on `PYTHONPATH`: a base image carries no pytest,
 # and the worktree a staged change is materialised into is a copy of HEAD, so `.venv` (ignored by
 # git) is not in it. Right where this repository's write verbs run -- a linux runner whose venv the
 # `Provision` line below built for this interpreter -- and right on a laptop for as long as every
@@ -102,7 +104,7 @@ lockstep.bind(
     PytestTest(
         args=["-q", "--no-header"],
         sandbox=Sandbox(
-            image=f"docker.io/library/python:{_PY}",
+            image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
             mounts=((_VENV, "/venv"),),
             extra_env={"PYTHONPATH": f"/venv/lib/python{_PY}/site-packages"},
         ),
@@ -251,7 +253,7 @@ lockstep.bind(EgressPolicy, egress)
 # guessed: run 33564844360 spent $23.07 over nine turns in 286 seconds before turn 10's projection
 # crossed its ceiling. Cost per turn RISES as the loop goes — the accumulated message list is
 # re-sent every turn, so spend is quadratic in turns rather than linear — which puts $100 at
-# roughly turn 25 and roughly twenty minutes, short of both the 1800-second wall and the 100 turns
+# roughly turn 25 and roughly twenty minutes, short of both the 3600-second wall and the 100 turns
 # the workshop grants.
 #
 # So `max_turns=100` below is a runaway backstop and not a promise of 100 turns. If a session
@@ -269,7 +271,11 @@ lockstep.bind(EgressPolicy, egress)
 #
 # `usd` is the ceiling that bounds all of it, and it is the one checked against a projection
 # before each turn.
-lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
+# 3600 seconds, not 1800. The first `/fix` on this repository (run 34129809277, #312) needed 2197:
+# 96 model turns plus two full-suite runs in the Test container, and it was stopped at 1800
+# with a correct fix staged and unproposed. A ceiling that stops a run doing the work it was
+# asked for is not measuring a runaway; the dollars still bind first.
+lockstep.budget = Budget(usd=100.00, wall_seconds=3600)
 
 # -- who ran it, for the runs made at a terminal -------------------------------------
 #
@@ -360,6 +366,9 @@ lockstep.workshop = Workshop(
     commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
     max_turns=100,
     max_tokens=20000,
+    # The per-invocation deadline, raised with the run's wall ceiling above and for the same run;
+    # the jobs that run these sessions allow 65 minutes, so the framework still stops first.
+    deadline_seconds=3600,
 )
 
 
