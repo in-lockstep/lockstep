@@ -1,0 +1,95 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04509,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 276,
+        "message": "find_spec executes top-level __init__.py for namespace packages in some Python versions",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 204,
+        "message": "The identity-test bypass was a real bug; the fix and its test are correct \u2014 recording for completeness",
+        "path": "src/in_lockstep/core/changes.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 206,
+        "message": "The sandbox test verifies credential isolation using a monkeypatched env var named to look like a real key",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2ed708441bca60206a03b4460a62dffbec62f11f",
+  "input_tokens": 11285,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 749,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T133926Z-a870",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 12034,
+  "ts": "2026-08-31T13:39:47+00:00",
+  "wall_seconds": 21.762
+}
