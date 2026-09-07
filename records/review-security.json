@@ -5,41 +5,17 @@
   "branch": "HEAD",
   "ci_actor": "tpouyer",
   "config": "base branch (not the ref under review)",
-  "cost_usd": 0.031929,
+  "cost_usd": 0.020319,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 7,
+    "count": 4,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 56,
-        "message": "The `claude` job fetches a GitHub OIDC token and writes it to `/tmp/gha-jwt`, but the job has no `if:` condition and no `needs:` on `gate`. It therefore runs unconditionally on every `issue_comment` event \u2014 including comments from untrusted actors \u2014 before the gate job can reject them. The token itself is short-lived and audience-scoped to `api.anthropic.com`, so the blast radius is limited to that federation trust, but the job also does `actions/checkout@v4` from an unvetted ref in this context\u2026[truncated]",
-        "path": ".github/workflows/implement.yml",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 53,
-        "message": "Same issue as in `implement.yml`: the `claude` job runs unconditionally on `pull_request` events with no `needs:` dependency. For `pull_request` from forks, `id-token: write` is typically suppressed by GitHub, so the risk is lower there, but on `push` or internal PRs the job mints and writes an OIDC token to `/tmp/gha-jwt` before any gating step can run.",
-        "path": ".github/workflows/lockstep.yml",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 55,
-        "message": "The fetched OIDC token is written to `/tmp/gha-jwt` as a plain file with default permissions (world-readable on a Linux runner). Any subsequent step running in the same job \u2014 including a malicious action injected via a compromised dependency \u2014 can read it with `cat /tmp/gha-jwt`. Prefer writing to `$RUNNER_TEMP` with an explicit `chmod 600`, or passing the value through a masked environment variable rather than a file.",
-        "path": ".github/workflows/implement.yml",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 84,
-        "message": "The `ACTIONS_ID_TOKEN_REQUEST_URL` value is used without any validation of its scheme or host before being passed to `urllib.request.urlopen`. If an attacker can influence that environment variable (e.g. via a workflow that sets it), they can redirect the OIDC token request to an arbitrary URL, causing the runner to send its `ACTIONS_ID_TOKEN_REQUEST_TOKEN` bearer credential to an attacker-controlled endpoint. This is worth noting even though the variable originates from GitHub's own runner envi\u2026[truncated]",
+        "line": 87,
+        "message": "ACTIONS_ID_TOKEN_REQUEST_URL is fetched from the environment and used as the target of an outbound HTTP request. If an attacker can set that variable before the process starts (e.g., a compromised step in a composite action that runs before this one), they control the URL the resolver fetches the token from \u2014 and therefore control what value is minted and seeded into the redaction registry as a trusted credential. The existing code does not validate that the URL belongs to the expected GitHub Ac\u2026[truncated]",
         "path": "src/in_lockstep/ai/auth.py",
         "severity": "warning"
       },
@@ -63,17 +39,17 @@
       }
     ]
   },
-  "head": "1f0727a46d7c1ebc4f346f2d57e865a8c4e22064",
-  "input_tokens": 6018,
+  "head": "6716bfb6e37d52ab6f43e3b77130fe7339715be3",
+  "input_tokens": 4953,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 925,
+  "output_tokens": 364,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 4,
   "status": "succeeded",
-  "tokens": 6943,
-  "ts": "2026-08-29T23:43:02+00:00",
-  "wall_seconds": 24.385
+  "tokens": 5317,
+  "ts": "2026-08-29T23:00:25+00:00",
+  "wall_seconds": 10.701
 }
