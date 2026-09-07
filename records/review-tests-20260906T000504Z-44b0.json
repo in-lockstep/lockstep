@@ -1,0 +1,54 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058217,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 363,
+        "message": "Shape assertion pins field names but not enforcement wiring",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "Renamed monotonicity test still asserts only two of the three enforced fields",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 177,
+        "message": "Positive-control count is now hardcoded to 12 \u2014 correct, and fragile in the right direction",
+        "path": "tests/in_lockstep/test_objectives.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5691a1294354dd709d48a5335c928948cdcab68c",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 792,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T000504Z-44b0",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 795,
+  "ts": "2026-09-06T00:05:23+00:00",
+  "wall_seconds": 19.631
+}
