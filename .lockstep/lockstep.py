@@ -253,7 +253,7 @@ lockstep.bind(EgressPolicy, egress)
 # guessed: run 33564844360 spent $23.07 over nine turns in 286 seconds before turn 10's projection
 # crossed its ceiling. Cost per turn RISES as the loop goes — the accumulated message list is
 # re-sent every turn, so spend is quadratic in turns rather than linear — which puts $100 at
-# roughly turn 25 and roughly twenty minutes, short of both the 1800-second wall and the 100 turns
+# roughly turn 25 and roughly twenty minutes, short of both the 3600-second wall and the 100 turns
 # the workshop grants.
 #
 # So `max_turns=100` below is a runaway backstop and not a promise of 100 turns. If a session
@@ -271,7 +271,11 @@ lockstep.bind(EgressPolicy, egress)
 #
 # `usd` is the ceiling that bounds all of it, and it is the one checked against a projection
 # before each turn.
-lockstep.budget = Budget(usd=100.00, wall_seconds=1800)
+# 3600 seconds, not 1800. The first `/fix` on this repository (run 34129809277, #312) needed 2197:
+# 96 model turns plus two full-suite runs in the Test container, and it was stopped at 1800
+# with a correct fix staged and unproposed. A ceiling that stops a run doing the work it was
+# asked for is not measuring a runaway; the dollars still bind first.
+lockstep.budget = Budget(usd=100.00, wall_seconds=3600)
 
 # -- who ran it, for the runs made at a terminal -------------------------------------
 #
@@ -362,6 +366,9 @@ lockstep.workshop = Workshop(
     commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
     max_turns=100,
     max_tokens=20000,
+    # The per-invocation deadline, raised with the run's wall ceiling above and for the same run;
+    # the jobs that run these sessions allow 65 minutes, so the framework still stops first.
+    deadline_seconds=3600,
 )
 
 
