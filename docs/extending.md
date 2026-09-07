@@ -811,7 +811,8 @@ A subclass of bare `AiStrategy` has to declare all three itself, `request: Class
 or `use` refuses it for want of a key to bind under.
 
 `capabilities` is the load-bearing frozenset every gate reads off the bound object, and it is not
-optional: subclassing `AiStrategy` means being handed `write_file`, `delete_file` and `run_script`
+optional: subclassing `AiStrategy` means being handed `write_file`, `edit_file`, `delete_file` and
+`run_script`
 and paying for a model call, so declaring less than `AGENCY` is refused at class creation.
 `ApprovalGate`, the budget refusal and the egress trigger all key on that set. An undeclared strategy would
 be an ungated one, which is why this is an error and not a warning.

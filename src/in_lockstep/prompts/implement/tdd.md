@@ -29,8 +29,11 @@ proves nothing about the change.
 weakening it. The test is the specification now — do not edit it to fit the code, and do not delete
 or skip it. Change the code under test instead.
 
-**Write whole files.** `write_file` replaces a path's entire contents, so read a file before you
-modify it and hand back the complete new version — not a fragment, and not a diff.
+**Edit, or write whole files.** `edit_file` replaces one passage with another: give it the exact
+text to replace, enough of it to occur once, and what takes its place. It is the tool for a change
+to a file you did not create. `write_file` replaces a path's entire contents, so it is for a new
+file or a rewrite; if you use it on an existing file, read the file first and hand back the
+complete new version — not a fragment, and not a diff.
 
 **Match what is there.** Naming, error handling, how failure is reported, how tests are laid out. A
 change that is correct but stylistically foreign costs a reviewer two decisions instead of one.

@@ -45,7 +45,25 @@ def test_the_tool_is_declared_beside_run_script(tmp_path: Path) -> None:
     workspace = Workspace(root=tmp_path, guard=ChangeGuard())
     tools, _runner = read_write_execute(workspace)
     names = {t.name for t in tools.definitions()}
-    assert {"run_tests", "run_script", "write_file"} <= names
+    assert {"run_tests", "run_script", "write_file", "edit_file"} <= names
+
+
+def test_edit_file_is_reachable_through_the_dispatch_table(tmp_path: Path) -> None:
+    """Declared in the set AND wired in the runner: the handler tests call `_edit` directly, and
+    a tool that is declared to the model but unreachable when called is the defect a control
+    removing the dispatch entry has to turn red (#337)."""
+    from in_lockstep.ai.builtins import read_write
+    from in_lockstep.ai.tools import BUILTIN_SERVER
+
+    (tmp_path / "f.py").write_text("x = 1\n")
+    workspace = Workspace(root=tmp_path, guard=ChangeGuard())
+    tools, runner = read_write(workspace)
+    assert "edit_file" in {t.name for t in tools.definitions()}
+    answer = asyncio.run(
+        runner(BUILTIN_SERVER, "edit_file", {"path": "f.py", "old": "x = 1", "new": "x = 2"})
+    )
+    assert answer.startswith("ok:"), answer
+    assert workspace.changes[-1].contents == "x = 2\n"
 
 
 def test_both_writing_verbs_get_it_without_naming_it() -> None:
