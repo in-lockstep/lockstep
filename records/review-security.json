@@ -1,55 +1,63 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.055041,
+  "cost_usd": 0.060843,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 4,
+    "count": 5,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 109,
-        "message": "Error messages include Jira's response body (up to 500 chars). The code comment asserts the token is safe because it travels in a request header, not the body. That is true for the Jira API token itself, but Jira's error responses can echo back fields from the request or carry project keys, user account IDs, or permission scopes that a caller may prefer not to have in logs or exception traces. This is a low-severity concern, but the 500-char truncation is the only limit on what surfaces.",
-        "path": "src/in_lockstep/platform/tickets/jira.py",
+        "line": 145,
+        "message": "Linter stdout/stderr appended to a Finding message without sanitisation. A linter that emits ANSI escape sequences, NUL bytes, or very long lines is surface-level cosmetic, but a tool whose output is attacker-influenced (e.g. linting a file containing crafted text) could inject terminal control sequences into whatever display layer renders the finding. The last-20-lines slice limits volume but does not strip control characters.",
+        "path": "src/in_lockstep/adapters/command.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 165,
-        "message": "The `key` parameter in `get`, `comment`, `create` (via `self.project`), `add_labels`, and `transition` is interpolated directly into URL paths without validation or encoding. A `key` value containing path separators (e.g. `../`) would traverse the URL path.",
-        "path": "src/in_lockstep/platform/tickets/jira.py",
+        "line": 227,
+        "message": "package.json is read and its `scripts.test` key is used to infer `test_command`, but only the presence of the key is checked \u2014 its value is not read. The resulting command is always hardcoded to `(\"npm\", \"test\")`, so no untrusted content from package.json reaches the command. This is not a finding, but noting it because it differs from what the comments imply about detection fidelity.",
+        "path": "src/in_lockstep/lockstep.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 125,
-        "message": "The JQL query passed to `search` is accepted as a raw string and forwarded to Jira in a POST body without any escaping or validation. The call sites visible in this diff pass caller-controlled strings directly.",
-        "path": "src/in_lockstep/platform/tickets/jira.py",
+        "line": 264,
+        "message": "The Makefile is read and its target names are extracted with a regex and embedded in `RepoFacts.make_targets`, which `summary()` then joins into a human-readable string displayed by `ls`. A Makefile target name matched by `[A-Za-z0-9_-]+` cannot contain shell metacharacters, so this is not exploitable for injection. However if `make_targets` is ever passed to a shell command (not visible in this diff), the assumption breaks. Flagging as low-confidence because the downstream consumer is not in th\u2026[truncated]",
+        "path": "src/in_lockstep/lockstep.py",
         "severity": "warning"
       },
       {
         "blocking": false,
         "id": "review.security",
-        "line": 84,
-        "message": "The `JiraSource` dataclass stores the `token` field as a plain string attribute. Any code that serialises a `JiraSource` instance (repr, dataclass `asdict`, logging of the object) will include the token in its output.",
-        "path": "src/in_lockstep/platform/tickets/jira.py",
+        "line": 1846,
+        "message": "_bind_line inlines `list(facts.test_command)` and `list(facts.lint_command)` directly into the generated scaffold via an f-string using `!r` formatting. Python `repr()` of a list of strings is safe for round-tripping through `compile()`, so there is no code-injection path here. The test at line 282 confirms `compile()` succeeds. Not a finding, but the reliance on `!r` being injection-safe is worth a comment in the code.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 110,
+        "message": "Path traversal via the `junit` parameter: `self.junit` is joined to `cwd` with `Path(cwd or \".\") / self.junit` and then read. If `junit` is caller-supplied and contains `../../sensitive/path`, `path.read_text()` will follow it. In the current codebase `junit` is set by the adapter constructor from static configuration, not from per-run input, so the immediate risk is low. If `junit` is ever exposed through a config file or API surface that a repository author or a third party can influence, this\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/command.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 12912,
+  "input_tokens": 16766,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 1087,
+  "output_tokens": 703,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 13999,
-  "wall_seconds": 28.997
+  "tokens": 17469,
+  "wall_seconds": 20.401
 }
