@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.032241,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 875,
+        "message": "Attacker-controlled prefix in `_latest_matching` scanned against all ledger records without anchoring",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 63,
+        "message": "Test helper sorts ledger records by filesystem mtime, which is not monotone under parallel test execution",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6bfdf5bb2af09e6593c7084c11f55de575ba2ca1",
+  "input_tokens": 7667,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 616,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T031118Z-7416",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 8283,
+  "ts": "2026-08-30T03:11:36+00:00",
+  "wall_seconds": 17.838
+}
