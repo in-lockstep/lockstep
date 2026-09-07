@@ -696,3 +696,68 @@ def test_doctor_says_nothing_about_a_repo_that_never_recorded(
     monkeypatch.setenv("IN_LOCKSTEP_ORG_SPEND_LIMIT", "100")
     report = doctor_module.run(_repo(tmp_path))
     assert "DOC167" not in [c.code for c in report.checks]
+
+
+# -- a fixture id cannot be published ----------------------------------------------------------
+
+
+def test_a_run_id_only_a_fixture_mints_cannot_be_pushed_reconciled_or_absorbed(tmp_path: Path) -> None:
+    """Issue 312. `triage-412` and two `wayfinder-*-local` records sat on this repository's real
+    ledger, and `report` counted a triage run that never happened. A local append accepts them --
+    a test's tmp root is where they belong -- and every path that publishes refuses them by name:
+    the fast-forward push, the reconcile a rejected push makes, and a bundle absorbed on the way."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    first, second = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    for clone in (first, second):
+        subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=clone, check=True)
+
+    asyncio.run(GitLedger(root=first).append("triage-412", {"kind": "triage"}))
+    with pytest.raises(HistoryError, match="triage-412"):
+        GitLedger(root=first).push()  # the fast path: an empty remote
+    assert _git(origin, "rev-parse", "--verify", "--quiet", f"refs/heads/{DEFAULT_BRANCH}") == "", (
+        "the refused push reached the remote"
+    )
+
+    asyncio.run(GitLedger(root=second).append("run-real", {"kind": "review"}))
+    GitLedger(root=second).push()
+    asyncio.run(GitLedger(root=first).append("run-mine", {"kind": "review"}))
+    with pytest.raises(HistoryError, match="triage-412"):
+        GitLedger(root=first).push()  # the reconcile path: a rejected push
+    landed = _repo(tmp_path / "c")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=landed, check=True)
+    assert GitLedger(root=landed).pull().gained == 1, "the remote holds only the real record"
+
+    bundle = GitLedger(root=first).bundle(tmp_path / "a.bundle")
+    with pytest.raises(HistoryError, match="triage-412"):
+        GitLedger(root=second).absorb(bundle)
+    assert [r["run_id"] for r in GitLedger(root=second).records()] == ["run-real"]
+
+    fresh = _repo(tmp_path / "d")
+    with pytest.raises(HistoryError, match="wayfinder-work-local"):
+        asyncio.run(GitLedger(root=fresh).append("wayfinder-work-local", {"kind": "workflow"}))
+        GitLedger(root=fresh).absorb(GitLedger(root=fresh).bundle(tmp_path / "d.bundle"))
+        # A bundle that would CREATE the branch is checked too.
+        GitLedger(root=_repo(tmp_path / "e")).absorb(tmp_path / "d.bundle")
+
+
+def test_a_fixture_id_the_branch_already_carries_does_not_block_the_cleanup(tmp_path: Path) -> None:
+    """The four that leaked are removed by a person; until then a push or pull that merely meets
+    them on the branch is not refused, or the refusal would block its own cleanup."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    first = _repo(tmp_path / "a")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=first, check=True)
+    asyncio.run(GitLedger(root=first).append("triage-412", {"kind": "triage"}))
+    subprocess.run(
+        ["git", "push", "-q", "origin", f"refs/heads/{DEFAULT_BRANCH}:refs/heads/{DEFAULT_BRANCH}"],
+        cwd=first,
+        check=True,
+        capture_output=True,
+    )  # the leak, made the way it happened: outside the framework's own push
+    second = _repo(tmp_path / "b")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=second, check=True)
+    assert GitLedger(root=second).pull().gained == 1
+    asyncio.run(GitLedger(root=second).append("run-new", {"kind": "review"}))
+    GitLedger(root=second).push()
+    assert sorted(str(r["run_id"]) for r in GitLedger(root=second).records()) == ["run-new", "triage-412"]

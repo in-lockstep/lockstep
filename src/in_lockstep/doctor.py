@@ -12,6 +12,7 @@ rather than implying more than it knows.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from dataclasses import dataclass, field
@@ -283,6 +284,7 @@ def _branch_protection(report: Report, root: Path) -> None:
         report.add("DOC120", Severity.NOTE, "could not check branch protection (gh unavailable)", "")
         return
     if result.returncode == 0:
+        _protection_bypasses(report, root, branch, result.stdout)
         return
     if _UNPROTECTED in (result.stderr + result.stdout):
         report.add(
@@ -302,6 +304,68 @@ def _branch_protection(report: Report, root: Path) -> None:
         + " A job token usually cannot read this API. Run `in-lockstep doctor` at a terminal, "
         "where gh carries your own credentials, to get an answer.",
     )
+
+
+def _protection_bypasses(report: Report, root: Path, branch: str, protection: str) -> None:
+    """A protection rule an administrator can step around is enforced by choice, and doctor says
+    whose. Two settings do it: `enforce_admins` off on the classic rule, and a bypass actor on an
+    active ruleset that requires a pull request or a status check. Both were true here (#312) --
+    one engineer, who is that admin, and a `required` check that was required of everybody else.
+    WARNINGs and not ERRORs: the rule exists and holds for everyone but the named role, which is a
+    fact to know rather than a check that failed. Neither call's failure is reported: the rule was
+    already read, and a ruleset API a token cannot list is the NOTE `DOC120` would have made if the
+    protection read had failed, not a second one.
+    """
+    try:
+        rule = json.loads(protection)
+    except ValueError:
+        rule = {}
+    enforce = rule.get("enforce_admins") if isinstance(rule, dict) else None
+    if isinstance(enforce, dict) and enforce.get("enabled") is False:
+        report.add(
+            "DOC127",
+            Severity.WARNING,
+            f"branch protection on {branch} is not enforced for administrators (enforce_admins is off)",
+            "An administrator can push past the required checks. With one engineer who is that "
+            "administrator, `required` is enforceable only by choice; turn on 'Do not allow "
+            "bypassing the above settings' to make it a guarantee.",
+        )
+    listed = _gh(root, "api", "repos/{owner}/{repo}/rulesets")
+    if listed is None or listed.returncode != 0:
+        return
+    try:
+        rulesets = json.loads(listed.stdout)
+    except ValueError:
+        return
+    for summary in rulesets if isinstance(rulesets, list) else []:
+        if not isinstance(summary, dict) or summary.get("enforcement") != "active":
+            continue
+        detail = _gh(root, "api", f"repos/{{owner}}/{{repo}}/rulesets/{summary.get('id')}")
+        if detail is None or detail.returncode != 0:
+            continue
+        try:
+            ruleset = json.loads(detail.stdout)
+        except ValueError:
+            continue
+        if not isinstance(ruleset, dict):
+            continue
+        kinds = {str(r.get("type")) for r in ruleset.get("rules", []) if isinstance(r, dict)}
+        actors = [a for a in ruleset.get("bypass_actors", []) if isinstance(a, dict)]
+        guarded = sorted(kinds & {"pull_request", "required_status_checks"})
+        if actors and guarded:
+            who = ", ".join(
+                f"{a.get('actor_type', '?')} {a.get('actor_id', '?')} ({a.get('bypass_mode', 'always')})"
+                for a in actors
+            )
+            name = ruleset.get("name", summary.get("id"))
+            report.add(
+                "DOC128",
+                Severity.WARNING,
+                f"ruleset {name!r} lets {who} bypass its {' and '.join(guarded)} rule(s)",
+                "A bypass actor on the ruleset that requires the review check makes that check "
+                "required of everyone except the actor named. Remove the bypass, or say in the "
+                "objectives ledger that the check is enforced by choice.",
+            )
 
 
 def _gh_said(result: subprocess.CompletedProcess[str]) -> str:

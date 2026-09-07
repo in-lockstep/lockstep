@@ -96,7 +96,7 @@ to move without somebody standing in front of this table.
 | `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3`, `GATE-SHAPE-1`, `GATE-VERDICT-1`, `GATE-PROGRESS-1` | — | — |
 | `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3`, `GATE-DOCS-1`, `GATE-BODY-1` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5`, `GATE-LENS-1` | — | — |
-| `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3` | — | — |
+| `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3`, `GATE-DOGFOOD-1` | — | Reviews, a fix and measurement have closed here (`GATE-DOGFOOD-1` names the runs); an implementation has not, and `/review <lens>` on a pull request thread has never matched, so that clause of the same gate is not asserted until the owner's comment makes it true. Deliberately not dogfooded on this repository's own runs, and each a separate decision: egress enforcement and the daily ceiling (off, documented), GitLab (no instance; O3 says so), and any provider but Anthropic (`GATE-COST-3` prices it; nothing here has routed to it). The required `review` check is enforced by choice -- `doctor` now says so (`DOC127`, `DOC128`) -- and stays that way while one engineer is the administrator. |
 | `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1` | — | — |
 | `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-LEDGER-12`, `GATE-REVIEW-6` | — | — |
 
@@ -147,6 +147,15 @@ away. *Absent is not zero*, inside the tool whose job is finding absent controls
 repository the whole of the second clause. The lesson generalises past this gate: a diagnostic
 that cannot distinguish **did not hold** from **could not look** will have its verdict discarded,
 and then it gates nothing at all.
+
+On 2026-09-07 the loop closed (`GATE-DOGFOOD-1`, #312). Until then this row's `held` rested on
+reviews alone: the framework had never opened a pull request here, and the two runs whose work
+half succeeded had died at `propose`. The ninth `/fix` on #319 opened #343 and it merged -- the
+first change in this repository's history a model staged and a person merged -- and it took eight
+framework fixes to get there, each one a defect only a real run on a real runner could have shown
+(the row lists them). `improve.yml` has run twice and refused to propose twice, by name, which is
+the learning loop working on no evidence rather than not working. What has not happened is said in
+the row's gap: no implementation, and no `/review <lens>` on a thread.
 
 What O10 covers, plainly, so the `held` is readable: reviews, fixes, implementations and
 measurement, which are the four things the objective names. `backport`, `triage`, `rfe`, `pack`
