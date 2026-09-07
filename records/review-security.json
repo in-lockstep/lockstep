@@ -1,47 +1,31 @@
 {
   "aspect": "security",
   "billed_fraction": 1.0,
-  "cost_usd": 0.044898,
+  "cost_usd": 0.035334,
   "decided": true,
   "epoch": "in-process",
   "findings": {
-    "count": 3,
+    "count": 1,
     "items": [
       {
         "blocking": false,
         "id": "review.security",
-        "line": 147,
-        "message": "Model-controlled file paths reach the worktree materialiser without any validation in the code visible here.",
-        "path": "src/in_lockstep/adapters/ai/tdd.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 263,
-        "message": "Model reply content is truncated and stored as a summary without sanitisation visible in this diff.",
-        "path": "src/in_lockstep/adapters/ai/tdd.py",
-        "severity": "warning"
-      },
-      {
-        "blocking": false,
-        "id": "review.security",
-        "line": 109,
-        "message": "Phase 2 prompt includes the full contents of model-staged test files verbatim.",
-        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "line": 52,
+        "message": "Test code from AI-generated changeset executes in the worktree before any human review",
+        "path": "src/in_lockstep/adapters/worktree.py",
         "severity": "warning"
       }
     ]
   },
-  "input_tokens": 12056,
+  "input_tokens": 9988,
   "kind": "review",
   "model": "anthropic:claude-sonnet-4-6",
-  "output_tokens": 582,
+  "output_tokens": 358,
   "priced_fraction": 1.0,
   "reason": null,
   "run_id": "review-security",
   "schema": 3,
   "status": "succeeded",
-  "tokens": 12638,
-  "wall_seconds": 17.335
+  "tokens": 10346,
+  "wall_seconds": 13.122
 }
