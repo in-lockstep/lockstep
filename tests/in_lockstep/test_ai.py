@@ -1549,6 +1549,78 @@ def test_gate_redact_3_a_mask_written_into_a_file_that_holds_no_value_is_refused
     assert runner._write({"path": "new.py", "contents": "y = '***'\n"}).startswith("refused:")
 
 
+# -- edit_file: one passage for another, staged as the whole file (#337) ------------------------
+
+
+def _editable_tree(root: Path) -> Any:
+    from in_lockstep.ai.builtins import ToolRunnerImpl, Workspace
+    from in_lockstep.core.changes import ChangeGuard
+
+    root.mkdir(exist_ok=True)
+    (root / "big.py").write_text("def a():\n    return 1\n\n\ndef b():\n    return 1\n")
+    return ToolRunnerImpl(workspace=Workspace(root=root, guard=ChangeGuard(), workflow_id="fix"))
+
+
+def test_edit_file_replaces_one_passage_and_stages_the_whole_file(tmp_path: Path) -> None:
+    """The seventh `/fix` on #319 spent twenty turns scripting string replacements through
+    `run_script` to avoid retyping a 30 KB file, in a worktree that was thrown away. This is the
+    tool it was reaching for."""
+    runner = _editable_tree(tmp_path / "repo")
+    answer = runner._edit(
+        {"path": "big.py", "old": "def b():\n    return 1", "new": "def b():\n    return 2"}
+    )
+    assert answer.startswith("ok:"), answer
+    (change,) = runner.workspace.changes
+    assert change.contents == "def a():\n    return 1\n\n\ndef b():\n    return 2\n"
+    assert runner.progress == 1 and runner.last_progress == "edited big.py"
+
+
+def test_edit_file_edits_the_version_this_session_already_staged(tmp_path: Path) -> None:
+    runner = _editable_tree(tmp_path / "repo")
+    runner._edit({"path": "big.py", "old": "return 1\n\n", "new": "return 10\n\n"})
+    answer = runner._edit({"path": "big.py", "old": "return 10", "new": "return 100"})
+    assert answer.startswith("ok:"), answer
+    assert "return 100" in str(runner.workspace.changes[-1].contents)
+    assert len(runner.workspace.changes) == 1, "the second edit replaced the first staging, not added to it"
+
+
+def test_edit_file_refuses_an_ambiguous_or_absent_passage_by_name(tmp_path: Path) -> None:
+    runner = _editable_tree(tmp_path / "repo")
+    assert "occurs 2 times" in runner._edit({"path": "big.py", "old": "return 1", "new": "return 2"})
+    assert "was not found" in runner._edit({"path": "big.py", "old": "return 7", "new": "return 2"})
+    assert "no file at" in runner._edit({"path": "nope.py", "old": "x", "new": "y"})
+    assert runner._edit({"path": "big.py", "old": "", "new": "y"}).startswith("error:")
+    assert runner.workspace.changes == [] and runner.progress == 0
+
+
+def test_gate_guard_1_edit_file_respects_the_guard_on_both_sides(tmp_path: Path) -> None:
+    """GATE-GUARD-1 and GATE-GUARD-4 for the edit: reading through `check_read`, staging through
+    `record`, so a protected path is refused the way `read_file` and `write_file` refuse it, and
+    a link out of the tree is not a file."""
+    root = tmp_path / "repo"
+    runner = _editable_tree(root)
+    (root / ".env").write_text("K=v\n")
+    assert runner._edit({"path": ".env", "old": "K=v", "new": "K=w"}).startswith("refused:")
+    (root / ".github").mkdir()
+    (root / ".github" / "ci.yml").write_text("on: push\n")
+    assert runner._edit({"path": ".github/ci.yml", "old": "push", "new": "pull"}).startswith("refused:")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret\n")
+    (root / "link.txt").symlink_to(outside)
+    assert "no file at" in runner._edit({"path": "link.txt", "old": "secret", "new": "x"})
+
+
+def test_gate_redact_3_an_edit_beside_a_masked_value_keeps_the_value(tmp_path: Path) -> None:
+    """The edit is made on the view the model has, and the masked values go back the way they do
+    for a rewrite; an edit that touches one is refused by count, not silently applied."""
+    runner, original = _file_with_a_key(tmp_path / "repo")
+    answer = runner._edit({"path": "test_x.py", "old": "not in shown", "new": "not in shown  # edited"})
+    assert answer.startswith("ok:") and "2 value(s)" in answer, answer
+    assert runner.workspace.changes[-1].contents == original.replace("not in shown", "not in shown  # edited")
+    touching = runner._edit({"path": "test_x.py", "old": 'registry.add("***")', "new": 'registry.add("x")'})
+    assert touching.startswith("refused:") and "mask" in touching
+
+
 @pytest.mark.parametrize("path", ["src/app.py", ".github/ci.yml", ".lockstep/lockstep.py"])
 def test_a_read_refusal_that_refused_everything_would_be_the_same_defect(tmp_path: Path, path: str) -> None:
     """The other direction, and the reason the read list is SHORTER than the write tiers.

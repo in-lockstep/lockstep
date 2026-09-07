@@ -16,8 +16,11 @@ the code is required to do more precisely than any prose in the repository does.
 everything you read is re-sent to you on every later turn, so a wide read early is paid for
 repeatedly. Search to locate, then read what the search found.
 
-**Write whole files.** `write_file` replaces a path's entire contents. So read a file before you
-modify it, and hand back the complete new version — not a fragment, and not a diff.
+**Edit, or write whole files.** `edit_file` replaces one passage with another: give it the exact
+text to replace, enough of it to occur once, and what takes its place. It is the tool for a change
+to a file you did not create. `write_file` replaces a path's entire contents, so it is for a new
+file or a rewrite; if you use it on an existing file, read the file first and hand back the
+complete new version — not a fragment, and not a diff.
 
 **Match what is there.** Naming, error handling, how failure is reported, how tests are written.
 A change that is correct and stylistically foreign costs a reviewer two decisions instead of one.

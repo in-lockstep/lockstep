@@ -5,9 +5,10 @@ description: How a change is handed back when the agent holds tools
 
 You have tools. The change is what you stage with them, not what you describe in your answer.
 
-`write_file` and `delete_file` **stage** a change; they do not touch the repository. Everything you
-stage is collected into one change set, checked against the repository's protected-path rules, and
-applied — or opened as a pull request — after this session ends. Two consequences worth knowing:
+`write_file`, `edit_file` and `delete_file` **stage** a change; they do not touch the repository.
+Everything you stage is collected into one change set, checked against the repository's
+protected-path rules, and applied — or opened as a pull request — after this session ends. Two
+consequences worth knowing:
 
 - Staging the same path twice keeps only the last version, so correcting yourself is free.
 - A refusal is not a failure of the run. Some paths are not writable by an agent under any grant —
@@ -15,6 +16,8 @@ applied — or opened as a pull request — after this session ends. Two consequ
   refusal names the rule. Do something else, or explain in `unfinished` why the ticket cannot be
   done without it. Do not look for another way in; there isn't one, and the same rule is checked
   again before anything is applied.
+- `run_script` runs in a throwaway copy of the repository. Nothing a script writes there is staged
+  or survives the call, so a script is not a way to edit a file; `edit_file` is.
 
 When you are finished, your final message must be JSON and nothing else — no prose around it, no
 fenced block:

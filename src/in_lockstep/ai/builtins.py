@@ -313,6 +313,27 @@ def read_write(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
         ),
         Tool(
             server=BUILTIN_SERVER,
+            name="edit_file",
+            description=(
+                "Replace one passage of a file with another and stage the result. `old` must occur "
+                "exactly once in the file as it currently is (your own staged version, if you have "
+                "one), so include enough surrounding lines to make it unique. Prefer this over "
+                "write_file for a change to a large file: it costs you the lines you change, not "
+                "the whole file, and it cannot drop a line you never meant to touch."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "old": {"type": "string", "description": "the exact text to replace, once"},
+                    "new": {"type": "string", "description": "what takes its place"},
+                },
+                "required": ["path", "old", "new"],
+            },
+            capabilities=frozenset({Capability.WRITES_FILES}),
+        ),
+        Tool(
+            server=BUILTIN_SERVER,
             name="delete_file",
             description="Stage a deletion. Applied after the run, not immediately.",
             parameters={
@@ -443,6 +464,7 @@ class ToolRunnerImpl:
             "list_files": self._list,
             "search_text": self._search,
             "write_file": self._write,
+            "edit_file": self._edit,
             "delete_file": self._delete,
             "run_script": self._script,
             "run_tests": self._tests,
@@ -599,6 +621,61 @@ class ToolRunnerImpl:
         if answer.startswith("ok:"):
             self._advance(f"wrote {path}")
         return answer
+
+    def _edit(self, args: dict[str, object]) -> str:
+        """One passage for another, staged as the whole file.
+
+        The seventh `/fix` on this repository's own #319 had its fix worked out and spent twenty
+        turns trying to put it into a 30 KB file without retyping the file: the only write was
+        `write_file`, which takes whole contents, so it scripted string replacements through
+        `run_script`, whose worktree is thrown away (#337). A targeted edit is the tool it was
+        reaching for. The replacement is done on the VIEW the model has -- the file as the
+        redacting sink shows it -- and `Workspace.record` puts the masked values back, so an
+        edit near a key-shaped string works the same way a rewrite does (GATE-REDACT-3), and an
+        edit that touches one is refused there by count.
+        """
+        path = str(args.get("path", ""))
+        old, new = str(args.get("old", "")), str(args.get("new", ""))
+        if not old:
+            return "error: edit_file needs a non-empty `old`; to write a new file, use write_file"
+        current = self._current(path)
+        if current is None:
+            return f"error: no file at {path} to edit; write_file creates one"
+        if isinstance(current, str) and current.startswith("refused:"):
+            return current
+        view = self.workspace.redact.text(current)
+        count = view.count(old)
+        if count == 0:
+            return (
+                f"error: `old` was not found in {path} as it currently is. Read the file again and "
+                f"copy the passage exactly, whitespace included."
+            )
+        if count > 1:
+            return (
+                f"error: `old` occurs {count} times in {path}; include more surrounding lines so it "
+                f"occurs once"
+            )
+        answer = self.workspace.record(path, view.replace(old, new, 1))
+        if answer.startswith("ok:"):
+            self._advance(f"edited {path}")
+        return answer
+
+    def _current(self, path: str) -> str | None:
+        """The file as this session sees it: its own staged version if it has one, else the disk,
+        through the same read refusals `read_file` applies. None when there is nothing there."""
+        for change in reversed(self.workspace.changes):
+            if change.path == path:
+                return change.contents
+        refusal = self.workspace.guard.check_read(path)
+        if refusal is not None:
+            return f"refused: {path} is protected ({refusal.rule})"
+        target = self.workspace.resolve(path)
+        if not target.is_file() or not self.workspace.inside(target):
+            return None
+        try:
+            return target.read_text()
+        except (OSError, UnicodeDecodeError):
+            return None
 
     def _delete(self, args: dict[str, object]) -> str:
         path = str(args.get("path", ""))
