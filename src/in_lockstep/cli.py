@@ -5481,11 +5481,21 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: boo
         click.echo(f"  mkdir -p .lockstep && git mv {LEGACY_MODULE_FILE} {MODULE_FILE}")
         raise SystemExit(EXIT_FAILED)
 
+    detected = Lockstep.detect()
+    root = Path(detected.repo.root).resolve()
+    if root in Path.cwd().resolve().parents:
+        # Detection read the root and this command writes where it stands; the two have to be
+        # one place, or a module is scaffolded from one directory's facts into a subdirectory
+        # (#316). Only a working directory INSIDE the root is refused: on a runner detection
+        # prefers GITHUB_WORKSPACE, which a scratch directory is not under at all.
+        click.echo(f"run init at the repository root: detection read {root}, and that is where")
+        click.echo("the module and the trampolines are written")
+        raise SystemExit(EXIT_FAILED)
+    facts = detected.repo.facts
     module = Path(MODULE_FILE)
     if module.exists() and not force:
         click.echo(f"{MODULE_FILE} exists (use --force to overwrite)")
     else:
-        facts = Lockstep.detect().repo.facts
         module.parent.mkdir(parents=True, exist_ok=True)
         module.write_text(_scaffold_module(facts))
         click.echo(f"wrote {MODULE_FILE}")
@@ -5509,24 +5519,36 @@ def init_cmd(force: bool, with_implement: bool, with_fix: bool, with_review: boo
     from .platform.hosted import detect_host
 
     host = detect_host()
+    # The provider each trampoline installs and guards on is the one the module routes the verb
+    # to, read now that the module exists; a module with no route gets the CLI's own default.
+    try:
+        configured, _recorder = _default_lockstep()
+    except Exception:  # noqa: BLE001 - a module this cannot load still gets a trampoline for the default
+        configured = None
     if host == "gitlab":
-        if _write_trampoline(Path(".gitlab-ci.yml"), _SCAFFOLD_GITLAB_TRAMPOLINE):
+        if _write_trampoline(
+            Path(".gitlab-ci.yml"), _SCAFFOLD_GITLAB_TRAMPOLINE, provider=_provider_for(configured, "review")
+        ):
             click.echo("")
             click.echo("One active job, because reviewing is read-only. The gate/work/propose split")
             click.echo("for write-capable verbs is in the same file and active -- inert until a")
             click.echo("pipeline runs with LOCKSTEP_ISSUE set on the default branch. The file says")
             click.echo("which credential each job needs; docs/trampoline.md is the contract.")
-    elif _write_trampoline(Path(".github/workflows/lockstep.yml"), _SCAFFOLD_TRAMPOLINE):
+    elif _write_trampoline(
+        Path(".github/workflows/lockstep.yml"),
+        _SCAFFOLD_TRAMPOLINE,
+        provider=_provider_for(configured, "review"),
+    ):
         click.echo("")
         click.echo("One job, because reviewing is read-only. Add the privileged `apply` job the")
         click.echo("day a verb of yours produces a change to write; the file says where.")
 
     if with_implement:
-        _scaffold_implement(module, host=host)
+        _scaffold_implement(module, facts, provider=_provider_for(configured, "implement"), host=host)
     if with_fix:
-        _scaffold_fix(module, host=host)
+        _scaffold_fix(module, facts, provider=_provider_for(configured, "fix"), host=host)
     if with_review:
-        _scaffold_review(host=host)
+        _scaffold_review(provider=_provider_for(configured, "review"), host=host)
 
     _disclose_what_a_run_keeps()
 
@@ -5617,7 +5639,7 @@ def _disclose_what_a_run_keeps() -> None:
     click.echo("  Run records are the exception and are meant to survive: an orphan branch.")
 
 
-def _write_trampoline(path: Path, template: str) -> bool:
+def _write_trampoline(path: Path, template: str, *, provider: str = "anthropic") -> bool:
     """Write a CI trampoline once, pinning the framework version. Returns whether it wrote.
 
     The version writing the scaffold is the version the scaffold installs: unpinned, every
@@ -5629,9 +5651,131 @@ def _write_trampoline(path: Path, template: str) -> bool:
         click.echo(f"{path} exists — left alone, deliberately")
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(template.replace("IN_LOCKSTEP_VERSION", __version__))
+    path.write_text(_render_trampoline(template, provider))
     click.echo(f"wrote {path}")
     return True
+
+
+#: What a trampoline needs to run a route at a provider: the extra that installs its SDK, and the
+#: secrets the job is guarded on and handed, first one first. Every trampoline used to name
+#: `anthropic` and `ANTHROPIC_API_KEY` outright, so a module routing review to Bedrock got a
+#: green check that never reviewed (#316). A provider not listed here is refused by name at
+#: `init` rather than scaffolded with a guard that would skip forever (O11).
+_PROVIDER_CI: dict[str, tuple[str, tuple[str, ...]]] = {
+    "anthropic": ("anthropic", ("ANTHROPIC_API_KEY",)),
+    "bedrock": ("bedrock", ("AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "AWS_REGION")),
+    "vertex": ("google", ("GOOGLE_APPLICATION_CREDENTIALS",)),
+    "gemini": ("google", ("GOOGLE_APPLICATION_CREDENTIALS",)),
+}
+
+
+def _ci_recipe(provider: str) -> tuple[str, tuple[str, ...]]:
+    """The extra and the secrets a trampoline for `provider` carries, or a refusal naming it."""
+    recipe = _PROVIDER_CI.get(provider)
+    if recipe is None:
+        known = ", ".join(sorted(_PROVIDER_CI))
+        raise click.ClickException(
+            f"init cannot write a CI trampoline for a route to {provider!r}: it does not know which "
+            f"extra installs that provider or which secret carries its credential (known: {known}). "
+            f"Route CI at one of those, or write the trampoline by hand from docs/trampoline.md."
+        )
+    return recipe
+
+
+def _render_trampoline(template: str, provider: str) -> str:
+    """The template with its version and provider placeholders filled.
+
+    `IN_LOCKSTEP_SECRET` on a line of its own inside an `env:` block is the credential handed to
+    the step, and becomes one line per secret the recipe names, at the same indentation; every
+    other occurrence -- the guard, the skip message -- is the first secret's name.
+    """
+    extra, secrets = _ci_recipe(provider)
+    out: list[str] = []
+    for line in template.replace("IN_LOCKSTEP_VERSION", __version__).splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped in ("IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}",):
+            indent = line[: len(line) - len(line.lstrip())]
+            out.extend(f"{indent}{name}: ${{{{ secrets.{name} }}}}\n" for name in secrets)
+            continue
+        out.append(line.replace("IN_LOCKSTEP_EXTRA", extra).replace("IN_LOCKSTEP_SECRET", secrets[0]))
+    return "".join(out)
+
+
+def _provider_for(lockstep: Any, verb: str) -> str:
+    """The provider a scaffolded trampoline for `verb` runs at: the module's route, else the
+    default the CLI itself would choose for the verb."""
+    from .ai.bootstrap import Model, routed_model
+
+    routes = dict(getattr(getattr(lockstep, "models", None), "routes", None) or {})
+    routed = routed_model(routes, verb) if routes else ""
+    return Model(routed).provider if routed else "anthropic"
+
+
+#: The container a write verb's `run_script` and suite run in, by the one stack detection found.
+#: One stack, because a repository that is two is one nobody can pick a base image for.
+_STACK_IMAGES = {
+    "python": "docker.io/library/python:3.12-slim",
+    "node": "docker.io/library/node:22-slim",
+    "go": "docker.io/library/golang:1.23",
+    "rust": "docker.io/library/rust:1-slim",
+    "jvm": "docker.io/library/eclipse-temurin:21",
+}
+
+
+def _sandbox_image(facts: Any) -> str:
+    """The image to scaffold, or `""` when nothing here says which: a Dockerfile (the repository
+    already states its environment, and the image it builds is not a name detection can know), a
+    stack of two, or no stack at all. `python:3.12-slim` for every stack was a Node repository
+    getting a `run_script` container with no toolchain (#316)."""
+    if getattr(facts, "dockerfile", False):
+        return ""
+    return _STACK_IMAGES.get(str(getattr(facts, "stack", "") or ""), "")
+
+
+def _verb_config(template: str, facts: Any, *, guarded: bool) -> str:
+    """A write verb's module block, fitted to what detection found: the Test line the plain
+    scaffold writes (a stub when nothing was placed), and a workshop whose image is derived or
+    a stub saying why not."""
+    imports: list[str] = ["Test"]
+    test_bind = _bind_line(facts, "Test", imports)
+    if test_bind.startswith("lockstep.bind(Test,"):
+        # The plain scaffold already wrote this line above; repeating it would rebind. `startswith`,
+        # because the stub's own example line is a commented `lockstep.bind(Test, ...)`.
+        test_bind = "# Test is bound above, from what detection found (`in-lockstep ls` prints it)."
+    image = _sandbox_image(facts)
+    if image:
+        # Two lines at two positions, because ruff's isort sorts `in_lockstep` before
+        # `in_lockstep.adapters.ai` and `adapters.sandbox` after it, and the adopter's own
+        # Validate checks the file `init` just wrote.
+        workshop_import = "from in_lockstep import Workshop\n"
+        sandbox_import = "from in_lockstep.adapters.sandbox import Sandbox\n"
+        workshop = f'Workshop(commands=Sandbox(image="{image}", require_container=True))'
+        lines = f"lockstep.workshop = {workshop}"
+        if guarded:
+            lines = f"if lockstep.workshop.commands is None:\n    lockstep.workshop = {workshop}"
+    else:
+        why = (
+            "a Dockerfile is here, and the image it builds is yours to name"
+            if getattr(facts, "dockerfile", False)
+            else f"the detected stack is {getattr(facts, 'stack', '') or 'nothing detection recognises'}"
+        )
+        workshop_import = sandbox_import = ""
+        lines = (
+            f"# No container image was derived: {why}.\n"
+            f"# Until one is named, `run_script` is declared and withheld, and the suite is not run\n"
+            f"# over a staged change. Bind one:\n"
+            f"#   from in_lockstep import Workshop\n"
+            f"#   from in_lockstep.adapters.sandbox import Sandbox\n"
+            f"#   lockstep.workshop = Workshop(\n"
+            f'#       commands=Sandbox(image="ghcr.io/you/ci:tag", require_container=True)\n'
+            f"#   )"
+        )
+    return (
+        template.replace("__WORKSHOP_IMPORT__", workshop_import)
+        .replace("__SANDBOX_IMPORT__", sandbox_import)
+        .replace("__WORKSHOP__", lines)
+        .replace("__TEST_BIND__", test_bind)
+    )
 
 
 def _binds_lockstep(text: str) -> bool:
@@ -5763,11 +5907,8 @@ def _without_duplicate_definitions(existing: str, block: str) -> str:
     return "".join(line for i, line in enumerate(lines) if i not in drop)
 
 
-_SCAFFOLD_IMPLEMENT_CONFIG = """from in_lockstep import Workshop
-from in_lockstep.adapters.ai import Oneshot
-from in_lockstep.adapters.pytest_adapter import PytestTest, Test
-from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.middleware.approval import ApprovalGate
+_SCAFFOLD_IMPLEMENT_CONFIG = """__WORKSHOP_IMPORT__from in_lockstep.adapters.ai import Oneshot
+__SANDBOX_IMPORT__from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
@@ -5812,9 +5953,7 @@ lockstep.middleware += [ApprovalGate()]
 # answer to "how does implementing happen here". Swap `Oneshot` for `TDD` to require
 # red-then-green. The model comes from the `models.route("implement", ...)` line above; the
 # invoker is assembled per run, so no factory is threaded here.
-lockstep.workshop = Workshop(
-    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
-)
+__WORKSHOP__
 lockstep.use(Oneshot)
 
 # Test runs after the change is staged — against a throwaway worktree of HEAD plus the change — and
@@ -5825,13 +5964,12 @@ lockstep.use(Oneshot)
 # pass `Sandbox(image=..., require_container=True)` here too — the same trade the note below draws
 # for run_script.
 #
-# Guarded, like every binding the /fix block appends. The section above this one binds whatever
-# detection found — `CommandTest(["npm", "test"])` on a Node repository — and an unguarded bind
-# here replaced it without a word, so `ls` printed `Test -> PytestTest` and the implement flow ran
-# pytest against a repository that has none. Pytest is the fallback for the case detection placed
-# nothing, so the flow still has a runner; a repository with a runner keeps the one it has.
-if not lockstep.container.has(Test):
-    lockstep.bind(Test, PytestTest())
+# Nothing is bound here. The section above binds whatever detection found -- `CommandTest(["npm",
+# "test"])` on a Node repository -- and this block used to fall back to pytest when it found
+# nothing, which was a runner invented for a stack detection could not place: the wrong default
+# that runs. A verdict over no runner is "unverified", which is honest, and the stub below says
+# how to bind one.
+__TEST_BIND__
 
 # EGRESS, and read this before shipping the implement verb. The review scaffold above already
 # bound `UnsandboxedEgress`, and that binding is global — so this implementing verb inherits it,
@@ -5849,11 +5987,8 @@ if not lockstep.container.has(Test):
 
 """
 
-_SCAFFOLD_FIX_CONFIG = """from in_lockstep import Workshop
-from in_lockstep.adapters.ai import DiagnoseThenFix
-from in_lockstep.adapters.pytest_adapter import PytestTest, Test
-from in_lockstep.adapters.sandbox import Sandbox
-from in_lockstep.middleware.approval import ApprovalGate
+_SCAFFOLD_FIX_CONFIG = """__WORKSHOP_IMPORT__from in_lockstep.adapters.ai import DiagnoseThenFix
+__SANDBOX_IMPORT__from in_lockstep.middleware.approval import ApprovalGate
 from in_lockstep.platform.hosted import hosted_scm, hosted_tickets
 from in_lockstep.platform.scm import Scm
 from in_lockstep.platform.tickets import TicketSource
@@ -5865,16 +6000,17 @@ from in_lockstep.platform.tickets import TicketSource
 
 
 # Each binding is guarded, so this block works on its own and also composes with the implement
-# scaffold without binding TicketSource, Scm, Test or the approval gate a second time. `hosted_*`
+# scaffold without binding TicketSource, Scm or the approval gate a second time. `hosted_*`
 # bind the detected host's adapters — GitHub or GitLab — so the block runs unedited on either.
+# Test is not bound here: the section above binds what detection found, and a runner detection
+# could not place is not invented (the stub below says how to bind one).
 if not lockstep.container.has(TicketSource):
     lockstep.bind(TicketSource, hosted_tickets())
 if not lockstep.container.has(Scm):
     lockstep.bind(Scm, hosted_scm())
-if not lockstep.container.has(Test):
-    lockstep.bind(Test, PytestTest())
 if not any(getattr(m, "provides_approval", False) for m in lockstep.middleware):
     lockstep.middleware += [ApprovalGate()]
+__TEST_BIND__
 
 lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 
@@ -5883,10 +6019,7 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # .git/.lockstep past ChangeGuard.
 # The strategy IS the adapter: `ls` prints `Fix -> DiagnoseThenFix`. The model comes from the
 # `models.route("fix", ...)` line above; the invoker is assembled per run.
-if lockstep.workshop.commands is None:
-    lockstep.workshop = Workshop(
-        commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True)
-    )
+__WORKSHOP__
 lockstep.use(DiagnoseThenFix)
 
 """
@@ -5914,7 +6047,7 @@ from in_lockstep.workflows import {family} as {family}_workflows
 """
 
 
-def _scaffold_implement(module: Path, *, host: str = "") -> None:
+def _scaffold_implement(module: Path, facts: Any, *, provider: str, host: str = "") -> None:
     """The `/implement` chat-ops flow: a three-job trampoline, and the two workflows it fires.
 
     The headline feature used to require reverse-engineering this repository's own trampoline.
@@ -5928,9 +6061,12 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
         click.echo("        branch. Scope their credentials first; the file says which.")
     else:
-        _write_trampoline(Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE)
+        _write_trampoline(
+            Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE, provider=provider
+        )
 
     text = module.read_text() if module.exists() else ""
+    config = _verb_config(_SCAFFOLD_IMPLEMENT_CONFIG, facts, guarded=False)
     # The old id is checked too: a module scaffolded before the `from-ticket` rename already has
     # the block, and appending a second copy would register duplicate workflows.
     if "implement/from-ticket" in text or "implement/from-issue" in text:
@@ -5947,7 +6083,7 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
         click.echo("`in-lockstep init --implement` in a fresh directory to see it.")
     else:
         tail = REGISTER_TAIL.format(family="implement")
-        block = _SCAFFOLD_IMPLEMENT_CONFIG + _without_duplicate_imports(_SCAFFOLD_IMPLEMENT_CONFIG, tail)
+        block = config + _without_duplicate_imports(config, tail)
         merged = text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         try:
             # Never leave a module that will not import: a bad append breaks every later command,
@@ -5960,16 +6096,25 @@ def _scaffold_implement(module: Path, *, host: str = "") -> None:
             click.echo(f"extended {module} with implement/from-ticket and implement/propose")
 
     click.echo("")
-    click.echo("Three things make it real:")
-    click.echo("  1. Set the ANTHROPIC_API_KEY repository secret.")
-    click.echo("  2. Optionally add required reviewers to the `implement` environment in repository")
+    click.echo("Things to decide before it runs:")
+    click.echo(f"  1. Set the {_ci_recipe(provider)[1][0]} repository secret; the trampoline guards on it.")
+    click.echo("  2. Set the IN_LOCKSTEP_ORG_SPEND_LIMIT repository variable to the cap you set in the")
+    click.echo("     provider console: `doctor` is a required step and refuses without it.")
+    image = _sandbox_image(facts)
+    if image:
+        click.echo(f"  3. The sandbox image is {image}, derived from the detected stack; change it if")
+        click.echo("     the suite needs more than the base image carries.")
+    else:
+        click.echo("  3. Name the container image `run_script` and the suite run in; the appended block")
+        click.echo("     says why none was derived and where the line goes.")
+    click.echo("  4. Optionally add required reviewers to the `implement` environment in repository")
     click.echo("     settings — that makes the propose job an approval in the system of record.")
-    click.echo("  3. Read the EGRESS note in the appended block: the review scaffold's")
+    click.echo("  5. Read the EGRESS note in the appended block: the review scaffold's")
     click.echo("     UnsandboxedEgress binding is global, so this write-capable verb inherits it.")
     click.echo("     The comment names what still bounds a session, and how to enforce egress.")
 
 
-def _scaffold_fix(module: Path, *, host: str = "") -> None:
+def _scaffold_fix(module: Path, facts: Any, *, provider: str, host: str = "") -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
     `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
@@ -5982,10 +6127,13 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         click.echo("        inert until a pipeline runs with LOCKSTEP_ISSUE on the default")
         click.echo("        branch. Scope their credentials first; the file says which.")
     else:
-        _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE)
-        _write_trampoline(Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE)
+        _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE, provider=provider)
+        _write_trampoline(
+            Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE, provider=provider
+        )
 
     text = module.read_text() if module.exists() else ""
+    config = _verb_config(_SCAFFOLD_FIX_CONFIG, facts, guarded=True)
     # The old id is checked too — see `_scaffold_implement`.
     if "fix/from-ticket" in text or "fix/from-issue" in text:
         click.echo(f"{module} already defines fix/from-ticket — left alone")
@@ -5994,7 +6142,7 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
         click.echo("Run `in-lockstep init --fix` in a fresh directory to see the block.")
     else:
         tail = REGISTER_TAIL.format(family="fix")
-        block = _SCAFFOLD_FIX_CONFIG + _without_duplicate_imports(_SCAFFOLD_FIX_CONFIG, tail)
+        block = config + _without_duplicate_imports(config, tail)
         merged = text + _without_duplicate_definitions(text, _without_duplicate_imports(text, block))
         try:
             compile(merged, str(module), "exec")
@@ -6005,7 +6153,7 @@ def _scaffold_fix(module: Path, *, host: str = "") -> None:
             click.echo(f"extended {module} with fix/from-ticket and fix/propose")
 
 
-def _scaffold_review(*, host: str = "") -> None:
+def _scaffold_review(*, provider: str, host: str = "") -> None:
     """The `/review <lens>` chat-ops flow: a three-job trampoline, and nothing appended to the
     module.
 
@@ -6027,7 +6175,9 @@ def _scaffold_review(*, host: str = "") -> None:
         click.echo("        request is `in-lockstep review --aspect <lens>`, locally or from a")
         click.echo("        pipeline run with variables, the way the work job takes LOCKSTEP_ISSUE.")
         return
-    if _write_trampoline(Path(".github/workflows/review.yml"), _SCAFFOLD_REVIEW_TRAMPOLINE):
+    if _write_trampoline(
+        Path(".github/workflows/review.yml"), _SCAFFOLD_REVIEW_TRAMPOLINE, provider=provider
+    ):
         click.echo("")
         click.echo("Three jobs, because posting is a write: `gate` holds no credential, `review`")
         click.echo("holds the provider key and reads, `post` holds the write token and no provider")
@@ -6105,8 +6255,10 @@ def _bind_line(facts: Any, verb: str, imports: list[str]) -> str:
     default that runs unbidden and no name imported but unused."""
     if verb == "Test":
         if getattr(facts, "pytest", False):
+            from .adapters.detected import PYTEST_ARGS
+
             imports.append("PytestTest")
-            return 'lockstep.bind(Test, PytestTest(args=["-q"]))'
+            return f"lockstep.bind(Test, PytestTest(args={list(PYTEST_ARGS)!r}))"
         if getattr(facts, "test_command", ()):
             imports.append("CommandTest")
             return f"lockstep.bind(Test, CommandTest({list(facts.test_command)!r}))"
@@ -6209,14 +6361,18 @@ jobs:
         # No credential here: doctor reads config from the trusted base ref, so it never executes
         # the change under review, and giving the key to a step that does not call a model just
         # widens where it can leak.
-        run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
-        continue-on-error: true
+        run: uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        # Not `continue-on-error`: a verdict nothing acts on is a diagnostic nobody reads. What
+        # it checks first is the provider-side spend cap you set in the console, attested here as
+        # a repository variable; without it this step is red, on purpose.
+        env:
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       - name: Review
         # Skipped without a credential rather than failed: a pull request from a fork gets no
         # secrets, and a red check the contributor cannot fix teaches everyone to ignore red.
         # The `secrets` context reads in a step `if`, which keeps the key scoped to this one step
         # instead of every step in the job.
-        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: ${{ secrets.IN_LOCKSTEP_SECRET != '' }}
         # `security` is one of four shipped lenses; `intent`, `performance` and `tests` are the
         # others, and `--aspect <name>` runs any of them. One is scaffolded rather than four
         # because each is a real model call against the ceiling below, so four lenses is four
@@ -6225,7 +6381,7 @@ jobs:
         # any your own `AiReview(lenses=...)` added, which is the same list `/review <aspect>`
         # resolves against.
         run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep review \
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep review \
             --base "origin/${GITHUB_BASE_REF}" \
             --head "${GITHUB_SHA}" \
             --aspect security \
@@ -6233,7 +6389,7 @@ jobs:
             --record \
             --cassette "${RUNNER_TEMP}/review.json"
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.
           # Leave it unset unless your key is identity-linked; empty sends no header.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
@@ -6248,18 +6404,18 @@ jobs:
       #
       # Delete both steps if you would rather keep nothing. Nothing else depends on them.
       - name: Harvest what the review recorded
-        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: ${{ secrets.IN_LOCKSTEP_SECRET != '' }}
         # Harvest refuses rather than inventing, so a recording it cannot build a case from exits
         # non-zero. That is right for harvest and the wrong reason to fail somebody's review.
         continue-on-error: true
         run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \
             --from "${RUNNER_TEMP}/review.json" \
             --into .lockstep/cases \
             --family review
       - name: No provider credential
-        if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
-        run: echo "no ANTHROPIC_API_KEY (fork pull request?) — review skipped, nothing failed"
+        if: ${{ secrets.IN_LOCKSTEP_SECRET == '' }}
+        run: echo "no IN_LOCKSTEP_SECRET (fork pull request?) — review skipped, nothing failed"
       # `review` is read-only and this job has `contents: read`, so it cannot publish its own
       # record. The bundle carries it out, and `publish` below pushes it.
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
@@ -6346,13 +6502,15 @@ review:
     # Full history: the review diffs base...head, which a shallow clone cannot resolve.
     GIT_DEPTH: "0"
   script:
-    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+    - pip install --quiet 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION'
     # The target branch is not fetched by default on a merge-request pipeline, and the trusted
     # config ref and the diff base both live on it.
     - git fetch --quiet origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     # No credential needed: doctor reads config from the trusted target ref, so it never executes
-    # the change under review.
-    - in-lockstep doctor || true
+    # the change under review. Not `|| true`: a verdict nothing acts on is a diagnostic nobody
+    # reads, and the first thing it checks is IN_LOCKSTEP_ORG_SPEND_LIMIT, a CI variable
+    # attesting the spend cap you set in the provider console.
+    - in-lockstep doctor
     # Skipped without a credential rather than failed: a merge request from a fork gets no
     # protected variables, and a red check the contributor cannot fix teaches everyone to
     # ignore red.
@@ -6363,15 +6521,14 @@ review:
     # gitignores and the artifact keeps for the stated number of days. Delete the two lines if
     # you would rather keep nothing; nothing else depends on them.
     #
-    # `|| true` on the harvest for the reason `doctor` has it: harvest refuses rather than
-    # inventing, so a recording it cannot build a case from exits non-zero, and that is the wrong
-    # reason to fail somebody's review.
+    # `|| true` on the harvest: harvest refuses rather than inventing, so a recording it cannot
+    # build a case from exits non-zero, and that is the wrong reason to fail somebody's review.
     - |
       # `security` is one of four shipped lenses; `intent`, `performance` and `tests` are the
       # others, and `--aspect <name>` runs any of them. One is scaffolded rather than four
       # because each is a real model call against the ceiling below. `in-lockstep ls` prints the
       # lenses your module actually has, including any of your own.
-      if [ -n "$ANTHROPIC_API_KEY" ]; then
+      if [ -n "$IN_LOCKSTEP_SECRET" ]; then
         in-lockstep review \\
           --base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \\
           --head "${CI_COMMIT_SHA}" \\
@@ -6384,7 +6541,7 @@ review:
           --into .lockstep/cases \\
           --family review || true
       else
-        echo "no ANTHROPIC_API_KEY (fork merge request?) — review skipped, nothing failed"
+        echo "no IN_LOCKSTEP_SECRET (fork merge request?) — review skipped, nothing failed"
       fi
   artifacts:
     when: always
@@ -6413,7 +6570,7 @@ review:
 # Before the first run: create environments `lockstep-work` and `lockstep-propose`; then SCOPE
 # the credentials — GitLab's default variable scope is every environment, and an unscoped
 # variable quietly puts both credentials in both jobs, which unmakes the split without any
-# visible failure. Scope ANTHROPIC_API_KEY and a read-only project access token (read_api, as
+# visible failure. Scope IN_LOCKSTEP_SECRET and a read-only project access token (read_api, as
 # GITLAB_TOKEN — what `permissions: issues: read` is on GitHub, so from-ticket can fetch the
 # issue on a private project) to lockstep-work; scope a write-capable project access token
 # (api, as GITLAB_TOKEN) to lockstep-propose; mark lockstep-propose protected with required
@@ -6447,7 +6604,7 @@ work:
   # Honest about the half this repository cannot test: whether a federation rule can be created
   # for a GitLab issuer is a question for the provider, and this repository is GitHub-hosted, so
   # it has never performed this exchange. If it is not available to you, delete these three lines
-  # and scope ANTHROPIC_API_KEY to lockstep-work instead. The run is identical either way, and a
+  # and scope IN_LOCKSTEP_SECRET to lockstep-work instead. The run is identical either way, and a
   # long-lived key in a scoped, protected variable is a real position rather than a fallback.
   id_tokens:
     ANTHROPIC_IDENTITY_TOKEN:
@@ -6463,15 +6620,15 @@ work:
   variables:
     GIT_DEPTH: "0"
   script:
-    - pip install --quiet 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION'
+    - pip install --quiet 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION'
     # The repository's own environment, before anything runs in it; docs/trampoline.md says why
     # this runs here and never in review. Not `|| true`: an environment that could not be built
     # is this job's failure, named.
     - in-lockstep provision
-    - in-lockstep doctor || true
+    - in-lockstep doctor
     - |
       in-lockstep run implement/from-ticket --arg ticket="#${LOCKSTEP_ISSUE}" \\
-        --approved-by "${GITLAB_USER_LOGIN}" --budget 2.00
+        --approved-by "${GITLAB_USER_LOGIN}"
     - in-lockstep history --bundle history.bundle || true
   artifacts:
     when: always
@@ -6610,23 +6767,29 @@ jobs:
       # lockstep.yml, whose checkout is the change under review and whose install hooks must not
       # run beside a token; never in propose, whose commit would sweep in what an install wrote.
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
-      - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
-        continue-on-error: true
+      - run: uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        # Not `continue-on-error`: a verdict nothing acts on is a diagnostic nobody reads. What
+        # it checks first is the provider-side spend cap you set in the console, attested here as
+        # a repository variable; without it this step is red, on purpose.
+        env:
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       # The same command a developer runs, with `--approved-by` where they would type
       # `--approve`. The process does not change when it moves from a terminal to a trigger —
-      # only who the human is and how they were verified.
+      # only who the human is and how they were verified. No `--budget`: the ceiling is
+      # `lockstep.budget` in the module, and a flag here would replace it rather than merge with
+      # it, so the number in force and the number in the diff would differ and nothing would say.
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run implement/from-ticket \\
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' \\
+            in-lockstep run implement/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
-            --budget 2.00 \
             --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           # A name GitHub computed and the gate verified, not one the comment claimed.
           ACTOR: ${{ needs.gate.outputs.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
       # The record this run made lives in THIS runner's .git and dies with it. It travels as a
@@ -6777,19 +6940,22 @@ jobs:
       # lockstep.yml, whose checkout is the change under review and whose install hooks must not
       # run beside a token; never in propose, whose commit would sweep in what an install wrote.
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
-      - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
-        continue-on-error: true
+      - run: uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        # Not `continue-on-error`: a verdict nothing acts on is a diagnostic nobody reads. What
+        # it checks first is the provider-side spend cap you set in the console, attested here as
+        # a repository variable; without it this step is red, on purpose.
+        env:
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "${ACTOR}" \\
-            --budget 3.00 \
             --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           ACTOR: ${{ needs.gate.outputs.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
         if: always()
@@ -6911,21 +7077,24 @@ jobs:
       # lockstep.yml, whose checkout is the change under review and whose install hooks must not
       # run beside a token; never in propose, whose commit would sweep in what an install wrote.
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep provision
-      - run: uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep doctor
-        continue-on-error: true
+      - run: uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep doctor
+        # Not `continue-on-error`: a verdict nothing acts on is a diagnostic nobody reads. What
+        # it checks first is the provider-side spend cap you set in the console, attested here as
+        # a repository variable; without it this step is red, on purpose.
+        env:
+          IN_LOCKSTEP_ORG_SPEND_LIMIT: ${{ vars.IN_LOCKSTEP_ORG_SPEND_LIMIT }}
       # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when the
       # framework opened the follow-up. The grant is the write-gated label, not a comment.
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep run fix/from-ticket \\
             --arg ticket="#${ISSUE}" \\
             --approved-by "labeled:${LABELER}" \\
-            --budget 3.00 \
             --record
         env:
           ISSUE: ${{ github.event.issue.number }}
           LABELER: ${{ github.event.sender.login }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
       - run: uvx --from 'in-lockstep==IN_LOCKSTEP_VERSION' in-lockstep history --bundle history.bundle
         if: always()
@@ -7096,7 +7265,7 @@ jobs:
       # `--comment-out` writes the comment body for the NEXT job to post: the job that called the
       # model must not also hold the token that writes the repository.
       - run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep review \\
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep review \\
             --ask "$BODY" --pr "$ISSUE" --comment-out findings.md \\
             --record --cassette "${RUNNER_TEMP}/review-${ISSUE}.json"
         env:
@@ -7105,7 +7274,7 @@ jobs:
           # `gh` reads this to ask the host for the pull request's refs. The read token, not a
           # write one: this job's `permissions` above are what bound it.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_LOCKSTEP_SECRET: ${{ secrets.IN_LOCKSTEP_SECRET }}
           # A variable rather than a secret: a workspace id identifies, it does not authenticate.
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
       # Recording is ON. The tape stays in RUNNER_TEMP and dies with the runner; what survives is
@@ -7116,7 +7285,7 @@ jobs:
         # non-zero. That is right for harvest and the wrong reason to fail somebody's review.
         continue-on-error: true
         run: |
-          uvx --from 'in-lockstep[anthropic]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \\
+          uvx --from 'in-lockstep[IN_LOCKSTEP_EXTRA]==IN_LOCKSTEP_VERSION' in-lockstep eval harvest \\
             --from "${RUNNER_TEMP}/review-${ISSUE}.json" \\
             --into .lockstep/cases \\
             --family review

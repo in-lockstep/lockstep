@@ -27,6 +27,12 @@ from .command import (
 from .pytest_adapter import PytestTest, Test
 from .ruff_adapter import RuffValidate, Validate
 
+#: The arguments the drop-in pytest binding runs with, and the ones `init` writes into the module
+#: it scaffolds -- one constant, because the two disagreed for as long as each spelled its own
+#: (`["-q"]` in the scaffold, `["-q", "--no-header"]` here) while this file's docstring said they
+#: agreed (#316).
+PYTEST_ARGS: tuple[str, ...] = ("-q", "--no-header")
+
 
 def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     """The `(interface, implementation)` pairs a repository's detected parts imply. Empty when
@@ -50,7 +56,7 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
         out.append((Provision, CommandProvision(facts.provision_commands)))
 
     if facts.pytest:
-        out.append((Test, PytestTest(args=["-q", "--no-header"])))
+        out.append((Test, PytestTest(args=list(PYTEST_ARGS))))
     elif facts.test_command:
         out.append((Test, CommandTest(facts.test_command)))
 

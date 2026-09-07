@@ -302,7 +302,14 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: and `improve --explain` says where a body the loop may propose to lives when a tier-1 path
 #: refuses. What a body resolves to, and where a house one lives, live in `ai/prompt.py` and the
 #: guard, where `test_prompt_composition.py` and `test_cli.py`'s guard test reach them.
-CLI_HELPER_STATEMENTS = 1032
+#: 1032 -> 1086 with #316, composing and rendering: `_render_trampoline` fills a trampoline's
+#: provider placeholders from `_ci_recipe`'s table, `_provider_for` reads the verb's route off the
+#: module, `_verb_config` fits a write-verb block to what detection found, `_sandbox_image` maps
+#: the one detected stack to an image, and `init` refuses outside the root and names what to
+#: decide. What detection finds -- the lint script, the lockfiles, the manifests one level down --
+#: lives in `lockstep.py` and `core/context.py`, where `test_detect.py` reaches it without a
+#: CliRunner.
+CLI_HELPER_STATEMENTS = 1086
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
