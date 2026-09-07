@@ -95,9 +95,10 @@ class InvokePolicy:
     # suite for this many turns in a row is not getting anywhere, and every one of those turns
     # resends the whole history: five `/fix` runs on this repository's own #319 staged a correct
     # fix in 68 turns once and spent 159 and 161 turns twice, ending at the wall ceiling both
-    # times. Twenty, because the third of those runs read for most of its turns before it wrote
-    # and was right to; a reading phase at the start is not cut off, a reading phase that never
-    # ends is. `under` takes the lower of this and what the policy stack contributed.
+    # times. Twenty after the first write; twice that before it, because a session has to read
+    # before it can write and the sixth run was cut off at 20 turns still reading. A reading
+    # phase at the start is not cut off, a reading phase that never ends is. `under` takes the
+    # lower of this and what the policy stack contributed.
     max_idle_turns: int = 20
     # How many times a session may run the suite. Beside `max_turns` because it is the same kind of
     # ceiling — a bound on what one invocation may consume — and because a repository that wants a
@@ -501,7 +502,14 @@ class AiInvoker:
                 last_progress = f"turn {index}: {getattr(run_tool, 'last_progress', '') or 'progressed'}"
             else:
                 idle += 1
-            if idle >= policy.max_idle_turns:
+            # Twice the ceiling before anything has been staged, the ceiling after. A session has
+            # to read before it can write, and the sixth `/fix` on this repository's own #319
+            # was stopped at turn 20 with nothing staged, 88 seconds in, reading the code it was
+            # about to change (#337): the reading phase the row said would not be cut off, cut
+            # off. Once it has written, twenty turns without another write or a new suite run is
+            # wandering; before it has, the same twenty is the job.
+            allowance = policy.max_idle_turns * (1 if last_progress else 2)
+            if idle >= allowance:
                 # Stopped, not exhausted: the turns were there and the session was not using
                 # them. The staged change survives in the workspace for the strategy to return,
                 # so a run stopped for idling still hands a person its attempt (#337).
