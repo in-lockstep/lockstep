@@ -1,0 +1,37 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34151300387",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.027414,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 292,
+        "message": "Assertion only checks argv items that start with USER= or LOGNAME= and end with =sandbox, but the negative check is expressed as a compound condition that may not catch all leakage forms.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "8f9ae882420a330c1eb8618820d51c8fc039472c",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 313,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T182149Z-9beb",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 316,
+  "ts": "2026-09-07T18:21:57+00:00",
+  "wall_seconds": 8.686
+}
