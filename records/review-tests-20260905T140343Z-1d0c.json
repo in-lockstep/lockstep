@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.038199,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 308,
+        "message": "The `test_a_blocked_run_is_not_announced_as_a_failure` test asserts the cost string but the assertion would still pass if the change were reverted \u2014 the old code path also formats `spent` from the record and includes it in `body`. The new assertion is load-bearing for the status wording but the `$97.54` assertion does not distinguish the new code from the old.",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 340,
+        "message": "No test covers the case where both a `blocked` record and a `failed` record for the same verb exist for the same ticket. The change picks the newest by `ts`; if the blocked run is newer, the caller must emit `was stopped by` rather than `failed with`. This boundary is not exercised.",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 107,
+        "message": "The existing `test_a_failed_run_says_so_on_the_ticket` test was updated to add `workflow` to the ledger record. The assertion it makes (`failed with`) would pass even if the family-filter were absent, because this record is the only one in the ledger and it matches both the old and the new predicate. The test now exercises the new field is present, but it does not assert that the filter is what selected the record \u2014 a narrower gap than the cross-verb test, but worth noting.",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "ae38aed97f1ddb7b07ccb4a4aa016206a9e1d117",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 630,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T140343Z-1d0c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 633,
+  "ts": "2026-09-05T14:04:01+00:00",
+  "wall_seconds": 17.917
+}
