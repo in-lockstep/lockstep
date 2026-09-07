@@ -1,0 +1,53 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34168497502",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044818,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 818,
+        "message": "state() is only sampled on three of the eight clones; the other five are not checked for staleness or correctness.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 832,
+        "message": "No test asserts that HistoryError is raised when git push fails for a reason other than a stale lease.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 847,
+        "message": "The `state('never-claimed')` assertion on ledger[7] is the only test of the None-when-absent path, and it reuses a ledger that already participated in the race.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e1149646abed261de1355227cad3abcc0e27aa27",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 708,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T230011Z-b4c7",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 711,
+  "ts": "2026-09-07T23:00:30+00:00",
+  "wall_seconds": 19.076
+}
