@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.037224,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 50,
+        "message": "Regex-parsed integer from untrusted comment body reaches `int()` without further constraint, but is only used as a depth count \u2014 not a direct security risk. However, the regex `_RESUME` anchors on `(?:^|\\s)` and ends with `(?=\\s|$)`, meaning a comment body like `/implement --resume 9999999` sets depth to 9,999,999. If that depth drives any loop or slice over stored artifacts, an attacker who can post a comment could cause the caller to attempt to fetch or allocate for an arbitrarily large number\u2026[truncated]",
+        "path": "src/in_lockstep/platform/chatops.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1173,
+        "message": "The `artifact` string passed to `read_changeset` and `read_verdict` comes directly from the `--resume` CLI flag, which is user-controlled. If those platform functions interpret the artifact path as a filesystem path (or URL), an attacker with CLI access could supply a path like `../../etc/passwd` or a remote URL to read arbitrary files. The content of `read_changeset` and `read_verdict` is not in this diff, so it is not possible to confirm whether they sanitize or constrain the path \u2014 this is na\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "828f75d6c9b6a156ee5553674154c75729b112c6",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 468,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T072409Z-318e",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 471,
+  "ts": "2026-09-02T07:24:24+00:00",
+  "wall_seconds": 14.761
+}
