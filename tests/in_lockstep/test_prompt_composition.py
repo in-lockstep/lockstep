@@ -134,6 +134,7 @@ def test_plus_appends_after_the_shipped_layers_never_replacing_them() -> None:
     """A house guardrail extends the stack; it cannot quietly drop the baseline underneath.
     Replacing wholesale stays possible — by constructing a fresh PromptLayers, visibly."""
     layered = review_layers().plus(guardrails=(("acme/no-vendoring", "Do not vendor dependencies."),))
+    # (the contexts half of `plus` is held two tests down)
     projection = layered.projection("review/security-reviewer")
     assert projection[0] == "guardrail:baseline"
     assert "guardrail:acme/no-vendoring" in projection
@@ -240,3 +241,22 @@ def test_every_ai_adapter_reports_what_it_composes() -> None:
         assert composed[expected].source == type(adapter).__name__
         # Every label is qualified by its verb, so two verbs may hold a prompt of one short name.
         assert all("/" in label for label in composed)
+
+
+def test_a_context_added_through_plus_lands_after_the_skills_and_after_the_body() -> None:
+    """`contexts=` was accepted by `plus` and reached by no test and no doc page (#311). Order is
+    the invariant `system` states: guardrails, body, skills, contexts."""
+    from in_lockstep.ai.prompt import LIFECYCLE_MODULE
+    from in_lockstep.loader import MODULE_NAME as LOADER_MODULE
+    from in_lockstep.prompts.review import SecurityReviewPrompt, review_layers
+
+    assert LIFECYCLE_MODULE == LOADER_MODULE
+    layered = review_layers().plus(
+        skills=(("acme/how", "Quote the line."),), contexts=(("acme/arch", "Three services, one queue."),)
+    )
+    composed = SecurityReviewPrompt().system(layered)
+    body_at = composed.index(SecurityReviewPrompt().body_text().strip()[:40])
+    skill_at = composed.index("<!-- skill: acme/how -->")
+    context_at = composed.index("<!-- context: acme/arch -->")
+    assert body_at < skill_at < context_at
+    assert layered.projection("security")[-2:] == ["skill:acme/how", "context:acme/arch"]

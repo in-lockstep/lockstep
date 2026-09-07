@@ -169,7 +169,7 @@ from in_lockstep.prompts.review import LENSES, ReviewPrompt
 
 class LicenseLens(ReviewPrompt):
     aspect = "license"
-    body = Body.from_path(".lockstep/prompts/license.md")
+    body = Body.from_path("prompts/license.md")
 
 lockstep.bind(
     Review,
@@ -178,6 +178,8 @@ lockstep.bind(
 ```
 
 `in-lockstep show-prompt license` renders it offline, and `ls` stars it as not-the-shipped-prompt.
+The body lives in `prompts/` at the repository root, not under `.lockstep/`: that directory is
+deny-always for every writing verb, so a lens there can never be proposed to by the learning loop.
 
 To add to a shipped lens rather than write one, keep its class and its key. A `Lens` carries what
 a subclass would have carried, and a route keyed `review/<lens>` puts that one lens on a different

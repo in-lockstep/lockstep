@@ -297,7 +297,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: each side holds that the other does not, or a dash. Which ref a read resolves to, what a pull
 #: does and how divergence is counted live in `platform/ledger/history.py` (`resolved`, `pull`,
 #: `divergence`), where `test_history.py` reaches them over a bare origin without a CliRunner.
-CLI_HELPER_STATEMENTS = 1008
+#: 1008 -> 1032 with #311, rendering: the text half of `show-prompt` moved out of the command
+#: body into `_show_prompt_text` so one `BodyNotFound` handler covers projection and text alike,
+#: and `improve --explain` says where a body the loop may propose to lives when a tier-1 path
+#: refuses. What a body resolves to, and where a house one lives, live in `ai/prompt.py` and the
+#: guard, where `test_prompt_composition.py` and `test_cli.py`'s guard test reach them.
+CLI_HELPER_STATEMENTS = 1032
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
