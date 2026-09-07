@@ -283,7 +283,13 @@ def test_gate_sandbox_2_the_container_has_no_network_one_writable_mount_and_read
     writable = [v for v in volumes if not v.endswith(":ro")]
     assert writable == [f"{tmp_path / 'tree'}:/work"], volumes
     assert f"{venv}:/venv:ro" in volumes
-    assert not any(item.startswith("HOME=") for item in argv), "the host's HOME reached the container"
+    assert "HOME=/tmp" in argv and not any(
+        item.startswith("HOME=") and item != "HOME=/tmp" for item in argv
+    ), "the host's HOME reached the container"
+    # As the host user, with podman told to keep the id: root inside with every capability
+    # dropped cannot write a tree the host user owns, which is what the runner handed it (#312).
+    assert f"{os.getuid()}:{os.getgid()}" in argv and "--userns=keep-id" in argv
+    assert argv.index("--user") < argv.index("-v")
 
 
 def test_gate_sandbox_2_a_refused_container_is_a_blocked_test_not_a_broken_suite(

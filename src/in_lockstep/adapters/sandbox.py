@@ -170,6 +170,14 @@ class Sandbox:
         # `DOCKER_HOST` or `CONTAINER_HOST` there points the whole "sandboxed" run at another
         # daemon. The client gets the same pass-through set a subprocess would, and nothing else.
         env_flags = [item for key, value in self.extra_env.items() for item in ("-e", f"{key}={value}")]
+        # As the host user, not root. `--cap-drop=ALL` drops CAP_DAC_OVERRIDE, so root inside the
+        # container may write only what "others" may -- and the tree is the host user's, mode 755,
+        # so on a CI runner (uid 1001) the "throwaway tree the command may write" was not writable
+        # at all: ruff exited 2 on its cache directory, and this repository's fourth `/fix` on
+        # itself failed on exactly that (#312). Rootless podman maps the host user to root inside
+        # unless told to keep the id, so it gets both flags; docker maps nothing and gets the uid.
+        # `HOME` is a writable scratch inside, never the host's: a tool that wants one gets /tmp.
+        user_flags = _run_as_host_user(runtime)
         # `:ro` on every extra mount and never on the tree: the tree is a throwaway copy the
         # command may write, the environment is the host's and the command may only read it.
         mount_flags = [
@@ -181,6 +189,9 @@ class Sandbox:
             "--rm",
             *flags,
             f"--memory={self.memory}",
+            *user_flags,
+            "-e",
+            "HOME=/tmp",
             *env_flags,
             "-v",
             f"{mount}:/work",
@@ -201,6 +212,19 @@ class Sandbox:
         # Honest about what this is: a separate process with no inherited credentials. It is not
         # a kernel sandbox, and calling it one would be the sort of claim this codebase avoids.
         return SandboxResult(code, out, err, sandboxed=False, how="subprocess:no-credentials")
+
+
+def _run_as_host_user(runtime: str) -> list[str]:
+    """The flags that make the container's process the host user, so the tree it is handed is
+    writable by it and by nobody else. Nothing on a platform with no uids."""
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if getuid is None or getgid is None:  # pragma: no cover - Windows
+        return []
+    flags = ["--user", f"{getuid()}:{getgid()}"]
+    if os.path.basename(runtime) == "podman":
+        flags = ["--userns=keep-id", *flags]
+    return flags
 
 
 def host_fallback(runner: object) -> str | None:
