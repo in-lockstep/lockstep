@@ -787,6 +787,11 @@ def test_gate_auth_1_a_host_that_cannot_say_where_home_is_is_skipped_not_passed(
     from in_lockstep.ai.bootstrap import default_registry
     from in_lockstep.llm.interface import Credentials
 
+    # This one constructs the real client, so it needs the real SDK. `check` syncs without the
+    # extras, which is where it first went red: the covering test above skips on the same
+    # absence and this has to as well, or a gate about credentials fails over a missing package.
+    pytest.importorskip("anthropic")
+
     def homeless(uid: int) -> object:
         raise KeyError(f"getpwuid(): uid not found: {uid}")
 
