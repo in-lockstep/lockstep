@@ -1,0 +1,71 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34170159692",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.160483,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 110,
+        "message": "Timing assertion elapsed < 8 * 0.25 can fail on a slow CI runner without the behaviour being wrong.",
+        "path": "tests/in_lockstep/test_barrier.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 128,
+        "message": "The negative-control comment misstates what would falsify the positive case.",
+        "path": "tests/in_lockstep/test_barrier.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "No test covers _continuation_for when the barrier record names an id not in the registry.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "No test for _resumption_kwargs when the continuation has no Resumption-annotated parameter.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:parked -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:parked -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4fce95f4fd61cfffd1b6b30239d58303f48def27",
+  "input_tokens": 6,
+  "kind": "review",
+  "output_tokens": 1781,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T232943Z-0744",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 1787,
+  "ts": "2026-09-07T23:30:22+00:00",
+  "wall_seconds": 39.708
+}

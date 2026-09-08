@@ -1,0 +1,37 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34168497502",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.041263,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 352,
+        "message": "`_state` makes two sequential network calls (ls-remote then fetch) to read one value.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e1149646abed261de1355227cad3abcc0e27aa27",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 456,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260907T225958Z-268a",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 459,
+  "ts": "2026-09-07T23:00:11+00:00",
+  "wall_seconds": 13.065
+}

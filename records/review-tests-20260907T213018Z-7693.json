@@ -1,0 +1,61 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34163313773",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.073805,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 733,
+        "message": "The 'create branch via bundle' sub-case is inside the same pytest.raises block as the preceding absorb, so it may never execute.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 746,
+        "message": "The cleanup test asserts sorted record order contains both ids, but 'triage-412' sorts before 'run-new' \u2014 the assertion would pass even if the new real record were absent.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 97,
+        "message": "The 'known' set omits the fourth leaked id mentioned in the design comment ('review-security'), so the test would flag it as an unexpected fixture record.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 56,
+        "message": "test_gate_dogfood_1_the_learning_loop_has_measured_here asserts all blocked improve records have a reason, but the 'at least one improve run exists' assertion is the meaningful one; the all() over a filtered subset adds no signal if the subset is empty.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c89c2a003608f2080763e951f978515193c7f8d3",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 946,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T213018Z-7693",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 949,
+  "ts": "2026-09-07T21:30:50+00:00",
+  "wall_seconds": 32.321
+}

@@ -1,0 +1,60 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34170159692",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.13028,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 398,
+        "message": "Unsanitized prefix from caller flows into a `ls-remote` ref pattern.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1283,
+        "message": "`resume` workflow ID is read from an attacker-writable shared store and executed.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:parked -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:parked -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4fce95f4fd61cfffd1b6b30239d58303f48def27",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 661,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T232845Z-a15b",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 664,
+  "ts": "2026-09-07T23:29:06+00:00",
+  "wall_seconds": 20.482
+}
