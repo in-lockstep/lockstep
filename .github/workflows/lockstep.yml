@@ -20,12 +20,13 @@
 # full-context review ($0.189 at ~600 output tokens). Far enough above normal that it never fires
 # on a good run; close enough that a loop going wrong stops in cents.
 #
-# It is PER LENS, and this job now runs four of them, so the number to reason about for a push is
-# four times the one above: roughly $0.76 observed and $0.97 against the worst-case projection,
-# with $3.00 the ceiling all four could reach before anything refused. Said out loud because a
-# per-run ceiling that quietly became a per-push bill four times its size is exactly the kind of
-# number nobody recomputes. `IN_LOCKSTEP_DAILY_LIMIT` is the control that bounds the day rather
-# than the run, and it is not set here.
+# It WAS per lens, and this job ran four lenses as four runs under it; since Phase 5 the four
+# are branches of one run (`review/all-lenses`) sharing ONE ceiling, so the number stated below
+# is the four-lens number: $3.00, four times the per-lens figure above, which is roughly four
+# times the worst-case projection and sixteen times the observed cost of one full-context lens.
+# A joint ceiling is the point of the fan-out (`GATE-COST-6`): a branch that would cross it is
+# refused before its call, whatever the other three have spent. `IN_LOCKSTEP_DAILY_LIMIT` is
+# the control that bounds the day rather than the run, and it is not set here.
 #
 # `--budget` is stated here rather than left to lockstep.py, because of the adoption case.
 # Configuration loads from the trusted ref — the base branch — so a repository's very first pull
@@ -54,7 +55,10 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 65 like every model job here, since the check became a `run` of a workflow under the
+    # module's own hour-long deadline: the host must not end the job before the framework can
+    # write its record. Four one-turn lenses finish in minutes; the number is a ceiling.
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
@@ -107,11 +111,10 @@ jobs:
         # pull request in the repository that exists to dogfood them (#241), which made them
         # things we ask adopters to trust on our word. That is what O10 exists to refuse.
         #
-        # The list is written here rather than resolved by a flag, and that is deliberate. Each
-        # lens is a real model call against a real ceiling, so a fifth one is a decision about
-        # money and belongs in the file that spends it, where a reviewer meets it in the diff.
-        # `GATE-REVIEW-5` compares this list against the lenses the BOUND adapter declares, so a
-        # lens added to the framework turns this file red rather than going quietly unexercised.
+        # The lenses are not listed here any more. `review/all-lenses` declares one branch per
+        # lens the BOUND adapter declares, so a lens added to the framework is exercised the day
+        # it lands rather than the day somebody remembers this file (`GATE-REVIEW-5` holds the
+        # workflow to that); the decision about money is the ceiling below, which the four share.
         #
         # Findings do not fail this step, which is what makes four lenses defensible on a
         # REQUIRED check. `AiReview` emits them as non-blocking warnings, so a lens that finds
@@ -122,20 +125,21 @@ jobs:
         # Every lens runs even after one fails, and the command exits with the worst status. That
         # loop used to be four shell statements here -- `status=0; for …; do … || status=$?; done;
         # exit $status` -- which is lifecycle logic in the one file nothing tests (#314). It is
-        # `review`'s own loop now, and this file names the lenses and nothing else (GATE-CI-4).
+        # `review`'s own loop after #314, and one fan-out since Phase 5: four branches at once,
+        # one joint budget, one kill switch, the worst verdict the run's (GATE-CI-4: this file
+        # names a workflow and nothing else).
         #
         # One tape for all four. A cassette is keyed on the whole composed prompt and each lens
         # composes a different one, so they accumulate into the same file rather than overwrite
         # each other — and one harvest at the end covers the lot.
         run: |
-          uv run in-lockstep review \
-            --base "origin/${GITHUB_BASE_REF}" \
-            --head "${GITHUB_SHA}" \
-            --aspect security --aspect intent --aspect performance --aspect tests \
-            --budget 0.75 \
+          uv run in-lockstep run review/all-lenses \
+            --arg base="origin/${GITHUB_BASE_REF}" \
+            --arg head="${GITHUB_SHA}" \
+            --arg comments=review-comments \
+            --budget 3.00 \
             --record \
-            --cassette "${RUNNER_TEMP}/review.json" \
-            --comment-out review-comments
+            --cassette "${RUNNER_TEMP}/review.json"
         env:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
