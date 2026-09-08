@@ -160,9 +160,9 @@ class PytestTest:
             # the ledger, the ticket and the log, and which nine was recoverable from none of
             # them (#312). The model's own `run_tests` result already listed them; the verdict
             # the record carries is for the next engineer (O12), who was told less.
-            failed_ids = [c.id for c in report.cases if c.outcome in ("failed", "error")]
-            named = ", ".join(failed_ids[:10]) + (
-                f" (+{len(failed_ids) - 10} more)" if len(failed_ids) > 10 else ""
+            failing = [c for c in report.cases if c.outcome in ("failed", "error")]
+            named = "; ".join(_named(c) for c in failing[:10]) + (
+                f" (+{len(failing) - 10} more)" if len(failing) > 10 else ""
             )
             findings = (
                 Finding(
@@ -196,6 +196,26 @@ def _undecided(report: TestReport, finding: str, why: str) -> Outcome[TestReport
     )
 
 
+#: How much of a failure's message a verdict keeps. Enough for the assertion and its first
+#: values; a message is one line of pytest's summary and rarely longer, but a parametrised
+#: repr can run to kilobytes, and a finding is read on a ticket.
+MESSAGE_CHARS = 240
+
+
+def _case(line: str) -> TestCase:
+    """One `FAILED <id> - <why>` line into a case that keeps both halves."""
+    head, _, why = line.partition(" - ")
+    return TestCase(
+        id=head.split(maxsplit=1)[1].strip(),
+        outcome=line.split()[0].lower(),
+        message=why.strip()[:MESSAGE_CHARS],
+    )
+
+
+def _named(case: TestCase) -> str:
+    return f"{case.id} - {case.message}" if case.message else case.id
+
+
 def _parse(text: str) -> tuple[TestReport, bool]:
     """Read pytest's terminal summary, and say whether one was there to read.
 
@@ -207,9 +227,13 @@ def _parse(text: str) -> tuple[TestReport, bool]:
     duration = 0.0
     summarized = False
     # The short test summary pytest prints by default (`-r fE`): one `FAILED <id> - <why>` or
-    # `ERROR <id>` line per test that did not pass. Names, so the verdict can say WHICH nine.
+    # `ERROR <id>` line per test that did not pass. Names, so the verdict can say WHICH nine --
+    # and the `<why>`, kept as the case's message, so it can say what each one said. The tape
+    # that held the full output dies with the runner, and the first `/implement` here failed on
+    # three tests whose names survived and whose messages did not; one of them could not be
+    # reproduced anywhere afterwards (GATE-VERDICT-2).
     cases = tuple(
-        TestCase(id=line.split(" - ", 1)[0].split(maxsplit=1)[1].strip(), outcome=line.split()[0].lower())
+        _case(line)
         for line in text.splitlines()
         if line.startswith(("FAILED ", "ERROR ")) and len(line.split()) > 1
     )

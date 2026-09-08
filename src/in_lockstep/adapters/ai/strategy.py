@@ -499,8 +499,11 @@ def _rendered(outcome: Any) -> str:
         return f"{head}\n\nEverything that ran, passed."
     # Failures first and passes never: the failing tests are the entire reason to have run this,
     # and a result truncated by `max_tool_result_chars` must not lose them to a list of passes.
+    # Name and message both: what a test said is what the model has to act on, and a name alone
+    # sends it back to rerun the suite to learn what it already paid to be told (GATE-VERDICT-2).
     names = [
         f"  {getattr(case, 'id', '?')}"
+        + (f" - {message}" if (message := getattr(case, "message", "")) else "")
         for case in getattr(report, "cases", ())
         if getattr(case, "outcome", "") in ("failed", "error")
     ]
