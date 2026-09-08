@@ -167,10 +167,19 @@ class CommandTest:
         # A per-call `root` (a materialized worktree) wins over the bound `cwd` wins over the
         # repo's root: the spec is how a workflow points one bound adapter at a staged change
         # without rebinding it.
-        cwd = inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        # A bound package directory is kept inside the worktree rather than replaced by it, and
+        # the model's root-relative paths are rebased to it (`tooling.within`, GATE-TOOLING-4).
+        repo_root = getattr(getattr(ctx, "repo", None), "root", None)
+        paths = tuple(inp.paths or ())
+        cwd: str | None
+        if inp.root:
+            cwd, package = tooling.within(inp.root, self.cwd, repo_root)
+            paths = tooling.rebase(paths, package)
+        else:
+            cwd = self.cwd or repo_root
         selector = [*self.selector_arg, inp.selector] if (inp.selector and self.selector_arg) else []
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
-        cmd = [argv0, *self.command[1:], *selector, *inp.args, *(inp.paths or ())]
+        cmd = [argv0, *self.command[1:], *selector, *inp.args, *paths]
         result = await self.sandbox.run(cmd, cwd=cwd)
         if (refused := _refused(result)) is not None:
             return refused
