@@ -340,3 +340,49 @@ def test_gate_judge_3_a_failing_half_decides_so_a_tightened_case_with_a_rubric_s
     # pass, which is not one.
     half = grade(Case(name="c", expect={"contains": ["no"], "rubric": "sensible"}), "no stripes")
     assert summarize([half])["decided"] == 0 and arm_of([half]).passed == 0
+
+
+def test_gate_judge_3_plain_eval_run_replays_a_kept_verdict_and_refuses_one_whose_key_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-JUDGE-3, the offline half. The first sidecar made `make check` read the promoted case
+    as undecided the moment it stated a rubric, because plain `eval run` never read what the
+    judge had kept. A kept verdict whose key is this rubric over this answer settles it with no
+    model; one whose key moved (the rubric tightened) is not a verdict on this case; and a kept
+    verdict below the bar fails the settle like a failed check."""
+    monkeypatch.chdir(tmp_path)
+    corpus = tmp_path / "cases"
+    _case(corpus, "judged")
+    ask = CorpusImprover(corpus).corpus_rubrics()[0]
+    sidecar = corpus / "review" / f"judged{SIDECAR_SUFFIX}"
+
+    def keep(level: int, *, rubric_sha256: str = ask.rubric_sha256) -> None:
+        row = {
+            "case": "judged",
+            "arm": "recorded",
+            "level": level,
+            "reason": f"rung {level}",
+            "evidence": [],
+            "judge": "test",
+            "rubric_sha256": rubric_sha256,
+            "answer_sha256": ask.answer_sha256,
+        }
+        sidecar.write_text(json.dumps(row) + "\n")
+
+    keep(5)
+    settled = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert settled.exit_code == 0, settled.output
+    assert (
+        "judged       1  (1 replayed from sidecars)" in settled.output
+        and "pass rate    100%" in settled.output
+    )
+
+    keep(5, rubric_sha256="0" * 64)
+    moved = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert moved.exit_code == 0, moved.output
+    assert "(0 replayed from sidecars)" in moved.output and "outstanding  1" in moved.output
+
+    keep(1)
+    failed = CliRunner().invoke(main, ["eval", "run", "--corpus", str(corpus)])
+    assert failed.exit_code != 0, failed.output
+    assert "pass rate    0%" in failed.output

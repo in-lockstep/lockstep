@@ -355,12 +355,15 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # each re-asks a promoted case against the model that case was recorded on, because a comparison
 # that also changed the model would be a comparison of two things.
 lockstep.models.route("improve", "anthropic:claude-opus-4-6")
-# The judge takes the free INTERNAL path triage takes. Grading one answer against a rubric a
-# person wrote is a bounded reading task, it runs once per rubric per arm on every measurement,
-# and a verdict from a local model is a verdict this repository can afford to re-ask when the
-# rubric changes. The route is a line, so a repository that wants a stronger judge changes it
-# here and nowhere else (O11).
-lockstep.models.route("judge", "local:qwen3-8b")
+# Haiku, the cheapest hosted model the table prices, and not the free local path triage takes.
+# The plan chose `local:qwen3-8b`; the first real `judge/corpus` run here dialled an Ollama nobody
+# had started and errored, and the owner's decision was that a judge this repository actually
+# runs is worth more than one that is free in principle. Grading one answer against a rubric a
+# person wrote is one short call per rubric per arm, and a verdict is kept beside its case and
+# replayed, so the bill recurs only when the rubric or the answer changes. The route is a line,
+# so a repository that wants the free path, or a stronger judge, changes it here and nowhere
+# else (O11).
+lockstep.models.route("judge", "anthropic:claude-haiku-4-5")
 
 # -- the workshop -------------------------------------------------------------------
 #
