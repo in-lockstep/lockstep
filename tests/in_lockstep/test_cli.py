@@ -4666,3 +4666,50 @@ def test_gate_ledger_2_a_commit_resolves_to_its_own_sha_and_committer_moment(
     assert len(sha) == 40 and when.isoformat() == "2026-09-10T12:00:00+00:00"
     with pytest.raises(click.ClickException, match="not a commit git can show"):
         _resolve_merge("nope", lambda: None)
+
+
+def test_gate_ledger_2_a_fan_outs_lens_steps_carry_their_own_subject_and_bill() -> None:
+    """GATE-LEDGER-2's finding, fixed: since PR-13 the required check is one workflow record whose
+    four lenses are steps, and a step carried no subject, so every lens run since was invisible to
+    `report --around`. A review step named for a bound lens now carries the subject its own
+    record would -- the composition for `review/<lens>` on the lens's routed model -- and its own
+    cost; a step that is no lens, or whose model is not routed, carries none."""
+    from in_lockstep.adapters.ai import AiReview, Review
+    from in_lockstep.cli import _eval_subject, _steps_with_subjects
+    from in_lockstep.core.context import StepOutcome
+    from in_lockstep.core.outcome import Cost, Outcome, Status
+    from in_lockstep.lockstep import Lockstep
+
+    lockstep = Lockstep()
+    lockstep.bind(Review, AiReview())
+    lockstep.models.route("review", "anthropic:claude-sonnet-4-6")
+    lockstep.models.route("review/security", "anthropic:claude-haiku-4-5")
+    steps = [
+        StepOutcome(
+            "security", "review", Outcome(status=Status.SUCCEEDED, cost=Cost(usd=0.02, output_tokens=40))
+        ),
+        StepOutcome("tests", "review", Outcome(status=Status.FAILED, cost=Cost(usd=0.01))),
+        StepOutcome("nonesuch", "review", Outcome(status=Status.SUCCEEDED)),
+        StepOutcome("test", "test", Outcome(status=Status.SUCCEEDED)),
+    ]
+    records = _steps_with_subjects(lockstep, steps)
+    security, tests, nonesuch, plain = records
+    expected = _eval_subject(
+        lockstep, kind="review", aspect="security", model_id="anthropic:claude-haiku-4-5"
+    )
+    assert expected is not None and security["subject"] == expected.key
+    assert (
+        security["subject_label"].startswith("review/security ")
+        and "claude-haiku-4-5" in security["subject_label"]
+    )
+    assert tests["subject_label"].endswith("on anthropic:claude-sonnet-4-6"), (
+        "the verb's route when the lens has none"
+    )
+    assert (security["cost_usd"], security["tokens"], tests["cost_usd"]) == (0.02, 40, 0.01)
+    assert "subject" not in nonesuch and "subject" not in plain
+
+    unrouted = Lockstep()
+    unrouted.bind(Review, AiReview())
+    assert "subject" not in _steps_with_subjects(unrouted, steps[:1])[0], (
+        "a model that was not routed is not guessed"
+    )

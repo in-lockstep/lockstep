@@ -247,7 +247,7 @@ def windows_around(
     assert isinstance(ts, datetime) and ts.tzinfo is not None, "a tz-aware moment, so records compare"
     before: list[dict[str, object]] = []
     after: list[dict[str, object]] = []
-    for record in records:
+    for record in _with_lens_steps(records):
         key = str(record.get("subject") or "")
         label = str(record.get("subject_label") or "")
         strategy = label.split(" ", 1)[0] if label else ""
@@ -264,6 +264,40 @@ def windows_around(
             continue
         (before if when < ts else after).append(record)
     return before, after
+
+
+def _with_lens_steps(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Every record, and beside each workflow record one entry per step that carries a subject.
+
+    A fan-out's lenses are steps of one record, each stamped with its own subject and its own
+    bill since the fix to `GATE-LEDGER-2`'s finding; as a window entry each takes the parent's
+    moment and epoch and its own status and cost, so four lenses on one run are four comparable
+    runs of their subjects rather than one record on none. The parent stays in the list: it
+    carries no subject of its own and so falls in no window, and a reader of `records()` is
+    unchanged.
+    """
+    out: list[dict[str, object]] = []
+    for record in records:
+        out.append(record)
+        steps = record.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict) or not step.get("subject"):
+                continue
+            out.append(
+                {
+                    "epoch": record.get("epoch", LEGACY_EPOCH),
+                    "ts": record.get("ts"),
+                    "run_id": record.get("run_id"),
+                    "kind": str(step.get("verb") or "review"),
+                    "status": step.get("status"),
+                    "subject": step.get("subject"),
+                    "subject_label": step.get("subject_label"),
+                    **{k: step[k] for k in ("cost_usd", "tokens", "wall_seconds") if k in step},
+                }
+            )
+    return out
 
 
 def compare(
