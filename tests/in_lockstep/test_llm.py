@@ -145,6 +145,19 @@ def test_gate_auth_1_every_registered_provider_constructs_with_the_environment_e
         provider = registration.factory(registration.settings, Credentials.none())
     except ImportError as e:
         pytest.skip(f"{name}: its SDK is not installed here ({e})")
+    except RuntimeError as e:
+        # A fact about the host, not a provider reaching past its arguments. Handed no
+        # credential, the Anthropic SDK runs its own chain, and that chain looks for a config
+        # file under the user's home -- so `Path.home()` is called, and on a host that cannot say
+        # where home is it RAISES rather than returning nothing. That is a container running as a
+        # uid with no `/etc/passwd` entry and no `HOME`, which is what GitHub's docker gives a
+        # `--user` run and what podman does not: podman fabricates an entry, which is why two
+        # paid `/implement` runs died here (#373) and no local rebuild of the same container ever
+        # reproduced it. Skipped by name where the host cannot answer, and checked everywhere it
+        # can, the way GATE-DOGFOOD-1 skips where `gh` is absent.
+        if "home directory" not in str(e):
+            raise
+        pytest.skip(f"{name}: this host cannot say where home is, so its SDK cannot construct ({e})")
     except (MissingCredential, ValueError) as refused:
         # Refused by name, which is the other honest answer: the credential, or for a cloud
         # registration the region, that nothing handed in and the environment did not supply.
@@ -754,3 +767,69 @@ def test_a_tagged_id_or_an_absent_one_is_accepted(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", value)
     assert _anthropic_workspace() == value.strip()
+
+
+def test_gate_auth_1_a_host_that_cannot_say_where_home_is_is_skipped_not_passed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-AUTH-1. The third honest outcome, and the one that cost two paid runs to name.
+
+    Handed no credential, an SDK may run its own chain, and Anthropic's looks for a config file
+    under the user's home -- so `Path.home()` is called, and where the host can answer neither
+    from `HOME` nor from the passwd database it raises. A container running as a uid with no
+    entry is exactly that host: GitHub's docker gives a `--user` run no entry, podman fabricates
+    one, and the difference is why #373 failed twice in CI and nowhere else. Skipped by name
+    rather than passed, so the gate is not quietly weakened where it cannot be checked, and not
+    failed, because the provider did nothing wrong.
+    """
+    import pwd
+
+    from in_lockstep.ai.bootstrap import default_registry
+    from in_lockstep.llm.interface import Credentials
+
+    # This one constructs the real client, so it needs the real SDK. `check` syncs without the
+    # extras, which is where it first went red: the covering test above skips on the same
+    # absence and this has to as well, or a gate about credentials fails over a missing package.
+    pytest.importorskip("anthropic")
+
+    def homeless(uid: int) -> object:
+        raise KeyError(f"getpwuid(): uid not found: {uid}")
+
+    monkeypatch.setattr(pwd, "getpwuid", homeless)
+    registration = default_registry()._registrations["anthropic"]
+    monkeypatch.setattr(os, "environ", {})
+    with pytest.raises(RuntimeError, match="home directory"):
+        registration.factory(registration.settings, Credentials.none())
+
+
+def test_gate_auth_1_a_runtime_error_that_is_not_about_home_still_fails_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The skip is for one sentence, not for an exception class.
+
+    A provider that fails to construct for its own reasons must fail this gate. Widened to every
+    `RuntimeError`, the escape hatch would become the gate: the one environment fact the host
+    cannot help with would excuse every transport that could not be built.
+    """
+    from types import SimpleNamespace
+
+    from in_lockstep.ai import bootstrap
+
+    def boom(settings: object, creds: object) -> object:
+        raise RuntimeError("the transport could not be built")
+
+    registry = SimpleNamespace(_registrations={"anthropic": SimpleNamespace(factory=boom, settings=None)})
+    monkeypatch.setattr(bootstrap, "default_registry", lambda: registry)
+    # Not `pytest.raises`: a widened guard would SKIP, and a skip propagating out of here marks
+    # this test skipped rather than failed -- green CI, gate gone. The outcome that must not
+    # happen has to be spelled as a failure.
+    try:
+        test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty(
+            "anthropic", monkeypatch
+        )
+    except RuntimeError as raised:
+        assert "transport" in str(raised)
+    except BaseException as excused:  # noqa: BLE001 - `pytest.skip` is what this refuses
+        pytest.fail(f"a transport that could not be built was excused, not failed: {excused!r}")
+    else:
+        pytest.fail("a transport that could not be built neither raised nor failed the gate")
