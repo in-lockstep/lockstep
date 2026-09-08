@@ -489,9 +489,11 @@ lockstep.middleware += [
 
 # -- the learning loop --------------------------------------------------------------
 #
-# One adapter serves both of the loop's paid requests -- `Draft`, one call that rewrites a body,
-# and `Measure`, one call per promoted case that body is evidence for -- so they spend from one
-# budget and record onto one tape. The `Improver` port is the measuring half: it reads the
+# One adapter serves both of the loop's paid requests -- `Draft`, one call that rewrites a body, and
+# `Measure`, one call per promoted case that body is evidence for -- so they spend from one budget
+# and record onto one tape. For a case that states a rubric, `improve/measure` then asks the `Judge`
+# bound below one question per arm, so both arms are graded on the same rung before a proposal parks
+# on its own draft for a person to resume. The `Improver` port is the measuring half: it reads the
 # promoted corpus and the ledger census, which a workflow may not import, and it is bound here
 # because where the corpus lives is this repository's decision (`evidence/README.md`).
 improving = AiImprove()
@@ -515,8 +517,9 @@ lockstep.bind(Judge, AiJudge())
 # `DuplicateWorkflow` on a repeated id: a module that ejected its own copy and also imported these
 # would fail to load entirely, so claiming the ids has to be something a module asks for.
 #
-# `in-lockstep init --eject` writes the source here instead, for a repository that wants to own
-# its process. That is a real position, not a fallback.
+# `in-lockstep show-workflow <family>` prints the shipped source for a repository that wants to
+# read it, and `--registered` prints what this repository put in force. There is deliberately no
+# flag that writes a copy.
 from in_lockstep.workflows import fix as fix_workflows  # noqa: E402
 from in_lockstep.workflows import implement as implement_workflows  # noqa: E402
 from in_lockstep.workflows import improve as improve_workflows  # noqa: E402

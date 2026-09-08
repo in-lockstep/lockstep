@@ -41,13 +41,13 @@ still advertises.
 
 | Capability | Status | What that means |
 |---|---|---|
-| Code Review | runs | `review --aspect security`, per-lens prompts, cassette-replayable offline; `/review <lens>` on a pull request from `init --review`, resolved in Python against the lenses the module binds and posted from a job holding no key; a `Lens` a repository enhances, bounds and routes without a fork |
+| Code Review | runs | `review --aspect security`, repeatable so every lens named runs and is recorded; the required check here is one `review/all-lenses` run that fans out over every bound lens and posts one sticky comment per lens; cassette-replayable offline; `/review <lens>` on a pull request from `init --review`, resolved in Python against the lenses the module binds and posted from a job holding no key; a `Lens` a repository enhances, bounds and routes without a fork |
 | Implement | runs | oneshot and TDD strategies; `/implement` on an issue end to end via the three-job trampoline |
 | Bug Fix | runs | `fix` verb; a failed run opens an `ai-generated` issue an agent can pick up, attempts bounded |
 | Triage | runs | `triage` from a ticket, `$0` on a local model |
 | Detected lifecycle | runs | `Lockstep.detect()` reads pyproject, package.json, the Makefile, `Cargo.toml`, `go.mod`, `pom.xml`, `build.gradle`, `Gemfile`/`Rakefile`, `composer.json`, `mix.exs`, `*.csproj`/`*.sln`, `CMakeLists.txt`, `Package.swift` and `BUILD.bazel`, and `detected_bindings` serves Test, Validate, Build and Run from what is actually there: pytest and ruff where they exist, then Makefile targets (`make test`, `make lint`, `make build`, `make run`), then package.json scripts, then what a native manifest guarantees (`cargo test`, `go build ./...`, `mix test`, `dotnet test`, `swift test`, `bazel test //...` inside a workspace, `./mvnw`/`./gradlew` only where the wrapper is committed) or a line in it declares (`composer test` from a `test` script, `bundle exec rake test` from a Rakefile that defines the task, `ctest` where `enable_testing()` was called). A repository with no `lockstep.py` runs on those bindings; `init` writes the same ones into the module it scaffolds. A target that is not in the file is not guessed — and a repository nothing here can serve is told what was looked for rather than left with a silent absence |
 | Provisioned environment | runs | `provision` builds the repository's own environment from a file that exists (`uv sync --locked` for a `uv.lock`, `npm ci` for a `package-lock.json`, a requirements.txt into a venv of its own, or the Makefile's own `deps` target); `detected_bindings` binds it first and the scaffolded work jobs run it before `doctor`, with one line that is the same in every repository. A pyproject without a lock binds no Python provisioner, and nothing to provision is `not bound`, never a success |
-| Harvesting history into cases | runs | `eval harvest` turns a recording into cases (real requests, real answers, expectations derived from them); `eval run` replays and settles them for nothing. Measures everything below the model; re-testing a changed prompt is a real call |
+| Harvesting history into cases | runs | `eval harvest` turns a recording into cases (real requests, real answers, expectations derived from them); `eval run` replays and settles them for nothing, and `eval run --judge` puts every rubric to the bound `Judge` as a recorded `judge/corpus` run, keeping each verdict in a sidecar beside its case. Measures everything below the model; re-testing a changed prompt, and judging a rubric, are real calls |
 | Review conversation as context | runs | what a reviewer said on the pull request (the thread, the verdicts, the notes pinned to a line) reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
@@ -63,7 +63,11 @@ still advertises.
 | Consistency across askers | runs | `report --by actor` splits the ledger by who asked: outcome mix, turns and spend per succeeded run, findings per run, and the spread between askers with every number carrying the runs it came from. Askers are stable pseudonyms unless `--names`; a run nobody is recorded as asking for is a `—` row, never an "unknown" bucket; a local run carries who ran it only where `lockstep.identity = GitAuthor()` opts in |
 | Ledger + tamper-evidence | runs | orphan-branch records; `report`/`doctor` flag a rewritten history |
 | Improvement loop | runs | `improve` reads the ledger for a finding that keeps coming back, drafts a change to the one declared `Improvable` body it is attributed to, measures the draft against the promoted corpus before opening anything — both arms over the same cases, every rubric put to the `judge` verb on both arms with verdicts kept beside the case and replayed, `—` where nobody judged — and stages the change with its scorecard; `run improve/propose` is the job that holds the write token, and it enforces the open-proposal ceiling where the proposal is opened. It refuses before its first model call unless a trend qualifies, the body is writable by grant, and a promoted case fails against it. `improve --explain` reads the ledger and says what would stop a proposal, opening nothing and spending nothing |
+| Judge | runs | the `judge` verb: `AiJudge` bound to `Judge`, routed and priced like any verb; `improve` asks it one question per rubric per arm and `eval run --judge` asks it over the promoted corpus, every verdict recorded and replayed from its sidecar, `—` where nobody judged |
+| Park and resume | runs | `ctx.park` and `ctx.human` stop a run at a person; the barrier record lives in the shared ledger, `ls --parked` lists what is waiting, and `in-lockstep resume` (the local form of `resume.yml`) applies the verdict and continues the run from any machine; `ctx.fan_out` runs machine branches at once under one joint ceiling |
 | Shared ledger store | runs | `GitLedger(shared=True)` provides `compare_and_set` as a swap on the remote's own ref, so eight runners claiming one key produce one success; one repository's ledger, not a workspace's. The default construction stays `LOCAL` and refuses |
+
+Each row above has a diagram behind it: the [runtime architecture](https://in-lockstep.github.io/lockstep/diagrams/runtime-architecture.html) and one control-flow page per shipped workflow, verb and strategy, indexed in [docs/diagrams](docs/diagrams/README.md). They are interactive pages on the site, and their sources are in the repository.
 
 ## Why code rather than configuration
 
@@ -105,7 +109,7 @@ is why each refusal is where it is.
 
 ```bash
 in-lockstep run <workflow>       # run it; --recover resumes an interrupted run
-in-lockstep review --base ...    # review a change, one lens at a time
+in-lockstep review --base ... --aspect security --aspect tests   # review a change; every lens named runs and is recorded
 in-lockstep review --ask "/review tests" --pr 42   # the lens a comment named, resolved here; --comment-out writes the body
 in-lockstep comment --pr 42 --body-file findings.md   # post what another job composed, from a job with no key
 in-lockstep implement --ticket X # read a ticket, stage a change; writes nothing itself
@@ -126,6 +130,12 @@ in-lockstep doctor               # are the controls actually in place?
 in-lockstep report --by model    # what the ledger adds up to — and whether it was rewritten
 in-lockstep report --by actor    # are people getting consistent results? pseudonymous; --names to name them
 in-lockstep history --explain X  # one run's record, every field, in words
+in-lockstep history --pull       # bring the remote's records onto the local branch; pushes nothing
+in-lockstep report --around '#41' # the runs after a merged prompt change against the runs before; no verdict
+in-lockstep eval run --judge     # put every rubric to the bound judge, recorded, verdicts kept beside the cases
+in-lockstep ls --parked          # the runs waiting on a person, from the shared store
+in-lockstep resume --run X --as approved --by NAME   # apply a person's verdict to a parked run and continue it
+in-lockstep show-workflow implement   # the source of a shipped process, as imported, no key
 in-lockstep egress-manifest      # the hosts a run may dial, for the proxy that enforces it
 in-lockstep gate --actor ...     # is this person allowed to fire a chat-ops trigger
 in-lockstep eval harvest --from  # turn a recording into cases you can measure against
@@ -177,6 +187,8 @@ whole mechanism and the argument for each refusal in it; the worked examples are
 what in-process invocation costs (what replaced each substrate control, what is weaker, what was
 lost), and [exit gates](design/gates.md) tracks every claimed control against the test that holds
 it, including the ones that are `unit only` or `unmet`.
+
+**Looking for a picture?** [docs/diagrams](docs/diagrams/README.md) holds seventeen interactive pages: the runtime, every shipped workflow, verb and strategy, the security model, the ledger's path to origin, the learning loop, and the chat-ops job split.
 
 **Why is it like this?** The essays: [design](design/in-lockstep-design.md) and
 [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md). Long, and deliberately below the

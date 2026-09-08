@@ -18,7 +18,7 @@ from in_lockstep.core.spend import Budget
 lockstep = Lockstep.detect()
 
 # The four lenses share a budget, because they share a run. Fan-out multiplies spend, so the
-# ceiling is joint rather than per-branch — even before fan-out exists to make that literal.
+# ceiling is joint rather than per-branch: `fan_out` reserves every branch against this one ceiling.
 lockstep.budget = Budget(usd=1.50, wall_seconds=600)
 
 lockstep.contribute(
@@ -39,19 +39,15 @@ ASPECTS = ("security", "intent", "performance", "tests")
 
 
 @workflow(id="pr-review/all-aspects")
-async def review_all(ctx: RunContext, base: str, head: str) -> dict[str, Outcome[Any]]:
-    """Every lens over one change.
+async def review_all(ctx: RunContext, base: str, head: str) -> Outcome[Any]:
+    """Every lens over one change, at once: four branches, one budget, one tape, one kill switch.
 
-    Sequential here. When fan-out lands these become declared branches over the same joint budget,
-    and the only thing that changes is that they run at once — which is why `ctx.call` exists
-    separately from `ctx.do` already.
+    A blocked branch does not stop the others; the join's verdict is the worst branch's, its cost
+    the sum, and it is decided only if every branch was. This is the shape of the framework's own
+    `review/all-lenses`, which reads the branches off the bound adapter rather than a tuple here:
+    `from in_lockstep.workflows import review; review.register()` is the line that gets that one.
     """
-    reports: dict[str, Outcome[Any]] = {}
-    for aspect in ASPECTS:
-        outcome = await ctx.do(Review(base=base, head=head, aspect=aspect))
-        reports[aspect] = outcome
-        # A blocked lens stops the run: it means a ceiling was hit or a control refused, and the
-        # remaining lenses would hit the same one.
-        if outcome.blocked:
-            break
-    return reports
+    join = await ctx.fan_out(
+        branches={a: ctx.call(Review(base=base, head=head, aspect=a), step=a) for a in ASPECTS}
+    )
+    return join.as_outcome()

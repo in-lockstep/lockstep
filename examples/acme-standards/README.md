@@ -1,6 +1,6 @@
 # acme-standards — an organisation's standards as an installable package
 
-Goal 9 is hierarchical inheritance: org, then team, then repository. This is the org layer, in
+O8, extended without forking, has a hierarchical form: org, then team, then repository. This is the org layer, in
 its entirety — a `pyproject.toml` that declares one entry point and an `apply` function that
 contributes what the organisation wants everywhere.
 

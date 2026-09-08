@@ -63,6 +63,8 @@ This repository's own [.lockstep/lockstep.py](../.lockstep/lockstep.py) is the f
 version, including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the
 live tree.
 
+Drawn: [chat-ops](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html) for the jobs, [implement strategies](https://in-lockstep.github.io/lockstep/diagrams/implement-strategies.html) for red then green.
+
 ## 4. A rolling daily spend ceiling
 
 The per-run budget bounds one run. This bounds a runaway *trigger*, a chat-ops loop firing all
@@ -74,7 +76,8 @@ export IN_LOCKSTEP_DAILY_LIMIT=10.00
 ```
 
 Honest scope: the window sums this clone's ledger, so a runner that never fetched
-`lockstep-history` sums less than the truth. The provider console's organisation limit
+`lockstep-history` sums less than the truth; `in-lockstep history --pull` folds the remote's
+records in first, and pushes nothing. Two concurrent runs still race the read. The provider console's organisation limit
 (`IN_LOCKSTEP_ORG_SPEND_LIMIT`, attested to `doctor`) remains the durable backstop.
 
 ## 5. House guardrails in every review
@@ -146,9 +149,13 @@ Cassettes sit at the `LLMInput`/`LLMOutput` seam, so a recording replays against
 provider, and tool IO is captured alongside model IO.
 
 ```bash
-in-lockstep review --base origin/main --record       # one real call, writes the cassette
-in-lockstep review --base origin/main --offline      # deterministic and free, from here on
+in-lockstep review --base origin/main --cassette "$TMPDIR/review.json"            # one real call; recording is the default
+in-lockstep review --base origin/main --offline --cassette "$TMPDIR/review.json"  # deterministic and free, from here on
 ```
+
+Name the cassette on both lines: `--offline` with no `--cassette` replays the shipped fixture, not
+what you recorded. A tape lives outside the repository, which is why the default is `$RUNNER_TEMP`
+or `$TMPDIR`.
 
 The replay refuses to silently call out when the prompt no longer matches the recording. A
 changed guardrail means re-recording, and it says so rather than billing you quietly.
@@ -209,6 +216,10 @@ in-lockstep report --by model     # aggregates, and flags any record rewritten a
 in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check
 ```
 
+After a proposal merges, `in-lockstep report --around <sha|#PR>` compares the runs on that subject
+after the merge with the runs before it, and prints a delta rather than a verdict, with `—` where
+either window is too thin.
+
 The check reads the retained chain. A force-push that *replaced* the chain is the remote's to
 refuse. Protect `lockstep-history` with a ruleset blocking force-pushes and deletions. Appends
 are fast-forwards and still flow, so it needs no reviews and slows nothing down.
@@ -224,3 +235,5 @@ That appends a note to the branch — who, why, when, and what the commit rewrot
 and `doctor` print the note where `TAMPERED` was. A rewrite in any other commit is still an alarm,
 and the note itself is protected by the same check. A flag nobody can acknowledge is one everybody
 learns to read past.
+
+Drawn: [the ledger](https://in-lockstep.github.io/lockstep/diagrams/ledger.html), from a run to `origin/lockstep-history` and back to `report`.

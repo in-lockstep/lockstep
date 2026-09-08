@@ -1,0 +1,242 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Deterministic verbs: what a script decides",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "detect",
+      "label": "Detection: Lockstep.detect()"
+    },
+    {
+      "id": "verbs",
+      "label": "Verbs a repository's own commands serve"
+    },
+    {
+      "id": "stop",
+      "label": "Declined or refused",
+      "variant": "exception"
+    },
+    {
+      "id": "runner",
+      "label": "Where a command runs"
+    }
+  ],
+  "phases": [
+    {
+      "id": "read",
+      "label": "Read the manifests",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "bind",
+      "label": "Bind and run",
+      "fromCol": 2,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "manifests",
+    "facts",
+    "provision",
+    "test",
+    "validate",
+    "outcome"
+  ],
+  "nodes": [
+    {
+      "id": "manifests",
+      "lane": "detect",
+      "col": 0,
+      "type": "database",
+      "label": "Build manifests",
+      "sublabel": "thirteen ecosystems",
+      "width": 140
+    },
+    {
+      "id": "facts",
+      "lane": "detect",
+      "col": 1,
+      "type": "backend",
+      "label": "RepoFacts",
+      "sublabel": "toolchain guarantees only",
+      "tag": "never guessed",
+      "width": 140
+    },
+    {
+      "id": "declined",
+      "lane": "stop",
+      "col": 1,
+      "type": "security",
+      "label": "Declined by name",
+      "sublabel": "what was looked for",
+      "width": 140
+    },
+    {
+      "id": "provision",
+      "lane": "verbs",
+      "col": 2,
+      "type": "backend",
+      "label": "Provision",
+      "sublabel": "frozen install from a lock",
+      "width": 140
+    },
+    {
+      "id": "test",
+      "lane": "verbs",
+      "col": 3,
+      "type": "backend",
+      "label": "Test",
+      "sublabel": "pytest, make test, cargo...",
+      "width": 140
+    },
+    {
+      "id": "validate",
+      "lane": "verbs",
+      "col": 4,
+      "type": "backend",
+      "label": "Validate / Build",
+      "sublabel": "ruff, eslint, make build, run",
+      "width": 140
+    },
+    {
+      "id": "outcome",
+      "lane": "verbs",
+      "col": 5,
+      "type": "backend",
+      "label": "Outcome",
+      "sublabel": "status and decided",
+      "width": 140
+    },
+    {
+      "id": "not_decided",
+      "lane": "stop",
+      "col": 3,
+      "type": "security",
+      "label": "Decided nothing",
+      "sublabel": "zero tests ran",
+      "width": 140
+    },
+    {
+      "id": "sandbox",
+      "lane": "runner",
+      "col": 3,
+      "type": "security",
+      "label": "Sandbox",
+      "sublabel": "container, no network",
+      "width": 140
+    },
+    {
+      "id": "host",
+      "lane": "runner",
+      "col": 2,
+      "type": "backend",
+      "label": "Host runner",
+      "sublabel": ".venv or PATH, or refused",
+      "width": 140
+    },
+    {
+      "id": "backport",
+      "lane": "verbs",
+      "col": 1,
+      "type": "backend",
+      "label": "Backport",
+      "sublabel": "cherry-pick; model on conflict",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "manifests",
+      "to": "facts",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "facts",
+      "to": "declined",
+      "label": "nothing servable",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e3",
+      "from": "facts",
+      "to": "provision",
+      "label": "detected_bindings",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "provision",
+      "to": "test",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "test",
+      "to": "validate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "validate",
+      "to": "outcome",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "test",
+      "to": "not_decided",
+      "label": "zero tests",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e8",
+      "from": "test",
+      "to": "sandbox",
+      "label": "model-staged",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e9",
+      "from": "provision",
+      "to": "host",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e10",
+      "from": "facts",
+      "to": "backport",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Precedence",
+      "items": [
+        "A tool with structured output, then a written target or script, then what a manifest guarantees",
+        "A target not in the file is not invented"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Honest absence",
+      "items": [
+        "Zero tests decides nothing rather than passing",
+        "A tool that is nowhere is refused with the places looked"
+      ]
+    }
+  ]
+}

@@ -38,7 +38,7 @@ framework, more useful: it turns the checkable half of those constraints into co
 
 ## What this example does
 
-`in-lockstep` ships no `Implement` adapter at all, so this is what extending a verb actually looks
+`in-lockstep` ships `Oneshot` and `TDD` for this verb; wayfinder is a third answer to it, so this is what extending a verb from outside the framework actually looks
 like from outside the framework — not configuration, but a small amount of ordinary Python.
 
 ```
@@ -193,8 +193,19 @@ practice — and their absence is what marks a ticket as fog.
 
 Working needs a model, so `WayfinderImplement` takes an `invoker_factory` and refuses with
 `wayfinder.no_invoker` when it has none, rather than pretending to work and returning nothing. To
-wire one, copy the invoker construction from `review_cmd` in `src/in_lockstep/cli.py` and pass it
-to the binding in `lockstep.py`.
+wire one, route the verb and hand the adapter the routed factory:
+
+```python
+from in_lockstep.ai.bootstrap import routed_invoker
+
+lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
+lockstep.bind(
+    Implement, WayfinderImplement(max_tickets_per_session=1, invoker_factory=routed_invoker("implement"))
+)
+```
+
+The model then comes from the route line and egress from the bound `EgressPolicy`, the same way
+every shipped AI adapter resolves its own.
 
 `tests/in_lockstep/test_example_wayfinder.py` exercises all of it. An example nothing runs is
 documentation that compiles.

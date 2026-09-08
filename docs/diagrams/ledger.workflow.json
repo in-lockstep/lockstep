@@ -1,0 +1,242 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "The ledger: from a run to origin, and back to a reader",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1130,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "run",
+      "label": "A run records"
+    },
+    {
+      "id": "publish",
+      "label": "Push access"
+    },
+    {
+      "id": "origin",
+      "label": "origin"
+    },
+    {
+      "id": "readers",
+      "label": "Readers"
+    }
+  ],
+  "phases": [
+    {
+      "id": "record",
+      "label": "Record",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "carry",
+      "label": "Carry and publish",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "read",
+      "label": "Read back",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "record",
+    "local",
+    "push",
+    "origin",
+    "report"
+  ],
+  "nodes": [
+    {
+      "id": "record",
+      "lane": "run",
+      "col": 0,
+      "type": "backend",
+      "label": "Run record",
+      "sublabel": "status, cost, subject",
+      "width": 136
+    },
+    {
+      "id": "local",
+      "lane": "run",
+      "col": 1,
+      "type": "database",
+      "label": "lockstep-history",
+      "sublabel": "local orphan branch",
+      "width": 136
+    },
+    {
+      "id": "bundle",
+      "lane": "publish",
+      "col": 1,
+      "type": "database",
+      "label": "Run artifact",
+      "sublabel": "read-only job",
+      "width": 136
+    },
+    {
+      "id": "push",
+      "lane": "publish",
+      "col": 2,
+      "type": "security",
+      "label": "history --push",
+      "sublabel": "never automatic",
+      "width": 136
+    },
+    {
+      "id": "absorb",
+      "lane": "publish",
+      "col": 3,
+      "type": "security",
+      "label": "--from-bundle --push",
+      "sublabel": "write token, no key",
+      "width": 136
+    },
+    {
+      "id": "sweep",
+      "lane": "publish",
+      "col": 4,
+      "type": "backend",
+      "label": "reconcile sweep",
+      "sublabel": "cancelled runs' leftovers",
+      "width": 136
+    },
+    {
+      "id": "origin",
+      "lane": "origin",
+      "col": 4,
+      "type": "database",
+      "label": "origin",
+      "sublabel": "tamper-evident",
+      "width": 136
+    },
+    {
+      "id": "clone",
+      "lane": "origin",
+      "col": 5,
+      "type": "external",
+      "label": "A colleague's clone",
+      "sublabel": "reads the remote ref",
+      "width": 136
+    },
+    {
+      "id": "improve",
+      "lane": "readers",
+      "col": 3,
+      "type": "backend",
+      "label": "improve census",
+      "sublabel": "a recurring finding",
+      "width": 136
+    },
+    {
+      "id": "report",
+      "lane": "readers",
+      "col": 5,
+      "type": "frontend",
+      "label": "report, --explain",
+      "sublabel": "--scm, --around",
+      "width": 136
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "record",
+      "to": "local",
+      "label": "append",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "record",
+      "to": "bundle",
+      "label": "in CI, bundled",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "local",
+      "to": "push",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "bundle",
+      "to": "absorb",
+      "label": "untrusted artifact",
+      "variant": "default"
+    },
+    {
+      "id": "e6",
+      "from": "push",
+      "to": "origin",
+      "label": "record by record",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "absorb",
+      "to": "origin",
+      "variant": "default"
+    },
+    {
+      "id": "e8",
+      "from": "sweep",
+      "to": "origin",
+      "label": "outstanding",
+      "variant": "dashed"
+    },
+    {
+      "id": "e9",
+      "from": "origin",
+      "to": "clone",
+      "label": "--pull to merge",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e10",
+      "from": "origin",
+      "to": "report",
+      "label": "every record",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e11",
+      "from": "origin",
+      "to": "improve",
+      "label": "findings",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Publishing is an act",
+      "items": [
+        "A local run appends and stops; reaching a remote needs credentials",
+        "CI carries the record out as an artifact and pushes from the job that can"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Honest reading",
+      "items": [
+        "report --scm counts what is still in artifacts; without it, a dash",
+        "A rewritten history is flagged; an acknowledged rewrite is named"
+      ]
+    }
+  ]
+}

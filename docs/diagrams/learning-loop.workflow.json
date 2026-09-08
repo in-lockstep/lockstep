@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": { "title": "The learning loop: from recordings to a measured proposal", "quality_profile": "showcase", "viewBox": [1130, 660] },
+  "lanes": [
+    { "id": "recorded", "label": "Recorded and harvested" },
+    { "id": "person", "label": "A person" },
+    { "id": "evidence", "label": "Promoted evidence" },
+    { "id": "measured", "label": "Measured" }
+  ],
+  "phases": [
+    { "id": "harvest", "label": "Harvest", "fromCol": 0, "toCol": 2 },
+    { "id": "promote", "label": "Promote", "fromCol": 3, "toCol": 3, "variant": "emphasis" },
+    { "id": "measure", "label": "Measure and propose", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["tape", "harvest", "candidate", "person", "evidence", "measure", "proposal"],
+  "nodes": [
+    { "id": "tape", "lane": "recorded", "col": 0, "type": "database", "label": "Cassette", "sublabel": "every call, on the runner", "tag": "expires with the job", "width": 140 },
+    { "id": "harvest", "lane": "recorded", "col": 1, "type": "backend", "label": "eval harvest", "sublabel": "real request, real answer", "width": 140 },
+    { "id": "candidate", "lane": "recorded", "col": 2, "type": "database", "label": "Candidate cases", "sublabel": "run artifact, 30 days", "width": 140 },
+    { "id": "ledger", "lane": "recorded", "col": 4, "type": "database", "label": "Ledger", "sublabel": "the recurring finding", "width": 140 },
+    { "id": "person", "lane": "person", "col": 3, "type": "external", "label": "Tighten, promote", "sublabel": "a pull request somebody reads", "tag": "publication", "width": 140 },
+    { "id": "around", "lane": "person", "col": 5, "type": "frontend", "label": "report --around", "sublabel": "before vs after; no verdict", "width": 140 },
+    { "id": "evidence", "lane": "evidence", "col": 3, "type": "database", "label": "evidence/cases", "sublabel": "capped; settled by make check", "width": 140 },
+    { "id": "evalrun", "lane": "measured", "col": 3, "type": "backend", "label": "eval run", "sublabel": "offline, $0, verdicts replayed", "width": 140 },
+    { "id": "measure", "lane": "measured", "col": 4, "type": "backend", "label": "improve/measure", "sublabel": "draft, both arms, judged", "tag": "refuses before spending", "width": 140 },
+    { "id": "proposal", "lane": "measured", "col": 5, "type": "external", "label": "Proposal PR", "sublabel": "scorecard; parked on review", "width": 140 }
+  ],
+  "edges": [
+    { "id": "e1", "from": "tape", "to": "harvest", "variant": "emphasis" },
+    { "id": "e2", "from": "harvest", "to": "candidate", "variant": "emphasis" },
+    { "id": "e3", "from": "candidate", "to": "person", "label": "read", "variant": "emphasis" },
+    { "id": "e4", "from": "person", "to": "evidence", "label": "cap of 24", "variant": "emphasis" },
+    { "id": "e5", "from": "evidence", "to": "evalrun", "variant": "default" },
+    { "id": "e6", "from": "evidence", "to": "measure", "label": "cases the body fails", "variant": "emphasis" },
+    { "id": "e7", "from": "ledger", "to": "measure", "label": "trend", "variant": "dashed", "role": "branch" },
+    { "id": "e8", "from": "measure", "to": "proposal", "label": "improved only", "variant": "emphasis" },
+    { "id": "e9", "from": "proposal", "to": "around", "label": "after merging", "variant": "dashed", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Suggestions only", "items": ["The output is a pull request a person reads", "A draft that loses one case is not opened"] },
+    { "dot": "rose", "title": "What teaches it", "items": ["A harvested case passes by construction; a person tightening one is the label", "A rubric nobody judged is outstanding, never passed"] }
+  ]
+}
