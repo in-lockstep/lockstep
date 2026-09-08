@@ -187,7 +187,7 @@ The `standards` line is where an organisation's installed policy package would a
 line says which `lockstep.py` constrained this invocation, which matters the day it is a trusted
 ref rather than your working tree.
 
-The `detected` line reads the Makefile and package.json as well as pyproject. Where no pytest or
+The `detected` line reads the Makefile and package.json as well as pyproject, and the native manifests of Rust, Go, the JVM, Ruby, PHP, Elixir, .NET, Swift, Bazel and CMake. Where no pytest or
 ruff was found, a `test` or `lint` target serves `Test` or `Validate` with an exit code, and a
 `build` or `run` target (or a `build` or `start` script) serves `Build` and `Run` the same way,
 to the command that is already there. `init` writes those bindings into the module, and a

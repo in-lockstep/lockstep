@@ -17,6 +17,7 @@ import time
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any, TypeVar
 
 from .container import Container
@@ -107,7 +108,39 @@ BUILD_MANIFESTS = (
     "pom.xml",
     "build.gradle",
     "build.gradle.kts",
+    # The seven `GATE-TOOLING-3` named, read since Phase 7 (PR-17). Two are globs, because a
+    # .NET project file carries the project's own name; `manifest_present` reads either spelling.
+    "Gemfile",
+    "Rakefile",
+    "composer.json",
+    "mix.exs",
+    "*.csproj",
+    "*.sln",
+    "CMakeLists.txt",
+    "Package.swift",
+    "BUILD.bazel",
 )
+
+
+def manifest_present(directory: Path, name: str) -> bool:
+    """Whether one advertised manifest is in `directory`: a file by that name, or for the two
+    glob entries any file matching. One reader for the root and for the one-level-down scan, so
+    the decline cannot advertise a spelling detection does not read."""
+    if "*" in name:
+        return any(directory.glob(name))
+    return (directory / name).exists()
+
+
+#: What a stack that is here and bound nothing is told, beside the generic sentence. Each names
+#: the one line in the tree that would have made it servable, because a repository that DID
+#: state how it builds must not be sent to fix the thing that is not broken.
+STACK_HINTS = {
+    "jvm": "a Maven or Gradle repository needs its ./mvnw or ./gradlew committed",
+    "ruby": "a Rakefile with a `test` task (`task :test` or `Rake::TestTask`) binds `bundle exec rake test`",
+    "php": "a `test` entry under composer.json `scripts` binds `composer test`",
+    "cpp": "`enable_testing()` in CMakeLists.txt binds `ctest`",
+    "bazel": "a WORKSPACE or MODULE.bazel beside BUILD.bazel binds `bazel test //...`",
+}
 
 
 @dataclass(frozen=True)
@@ -122,7 +155,8 @@ class RepoFacts:
     """
 
     #: The ecosystems whose manifests are in the tree, comma-joined in a fixed order:
-    #: `"python"`, `"node"`, `"rust"`, `"go"`, `"jvm"`, or `""` when none is recognised. A list
+    #: `"python"`, `"node"`, `"rust"`, `"go"`, `"jvm"`, `"ruby"`, `"php"`, `"elixir"`,
+    #: `"dotnet"`, `"swift"`, `"bazel"`, `"cpp"`, or `""` when none is recognised. A list
     #: rather than a winner, because a Go service with a package.json front end is two true facts
     #: and picking one would report a repository as something it is only half of. Display only —
     #: what gets bound is decided per verb below, where the precedence is written down.
@@ -183,9 +217,10 @@ class RepoFacts:
         if self.stack:
             # Reaching here with `jvm` in the stack means no usable wrapper: `pom.xml` and
             # `build.gradle` bind their commands only when `./mvnw` or `./gradlew` is on disk, so
-            # had one been there this would have been servable.
-            wrapper = " (a Maven or Gradle repository needs its ./mvnw or ./gradlew committed)"
-            hint = wrapper if "jvm" in self.stack else ""
+            # had one been there this would have been servable. The same shape for every stack
+            # whose manifest binds only on a line inside it: the hint names that line.
+            hints = [STACK_HINTS[name] for name in self.stack.split(", ") if name in STACK_HINTS]
+            hint = f" ({'; '.join(hints)})" if hints else ""
             return f"{self.stack} is here and named no test, lint, build or run command{hint}"
         if self.makefile:
             return "a Makefile is here with no test, lint, build or run target"
