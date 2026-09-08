@@ -37,6 +37,7 @@ def _package_dir() -> Path:
 
 
 def test_the_package_carries_the_marker_where_python_finds_it():
+    """GATE-PLUGIN-2: the PEP 561 marker ships in the package, so an adopter's type checker sees us."""
     """Beside `__init__.py` of the imported package, not at a path in the source layout.
 
     Asserted against the import rather than against `src/`, because those are the same directory

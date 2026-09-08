@@ -1,14 +1,15 @@
 """Gates over the transport layer.
 
 These are structural assertions, deliberately: they hold without network, keys, or SDKs installed,
-which is what lets them run in CI from day one. The behavioural gates (GATE-ASYNC-2/4,
-GATE-RETRY-1/4/6) need a stub provider and land with the invoker in Phase 2.
+which is what lets them run in CI from day one. The behavioural gates over the transport live
+beside the invoker in `test_ai.py`, with a stub provider.
 """
 
 from __future__ import annotations
 
 import ast
 import inspect
+import os
 import typing
 from pathlib import Path
 
@@ -117,6 +118,41 @@ def test_gate_cost_4_no_default_cost_table() -> None:
     root = LLM_ROOT.parents[1]
     for path in root.rglob("*.py"):
         assert "DEFAULT_COST_PER_M" not in path.read_text(), f"{path} carries DEFAULT_COST_PER_M"
+
+
+def _registrations() -> list[str]:
+    from in_lockstep.ai.bootstrap import default_registry
+
+    return default_registry().names()
+
+
+@pytest.mark.parametrize("name", _registrations())
+def test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-AUTH-1, constructed rather than grepped. Every factory the default registry holds is
+    called with `os.environ` empty and no credential: it either builds, or refuses by naming the
+    credential it was not handed. What it may not do is reach past its arguments -- a factory
+    that read a key from the environment here would build where this expects a refusal, and the
+    source scan beside this could not see a `getenv` hidden behind an SDK's own default."""
+    from in_lockstep.ai.bootstrap import MissingCredential, default_registry
+    from in_lockstep.llm.interface import Credentials
+
+    monkeypatch.setattr(os, "environ", {})
+    registry = default_registry()
+    registration = registry._registrations[name]
+    try:
+        provider = registration.factory(registration.settings, Credentials.none())
+    except ImportError as e:
+        pytest.skip(f"{name}: its SDK is not installed here ({e})")
+    except (MissingCredential, ValueError) as refused:
+        # Refused by name, which is the other honest answer: the credential, or for a cloud
+        # registration the region, that nothing handed in and the environment did not supply.
+        assert str(refused), f"{name} refused without saying what was missing"
+        return
+    assert provider is not None
+    for forbidden in ("os.environ", "getenv"):
+        assert forbidden not in repr(provider)
 
 
 @pytest.mark.parametrize("path", PROVIDERS, ids=[p.stem for p in PROVIDERS])

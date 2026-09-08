@@ -385,3 +385,20 @@ def test_every_prose_census_matches_the_table():
     assert claims, "no file states the census; the pattern that finds it has stopped matching"
     for name, claim in claims:
         assert claim == actual, f"{name} says {claim[0]} of {claim[1]} held; the table says {actual[0]}"
+
+
+def test_no_ledger_or_front_page_still_counts_ten_objectives():
+    """Prose drift the audit found (#315): "ten objectives" and `O1`-`O10` in five places while
+    twelve rows existed. The pinned count above says how many there are; this says the prose
+    agrees, in every file a reader meets first, and it fails the day a fourteenth arrives and
+    somebody forgets one of them."""
+    count = len(_ledger(OBJECTIVES_MD.read_text()))
+    words = {12: "twelve", 13: "thirteen", 14: "fourteen"}[count]
+    for path in (CLAUDE_MD, OBJECTIVES_MD, GATES_MD, ROOT / "README.md"):
+        text = path.read_text()
+        for stale in ("ten objectives", "`O1`-`O10`", "twelve objectives" if count != 12 else "never"):
+            assert stale not in text, f"{path.name} still says {stale!r}"
+    assert (
+        f"{words} objectives" in CLAUDE_MD.read_text().lower()
+        or f"{words} objectives" in (ROOT / "README.md").read_text().lower()
+    )

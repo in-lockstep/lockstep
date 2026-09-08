@@ -152,6 +152,8 @@ def test_the_scan_finds_the_wrapper_itself() -> None:
 
 @pytest.mark.parametrize("path", MODULES, ids=[str(p.relative_to(SRC)) for p in MODULES])
 def test_no_module_writes_outside_the_process_unwrapped(path: Path) -> None:
+    """GATE-REDACT-1: every primitive that leaves the process is inside `privileged/sink.py`,
+    or named in the exemption table with a reason."""
     relative = str(path.relative_to(SRC))
     if relative == SINK_MODULE:
         return

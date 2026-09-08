@@ -35,12 +35,12 @@ says what changed and why.
 
 ## Wanted contributions
 
-Sized and genuinely wanted. Each is a roadmap item or a recorded gap:
+Sized and genuinely wanted. Each is a recorded gap (the roadmap they were once numbered against exists in no file now; the README's capability matrix and `design/gates.md` are where a gap is recorded):
 
-- **Backport workflow** (roadmap 25): deterministic-first (cherry-pick via plain git, escalate to
+- **Backport workflow**: deterministic-first (cherry-pick via plain git, escalate to
   a model only on conflict). The verb exists; nothing serves it.
-- **RFE workflow** (roadmap 25): rides the triage vertical rather than growing its own.
-- **Flaky-test adapter** (roadmap 26): detect, quarantine with a ticket trailer
+- **RFE workflow**: rides the triage vertical rather than growing its own.
+- **Flaky-test adapter**: detect, quarantine with a ticket trailer
   (`GATE-TESTGUARD-1` refuses silencing without one), report.
 - **A hosted OpenAI-compatible provider recipe**: the seam (an explicit
   `invoker_factory(registry=...)` passed to the adapter) exists and is documented; a worked

@@ -14,8 +14,8 @@ how.
 > of their choice using the provider(s) and model(s) of their choice constrained by the
 > process(es) and policy of their choice.
 
-Everything below is that sentence made checkable. The mission is wider than the ten objectives
-was — it named collaboration between engineers, and choice of provider and model, and for a
+Everything below is that sentence made checkable. The mission is wider than the first ten
+were — it named collaboration between engineers, and choice of provider and model, and for a
 while no objective carried either. `design/objectives.md` recorded that gap rather than papering
 over it, and #240 settled it the way the ledger asks: two more objectives rather than a wider
 reading of the ten, because stretching an objective to cover something it does not say is the

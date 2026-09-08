@@ -81,14 +81,12 @@ def _record(
 # -- the recording ---------------------------------------------------------------------------
 
 
-def test_gate_eval_3_a_stored_request_hashes_back_to_the_key_it_is_filed_under(tmp_path: Path) -> None:
-    """GATE-EVAL-3. The property everything else here rests on.
-
-    A stored request that hashed differently from the one recorded would be a recording that cannot
-    find itself: harvest would build a case, `eval run` would replay it, the lookup would miss, and
-    the case would report as unplayable for a reason nobody could act on. Cheap to assert, and the
-    failure it prevents is one that would look like a data problem rather than a code one.
-    """
+def test_a_request_that_needed_no_redaction_is_filed_under_the_key_it_hashes_to(tmp_path: Path) -> None:
+    """The weaker half, named for what it proves. This fixture redacts nothing, so the stored
+    request IS the raw one and hashes to its key; a request that needed masking does not, and
+    cannot, which is what `GATE-EVAL-3`'s row explains and
+    `test_gate_eval_3_a_redacted_recording_still_finds_itself` below asserts. For years this test
+    carried the gate's name while proving only the case in which the property could not fail."""
     data = json.loads(_record(tmp_path).read_text())
     ((key, entry),) = data["provider_calls"].items()
     assert key_of(request_from(entry["request"])) == key

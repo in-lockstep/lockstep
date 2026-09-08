@@ -7,7 +7,7 @@
 > of their choice using the provider(s) and model(s) of their choice constrained by the
 > process(es) and policy of their choice.
 
-The ten objectives in `CLAUDE.md` are how that sentence is made measurable. This file is the
+The thirteen objectives in `CLAUDE.md` are how that sentence is made measurable. This file is the
 ledger over them, and it exists for one reason: **the objectives had no ratchet.**
 
 `design/gates.md` opens by arguing that a gate defined nowhere is indistinguishable from one that
@@ -50,7 +50,7 @@ close.
 
 Eight properties, all in `test_objectives.py`, which discharges `GATE-TEST-8`:
 
-1. **Primary key.** The ids here are exactly `O1`-`O10`, each once. `GATE-TEST-7` had to be added
+1. **Primary key.** The ids here are exactly `O1`-`O13`, each once. `GATE-TEST-7` had to be added
    to `gates.md` for the same reason, after a duplicate id let two rows discharge each other.
 2. **The titles match `CLAUDE.md` verbatim.** Rewording an objective there without re-reading its
    row here fails the build. The objectives are the subject; this file is a claim about them, and
@@ -88,17 +88,17 @@ to move without somebody standing in front of this table.
 | Objective | Title | Status | Carried by | Blocked on | The gap |
 |---|---|---|---|---|---|
 | `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2`, `GATE-CI-3` | — | — |
-| `O2` | Onboarding is light | held | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2`, `GATE-TOOLING-3` | — | — |
+| `O2` | Onboarding is light | held | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-TOOLING-2`, `GATE-TOOLING-3`, `GATE-FIXTURE-1` | — | — |
 | `O3` | The same process at a terminal and in CI | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-CI-2`, `GATE-CI-4`, `GATE-OUT-7`, `GATE-OUT-5` | — | GitLab is scaffold-tested and never executed: the parity walk and the credential split are asserted over the file an adopter is given, and only a pipeline on an instance this repository does not have would move README's row from `partial`. The learning loop has no GitHub scaffold; its GitHub spelling is this repository's own `improve.yml`. |
 | `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-JUDGE-3` | — | — |
-| `O5` | The record is what teaches it | held | `GATE-IMPROVE-1`, `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-IMPROVE-8`, `GATE-EVAL-2`, `GATE-EVAL-4`, `GATE-EVIDENCE-1`, `GATE-OUT-2`, `GATE-LEDGER-12`, `GATE-JUDGE-1`, `GATE-JUDGE-3`, `GATE-LEDGER-2` | — | The reading half, the writing half and, since PR-18, the half that reads back: `improve` reads the ledger for a qualifying trend, drafts a change to the one declared body that trend is attributed to, measures the draft against the promoted corpus on both arms -- the bound judge settling the rubrics, a verdict kept beside its case -- opens the change with its scorecard, and `report --around` compares the runs after the merge with the runs before it on that body's subject (`GATE-LEDGER-2`). What this repository's own ledger can show of that last step was thin when the row moved -- the Phase 4 merge had two subject-carrying runs after it, because the required check's fan-out records carried its lenses as steps without a subject -- and the fix that followed stamps each lens step with its subject and its bill, so every check since is four comparable runs; the records before it stay thin and the window says so. On this repository the corpus is one promoted case with one kept verdict, so the loop refuses before spending until somebody tightens a case to what a correct answer would have said -- the labelling act it learns from. The reason the first dispatched `improve` run actually gives belongs in this row once it has run. |
-| `O6` | The model never holds a secret | held | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-SANDBOX-2`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-REDACT-3`, `GATE-GUARD-4`, `GATE-CFG-1`, `GATE-POLICY-2` | — | The container a model-staged test needs is one whose image carries the suite's dependencies, and `init` names that image rather than deriving it, so an adopter's first `implement` or `fix` refuses `sandbox.host_fallback` until a person writes the line (`GATE-SANDBOX-2` says why a stack image will not do). This repository's own container mounts the `.venv` its runner built, which runs the suite wherever its packages import on linux -- everywhere, while they stay pure Python -- and fails at import, naming the module, the day one does not. Egress for the run as a whole stays opted out here and in the scaffold (`GATE-EGRESS-2`, #315). |
+| `O5` | The record is what teaches it | held | `GATE-IMPROVE-1`, `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-IMPROVE-8`, `GATE-EVAL-2`, `GATE-EVAL-4`, `GATE-EVIDENCE-1`, `GATE-OUT-2`, `GATE-LEDGER-12`, `GATE-JUDGE-1`, `GATE-JUDGE-3`, `GATE-LEDGER-2`, `GATE-LEDGER-4`, `GATE-EVAL-1`, `GATE-EVAL-3` | — | The reading half, the writing half and, since PR-18, the half that reads back: `improve` reads the ledger for a qualifying trend, drafts a change to the one declared body that trend is attributed to, measures the draft against the promoted corpus on both arms -- the bound judge settling the rubrics, a verdict kept beside its case -- opens the change with its scorecard, and `report --around` compares the runs after the merge with the runs before it on that body's subject (`GATE-LEDGER-2`). What this repository's own ledger can show of that last step was thin when the row moved -- the Phase 4 merge had two subject-carrying runs after it, because the required check's fan-out records carried its lenses as steps without a subject -- and the fix that followed stamps each lens step with its subject and its bill, so every check since is four comparable runs; the records before it stay thin and the window says so. On this repository the corpus is one promoted case with one kept verdict, so the loop refuses before spending until somebody tightens a case to what a correct answer would have said -- the labelling act it learns from. The reason the first dispatched `improve` run actually gives belongs in this row once it has run. |
+| `O6` | The model never holds a secret | held | `GATE-AUTH-1`, `GATE-AUTH-2`, `GATE-SANDBOX-1`, `GATE-SANDBOX-2`, `GATE-EGRESS-1`, `GATE-EGRESS-2`, `GATE-EGRESS-3`, `GATE-REDACT-1`, `GATE-REDACT-2`, `GATE-REDACT-3`, `GATE-GUARD-4`, `GATE-CFG-1`, `GATE-POLICY-2`, `GATE-CFG-2`, `GATE-RETRY-6`, `GATE-APPROVAL-1`, `GATE-GUARD-1`, `GATE-GUARD-2` | — | The container a model-staged test needs is one whose image carries the suite's dependencies, and `init` names that image rather than deriving it, so an adopter's first `implement` or `fix` refuses `sandbox.host_fallback` until a person writes the line (`GATE-SANDBOX-2` says why a stack image will not do). This repository's own container mounts the `.venv` its runner built, which runs the suite wherever its packages import on linux -- everywhere, while they stay pure Python -- and fails at import, naming the module, the day one does not. Egress for the run as a whole stays opted out here and in the scaffold (`GATE-EGRESS-2`, #315). |
 | `O7` | Determinism first | held | `GATE-REVIEW-2`, `GATE-REVIEW-3`, `GATE-REVIEW-4`, `GATE-EVAL-4`, `GATE-COST-3`, `GATE-SHAPE-1`, `GATE-VERDICT-1`, `GATE-PROGRESS-1`, `GATE-OUT-3`, `GATE-JUDGE-2` | — | — |
-| `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3`, `GATE-DOCS-1`, `GATE-BODY-1` | — | — |
+| `O8` | Extended without forking | held | `GATE-PACK-1`, `GATE-PACK-2`, `GATE-PACK-3`, `GATE-PACK-4`, `GATE-PACK-5`, `GATE-PLUGIN-1`, `GATE-PLUGIN-2`, `GATE-PLUGIN-3`, `GATE-DOCS-1`, `GATE-BODY-1`, `GATE-POLICY-1` | — | — |
 | `O9` | New aspects on a verb that already exists | held | `GATE-REVIEW-3`, `GATE-PACK-5`, `GATE-REVIEW-5`, `GATE-LENS-1` | — | — |
-| `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3`, `GATE-DOGFOOD-1` | — | Reviews on every pull request, a review asked for on a thread, a fix and measurement have closed here (`GATE-DOGFOOD-1` names the runs); an implementation has not. Deliberately not dogfooded on this repository's own runs, and each a separate decision: egress enforcement and the daily ceiling (off, documented), GitLab (no instance; O3 says so), and any provider but Anthropic (`GATE-COST-3` prices it; nothing here has routed to it). The required `review` check is enforced by choice -- `doctor` now says so (`DOC127`, `DOC128`) -- and stays that way while one engineer is the administrator. |
-| `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1`, `GATE-JUDGE-2` | — | — |
-| `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-LEDGER-12`, `GATE-REVIEW-6`, `GATE-OUT-6` | — | — |
+| `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3`, `GATE-DOGFOOD-1`, `GATE-LEDGER-10` | — | Reviews on every pull request, a review asked for on a thread, a fix and measurement have closed here (`GATE-DOGFOOD-1` names the runs); an implementation has not. Deliberately not dogfooded on this repository's own runs, and each a separate decision: egress enforcement and the daily ceiling (off, documented), GitLab (no instance; O3 says so), and any provider but Anthropic (`GATE-COST-3` prices it; nothing here has routed to it). The required `review` check is enforced by choice -- `doctor` now says so (`DOC127`, `DOC128`) -- and stays that way while one engineer is the administrator. |
+| `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1`, `GATE-JUDGE-2`, `GATE-COST-3` | — | — |
+| `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-LEDGER-12`, `GATE-REVIEW-6`, `GATE-OUT-6`, `GATE-LEDGER-1`, `GATE-LEDGER-3`, `GATE-LEDGER-7`, `GATE-LEDGER-8`, `GATE-LEDGER-9`, `GATE-REVIEW-1` | — | — |
 | `O13` | A run is bounded before it starts | held | `GATE-BUDGET-1`, `GATE-COST-1`, `GATE-COST-2`, `GATE-COST-5`, `GATE-DEADLINE-1`, `GATE-RETRY-4`, `GATE-TESTGUARD-1`, `GATE-COST-6`, `GATE-ASYNC-3b` | — | Written in Phase 8 (PR-19) from the mission's *disciplined* clause and not from the gates, and then found to be carried by nine that already held: the startup refusal of an undeclared ceiling (`GATE-BUDGET-1`), the projection checked before the turn it prices (`GATE-COST-2`) and accumulated per run rather than per process (`GATE-COST-1`), the org-level spend limit `doctor` demands be attested (`GATE-COST-5`), the deadline and the kill switch stopping a loop mid-flight (`GATE-DEADLINE-1`), the retry that is not made when it would outlast the clock (`GATE-RETRY-4`), the refusal of a change that loosens the tests bounding it (`GATE-TESTGUARD-1`), and the two Phase 5 added -- a joint ceiling across a fan-out (`GATE-COST-6`) and the switch reaching every in-flight branch (`GATE-ASYNC-3b`) -- which waited in the uncited count for exactly this row rather than being stretched under O7. What the row does not claim: a daily ceiling on this repository's own runs, which is deliberately off (O10's row lists it as not dogfooded), and any bound on wall clock the deadline does not already state. |
 
 13 of 13 are `held`. That is the number this file exists to make visible, and it should be read
@@ -302,33 +302,25 @@ remove. The table returns the day a gate qualifies; the test recomputes it eithe
 
 ## Held, and claimed by no objective
 
-**32 held gates are cited by no objective row.** The number is exact and the test recomputes it:
+**15 held gates are cited by no objective row.** The number is exact and the test recomputes it:
 it may not rise without a row claiming the gate or this sentence saying why it holds for nobody,
 and when it falls this sentence is lowered and the fall is the credit. Thirty-nine until Phase 5
 built `fan_out` and added two spend-and-time rows to it; forty-one until O13 claimed those two and
-seven older ones in Phase 8 (PR-19), which is the largest fall this sentence has recorded and the
-one #240 predicted: the mission's *disciplined* clause was carried by O4, O6 and O7 in the map
-below, and none of those three sentences says a run is bounded before it starts.
+seven older ones in Phase 8 (PR-19); thirty-two until PR-20 re-read every row against the
+sixteen citations the audit named (#315) and retired `GATE-GUARD-3` with its subject.
 
-The section above sees the unsettled half of the ledger and reads as *almost everything here
-serves an objective*. It means *almost every unsettled thing does*. The other half is this number,
-and it was found by counting (#273): nearly half the `held` rows assert a property that no stated
-direction claims. The list is not written here because a list of thirty-nine is a census and not
-a ratchet; the test names the members whenever the count moves, which is the moment somebody is
-standing in front of this table anyway.
-
-What the number holds is not junk, and that is the point of writing it down. Some of it is the
-apparatus checking itself -- `GATE-TEST-7` and `GATE-TEST-8` are the two ledgers' own consistency
-checks, `GATE-CFG-2` is `doctor` refusing a configuration read from the ref under review -- and no
-objective row will ever cite those, because they serve every row rather than one. Most of it is
-mechanism built, held and tested that no objective has yet been asked to carry: the transport
-retry and async-client rows (`GATE-RETRY-1` to `-3`, `GATE-ASYNC-1` to `-4`), the ledger
-plumbing (`GATE-LEDGER-1`, `-3` to `-9`; the cost rows went to O13), the three write guards
-(`GATE-GUARD-1` to `-3`) and `GATE-REVIEW-1`, the nearest held surface to the mission's
-collaboration clause. #240 added two objectives to carry what the mission named and no objective
-did; this number is what it has to move, one re-read row at a time -- and a gate whose row cannot
-be claimed by any objective's own text, after that reading, is what `CLAUDE.md` calls surface to
-remove.
+What is left is apparatus, and every one of the fifteen is named here so that the next re-read
+starts from a list rather than a count. The two ledgers checking themselves: `GATE-TEST-1`,
+`GATE-TEST-2`, `GATE-TEST-7`, `GATE-TEST-8` -- consistency of the corpus and of these tables,
+serving every row rather than one. The transport's own discipline, held under `AiInvoker` and
+cited by no objective because no objective's sentence is about how a transport behaves:
+`GATE-ASYNC-1` to `-4` and `GATE-RETRY-1` to `-3`. The ledger's own shape: `GATE-LEDGER-5` and
+`GATE-LEDGER-6`, the epoch and the keys a record may not carry. And the two the plan asked the
+owner about, kept by decision at PR-20 rather than retired: `GATE-OUT-4`, the refusal a LOCAL
+store gives `compare_and_set`, which is what `park` reads to refuse by name; and `GATE-OUT-1`,
+the outcome vocabulary every row's status is spelled in. A gate here that a later objective's own
+text turns out to claim moves up; one whose row cannot be claimed by any objective's text after
+this reading is what `CLAUDE.md` calls surface to remove, and none of the fifteen is that.
 
 ## How the mission maps, and what it cost to say so
 
@@ -378,12 +370,12 @@ same ground and do enforce. It read differently afterwards — an adopter choosi
 the thing the mission exists for, and five of the choices were inert. #263 deleted them, and O6 is
 `held`.
 
-## Held, and cited by nothing
+## Held, and cited by nothing (as it stood before #273)
 
-The section above lists the *unsettled* gates no objective is blocked on. There is a second pool
-it cannot see: thirty-nine gates are `held` and cited by no row here, because the check filters on
-unsettled statuses — so a held gate serving no stated direction is invisible to the very section
-that exists to find surface serving no direction. #273 is that gap.
-
-O11's three carriers came out of that pool. It is worth draining for that reason rather than as a
-matter of tidiness: what is in there is not junk, it is directions nobody has written down yet.
+Kept as the record of how the count above came to exist. When this section was written the
+*claimed by no objective* section listed only the unsettled gates no objective was blocked on,
+and a second pool it could not see -- thirty-nine gates `held` and cited by no row -- was
+invisible to the very section that existed to find surface serving no direction. #273 counted
+that pool and wrote the number into the section above, where the test has recomputed it ever
+since; O11's three carriers came out of it, then O13's nine, then the sixteen PR-20 cited. What
+was in there was not junk. It was directions nobody had written down yet, and now they are.

@@ -44,7 +44,7 @@ ALL = _cases("corpus.json", "repo") + _cases("corpus-shipped.json", "shipped")
 
 @pytest.mark.parametrize("scope,key,entry", ALL, ids=[f"{k}" for _, k, _ in ALL])
 def test_composed_prompt_matches_corpus(scope: str, key: str, entry: dict[str, Any]) -> None:
-    """The captured text still hashes to what was recorded."""
+    """GATE-TEST-1: the captured text still hashes to what was recorded."""
     text = (CORPUS / "prompts" / f"{key}.txt").read_text()
     assert hashlib.sha256(text.encode()).hexdigest() == entry["sha256"], (
         f"{key}: composed prompt changed. If deliberate, re-run tools/capture_corpus.py and "
