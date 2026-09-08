@@ -331,6 +331,10 @@ def improve_body(scorecard: Any, rationale: str, *, run_id: str, label: str) -> 
         "",
         f"**Measurement run:** `{run_id}` — `in-lockstep history --explain {run_id}` prints its "
         "record, and the paid arm's inferences were recorded on that run's tape.",
+        "",
+        "**After merging:** `in-lockstep report --around <this pull request's number>` compares the "
+        f"runs on `{label}` after the merge with the runs before it, each window with its run count "
+        "and no verdict (`GATE-LEDGER-2`).",
     ]
     if rationale:
         lines += ["", "**The drafter's rationale**", "", rationale.strip()]

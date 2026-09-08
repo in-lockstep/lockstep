@@ -1056,3 +1056,88 @@ def test_a_parked_pull_request_carries_the_label_and_the_fenced_json_and_loses_t
     asyncio.run(scm.clear_parked(41, "run-1"))
     assert ("pr", "edit", "41", "--remove-label", "lockstep:parked") in calls
     assert any("resumed" in c[-1] and "<!-- in-lockstep:parked -->" in c[-1] for c in calls)
+
+
+# -- GATE-LEDGER-2's caller: the windows around a merge ------------------------------------------
+
+
+def _around_record(
+    ts: str, *, subject: str = "k1", label: str = "review/security S@1 on m", **fields: object
+) -> dict[str, object]:
+    return {
+        "epoch": "in-process",
+        "kind": "review",
+        "status": "succeeded",
+        "ts": ts,
+        "subject": subject,
+        "subject_label": label,
+        **fields,
+    }
+
+
+def test_gate_ledger_2_windows_around_a_moment_split_one_subject_by_its_strategy_or_its_key() -> None:
+    """GATE-LEDGER-2, the caller. A merged proposal changes the subject KEY -- it is a hash of the
+    composed prompt -- so the runs after carry a different key from the runs before, and both
+    windows share only the strategy the label starts with. A strategy matches on that word; a
+    key matches exactly; a record with no `ts`, a naive one, or another subject is in neither."""
+    from datetime import UTC, datetime
+
+    from in_lockstep.platform.ledger.store import windows_around
+
+    merge = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
+    records = [
+        _around_record("2026-09-06T00:00:00+00:00", subject="old"),
+        _around_record("2026-09-07T11:59:59+00:00", subject="old"),
+        _around_record("2026-09-07T12:00:00+00:00", subject="new"),
+        _around_record("2026-09-08T00:00:00+00:00", subject="new"),
+        _around_record("2026-09-08T00:00:00+00:00", subject="other", label="review/intent I@1 on m"),
+        _around_record("2026-09-08T00:00:00", subject="new"),
+        {**_around_record("2026-09-08T00:00:00+00:00", subject="new"), "ts": None},
+    ]
+    before, after = windows_around(records, ts=merge, subject="review/security")
+    assert [r["subject"] for r in before] == ["old", "old"]
+    assert [r["subject"] for r in after] == ["new", "new"], "the moment itself is after"
+    by_key = windows_around(records, ts=merge, subject="new")
+    assert (len(by_key[0]), len(by_key[1])) == (0, 2)
+    assert windows_around(records, ts=merge, subject="nobody") == ([], [])
+
+
+def test_gate_ledger_2_two_seeded_windows_produce_a_delta_per_metric_and_a_thin_one_a_dash() -> None:
+    """GATE-LEDGER-2. `compare` over the windows `windows_around` cut, rendered by the leaf: a
+    delta for the failure rate and the mean cost when both sides clear `MIN_RUNS`, and a dash
+    that says how thin each side was when one does not."""
+    from in_lockstep import metrics
+    from in_lockstep.platform.ledger.store import MIN_RUNS, compare
+
+    before = [_around_record("2026-09-06T00:00:00+00:00", cost_usd=0.10) for _ in range(MIN_RUNS)]
+    before[0]["status"] = "failed"
+    after = [_around_record("2026-09-08T00:00:00+00:00", cost_usd=0.05) for _ in range(MIN_RUNS)]
+    rows = compare(before, after)
+    assert rows[0]["verdict"] == "measured"
+    lines = metrics.around_lines(
+        rows,
+        subject="review/security",
+        merge="abc123",
+        when="2026-09-07T12:00:00+00:00",
+        before_runs=len(before),
+        after_runs=len(after),
+        min_runs=MIN_RUNS,
+    )
+    text = "\\n".join(lines)
+    assert f"before    {MIN_RUNS} run(s)" in text and f"after     {MIN_RUNS} run(s)" in text
+    assert "failed" in text and "mean cost" in text and "-$0.0500" in text
+    assert f"measured over {MIN_RUNS} and {MIN_RUNS} runs; the delta is a number, not a verdict" in text
+
+    thin = metrics.around_lines(
+        compare(before, after[:1]),
+        subject="review/security",
+        merge="abc123",
+        when="w",
+        before_runs=len(before),
+        after_runs=1,
+        min_runs=MIN_RUNS,
+    )
+    assert any(
+        "too few runs" in line and "1 after" in line and f"{MIN_RUNS} on each side" in line for line in thin
+    )
+    assert all("$" not in line for line in thin), "a thin window renders no number"

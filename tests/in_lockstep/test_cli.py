@@ -11,11 +11,13 @@ discarded every binding, budget, policy contribution and model route the module 
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -4541,3 +4543,126 @@ def test_run_parked_ok_exits_zero_and_says_the_park_is_the_outcome(
     assert result.exit_code == 0, result.output
     assert "parked    human.pr_review; resume with" in result.output
     assert "exit      0: parked, and --parked-ok" in result.output
+
+
+# -- GATE-LEDGER-2's caller: report --around --------------------------------------------------------
+
+
+def _around_ledger(repo: Path, *, before: int, after: int, subject: str = "review/security") -> None:
+    ledger = repo / ".lockstep" / "ledger"
+    ledger.mkdir(parents=True, exist_ok=True)
+    for n in range(before + after):
+        side = "before" if n < before else "after"
+        day = "2026-09-01" if side == "before" else "2026-09-20"
+        (ledger / f"r{n}.json").write_text(
+            json.dumps(
+                {
+                    "epoch": "in-process",
+                    "run_id": f"r{n}",
+                    "kind": "review",
+                    "status": "failed" if (side == "before" and n == 0) else "succeeded",
+                    "decided": True,
+                    "ts": f"{day}T00:00:00+00:00",
+                    "subject": f"{side}-key",
+                    "subject_label": f"{subject} SecurityReviewPrompt@1 on m",
+                    "cost_usd": 0.10 if side == "before" else 0.05,
+                }
+            )
+        )
+
+
+class _MergedHost:
+    def __init__(self, merged: tuple[str, str] | None) -> None:
+        self.merged = merged
+        self.asked: list[int] = []
+
+    async def merged_change(self, number: int) -> tuple[str, str] | None:
+        self.asked.append(number)
+        return self.merged
+
+
+def test_gate_ledger_2_report_around_a_merged_pull_request_prints_two_windows_and_a_delta(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-LEDGER-2, the caller. The host names the merge commit and the moment; the ledger's
+    records on the subject split around it; each metric prints before, after and delta with the
+    run counts, and nothing prints a verdict."""
+    import in_lockstep.cli as cli_module
+
+    _write(repo)
+    _around_ledger(repo, before=5, after=5)
+    host = _MergedHost(("abc123def4567890", "2026-09-10T12:00:00Z"))
+    monkeypatch.setattr(cli_module, "_bound_scm", lambda lockstep: host)
+
+    result = CliRunner().invoke(main, ["report", "--around", "#41", "--subject", "review/security"])
+    assert result.exit_code == 0, result.output
+    assert host.asked == [41]
+    assert "around    abc123def456  (2026-09-10T12:00:00+00:00)" in result.output
+    assert (
+        "before    5 run(s) on that subject" in result.output and "after     5 run(s) since" in result.output
+    )
+    assert "failed           20%          0%        -20%" in result.output, result.output
+    assert "mean cost    $0.1000     $0.0500    -$0.0500" in result.output, result.output
+    assert "measured over 5 and 5 runs; the delta is a number, not a verdict" in result.output
+    assert "improved" not in result.output and "worse" not in result.output
+
+
+def test_gate_ledger_2_a_thin_window_renders_a_dash_that_says_why(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import in_lockstep.cli as cli_module
+
+    _write(repo)
+    _around_ledger(repo, before=5, after=2)
+    monkeypatch.setattr(
+        cli_module, "_bound_scm", lambda lockstep: _MergedHost(("abc123def4567890", "2026-09-10T12:00:00Z"))
+    )
+    result = CliRunner().invoke(main, ["report", "--around", "41", "--subject", "review/security"])
+    assert result.exit_code == 0, result.output
+    assert "too few runs: 5 before and 2 after, and 5 on each side is the floor" in result.output
+    assert "$" not in result.output
+
+
+def test_gate_ledger_2_the_refusals_name_an_unmerged_pr_an_unrecorded_subject_and_an_underivable_one(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GATE-LEDGER-2. Three refusals, each by name and each before any number is printed."""
+    import in_lockstep.cli as cli_module
+
+    _write(repo)
+    _around_ledger(repo, before=5, after=5)
+    monkeypatch.setattr(cli_module, "_bound_scm", lambda lockstep: _MergedHost(None))
+    unmerged = CliRunner().invoke(main, ["report", "--around", "#41", "--subject", "review/security"])
+    assert unmerged.exit_code != 0 and "pull request 41 is not merged" in unmerged.output
+
+    monkeypatch.setattr(
+        cli_module, "_bound_scm", lambda lockstep: _MergedHost(("abc123def4567890", "2026-09-10T12:00:00Z"))
+    )
+    nobody = CliRunner().invoke(main, ["report", "--around", "#41", "--subject", "review/intent"])
+    assert nobody.exit_code != 0 and "no record carries the subject 'review/intent'" in nobody.output
+
+    underivable = CliRunner().invoke(main, ["report", "--around", "#41"])
+    assert underivable.exit_code != 0, underivable.output
+    assert "touched no declared Improvable body" in underivable.output and "--subject" in underivable.output
+
+
+def test_gate_ledger_2_a_commit_resolves_to_its_own_sha_and_committer_moment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other spelling of `--around`: a commit git can show, dated by git and not by a host."""
+    import subprocess
+
+    from in_lockstep.cli import _resolve_merge
+
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], check=True)
+    (tmp_path / "x").write_text("x\n")
+    subprocess.run(["git", "add", "x"], check=True)
+    env = {**os.environ, "GIT_COMMITTER_DATE": "2026-09-10T12:00:00+00:00"}
+    subprocess.run(
+        ["git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "m"], check=True, env=env
+    )
+    sha, when = _resolve_merge("HEAD", lambda: None)
+    assert len(sha) == 40 and when.isoformat() == "2026-09-10T12:00:00+00:00"
+    with pytest.raises(click.ClickException, match="not a commit git can show"):
+        _resolve_merge("nope", lambda: None)
