@@ -88,7 +88,7 @@ to move without somebody standing in front of this table.
 | Objective | Title | Status | Carried by | Blocked on | The gap |
 |---|---|---|---|---|---|
 | `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2`, `GATE-CI-3` | — | — |
-| `O2` | Onboarding is light | partial | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2` | `GATE-TOOLING-3` | The same gap as before, one ecosystem-family narrower. #237 taught detection to read `Cargo.toml`, `go.mod`, `pom.xml` and `build.gradle`, so a Rust, Go or JVM adopter no longer hand-writes what was in their tree. A Ruby, PHP, Elixir, .NET, C++ or Swift adopter still does; a Poetry, PDM, Pipenv, Yarn or pnpm adopter no longer does, and neither does one whose stack decides its container image or whose `"lint"` script was already written (#316). This row did not move with O1's, and the reason is the difference between the two sentences: O1 sanctions declining in its own text -- *detection that guesses is worse than detection that declines* -- so a stack that is read or else named is O1 satisfied. O2's standard has no such clause. It is that what a person writes by hand is the thing nobody could have discovered for them, and a `Rakefile` sitting in the tree is discoverable. `GATE-TOOLING-3` is where the remainder is recorded. |
+| `O2` | Onboarding is light | held | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-RECORD-1`, `GATE-TOOLING-2`, `GATE-TOOLING-3` | — | — |
 | `O3` | The same process at a terminal and in CI | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-CI-2`, `GATE-CI-4`, `GATE-OUT-7`, `GATE-OUT-5` | — | GitLab is scaffold-tested and never executed: the parity walk and the credential split are asserted over the file an adopter is given, and only a pipeline on an instance this repository does not have would move README's row from `partial`. The learning loop has no GitHub scaffold; its GitHub spelling is this repository's own `improve.yml`. |
 | `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-JUDGE-3` | — | — |
 | `O5` | The record is what teaches it | partial | `GATE-IMPROVE-1`, `GATE-IMPROVE-2`, `GATE-IMPROVE-3`, `GATE-IMPROVE-4`, `GATE-IMPROVE-5`, `GATE-IMPROVE-6`, `GATE-IMPROVE-7`, `GATE-IMPROVE-8`, `GATE-EVAL-2`, `GATE-EVAL-4`, `GATE-EVIDENCE-1`, `GATE-OUT-2`, `GATE-LEDGER-12`, `GATE-JUDGE-1`, `GATE-JUDGE-3` | `GATE-LEDGER-2` | The reading half is real and, since #163, so is the writing half: `improve` reads the ledger for a qualifying trend, drafts a change to the one declared body that trend is attributed to, measures the draft against the promoted corpus before opening anything -- both arms over the same cases, a person as the declared judge -- and opens the change as a pull request carrying the scorecard, the run id and the recording behind it. What remains is what the ledger has named from the start. Nothing compares the runs after a merged proposal with the runs before it (`GATE-LEDGER-2`), so the loop can measure a draft and cannot yet measure whether a merged one helped. A rubric is `outstanding` on both arms until a verdict settles it -- `GATE-JUDGE-1` is the deciding half, with no judge model bound yet to give one -- and `GATE-OUT-2` is what keeps that honest rather than a pass; it carries this row since #267 struck the two clauses that described a `Cache` nobody wrote, so the gate now claims exactly what is enforced. On this repository the corpus is one promoted case that passes, so the loop refuses before spending until somebody tightens a case to what a correct answer would have said -- the labelling act it learns from. Until #307 that was not the refusal a scheduled run would have reached: the measuring job's checkout had no local `lockstep-history` and the ledger read nothing else, so its census was empty and the first refusal would have been `improve.no_trend`, forever, before any body or corpus was consulted. The job reads `origin/lockstep-history` now (`GATE-LEDGER-12`); the reason its first dispatched run actually gives belongs in this row once it has run. |
@@ -100,7 +100,7 @@ to move without somebody standing in front of this table.
 | `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1`, `GATE-JUDGE-2` | — | — |
 | `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-LEDGER-12`, `GATE-REVIEW-6`, `GATE-OUT-6` | — | — |
 
-10 of 12 are `held`. That is the number this file exists to make visible, and it should be read
+11 of 12 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -254,6 +254,18 @@ about this repository's headcount and not a gap in the framework -- no gate can 
 `GATE-TEAM-1`'s row keeps saying it -- which is why the objective is `held` on the mechanism the
 tests exercise over a two-person ledger rather than on the evidence this one repository can
 produce. Still the objective with the least under it; two gates rather than one.
+
+Eleven, when PR-17 (#317) closed `GATE-TOOLING-3` and O2 moved to `held`, the row that did not
+move twice. Nothing was exposed underneath this time, and the reason is the one the two earlier
+paragraphs give: the gap text had named the remainder exactly -- seven manifests, each a
+repository saying how it tests itself, each declined by name -- and the closure read all seven by
+the two rules #237 set rather than by any looser one. `mix test`, `dotnet test`, `swift test` and
+`bazel test //...` bind from the file because the toolchain guarantees them; `composer test`,
+`bundle exec rake test` and `ctest` bind only from the line in the file that declares them, and
+a Rakefile without a `test` task is told that rather than "unsupported". What a Ruby, PHP,
+Elixir, .NET, Swift, Bazel or CMake adopter writes by hand is now what nobody could have
+discovered for them, which is O2's sentence. What is still declined is stated in the same
+place: a CMake configure step, and a `run` line for any of the seven.
 
 ## Claimed by no objective
 

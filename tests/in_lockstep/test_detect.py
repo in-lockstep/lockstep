@@ -756,12 +756,24 @@ def test_every_advertised_manifest_is_one_detection_actually_reads(tmp_path: Pat
         "pom.xml": "<project/>",
         "build.gradle": "",
         "build.gradle.kts": "",
+        # GATE-TOOLING-3's seven. A glob entry is written under a real name it matches.
+        "Gemfile": "source 'https://rubygems.org'\n",
+        "Rakefile": "task :test do\nend\n",
+        "composer.json": '{"name":"x/y"}',
+        "mix.exs": "defmodule X.MixProject do\nend\n",
+        "*.csproj": ("app.csproj", '<Project Sdk="Microsoft.NET.Sdk"/>'),
+        "*.sln": ("app.sln", "Microsoft Visual Studio Solution File\n"),
+        "CMakeLists.txt": "project(x)\n",
+        "Package.swift": "// swift-tools-version:5.10\n",
+        "BUILD.bazel": "",
     }
     assert set(minimal) == set(BUILD_MANIFESTS), "a manifest was advertised without a case here"
     for name in BUILD_MANIFESTS:
-        root = tmp_path / name.replace(".", "_").replace("/", "_")
+        root = tmp_path / name.replace(".", "_").replace("/", "_").replace("*", "glob")
         root.mkdir()
-        _write(root, {name: minimal[name]})
+        spelled = minimal[name]
+        filename, content = spelled if isinstance(spelled, tuple) else (name, spelled)
+        _write(root, {filename: content})
         facts = _detect_facts(root)
         assert facts.summary(), f"{name} is advertised by the decline and detection reads nothing from it"
 
@@ -795,3 +807,123 @@ def test_a_servable_repository_declines_nothing(tmp_path: Path) -> None:
     """The other side of the ratchet: a decline that fired on a bound repository would be noise."""
     _write(tmp_path, {"Cargo.toml": '[package]\nname = "x"\n'})
     assert _detect_facts(tmp_path).declined() == ""
+
+
+# --- The seven the row named: GATE-TOOLING-3 ---------------------------------------------------
+
+
+def test_gate_tooling_3_mix_exs_binds_mix_test_and_provisions_only_from_a_lock(tmp_path: Path) -> None:
+    """GATE-TOOLING-3: `mix test` is guaranteed by the toolchain for any project; `mix deps.get`
+    only where a `mix.lock` says what to fetch."""
+    _write(tmp_path, {"mix.exs": "defmodule X.MixProject do\nend\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "elixir" and facts.test_command == ("mix", "test")
+    assert facts.provision_commands == ()
+    _write(tmp_path, {"mix.lock": "%{}\n"})
+    assert _detect_facts(tmp_path).provision_commands == (("mix", "deps.get"),)
+
+
+def test_gate_tooling_3_a_dotnet_project_or_solution_binds_dotnet_test_build_and_restore(
+    tmp_path: Path,
+) -> None:
+    """GATE-TOOLING-3: the SDK guarantees all three, and the project file carries the project's
+    own name, so the manifest is a glob and either spelling is read."""
+    _write(tmp_path, {"Widgets.csproj": '<Project Sdk="Microsoft.NET.Sdk"/>'})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "dotnet"
+    assert facts.test_command == ("dotnet", "test") and facts.build_command == ("dotnet", "build")
+    assert facts.provision_commands == (("dotnet", "restore"),)
+    solution = tmp_path / "sln"
+    solution.mkdir()
+    _write(solution, {"Widgets.sln": "Microsoft Visual Studio Solution File\n"})
+    assert _detect_facts(solution).test_command == ("dotnet", "test")
+
+
+def test_gate_tooling_3_package_swift_binds_swift_test_and_build_and_resolves_only_from_a_lock(
+    tmp_path: Path,
+) -> None:
+    """GATE-TOOLING-3."""
+    _write(tmp_path, {"Package.swift": "// swift-tools-version:5.10\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "swift"
+    assert facts.test_command == ("swift", "test") and facts.build_command == ("swift", "build")
+    assert facts.provision_commands == ()
+    _write(tmp_path, {"Package.resolved": "{}"})
+    assert _detect_facts(tmp_path).provision_commands == (("swift", "package", "resolve"),)
+
+
+def test_gate_tooling_3_bazel_binds_only_inside_a_workspace(tmp_path: Path) -> None:
+    """GATE-TOOLING-3: a BUILD file outside a workspace is not a Bazel repository, and `bazel`
+    there fails at run time -- the wrong default that runs. The decline names the missing file."""
+    _write(tmp_path, {"BUILD.bazel": ""})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "bazel" and facts.test_command == () and facts.build_command == ()
+    assert "MODULE.bazel" in facts.declined()
+    _write(tmp_path, {"MODULE.bazel": 'module(name = "x")\n'})
+    facts = _detect_facts(tmp_path)
+    assert facts.test_command == ("bazel", "test", "//...") and facts.build_command == (
+        "bazel",
+        "build",
+        "//...",
+    )
+    assert facts.provision_commands == (), "Bazel fetches its own"
+
+
+def test_gate_tooling_3_composer_test_binds_only_from_a_written_script(tmp_path: Path) -> None:
+    """GATE-TOOLING-3: a written script is a decision, the rule package.json already follows.
+    `composer install` only from a `composer.lock`."""
+    _write(tmp_path, {"composer.json": '{"name":"x/y"}'})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "php" and facts.test_command == ()
+    assert "composer test" in facts.declined()
+    _write(tmp_path, {"composer.json": '{"name":"x/y","scripts":{"test":"phpunit"}}', "composer.lock": "{}"})
+    facts = _detect_facts(tmp_path)
+    assert facts.test_command == ("composer", "test")
+    assert facts.provision_commands == (("composer", "install"),)
+
+
+def test_gate_tooling_3_rake_test_binds_only_from_a_rakefile_that_defines_the_task(tmp_path: Path) -> None:
+    """GATE-TOOLING-3: `bundle exec rake test` out of a Rakefile that defines `test` -- `task
+    :test`, `task "test"`, or a `Rake::TestTask` -- and nothing out of one that does not. A
+    Rakefile with no Gemfile is a ruby fact and no `bundle`."""
+    _write(tmp_path, {"Gemfile": "source 'https://rubygems.org'\n", "Rakefile": "task :build do\nend\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "ruby" and facts.test_command == ()
+    assert "Rake::TestTask" in facts.declined()
+    for spelling in ("task :test do\nend\n", 'task "test" do\nend\n', "Rake::TestTask.new do |t|\nend\n"):
+        _write(tmp_path, {"Rakefile": spelling})
+        assert _detect_facts(tmp_path).test_command == ("bundle", "exec", "rake", "test"), spelling
+    # `task :tests` and a comment are not the task.
+    _write(tmp_path, {"Rakefile": "# task :test\ntask :tests do\nend\n"})
+    assert _detect_facts(tmp_path).test_command == ()
+    _write(tmp_path, {"Rakefile": "task :test do\nend\n", "Gemfile.lock": "GEM\n"})
+    assert _detect_facts(tmp_path).provision_commands == (("bundle", "install"),)
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    _write(alone, {"Rakefile": "task :test do\nend\n"})
+    assert _detect_facts(alone).stack == "ruby" and _detect_facts(alone).test_command == ()
+
+
+def test_gate_tooling_3_cmake_binds_ctest_only_where_testing_was_enabled(tmp_path: Path) -> None:
+    """GATE-TOOLING-3: `ctest` in a project that never called `enable_testing()` finds nothing and
+    exits 8. The build half binds regardless; the configure step is never invented."""
+    _write(tmp_path, {"CMakeLists.txt": "project(x)\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.stack == "cpp" and facts.test_command == ()
+    assert facts.build_command == ("cmake", "--build", "build")
+    assert "enable_testing()" in facts.declined() or facts.declined() == ""
+    _write(tmp_path, {"CMakeLists.txt": "project(x)\nenable_testing()\nadd_test(NAME t COMMAND t)\n"})
+    assert _detect_facts(tmp_path).test_command == ("ctest", "--test-dir", "build")
+
+
+def test_gate_tooling_3_a_written_target_still_beats_every_derived_command(tmp_path: Path) -> None:
+    """The precedence #237 stated holds for the seven: a `test` target is a decision."""
+    _write(tmp_path, {"mix.exs": "", "Makefile": "test:\n\tmix test --trace\n"})
+    assert _detect_facts(tmp_path).test_command == ("make", "test")
+
+
+def test_gate_tooling_3_a_manifest_one_level_down_is_named_under_either_spelling(tmp_path: Path) -> None:
+    """The decline's one-level-down scan reads the glob entries the way the root does."""
+    _write(tmp_path, {"README.md": "# x\n", "api/Widgets.csproj": "<Project/>", "web/Gemfile": ""})
+    declined = _detect_facts(tmp_path).declined()
+    assert "api/*.csproj" in declined and "web/Gemfile" in declined

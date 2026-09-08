@@ -8,6 +8,7 @@ environment rather than the network.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,7 +16,15 @@ from typing import Any
 
 from .core.changes import ChangeGuard, PathPolicy
 from .core.container import Container, Scope, Tier
-from .core.context import AGENT_INSTRUCTION_FILES, BUILD_MANIFESTS, Approval, RepoFacts, RepoInfo, RunContext
+from .core.context import (
+    AGENT_INSTRUCTION_FILES,
+    BUILD_MANIFESTS,
+    Approval,
+    RepoFacts,
+    RepoInfo,
+    RunContext,
+    manifest_present,
+)
 from .core.improve import Improvable
 from .core.middleware import Middleware, provides_approval
 from .core.policy import Policy, PolicyStack
@@ -400,12 +409,31 @@ def _detect_facts(root: Path) -> RepoFacts:
 
     cargo = read("Cargo.toml")
     gradle = has("build.gradle", "build.gradle.kts")
+    composer_raw = read("composer.json")
+    composer: dict[str, Any] = {}
+    if composer_raw:
+        try:
+            loaded_composer = _json.loads(composer_raw)
+            composer = loaded_composer if isinstance(loaded_composer, dict) else {}
+        except ValueError:
+            composer = {}
+    rakefile = read("Rakefile")
+    cmake = read("CMakeLists.txt")
 
     python = bool(pyproject) or has("setup.py", "setup.cfg") or has("requirements.txt")
     node = bool(package)
     rust = bool(cargo)
     go = has("go.mod")
     jvm = has("pom.xml") or gradle
+    # The seven `GATE-TOOLING-3` named (#317). Each is a fact about the stack from the file's
+    # presence; what each BINDS is decided below, by the same rule as the four before them.
+    ruby = has("Gemfile", "Rakefile")
+    php = bool(composer)
+    elixir = has("mix.exs")
+    dotnet = manifest_present(root, "*.csproj") or manifest_present(root, "*.sln")
+    swift = has("Package.swift")
+    bazel = has("BUILD.bazel", "BUILD")
+    cpp = bool(cmake)
     # Every ecosystem whose manifest is here, not the first one matched. A Go service with a
     # package.json front end is two true facts, and reporting one of them made `ls` describe a
     # repository as something it is only half of. Display only: which of these actually gets
@@ -418,6 +446,13 @@ def _detect_facts(root: Path) -> RepoFacts:
             ("rust", rust),
             ("go", go),
             ("jvm", jvm),
+            ("ruby", ruby),
+            ("php", php),
+            ("elixir", elixir),
+            ("dotnet", dotnet),
+            ("swift", swift),
+            ("bazel", bazel),
+            ("cpp", cpp),
         )
         if present
     )
@@ -462,6 +497,25 @@ def _detect_facts(root: Path) -> RepoFacts:
     # framework runs its adapters on POSIX.
     maven_wrapper = has("pom.xml") and has("mvnw")
     gradle_wrapper = gradle and has("gradlew")
+    # The seven, by the same two rules. Guaranteed by the toolchain for any valid manifest, so
+    # bound from the file's presence: `mix test`, `dotnet test`, `swift test`, and `bazel test
+    # //...` -- the last only beside a WORKSPACE or MODULE.bazel, because a BUILD file outside a
+    # workspace is not a Bazel repository and `bazel` there fails at run time. Declared by a
+    # line in the file, so bound only where that line is: `composer test` needs a `test` script
+    # (a written script is a decision, the rule package.json already follows), `bundle exec
+    # rake test` needs a Rakefile that defines a `test` task, and `ctest` needs CMakeLists.txt
+    # to have called `enable_testing()` -- a project that never did has no tests for `ctest` to
+    # find, and "no tests were found" exiting 8 is the wrong default that runs. What is NOT
+    # derived: a CMake configure step (the generator, the build directory and the options are the
+    # project's, and every guess about them is a guess), and `swift run`/`mix run`/`dotnet run`
+    # without a target nothing here can know.
+    composer_scripts = composer.get("scripts")
+    composer_test = isinstance(composer_scripts, dict) and "test" in composer_scripts
+    rake_test = has("Gemfile") and bool(
+        re.search(r"""^\s*task\s+(?::test\b|["']test["'])|Rake::TestTask""", rakefile, re.MULTILINE)
+    )
+    cmake_tests = "enable_testing(" in cmake
+    bazel_workspace = bazel and has("WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel")
     test_command: tuple[str, ...] = ()
     if not pytest:
         if "test" in make_targets:
@@ -476,6 +530,20 @@ def _detect_facts(root: Path) -> RepoFacts:
             test_command = ("./mvnw", "test")
         elif gradle_wrapper:
             test_command = ("./gradlew", "test")
+        elif elixir:
+            test_command = ("mix", "test")
+        elif dotnet:
+            test_command = ("dotnet", "test")
+        elif swift:
+            test_command = ("swift", "test")
+        elif bazel_workspace:
+            test_command = ("bazel", "test", "//...")
+        elif rake_test:
+            test_command = ("bundle", "exec", "rake", "test")
+        elif composer_test:
+            test_command = ("composer", "test")
+        elif cmake_tests:
+            test_command = ("ctest", "--test-dir", "build")
 
     ruff = "[tool.ruff" in pyproject or has("ruff.toml", ".ruff.toml")
     eslint = (
@@ -522,6 +590,16 @@ def _detect_facts(root: Path) -> RepoFacts:
         build_command = ("./mvnw", "package")
     elif gradle_wrapper:
         build_command = ("./gradlew", "build")
+    elif dotnet:
+        build_command = ("dotnet", "build")
+    elif swift:
+        build_command = ("swift", "build")
+    elif bazel_workspace:
+        build_command = ("bazel", "build", "//...")
+    elif cpp:
+        # The build half of CMake is one command whatever the generator, once configured. The
+        # configure step is not invented; `build/` is where `ctest --test-dir` looks too.
+        build_command = ("cmake", "--build", "build")
     run_command: tuple[str, ...] = ()
     if "run" in make_targets:
         run_command = ("make", "run")
@@ -590,6 +668,20 @@ def _detect_facts(root: Path) -> RepoFacts:
             provision.append(("yarn", "install", "--frozen-lockfile"))
         elif has("pnpm-lock.yaml"):
             provision.append(("pnpm", "install", "--frozen-lockfile"))
+        # The seven, by the lockfile rule above: each tool's own install from a lock that
+        # exists. `dotnet restore` binds from the project file alone, because the SDK
+        # guarantees it and the lock is optional in that ecosystem; Bazel and CMake bind
+        # nothing, for the reason Cargo and Go do not -- the build fetches its own.
+        if has("Gemfile.lock"):
+            provision.append(("bundle", "install"))
+        if has("composer.lock"):
+            provision.append(("composer", "install"))
+        if has("mix.lock"):
+            provision.append(("mix", "deps.get"))
+        if dotnet:
+            provision.append(("dotnet", "restore"))
+        if has("Package.resolved"):
+            provision.append(("swift", "package", "resolve"))
 
     coverage = (
         has(".coveragerc", ".coverage-floor")
@@ -610,7 +702,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         for child in sorted(root.iterdir()):
             if not child.is_dir() or child.name.startswith(".") or child.name == "node_modules":
                 continue
-            below += [f"{child.name}/{name}" for name in BUILD_MANIFESTS if (child / name).exists()]
+            below += [f"{child.name}/{name}" for name in BUILD_MANIFESTS if manifest_present(child, name)]
     except OSError:
         pass
 

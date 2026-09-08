@@ -6265,6 +6265,15 @@ _STACK_IMAGES = {
     "go": "docker.io/library/golang:1.23",
     "rust": "docker.io/library/rust:1-slim",
     "jvm": "docker.io/library/eclipse-temurin:21",
+    # Of the seven `GATE-TOOLING-3` stacks, the five whose official image carries the whole
+    # toolchain the bound commands need. `cpp` and `bazel` are left to the stub on purpose: no
+    # library image ships CMake with a compiler, or Bazel at all, and naming one would be the
+    # `python:3.12-slim`-for-everything mistake #316 removed.
+    "ruby": "docker.io/library/ruby:3.3-slim",
+    "php": "docker.io/library/php:8.3-cli",
+    "elixir": "docker.io/library/elixir:1.17-slim",
+    "dotnet": "mcr.microsoft.com/dotnet/sdk:8.0",
+    "swift": "docker.io/library/swift:5.10",
 }
 
 
