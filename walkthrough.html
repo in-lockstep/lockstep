@@ -314,7 +314,7 @@ findings  19
         <div class="term-bar"><b>$ in-lockstep ls</b><span>excerpt</span></div>
 <pre><span class="d">policy</span>
   framework-floor  &lt;- in-lockstep
-  = network=(unset) scan=warn deny_tools=0</pre>
+  = scan=warn deny_tools=0 max_turns=100 max_idle_turns=(unset)</pre>
         <p class="term-cap"><code>scan=warn</code> records and continues. <code>scan=block</code>
           refuses before the first model call and names the patterns that matched. Organization
           standards can move that setting one way only, because a standard able to loosen it would
@@ -331,9 +331,9 @@ findings  19
 <section class="band">
   <div class="wrap">
     <div class="hed">
-      <h2>Five ways a run can end.</h2>
+      <h2>Six ways a run can end.</h2>
       <p class="lede">None of them is waiting for the model to announce that it is finished. Four
-        are ceilings the framework checks itself, on every turn.</p>
+        are ceilings the framework checks itself, on every turn, and one is a person.</p>
     </div>
 
     <div class="two-up">
@@ -347,6 +347,9 @@ findings  19
         <li><b>The deadline.</b> Wall clock, re-checked on every turn.</li>
         <li><b>The kill switch.</b> <code>IN_LOCKSTEP_DISABLE</code>, also re-checked on every
           turn, so a run already in flight can be halted from outside it.</li>
+        <li><b>It parks.</b> A workflow that reaches a decision only a person can make stops, marks
+          the pull request, and <code>resume</code> continues it from any machine once they act.
+          Parked is its own status, never a failure.</li>
       </ul>
 
       <div>

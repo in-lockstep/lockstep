@@ -340,11 +340,11 @@ skill:review/review-revision</pre>
             never touch the policy stack, the spend accumulator or the egress check. The controls
             crosswalk records that rather than mitigating it, because a library cannot promise
             otherwise.</li>
-          <li><b>Three fields reach a run.</b> <code>max_turns</code>, <code>deny_tools</code> and
-            <code>scan_input</code> are composed into the loop. <code>network</code>,
-            <code>permissions</code> and three credit fields are merged, printed, and read by
-            nothing else, and the project's own gate ledger marks that unmet. Do not write a floor
-            that leans on them.</li>
+          <li><b>Every field reaches a run.</b> <code>max_turns</code>, <code>max_idle_turns</code>,
+            <code>deny_tools</code> and <code>scan_input</code> are composed into the loop, and a
+            test pins that set so a field that enforces nothing cannot be offered. <code>network</code>,
+            <code>permissions</code> and the credit fields were deleted rather than wired, because each
+            already had a control covering the same ground.</li>
           <li><b>The ceiling that survives is your provider's.</b> <code>doctor</code> fails this
             repository until somebody attests an organization spend limit set in the provider
             console, because a per-run budget cannot bound a runaway trigger.</li>
