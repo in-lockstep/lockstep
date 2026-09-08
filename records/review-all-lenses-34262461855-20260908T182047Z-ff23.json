@@ -1,0 +1,150 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "32683622e4ee6d260ff240c65ed098969b6aca1e"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 6455,
+  "cache_write_tokens": 21036,
+  "ci_actor": "tpouyer",
+  "ci_run": "34262461855",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.100312,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 237,
+        "message": "`ERROR` lines have no `- <why>` half but are passed through `_case` which assumes the split is valid.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 237,
+        "message": "Pytest output parsed and surfaced verbatim into findings, tickets, and model tool results without sanitisation.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 167,
+        "message": "Tool-result test does not assert the no-message case is rendered without a trailing ' - '.",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "32683622e4ee6d260ff240c65ed098969b6aca1e",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.100312,
+  "output_tokens": 1297,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34262461855-20260908T182047Z-ff23",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.027644,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 237,
+            "message": "`ERROR` lines have no `- <why>` half but are passed through `_case` which assumes the split is valid.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 499,
+      "verb": "review",
+      "wall_seconds": 18.968
+    },
+    {
+      "cost_usd": 0.021001,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 55,
+      "verb": "review",
+      "wall_seconds": 7.901
+    },
+    {
+      "cost_usd": 0.025704,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 237,
+            "message": "Pytest output parsed and surfaced verbatim into findings, tickets, and model tool results without sanitisation.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 368,
+      "verb": "review",
+      "wall_seconds": 15.037
+    },
+    {
+      "cost_usd": 0.025963,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 167,
+            "message": "Tool-result test does not assert the no-message case is rendered without a trailing ' - '.",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 387,
+      "verb": "review",
+      "wall_seconds": 14.019
+    }
+  ],
+  "tokens": 1309,
+  "ts": "2026-09-08T18:21:06+00:00",
+  "wall_seconds": 18.968,
+  "workflow": "review/all-lenses"
+}
