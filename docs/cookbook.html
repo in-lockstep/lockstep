@@ -101,7 +101,7 @@ lockstep.bind(Implement, TDD())</code></pre>
 <h2 id="4-a-rolling-daily-spend-ceiling">4. A rolling daily spend ceiling</h2>
 <p>The per-run budget bounds one run. This bounds a runaway <em>trigger</em>, a chat-ops loop firing all night. It sums the ledger's own records over a rolling 24 hours, and refuses before a run starts:</p>
 <pre data-lang="bash"><code>export IN_LOCKSTEP_DAILY_LIMIT=10.00</code></pre>
-<p>Honest scope: the window sums this clone's ledger, so a runner that never fetched <code>lockstep-history</code> sums less than the truth. The provider console's organisation limit (<code>IN_LOCKSTEP_ORG_SPEND_LIMIT</code>, attested to <code>doctor</code>) remains the durable backstop.</p>
+<p>Honest scope: the window sums this clone's ledger, so a runner that never fetched <code>lockstep-history</code> sums less than the truth; <code>in-lockstep history --pull</code> folds the remote's records in first, and pushes nothing. Two concurrent runs still race the read. The provider console's organisation limit (<code>IN_LOCKSTEP_ORG_SPEND_LIMIT</code>, attested to <code>doctor</code>) remains the durable backstop.</p>
 <h2 id="5-house-guardrails-in-every-review">5. House guardrails in every review</h2>
 <p>Prompt text is data; the binding site is where data enters, visibly. <code>.plus</code> appends after the shipped baseline, so extending cannot quietly drop it.</p>
 <pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
@@ -134,8 +134,9 @@ def apply(std: Standards) -&gt; None:
 <p><code>enforced</code> is verified, not believed. A probe dials a host that must be unreachable, and the run is refused if it connects. Extra hosts you decide to allow (a package registry, before an <code>EXECUTES_CODE</code> step needs it) go in <code>EgressPolicy(allow=("pypi.org",))</code>, and the manifest prints them.</p>
 <h2 id="8-record-a-cassette-once-review-offline-forever">8. Record a cassette once, review offline forever</h2>
 <p>Cassettes sit at the <code>LLMInput</code>/<code>LLMOutput</code> seam, so a recording replays against a different provider, and tool IO is captured alongside model IO.</p>
-<pre data-lang="bash"><code>in-lockstep review --base origin/main --record       # one real call, writes the cassette
-in-lockstep review --base origin/main --offline      # deterministic and free, from here on</code></pre>
+<pre data-lang="bash"><code>in-lockstep review --base origin/main --cassette "$TMPDIR/review.json"            # one real call; recording is the default
+in-lockstep review --base origin/main --offline --cassette "$TMPDIR/review.json"  # deterministic and free, from here on</code></pre>
+<p>Name the cassette on both lines: <code>--offline</code> with no <code>--cassette</code> replays the shipped fixture, not what you recorded. A tape lives outside the repository, which is why the default is <code>$RUNNER_TEMP</code> or <code>$TMPDIR</code>.</p>
 <p>The replay refuses to silently call out when the prompt no longer matches the recording. A changed guardrail means re-recording, and it says so rather than billing you quietly.</p>
 <h2 id="9-a-house-review-lens-bound-rather-than-monkeypatched">9. A house review lens, bound rather than monkeypatched</h2>
 <p>A lens is a prompt class. Binding it is how it becomes real: visible in <code>ls</code>, loaded from the trusted ref, never an import-time side effect.</p>
@@ -167,6 +168,7 @@ lockstep.models.route("review/security", "anthropic:claude-opus-4-6")</code></pr
 <p>Every run records to the <code>lockstep-history</code> orphan branch. Two commands read it, and both check it was not rewritten:</p>
 <pre data-lang="bash"><code>in-lockstep report --by model     # aggregates, and flags any record rewritten after append
 in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check</code></pre>
+<p>After a proposal merges, <code>in-lockstep report --around &lt;sha|#PR&gt;</code> compares the runs on that subject after the merge with the runs before it, and prints a delta rather than a verdict, with <code>—</code> where either window is too thin.</p>
 <p>The check reads the retained chain. A force-push that <em>replaced</em> the chain is the remote's to refuse. Protect <code>lockstep-history</code> with a ruleset blocking force-pushes and deletions. Appends are fast-forwards and still flow, so it needs no reviews and slows nothing down.</p>
 <p>A flag you can explain, you acknowledge by name, and it stops being an alarm without becoming a secret:</p>
 <pre data-lang="bash"><code>in-lockstep history --acknowledge adca58e --reason "a laptop's fixed-run-id record replaced the branch's" --push</code></pre>

@@ -5039,17 +5039,18 @@
         <path data-edge-from="ticket" data-edge-to="package" data-edge-label="UNTRUSTED" data-edge-key="1" data-edge-id="c2" data-composition-points="208,230;280,230" d="M 208 230 L 280 230" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="package" data-edge-to="scan" data-edge-label="scanned" data-edge-key="2" data-edge-id="c3" data-composition-points="448,230;520,230" d="M 448 230 L 520 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="scan" data-edge-to="prompt" data-edge-label="delimited" data-edge-key="3" data-edge-id="c4" data-composition-points="688,230;760,230" d="M 688 230 L 760 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="prompt" data-edge-to="invoker" data-edge-key="4" data-edge-id="c5" data-composition-points="928,223;1000,223" d="M 928 223 L 1000 223" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="prompt" data-edge-to="invoker" data-edge-key="4" data-edge-id="c5" data-composition-points="928,216;1000,216" d="M 928 216 L 1000 216" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="oidc" data-edge-to="auth" data-edge-label="mint" data-edge-key="5" data-edge-id="c6" data-composition-points="928,110;1000,110" d="M 928 110 L 1000 110" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="auth" data-edge-to="invoker" data-edge-label="credential" data-edge-key="6" data-edge-id="c7" data-composition-points="1084,140;1084,200" d="M 1084 140 L 1084 200" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="invoker" data-edge-to="egress" data-edge-label="check before call" data-edge-key="7" data-edge-id="c8" data-composition-points="1084,260;1084,320" d="M 1084 260 L 1084 320" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="invoker" data-edge-to="tools" data-edge-key="8" data-edge-id="c9" data-composition-points="1000,237;976,237;976,296;604,296;604,320" d="M 1000 237 L 984 237 Q 976 237 976 245 L 976 288 Q 976 296 968 296 L 612 296 Q 604 296 604 304 L 604 320" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="invoker" data-edge-to="tools" data-edge-key="8" data-edge-id="c9" data-composition-points="1000,244;976,244;976,296;611,296;611,320" d="M 1000 244 L 984 244 Q 976 244 976 252 L 976 288 Q 976 296 968 296 L 619 296 Q 611 296 611 304 L 611 320" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="tools" data-edge-to="sandbox" data-edge-label="run_script" data-edge-key="9" data-edge-id="c10" data-composition-points="520,350;448,350" d="M 520 350 L 448 350" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="tools" data-edge-to="guard" data-edge-label="write_file" data-edge-key="10" data-edge-id="c11" data-composition-points="688,343;760,343" d="M 688 343 L 760 343" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="guard" data-edge-to="changeset" data-edge-label="staged" data-edge-key="11" data-edge-id="c12" data-composition-points="760,357;724,357;724,470;688,470" d="M 760 357 L 732 357 Q 724 357 724 365 L 724 462 Q 724 470 716 470 L 688 470" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="changeset" data-edge-to="propose_job" data-edge-label="guard again" data-edge-key="12" data-edge-id="c13" data-composition-points="520,470;448,470" d="M 520 470 L 448 470" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="propose_job" data-edge-to="pr" data-edge-label="open_change" data-edge-key="13" data-edge-id="c14" data-composition-points="280,470;208,470" d="M 280 470 L 208 470" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="egress" data-edge-to="redact" data-edge-label="records" data-edge-key="14" data-edge-id="c15" data-composition-points="1084,380;1084,440" d="M 1084 380 L 1084 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="tools" data-edge-to="invoker" data-edge-label="delegate: child loop, one spend, one tape" data-edge-key="15" data-edge-id="c16" data-composition-points="597,320;597,296;976,296;976,230;1000,230" d="M 597 320 L 597 304 Q 597 296 605 296 L 968 296 Q 976 296 976 288 L 976 238 Q 976 230 984 230 L 1000 230" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-config" data-node-id="config" data-node-label="Trusted config ref" tabindex="0" role="button" aria-label="Focus Trusted config ref, never the change under review, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="never the change under review" data-node-context="Architecture component">
@@ -5305,6 +5306,10 @@
         <g data-detail="context" data-edge-from="egress" data-edge-to="redact" data-edge-label="records" data-edge-key="14" data-edge-id="c15">
           <rect x="1062.2" y="384" width="43.6" height="14" rx="3" class="c-mask"/>
           <text x="1084" y="394" class="t-messagebus" font-size="8" text-anchor="middle">records</text>
+        </g>
+        <g data-detail="context" data-edge-from="tools" data-edge-to="invoker" data-edge-label="delegate: child loop, one spend, one tape" data-edge-key="15" data-edge-id="c16">
+          <rect x="683.1" y="276" width="206.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="786.5" y="286" class="t-messagebus" font-size="8" text-anchor="middle">delegate: child loop, one spend, one tape</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
