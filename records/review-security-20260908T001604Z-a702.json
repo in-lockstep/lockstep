@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34172751496",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.020994,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 243,
+        "message": "Remote name passed to `git fetch` is drawn from `self.remote` without visible sanitisation.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "3fd75fa92e863700b67a6bc2c85532a7d6c624df",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 369,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260908T001604Z-a702",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 372,
+  "ts": "2026-09-08T00:16:17+00:00",
+  "wall_seconds": 13.313
+}
