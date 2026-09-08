@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34165474040",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.076715,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 541,
+        "message": "Branch steps are recorded after `gather` returns, not inside the branch coroutine, so a branch that raises `CancelledError` without being converted (kill-switch check returns False) leaves no step on the parent run.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 157,
+        "message": "`release()` uses `max(0, \u2026)` guards, which silently absorb a double-release instead of raising.",
+        "path": "src/in_lockstep/core/spend.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6b19dc04afe2d89f46ca62b207a708c56bab22d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 648,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T220636Z-e091",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 651,
+  "ts": "2026-09-07T22:06:55+00:00",
+  "wall_seconds": 19.856
+}
