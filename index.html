@@ -41,6 +41,7 @@
       <a href="walkthrough.html">Walkthrough</a>
       <a href="governance.html">Governance</a>
       <a href="extensions.html">Extensions</a>
+      <a href="diagrams.html">Diagrams</a>
       <a href="docs/getting-started.html">Docs</a>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
@@ -216,7 +217,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
       <h2>The loop you already run, expressed as Python.</h2>
       <p class="lede">Clone it, change something, build it, run it, test it. You already do this,
         with scripts already in the repository. in-lockstep reads those and writes the loop down, so
-        the lifecycle becomes one file you can read, diff and review.</p>
+        the lifecycle becomes one file you can read, diff and review. <a href="diagrams/deterministic-verbs.html">See which command serves which verb</a>, and <a href="diagrams/runtime-architecture.html">the runtime around it</a>.</p>
     </div>
 
     <figure class="fig fig-wide loop-fig">
@@ -342,7 +343,7 @@ write; the file says where.</pre>
       <h2>The prompt is assembled, not typed.</h2>
       <p class="lede">Every call composes the same named fragments in the same order, with your
         guardrails first, and you can print the result or diff it against the shipped version
-        before anything runs.</p>
+        before anything runs. <a href="diagrams/prompt-composition.html">How the layers compose, drawn</a>.</p>
     </div>
 
     <div class="evidence">
@@ -443,7 +444,7 @@ skill:review/review-revision</pre>
     <div class="hed">
       <h2>What stops it pushing to your main branch?</h2>
       <p class="lede">Nothing inside one process could. So there are three, and the credential that
-        can talk to a model is never in the same process as the one that can write.</p>
+        can talk to a model is never in the same process as the one that can write. <a href="diagrams/chat-ops.html">The three jobs as a sequence</a>; <a href="diagrams/security-model.html">the whole security model</a>.</p>
     </div>
 
     <figure class="fig fig-wide">
@@ -543,7 +544,7 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
     <div class="hed">
       <h2>You cannot improve what you did not record.</h2>
       <p class="lede">So every run writes one: which commit, which model, what it cost, what it
-        decided. This is the whole published ledger, failures included.</p>
+        decided. This is the whole published ledger, failures included. <a href="diagrams/ledger.html">How a record reaches the branch</a>.</p>
     </div>
 
     <div class="ledger">
@@ -602,7 +603,7 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
       <h2>It will not print a number it has not earned.</h2>
       <p class="lede">Every AI dashboard you have been shown averages over whatever happened to be
         present. These figures carry their denominator, and one nobody measured stays a dash. Every
-        number below is read back from the same twenty-six published records as the table above.</p>
+        number below is read back from the same twenty-six published records as the table above. <a href="diagrams/learning-loop.html">What the record then teaches</a>.</p>
     </div>
 
     <figure class="shot">
@@ -780,7 +781,7 @@ pass rate    <span class="y">n/a — nothing decided</span>
       <h2>What runs today.</h2>
       <p class="lede">This list is held by a test. A capability that claims to run must name a
         command that exists, and one marked as missing must name nothing, so overclaiming and stale
-        claims both turn CI red.</p>
+        claims both turn CI red. <a href="diagrams.html">Every one of them is drawn</a>.</p>
     </div>
 
     <div class="ships">
@@ -876,6 +877,7 @@ pass rate    <span class="y">n/a — nothing decided</span>
       <a href="docs/getting-started.html">Getting started</a>
       <a href="docs/cookbook.html">Cookbook</a>
       <a href="docs/extending.html">Extending</a>
+      <a href="diagrams.html">Diagrams</a>
     </nav>
     <nav aria-label="Project">
       <h4>Project</h4>

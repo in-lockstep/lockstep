@@ -37,6 +37,7 @@
       <a href="../walkthrough.html">Walkthrough</a>
       <a href="../governance.html">Governance</a>
       <a href="../extensions.html">Extensions</a>
+      <a href="diagrams.html">Diagrams</a>
       <a href="../docs/getting-started.html">Docs</a>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
@@ -96,6 +97,7 @@ lockstep.models.route("implement", "anthropic:claude-sonnet-4-6")
 lockstep.bind(Implement, TDD())</code></pre>
 <p><code>in-lockstep ls</code> prints the whole story as one line, <code>Implement -&gt; TDD</code>. The model comes from the route above: an adapter bound with no explicit invoker resolves it per run, and egress from the bound <code>EgressPolicy</code>.</p>
 <p>This repository's own <a href="https://github.com/in-lockstep/lockstep/blob/main/lockstep/lockstep.py">.lockstep/lockstep.py</a> is the full worked version, including the <code>WorktreeRunner</code> wrap that keeps a model-chosen command's writes off the live tree.</p>
+<p>Drawn: <a href="https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html">chat-ops</a> for the jobs, <a href="https://in-lockstep.github.io/lockstep/diagrams/implement-strategies.html">implement strategies</a> for red then green.</p>
 <h2 id="4-a-rolling-daily-spend-ceiling">4. A rolling daily spend ceiling</h2>
 <p>The per-run budget bounds one run. This bounds a runaway <em>trigger</em>, a chat-ops loop firing all night. It sums the ledger's own records over a rolling 24 hours, and refuses before a run starts:</p>
 <pre data-lang="bash"><code>export IN_LOCKSTEP_DAILY_LIMIT=10.00</code></pre>
@@ -119,8 +121,9 @@ lockstep.bind(
 <pre data-lang="toml"><code>[project.entry-points."in_lockstep.standards"]
 acme = "acme_lockstep:apply"</code></pre>
 <pre data-lang="python"><code>from in_lockstep import Policy
+from in_lockstep.core.standards import Standards
 
-def apply(std):
+def apply(std: Standards) -&gt; None:
     std.contribute(Policy(name="acme-baseline", scan_input="block", max_turns=16))</code></pre>
 <p>Everything lands at <code>Tier.PLUGIN</code>, so any repository's own <code>lockstep.bind</code> still wins, and <code>in-lockstep ls</code> prints what applied. Worked example: <a href="https://github.com/in-lockstep/lockstep/blob/main/examples/acme-standards/">examples/acme-standards</a>.</p>
 <h2 id="7-feed-your-proxy-real-egress-enforcement">7. Feed your proxy: real egress enforcement</h2>
@@ -143,18 +146,32 @@ from in_lockstep.prompts.review import LENSES, ReviewPrompt
 
 class LicenseLens(ReviewPrompt):
     aspect = "license"
-    body = Body.from_path(".lockstep/prompts/license.md")
+    body = Body.from_path("prompts/license.md")
 
 lockstep.bind(
     Review,
     AiReview(lenses={**LENSES, "license": LicenseLens}),
 )</code></pre>
-<p><code>in-lockstep show-prompt license</code> renders it offline, and <code>ls</code> stars it as not-the-shipped-prompt.</p>
+<p><code>in-lockstep show-prompt license</code> renders it offline, and <code>ls</code> stars it as not-the-shipped-prompt. The body lives in <code>prompts/</code> at the repository root, not under <code>.lockstep/</code>: that directory is deny-always for every writing verb, so a lens there can never be proposed to by the learning loop.</p>
+<p>To add to a shipped lens rather than write one, keep its class and its key. A <code>Lens</code> carries what a subclass would have carried, and a route keyed <code>review/&lt;lens&gt;</code> puts that one lens on a different model:</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt
+
+lockstep.bind(
+    Review,
+    AiReview(lenses={**LENSES, "security": Lens(SecurityReviewPrompt, emphasis="No bare excepts.")}),
+)
+lockstep.models.route("review/security", "anthropic:claude-opus-4-6")</code></pre>
+<p>The key stays <code>security</code>, so <code>review.security</code> in the ledger and the sticky comment's marker both survive the change. A lens of your own gets a name nobody had; a better <code>security</code> stays <code>security</code>.</p>
 <h2 id="10-make-the-ledger-auditable">10. Make the ledger auditable</h2>
 <p>Every run records to the <code>lockstep-history</code> orphan branch. Two commands read it, and both check it was not rewritten:</p>
 <pre data-lang="bash"><code>in-lockstep report --by model     # aggregates, and flags any record rewritten after append
 in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check</code></pre>
 <p>The check reads the retained chain. A force-push that <em>replaced</em> the chain is the remote's to refuse. Protect <code>lockstep-history</code> with a ruleset blocking force-pushes and deletions. Appends are fast-forwards and still flow, so it needs no reviews and slows nothing down.</p>
+<p>A flag you can explain, you acknowledge by name, and it stops being an alarm without becoming a secret:</p>
+<pre data-lang="bash"><code>in-lockstep history --acknowledge adca58e --reason "a laptop's fixed-run-id record replaced the branch's" --push</code></pre>
+<p>That appends a note to the branch — who, why, when, and what the commit rewrote — and <code>report</code> and <code>doctor</code> print the note where <code>TAMPERED</code> was. A rewrite in any other commit is still an alarm, and the note itself is protected by the same check. A flag nobody can acknowledge is one everybody learns to read past.</p>
+<p>Drawn: <a href="https://in-lockstep.github.io/lockstep/diagrams/ledger.html">the ledger</a>, from a run to <code>origin/lockstep-history</code> and back to <code>report</code>.</p>
   </article>
 </div>
 </main>
@@ -187,6 +204,7 @@ in-lockstep doctor                # DOC167, an ERROR — tampering fails a requi
       <a href="../docs/getting-started.html">Getting started</a>
       <a href="../docs/cookbook.html">Cookbook</a>
       <a href="../docs/extending.html">Extending</a>
+      <a href="diagrams.html">Diagrams</a>
     </nav>
     <nav aria-label="Project">
       <h4>Project</h4>

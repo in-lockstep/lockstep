@@ -37,6 +37,7 @@
       <a href="../walkthrough.html">Walkthrough</a>
       <a href="../governance.html">Governance</a>
       <a href="../extensions.html">Extensions</a>
+      <a href="diagrams.html">Diagrams</a>
       <a href="../docs/getting-started.html">Docs</a>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
@@ -58,11 +59,14 @@
       <li><a href="#a-verb-of-your-own">A verb of your own</a></li>
       <li><a href="#a-house-prompt">A house prompt</a></li>
       <li><a href="#house-guardrails">House guardrails</a></li>
+      <li><a href="#house-skills-and-contexts">House skills and contexts</a></li>
+      <li><a href="#the-learning-loop">The learning loop</a></li>
       <li><a href="#middleware">Middleware</a></li>
       <li><a href="#packs-an-extension-that-travels">Packs: an extension that travels</a></li>
       <li><a href="#organisation-standards">Organisation standards</a></li>
       <li><a href="#models-and-providers">Models and providers</a></li>
       <li><a href="#a-strategy">A strategy</a></li>
+      <li><a href="#reading-the-process-you-are-running">Reading the process you are running</a></li>
       <li><a href="#the-path-a-project-takes">The path a project takes</a></li>
     </ol>
   </aside>
@@ -70,29 +74,36 @@
     <h1>Extending</h1>
     <p class="lede">Adapters, verbs, prompts, guardrails, middleware, packs and standards: every seam the framework leaves open, and what each one is for.</p>
 <p>Extension is ordinary subclassing plus binding. There is no plugin manifest and no registration DSL, because the container is already the registration mechanism.</p>
+<p>Every snippet on this page assumes two names and imports everything else: <code>lockstep</code>, the <code>Lockstep</code> your module built, and <code>ctx</code>, the <code>RunContext</code> a workflow is handed. The suite type-checks each page's snippets, in order, under the same <code>mypy --strict</code> an adopter runs, with exactly those two provided — so a shape shown here is a shape the checker accepts.</p>
 <h2 id="a-different-adapter">A different adapter</h2>
 <p>A verb is an interface; anything satisfying it can serve it.</p>
-<pre data-lang="python"><code>from in_lockstep import Capability, Outcome, Test, Verb
+<pre data-lang="python"><code>import subprocess
+
+from in_lockstep import Capability, Outcome, RunContext, Status, Test, Verb
 from in_lockstep.core.types import TestReport
 
 class ToxTest:
     verb = Verb.TEST
     capabilities = frozenset({Capability.EXECUTES_CODE, Capability.READS_REPO})
 
-    async def invoke(self, ctx, request: Test) -&gt; Outcome[TestReport]:
-        ...
+    async def invoke(self, ctx: RunContext, request: Test) -&gt; Outcome[TestReport]:
+        ran = subprocess.run(["tox", "-q"], cwd=ctx.repo.root, capture_output=True, text=True)
+        status = Status.SUCCEEDED if ran.returncode == 0 else Status.FAILED
+        # A real adapter parses the report; the shape is what matters here.
+        return Outcome(status=status, value=TestReport())
 
 lockstep.bind(Test, ToxTest())</code></pre>
 <p><code>Test</code> is the request type. Workflows do <code>ctx.do(Test(...))</code>, and the request's type is what the binding serves, so the same <code>Test</code> names both what a workflow asks for and what your adapter receives.</p>
 <p>An adapter that runs a tool can also say where it found it, by implementing <code>locations(root)</code> and returning <code>Resolution</code> values (<code>in_lockstep.core.types</code>). That is what puts the indented line under a binding in <code>ls</code> and lets <code>doctor</code> refuse before a run when the tool is nowhere. The shipped adapters resolve the repository's own <code>.venv</code> first; yours can use <code>in_lockstep.adapters.tooling</code> to do the same.</p>
-<p><code>Provision</code> is the verb that builds the environment those resolutions look in first, and the scaffolded work jobs run <code>in-lockstep provision</code> before <code>doctor</code>. Detection binds it only from a lockfile that exists; a layout it does not read is one line in the module, <code>lockstep.bind(Provision, CommandProvision([["poetry", "install"]]))</code>. <code>CommandProvision</code> runs its steps in order and stops at the first that fails. It is the one shipped adapter whose sandbox allows the network, because reaching a registry is its job; it still drops every credential, because a lockfile's install hooks are repository-authored code. The shipped binding installs a lockfile's default groups and nothing more; a layout that keeps its test dependencies in an extra binds <code>CommandProvision([["uv", "sync", "--locked", "--all-extras"]])</code>.</p>
+<p><code>Provision</code> is the verb that builds the environment those resolutions look in first, and the scaffolded work jobs run <code>in-lockstep provision</code> before <code>doctor</code>. Detection binds it only from a lockfile that exists, through that lockfile's own tool: <code>uv sync --locked</code>, <code>poetry install</code>, <code>pdm sync</code>, <code>pipenv sync</code>, <code>npm ci</code>, <code>yarn install --frozen-lockfile</code> or <code>pnpm install --frozen-lockfile</code>. A layout it does not read is one line in the module, <code>lockstep.bind(Provision, CommandProvision([["nix", "develop"]]))</code>. <code>CommandProvision</code> runs its steps in order and stops at the first that fails. It is the one shipped adapter whose sandbox allows the network, because reaching a registry is its job; it still drops every credential, because a lockfile's install hooks are repository-authored code. The shipped binding installs a lockfile's default groups and nothing more; a layout that keeps its test dependencies in an extra binds <code>CommandProvision([["uv", "sync", "--locked", "--all-extras"]])</code>.</p>
 <p><code>capabilities</code> is the part people skip and should not. Policy keys off it without knowing anything about your adapter: whether egress enforcement is mandatory, whether an approval gate applies, whether retry may re-invoke it. Declaring <code>EXECUTES_CODE</code> is how the framework knows to run you out of process, away from anything holding credentials.</p>
 <p><code>REACHES_NETWORK</code> exists separately from <code>WRITES_FILES</code>. "Read-only" describes mutation, not transmission. A fetch tool mutates nothing and is still an egress channel.</p>
+<p>The shape every single-turn adapter shares, gather, compose, one turn, settle, check, is drawn in <a href="https://in-lockstep.github.io/lockstep/diagrams/single-turn-verbs.html">single-turn verbs</a>; the wider map is the <a href="https://in-lockstep.github.io/lockstep/diagrams/runtime-architecture.html">runtime architecture</a>.</p>
 <h2 id="a-verb-of-your-own">A verb of your own</h2>
 <p>The shipped verbs are not a closed set. A verb is a name: a routing key and a telemetry label. Declaring one is constructing it, and the request it serves is an ordinary frozen dataclass:</p>
 <pre data-lang="python"><code>from dataclasses import dataclass
 
-from in_lockstep import Capability, Outcome, Status, Verb
+from in_lockstep import Capability, Outcome, RunContext, Status, Verb
 
 BENCHMARK = Verb("benchmark")
 
@@ -105,8 +116,8 @@ class PyperfBenchmark:
     verb = BENCHMARK
     capabilities = frozenset({Capability.EXECUTES_CODE})
 
-    async def invoke(self, ctx, request) -&gt; Outcome[dict]:
-        ...
+    async def invoke(self, ctx: RunContext, request: Benchmark) -&gt; Outcome[dict[str, float]]:
+        return Outcome(status=Status.SUCCEEDED, value={"seconds": 0.0})
 
 lockstep.bind(Benchmark, PyperfBenchmark())
 outcome = await ctx.do(Benchmark(iterations=1000))</code></pre>
@@ -115,13 +126,19 @@ outcome = await ctx.do(Benchmark(iterations=1000))</code></pre>
 <p>Nothing about a custom verb is second-class. Middleware sees it, <code>Spend</code> charges against it, <code>capabilities_for</code> reads its adapter, and the kill switch stops it. What it does <em>not</em> get is a shipped strategy or model route, because those are keyed by verb and the framework has none for a verb it has never heard of. Declare them yourself, or pass the model explicitly.</p>
 <h2 id="a-house-prompt">A house prompt</h2>
 <p>Prompts are classes; their bodies are markdown files.</p>
-<pre data-lang="python"><code>class OurSecurityReview(SecurityReviewPrompt):
+<pre data-lang="python"><code>from in_lockstep.prompts.review import SecurityReviewPrompt
+
+class OurSecurityReview(SecurityReviewPrompt):
     version = "team-3"
     emphasis = "SQLAlchemy 2.x session discipline; no bare excepts"</code></pre>
 <p>Subclassing and setting <code>emphasis</code> keeps the shipped body and adds to it. To replace the prose entirely, point at your own file:</p>
-<pre data-lang="python"><code>class OurReview(ReviewPrompt):
+<pre data-lang="python"><code>from in_lockstep.ai.prompt import Body
+from in_lockstep.prompts.review import ReviewPrompt
+
+class OurReview(ReviewPrompt):
     version = "team-1"
-    body = Body.from_file("prompts/our-review.md")</code></pre>
+    body = Body.from_path("prompts/our-review.md")</code></pre>
+<p><code>Body.from_path</code> is a file in this repository, read as given. <code>Body.from_file</code> is a resource inside a package, for a body a pack ships beside its classes, and it needs <code>package=</code>: without one it refuses naming <code>from_path</code>, rather than look inside the framework. A house body lives in <code>prompts/</code> at the repository root. Not under <code>.lockstep/</code>: that directory is deny-always for every writing verb, so a body there can be reviewed with but never proposed to by the learning loop, and <code>improve --explain</code> says so. <code>doctor</code> checks that every bound body resolves, and <code>show-prompt</code> refuses in one line when one does not.</p>
 <p>Writing one is half the job. Installing it goes through <code>bind</code>, like every other extension. A prompt is not a separate kind of thing with a separate registration mechanism:</p>
 <pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
 from in_lockstep.prompts.review import LENSES
@@ -132,6 +149,38 @@ lockstep.bind(
 )</code></pre>
 <p>Spreading <code>LENSES</code> keeps the three lenses you did not override. Passing a bare dict replaces the map entirely, which is what you want when your team ships its own set of aspects. An unknown aspect then reports the lenses <em>this adapter</em> has, not the ones that happen to ship.</p>
 <p>The map is copied at construction, in both directions: a later mutation of <code>LENSES</code> cannot reach an adapter you already bound, and an adapter cannot leak a lens back into the shipped map.</p>
+<h3 id="enhancing-a-shipped-lens-without-a-subclass">Enhancing a shipped lens, without a subclass</h3>
+<p>An entry in that map is either a prompt class or a <code>Lens</code>: the declared form, carrying the prompt and everything about running it that used to belong to the adapter alone.</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.prompts.review import LENSES, Lens, SecurityReviewPrompt, review_layers
+
+lockstep.bind(
+    Review,
+    AiReview(
+        lenses={
+            **LENSES,
+            "security": Lens(
+                prompt=SecurityReviewPrompt,
+                emphasis="SQLAlchemy 2.x session discipline; no bare excepts",
+                layers=review_layers().plus(guardrails=(("acme/house", "Never touch migrations."),)),
+                max_tokens=8000,
+            ),
+        },
+    ),
+)
+lockstep.models.route("review/security", "anthropic:claude-opus-4-6")</code></pre>
+<p>Every field but <code>prompt</code> defaults to the adapter's, so <code>Lens(SecurityReviewPrompt)</code> means exactly what the bare class meant. What each one adds:</p>
+<ul>
+<li>**<code>emphasis</code>** rides after the shipped body under its emphasis heading, beside anything a subclass's own <code>emphasis</code> says. The shipped prose is kept; this is for the three sentences a team wants to add to <code>security</code> without a class. A pack offers the same through <code>pack.emphasis("style")</code>, which reads <code>prompts/style.md</code> with its header stripped.</li>
+<li>**<code>layers</code>** is this lens's whole stack, and the other lenses keep the adapter's. Whole, not appended to: spell it <code>review_layers().plus(...)</code> to keep the baseline, and <code>ls</code> prints one guardrail chain per distinct stack so a lens that dropped it is visible beside the ones that did not.</li>
+<li>**<code>max_turns</code><strong> may only tighten and </strong><code>max_tokens</code>** replaces, and the asymmetry has a reason on each side. The adapter's turn cap is already the lower of its own and the policy floor an organisation contributed, and the floor cannot be recovered from that number, so a lens asking for more turns is clipped rather than guessed at. No such floor exists for output tokens, so a lens's number is exact, and it is the number <code>review.truncated</code> tells you to raise for one lens.</li>
+<li><strong>The route</strong> is a line in the models table rather than a field: <code>review/security</code> wins over <code>review</code>, a lens with no route of its own takes the verb's, and <code>ls</code> flags a route to a lens nothing binds the way it flags a route to a verb nothing serves.</li>
+</ul>
+<p>The key stays <code>security</code>, and that is the point of the shape. <code>review.security</code> is the finding id, the sticky comment's marker, the <code>Improvable</code> label and the census key, all at once. An enhancement published under a new name would fork every one of those for every consumer. **Namespace on <code>plus</code>, a name nobody had; never on <code>replacing</code>, a shipped name.** A lens of your own is <code>a11y</code>; a better <code>security</code> is still <code>security</code>.</p>
+<h3 id="a-lens-is-not-a-verb">A lens is not a verb</h3>
+<p>&gt; A <code>Lens</code> differs in what it <strong>says</strong>. A <code>Verb</code> differs in what it <strong>may do</strong>.</p>
+<p>The first instinct is to make each review kind a verb of its own -- <code>REVIEW_SECURITY</code>, <code>REVIEW_TESTS</code> -- so each can carry its own prompt and route. Dispatch is keyed on the request type, not the verb, so four verbs are mechanically four request dataclasses, four adapters and four binds, and the same again for every lens an extender adds; and <code>review.&lt;aspect&gt;</code> re-keyed would split every ledger record and every <code>Improvable</code> written against the old key. What it would buy is one span name.</p>
+<p>Capabilities are declared on the adapter, and approval and budget gates read them off the bound object. Four prose lenses over one diff share one posture -- a single turn, the diff in the prompt, no tools -- and are lenses. A review that must execute the suite, hold write tools, or take a deployed artifact instead of a diff has crossed a capability line, and that one genuinely is a verb: declare it as <em>A verb of your own</em> above describes.</p>
 <p>Read what you bound, before it runs:</p>
 <pre data-lang="bash"><code>in-lockstep show-prompt security          # what a run would send, from the bound adapter
 in-lockstep show-prompt security --diff   # what you changed, against the shipped body
@@ -139,6 +188,7 @@ in-lockstep show-prompt security --shipped</code></pre>
 <p><code>ls</code> prints the same thing in summary: every prompt each AI binding composes, starred where it is not the shipped one, with the guardrail chain underneath so a stack that does not open with the framework's baseline is visible without a second command.</p>
 <p>The body stays a <code>.md</code> deliberately. The people who write review prompts are frequently not Python programmers, and prompt text in a string literal has escaping hazards that prose in a file does not. It is also a security property: a prompt change proposed by the improvement loop is data rather than executable code entering your module's import graph.</p>
 <p>Bumping <code>version</code> matters for a different reason than it looks. Eval identity is a <em>content hash</em> of the composed prompt, not the declared version, so a measurement is correct whether or not you remember to bump it. <code>version</code> is the human label that travels alongside.</p>
+<p>Where a house prompt lands among the shipped layers and a standards package, and what the composed text then keys, is drawn in <a href="https://in-lockstep.github.io/lockstep/diagrams/prompt-composition.html">prompt composition</a>.</p>
 <h2 id="house-guardrails">House guardrails</h2>
 <p>Every AI adapter composes its prompt from layers: guardrails first, then the body, then skills. Every one takes the stack as <code>layers=</code>, the same seam <code>prompts=</code>/<code>lenses=</code> are. To add your own "do not" rules to a verb, extend the shipped stack and hand it to the adapter:</p>
 <pre data-lang="python"><code>from pathlib import Path
@@ -148,14 +198,71 @@ from in_lockstep.prompts.implement import implement_layers
 house = implement_layers().plus(
     guardrails=(("acme/house", Path("prompts/house-guardrails.md").read_text()),),
 )</code></pre>
-<pre data-lang="python"><code>lockstep.bind(Implement, Oneshot(layers=house))</code></pre>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import Implement, Oneshot
+
+lockstep.bind(Implement, Oneshot(layers=house))</code></pre>
 <p><code>plus</code> <em>appends</em>. Your guardrail lands after the framework's baseline and ahead of the body, so extending the stack cannot quietly drop the shipped constraints, and the position (guardrails before everything) stays the security property the composer guarantees. Replacing the stack wholesale is constructing a fresh <code>PromptLayers</code>, which is the visible, greppable spelling of that decision.</p>
 <p><code>emphasis</code> on a prompt subclass still exists and is the right place for style guidance. A guardrail is for constraints, and the difference is where it sits: emphasis rides after the body, guardrails before it.</p>
+<h2 id="house-skills-and-contexts">House skills and contexts</h2>
+<p>The two layers after the body take the same road. A <em>skill</em> is how the model should go about a kind of work; a <em>context</em> is what it should know about this repository. Both are named text, both are appended through <code>plus</code>, and both land after the body and its emphasis: skills first, then contexts, in the order given.</p>
+<pre data-lang="python"><code>from pathlib import Path
+
+from in_lockstep.prompts.implement import implement_layers
+
+knowing = implement_layers().plus(
+    skills=(("acme/migrations", Path("prompts/skills/migrations.md").read_text()),),
+    contexts=(("acme/architecture", Path("prompts/context/architecture.md").read_text()),),
+)</code></pre>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import Implement, Oneshot
+
+lockstep.bind(Implement, Oneshot(layers=knowing))</code></pre>
+<p><code>in-lockstep show-prompt implement/oneshot --projection</code> prints the stack with each layer named in its position, <code>skill:acme/migrations</code> before <code>context:acme/architecture</code>, both after the body. A skill body is part of the eval subject a run records, so editing one moves the subject the way editing a prompt body does.</p>
+<h2 id="the-learning-loop">The learning loop</h2>
+<p><code>in-lockstep improve</code> is the framework reading its own record and proposing a change to one of its prompts, as a pull request a person reads. It runs in three refusals and two model calls, and the refusals come first.</p>
+<p><strong>A trend has to qualify.</strong> The census <code>improve --explain</code> prints — a finding id that recurs across enough <em>billed</em> runs and enough weeks — and a body has to claim it. Bodies are declared, never guessed from a finding id's shape:</p>
+<pre data-lang="python"><code>from in_lockstep.core.improve import Improvable
+
+lockstep.improve = (
+    Improvable(body="prompts/review/security.md", verb="review",
+               label="review/security", answers=("review.security",)),
+)</code></pre>
+<p><strong>The body has to be writable by grant.</strong> <code>prompts/</code> is tier 2, so the proposing workflow needs a named grant, and <em>nothing names this path</em> is a refusal rather than a permission:</p>
+<pre data-lang="python"><code>from in_lockstep.core.changes import ChangeGuard, PathPolicy
+
+lockstep.guard = ChangeGuard(PathPolicy(
+    grants=frozenset({"prompts/"}), granted_to_workflow="improve/propose",
+))</code></pre>
+<p><strong>A promoted case has to fail against the body as it stands.</strong> A harvested case passes the answer it was harvested with by construction, so the loop can only learn from a case somebody tightened — see <code>evidence/README.md</code>. On a corpus at its ceiling it refuses before spending.</p>
+<p>Then it drafts, on the model routed for <code>improve</code>, and re-asks every attributable case against the draft on the model that case was recorded on. The scorecard has both arms over the same cases; <code>improved</code> means a case the current body failed now passes and none was lost, and only <code>improved</code> is staged. <code>in-lockstep run improve/propose</code> opens it, counting what is already open on the host first. Bind the adapter and the corpus, register the process, and it runs the same way at a terminal and from <code>.github/workflows/improve.yml</code>:</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiImprove, Draft, Measure
+from in_lockstep.core.improve import Improver
+from in_lockstep.improver import CorpusImprover
+from in_lockstep.workflows import improve
+
+improving = AiImprove()
+lockstep.bind(Draft, improving)
+lockstep.bind(Measure, improving)
+lockstep.bind(Improver, CorpusImprover("evidence/cases"))
+lockstep.models.route("improve", "anthropic:claude-opus-4-6")
+improve.register()</code></pre>
+<p>A rubric expectation is put to the bound judge on both arms, one ask per case per arm, as one step of the same run -- so the judge's calls share the measurement's budget, its reconciliation and its tape. The judge is a verb of its own, <code>judge</code>, routed apart from the drafter because a grading model is a choice of its own; this repository routes it at Haiku, and the free local path is one line away. A verdict is kept beside the case in a <code>.verdicts.jsonl</code> sidecar keyed by the rubric's and the answer's content hashes, so a rubric judged once over one answer is replayed rather than paid for again, and an answer that changed by a byte is judged afresh. A rubric the judge did not answer, or one no judge is bound for, stays <code>outstanding</code> on both arms and the body says so rather than printing a pass; the person on the pull request is the judge of last resort.</p>
+<p><code>in-lockstep eval run --judge --corpus evidence/cases --budget 0.10</code> judges the promoted corpus on its recorded answers, as a recorded run under a ceiling. Plain <code>eval run</code> never spends.</p>
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiJudge, Judge
+
+lockstep.bind(Judge, AiJudge())
+lockstep.models.route("judge", "anthropic:claude-haiku-4-5")  # or a free local model</code></pre>
+<p>A harvested case records the model it was answered by as <code>&lt;registration&gt;:&lt;model&gt;</code>: the registration name the run routed to, and the bare id that registration was sent. The after arm re-asks the case through the same registration, so the name has to be there. It comes from the registry, which stamps it on every provider it builds and which a recording keeps beside the request; harvest never guesses a provider from a model's name. A case that names no provider, one harvested from a tape recorded outside the registry, is refused before the drafter is paid, and the refusal says which case and what to set. A repository on its own registry hands it to the adapter as <code>AiImprove(registry=...)</code>, the way it hands one to <code>invoker_factory</code>.</p>
+<p>The loop end to end, from a recording to a measured proposal, is drawn in <a href="https://in-lockstep.github.io/lockstep/diagrams/learning-loop.html">the learning loop</a>; the two workflows and the judge are <a href="https://in-lockstep.github.io/lockstep/diagrams/improve.html">improve</a> and <a href="https://in-lockstep.github.io/lockstep/diagrams/judge.html">judge</a>, and the park on the proposal's review is <a href="https://in-lockstep.github.io/lockstep/diagrams/human-boundaries.html">human boundaries</a>.</p>
 <h2 id="middleware">Middleware</h2>
 <p>Cross-cutting behaviour (tracing, budgets, retries, approval) is a middleware chain around every <code>ctx.do</code>. There is no before/after registration API, because <code>next</code> is an explicit parameter and that gives you before, after, around and instead from one hook:</p>
-<pre data-lang="python"><code>from in_lockstep.core.middleware import ActionCall, Next, capabilities_for
+<pre data-lang="python"><code>from datetime import date
+
+from in_lockstep.core.middleware import ActionCall, Next, capabilities_for
 from in_lockstep.core.outcome import Outcome
 from in_lockstep.core.verbs import Capability
+
+def _is_friday() -&gt; bool:
+    return date.today().weekday() == 4
 
 class FridayFreeze:
     async def __call__(self, ctx: object, call: ActionCall, next: Next) -&gt; Outcome[object]:
@@ -170,7 +277,7 @@ lockstep.middleware += [FridayFreeze()]</code></pre>
 <p>Order is outermost-first: <code>middleware[0]</code> sees the call before <code>middleware[1]</code> and sees the <code>Outcome</code> after it. Each layer is one ordinary frame in a traceback, because the chain is folded by plain closures rather than decorators, so a <code>pdb</code> breakpoint lands where you expect.</p>
 <p>Two constraints worth knowing before you write one.</p>
 <p>**Middleware runs once per <code>ctx.do</code>, not once per model turn.** A long agentic loop is a single <code>ActionCall</code>, so a ceiling you enforce here is checked before the loop starts and after it ends, and never in between. That is why the spend check and the deadline live <em>inside</em> <code>AiInvoker</code>, re-evaluated every turn, rather than being middleware. If what you are writing needs to interrupt a loop in progress, middleware is the wrong layer.</p>
-<p><strong>Some actions must not be re-invoked.</strong> An action declaring <code>Capability.SPENDS_BUDGET</code> re-runs a whole agentic loop and re-pays every turn already spent, so anything that might call <code>next()</code> twice should refuse it. Inherit <code>RefusesBudgetedActions</code> and check, as <code>Retry</code> does.</p>
+<p><strong>Some actions must not be re-invoked.</strong> An action declaring <code>Capability.SPENDS_BUDGET</code> re-runs a whole agentic loop and re-pays every turn already spent, so anything that might call <code>next()</code> twice should check <code>Capability.SPENDS_BUDGET in capabilities_for(ctx, call)</code> first and refuse. The framework ships no retrying middleware for exactly this reason: retry belongs at the transport, where one HTTP attempt is one HTTP attempt, and <code>AiInvoker</code> carries that layer.</p>
 <p>What you cannot do here is redaction, egress or residency. Those are privileged: they run outside this chain because <code>--no-middleware</code> exists, and a debugging flag must not be able to switch off the thing keeping credentials out of a committed record.</p>
 <h2 id="packs-an-extension-that-travels">Packs: an extension that travels</h2>
 <p>Everything above is an extension you wrote in your own repository. A pack is the same thing packaged so another repository can install it: an ordinary Python distribution declaring an <code>in_lockstep.extensions</code> entry point.</p>
@@ -184,7 +291,9 @@ in-lockstep add acme-review-prompts              # accept it, and print the line
 <p><code>add</code> re-derives the receipt from the code that is installed, compares it with what this repository accepted before, records the result at <code>.lockstep/packs/&lt;name&gt;.json</code>, and prints the lines. Commit that record; it is the acknowledgement.</p>
 <p><code>add</code> does not write <code>lockstep.py</code> and it does not install anything: putting a stranger's code on your machine belongs in your dependency diff.</p>
 <p>A capability the pack did not previously hold is refused until <code>--accept</code> says so, because more agency is the change that should cost a decision. <code>doctor</code> re-derives against the record afterwards: <code>DOC170</code> fails on widened capabilities, <code>DOC171</code> warns when a bound prompt no longer opens with the shipped baseline, <code>DOC172</code> warns when a pack is installed unpinned.</p>
-<pre data-lang="python"><code>from in_lockstep.packs import pack
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.packs import pack
+from in_lockstep.prompts.review import LENSES, SecurityReviewPrompt, review_layers
 
 acme = pack("acme-review-prompts")
 
@@ -234,34 +343,52 @@ in-lockstep search tdd</code></pre>
 <p><strong>Somebody has to pay once.</strong> A trial replays what was recorded, so a pack with no cassette cannot be measured for nothing. That is what the project catalog's fourth criterion is about, and why <code>pack try</code> says so rather than reporting an empty result.</p>
 <p>The author records it with <code>in-lockstep pack try &lt;pack&gt; --record</code>, once, against a real model, and commits the cassette into the pack. Recording transmits, so it is subject to the same egress rules as any other real call; replaying transmits nothing, and the invoker knows it.</p>
 <p>The trial composes the pack's <code>prompts/&lt;aspect&gt;.md</code> inside the <strong>shipped</strong> layer stack, paired with <code>corpus/review/&lt;aspect&gt;-reviewer/</code>. Your own guardrails are deliberately not applied: measuring a pack through your configuration would measure your configuration, and two repositories would get different numbers for the same pack with no way to tell why.</p>
+<p>The four bands and the order they are applied in are drawn in <a href="https://in-lockstep.github.io/lockstep/diagrams/extension-resolution.html">extension resolution</a>.</p>
 <h2 id="organisation-standards">Organisation standards</h2>
 <p>Bindings resolve repository-above-organisation, which is right for adapters and wrong for standards. Standards go on the policy stack instead:</p>
-<pre data-lang="python"><code>lockstep.contribute(Policy(name="acme-floor", max_turns=8, deny_tools=("run_script",), scan_input="block"))</code></pre>
+<pre data-lang="python"><code>from in_lockstep import Policy
+
+lockstep.contribute(Policy(name="acme-floor", max_turns=8, deny_tools=("run_script",), scan_input="block"))</code></pre>
 <p>Contributions append and only tighten: ceilings take the lowest of several rather than the last read, tool denies union, the strictest scan wins. There is no removal API.</p>
 <p><strong>Three fields reach a run, and the rest are printed.</strong> <code>max_turns</code>, <code>deny_tools</code> and <code>scan_input</code> are what <code>InvokePolicy.under()</code> composes into the loop. A denied tool is removed from the <code>ToolSet</code> rather than refused when called, and <code>scan_input="block"</code> refuses before the first model call.</p>
-<p><code>Policy</code> also carries <code>network</code>, <code>permissions</code> and three credit fields. Those are merged, printed by <code>ls</code> and reported in the receipt, and <strong>nothing enforces them today</strong> (<code>GATE-POLICY-2</code>, <code>unmet</code>). Do not write an org floor that leans on them.</p>
-<p>Egress is the one worth knowing about, because it looks like the gap and is not: a real egress floor is <code>IN_LOCKSTEP_EGRESS=enforced</code> under a host that constrains destinations, verified by a probe, with <code>UnsandboxedEgress</code> as the named opt-out. That control is enforced and is checked by <code>doctor</code>; <code>Policy(network=...)</code> is a field the compiler-era design left behind.</p>
+<p><code>Policy</code> carries those three fields and nothing else. It used to carry <code>network</code>, <code>permissions</code> and three credit fields as well; they were merged, printed by <code>ls</code> and reported in the receipt, and enforced by nothing, so #263 deleted them. A security field that reads as in force while enforcing nothing is worse than its absence, and the receipt is the artefact a reviewer trusts.</p>
+<p>What to write instead, for each of them:</p>
+<div class="tbl-scroll"><table>
+<thead><tr>
+<th>was</th>
+<th>use</th>
+</tr></thead><tbody>
+<tr><td><code>Policy(network=...)</code></td><td><code>IN_LOCKSTEP_EGRESS=enforced</code> under a host that constrains destinations, verified by a probe, with <code>UnsandboxedEgress</code> as the named opt-out. Enforced, and checked by <code>doctor</code>.</td></tr>
+<tr><td><code>Policy(permissions=...)</code></td><td>the <code>Sandbox</code> a deterministic adapter runs under, and <code>deny_tools</code> for what a model may call.</td></tr>
+<tr><td>the three credit fields</td><td><code>Budget</code> and the <code>CostBudget</code> middleware, which refuse a run rather than describing one.</td></tr>
+</tbody></table></div>
+<p>Each of those enforces. That is the whole difference, and it is why the fields went rather than gaining an enforcement path of their own: every one of them already had a control covering the same ground, so wiring them would have meant two writers of one rule.</p>
 <p>At one repository, that line lives in <code>lockstep.py</code>. At two hundred, a line every repository has to remember is drift by another name. So standards also travel as an <strong>installable package</strong>: an <code>in_lockstep.standards</code> entry point whose function receives a facade that can <code>contribute</code> layers (stamped with the plugin's source) and <code>bind</code> at <code>Tier.PLUGIN</code> (the repository's own binds still win).</p>
 <p><code>Lockstep.detect()</code> applies every installed one, in entry-point-name order, before your module's own lines run, and <code>in-lockstep ls</code> prints what applied. The worked example is [<code>examples/acme-standards/</code>](../examples/acme-standards/): a <code>pyproject.toml</code> and one function is the entire org layer.</p>
 <p>Be clear about what that buys: <strong>visibility of removal, not impossibility.</strong> A repository can delete the line that contributes your standard, and a middleware chain cannot bound code that never calls <code>ctx.do</code>. Enforcement that must survive a hostile repository owner lives in a required CI check (<code>in-lockstep doctor --strict</code>) and in provider billing limits, not in a library.</p>
 <h2 id="models-and-providers">Models and providers</h2>
 <p>A verb is routed to a model, and the route is one visible line. <code>in-lockstep ls</code> prints it:</p>
-<pre data-lang="python"><code>lockstep.models.route(Verb.TRIAGE,    "local:qwen3-8b")           # cheap reading, on a laptop
+<pre data-lang="python"><code>from in_lockstep import Verb
+
+lockstep.models.route(Verb.TRIAGE,    "local:qwen3-8b")           # cheap reading, on a laptop
 lockstep.models.route(Verb.IMPLEMENT, "anthropic:claude-opus-4-6")
 lockstep.models.route(Verb.REVIEW,    "anthropic:claude-sonnet-4-6")</code></pre>
 <p>A model id is <code>provider:model</code>. The shipped providers are <code>anthropic</code>, <code>local</code> (Ollama), <code>bedrock</code>, <code>vertex</code> (Claude on GCP) and <code>gemini</code>.</p>
 <p>Bedrock, Vertex and Gemini authenticate through their cloud's own credential chain (the AWS chain, GCP application-default credentials), so they need no <code>*_API_KEY</code>. Region and project come from the cloud's environment (<code>AWS_REGION</code>; <code>GOOGLE_CLOUD_PROJECT</code> with <code>GOOGLE_CLOUD_LOCATION</code>). Their SDK is an optional extra, imported only when you route to one (<code>in-lockstep[bedrock]</code>, <code>[google]</code>), so a repository that routes to none pays nothing.</p>
 <p><strong>A cloud provider's model id is the cloud's, not the Anthropic API's</strong>, and the two namespaces do not overlap: Bedrock names Claude <code>us.anthropic.claude-sonnet-4-6-v1:0</code> (or your site's inference profile), Vertex uses an <code>@version</code> suffix.</p>
 <p>Because pricing keys on the id, a route to one is unpriced until you say what it costs. <code>doctor</code> refuses an unpriced route <em>before</em> the run spends anything, which is where you find out:</p>
-<pre data-lang="python"><code>from in_lockstep.ai.pricing import CostTable, Rate, default_table
+<pre data-lang="python"><code>from in_lockstep import Verb
+from in_lockstep.ai.pricing import CostTable, Rate, default_table
 
 lockstep.models.route(Verb.REVIEW, "bedrock:us.anthropic.claude-sonnet-4-6-v1:0")
 costs = default_table()
 costs.add("us.anthropic.claude-sonnet-4-6-v1:0", Rate(3.0, 15.0))   # per million tokens
 lockstep.bind(CostTable, costs)</code></pre>
 <p>To run against your own gateway, or to state a residency policy <strong>in code</strong> rather than infer it from an environment variable, build the default registry, register into it, and hand it to the factory:</p>
-<pre data-lang="python"><code>from in_lockstep.ai.bootstrap import default_registry, invoker_factory
+<pre data-lang="python"><code>from in_lockstep.adapters.ai import AiReview, Review
+from in_lockstep.ai.bootstrap import default_registry, invoker_factory
 from in_lockstep.llm.interface import DataPolicy, ProviderSettings
+from in_lockstep.llm.providers.openai_compat import OpenAIProvider
 
 registry = default_registry()
 registry.register(
@@ -273,23 +400,65 @@ registry.register(
 )
 lockstep.bind(Review, AiReview(invoker_factory("house:acme-7b", registry=registry)))</code></pre>
 <p><code>in-lockstep doctor</code> reads the routes and warns before a run spends anything if one names a provider nothing registered or a model nothing prices. The failure happens where it costs nothing, not at the first call.</p>
+<p><code>endpoint</code> is compared, at the first use of the provider, with the base URL the constructed client reports it will dial, and a mismatch is refused naming both. That is why the shipped <code>anthropic</code> registration refuses when <code>ANTHROPIC_BASE_URL</code> points anywhere but <code>api.anthropic.com</code>: the variable is read once, in the framework, and handed to the client, so a proxy set through the environment cannot be dialled under a declaration that says otherwise. To run through a proxy or a gateway, register it as above, with its address as the endpoint and its residency as the policy. Bedrock and Vertex derive their endpoint from the region; without one the registration carries <code>endpoint=None</code> and a reason, the manifest names the route it could not list, and a restricted repository refuses it by that reason. A registration of your own may do the same, and only that: <code>endpoint=None</code> needs <code>endpoint_reason</code>, and an empty endpoint is refused.</p>
+<p>A registration also declares what its models can do, and two of those declarations are checked before a call is made. Every shipped AI verb asks for its answer in a schema, and the implementing verbs hand the model tools; a registration with <code>caps=ModelCaps(structured_output=False)</code> or <code>tool_use=False</code> is refused by name for the call that needs the capability, before the first turn is paid for, and <code>doctor</code> warns about a route to the first. Both default to capable, so a registration that says nothing is not refused: <code>False</code> is a statement you make on purpose about a model you know.</p>
+<pre data-lang="python"><code>from in_lockstep.llm.registry import ModelCaps
+
+registry.register(
+    "tiny",
+    lambda settings, creds: OpenAIProvider(settings, creds),
+    settings=ProviderSettings(base_url="http://localhost:8080"),
+    data_policy=DataPolicy.INTERNAL,
+    endpoint="http://localhost:8080",
+    caps=ModelCaps(tool_use=False, structured_output=False),   # refused by name, not charged twice
+)</code></pre>
+<p><strong>Your provider is still recorded.</strong> The framework cannot reach inside your factory, but it holds the invoker your factory returns, and it wraps the provider on that — so an adapter bound this way keeps what it pays for without you doing anything, and O4's <em>every model call is recorded</em> means every. Recording is what a run does; <code>--no-record</code> is how a run declines it. The one shape past that boundary is an adapter that takes no factory at all and constructs <code>AiInvoker</code> inside its own <code>invoke</code>: nothing can wrap that, and rather than report a reassuring zero the run compares what the tape kept against what it spent and tells you a model was called that the recorder never saw.</p>
 <h2 id="a-strategy">A strategy</h2>
 <p>The strategy IS the adapter. A binding does not choose a dispatcher configured by a string; it names the approach itself:</p>
-<pre data-lang="python"><code>lockstep.workshop = Workshop(commands=Sandbox(image=IMAGE, require_container=True))
+<pre data-lang="python"><code>from in_lockstep import Workshop
+from in_lockstep.adapters.ai import TDD
+from in_lockstep.adapters.sandbox import Sandbox
+
+IMAGE = "ghcr.io/acme/ci:py312"
+lockstep.workshop = Workshop(commands=Sandbox(image=IMAGE, require_container=True))
 tdd = lockstep.use(TDD)             # or Oneshot, or your own class</code></pre>
 <p><code>use</code> binds the strategy under the request type it serves and finishes constructing it from the module: the resolved policy floor, the repo root, and the workshop's runner wrapped in a <code>WorktreeRunner</code>. It completes what was left unset and overrides nothing, so <code>lockstep.use(TDD(policy=InvokePolicy(max_turns=8)))</code> keeps the policy you named.</p>
 <p><code>bind</code> remains the primitive and the long spelling still works:</p>
-<pre data-lang="python"><code>lockstep.bind(Implement, TDD(commands=WorktreeRunner(sandbox, root), policy=...))</code></pre>
+<pre data-lang="python"><code>from in_lockstep.adapters.worktree import WorktreeRunner
+from in_lockstep.ai.invoker import InvokePolicy
+
+sandbox = Sandbox(image=IMAGE, require_container=True)
+lockstep.bind(
+    Implement,
+    TDD(commands=WorktreeRunner(sandbox, lockstep.repo.root), policy=InvokePolicy(max_turns=40)),
+)</code></pre>
 <p>Prefer <code>use</code> anyway. The two arguments it fills in are the two a hand-written bind can silently drop. Without <code>InvokePolicy.under(policy.resolve(), ...)</code> the contributed policy floor is ignored, and without the <code>WorktreeRunner</code> wrap the container bind-mounts your live tree. Neither omission appears in <code>ls</code>.</p>
 <p>Writing one is subclassing <code>AiStrategy</code> (which carries the constructor and the per-run session assembly) and implementing <code>invoke(ctx, request)</code>. It imports from the package root:</p>
 <pre data-lang="python"><code>from in_lockstep.adapters.ai import AGENCY, AiStrategy</code></pre>
-<p>Declare <code>id</code>, which lands on the report so an eval subject and a ledger record can key on the approach that ran, and <code>verb</code>.</p>
-<p><code>capabilities</code> is the load-bearing frozenset every gate reads off the bound object, and it is not optional: subclassing <code>AiStrategy</code> means being handed <code>write_file</code>, <code>delete_file</code> and <code>run_script</code> and paying for a model call, so declaring less than <code>AGENCY</code> is refused at class creation. <code>ApprovalGate</code>, the budget refusal and <code>Retry</code> all key on that set. An undeclared strategy would be an ungated one, which is why this is an error and not a warning.</p>
+<p>Declare <code>id</code>, which lands on the report so an eval subject and a ledger record can key on the approach that ran. Subclass the per-verb base rather than <code>AiStrategy</code> itself: <code>ImplementStrategy</code> and <code>FixStrategy</code> carry <code>verb</code>, <code>request</code> (the key <code>lockstep.use</code> binds under) and <code>capabilities</code>, so a strategy of yours states only what is its own.</p>
+<pre data-lang="python"><code>from typing import Any
+
+from in_lockstep import Outcome, RunContext
+from in_lockstep.adapters.ai import Implement, ImplementStrategy
+
+class Careful(ImplementStrategy):
+    id = "implement/careful"
+
+    async def invoke(self, ctx: RunContext, request: Implement) -&gt; Outcome[Any]:
+        return Outcome.errored("not written yet")</code></pre>
+<pre data-lang="python"><code>careful = lockstep.use(Careful)</code></pre>
+<p>A subclass of bare <code>AiStrategy</code> has to declare all three itself, <code>request: ClassVar[Any]</code> included, or <code>use</code> refuses it for want of a key to bind under.</p>
+<p><code>capabilities</code> is the load-bearing frozenset every gate reads off the bound object, and it is not optional: subclassing <code>AiStrategy</code> means being handed <code>write_file</code>, <code>edit_file</code>, <code>delete_file</code> and <code>run_script</code> and paying for a model call, so declaring less than <code>AGENCY</code> is refused at class creation. <code>ApprovalGate</code>, the budget refusal and the egress trigger all key on that set. An undeclared strategy would be an ungated one, which is why this is an error and not a warning.</p>
 <p>Declaring <em>more</em> is allowed, and is sometimes right: a set that could execute on some other configuration must not read as harmless on this one.</p>
 <p>Ship fixtures with a new strategy: ten unmeasured strategies are worse than one measured.</p>
 <p>Which strategy runs is a bind-time code decision in <code>lockstep.py</code>, reviewed like any other line. There is no request-time selection and no registry id, so nothing a ticket carries (a label, a comment, a body) can steer a run toward an approach that holds a path grant. What used to be a registry refusal (a privileged strategy unreachable from untrusted input) is now structural.</p>
 <p>Binding can also happen at the call, when the workflow should say what serves a request right at the execution site:</p>
-<pre data-lang="python"><code>outcome = await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)</code></pre>
+<pre data-lang="python"><code>from typing import Any
+
+from in_lockstep import Outcome, RunContext, TicketSource
+
+async def implement_with_tdd(ctx: RunContext, ticket: str, tickets: TicketSource) -&gt; Outcome[Any]:
+    return await ctx.do(Implement(ticket=await tickets.get(ticket)), via=tdd)</code></pre>
 <p><code>via=</code> is call-scoped: it never touches the container, so nothing leaks into later calls, and the same capability-keyed middleware gates the supplied adapter exactly as it would a bound one. It is still code choosing, because <code>lockstep.py</code> loads from a trusted ref.</p>
 <p>It is an <em>override</em> for a verb the module binds, not a replacement: the startup refusals (<code>UngatedAgency</code>, the budget checks) scan bound adapters, so keep the binding and pass the same instance.</p>
 <h3 id="oneshot"><code>Oneshot</code></h3>
@@ -307,6 +476,7 @@ in-lockstep apply-inline --from-artifact .lockstep/change</code></pre>
 <tr><td><code>ApprovalGate</code> … <code>UngatedAgency</code></td><td>A model that can write and spend needs a human in the loop.</td><td>Add <code>ApprovalGate()</code> to your middleware, or pass <code>--approve</code> for an attended local run.</td></tr>
 <tr><td><code>egress.unenforced</code></td><td>The tool set declares <code>EXECUTES_CODE</code>, which makes egress enforcement mandatory.</td><td>Run under a host that constrains egress with <code>IN_LOCKSTEP_EGRESS=enforced</code>, or <code>lockstep.bind(EgressPolicy, UnsandboxedEgress())</code>.</td></tr>
 <tr><td><code>UndeclaredBudget</code></td><td>Something bound spends money and no ceiling was declared. A replay cannot spend, so <code>--offline</code> and <code>--dry-run</code> state a ceiling of zero for you.</td><td><code>lockstep.budget = Budget(usd=2.00)</code>, or <code>--budget</code>.</td></tr>
+<tr><td><code>sandbox.host_fallback</code></td><td>The bound <code>Test</code> runner would run a file the model staged as a subprocess on this host. The repository's own suite may run that way; a model's test may not.</td><td>Bind <code>Test</code> with <code>Sandbox(image=..., require_container=True)</code>, where the image carries the suite's dependencies -- see the <code>TDD</code> section below for the <code>mounts=</code> shape.</td></tr>
 </tbody></table></div>
 <p>The egress one is the surprise on a laptop, and the opt-out is a binding rather than a flag on purpose: <code>UnsandboxedEgress</code> is named after what it does, so it greps and it reviews.</p>
 <p>**<code>run_script</code> executes; it does not shell.** Commands arrive as an argv array, with no pipes, no globs and no <code>&amp;&amp;</code>, and <code>argv[0]</code> must be in an allowlist (<code>ALLOWED_COMMANDS</code>).</p>
@@ -323,6 +493,43 @@ in-lockstep apply-inline --from-artifact .lockstep/change</code></pre>
 <p>The writing verbs read the repository's <code>AGENTS.md</code>, <code>CLAUDE.md</code> and <code>.cursorrules</code> into their system prompt, after the framework guardrails. <code>review</code> deliberately does not: it runs over a <code>pull_request</code> checkout, where those files are contributor-authored.</p>
 <p>This is where the <code>run_script</code> caveat above stops applying: oneshot's <code>run_script</code> sees the tree as it was, but tdd's verdict comes from <code>ctx.do(Test(root=…))</code> against the <em>materialised</em> change, so it reflects the code as proposed. Because it needs to run the suite, <code>TDD</code> requires a <code>Test</code> verb bound and refuses up front (<code>tdd.no_test</code>) if none is. It will not degrade to an untested oneshot.</p>
 <p>Bind it with <code>lockstep.bind(Implement, TDD(...))</code> and <code>in-lockstep ls</code> prints <code>Implement -&gt; TDD</code>, so how implementing happens is one visible line. The CLI's <code>--strategy tdd</code> does the same for a repository that has bound nothing.</p>
+<p><strong>The test it runs is one the model wrote</strong>, on a ticket nobody vetted, so the <code>Test</code> runner it hands that file to has to be a container: <code>--network=none</code>, the throwaway worktree as the only writable mount, no <code>HOME</code>. A <code>Test</code> bound with the default <code>Sandbox()</code> -- a credential-dropped subprocess on this host, which is right for <code>in-lockstep run selfcheck</code> over your own committed suite -- is refused before the worktree is made, as <code>sandbox.host_fallback</code>, by <code>TDD</code>, <code>DiagnoseThenFix</code>, the model's <code>run_tests</code> tool and the workflow's verdict over a staged change alike. The refusal names the line to write.</p>
+<p>The image is yours to name, because it has to carry the suite's dependencies and no stack image does: the worktree is a copy of HEAD, so <code>.venv</code> and <code>node_modules</code> are not in it. Two shapes. A CI image that already has everything installed:</p>
+<pre data-lang="python"><code>from in_lockstep.adapters import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+
+lockstep.bind(
+    Test,
+    PytestTest(args=["-q"], sandbox=Sandbox(image="ghcr.io/acme/ci:py312", require_container=True)),
+)</code></pre>
+<p>Or a base image with the environment the host already built mounted read-only beside the tree, which is what this repository does for itself. It works wherever the packages in that environment import inside the container: always on a linux runner, and on a laptop for as long as they are pure Python; a compiled dependency built for macOS fails at import there, naming the module.</p>
+<pre data-lang="python"><code>import sys
+
+from in_lockstep.adapters import PytestTest, Test
+from in_lockstep.adapters.sandbox import Sandbox
+
+PY = f"{sys.version_info.major}.{sys.version_info.minor}"
+lockstep.bind(
+    Test,
+    PytestTest(
+        args=["-q"],
+        sandbox=Sandbox(
+            image=f"docker.io/library/python:{PY}-slim",
+            mounts=((f"{lockstep.repo.root}/.venv", "/venv"),),
+            extra_env={"PYTHONPATH": f"/venv/lib/python{PY}/site-packages"},
+        ),
+    ),
+)</code></pre>
+<p><code>require_container</code> is off in the second shape on purpose: with it, <code>run selfcheck</code> would refuse on a laptop with no runtime, and that run is a person's, not a model's. The model-staged callers probe for the runtime themselves and refuse when it is missing.</p>
+<p>Both shipped strategies are drawn side by side in <a href="https://in-lockstep.github.io/lockstep/diagrams/implement-strategies.html">implement strategies</a>; the fix strategy's reproduce-then-repair shape is in <a href="https://in-lockstep.github.io/lockstep/diagrams/fix.html">fix</a>.</p>
+<h2 id="reading-the-process-you-are-running">Reading the process you are running</h2>
+<p>Extending something starts with reading it, and the shipped processes are framework code rather than lines in your module. <code>show-workflow</code> prints them:</p>
+<pre data-lang="bash"><code>in-lockstep show-workflow                    # the families and their ids
+in-lockstep show-workflow implement          # a whole module
+in-lockstep show-workflow implement/propose  # one process
+in-lockstep show-workflow --registered       # what THIS repository has in force</code></pre>
+<p>It reads nothing and spends nothing. The source comes from <code>inspect.getsource</code> on the module that is actually imported, so what you read is what runs — a property a copy in your own file could not have offered, which is the argument that retired <code>init --eject</code>. Ejecting gave you a readable copy and, with it, a fork: every later fix landed twice and reached nobody who had already scaffolded.</p>
+<p><code>--registered</code> answers the neighbouring question. <code>show-workflow implement</code> prints what the framework ships; <code>--registered</code> prints what your <code>lockstep.py</code> put in force, which differs the moment somebody writes their own — and that is exactly the case where reading the shipped source would mislead.</p>
 <h2 id="the-path-a-project-takes">The path a project takes</h2>
 <p>The framework is built around one arc, and each stage is meant to reuse the last rather than replace it.</p>
 <p><strong>Young: a terminal.</strong> One or two people, no CI to speak of. Processes are <code>@workflow</code> functions in <code>.lockstep/lockstep.py</code> and you run them by hand:</p>
@@ -340,11 +547,24 @@ in-lockstep apply-inline --from-artifact .lockstep/change</code></pre>
 <p><code>in-lockstep gate</code> takes <code>--association</code> as an opaque string for the same reason it always did: it works against whatever a host calls its access levels. GitLab computes no <code>author_association</code>, so there the gate answers from CODEOWNERS alone.</p>
 <h3 id="firing-it-from-ci">Firing it from CI</h3>
 <p>The rule is one line long: **process goes in <code>.lockstep/lockstep.py</code>, CI invokes it.**</p>
-<pre data-lang="python"><code>@workflow(id="implement/from-ticket")
-async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSource) -&gt; Outcome:
-    return await ctx.do(Implement(ticket=await tickets.get(ticket)))</code></pre>
+<p>For the processes the framework ships, "goes in" means <em>registered</em>, not written:</p>
+<pre data-lang="python"><code>from in_lockstep.workflows import implement
+
+implement.register()</code></pre>
 <pre data-lang="bash"><code>in-lockstep run implement/from-ticket --arg ticket='#59' --budget 2.00</code></pre>
-<p>The signature is the contract: <code>ticket</code> arrives from <code>--arg ticket=...</code>, and <code>tickets</code> is filled from the container because its annotation names a bound port. The dispatcher resolves <code>TicketSource</code> so the body never touches <code>ctx.container</code>.</p>
+<p>That is what <code>init --implement</code> writes, and <code>implement/from-ticket</code> is framework code — read it with <code>in-lockstep show-workflow implement</code>. Registering rather than copying is why a fix to the process reaches a repository by upgrading. **Do not hand-write <code>@workflow(id="implement/...")</code> beside that call**: <code>@workflow</code> refuses a repeated id, so a module claiming a shipped id from a <code>def</code> of its own raises <code>DuplicateWorkflow</code> at load, which is the correct answer to asking for two different things under one name.</p>
+<p>A process of your own is the same shape, under an id you own:</p>
+<pre data-lang="python"><code>from typing import Any
+
+from in_lockstep import Outcome, RunContext, TicketSource, workflow
+from in_lockstep.adapters.ai import Implement
+
+@workflow(id="implement/from-label")
+async def implement_from_label(ctx: RunContext, label: str, tickets: TicketSource) -&gt; Outcome[Any]:
+    ready = await tickets.search(f"label:{label}", limit=1)
+    return await ctx.do(Implement(ticket=ready[0]))</code></pre>
+<pre data-lang="bash"><code>in-lockstep run implement/from-label --arg label='ready' --budget 2.00</code></pre>
+<p>The signature is the contract: <code>label</code> arrives from <code>--arg label=...</code>, and <code>tickets</code> is filled from the container because its annotation names a bound port. The dispatcher resolves <code>TicketSource</code> so the body never touches <code>ctx.container</code>.</p>
 <p><code>--arg name=value</code> is repeatable and values arrive as strings, which usefully bounds what a CLI-runnable workflow can take: one needing a list of tickets takes a label or a path, not the tickets. Every dispatched run leaves a ledger record carrying its arguments, so "which issue, which actor" survives the run.</p>
 <p>What belongs in the CI file is the trigger, the job split, per-job permissions, and which secret each job gets. Those are the CI system's to grant and no Python can express them: one process cannot hold two different token scopes, and keeping a provider key out of the job that can write is the reason the trampoline has two jobs.</p>
 <p>Everything else is process, and process in YAML is process with no tests.</p>
@@ -362,6 +582,7 @@ async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSou
 <p>It is a Python function with tests rather than <code>grep</code> inside a YAML <code>if:</code>, because it is the whole authorization and YAML review is not a control.</p>
 <p><strong>The gate authorizes the asker, not the issue.</strong> Anyone can file an issue, and a member typing <code>/implement</code> on a drive-by hands that body to a model holding write tools. The ticket stays <code>UNTRUSTED_EXTERNAL</code>, writes are staged, <code>ChangeGuard</code> checks them twice, and the result arrives as a pull request a person reads. The gate bounds who can spend money; it does not bound what the text says.</p>
 <p>For unattended runs, <code>--approved-by "@login"</code> replaces <code>--approve</code> and records who asked in the ledger. A grant nobody can be traced to is not much of a grant. Neither is an environment approval in the system of record; if you want one, the <code>propose</code> job declares <code>environment: implement</code>, and adding required reviewers to it in repository settings makes it real.</p>
+<p>The three jobs and the two credentials are drawn as a sequence in <a href="https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html">chat-ops</a>, and the workflow they drive in <a href="https://in-lockstep.github.io/lockstep/diagrams/implement.html">implement</a>.</p>
 <p><strong>What bounds the spend</strong> is the actor gate, a per-issue concurrency group, and <code>--budget</code>. There is no per-day ceiling. See <code>docs/controls-crosswalk.md</code>, which records that as a loss rather than a replacement. A member who wants to spend $2 forty times can.</p>
   </article>
 </div>
@@ -395,6 +616,7 @@ async def implement_from_ticket(ctx: RunContext, ticket: str, tickets: TicketSou
       <a href="../docs/getting-started.html">Getting started</a>
       <a href="../docs/cookbook.html">Cookbook</a>
       <a href="../docs/extending.html">Extending</a>
+      <a href="diagrams.html">Diagrams</a>
     </nav>
     <nav aria-label="Project">
       <h4>Project</h4>
