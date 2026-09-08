@@ -340,7 +340,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: `_run_registered`. What the judge is asked, what is replayed and what a verdict settles live in
 #: `improver.py` and `workflows/judge.py`, where `test_judge_loop.py` reaches them without a
 #: CliRunner.
-CLI_HELPER_STATEMENTS = 1263
+#: 1263 -> 1277 with the first sidecar, translating: `_eval_run` reads the verdicts the judge
+#: kept beside each case and hands the one whose key is this rubric over this answer to `grade`,
+#: and prints how many it replayed. Which key a verdict answers to is `improver.py`'s
+#: (`corpus_rubrics`, `known_verdicts`); whether a kept verdict settles or fails a case is
+#: `grade`'s and `summarize`'s.
+CLI_HELPER_STATEMENTS = 1277
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

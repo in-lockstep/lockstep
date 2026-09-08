@@ -1584,8 +1584,14 @@ def _eval_harvest(from_cassette: str, into: str, family: str) -> None:
     )
 
 
-def _eval_run(cases: list[Any]) -> None:
+def _eval_run(cases: list[Any], root: Path) -> None:
     """Replay each case's recorded request and grade the answer that comes back.
+
+    A verdict kept beside a case is replayed the same way (`GATE-JUDGE-3`): a sidecar row whose
+    replay key is this case's current rubric over its recorded answer settles the rubric with no
+    model, and a row whose key no longer matches -- the rubric tightened, the answer re-recorded
+    -- is not a verdict on this case and leaves it outstanding. Without this, the first sidecar
+    made `make check` read the promoted case as undecided the moment it stated a rubric.
 
     Free, and it measures the harness rather than the prompt — the request replayed is the one that
     was recorded, so what is exercised is everything between a model's reply and an outcome. A case
@@ -1600,6 +1606,21 @@ def _eval_run(cases: list[Any]) -> None:
     from .ai.replay import Cassette, key_of, request_from
     from .evaluation import summarize
     from .evaluation.cases import grade
+    from .improver import CorpusImprover
+
+    improver = CorpusImprover(root)
+    asks = {ask.case: ask for ask in improver.corpus_rubrics()}
+    kept = {verdict.key: verdict for verdict in improver.known_verdicts()}
+    replayed = 0
+
+    def verdict_for(case: Any) -> dict[str, Any] | None:
+        nonlocal replayed
+        ask = asks.get(case.name)
+        verdict = kept.get((ask.rubric_sha256, ask.answer_sha256)) if ask is not None else None
+        if verdict is None:
+            return None
+        replayed += 1
+        return {"level": verdict.level, "reason": verdict.reason, "evidence": list(verdict.evidence)}
 
     tapes: dict[str, Any] = {}
     results: list[dict[str, Any]] = []
@@ -1625,7 +1646,7 @@ def _eval_run(cases: list[Any]) -> None:
                     (case.name, f"its request and its answer are not the pair recorded as {declared[:12]}")
                 )
                 continue
-            results.append(grade(case, _as_answer(str(case.recorded.get("content", "")))))
+            results.append(grade(case, _as_answer(str(case.recorded.get("content", ""))), verdict_for(case)))
             continue
 
         where = str((case.harvested or {}).get("cassette", ""))
@@ -1656,13 +1677,16 @@ def _eval_run(cases: list[Any]) -> None:
     click.echo("")
     click.echo(f"cases        {summary['total']} replayed, {len(unplayable)} skipped")
     click.echo(f"decided      {summary['decided']}")
+    click.echo(f"judged       {summary['judged']}  ({replayed} replayed from sidecars)")
     click.echo(f"outstanding  {summary['outstanding']}  (need a judge)")
     rate = summary["pass_rate"]
     click.echo(f"pass rate    {'n/a — nothing decided' if rate is None else f'{rate:.0%}'}")
     click.echo("")
     click.echo("Replayed, so nothing was spent and no prompt was tested. This settles the path")
     click.echo("between a model's reply and an outcome; changing the prompt is a real model call.")
-    if any(r["deterministic_passed"] is False for r in results):
+    # A judged rubric that failed fails the settle like a failed check (GATE-JUDGE-1): a kept
+    # verdict below the bar is evidence about this answer, and `make check` should say so.
+    if any(r["deterministic_passed"] is False or r.get("rubric_passed") is False for r in results):
         raise SystemExit(EXIT_FAILED)
 
 
@@ -1744,7 +1768,7 @@ def eval_cmd(
         if judge:
             _eval_judge(root, budget)
             return
-        _eval_run(cases)
+        _eval_run(cases, root)
         return
 
     # No model runs here and no answer exists, so nothing is decided: this reports what the

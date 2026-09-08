@@ -365,7 +365,7 @@ improve.register()
 A rubric expectation is put to the bound judge on both arms, one ask per case per arm, as one
 step of the same run -- so the judge's calls share the measurement's budget, its reconciliation
 and its tape. The judge is a verb of its own, `judge`, routed apart from the drafter because a
-grading model is a choice of its own; this repository routes it at the free local model. A
+grading model is a choice of its own; this repository routes it at Haiku, and the free local path is one line away. A
 verdict is kept beside the case in a `.verdicts.jsonl` sidecar keyed by the rubric's and the
 answer's content hashes, so a rubric judged once over one answer is replayed rather than paid for
 again, and an answer that changed by a byte is judged afresh. A rubric the judge did not answer,
@@ -379,7 +379,7 @@ on its recorded answers, as a recorded run under a ceiling. Plain `eval run` nev
 from in_lockstep.adapters.ai import AiJudge, Judge
 
 lockstep.bind(Judge, AiJudge())
-lockstep.models.route("judge", "local:qwen3-8b")
+lockstep.models.route("judge", "anthropic:claude-haiku-4-5")  # or a free local model
 ```
 
 A harvested case records the model it was answered by as `<registration>:<model>`: the
