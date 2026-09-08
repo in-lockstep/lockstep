@@ -184,11 +184,17 @@ class AiJudge:
                     e.reason, str(e), report=_report(verdicts, replayed, unsettled, calls), cost=total
                 )
             except InvocationFailed as e:
+                # `decided` is stated, because `Outcome` defaults it to True and a provider
+                # that could not be reached settled nothing: the first real `judge/corpus` run
+                # on this repository dialled an Ollama nobody had started and recorded
+                # `decided: true` over zero verdicts. What was settled before the failure is
+                # still on the report; the run as a whole did not decide the corpus.
                 return Outcome(
                     status=Status.ERRORED,
                     reason=e.reason,
                     value=_report(verdicts, replayed, unsettled, calls),
                     cost=total,
+                    decided=False,
                     findings=(Finding(id=e.reason, message=str(e), severity=Severity.ERROR, blocking=True),),
                 )
             total = total + invocation.cost
