@@ -25,6 +25,18 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
 
 
+def _gh(*args: str) -> subprocess.CompletedProcess[str]:
+    """`gh`, or a skip that names its absence. The Test container this repository binds is uv's
+    Python image, which carries no `gh`; run there, these two host-asking tests raised
+    `FileNotFoundError` and read as failures of the change under test, which is how the first
+    `/implement` here was refused for a suite it had not touched (run 34255026959). A host that
+    cannot be asked is a named skip, the same answer the unfetched ref gets above."""
+    try:
+        return subprocess.run(["gh", *args], cwd=ROOT, capture_output=True, text=True)
+    except FileNotFoundError:
+        pytest.skip("GATE-DOGFOOD-1 not checked: gh is not installed where this suite runs")
+
+
 def _published_records() -> list[dict[str, object]]:
     if _git("rev-parse", "--verify", "--quiet", f"{HISTORY_REF}^{{commit}}").returncode != 0:
         pytest.skip(f"GATE-DOGFOOD-1 not checked: {HISTORY_REF} is not fetched in this checkout")
@@ -68,12 +80,7 @@ def test_gate_dogfood_1_the_learning_loop_has_measured_here() -> None:
 def test_gate_dogfood_1_the_host_has_merged_a_change_this_framework_opened() -> None:
     """Asked of the host, not the ledger: a merged pull request whose head is a run branch. #343
     was the first, merged 2026-09-07."""
-    listed = subprocess.run(
-        ["gh", "pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
+    listed = _gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName")
     if listed.returncode != 0:
         said = (listed.stderr or listed.stdout).strip().splitlines()
         pytest.skip(
@@ -107,22 +114,8 @@ def test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_job
     """The chat-ops clause. `/review security` on #348 (run 34167168362, 2026-09-07) was the first
     comment that matched `review.yml`'s gate and ran through gate, review and post to a sticky
     comment; the first that matched at all, 34163733667, failed for want of a token (#347)."""
-    listed = subprocess.run(
-        [
-            "gh",
-            "run",
-            "list",
-            "--workflow=review.yml",
-            "--status",
-            "success",
-            "--limit",
-            "5",
-            "--json",
-            "databaseId",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
+    listed = _gh(
+        "run", "list", "--workflow=review.yml", "--status", "success", "--limit", "5", "--json", "databaseId"
     )
     if listed.returncode != 0:
         said = (listed.stderr or listed.stdout).strip().splitlines()
@@ -132,3 +125,15 @@ def test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_job
     except ValueError:
         pytest.skip("GATE-DOGFOOD-1 not checked: gh returned no JSON")
     assert runs, "no review-on-request run has ever succeeded on this repository"
+
+
+def test_gate_dogfood_1_is_not_checked_rather_than_failed_where_gh_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-DOGFOOD-1's host-asking tests skip by name with no `gh` on PATH, as they do inside the
+    Test container this repository binds, instead of raising and failing the change under test."""
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(pytest.skip.Exception, match="gh is not installed"):
+        test_gate_dogfood_1_the_host_has_merged_a_change_this_framework_opened()
+    with pytest.raises(pytest.skip.Exception, match="gh is not installed"):
+        test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_jobs()
