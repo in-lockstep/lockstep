@@ -318,3 +318,51 @@ def test_the_staged_set_then_crosses_the_guard_again_at_apply(
     )
     result = CliRunner().invoke(main, ["apply-inline", "--from-artifact", str(payload)])
     assert result.exit_code == 3, result.output
+
+
+# -- GATE-WORKSPACE-1: what a session staged is what it sees ----------------------------------
+
+
+def test_gate_workspace_1_search_text_finds_a_symbol_at_the_line_the_session_staged_it(
+    workspace: Workspace,
+) -> None:
+    """GATE-WORKSPACE-1. The disk says one thing and the session's write says another; the
+    search answers from the write, at the staged line, and a file that exists only in the
+    staged set is searched too."""
+    (workspace.root / "a.py").write_text("x = 1\n")
+    _, run = read_write(workspace)
+    asyncio.run(
+        run("builtin", "write_file", {"path": "a.py", "contents": "x = 1\n\ndef fresh():\n    pass\n"})
+    )
+    asyncio.run(run("builtin", "write_file", {"path": "b.py", "contents": "from a import fresh\n"}))
+    hits = asyncio.run(run("builtin", "search_text", {"pattern": "fresh"}))
+    assert hits.splitlines() == ["a.py:3: def fresh():", "b.py:1: from a import fresh"]
+    assert (workspace.root / "a.py").read_text() == "x = 1\n", "the disk was never written"
+
+
+def test_gate_workspace_1_a_staged_deletion_hides_the_file_from_search_and_listing(
+    workspace: Workspace,
+) -> None:
+    """GATE-WORKSPACE-1. A file the session deleted is gone from the session's view of the tree
+    although it is still on disk, and `list_files` names the staged new file beside the rest."""
+    (workspace.root / "old.py").write_text("gone = True\n")
+    (workspace.root / "keep.py").write_text("kept = True\n")
+    _, run = read_write(workspace)
+    asyncio.run(run("builtin", "delete_file", {"path": "old.py"}))
+    asyncio.run(run("builtin", "write_file", {"path": "new.py", "contents": "fresh = True\n"}))
+    assert asyncio.run(run("builtin", "search_text", {"pattern": "gone"})) == "(no matches)"
+    assert asyncio.run(run("builtin", "list_files", {"glob": "*.py"})).splitlines() == ["keep.py", "new.py"]
+
+
+def test_gate_workspace_1_the_three_readers_agree_and_the_guard_still_applies(workspace: Workspace) -> None:
+    """GATE-WORKSPACE-1. `read_file`, `list_files` and `search_text` describe one tree, and a
+    protected name stays out of the listing and the search whether it is on disk or staged."""
+    (workspace.root / ".env").write_text("API_KEY=secret\n")
+    _, run = read_write(workspace)
+    asyncio.run(run("builtin", "write_file", {"path": "note.txt", "contents": "the key is not here\n"}))
+    assert asyncio.run(run("builtin", "read_file", {"path": "note.txt"})) == "the key is not here\n"
+    assert asyncio.run(run("builtin", "list_files", {"glob": "*"})).splitlines() == ["note.txt"]
+    assert (
+        asyncio.run(run("builtin", "search_text", {"pattern": "secret|key"}))
+        == "note.txt:1: the key is not here"
+    )

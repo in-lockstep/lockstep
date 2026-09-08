@@ -35,6 +35,7 @@ import fnmatch
 import inspect
 import posixpath
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -621,19 +622,52 @@ class ToolRunnerImpl:
             return text[:MAX_READ_CHARS] + "\n…[truncated]"
         return text
 
+    def _staged(self) -> dict[str, str | None]:
+        """This session's own writes, the last one per path, keyed the way the tree is walked."""
+        view: dict[str, str | None] = {}
+        for change in self.workspace.changes:
+            view[posixpath.normpath(change.path.replace("\\", "/"))] = change.contents
+        return view
+
+    def _files(self, glob: str, staged: dict[str, str | None]) -> Iterator[tuple[str, Path | None]]:
+        """Every file in the tree as THIS SESSION sees it, in order: the disk, minus what the
+        session staged as deleted, plus what it staged as written.
+
+        `read_file` got this view in #337 and `list_files` and `search_text` stayed on the disk, so
+        a model that wrote a file and searched for the symbol it had just defined was told
+        "(no matches)" -- and read the file a turn later to check, which is the turn this saves.
+        The three tools answer from one walk so they cannot disagree about what exists; a path is
+        yielded with `None` when its text is the staged version rather than a file on disk.
+
+        The guard and the symlink rule apply to staged names too, for the same reason they apply
+        to disk names: a search is how somebody looks for a credential, and a listing of what was
+        declined is a map of where to look. Skipped silently, never named.
+        """
+        root = self.workspace.root
+        entries: dict[str, Path | None] = {
+            str(p.relative_to(root)): p for p in root.rglob("*") if p.is_file()
+        }
+        for rel, contents in staged.items():
+            if contents is None:
+                entries.pop(rel, None)
+            else:
+                entries[rel] = None
+        for rel in sorted(entries):
+            if not fnmatch.fnmatch(rel, glob):
+                continue
+            if self.workspace.guard.check_read(rel) is not None:
+                continue
+            path = entries[rel]
+            # `rglob` yields a link by its in-tree name and `read_text` would follow it out.
+            if path is not None and not self.workspace.inside(path):
+                continue
+            yield rel, path
+
     def _list(self, args: dict[str, object]) -> str:
         pattern = str(args.get("glob", "*"))
         # Names, not contents, so the stake is lower than `read_file`'s — but a listing of
         # `.git/` is noise at best, and a listing of what is protected is a map of where to look.
-        matches = sorted(
-            rel
-            for p in self.workspace.root.rglob("*")
-            if p.is_file()
-            and fnmatch.fnmatch(rel := str(p.relative_to(self.workspace.root)), pattern)
-            and self.workspace.guard.check_read(rel) is None
-            # A link out of the tree is not a file in it, whatever `rglob` yields.
-            and self.workspace.inside(p)
-        )
+        matches = [rel for rel, _ in self._files(pattern, self._staged())]
         if not matches:
             return "(no matches)"
         listed = matches[:MAX_LISTED]
@@ -653,29 +687,21 @@ class ToolRunnerImpl:
 
         matches: list[str] = []
         truncated = False
-        for path in sorted(self.workspace.root.rglob("*")):
-            if not path.is_file():
-                continue
-            rel = str(path.relative_to(self.workspace.root))
-            if not fnmatch.fnmatch(rel, glob):
-                continue
-            # The same rule `read_file` applies, and the more important of the two: a search is how
-            # somebody LOOKS for a credential, and this walked `rglob("*")` with no guard at all —
-            # so `search_text(pattern="API_KEY")` returned lines out of `.env` and out of `.git/`.
-            # Skipped silently rather than refused: a search is over the tree, and naming every
-            # protected file it declined would be a listing of exactly what is worth reading.
-            if self.workspace.guard.check_read(rel) is not None:
-                continue
-            # Skipped like a guarded path, and for the same reason: `rglob` yields the link by
-            # its in-tree name and `read_text` would follow it out.
-            if not self.workspace.inside(path):
-                continue
-            try:
-                text = path.read_text()
-            except (OSError, UnicodeDecodeError):
-                # A binary file is not a search failure, and reporting one per binary would bury
-                # the answer under noise about the things that were never candidates.
-                continue
+        staged = self._staged()
+        # The same walk `list_files` takes, guarded the same way (a search is how somebody LOOKS
+        # for a credential, and this once walked `rglob("*")` with no guard at all, so
+        # `search_text(pattern="API_KEY")` returned lines out of `.env` and `.git/`), and over
+        # the session's own staged writes rather than the disk they have not reached.
+        for rel, path in self._files(glob, staged):
+            if path is None:
+                text = staged[rel] or ""
+            else:
+                try:
+                    text = path.read_text()
+                except (OSError, UnicodeDecodeError):
+                    # A binary file is not a search failure, and reporting one per binary would
+                    # bury the answer under noise about the things that were never candidates.
+                    continue
             for number, line in enumerate(text.splitlines(), start=1):
                 if expression.search(line):
                     if len(matches) >= MAX_SEARCH_MATCHES:
