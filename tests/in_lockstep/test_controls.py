@@ -120,6 +120,38 @@ def test_gate_egress_2_an_asserted_mode_a_probe_disproves_is_refused() -> None:
     assert exc.value.reason == "egress.probe_failed"
 
 
+def test_gate_egress_2_the_probe_is_consulted_once_and_a_connection_that_succeeds_refuses_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-EGRESS-2, verified rather than attested. The neighbouring test sets the probe's answer
+    by hand, which proves the refusal and nothing about the probe; this stubs `_can_connect`
+    itself. An ENFORCED mode whose probe reaches the blocked host is refused before any call and
+    the probe was asked exactly once for the session; one whose probe cannot connect permits the
+    run, and a second `check` asks nothing again."""
+    from in_lockstep.privileged import egress as module
+
+    asked: list[tuple[str, int]] = []
+
+    def connects(host: str, port: int) -> bool:
+        asked.append((host, port))
+        return True
+
+    monkeypatch.setattr(module, "_can_connect", connects)
+    policy = EgressPolicy(mode=EgressMode.ENFORCED_EXTERNAL)
+    with pytest.raises(EgressRefused) as exc:
+        policy.check(capabilities=frozenset({Capability.WRITES_FILES}), untrusted_context=False)
+    assert exc.value.reason == "egress.probe_failed"
+    assert asked == [(module.PROBE_HOST, module.PROBE_PORT)], "probed the blocked host, once"
+    with pytest.raises(EgressRefused):
+        policy.check(capabilities=frozenset({Capability.WRITES_FILES}), untrusted_context=False)
+    assert len(asked) == 1, "cached for the session; a second check does not probe again"
+
+    monkeypatch.setattr(module, "_can_connect", lambda host, port: False)
+    sealed = EgressPolicy(mode=EgressMode.ENFORCED_CONTAINER)
+    sealed.check(capabilities=frozenset({Capability.WRITES_FILES}), untrusted_context=False)
+    assert sealed.verify() is True
+
+
 def test_a_verified_mode_permits_the_run() -> None:
     policy = EgressPolicy(mode=EgressMode.ENFORCED_CONTAINER)
     policy._verified = True

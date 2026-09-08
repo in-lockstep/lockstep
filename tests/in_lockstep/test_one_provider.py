@@ -158,7 +158,9 @@ def test_the_verbs_that_call_a_provider_record_without_being_asked():
     """
     from in_lockstep.cli import main
 
-    for name in ("review", "triage", "rfe", "backport", "implement", "run"):
+    # Seven verbs since `improve` shipped (#163); the row says seven and this tuple is where it
+    # is counted, so a verb added to one and not the other is a gate that stopped meaning it.
+    for name in ("review", "triage", "rfe", "backport", "implement", "run", "improve"):
         option = next(o for o in main.commands[name].params if o.name == "record")
         assert option.default is None, f"{name} --record defaults to {option.default!r}"
         assert option.secondary_opts == ["--no-record"], f"{name} cannot decline"

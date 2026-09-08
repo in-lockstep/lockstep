@@ -48,16 +48,40 @@ def _rows() -> list[tuple[str, str]]:
     return found
 
 
+def _test_functions(path: Path) -> list[str]:
+    """The name and docstring of every collected test function in one file, and nothing else.
+
+    The positive direction used to be a substring search over whole files, so a module docstring
+    saying a test "lands in Phase 2", or a comment recording that a mechanism was deleted,
+    discharged a `held` row (#315: `GATE-ASYNC-2` and `GATE-GUARD-3` held that way for months).
+    What discharges a gate now is what pytest collects: a function whose name starts `test_`,
+    at module level or in a `*Tests` class, and what it says about itself in its own docstring.
+    A citation anywhere else is prose about a test rather than a test.
+    """
+    import ast
+
+    try:
+        tree = ast.parse(path.read_text())
+    except SyntaxError:
+        return []
+    out: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            out.append(node.name + "\n" + (ast.get_docstring(node) or ""))
+    return out
+
+
 def _corpus() -> str:
     text = []
     for target in SEARCHED:
         if target.is_file():
+            # The Makefile counts whole: GATE-TEST-3 is a property of how the suite is run.
             text.append(target.read_text())
             continue
-        for path in target.rglob("*"):
+        for path in sorted(target.rglob("*.py")):
             # Skip this file: it names every gate id, and would discharge all of them.
-            if path.is_file() and path.suffix in {".py", ".md"} and path != Path(__file__):
-                text.append(path.read_text())
+            if path != Path(__file__):
+                text.extend(_test_functions(path))
     return "\n".join(text)
 
 
@@ -125,3 +149,23 @@ def test_every_section_a_gate_cites_resolves() -> None:
         f"design/gates.md cites {missing}, which are not headings in in-lockstep-design.md. "
         f"An exemption granted by a citation nobody can follow is granted by nothing."
     )
+
+
+def test_a_gate_named_only_in_a_comment_or_a_module_docstring_is_undischarged(tmp_path: Path) -> None:
+    """The positive direction's own control (#315). Before it, any text under `tests/` naming a
+    gate discharged it, so a module docstring saying a test 'lands in Phase 2' held
+    `GATE-ASYNC-2` for months. Only a collected test's name or its own docstring counts now."""
+    (tmp_path / "test_prose.py").write_text(
+        '"""GATE-CONTROLONLY-1 is described here and nowhere a test runs."""\n'
+        "# GATE-CONTROLONLY-2 in a comment\n"
+        "def helper():\n"
+        '    """GATE-CONTROLONLY-3 in a helper nobody collects."""\n'
+        "def test_real():\n"
+        '    """GATE-CONTROLONLY-4 in a collected test."""\n'
+        "def test_gate_controlonly_5_in_a_name():\n"
+        "    pass\n"
+    )
+    corpus = "\n".join(_test_functions(tmp_path / "test_prose.py"))
+    for undischarged in ("GATE-CONTROLONLY-1", "GATE-CONTROLONLY-2", "GATE-CONTROLONLY-3"):
+        assert not _discharged(undischarged, corpus), undischarged
+    assert _discharged("GATE-CONTROLONLY-4", corpus) and _discharged("GATE-CONTROLONLY-5", corpus)

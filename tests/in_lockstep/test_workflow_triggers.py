@@ -903,3 +903,28 @@ def test_gate_record_1_the_scaffolded_upload_asks_for_hidden_files() -> None:
     assert uploads, "the scaffold uploads nothing at all"
     for step in uploads:
         assert (step.get("with") or {}).get("include-hidden-files") is True
+
+
+def test_gate_ci_3_no_step_whose_verdict_something_acts_on_is_marked_continue_on_error() -> None:
+    """GATE-CI-3, second clause: a verdict this repository prints is one something acts on. The
+    four `doctor` steps carried `continue-on-error: true` until #249 and every diagnostic they
+    printed was discarded; reinstating the line on any doctor, gate, review, run, implement or
+    fix step would silently discard it again, and until this test nothing would have noticed.
+    Publishing steps -- bundling and pushing history, uploading an artifact -- may carry it: a
+    record that could not be pushed is a record still in an artifact, and `report --scm` counts
+    those rather than the job failing on them."""
+    import yaml
+
+    verdicts = re.compile(r"in-lockstep\s+(doctor|gate|review|run|implement|fix)\b")
+    offenders: list[str] = []
+    for path in ALL_WORKFLOWS:
+        data = yaml.safe_load(path.read_text())
+        for job_name, job in (data.get("jobs") or {}).items():
+            for step in job.get("steps") or []:
+                if not isinstance(step, dict) or step.get("continue-on-error") is not True:
+                    continue
+                if verdicts.search(str(step.get("run") or "")):
+                    offenders.append(
+                        f"{path.name}:{job_name}: {str(step.get('run')).strip().splitlines()[0]}"
+                    )
+    assert offenders == [], offenders

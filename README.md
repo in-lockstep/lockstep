@@ -28,7 +28,7 @@ lockstep.middleware += [otel(), CostBudget(usd=2.00)]
 > of their choice using the provider(s) and model(s) of their choice constrained by the
 > process(es) and policy of their choice.
 
-The ten objectives in [CLAUDE.md](CLAUDE.md) are that sentence made measurable, and
+The thirteen objectives in [CLAUDE.md](CLAUDE.md) are that sentence made measurable, and
 [design/objectives.md](design/objectives.md) is the ledger over them — joined to the gate ledger,
 so an objective cannot read as met while a gate carrying it does not hold.
 
@@ -51,7 +51,7 @@ still advertises.
 | Review conversation as context | runs | what a reviewer said on the pull request (the thread, the verdicts, the notes pinned to a line) reaches the next `/fix` or `/implement` as untrusted context, and `/fix` can be asked for *from* the pull request: it resolves to the ticket that pull request was opened for |
 | Backport | runs | deterministic `cherry-pick -x` staged for `apply --base`; `--resolve` lets a model merge conflicts, budget- and approval-gated |
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
-| Flaky-test adapter | planned | roadmap item 26 |
+| Flaky-test adapter | planned | a wanted contribution, sized in [CONTRIBUTING.md](CONTRIBUTING.md); `GATE-TESTGUARD-1` already refuses silencing a test without a ticket, and nothing yet detects or quarantines one |
 | GitHub | runs | SCM, issues, chat-ops gate, trampolines |
 | GitLab | partial | `GitLabScm`/`GitLabIssues` and `init --host gitlab` ship a file with the four verbs and a published review record, parity-tested against the GitHub trampolines in both directions; no pipeline has ever run it, and only an instance would move this row |
 | Keyless CI (federation) | runs | GitHub OIDC exchanged at Anthropic; no `ANTHROPIC_API_KEY` in secrets |

@@ -332,15 +332,84 @@ def test_a_failing_tool_is_data_not_a_crash() -> None:
 
 
 def test_gate_retry_1_transport_retries_exactly_three_times() -> None:
-    calls = {"n": 0}
+    """GATE-RETRY-1, through `AiInvoker` and its default policy rather than a `RetryPolicy` built
+    by hand: the row is about one logical MODEL CALL, and the invoker is what makes one. A
+    provider that fails 503 forever is asked exactly three times and the run is ERRORED as the
+    provider's fault, with the count on the stub and not on a helper the test constructed."""
+    from types import SimpleNamespace
 
-    async def always_500():
-        calls["n"] += 1
-        raise TransientError("upstream", status_code=503)
+    from in_lockstep.core.spend import Budget, Spend
+    from in_lockstep.llm.interface import LLMProvider
+    from in_lockstep.llm.types import Message
+    from in_lockstep.privileged.egress import UnsandboxedEgress
 
-    with pytest.raises(TransientError):
-        asyncio.run(RetryPolicy(attempts=3, base_delay=0).run(always_500))
-    assert calls["n"] == 3
+    class Always503(LLMProvider):
+        calls = 0
+
+        def name(self) -> str:
+            return "stub"
+
+        async def generate(self, input: LLMInput) -> LLMOutput:
+            type(self).calls += 1
+            raise TransientError("upstream", status_code=503)
+
+    table = CostTable()
+    table.add("m", Rate(3.0, 15.0))
+    invoker = AiInvoker(
+        Always503(),
+        model="m",
+        cost_table=table,
+        spend=Spend(budget=Budget(usd=5.0)),
+        egress=UnsandboxedEgress(),
+        retry=RetryPolicy(base_delay=0),
+    )
+    assert RetryPolicy().attempts == 3, "the default the row counts against"
+    with pytest.raises(InvocationFailed) as failed:
+        asyncio.run(
+            invoker.run(
+                system="s", messages=[Message(role="user", content="go")], policy=InvokePolicy(max_turns=1)
+            )
+        )
+    assert Always503.calls == 3
+    assert failed.value.reason.startswith("provider."), failed.value.reason
+    del SimpleNamespace  # noqa: F821 - unused import guard for the linter, kept local
+
+
+def test_gate_async_2_a_slow_transport_is_cancelled_by_the_caller_and_records_the_closed_connection() -> None:
+    """GATE-ASYNC-2. The row asserts the transport protocol is honestly asynchronous: a caller's
+    `asyncio.wait_for(provider.generate(...), 0.1)` against a provider that takes five seconds
+    raises `TimeoutError`, and the provider observes the cancellation -- the connection closed
+    before completion -- rather than finishing in the background. A stub that swallowed the
+    cancellation, or a `generate` that blocked the loop, would fail either half."""
+    from in_lockstep.llm.interface import LLMProvider
+    from in_lockstep.llm.types import LLMInput, LLMOutput, Message
+
+    class Slow(LLMProvider):
+        closed_before_completion = False
+        completed = False
+
+        def name(self) -> str:
+            return "slow"
+
+        async def generate(self, input: LLMInput) -> LLMOutput:
+            try:
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                type(self).closed_before_completion = True
+                raise
+            type(self).completed = True
+            return LLMOutput(content="late")
+
+    async def call() -> None:
+        started = time.monotonic()
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(
+                Slow().generate(LLMInput(model="m", messages=[Message(role="user", content="x")])), 0.1
+            )
+        assert time.monotonic() - started < 2, "the caller did not wait for the slow transport"
+
+    asyncio.run(call())
+    assert Slow.closed_before_completion and not Slow.completed
 
 
 def test_non_retryable_errors_are_attempted_once() -> None:
