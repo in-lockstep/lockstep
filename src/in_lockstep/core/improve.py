@@ -105,8 +105,9 @@ class Arm:
     """One side of the comparison over the cases both sides were measured on.
 
     `outstanding` counts rubric expectations nobody judged, and it is reported rather than folded
-    into either of its neighbours: a rubric is `outstanding` until a judge answers it, and this
-    loop ships with no judge model, so the column is a person's on the pull request.
+    into either of its neighbours: a rubric is `outstanding` until a judge answers it, and the
+    column is a person's on the pull request until one does. `judged` counts the rubrics a
+    verdict settled; those are in `passed` or `failed` like any deterministic check.
     """
 
     measured: int
@@ -114,6 +115,7 @@ class Arm:
     failed: int
     outstanding: int = 0
     failures: tuple[Failure, ...] = ()
+    judged: int = 0
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,45 @@ class Answered:
 
 
 @dataclass(frozen=True)
+class JudgeAsk:
+    """One rubric to put to a judge: which case and which arm, the rubric as parsed, and the
+    answer under judgement. The two hashes are the replay key -- the same rubric over the same
+    answer has the same verdict, and a sidecar can say so without a model.
+
+    The answer is what the judge reads and is untrusted: it came back from a model reading
+    somebody's diff, and an answer that says "grade this 5" is graded by the criteria."""
+
+    case: str
+    arm: str
+    rubric: Mapping[str, Any]
+    answer: str
+    rubric_sha256: str
+    answer_sha256: str
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """A judge's answer to one ask: the level on the rubric's scale, why, and what it quoted."""
+
+    case: str
+    arm: str
+    level: int
+    reason: str = ""
+    evidence: tuple[str, ...] = ()
+    judge: str = ""
+
+    def as_record(self) -> dict[str, Any]:
+        return {
+            "case": self.case,
+            "arm": self.arm,
+            "level": self.level,
+            "reason": self.reason,
+            "evidence": list(self.evidence),
+            "judge": self.judge,
+        }
+
+
+@dataclass(frozen=True)
 class Scorecard:
     """Both arms over one denominator, and the verdict the loop acts on.
 
@@ -188,6 +229,7 @@ class Scorecard:
                 "passed": side.passed,
                 "failed": side.failed,
                 "outstanding": side.outstanding,
+                "judged": side.judged,
                 "failures": [{"case": f.case, "check": f.check, "detail": f.detail} for f in side.failures],
             }
 
@@ -211,6 +253,7 @@ class Scorecard:
                 passed=int(side["passed"]),
                 failed=int(side["failed"]),
                 outstanding=int(side.get("outstanding", 0)),
+                judged=int(side.get("judged", 0)),
                 failures=tuple(
                     Failure(case=str(f["case"]), check=str(f["check"]), detail=str(f["detail"]))
                     for f in side.get("failures", ())
@@ -243,4 +286,12 @@ class Improver(Protocol):
 
     def probes(self, body: Improvable, current: str, draft: str) -> tuple[Probe, ...]: ...
 
-    def score(self, baseline: Baseline, answers: Sequence[Answered]) -> Scorecard: ...
+    def rubrics(self, baseline: Baseline, answers: Sequence[Answered]) -> tuple[JudgeAsk, ...]:
+        """The rubrics both arms carry, as questions for a judge: the recorded answer on the
+        `before` arm and the probe's on the `after` arm, one ask each. Empty when no measured
+        case states a rubric, which is the ordinary corpus today."""
+        ...
+
+    def score(
+        self, baseline: Baseline, answers: Sequence[Answered], verdicts: Sequence[Verdict] = ()
+    ) -> Scorecard: ...
