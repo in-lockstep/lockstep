@@ -30,3 +30,28 @@ jobs:
       - run: make ci
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # The same suite, in the container a model's run will meet.
+  #
+  # `check` above runs pytest on the runner. Every `/implement` and `/fix` runs it inside the
+  # container `.lockstep/lockstep.py` binds to `Test`, and until this job existed nothing
+  # exercised that second path without spending: the only thing that had ever noticed a failure
+  # there was a paid run. #373 failed twice on one test that passes on the runner and in every
+  # local rebuild of that container, and the second attempt cost $7.92 to learn what this says
+  # for free on every push.
+  #
+  # It dispatches the shipped `selfcheck` workflow rather than a hand-rolled `docker run`, so the
+  # image, the mounts and the environment are the ones the binding declares and cannot drift from
+  # what a model's `run_tests` gets. No token and no credential: `gh` is not in the container, so
+  # the gates that ask the host skip by name there, which is itself part of what this proves.
+  container:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      - run: uv run in-lockstep run selfcheck
