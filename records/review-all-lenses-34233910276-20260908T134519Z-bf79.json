@@ -1,0 +1,230 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "0adb43419272e8a842088e16b1f57c1c3d2223d1"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 532966,
+  "ci_actor": "tpouyer",
+  "ci_run": "34233910276",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 2.055665,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 9,
+        "message": "Regeneration instructions reference an 'Archify skill' and a gh-pages branch copy step that are not documented anywhere else in the diff.",
+        "path": "docs/diagrams/README.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 104,
+        "message": "The 'expired' node's sublabel says 'sweep closes it' but the design prose in this same diff says sweep is not built.",
+        "path": "docs/diagrams/human-boundaries.workflow.json",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 91,
+        "message": "The title says 'four lenses' but the lane label says 'Fan-out branches: one budget, one tape, one kill switch'; these are consistent, but the node 'Review(aspect) / four lenses' hard-codes four where the actual workflow reads lenses off the bound adapter dynamically.",
+        "path": "docs/diagrams/review.workflow.json",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 123,
+        "message": "The 'Trigger, resume' row in the table has a formatting accident: the GitLab CI cell contains text that was meant for a separate row ('a pipeline schedule on the default branch setting LOCKSTEP_IMPROVE=1; the measure and improve-propose jobs run the same two commands'), which was the old GitLab cell for the learning-loop row.",
+        "path": "docs/trampoline.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 24,
+        "message": "The line about diagrams is not wrapped to match the surrounding paragraph width, making it significantly longer than the 100-or-so-character convention visible in the rest of the file.",
+        "path": "CONTRIBUTING.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 50,
+        "message": "Fan-out branch keys are derived from the `ASPECTS` tuple and passed as `step=` identifiers without visible sanitization.",
+        "path": "examples/pr-review/.lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 42,
+        "message": "Sequential-to-fan_out rewrite has no accompanying test change in this diff.",
+        "path": "examples/pr-review/.lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 462,
+        "message": "New fan-out and ctx.park section has no test reference or gate entry.",
+        "path": "docs/extending.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0adb43419272e8a842088e16b1f57c1c3d2223d1",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 1.027832,
+  "output_tokens": 3798,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34233910276-20260908T134519Z-bf79",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.264283,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 9,
+            "message": "Regeneration instructions reference an 'Archify skill' and a gh-pages branch copy step that are not documented anywhere else in the diff.",
+            "path": "docs/diagrams/README.md",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 104,
+            "message": "The 'expired' node's sublabel says 'sweep closes it' but the design prose in this same diff says sweep is not built.",
+            "path": "docs/diagrams/human-boundaries.workflow.json",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 91,
+            "message": "The title says 'four lenses' but the lane label says 'Fan-out branches: one budget, one tape, one kill switch'; these are consistent, but the node 'Review(aspect) / four lenses' hard-codes four where the actual workflow reads lenses off the bound adapter dynamically.",
+            "path": "docs/diagrams/review.workflow.json",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 123,
+            "message": "The 'Trigger, resume' row in the table has a formatting accident: the GitLab CI cell contains text that was meant for a separate row ('a pipeline schedule on the default branch setting LOCKSTEP_IMPROVE=1; the measure and improve-propose jobs run the same two commands'), which was the old GitLab cell for the learning-loop row.",
+            "path": "docs/trampoline.md",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 24,
+            "message": "The line about diagrams is not wrapped to match the surrounding paragraph width, making it significantly longer than the 100-or-so-character convention visible in the rest of the file.",
+            "path": "CONTRIBUTING.md",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 975,
+      "verb": "review",
+      "wall_seconds": 40.417
+    },
+    {
+      "cost_usd": 0.251424,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 103,
+      "verb": "review",
+      "wall_seconds": 7.269
+    },
+    {
+      "cost_usd": 0.254807,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 50,
+            "message": "Fan-out branch keys are derived from the `ASPECTS` tuple and passed as `step=` identifiers without visible sanitization.",
+            "path": "examples/pr-review/.lockstep/lockstep.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 322,
+      "verb": "review",
+      "wall_seconds": 12.624
+    },
+    {
+      "cost_usd": 0.257319,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 42,
+            "message": "Sequential-to-fan_out rewrite has no accompanying test change in this diff.",
+            "path": "examples/pr-review/.lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 462,
+            "message": "New fan-out and ctx.park section has no test reference or gate entry.",
+            "path": "docs/extending.md",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 511,
+      "verb": "review",
+      "wall_seconds": 32.749
+    }
+  ],
+  "tokens": 3822,
+  "ts": "2026-09-08T13:46:00+00:00",
+  "wall_seconds": 93.059,
+  "workflow": "review/all-lenses"
+}
