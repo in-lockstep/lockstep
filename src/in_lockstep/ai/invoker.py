@@ -465,7 +465,7 @@ class AiInvoker:
                 self.spend.release(projected)
                 raise
             cost = self._price(output)
-            self.spend.charge_turn(cost, reserved=projected)
+            self.spend.charge_turn(cost, reserved=projected, tools=(tc.name for tc in output.tool_calls))
             total = total + cost
             last = output
             turns.append(

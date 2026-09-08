@@ -2238,6 +2238,36 @@ def test_gate_delegate_1_a_tool_the_parent_does_not_hold_is_refused_by_name_and_
     assert len(provider.calls) == 6, "two refusals cost no model call"
 
 
+def test_gate_record_6_the_invoker_counts_turns_and_tool_calls_on_the_spend_a_delegated_child_included() -> (
+    None
+):
+    """GATE-RECORD-6. Four model calls -- the parent's delegation, the child's `peek`, the child's
+    answer, the parent's answer -- are four turns on the one `Spend`, and the two tool calls are
+    counted by name. The child's are in the parent's numbers because it charges the parent's
+    `Spend`; a strategy's own report never sees them, which is why the record reads from here."""
+    provider = Stub(
+        replies=[
+            _delegate_call(tools=["peek"]),
+            LLMOutput(content="", tool_calls=[ToolCall(id="c1", name="peek", input={})]),
+            LLMOutput(content="child done"),
+            LLMOutput(content="parent done"),
+        ]
+    )
+    spend = Spend(budget=Budget(usd=5.0))
+    result = asyncio.run(
+        invoker(provider, spend=spend).run(
+            system="s",
+            messages=[Message(role="user", content="go")],
+            tools=_delegating_tools(),
+            run_tool=_peek,
+            policy=InvokePolicy(max_turns=8),
+        )
+    )
+    assert result.content == "parent done"
+    assert spend.turns == 4
+    assert spend.tool_calls == {"delegate": 1, "peek": 1}
+
+
 def test_gate_delegate_1_a_child_spends_from_the_parents_budget_and_cannot_cross_it() -> None:
     """One `Spend`: the child's turns reserve and charge against the parent's ceiling, and the
     turn that would cross it is refused inside the child. The parent learns that as a tool result

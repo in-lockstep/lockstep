@@ -1832,6 +1832,28 @@ def test_a_run_that_cannot_spend_is_not_stopped_by_a_spending_ceiling(repo: Path
     assert record["tokens"] > 0, "a replay that reported no usage would not be a replay"
 
 
+def test_gate_record_6_a_review_record_carries_its_turns(repo: Path) -> None:
+    """GATE-RECORD-6. A review record carries the turns its replay made and the tools it asked
+    for; before schema 9 only `implement` and `fix` records had a turn count at all."""
+    import json
+
+    _lifecycle(repo).write_text(
+        "from in_lockstep import Lockstep\n"
+        "from in_lockstep.core.spend import Budget\n"
+        "from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress\n"
+        "lockstep = Lockstep.detect()\n"
+        "lockstep.budget = Budget(usd=0.0001)\n"
+        "lockstep.bind(EgressPolicy, UnsandboxedEgress())\n"
+    )
+    result = CliRunner().invoke(main, ["review", "--dry-run", "--base", "HEAD", "--diff", _diff(repo)])
+    assert result.exit_code == 0, result.output
+    record = json.loads(_ledger_record(repo, "review-security").read_text())
+    assert record["turns"] >= 1, "a replayed turn is a turn"
+    assert isinstance(record["tool_calls"], dict)
+    explained = CliRunner().invoke(main, ["history", "--explain", "review-security"])
+    assert f"turns     {record['turns']}" in explained.output
+
+
 # -- the ledger keeps what was found, not only how much ---------------------------------------
 
 
@@ -2513,6 +2535,25 @@ def test_a_dispatched_workflow_leaves_a_ledger_record(repo: Path) -> None:
     assert record["workflow"] == "demo/ok"
     # The provenance: which issue, which actor. Without it the record cannot say what it was for.
     assert record["args"] == {"issue": "#59"}
+
+
+def test_gate_record_6_a_workflow_record_carries_its_turns_and_tool_calls(repo: Path) -> None:
+    """GATE-RECORD-6. A workflow record says how many model calls the run made and what they
+    asked for, read from the run's `Spend`. This one called no model, and zero is what it
+    measured: the field is present because the run held a `Spend`, not because a strategy
+    happened to report."""
+    import json
+
+    _workflow_repo(
+        repo,
+        "@workflow(id='demo/ok')\n"
+        "async def demo(ctx, issue='#1'):\n"
+        "    return Outcome(status=Status.SUCCEEDED)\n",
+    )
+    CliRunner().invoke(main, ["run", "demo/ok", "--arg", "issue=#59"])
+    record = json.loads(next((repo / ".lockstep/ledger").glob("demo-ok-*.json")).read_text())
+    assert record["turns"] == 0
+    assert record["tool_calls"] == {}
 
 
 def test_run_states_a_ceiling_the_module_did_not(repo: Path) -> None:

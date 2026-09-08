@@ -15,7 +15,7 @@ asked somebody else for should not be added together without saying which is whi
 ## Absent is not zero, and the denominator travels with the number
 
 This is the ledger's own rule and the reason `Measured` exists rather than a bare float. A record
-written before `ts` existed cannot be placed in a week; a review has no `turns`; a repository that
+written before `ts` existed cannot be placed in a week; a schema-8 review has no `turns`; a repository that
 never ran unattended has no approvals. Averaging over what happens to be present and printing the
 result as though it described everything is how a dashboard comes to be quietly wrong — and a
 metric that is quietly wrong is worse than a missing one, because somebody makes a decision with it.
@@ -784,8 +784,9 @@ def _turns(records: list[dict[str, Any]]) -> list[tuple[str, Measured]]:
     the same number by construction, so `complete` is always True and the label that exists to warn
     you is silently never printed. "6.0 turns" over one of ten runs has to say so.
 
-    A strategy no run of which recorded turns is left out rather than listed as a dash: reviews do
-    not have turns and never will, and a row per verb saying so is noise rather than honesty.
+    A strategy no run of which recorded turns is left out rather than listed as a dash: a record
+    written before schema 9 has no turn count unless it was an `implement` or `fix`, and a row per
+    verb saying so is noise rather than honesty.
     """
     buckets: dict[str, list[dict[str, Any]]] = {}
     for record in records:

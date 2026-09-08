@@ -356,7 +356,10 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: stamps each review lens step of a workflow record with the subject `_write_ledger` already
 #: computes for a bespoke review run, on the lens's routed model. What a subject IS stays
 #: `evaluation.subject`'s; which record a step becomes in a window is `windows_around`'s.
-CLI_HELPER_STATEMENTS = 1341
+#: 1341 -> 1351 for `GATE-RECORD-6`, translating: `_turns_taken` reads `turns` and `tool_calls`
+#: off the run's `Spend` for the three record writers and `--explain` renders the line. What a
+#: turn is and what it charges stays `Spend.charge_turn`'s, where `test_core.py` reaches it.
+CLI_HELPER_STATEMENTS = 1351
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

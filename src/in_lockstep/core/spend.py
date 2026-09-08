@@ -13,6 +13,7 @@ no run scoping and cross-stamped labels the moment two runs overlapped.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from .outcome import Cost
@@ -103,6 +104,13 @@ class Spend:
     budget: Budget = field(default_factory=Budget)
     charged: Cost = field(default_factory=Cost)
     turns: int = 0
+    #: How many times each tool was called, by name, across every turn this run charged -- a
+    #: delegated child's included, because it charges the same `Spend`. Kept here rather than on
+    #: `Cost` because a count of calls is not something an outcome reports and the run charges
+    #: again (GATE-COST-7 is about exactly that doubling); it is what the run DID, and the run
+    #: keeps it once, beside `turns`. A record reads it to say where a session's turns went
+    #: (GATE-RECORD-6), which is the number that tells a reading phase from a wandering one.
+    tool_calls: dict[str, int] = field(default_factory=dict)
     #: What concurrent callers have been promised and not yet charged. Four fan-out branches
     #: each projecting a turn against one ceiling would each see the same remaining dollar and
     #: all four go, which is the quadruple spend `GATE-COST-6` refuses; a reservation is counted
@@ -116,12 +124,18 @@ class Spend:
     def charge(self, cost: Cost) -> None:
         self.charged = self.charged + cost
 
-    def charge_turn(self, cost: Cost, *, reserved: Cost | None = None) -> None:
-        """Charge one turn, and release the reservation it was made under, if any."""
+    def charge_turn(self, cost: Cost, *, reserved: Cost | None = None, tools: Iterable[str] = ()) -> None:
+        """Charge one turn, and release the reservation it was made under, if any.
+
+        `tools` names what the turn asked for, one entry per call, so a turn that read three
+        files counts three `read_file` calls and a turn that answered counts none.
+        """
         if reserved is not None:
             self.release(reserved)
         self.charge(cost)
         self.turns += 1
+        for name in tools:
+            self.tool_calls[name] = self.tool_calls.get(name, 0) + 1
 
     def reserve(self, projected: Cost) -> str | None:
         """Check and reserve in ONE step: `None` and the projection is held against the ceiling,
