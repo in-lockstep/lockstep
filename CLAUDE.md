@@ -24,13 +24,13 @@ which is the point of writing it down.
 
 ## What this framework is for
 
-Twelve objectives, numbered so a change can cite one. They are the direction; everything below this
+Thirteen objectives, numbered so a change can cite one. They are the direction; everything below this
 section is detail about how to work here without breaking something.
 
 Their status is not a matter of opinion. `design/objectives.md` is the ledger over them, joined to
 `design/gates.md` and ratcheted the same way: an objective is `held` only when gates that hold
 carry it, every gap it states is anchored in a named gate, and closing one of those gates fails
-the build until somebody re-reads the row. 12 of 12 are `held` today. Read it before claiming a
+the build until somebody re-reads the row. 13 of 13 are `held` today. Read it before claiming a
 change serves an objective, because the row will tell you what is already carrying it.
 
 **Every change is measured against these.** A feature, a fix, a refactor or a deletion either moves
@@ -90,6 +90,16 @@ above is written as though one person were working alone. What one engineer's ru
 be legible to the next — who asked for it, what it cost, what it decided, and whether people are
 getting consistent results from the same process. This is the objective with the least under it,
 and saying so is the reason it is here.
+
+**O13 — A run is bounded before it starts.** The mission says AI usage is kept *disciplined*, and
+discipline is a bound stated before the spend, not a bill read afterwards. Every run declares
+what it may cost and how long it may take before its first model call, and a ceiling nobody
+declared is refused rather than defaulted: no budget means no run, not an unbounded one. Inside
+the bound the framework keeps its word — the projected cost of a turn is checked before the turn
+is made, concurrent work draws on one ceiling rather than one each, a deadline stops a loop
+mid-flight, a retry that would outlast the clock is not made, and a change that would loosen the
+tests that bound it is refused. The controls stopping a run are the discipline working, which is
+why `blocked` is never a failure.
 
 ## Tests
 

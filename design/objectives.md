@@ -99,8 +99,9 @@ to move without somebody standing in front of this table.
 | `O10` | It runs on itself | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-TEST-3`, `GATE-REVIEW-5`, `GATE-CFG-3`, `GATE-CI-3`, `GATE-DOGFOOD-1` | — | Reviews on every pull request, a review asked for on a thread, a fix and measurement have closed here (`GATE-DOGFOOD-1` names the runs); an implementation has not. Deliberately not dogfooded on this repository's own runs, and each a separate decision: egress enforcement and the daily ceiling (off, documented), GitLab (no instance; O3 says so), and any provider but Anthropic (`GATE-COST-3` prices it; nothing here has routed to it). The required `review` check is enforced by choice -- `doctor` now says so (`DOC127`, `DOC128`) -- and stays that way while one engineer is the administrator. |
 | `O11` | The provider and the model are the adopter's, not ours | held | `GATE-AUTH-2`, `GATE-RESIDENCY-1`, `GATE-COST-4`, `GATE-LENS-1`, `GATE-MODEL-1`, `GATE-JUDGE-2` | — | — |
 | `O12` | A second engineer is served, not obstructed | held | `GATE-TEAM-1`, `GATE-TEAM-2`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-LEDGER-12`, `GATE-REVIEW-6`, `GATE-OUT-6` | — | — |
+| `O13` | A run is bounded before it starts | held | `GATE-BUDGET-1`, `GATE-COST-1`, `GATE-COST-2`, `GATE-COST-5`, `GATE-DEADLINE-1`, `GATE-RETRY-4`, `GATE-TESTGUARD-1`, `GATE-COST-6`, `GATE-ASYNC-3b` | — | Written in Phase 8 (PR-19) from the mission's *disciplined* clause and not from the gates, and then found to be carried by nine that already held: the startup refusal of an undeclared ceiling (`GATE-BUDGET-1`), the projection checked before the turn it prices (`GATE-COST-2`) and accumulated per run rather than per process (`GATE-COST-1`), the org-level spend limit `doctor` demands be attested (`GATE-COST-5`), the deadline and the kill switch stopping a loop mid-flight (`GATE-DEADLINE-1`), the retry that is not made when it would outlast the clock (`GATE-RETRY-4`), the refusal of a change that loosens the tests bounding it (`GATE-TESTGUARD-1`), and the two Phase 5 added -- a joint ceiling across a fan-out (`GATE-COST-6`) and the switch reaching every in-flight branch (`GATE-ASYNC-3b`) -- which waited in the uncited count for exactly this row rather than being stretched under O7. What the row does not claim: a daily ceiling on this repository's own runs, which is deliberately off (O10's row lists it as not dogfooded), and any bound on wall clock the deadline does not already state. |
 
-12 of 12 are `held`. That is the number this file exists to make visible, and it should be read
+13 of 13 are `held`. That is the number this file exists to make visible, and it should be read
 the way the gate ledger's own census is read: `partial` against a stated gap is a better position
 than `held` against nothing, and the previous state of this repository was not `held` — it was
 unmeasured.
@@ -277,6 +278,16 @@ step carried no subject. The fix landed one merge later: a lens step carries its
 bill, and the window reads it as a run of its own. Every objective is `held`; the ledger's next
 work is the re-read Phase 8 owes each row, not a closure.
 
+Thirteen, when PR-19 wrote O13 and it arrived `held`. The opposite of O12's arrival: that row
+came `unmet` because nothing served it, and this one came carried by nine gates that had held for
+months under nobody -- the seven spend-and-time rows #273's count found sitting in the uncited
+half, and the two Phase 5 added there on purpose. The objective was written from the mission's
+*disciplined* clause first and matched to gates second, in that order, because a paragraph
+written from the gates would have been a list wearing a sentence. The uncited count fell from
+forty-one to thirty-two, the largest fall it has recorded, and the map below now carries the
+clause under an objective whose own text says what discipline means here: a bound stated before
+the spend, and a ceiling nobody declared refused rather than defaulted.
+
 ## Claimed by no objective
 
 Every gate that is `unmet`, `partial` or `unit only` and cited by no row above. `deferred` and
@@ -291,13 +302,13 @@ remove. The table returns the day a gate qualifies; the test recomputes it eithe
 
 ## Held, and claimed by no objective
 
-**41 held gates are cited by no objective row.** The number is exact and the test recomputes it:
+**32 held gates are cited by no objective row.** The number is exact and the test recomputes it:
 it may not rise without a row claiming the gate or this sentence saying why it holds for nobody,
 and when it falls this sentence is lowered and the fall is the credit. Thirty-nine until Phase 5
-built `fan_out`; the two it added, `GATE-COST-6` and `GATE-ASYNC-3b`, are spend-and-time
-discipline, and the objective that claims that clause of the mission is O13, which the plan writes
-in Phase 8 (`.plan.md`, PR-19). They wait here rather than being stretched under O7, because a
-joint budget is not determinism and the ledger asks that a row say what it means.
+built `fan_out` and added two spend-and-time rows to it; forty-one until O13 claimed those two and
+seven older ones in Phase 8 (PR-19), which is the largest fall this sentence has recorded and the
+one #240 predicted: the mission's *disciplined* clause was carried by O4, O6 and O7 in the map
+below, and none of those three sentences says a run is bounded before it starts.
 
 The section above sees the unsettled half of the ledger and reads as *almost everything here
 serves an objective*. It means *almost every unsettled thing does*. The other half is this number,
@@ -311,8 +322,8 @@ apparatus checking itself -- `GATE-TEST-7` and `GATE-TEST-8` are the two ledgers
 checks, `GATE-CFG-2` is `doctor` refusing a configuration read from the ref under review -- and no
 objective row will ever cite those, because they serve every row rather than one. Most of it is
 mechanism built, held and tested that no objective has yet been asked to carry: the transport
-retry and async-client rows (`GATE-RETRY-1` to `-4`, `GATE-ASYNC-1` to `-4`), the ledger and cost
-plumbing (`GATE-LEDGER-1`, `-3` to `-9`, `GATE-COST-1`, `-2`, `-5`), the three write guards
+retry and async-client rows (`GATE-RETRY-1` to `-3`, `GATE-ASYNC-1` to `-4`), the ledger
+plumbing (`GATE-LEDGER-1`, `-3` to `-9`; the cost rows went to O13), the three write guards
 (`GATE-GUARD-1` to `-3`) and `GATE-REVIEW-1`, the nearest held surface to the mission's
 collaboration clause. #240 added two objectives to carry what the mission named and no objective
 did; this number is what it has to move, one re-read row at a time -- and a gate whose row cannot
@@ -333,8 +344,8 @@ state is the inflation this whole apparatus exists to refuse, and it would have 
 mean less than it does today: a row is worth something only while its text is the thing being
 measured. Collaboration had no such candidate at all.
 
-So the ten became twelve. The mapping is now one clause to one objective, which is the property
-worth having:
+So the ten became twelve, and in Phase 8 thirteen. The mapping is now one clause to one
+objective, which is the property worth having:
 
 | the mission says | the objective |
 |---|---|
@@ -342,7 +353,7 @@ worth having:
 | the provider(s) and model(s) of their choice | **O11** |
 | the process(es) of their choice | O1, O8 |
 | the policy of their choice | O6, O8 |
-| disciplined and structured | O4, O6, O7 |
+| disciplined and structured | O4, O6, O7, **O13** |
 | teams of engineers working together | **O12** |
 
 **O12 arrives `unmet`, and that is the point.** The ratchet's rule is that an objective no gate
