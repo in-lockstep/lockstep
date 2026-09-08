@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34163313773",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.068259,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 740,
+        "message": "The 'bundle that would CREATE the branch' assertion is unreachable in the test as written.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 97,
+        "message": "Known leaked fixture ids set does not include 'review-security', which the gate description names.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c89c2a003608f2080763e951f978515193c7f8d3",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 576,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T212947Z-0c16",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 579,
+  "ts": "2026-09-07T21:30:04+00:00",
+  "wall_seconds": 16.61
+}
