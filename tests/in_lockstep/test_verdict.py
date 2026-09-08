@@ -119,3 +119,53 @@ def test_gate_verdict_1_run_tests_refuses_a_path_that_looks_like_an_option(tmp_p
     assert answer.startswith("refused: '-p' looks like a pytest option"), answer
     assert seen == [], "the runner was never reached, so the option never reached pytest's argv"
     assert asyncio.run(runner(BUILTIN_SERVER, "run_tests", {"paths": ["tests/a.py"]})) == "ok"
+
+
+# -- GATE-VERDICT-2: a red verdict says what each failure said ---------------------------------
+
+
+_RED_TAIL = """\
+FAILED tests/in_lockstep/test_a.py::test_one - AssertionError: expected 3 failed of 2674, got 0
+ERROR tests/in_lockstep/test_b.py::test_two - FileNotFoundError: [Errno 2] No such file or directory: 'gh'
+FAILED tests/in_lockstep/test_c.py::test_three
+2 failed, 1 error, 2671 passed in 300.00s
+"""
+
+
+def test_gate_verdict_2_a_red_verdict_carries_each_failures_message_beside_its_name() -> None:
+    """GATE-VERDICT-2. The names survived run 34255026959 and the messages died with the tape;
+    one failure could not be reproduced afterwards. The case keeps pytest's `- <why>` half, and
+    the finding a ticket and the ledger see names both."""
+    outcome = _run(1, _RED_TAIL)
+    by_id = {c.id: c for c in outcome.value.cases}
+    assert (
+        by_id["tests/in_lockstep/test_a.py::test_one"].message
+        == "AssertionError: expected 3 failed of 2674, got 0"
+    )
+    assert by_id["tests/in_lockstep/test_b.py::test_two"].message.startswith("FileNotFoundError")
+    assert by_id["tests/in_lockstep/test_c.py::test_three"].message == "", (
+        "no message is no message, not a guess"
+    )
+    (finding,) = [f for f in outcome.findings if f.id == "test.expectation_unmet"]
+    assert "test_one - AssertionError: expected 3 failed" in finding.message
+    assert "No such file or directory: 'gh'" in finding.message
+    assert "test_c.py::test_three" in finding.message
+
+
+def test_gate_verdict_2_the_model_is_told_what_its_tests_said() -> None:
+    """GATE-VERDICT-2, the tool result: `run_tests` renders the message beside the name, so the
+    model acts on the assertion rather than rerunning the suite to read it."""
+    from in_lockstep.adapters.ai.strategy import _rendered
+
+    text = _rendered(_run(1, _RED_TAIL))
+    assert "test_one - AssertionError: expected 3 failed of 2674, got 0" in text
+    assert "test_c.py::test_three\n" in text or text.endswith("test_c.py::test_three")
+
+
+def test_gate_verdict_2_a_message_is_bounded_so_a_finding_stays_readable() -> None:
+    """A parametrised repr can run to kilobytes; a finding is read on a ticket."""
+    from in_lockstep.adapters.pytest_adapter import MESSAGE_CHARS
+
+    long = "FAILED tests/t.py::t - AssertionError: " + "x" * 5000 + "\n1 failed in 0.10s\n"
+    (case,) = _run(1, long).value.cases
+    assert len(case.message) == MESSAGE_CHARS
