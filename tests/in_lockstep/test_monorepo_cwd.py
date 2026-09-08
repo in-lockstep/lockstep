@@ -96,3 +96,44 @@ def test_gate_tooling_4_a_bound_directory_outside_the_repository_yields_the_work
     assert tooling.within("/tmp/tree", None, "/repo") == ("/tmp/tree", "")
     assert tooling.within("/tmp/tree", "/repo", "/repo") == ("/tmp/tree", "")
     assert tooling.rebase(("a/b.py",), "") == ("a/b.py",)
+
+
+def test_gate_tooling_4_a_host_absolute_path_is_made_relative_so_a_container_can_see_it(
+    tmp_path: Path,
+) -> None:
+    """GATE-TOOLING-4. A sandbox mounts the tree at a fixed path inside the image, so the
+    repository's own absolute root names nothing there: `run selfcheck` with no `--paths`
+    defaults to exactly that, and pytest answered `file or directory not found` with exit 4 and
+    no summary -- a verdict about a suite that never ran. Relative to the working directory the
+    runner is given, the same path names the same file on both sides.
+    """
+    repo = tmp_path / "repo"
+    (repo / "libs" / "core").mkdir(parents=True)
+
+    runner = _Recorder()
+    adapter = PytestTest(sandbox=runner)
+    asyncio.run(adapter.invoke(_ctx(repo), Test(paths=(str(repo),))))
+    assert runner.command[-1] == ".", runner.command
+
+    runner = _Recorder()
+    asyncio.run(PytestTest(sandbox=runner).invoke(_ctx(repo), Test(paths=(str(repo / "libs" / "core"),))))
+    assert runner.command[-1] == "libs/core"
+
+    # A relative path needs no translation, and one outside the tree gets none: there is no
+    # honest answer for a file the container cannot see, and inventing one resolves to the
+    # wrong file rather than to nothing.
+    runner = _Recorder()
+    outside = str(tmp_path / "elsewhere" / "x.py")
+    asyncio.run(PytestTest(sandbox=runner).invoke(_ctx(repo), Test(paths=("tests/a.py", outside))))
+    assert runner.command[-2:] == ["tests/a.py", outside]
+
+
+def test_gate_tooling_4_a_command_test_translates_the_same_paths(tmp_path: Path) -> None:
+    """The same rule through the generic runner, because the two adapters are the two ways a
+    repository binds a suite and a path that works through one must work through the other."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    runner = _Recorder()
+    adapter = CommandTest(["npm", "test"], sandbox=runner)
+    asyncio.run(adapter.invoke(_ctx(repo), Test(paths=(str(repo),))))
+    assert runner.command[-1] == "."

@@ -928,3 +928,49 @@ def test_gate_ci_3_no_step_whose_verdict_something_acts_on_is_marked_continue_on
                         f"{path.name}:{job_name}: {str(step.get('run')).strip().splitlines()[0]}"
                     )
     assert offenders == [], offenders
+
+
+def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_use() -> None:
+    """GATE-CI-5. Two halves, and the second is the one that can rot silently.
+
+    A job that dispatches `selfcheck` proves nothing if the bound `Test` names no image: it would
+    run the suite on the runner, pass, and look exactly like this. So the image the binding
+    declares is asserted here beside the job, and the job dispatches the shipped workflow rather
+    than a hand-rolled `docker run`, which is what keeps the container, its mounts and its
+    environment the ones a model's `run_tests` will actually get.
+    """
+    from in_lockstep.core.types import Test
+    from in_lockstep.core.workflow import restore, snapshot
+    from in_lockstep.loader import load
+
+    ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text())
+    dispatches = [
+        f"{name}: {step['run'].strip()}"
+        for name, job in (ci.get("jobs") or {}).items()
+        for step in job.get("steps") or []
+        if isinstance(step, dict) and "in-lockstep run selfcheck" in str(step.get("run") or "")
+    ]
+    assert dispatches, (
+        "no job in ci.yml runs the suite through the bound Test verb, so the container path a "
+        "model's run takes is exercised only by a paid run (#373)"
+    )
+    # The grant, and which one. `ApprovalGate` gates on EXECUTES_CODE, so the dispatch needs one
+    # or the job blocks; `--approve` would open it by claiming a human is watching a push, which
+    # is a false record rather than a convenience, and it is the shortcut somebody reaches for
+    # when the job goes red.
+    for dispatch in dispatches:
+        assert "--approved-by" in dispatch, f"{dispatch}: dispatches Test with no grant"
+        assert "--approve " not in dispatch and not dispatch.endswith("--approve"), (
+            f"{dispatch}: `--approve` says a person is watching this run, and nobody watches a push"
+        )
+
+    state = snapshot()
+    try:
+        module, _ref = load(str(ROOT))
+        sandbox = getattr(module.lockstep.container.resolve(Test), "sandbox", None)
+    finally:
+        restore(state)
+    assert getattr(sandbox, "image", ""), (
+        "the bound Test names no container image, so the job above runs the suite on the runner "
+        "and proves nothing about the environment a model's run_tests gets"
+    )

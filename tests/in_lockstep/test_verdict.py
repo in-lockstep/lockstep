@@ -169,3 +169,32 @@ def test_gate_verdict_2_a_message_is_bounded_so_a_finding_stays_readable() -> No
     long = "FAILED tests/t.py::t - AssertionError: " + "x" * 5000 + "\n1 failed in 0.10s\n"
     (case,) = _run(1, long).value.cases
     assert len(case.message) == MESSAGE_CHARS
+
+
+def test_gate_verdict_1_a_runner_that_reported_nothing_says_what_it_printed() -> None:
+    """GATE-VERDICT-1. `pytest exited 4` is not something anybody can act on, and the usage error
+    behind it is what pytest had already written down. A container job dispatching the suite got
+    exactly that and nothing else, so the cause was recoverable from no record, no log and no
+    finding. The tail travels, on both the failing and the silent-but-clean path."""
+    errored = _run(4, "ERROR: file or directory not found: tests\n")
+    assert errored.status is Status.ERRORED and errored.reason == "test.no_summary"
+    assert "file or directory not found: tests" in errored.findings[0].message
+
+    quiet = _run(0, "")
+    assert quiet.findings[0].id == "test.no_summary" and not quiet.decided
+    assert "printed nothing" in quiet.findings[0].message
+
+    noisy = _run(0, "collected 0 items\nsomething odd\n")
+    assert "collected 0 items / something odd" in noisy.findings[0].message
+
+
+def test_a_silent_runners_message_survives_the_record_whole() -> None:
+    """The tail is sized against `Finding.as_record`'s own cap, so the ledger keeps the sentence
+    that names the cause rather than clipping it a second time."""
+    from in_lockstep.core.outcome import Finding
+
+    outcome = _run(4, "boom " * 400 + "the line that says why\n")
+    (finding,) = outcome.findings
+    assert "the line that says why" in finding.message
+    assert finding.as_record()["message"] == finding.message, "the record clipped what the tail kept"
+    assert len(finding.message) <= Finding.MAX_RECORDED_MESSAGE
