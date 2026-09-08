@@ -989,6 +989,23 @@ and its turn cap and deadline are whatever the parent had left. Its answer takes
 and injection scan every tool result does. Off by default because a session that can start
 sessions is one whose turn cap no longer bounds its model calls on its own; the budget still does.
 
+**`search_code` is opt-in, and it searches what the session staged.** `lockstep.use(Oneshot(code_search=True))`
+hands the session a symbol-level search over a code graph the framework builds with
+[Graft](https://github.com/trailhq/Graft): `ask` a task in words, `grep` a regex grouped by the
+enclosing symbol, `callers` of a symbol in or out to a depth, a file's `skeleton`, or a `map` of the
+repository. There is nothing to install or configure: `in-lockstep provision` installs a pinned
+Graft into the framework's own cache (never the repository, a global prefix or `$HOME`; Node >= 20
+and a C/C++ toolchain are the host's part), the index is built before the first model call and
+rebuilt only when the tree or the session's staged writes changed, and a host without Node yields
+a tool that refuses `search_code.no_node` by name while the run goes on. The index describes the
+tree the session sees -- HEAD plus its own staged writes, the same thing `read_file` and
+`search_text` answer from -- so a symbol the model just wrote is found at its staged line. Every
+Graft process runs with telemetry off, no key in reach and its working directory outside the
+repository, and every answer is rendered by the framework from JSON, because Graft's own text
+carries instructions addressed to a model. The run record carries the Graft version and the index
+fingerprint. Off by default for the reason `delegate` is: a tool's name is part of every recorded
+request's key, and a tool in every session would stop the shipped cassette replaying.
+
 ### `TDD`
 
 Test-first, enforced by the strategy rather than requested in a prompt. It runs in two model steps

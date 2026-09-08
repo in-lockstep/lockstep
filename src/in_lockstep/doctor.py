@@ -653,7 +653,6 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
     import tempfile
 
     from .core.types import Locatable
-    from .core.verbs import Verb, verb_of
 
     # The probe runs the repository's interpreter, which is the change under review's, so it gets
     # what a sandboxed adapter would get and no more: the pass-through variables, never this
@@ -672,50 +671,100 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
     repo_root = str(getattr(getattr(lockstep, "repo", None), "root", "") or Path(root).resolve())
     for binding in lockstep.container.resolved():
         impl = binding.impl
-        if isinstance(impl, type) or not isinstance(impl, Locatable):
+        if isinstance(impl, type):
             continue
-        who = f"{binding.iface.__name__} -> {type(impl).__name__}"
-        for resolution in impl.locations(repo_root):
-            if resolution.path is None:
-                # The remedy for a missing pytest or ruff is to provision; the remedy for a
-                # missing provisioner cannot be, because it is what provisioning runs.
-                remedy = (
-                    "Put the provisioner on PATH or on the job's image. This binding is what builds "
-                    "the repository's environment, so nothing else can supply it."
-                    if verb_of(impl) is Verb.PROVISION
-                    else "Give the repository its own environment (`uv sync`, or `python -m venv .venv` "
-                    "and install the tool into it), or put the tool on PATH. An installed in-lockstep "
-                    "carries neither pytest nor ruff and must not run yours from its own interpreter."
+        # The adapter's own tools, and then the ones the framework provisions for it (#375):
+        # an adapter that names a `Graft` in `provisions` is asked where Node and Graft are the
+        # same way a `PytestTest` is asked where pytest is. A framework-provisioned tool that is
+        # not there yet is a NOTE, not an error: `in-lockstep provision` is what fills the cache,
+        # and `doctor` runs before it in every job that runs both.
+        asked: list[tuple[str, Any, bool]] = []
+        if isinstance(impl, Locatable):
+            asked.append((f"{binding.iface.__name__} -> {type(impl).__name__}", impl, False))
+        for extra in getattr(impl, "provisions", ()) or ():
+            if isinstance(extra, Locatable):
+                asked.append(
+                    (
+                        f"{binding.iface.__name__} -> {type(impl).__name__} ({type(extra).__name__})",
+                        extra,
+                        True,
+                    )
                 )
-                report.add(
-                    "DOC180",
-                    Severity.ERROR,
-                    f"{who} found no {resolution.tool}; looked for {', '.join(resolution.tried)}",
-                    remedy,
-                )
-                continue
-            if not resolution.probe:
-                continue
-            try:
-                probe = subprocess.run(
-                    resolution.probe, capture_output=True, text=True, timeout=30, env=probe_env, cwd=probe_cwd
-                )
-            except (OSError, subprocess.SubprocessError) as e:
-                report.add(
-                    "DOC181",
-                    Severity.ERROR,
-                    f"{who}: {resolution.tool} at {resolution.path} could not be run: {e}",
-                )
-                continue
-            if probe.returncode != 0:
-                tail = (probe.stderr or probe.stdout).strip().splitlines()[-1:] or [""]
-                report.add(
-                    "DOC181",
-                    Severity.ERROR,
-                    f"{who}: {resolution.tool} at {resolution.path} ({resolution.how}) cannot do what the "
-                    f"adapter needs: `{' '.join(resolution.probe[1:])}` exited {probe.returncode}: {tail[0]}",
-                    "Install the tool into that environment, or bind the adapter with the path that has it.",
-                )
+        for who, located, provisioned in asked:
+            _locations(
+                report,
+                located,
+                who,
+                repo_root,
+                provisioned=provisioned,
+                probe_env=probe_env,
+                probe_cwd=probe_cwd,
+            )
+
+
+def _locations(
+    report: Report,
+    impl: Any,
+    who: str,
+    repo_root: str,
+    *,
+    provisioned: bool,
+    probe_env: dict[str, str],
+    probe_cwd: str,
+) -> None:
+    """One `Locatable`'s answers, as DOC180/DOC181/DOC182 lines."""
+    from .core.verbs import Verb, verb_of
+
+    for resolution in impl.locations(repo_root):
+        if resolution.path is None and provisioned:
+            report.add(
+                "DOC182",
+                Severity.NOTE,
+                f"{who}: {resolution.tool} is not provisioned yet; looked for {', '.join(resolution.tried)}",
+                "`in-lockstep provision` installs it into the framework's cache; a run that starts "
+                "without it refuses the tool by name and goes on.",
+            )
+            continue
+        if resolution.path is None:
+            # The remedy for a missing pytest or ruff is to provision; the remedy for a
+            # missing provisioner cannot be, because it is what provisioning runs.
+            remedy = (
+                "Put the provisioner on PATH or on the job's image. This binding is what builds "
+                "the repository's environment, so nothing else can supply it."
+                if verb_of(impl) is Verb.PROVISION
+                else "Give the repository its own environment (`uv sync`, or `python -m venv .venv` "
+                "and install the tool into it), or put the tool on PATH. An installed in-lockstep "
+                "carries neither pytest nor ruff and must not run yours from its own interpreter."
+            )
+            report.add(
+                "DOC180",
+                Severity.ERROR,
+                f"{who} found no {resolution.tool}; looked for {', '.join(resolution.tried)}",
+                remedy,
+            )
+            continue
+        if not resolution.probe:
+            continue
+        try:
+            probe = subprocess.run(
+                resolution.probe, capture_output=True, text=True, timeout=30, env=probe_env, cwd=probe_cwd
+            )
+        except (OSError, subprocess.SubprocessError) as e:
+            report.add(
+                "DOC181",
+                Severity.ERROR,
+                f"{who}: {resolution.tool} at {resolution.path} could not be run: {e}",
+            )
+            continue
+        if probe.returncode != 0:
+            tail = (probe.stderr or probe.stdout).strip().splitlines()[-1:] or [""]
+            report.add(
+                "DOC181",
+                Severity.ERROR,
+                f"{who}: {resolution.tool} at {resolution.path} ({resolution.how}) cannot do what the "
+                f"adapter needs: `{' '.join(resolution.probe[1:])}` exited {probe.returncode}: {tail[0]}",
+                "Install the tool into that environment, or bind the adapter with the path that has it.",
+            )
 
 
 def _model_routes(report: Report, lockstep: Any) -> None:

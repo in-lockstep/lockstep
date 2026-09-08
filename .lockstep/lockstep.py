@@ -419,9 +419,16 @@ lockstep.workshop = Workshop(
 # wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
 #
 # `delegation=True` hands the session `delegate` (#332): one bounded task to a nested loop over a
-# subset of its own tools, on the same spend and the same tape. Enabled here so the next
-# `/implement` on this repository exercises it; no run has yet, and O10's row says so.
-tdd = lockstep.use(TDD(delegation=True))
+# subset of its own tools, on the same spend and the same tape. Run 34255026959 used it three
+# times.
+#
+# `code_search=True` hands the session `search_code` (#375): Graft, provisioned by the framework
+# into its own cache by `in-lockstep provision` and built before the first model call, searched
+# over HEAD plus what the session has staged. Opt-in here rather than in every session because a
+# tool's name is in every recorded request's key: the shipped review cassette keeps replaying.
+# The record carries the Graft version and the index fingerprint (`search_code.index`), which is
+# how the runs before and after this line are compared (`docs/needs.md`).
+tdd = lockstep.use(TDD(delegation=True, code_search=True))
 
 
 # -- the fixing verb ----------------------------------------------------------------
@@ -434,7 +441,9 @@ tdd = lockstep.use(TDD(delegation=True))
 # What it does NOT share with implement is the model — see the `fix` route above — and what it
 # does not share with either is a way to reach the repository: like every writing verb here it
 # stages into a ChangeSet, and the privileged half opens the change.
-fix = lockstep.use(DiagnoseThenFix)
+# `code_search=True` for the reason implement has it: a fix session's reading phase is the one
+# #337's ceiling was written about.
+fix = lockstep.use(DiagnoseThenFix(code_search=True))
 
 
 # -- middleware ---------------------------------------------------------------------

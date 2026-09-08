@@ -34,7 +34,7 @@ from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..worktree import head_state, materialize, staged_refusal
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
-from .strategy import PhaseError, not_a_verdict, read_reply, reported, run_phase, test_findings
+from .strategy import PhaseError, not_a_verdict, read_reply, reported, run_phase, search_notes, test_findings
 
 
 async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]:
@@ -274,6 +274,7 @@ class TDD(ImplementStrategy):
             malformed=malformed,
             invocations=(red_inv, green_inv),
             prefix="implement",
+            notes=search_notes(session),
         )
 
         async with materialize(session.repo_root, full) as tree:

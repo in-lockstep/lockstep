@@ -14,7 +14,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ...ai.builtins import CommandRunner, Workspace, read_write_execute
+from ...ai.builtins import CodeSearch, CommandRunner, Workspace, read_write_execute
 from ...ai.context import ContextCurator
 from ...ai.invoker import InvocationBlocked, InvocationFailed, InvokePolicy
 from ...ai.prompt import Composition, PromptLayers, compositions
@@ -146,8 +146,15 @@ class AiStrategy:
         prompts: Mapping[str, Any] | None = None,
         layers: PromptLayers | None = None,
         delegation: bool = False,
+        code_search: bool | CodeSearch = False,
     ) -> None:
         self.invoker_factory = invoker_factory
+        #: Whether the session holds `search_code` (#375): `True` binds Graft in the framework's
+        #: cache, provisioned by `in-lockstep provision` and built before the first model call; a
+        #: `CodeSearch` of the caller's is used as given. Off unless the module says so, because a
+        #: tool's name is part of every recorded request's key -- see `read_only`.
+        self.code_search = code_search
+        self._graft: Any = None
         #: Whether the session may hand a task to a nested session over a narrower tool set
         #: (`delegate`, #332). Off unless the module says so: it is the one builtin that turns a
         #: turn cap into a bound on this loop rather than on every model call the run makes.
@@ -228,6 +235,28 @@ class AiStrategy:
             source=type(self).__name__,
         )
 
+    @property
+    def provisions(self) -> tuple[Any, ...]:
+        """What `in-lockstep provision` installs for this adapter: Graft, when `code_search=True`."""
+        return (self._graft_backend(),) if self.code_search is True else ()
+
+    def _graft_backend(self) -> Any:
+        """One `Graft` per adapter, so a run's `_session` and `provision` name the same cache."""
+        if self._graft is None:
+            from ..graft import Graft
+
+            self._graft = Graft()
+        return self._graft
+
+    def _code_search(self, root: str) -> CodeSearch | None:
+        """The backend for this run, or none. A `GraftSearch` is per run because it keeps what
+        the run searched for the record."""
+        if self.code_search is True:
+            from ..graft import GraftSearch
+
+            return GraftSearch(graft=self._graft_backend(), repo_root=root)
+        return self.code_search or None
+
     def _session(self, ctx: Any) -> Any:
         """The per-run bundle. Built fresh each invoke: the workspace accumulates staged writes,
         and the invoker's credential is resolved per call rather than at bind time."""
@@ -242,6 +271,7 @@ class AiStrategy:
             tests=_test_runner(ctx, root, workspace),
             max_test_runs=self.policy.max_test_runs,
             delegation=self.delegation,
+            code_search=self._code_search(root),
         )
         layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
         if type(self).reads_house_rules:
@@ -295,6 +325,12 @@ async def run_phase(
     verb's own report over a change set: a run stopped for idling still hands a person its
     attempt, as one stopped at the turn cap does (#337).
     """
+    # The index a session searches is built here, before the first model call, rather than on the
+    # first query (GATE-SEARCH-1): a refusal is kept for the record and every query returns it,
+    # so a phase never waits on a cold cache mid-loop and a run goes on without the tool.
+    prepare = getattr(getattr(getattr(session, "run_tool", None), "code_search", None), "prepare", None)
+    if callable(prepare):
+        await prepare()
     try:
         invocation = await session.invoker.run(
             system=system,
@@ -398,10 +434,12 @@ def reported(
     malformed: bool = False,
     invocations: tuple[Any, ...] = (),
     prefix: str,
+    notes: tuple[Finding, ...] = (),
 ) -> list[Finding]:
     """The findings that travel with a change: the staged paths, the gaps it named, a note if the
-    cover note was not JSON, and anything the injection scanner saw. `prefix` namespaces the ids
-    (`implement.staged`, `fix.staged`)."""
+    cover note was not JSON, anything the injection scanner saw, and `notes` -- what the session's
+    tools want on the record, which today is what `search_code` searched (`search_notes`).
+    `prefix` namespaces the ids (`implement.staged`, `fix.staged`)."""
     findings = [
         Finding(
             id=f"{prefix}.staged",
@@ -434,7 +472,15 @@ def reported(
         for inv in invocations
         for f in inv.findings
     ]
+    findings += list(notes)
     return findings
+
+
+def search_notes(session: Any) -> tuple[Finding, ...]:
+    """What the session's code search wants on the record, or nothing when there was none."""
+    backend = getattr(getattr(session, "run_tool", None), "code_search", None)
+    notes = getattr(backend, "notes", None)
+    return tuple(notes()) if callable(notes) else ()
 
 
 def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
