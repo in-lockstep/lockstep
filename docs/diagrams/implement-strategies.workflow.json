@@ -1,0 +1,252 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Implement strategies: Oneshot and TDD",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "session",
+      "label": "Model session, in a worktree of HEAD"
+    },
+    {
+      "id": "tdd",
+      "label": "TDD: red, then green"
+    },
+    {
+      "id": "stop",
+      "label": "Stopped by name",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "in",
+      "label": "Read",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "work",
+      "label": "Stage",
+      "fromCol": 1,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "done",
+      "label": "Return",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "ticket",
+    "session",
+    "red_test",
+    "red",
+    "impl",
+    "green",
+    "changeset"
+  ],
+  "nodes": [
+    {
+      "id": "ticket",
+      "lane": "session",
+      "col": 0,
+      "type": "external",
+      "label": "Ticket + house rules",
+      "sublabel": "untrusted context",
+      "width": 140
+    },
+    {
+      "id": "session",
+      "lane": "session",
+      "col": 1,
+      "type": "backend",
+      "label": "Turn loop",
+      "sublabel": "read, search, write, run_script",
+      "tag": "40 turns, priced",
+      "width": 140
+    },
+    {
+      "id": "oneshot",
+      "lane": "session",
+      "col": 4,
+      "type": "backend",
+      "label": "Oneshot",
+      "sublabel": "one session stages it all",
+      "width": 140
+    },
+    {
+      "id": "red_test",
+      "lane": "tdd",
+      "col": 2,
+      "type": "backend",
+      "label": "Write the test",
+      "sublabel": "staged, not applied",
+      "width": 140
+    },
+    {
+      "id": "red",
+      "lane": "tdd",
+      "col": 3,
+      "type": "security",
+      "label": "Test, expect=fail",
+      "sublabel": "collected and red?",
+      "width": 140
+    },
+    {
+      "id": "impl",
+      "lane": "tdd",
+      "col": 4,
+      "type": "backend",
+      "label": "Implement",
+      "sublabel": "shown the red test",
+      "width": 140
+    },
+    {
+      "id": "green",
+      "lane": "tdd",
+      "col": 5,
+      "type": "security",
+      "label": "Test, expect=pass",
+      "sublabel": "test plus implementation",
+      "width": 140
+    },
+    {
+      "id": "not_red",
+      "lane": "stop",
+      "col": 3,
+      "type": "security",
+      "label": "tdd.not_red",
+      "sublabel": "or test_not_collected",
+      "width": 140
+    },
+    {
+      "id": "not_green",
+      "lane": "stop",
+      "col": 5,
+      "type": "security",
+      "label": "tdd.not_green",
+      "sublabel": "returned unproposed",
+      "width": 140
+    },
+    {
+      "id": "ceiling",
+      "lane": "stop",
+      "col": 1,
+      "type": "security",
+      "label": "Blocked",
+      "sublabel": "budget, deadline, kill switch",
+      "width": 140
+    },
+    {
+      "id": "changeset",
+      "lane": "session",
+      "col": 5,
+      "type": "database",
+      "label": "ChangeSet",
+      "sublabel": "summary, notes, files",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "ticket",
+      "to": "session",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "session",
+      "to": "ceiling",
+      "label": "over a ceiling",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e3",
+      "from": "session",
+      "to": "red_test",
+      "label": "TDD",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "session",
+      "to": "oneshot",
+      "label": "Oneshot",
+      "variant": "default"
+    },
+    {
+      "id": "e5",
+      "from": "red_test",
+      "to": "red",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "red",
+      "to": "not_red",
+      "label": "passed",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e7",
+      "from": "red",
+      "to": "impl",
+      "label": "red",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "impl",
+      "to": "green",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e9",
+      "from": "green",
+      "to": "not_green",
+      "label": "still red",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e10",
+      "from": "green",
+      "to": "changeset",
+      "label": "green",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e11",
+      "from": "oneshot",
+      "to": "changeset",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Staging, not applying",
+      "items": [
+        "A session writes into a ChangeSet; the tree is touched by propose",
+        "A test the suite never collected is not red, and the run says so"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Why TDD costs a second phase",
+      "items": [
+        "Red confirms the test captured something before the model is paid to satisfy it",
+        "Green after red is the only success"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Extension resolution: four bands, one order",
+    "quality_profile": "showcase"
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 4,
+    "cellW": 176,
+    "cellH": 60,
+    "gapX": 88,
+    "gapY": 72
+  },
+  "components": [
+    {
+      "id": "shipped",
+      "type": "backend",
+      "label": "Shipped defaults",
+      "sublabel": "bodies, lenses, policy floor",
+      "row": 0,
+      "col": 0,
+      "size": [
+        176,
+        60
+      ],
+      "tag": "SHIPPED"
+    },
+    {
+      "id": "plugin",
+      "type": "backend",
+      "label": "Standards packages",
+      "sublabel": "in_lockstep.standards entry points",
+      "row": 0,
+      "col": 1,
+      "size": [
+        176,
+        60
+      ],
+      "tag": "PLUGIN"
+    },
+    {
+      "id": "module",
+      "type": "security",
+      "label": ".lockstep/lockstep.py",
+      "sublabel": "anything; outranks every plugin",
+      "row": 0,
+      "col": 2,
+      "size": [
+        176,
+        60
+      ],
+      "tag": "EXPLICIT"
+    },
+    {
+      "id": "callsite",
+      "type": "backend",
+      "label": "Call site",
+      "sublabel": "ctx.do(..., via=)",
+      "row": 0,
+      "col": 3,
+      "size": [
+        176,
+        60
+      ],
+      "tag": "one run"
+    },
+    {
+      "id": "container",
+      "type": "backend",
+      "label": "Resolved container",
+      "sublabel": "in-lockstep ls",
+      "row": 1,
+      "col": 2,
+      "size": [
+        176,
+        60
+      ]
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "Policy stack",
+      "sublabel": "tighten-only merge",
+      "row": 1,
+      "col": 1,
+      "size": [
+        176,
+        60
+      ]
+    },
+    {
+      "id": "pack",
+      "type": "external",
+      "label": "Extension pack",
+      "sublabel": "in_lockstep.extensions",
+      "row": 2,
+      "col": 0,
+      "size": [
+        176,
+        60
+      ],
+      "tag": "offers, never applies"
+    },
+    {
+      "id": "describe",
+      "type": "backend",
+      "label": "pack describe",
+      "sublabel": "receipt derived from code",
+      "row": 2,
+      "col": 1,
+      "size": [
+        176,
+        60
+      ]
+    },
+    {
+      "id": "add",
+      "type": "security",
+      "label": "add",
+      "sublabel": "prints; a committed acknowledgement",
+      "row": 2,
+      "col": 3,
+      "size": [
+        176,
+        60
+      ]
+    },
+    {
+      "id": "try",
+      "type": "backend",
+      "label": "pack try",
+      "sublabel": "$0 replay of its cassettes",
+      "row": 3,
+      "col": 3,
+      "size": [
+        176,
+        60
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "Catalog",
+      "sublabel": "index.toml in a git repo",
+      "row": 3,
+      "col": 0,
+      "size": [
+        176,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Applied first to last; the later wins, except policy",
+      "wraps": [
+        "shipped",
+        "plugin",
+        "module",
+        "callsite"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "r1",
+      "from": "shipped",
+      "to": "plugin",
+      "label": "then",
+      "labelDy": 24
+    },
+    {
+      "id": "r2",
+      "from": "plugin",
+      "to": "module",
+      "label": "then",
+      "labelDy": 24
+    },
+    {
+      "id": "r3",
+      "from": "module",
+      "to": "callsite",
+      "label": "then",
+      "labelDy": -19
+    },
+    {
+      "id": "r4",
+      "from": "module",
+      "to": "container",
+      "label": "bind",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "r5",
+      "from": "plugin",
+      "to": "policy",
+      "label": "layers",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "r6",
+      "from": "policy",
+      "to": "container",
+      "label": "floor",
+      "variant": "security"
+    },
+    {
+      "id": "r7",
+      "from": "catalog",
+      "to": "pack",
+      "label": "market add",
+      "variant": "dashed",
+      "labelDy": -19
+    },
+    {
+      "id": "r8",
+      "from": "pack",
+      "to": "describe",
+      "label": "inspect",
+      "variant": "default"
+    },
+    {
+      "id": "r9",
+      "from": "describe",
+      "to": "add",
+      "label": "accept",
+      "variant": "security"
+    },
+    {
+      "id": "r10",
+      "from": "add",
+      "to": "container",
+      "label": "the line you write binds it",
+      "variant": "emphasis"
+    },
+    {
+      "id": "r11",
+      "from": "add",
+      "to": "try",
+      "label": "measure",
+      "variant": "dashed",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "A pack lands in band three",
+      "items": [
+        "Installed and not named in lockstep.py: no effect at all",
+        "Nothing lets a stranger land at EXPLICIT on its own"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Policy is the exception",
+      "items": [
+        "Layers merge tighten-only; order decides who is printed, not who wins",
+        "The receipt is derived from code and refused when a file disagrees"
+      ]
+    }
+  ]
+}

@@ -65,6 +65,8 @@ still advertises.
 | Improvement loop | runs | `improve` reads the ledger for a finding that keeps coming back, drafts a change to the one declared `Improvable` body it is attributed to, measures the draft against the promoted corpus before opening anything — both arms over the same cases, every rubric put to the `judge` verb on both arms with verdicts kept beside the case and replayed, `—` where nobody judged — and stages the change with its scorecard; `run improve/propose` is the job that holds the write token, and it enforces the open-proposal ceiling where the proposal is opened. It refuses before its first model call unless a trend qualifies, the body is writable by grant, and a promoted case fails against it. `improve --explain` reads the ledger and says what would stop a proposal, opening nothing and spending nothing |
 | Shared ledger store | runs | `GitLedger(shared=True)` provides `compare_and_set` as a swap on the remote's own ref, so eight runners claiming one key produce one success; one repository's ledger, not a workspace's. The default construction stays `LOCAL` and refuses |
 
+Each row above has a diagram behind it: the [runtime architecture](https://in-lockstep.github.io/lockstep/diagrams/runtime-architecture.html) and one control-flow page per shipped workflow, verb and strategy, indexed in [docs/diagrams](docs/diagrams/README.md). They are interactive pages on the site, and their sources are in the repository.
+
 ## Why code rather than configuration
 
 A change to your review policy becomes a diff in a pull request, with blame, history and rollback.
@@ -177,6 +179,8 @@ whole mechanism and the argument for each refusal in it; the worked examples are
 what in-process invocation costs (what replaced each substrate control, what is weaker, what was
 lost), and [exit gates](design/gates.md) tracks every claimed control against the test that holds
 it, including the ones that are `unit only` or `unmet`.
+
+**Looking for a picture?** [docs/diagrams](docs/diagrams/README.md) holds seventeen interactive pages: the runtime, every shipped workflow, verb and strategy, the security model, the ledger's path to origin, the learning loop, and the chat-ops job split.
 
 **Why is it like this?** The essays: [design](design/in-lockstep-design.md) and
 [ADR 0001](design/adr/0001-pivot-to-runnable-framework.md). Long, and deliberately below the

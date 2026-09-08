@@ -1,0 +1,409 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Security model: what a model can reach, and what it cannot",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "credentials",
+        "label": "Where secrets are",
+        "focus": [
+          "auth",
+          "oidc",
+          "invoker",
+          "propose_job"
+        ],
+        "note": "Resolved at the edge, handed to the transport, never in the package a model reads."
+      },
+      {
+        "id": "text",
+        "label": "What the model reads",
+        "focus": [
+          "ticket",
+          "package",
+          "scan",
+          "prompt"
+        ],
+        "note": "Untrusted text is delimited and scanned; it selects nothing."
+      },
+      {
+        "id": "writes",
+        "label": "What a model can do",
+        "focus": [
+          "tools",
+          "sandbox",
+          "guard",
+          "changeset",
+          "propose_job"
+        ],
+        "note": "Writes are staged, checked twice, and opened as a pull request."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 5,
+    "cellW": 168,
+    "cellH": 60,
+    "gapX": 72,
+    "gapY": 60
+  },
+  "components": [
+    {
+      "id": "config",
+      "type": "security",
+      "label": "Trusted config ref",
+      "sublabel": "never the change under review",
+      "row": 0,
+      "col": 0,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "Chat-ops gate",
+      "sublabel": "authorizes the asker",
+      "row": 0,
+      "col": 1,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "oidc",
+      "type": "cloud",
+      "label": "OIDC / key",
+      "sublabel": "short-lived, scoped",
+      "row": 0,
+      "col": 3,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Auth resolver",
+      "sublabel": "resolved at the edge",
+      "row": 0,
+      "col": 4,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "ticket",
+      "type": "external",
+      "label": "Ticket / diff / logs",
+      "sublabel": "attacker-influenceable",
+      "row": 1,
+      "col": 0,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "package",
+      "type": "backend",
+      "label": "Context package",
+      "sublabel": "provenance-tagged",
+      "row": 1,
+      "col": 1,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "scan",
+      "type": "security",
+      "label": "Injection scan",
+      "sublabel": "findings travel with the run",
+      "row": 1,
+      "col": 2,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "prompt",
+      "type": "backend",
+      "label": "Composed prompt",
+      "sublabel": "guardrails first",
+      "row": 1,
+      "col": 3,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "invoker",
+      "type": "backend",
+      "label": "AiInvoker",
+      "sublabel": "holds the credential",
+      "row": 1,
+      "col": 4,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "egress",
+      "type": "security",
+      "label": "EgressPolicy",
+      "sublabel": "probe-verified, fail closed",
+      "row": 2,
+      "col": 4,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "backend",
+      "label": "ToolSet",
+      "sublabel": "deny by default",
+      "row": 2,
+      "col": 2,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "Sandbox",
+      "sublabel": "no network, no credentials",
+      "row": 2,
+      "col": 1,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "ChangeGuard",
+      "sublabel": "tiers; tests never silenced",
+      "row": 2,
+      "col": 3,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "redact",
+      "type": "security",
+      "label": "Redact + sink",
+      "sublabel": "every write masked",
+      "row": 3,
+      "col": 4,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "changeset",
+      "type": "database",
+      "label": "Staged ChangeSet",
+      "sublabel": "an untrusted artifact",
+      "row": 3,
+      "col": 2,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "propose_job",
+      "type": "security",
+      "label": "Propose job",
+      "sublabel": "write token, no provider",
+      "row": 3,
+      "col": 1,
+      "size": [
+        168,
+        60
+      ]
+    },
+    {
+      "id": "pr",
+      "type": "external",
+      "label": "Pull request",
+      "sublabel": "run-scoped branch, a person reads",
+      "row": 3,
+      "col": 0,
+      "size": [
+        168,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Model job: provider credential, read-only",
+      "wraps": [
+        "package",
+        "scan",
+        "prompt",
+        "invoker",
+        "tools",
+        "sandbox",
+        "guard",
+        "egress"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Write job",
+      "wraps": [
+        "propose_job",
+        "pr"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": "config",
+      "to": "gate",
+      "label": "loaded first",
+      "variant": "security",
+      "labelDy": -19
+    },
+    {
+      "id": "c2",
+      "from": "ticket",
+      "to": "package",
+      "label": "UNTRUSTED",
+      "variant": "security"
+    },
+    {
+      "id": "c3",
+      "from": "package",
+      "to": "scan",
+      "label": "scanned"
+    },
+    {
+      "id": "c4",
+      "from": "scan",
+      "to": "prompt",
+      "label": "delimited"
+    },
+    {
+      "id": "c5",
+      "from": "prompt",
+      "to": "invoker",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c6",
+      "from": "oidc",
+      "to": "auth",
+      "label": "mint",
+      "variant": "security",
+      "labelDy": -19
+    },
+    {
+      "id": "c7",
+      "from": "auth",
+      "to": "invoker",
+      "label": "credential",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "c8",
+      "from": "invoker",
+      "to": "egress",
+      "label": "check before call",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "c9",
+      "from": "invoker",
+      "to": "tools",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "id": "c10",
+      "from": "tools",
+      "to": "sandbox",
+      "label": "run_script",
+      "variant": "dashed"
+    },
+    {
+      "id": "c11",
+      "from": "tools",
+      "to": "guard",
+      "label": "write_file",
+      "variant": "security"
+    },
+    {
+      "id": "c12",
+      "from": "guard",
+      "to": "changeset",
+      "label": "staged",
+      "labelDy": 24
+    },
+    {
+      "id": "c13",
+      "from": "changeset",
+      "to": "propose_job",
+      "label": "guard again",
+      "variant": "security"
+    },
+    {
+      "id": "c14",
+      "from": "propose_job",
+      "to": "pr",
+      "label": "open_change",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c15",
+      "from": "egress",
+      "to": "redact",
+      "label": "records",
+      "variant": "dashed",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "A successful injection has nothing to take",
+      "items": [
+        "Keys resolve at the edge and never enter the context package",
+        "The job that writes cannot reach a model; the job with the model cannot write"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Text selects nothing",
+      "items": [
+        "The comment picks a command; the gate authorizes the person",
+        "The ticket body is delimited, scanned, and never a control surface"
+      ]
+    }
+  ]
+}

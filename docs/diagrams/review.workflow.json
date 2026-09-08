@@ -1,0 +1,220 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "review/all-lenses: one fan-out, four lenses",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1130,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "host",
+      "label": "Host"
+    },
+    {
+      "id": "run",
+      "label": "Review job"
+    },
+    {
+      "id": "lenses",
+      "label": "Fan-out branches: one budget, one tape, one kill switch"
+    },
+    {
+      "id": "publish",
+      "label": "Publish job: pull-requests write"
+    }
+  ],
+  "phases": [
+    {
+      "id": "trigger",
+      "label": "Trigger",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "fanout",
+      "label": "ctx.fan_out",
+      "fromCol": 1,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "publish_p",
+      "label": "Comments and record",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "pr",
+    "lenses",
+    "lens",
+    "invoke",
+    "join",
+    "comments",
+    "sticky"
+  ],
+  "nodes": [
+    {
+      "id": "pr",
+      "lane": "host",
+      "col": 0,
+      "type": "external",
+      "label": "Pull request event",
+      "sublabel": "or /review <lens>",
+      "width": 140
+    },
+    {
+      "id": "lenses",
+      "lane": "run",
+      "col": 1,
+      "type": "backend",
+      "label": "bound_lenses(ctx)",
+      "sublabel": "adapter compositions",
+      "width": 140
+    },
+    {
+      "id": "lens",
+      "lane": "lenses",
+      "col": 2,
+      "type": "backend",
+      "label": "Review(aspect)",
+      "sublabel": "four lenses",
+      "tag": "machine branches",
+      "width": 140
+    },
+    {
+      "id": "invoke",
+      "lane": "lenses",
+      "col": 3,
+      "type": "backend",
+      "label": "AiReview",
+      "sublabel": "diff untrusted, settle",
+      "width": 140
+    },
+    {
+      "id": "join",
+      "lane": "run",
+      "col": 3,
+      "type": "backend",
+      "label": "JoinResult",
+      "sublabel": "worst status wins",
+      "width": 140
+    },
+    {
+      "id": "killed",
+      "lane": "lenses",
+      "col": 1,
+      "type": "security",
+      "label": "Kill switch",
+      "sublabel": "cancels branches in 2s",
+      "width": 140
+    },
+    {
+      "id": "comments",
+      "lane": "run",
+      "col": 4,
+      "type": "database",
+      "label": "One body per lens",
+      "sublabel": "one body per lens",
+      "width": 140
+    },
+    {
+      "id": "sticky",
+      "lane": "publish",
+      "col": 5,
+      "type": "external",
+      "label": "Sticky comments",
+      "sublabel": "one marker per lens",
+      "width": 140
+    },
+    {
+      "id": "record",
+      "lane": "publish",
+      "col": 4,
+      "type": "database",
+      "label": "Ledger record",
+      "sublabel": "lens steps carry subjects",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "pr",
+      "to": "lenses",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "lenses",
+      "to": "lens",
+      "label": "one branch each",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e3",
+      "from": "lens",
+      "to": "invoke",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "invoke",
+      "to": "join",
+      "label": "outcome",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "killed",
+      "to": "lens",
+      "label": "killswitch",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e6",
+      "from": "join",
+      "to": "comments",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "comments",
+      "to": "sticky",
+      "label": "comment",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "join",
+      "to": "record",
+      "label": "bundle, push",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Findings are warnings",
+      "items": [
+        "A lens that finds something still exits 0",
+        "Each finding's path is checked against the diff as sent"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Shared bounds",
+      "items": [
+        "Four branches reserve from one Spend",
+        "The join is decided only when every branch decided"
+      ]
+    }
+  ]
+}

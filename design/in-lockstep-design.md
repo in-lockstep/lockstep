@@ -134,6 +134,8 @@ The identical command runs in GitHub Actions or GitLab CI via a thin trampoline 
 └────────────────────────────────────────────────────────────────────┘
 ```
 
+An interactive rendering of this map as it stands today is [`docs/diagrams/runtime-architecture.html`](https://in-lockstep.github.io/lockstep/diagrams/runtime-architecture.html).
+
 Layering rule: arrows point down only. Workflows know verbs; verbs know nothing about workflows; adapters know their tool or the AI subsystem; the dispatch core knows nothing about any specific verb; the platform layer is reachable only through `RunContext`.
 
 ## 4. The dispatch core
@@ -269,6 +271,8 @@ async def after_reviews(ctx, r: Resumption):
     return jr.as_outcome()
 ```
 
+The shipped fan-out, `review/all-lenses`, is drawn in [`docs/diagrams/review.html`](https://in-lockstep.github.io/lockstep/diagrams/review.html).
+
 Aggregation — quorums, weighted verdicts, "security overrides all" — is ordinary code or a bound `ReviewAggregator` policy. The framework's contract is only the barrier.
 
 
@@ -316,6 +320,8 @@ class Prompt(Generic[P, S]):                # P: params dataclass, S: output sch
 ```
 
 Prompts are classes in your repo, so they diff, blame, and roll back like everything else, and `version` keys the evaluation store (§8). The framework ships a default prompt per AI verb (`prompts.ImplementPrompt`, `prompts.ReviewPrompt`, …) designed for subclass extension — override `emphasis`, add few-shot `exemplars`, or replace `render` wholesale. A prompt change is a PR; §8 makes prompt PRs pass offline evals in CI before merge.
+
+As built: [`docs/diagrams/prompt-composition.html`](https://in-lockstep.github.io/lockstep/diagrams/prompt-composition.html).
 
 ### 5.4 Context — deterministic assembly of what the model sees
 
@@ -461,6 +467,8 @@ Every `Outcome` artifact gets an `ArtifactRef` (kind, content hash, storage ref)
 
 The requirement: measure AI-generated artifacts over time, and improve the *local implementation* using that measurement, through commits/PRs. The design closes an elegant loop: because prompts, exemplars, and routing policy are code (§5.3), "learning" means "open a PR against your own repo," which the same lifecycle then reviews, tests, and merges. The framework improves through the process it automates, with humans at the merge gate.
 
+As built: [`docs/diagrams/learning-loop.html`](https://in-lockstep.github.io/lockstep/diagrams/learning-loop.html), with [`improve.html`](https://in-lockstep.github.io/lockstep/diagrams/improve.html) and [`judge.html`](https://in-lockstep.github.io/lockstep/diagrams/judge.html) for the two workflows behind it.
+
 ### 8.1 Signals — ground truth already lives in your SCM
 
 ```python
@@ -506,6 +514,8 @@ The `otel()` middleware is default-on and needs only standard `OTEL_EXPORTER_OTL
 
 Threat model in one line: the framework feeds attacker-influenceable text (repo files, ticket bodies, CI logs) to models that hold tools and credentials, then acts on the output.
 
+As built: [`docs/diagrams/security-model.html`](https://in-lockstep.github.io/lockstep/diagrams/security-model.html).
+
 1. **Provenance-tagged context** (§5.4). Untrusted items are labeled and delimited in prompts; policy middleware can shrink the ToolSet to read-only when any `UNTRUSTED_EXTERNAL` item is present.
 2. **Deny-by-default tools** (§5.5). Allowlists per verb; write/exec tools require explicit grant, typically behind `ApprovalGate`.
 3. **Sandboxed `run`.** The default `Run` adapter executes in a container (or firejail/no-net subprocess fallback) with no ambient credentials and an explicit mount set. Executing generated code outside a sandbox requires binding an adapter whose name says so (`UnsandboxedRun`).
@@ -529,6 +539,8 @@ in-lockstep doctor                    # auth, SCM reach, provider reach, pins, i
 ```
 
 Discovery: `lockstep.py` (or `lockstep/` package) at repo root, plus entry-point-registered workflow packages. `in-lockstep ls` prints the *resolved* container — since config is code, this is the "what will actually run" answer that YAML users get from their file (R1-DX-3).
+
+As built: [`docs/diagrams/chat-ops.html`](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html) is the three-job sequence a `/implement` comment drives.
 
 **The trampoline principle.** CI hosts require their own YAML; that YAML invokes the CLI and contains no lifecycle logic. It is host-owned invocation, not framework output — nothing is generated, nothing is transpiled:
 
@@ -556,6 +568,8 @@ Import-time purity: `lockstep.py` may construct objects and bind, but must not p
 Principle 7 in full: a run is a single machine-driven episode. The moment a person must weigh in, the run does not wait — it **parks**: state externalizes to the ledger and the system of record, notifications go out (§14), the process exits with status `PARKED`, and a **continuation workflow** starts as a fresh run when the human's event arrives. Long lifecycles are chains of short runs stitched by human events, not one long process. This buys the durable-execution outcome (waits of days or weeks) with none of its costs: no determinism rules on user code, no replay sandbox, no stateful server — workflows remain plain Python, and in-lockstep remains a library.
 
 The companion stance: **the human acts in the system of record** — approving the PR, transitioning the ticket, granting the host's environment approval — never in a bespoke UI. Notifications are signposts pointing at the place to act, not control surfaces (§14). Human decisions therefore inherit the SCM's and tracker's authentication, authorization, and audit for free, and the framework exposes no inbound endpoint.
+
+As built: [`docs/diagrams/human-boundaries.html`](https://in-lockstep.github.io/lockstep/diagrams/human-boundaries.html).
 
 ### 13.1 park
 

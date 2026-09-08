@@ -103,6 +103,8 @@ line naming the ref it read and how many records each side holds that the other 
 `in-lockstep history --pull` is the act that brings the remote's records onto a local branch,
 record by record, without pushing.
 
+How a record travels from a run to `origin/lockstep-history` and back to a reader is drawn in [the ledger diagram](https://in-lockstep.github.io/lockstep/diagrams/ledger.html).
+
 ## The module is the configuration
 
 `init` detected pytest, ruff and a `uv.lock` above, so the scaffold it wrote already binds them:
@@ -221,6 +223,8 @@ An outcome carries a `status` and, separately, `decided`. Those answer different
 did it end" and "did it produce evidence". A test run that collected nothing succeeded and decided
 nothing, and reporting it as a clean pass would be the reassuring number this framework tries hard
 not to produce.
+
+Which command detection binds to which verb, and where each runs, is drawn in [deterministic verbs](https://in-lockstep.github.io/lockstep/diagrams/deterministic-verbs.html).
 
 ## The first model-shaped run costs nothing
 
@@ -417,6 +421,8 @@ that named people who never chose to be named is the leaderboard the pseudonyms 
 A run whose model the framework did not choose carries no subject at all rather than a partial one,
 and `implement` and `fix` carry none either: those strategies append the repository's house rules at
 run time, so the prompt they composed up front is not the prompt they sent.
+
+For the whole arc a `report --around` comparison sits at the end of, see [the learning loop](https://in-lockstep.github.io/lockstep/diagrams/learning-loop.html).
 
 ## Local models
 

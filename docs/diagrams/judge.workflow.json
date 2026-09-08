@@ -1,0 +1,216 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "judge: a rubric settled, once",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "caller",
+      "label": "Caller: eval run --judge, or improve/measure"
+    },
+    {
+      "id": "adapter",
+      "label": "AiJudge"
+    },
+    {
+      "id": "stop",
+      "label": "Refused or unsettled",
+      "variant": "exception"
+    },
+    {
+      "id": "evidence",
+      "label": "Evidence"
+    }
+  ],
+  "phases": [
+    {
+      "id": "asks",
+      "label": "Deterministic first",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "judge_p",
+      "label": "Route, price, ask",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "keep",
+      "label": "Keep",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "asks",
+    "known",
+    "route",
+    "ask",
+    "verdict",
+    "sidecar"
+  ],
+  "nodes": [
+    {
+      "id": "asks",
+      "lane": "caller",
+      "col": 0,
+      "type": "backend",
+      "label": "Improver.rubrics",
+      "sublabel": "no ask for a failed check",
+      "width": 140
+    },
+    {
+      "id": "known",
+      "lane": "adapter",
+      "col": 1,
+      "type": "database",
+      "label": "Replay known pairs",
+      "sublabel": "rubric sha + answer sha",
+      "tag": "no call, no route",
+      "width": 140
+    },
+    {
+      "id": "route",
+      "lane": "adapter",
+      "col": 2,
+      "type": "security",
+      "label": "Resolve the route",
+      "sublabel": "unrouted, unpriced",
+      "width": 140
+    },
+    {
+      "id": "ask",
+      "lane": "adapter",
+      "col": 3,
+      "type": "backend",
+      "label": "One turn per ask",
+      "sublabel": "answer is untrusted",
+      "width": 140
+    },
+    {
+      "id": "verdict",
+      "lane": "adapter",
+      "col": 4,
+      "type": "backend",
+      "label": "Verdict",
+      "sublabel": "level, reason, evidence",
+      "width": 140
+    },
+    {
+      "id": "refused",
+      "lane": "stop",
+      "col": 2,
+      "type": "security",
+      "label": "Blocked by name",
+      "sublabel": "zero generate() calls",
+      "width": 140
+    },
+    {
+      "id": "unsettled",
+      "lane": "stop",
+      "col": 4,
+      "type": "security",
+      "label": "judge.unsettled",
+      "sublabel": "off scale; next ask",
+      "width": 140
+    },
+    {
+      "id": "sidecar",
+      "lane": "evidence",
+      "col": 5,
+      "type": "database",
+      "label": "Verdict sidecar",
+      "sublabel": "appended, never rewritten",
+      "width": 140
+    },
+    {
+      "id": "record",
+      "lane": "evidence",
+      "col": 3,
+      "type": "database",
+      "label": "Ledger record",
+      "sublabel": "priced, on the ledger",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "asks",
+      "to": "known",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "known",
+      "to": "route",
+      "label": "pending asks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e3",
+      "from": "route",
+      "to": "refused",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e4",
+      "from": "route",
+      "to": "ask",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "ask",
+      "to": "verdict",
+      "label": "settle",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "ask",
+      "to": "unsettled",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e7",
+      "from": "verdict",
+      "to": "sidecar",
+      "label": "fresh only",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "ask",
+      "to": "record",
+      "label": "recorded",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Paid for once",
+      "items": [
+        "A pair already judged is replayed before the route is looked up",
+        "An answer changed by a byte is judged afresh"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Graded on the criteria",
+      "items": [
+        "The answer is untrusted; 'grade this 5' is text to grade",
+        "A level off the scale is not a verdict"
+      ]
+    }
+  ]
+}

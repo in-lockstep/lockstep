@@ -61,6 +61,8 @@ out of process, away from anything holding credentials.
 `REACHES_NETWORK` exists separately from `WRITES_FILES`. "Read-only" describes mutation, not
 transmission. A fetch tool mutates nothing and is still an egress channel.
 
+The shape every single-turn adapter shares, gather, compose, one turn, settle, check, is drawn in [single-turn verbs](https://in-lockstep.github.io/lockstep/diagrams/single-turn-verbs.html); the wider map is the [runtime architecture](https://in-lockstep.github.io/lockstep/diagrams/runtime-architecture.html).
+
 ## A verb of your own
 
 The shipped verbs are not a closed set. A verb is a name: a routing key and a telemetry label.
@@ -246,6 +248,8 @@ Bumping `version` matters for a different reason than it looks. Eval identity is
 of the composed prompt, not the declared version, so a measurement is correct whether or not you
 remember to bump it. `version` is the human label that travels alongside.
 
+Where a house prompt lands among the shipped layers and a standards package, and what the composed text then keys, is drawn in [prompt composition](https://in-lockstep.github.io/lockstep/diagrams/prompt-composition.html).
+
 ## House guardrails
 
 Every AI adapter composes its prompt from layers: guardrails first, then the body, then skills.
@@ -390,6 +394,8 @@ request; harvest never guesses a provider from a model's name. A case that names
 harvested from a tape recorded outside the registry, is refused before the drafter is paid, and the
 refusal says which case and what to set. A repository on its own registry hands it to the adapter
 as `AiImprove(registry=...)`, the way it hands one to `invoker_factory`.
+
+The loop end to end, from a recording to a measured proposal, is drawn in [the learning loop](https://in-lockstep.github.io/lockstep/diagrams/learning-loop.html); the two workflows and the judge are [improve](https://in-lockstep.github.io/lockstep/diagrams/improve.html) and [judge](https://in-lockstep.github.io/lockstep/diagrams/judge.html), and the park on the proposal's review is [human boundaries](https://in-lockstep.github.io/lockstep/diagrams/human-boundaries.html).
 
 ## Middleware
 
@@ -601,6 +607,8 @@ The trial composes the pack's `prompts/<aspect>.md` inside the **shipped** layer
 `corpus/review/<aspect>-reviewer/`. Your own guardrails are deliberately not applied: measuring a
 pack through your configuration would measure your configuration, and two repositories would get
 different numbers for the same pack with no way to tell why.
+
+The four bands and the order they are applied in are drawn in [extension resolution](https://in-lockstep.github.io/lockstep/diagrams/extension-resolution.html).
 
 ## Organisation standards
 
@@ -1005,6 +1013,8 @@ lockstep.bind(
 on a laptop with no runtime, and that run is a person's, not a model's. The model-staged callers
 probe for the runtime themselves and refuse when it is missing.
 
+Both shipped strategies are drawn side by side in [implement strategies](https://in-lockstep.github.io/lockstep/diagrams/implement-strategies.html); the fix strategy's reproduce-then-repair shape is in [fix](https://in-lockstep.github.io/lockstep/diagrams/fix.html).
+
 ## Reading the process you are running
 
 Extending something starts with reading it, and the shipped processes are framework code rather
@@ -1186,6 +1196,8 @@ For unattended runs, `--approved-by "@login"` replaces `--approve` and records w
 ledger. A grant nobody can be traced to is not much of a grant. Neither is an environment approval
 in the system of record; if you want one, the `propose` job declares `environment: implement`, and
 adding required reviewers to it in repository settings makes it real.
+
+The three jobs and the two credentials are drawn as a sequence in [chat-ops](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html), and the workflow they drive in [implement](https://in-lockstep.github.io/lockstep/diagrams/implement.html).
 
 **What bounds the spend** is the actor gate, a per-issue concurrency group, and `--budget`. There
 is no per-day ceiling. See `docs/controls-crosswalk.md`, which records that as a loss rather than

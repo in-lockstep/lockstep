@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": { "title": "implement: from ticket to pull request", "quality_profile": "showcase" },
+  "lanes": [
+    { "id": "host", "label": "Host (GitHub / GitLab)" },
+    { "id": "model_job", "label": "Model job: holds the provider key, no write token" },
+    { "id": "stop", "label": "Refusals and failures", "variant": "exception" },
+    { "id": "write_job", "label": "Write job: holds the write token, no provider key" }
+  ],
+  "phases": [
+    { "id": "ask", "label": "Ask", "fromCol": 0, "toCol": 0 },
+    { "id": "implement", "label": "implement/from-ticket", "fromCol": 1, "toCol": 3, "variant": "emphasis" },
+    { "id": "propose", "label": "implement/propose + implement/report", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["comment", "gate", "ticket", "strategy", "changeset", "propose", "pr"],
+  "nodes": [
+    { "id": "comment", "lane": "host", "col": 0, "type": "external", "label": "/implement comment", "sublabel": "on an issue", "width": 136 },
+    { "id": "gate", "lane": "model_job", "col": 1, "type": "security", "label": "Chat-ops gate", "sublabel": "author is a maintainer?", "width": 136 },
+    { "id": "ticket", "lane": "model_job", "col": 2, "type": "backend", "label": "Ticket + last review", "sublabel": "untrusted context", "width": 136 },
+    { "id": "strategy", "lane": "model_job", "col": 3, "type": "backend", "label": "ctx.do(Implement)", "sublabel": "TDD or Oneshot, in a worktree", "tag": "budget + approval gated", "width": 136 },
+    { "id": "changeset", "lane": "model_job", "col": 4, "type": "database", "label": "changeset artifact", "sublabel": "staged, never applied here", "width": 136 },
+    { "id": "attempt", "lane": "stop", "col": 4, "type": "database", "label": "attempt artifact", "sublabel": "kept as evidence", "width": 136 },
+    { "id": "refused", "lane": "stop", "col": 1, "type": "security", "label": "Refused", "sublabel": "not a maintainer", "width": 136 },
+    { "id": "failed", "lane": "stop", "col": 3, "type": "security", "label": "Blocked or failed", "sublabel": "ceiling, not red, not green", "width": 136 },
+    { "id": "propose", "lane": "write_job", "col": 4, "type": "backend", "label": "implement/propose", "sublabel": "branch, commit, open draft", "width": 136 },
+    { "id": "pr", "lane": "host", "col": 5, "type": "external", "label": "Draft pull request", "sublabel": "a person reads it", "width": 136 },
+    { "id": "report", "lane": "write_job", "col": 5, "type": "backend", "label": "implement/report", "sublabel": "comment on the ticket", "width": 136 },
+    { "id": "issue", "lane": "stop", "col": 5, "type": "external", "label": "ai-generated issue", "sublabel": "on a failed attempt", "width": 136 }
+  ],
+  "edges": [
+    { "id": "e1", "from": "comment", "to": "gate", "variant": "default" },
+    { "id": "e2", "from": "gate", "to": "refused", "label": "no", "variant": "security", "role": "error" },
+    { "id": "e3", "from": "gate", "to": "ticket", "label": "yes", "variant": "emphasis" },
+    { "id": "e4", "from": "ticket", "to": "strategy", "variant": "emphasis" },
+    { "id": "e5", "from": "strategy", "to": "changeset", "label": "succeeded", "variant": "emphasis" },
+    { "id": "e6", "from": "strategy", "to": "failed", "label": "blocked / failed", "variant": "security", "role": "error" },
+    { "id": "e7", "from": "failed", "to": "attempt", "variant": "dashed", "role": "branch" },
+    { "id": "e8", "from": "changeset", "to": "propose", "label": "read back, untrusted", "variant": "emphasis" },
+    { "id": "e9", "from": "propose", "to": "pr", "variant": "emphasis" },
+    { "id": "e10", "from": "propose", "to": "report", "variant": "default" },
+    { "id": "e11", "from": "attempt", "to": "issue", "label": "file for a later /fix", "variant": "dashed", "role": "branch" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Two jobs, one process", "items": ["The job that runs the model never holds a write token", "The job that opens the change never holds a provider key"] },
+    { "dot": "rose", "title": "What stops a run", "items": ["No declared budget refuses before the first call", "A red suite after green, or no test collected, fails by name"] }
+  ]
+}

@@ -15,6 +15,8 @@ number that is true.
 by a test that names it, and a gate marked `unmet` must not be. Implementing one without updating
 the ledger fails. The README's what-ships-today matrix is checked the same way.
 
+Before changing a workflow, verb or strategy, find its page in [docs/diagrams](docs/diagrams/README.md): the diagram is the shape a change is measured against, and a change that moves the shape moves the diagram in the same pull request.
+
 ## The three disciplines a change is judged by
 
 Most review feedback here is one of these, so it is cheaper to read them first:
