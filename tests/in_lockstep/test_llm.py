@@ -795,3 +795,36 @@ def test_gate_auth_1_a_host_that_cannot_say_where_home_is_is_skipped_not_passed(
     monkeypatch.setattr(os, "environ", {})
     with pytest.raises(RuntimeError, match="home directory"):
         registration.factory(registration.settings, Credentials.none())
+
+
+def test_gate_auth_1_a_runtime_error_that_is_not_about_home_still_fails_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The skip is for one sentence, not for an exception class.
+
+    A provider that fails to construct for its own reasons must fail this gate. Widened to every
+    `RuntimeError`, the escape hatch would become the gate: the one environment fact the host
+    cannot help with would excuse every transport that could not be built.
+    """
+    from types import SimpleNamespace
+
+    from in_lockstep.ai import bootstrap
+
+    def boom(settings: object, creds: object) -> object:
+        raise RuntimeError("the transport could not be built")
+
+    registry = SimpleNamespace(_registrations={"anthropic": SimpleNamespace(factory=boom, settings=None)})
+    monkeypatch.setattr(bootstrap, "default_registry", lambda: registry)
+    # Not `pytest.raises`: a widened guard would SKIP, and a skip propagating out of here marks
+    # this test skipped rather than failed -- green CI, gate gone. The outcome that must not
+    # happen has to be spelled as a failure.
+    try:
+        test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty(
+            "anthropic", monkeypatch
+        )
+    except RuntimeError as raised:
+        assert "transport" in str(raised)
+    except BaseException as excused:  # noqa: BLE001 - `pytest.skip` is what this refuses
+        pytest.fail(f"a transport that could not be built was excused, not failed: {excused!r}")
+    else:
+        pytest.fail("a transport that could not be built neither raised nor failed the gate")
