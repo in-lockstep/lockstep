@@ -41,6 +41,7 @@
       <a href="walkthrough.html">Walkthrough</a>
       <a href="governance.html">Governance</a>
       <a href="extensions.html">Extensions</a>
+      <a href="diagrams.html">Diagrams</a>
       <a href="docs/getting-started.html">Docs</a>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
@@ -216,7 +217,7 @@ cost      <span class="g">$0.0000  (replayed; nothing was billed)</span></pre>
       <h2>The loop you already run, expressed as Python.</h2>
       <p class="lede">Clone it, change something, build it, run it, test it. You already do this,
         with scripts already in the repository. in-lockstep reads those and writes the loop down, so
-        the lifecycle becomes one file you can read, diff and review.</p>
+        the lifecycle becomes one file you can read, diff and review. <a href="diagrams/deterministic-verbs.html">See which command serves which verb</a>, and <a href="diagrams/runtime-architecture.html">the runtime around it</a>.</p>
     </div>
 
     <figure class="fig fig-wide loop-fig">
@@ -342,7 +343,7 @@ write; the file says where.</pre>
       <h2>The prompt is assembled, not typed.</h2>
       <p class="lede">Every call composes the same named fragments in the same order, with your
         guardrails first, and you can print the result or diff it against the shipped version
-        before anything runs.</p>
+        before anything runs. <a href="diagrams/prompt-composition.html">How the layers compose, drawn</a>.</p>
     </div>
 
     <div class="evidence">
@@ -443,7 +444,7 @@ skill:review/review-revision</pre>
     <div class="hed">
       <h2>What stops it pushing to your main branch?</h2>
       <p class="lede">Nothing inside one process could. So there are three, and the credential that
-        can talk to a model is never in the same process as the one that can write.</p>
+        can talk to a model is never in the same process as the one that can write. <a href="diagrams/chat-ops.html">The three jobs as a sequence</a>; <a href="diagrams/security-model.html">the whole security model</a>.</p>
     </div>
 
     <figure class="fig fig-wide">
@@ -522,9 +523,8 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
           failure.</p>
       </div>
       <div class="jobs-note">
-        <p>The workflow file driving all of this is thirteen shell statements long: eight bare calls
-          to the tool, and five that install it or hand one job's answer to the next. A test rejects
-          the fourteenth, because lifecycle logic that leaks into YAML is lifecycle logic nobody can
+        <p>The workflow file driving all of this is nine shell statements long: seven bare calls to
+          the tool, and two that install it. A test rejects the tenth, because lifecycle logic that leaks into YAML is lifecycle logic nobody can
           run on their laptop.</p>
         <p>Your configuration is also loaded from the base branch, never the branch under review. A
           change cannot rewrite the rules that decide whether to accept it.</p>
@@ -543,7 +543,7 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
     <div class="hed">
       <h2>You cannot improve what you did not record.</h2>
       <p class="lede">So every run writes one: which commit, which model, what it cost, what it
-        decided. This is the whole published ledger, failures included.</p>
+        decided. This is the whole published ledger, failures included. <a href="diagrams/ledger.html">How a record reaches the branch</a>.</p>
     </div>
 
     <div class="ledger">
@@ -561,10 +561,10 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
       </div>
 
       <div class="ledger-rows">
-        <h3 class="lg-h">Every write-verb run on the published ledger: 8 runs, all of them real model calls</h3>
+        <h3 class="lg-h">Every write-verb run on the published ledger: 20 runs, all of them real model calls</h3>
         <div class="tbl-scroll">
         <table class="tbl">
-          <caption class="vh">Eight unattended runs, with outcome, reason and cost</caption>
+          <caption class="vh">Twenty unattended runs, by ticket, with outcome, reason and cost</caption>
           <thead><tr><th scope="col">Outcome</th><th scope="col">What happened</th><th scope="col" class="num">Cost, tokens at list price</th></tr></thead>
           <tbody>
             <tr><td><span class="dot m"></span>succeeded</td><td>wrote the metrics module; merged after its lost pull request was recovered by hand</td><td class="num">$41.59</td></tr>
@@ -575,8 +575,11 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
             <tr><td><span class="dot r"></span>errored</td><td>2.1M tokens in, then the short-lived credential failed to renew</td><td class="num">$33.80</td></tr>
             <tr><td><span class="dot r"></span>failed</td><td><code>tdd.not_red</code>, the test never failed</td><td class="num">$31.53</td></tr>
             <tr><td><span class="dot r"></span>failed</td><td><code>tdd.not_green</code>, the fix did not land</td><td class="num">$13.84</td></tr>
+            <tr><td><span class="dot h"></span>blocked</td><td>the improve loop, twice: <code>improve.no_trend</code>, then <code>improve.nothing_to_improve</code>, each refused before a model call</td><td class="num">$0.00</td></tr>
+            <tr><td><span class="dot h"></span>blocked, failed</td><td>eight <code>/fix</code> attempts at #319: two wall-clock ceilings, three <code>fix.not_fixed</code>, two <code>fix.no_progress</code>, one <code>fix.not_reproduced</code></td><td class="num">$52.56</td></tr>
+            <tr><td><span class="dot m"></span>succeeded</td><td>the ninth attempt at #319 staged the fix that merged as #343, the first framework-authored change in this repository; <code>fix/propose</code> opened it for nothing</td><td class="num">$1.48</td></tr>
           </tbody>
-          <tfoot><tr><th scope="row" colspan="2">Eight runs, summed before rounding</th><td class="num">$275.23</td></tr></tfoot>
+          <tfoot><tr><th scope="row" colspan="2">Twenty runs, summed before rounding</th><td class="num">$329.27</td></tr></tfoot>
         </table>
         </div>
         <p class="lg-note">The $31.53 run failed because this repository names test classes
@@ -602,7 +605,8 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
       <h2>It will not print a number it has not earned.</h2>
       <p class="lede">Every AI dashboard you have been shown averages over whatever happened to be
         present. These figures carry their denominator, and one nobody measured stays a dash. Every
-        number below is read back from the same twenty-six published records as the table above.</p>
+        number in the page below was read back from the ledger as it stood at 0.2.2, twenty-six records; the
+        excerpt beside it is the same command over the ledger today. <a href="diagrams/learning-loop.html">What the record then teaches</a>.</p>
     </div>
 
     <figure class="shot">
@@ -617,43 +621,53 @@ ledger    lockstep-history:records/selfcheck-...json</pre>
 
     <div class="two-up">
       <div class="term">
-        <div class="term-bar"><b>$ in-lockstep report</b><span>excerpt, the published ledger</span></div>
-<pre><span class="r">TAMPERED  records/review-security.json was modified
-          after being appended (commit adca58e73a2b)</span>
-records   26  2026-08-30 → 2026-09-02
+        <div class="term-bar"><b>$ in-lockstep report</b><span>excerpt, the published ledger, from a fresh clone</span></div>
+<pre>records   522  2026-08-30 → 2026-09-08
 
 <span class="d">outcomes</span>
-  failed        <span class="r">12%  (3 of 24)</span>
-  decided none  0%  (0 of 24)
-  <span class="y">blocked       4  (a control stopping a run is the control
-                   working)</span>
-  no verdict    2  (written before schema 5 by a workflow
-                   that returned no Outcome; not counted
-                   as anything)
+  failed        <span class="r">4%  (20 of 503)</span>
+  decided none  0%  (2 of 520)
+  <span class="y">blocked       17  (a control stopping a run is the control working; not in a rate)</span>
+  learning      2  (the improve loop's own runs, counted apart)
+  no verdict    2  (written before schema 5 by a workflow that returned no Outcome; not counted as anything)
+    provider.authentication      5
+    review.unparseable           5
+    approval.required            4
+    fix.not_fixed                3
     cost.budget_exceeded         3
-    tdd.not_red                  1
-    provider.authentication      1
-    tdd.not_green                1
-    wayfinder.not_on_frontier    1
+    killswitch                   3
+    fix.no_progress              2
+    budget:wall:2196.9&gt;1800.0    1
 
 <span class="d">spend</span>
-  total         $275.2322
-  per run       $10.5859
-  tokens        19,279,877
+  total         $362.6034
+  per run       $0.6946
+  tokens        21,330,111
 
 <span class="d">attempts per ticket</span>
-  #139               5 run(s)   <span class="y">$210.1739</span>
+  #319               10 run(s)   $54.0399
+  #139               5 run(s)   $210.1739
+  #109               1 run(s)   $9.6244
+  #146               1 run(s)   $41.5928
+  #150               1 run(s)   $13.8411
 
 <span class="d">who and how</span>
-  unattended    31% of runs, with nobody watching
+  actor-1                  469 run(s)
+  actor-2                  1 run(s)
+  actor-3                  3 run(s)
+  actor-4                  4 run(s)
+  —                        45 run(s)   (carried no identity: a local run; `lockstep.identity = GitAuthor()` records one)
+  unattended    3% of runs, with nobody watching
+  dirty tree    7% of runs saw uncommitted changes
+  (pseudonyms, by first appearance; `--names` to name them; `report --by actor` for the spread)
 
 <b>A dash is a number nobody measured. It is not a zero.</b>
-history   <span class="r">NOT APPEND-ONLY: 1 record(s) rewritten (see above)</span></pre>
-        <p class="term-cap">Three of twenty-four failed, and it says so. Two records are older than the
+history   append-only across the retained chain, except <span class="y">2 rewrite(s) acknowledged by name (see above)</span></pre>
+        <p class="term-cap">Twenty of five hundred and three failed, and it says so. Two records are older than the
           schema that carries a verdict, so they are counted as neither passed nor failed. Five
-          attempts at one ticket cost $210, and it says that too. The first line and the last are the
-          ledger checking itself, and this time it found something: <strong>one published record was
-          rewritten after it was appended, and the report names it.</strong></p>
+          attempts at one ticket cost $210 and ten at another cost $54, and it says that too. The last
+          line is the ledger checking itself: <strong>two published records were rewritten after they
+          were appended, and the report names the commits and the reasons somebody stood behind.</strong></p>
       </div>
 
       <div class="term">
@@ -693,37 +707,34 @@ pass rate    <span class="y">n/a — nothing decided</span>
           <li><b>The environment is built only from a layout it already knows.</b>
             <code>provision</code> runs <code>uv sync --locked</code> from a uv.lock,
             <code>npm ci</code> from a package-lock.json, a requirements.txt into a virtual
-            environment of its own, or the Makefile's own <code>deps</code> target. A pyproject
-            carrying a Poetry, PDM or Pipfile lock and nothing else binds nothing, and says
+            environment of its own, or the Makefile's own <code>deps</code> target. A Poetry, PDM, Pipfile, Yarn, pnpm, Bundler, Composer, Mix or Swift lock binds its own tool's
+            frozen install the same way. A pyproject with no lock at all binds nothing, and says
             <code>not bound</code> rather than guessing at it.</li>
-          <li><b>It does not yet improve its own prompts.</b> Every run is recorded and any run
-            replays for nothing, but nothing reads the ledger back, measures a prompt change, and
-            proposes it. That loop, ending in a pull request a person reads, is
-            <a href="https://github.com/in-lockstep/lockstep/issues/163">issue 163</a>.</li>
-          <li><b>The report does not yet compare people.</b> Every record names who asked for the
-            run, but nothing groups by it, so a team cannot see whether two engineers get the same
-            results from the same setup. That comparison, with the denominators and without the
-            names, is <a href="https://github.com/in-lockstep/lockstep/issues/164">issue 164</a>.</li>
-          <li><b>One ledger per clone, not one per organization.</b> A shared store is declared
-            and refused on purpose until it can be made trustworthy, so there is no rollup across
-            repositories yet.</li>
-          <li><b>The two bugs the first outside users hit are fixed. Two more are open.</b> A
-            record now takes its status from its steps, and an installed copy now runs your
-            repository's tools rather than its own interpreter. Since then:
-            <code>run selfcheck</code> drops <code>--approve</code>, so a repository scaffolded with
-            <code>init --implement</code> cannot reach a green selfcheck by any flag
+          <li><b>It improves its own prompts, one finding at a time.</b> <code>improve</code> reads the
+            ledger for a finding that keeps coming back, drafts a change to the one body it is
+            attributed to, measures both arms against the promoted corpus with every rubric put to the
+            <code>judge</code> verb, and parks on a person's review of the proposal.
+            <code>improve --explain</code> says what would stop a proposal, spending nothing.</li>
+          <li><b>The report compares askers, not names.</b> <code>report --by actor</code> splits the
+            ledger by who asked, every number carrying the runs it came from; askers are stable
+            pseudonyms unless <code>--names</code>, and a run nobody is recorded as asking for is a
+            dash, never an unknown bucket.</li>
+          <li><b>One ledger per repository, not one per organization.</b>
+            <code>GitLedger(shared=True)</code> swaps on the remote's own ref, so eight runners
+            claiming one key produce one success and a parked run resumes from any machine; the
+            default construction stays local and refuses. There is still no rollup across
+            repositories.</li>
+          <li><b>The four bugs the first outside users hit are fixed.</b> A record takes its status
+            from its steps, an installed copy runs your repository's tools rather than its own
+            interpreter, <code>run selfcheck</code> accepts <code>--approve</code>
             (<a href="https://github.com/in-lockstep/lockstep/issues/189">issue 189</a>), and the
-            module those flags write does not pass ruff, with an unsorted import block, two unused
-            imports and two f-strings with nothing in them
+            module <code>init --implement</code> writes passes ruff on its first selfcheck
             (<a href="https://github.com/in-lockstep/lockstep/issues/190">issue 190</a>).</li>
-          <li><b>The implement scaffold rebinds your test verb to pytest.</b> Detection binds Test
-            to what it found, and the block <code>init --implement</code> appends then binds pytest
-            over it, whatever the repository runs. A repository that is not Python deletes that
-            line.</li>
-          <li><b>A red doctor does not fail the pipeline it writes.</b> Every workflow the scaffold
-            writes runs <code>doctor</code> as <code>continue-on-error</code>, so a repository whose
-            own controls are red still goes green. The work jobs run <code>provision</code> before
-            it without that flag, so an environment that cannot be built does fail, by name.</li>
+          <li><b>A red doctor fails the pipeline it writes.</b> The scaffolds run
+            <code>doctor</code> without <code>continue-on-error</code>, and a test over this
+            repository's own workflows refuses the flag on any step whose verdict something acts on;
+            the scaffolds decline where detection declined rather than binding pytest over a
+            repository that runs something else.</li>
           <li><b>No flaky-test handling.</b> The adapter is not built, and a test in the repository
             asserts that it has not shipped.</li>
           <li><b>GitLab is partial.</b> The protocols and host-aware setup ship. Nobody has run a
@@ -734,9 +745,9 @@ pass rate    <span class="y">n/a — nothing decided</span>
           <li><b>It does not enforce where a run connects.</b> It prints the list of hosts a run may
             dial and verifies that something outside the process is enforcing it. That is a manifest
             for a proxy, not a firewall.</li>
-          <li><b>Some policy fields are carried, not enforced.</b> Turn limits, denied tools and input
-            scanning reach the loop. Several others are merged and printed and read by nothing else,
-            and the project's own gate ledger says so in writing.</li>
+          <li><b>Every policy field reaches the loop.</b> Turn limits, idle-turn limits, denied tools
+            and input scanning are the fields, and a test pins that set so a new one cannot arrive
+            inert. The fields that were merged and read by nothing were deleted rather than wired.</li>
           <li><b>No adoption to point at.</b> No users, no logos, no case studies. It is new, and the
             runs on this page are its own.</li>
         </ul>
@@ -762,7 +773,7 @@ pass rate    <span class="y">n/a — nothing decided</span>
 <span class="y">WARNING</span> DOC130  no egress enforcement is declared
 
 3 finding(s), <span class="r">2 error(s)</span></pre>
-          <p class="term-cap">Twenty-nine checks, run against its own repository, exiting non-zero.
+          <p class="term-cap">Thirty-five checks, run against its own repository, exiting non-zero.
             It names the rewritten record with its commit hash, and then tells you the limit of
             its own tamper check.</p>
         </div>
@@ -780,19 +791,21 @@ pass rate    <span class="y">n/a — nothing decided</span>
       <h2>What runs today.</h2>
       <p class="lede">This list is held by a test. A capability that claims to run must name a
         command that exists, and one marked as missing must name nothing, so overclaiming and stale
-        claims both turn CI red.</p>
+        claims both turn CI red. <a href="diagrams.html">Every one of them is drawn</a>.</p>
     </div>
 
     <div class="ships">
       <div class="ships-col">
-        <h3 class="lg-h">Six lifecycle verbs</h3>
+        <h3 class="lg-h">Eight verbs</h3>
         <dl class="verbs">
-          <div><dt>review</dt><dd>one lens at a time, replayable offline for nothing</dd></div>
+          <div><dt>review</dt><dd>four lenses in one run, each posting its own comment; replayable offline for nothing</dd></div>
           <div><dt>implement</dt><dd>one-shot or test-first, from a ticket</dd></div>
           <div><dt>fix</dt><dd>a failed run files the bug that an agent then picks up</dd></div>
           <div><dt>triage</dt><dd>place a ticket, cheap enough for a local model</dd></div>
           <div><dt>backport</dt><dd>plain cherry-pick, a model only on conflict</dd></div>
           <div><dt>rfe</dt><dd>draft a ticket from an idea, a person files it</dd></div>
+          <div><dt>improve</dt><dd>read the ledger, measure a prompt change, park on your review</dd></div>
+          <div><dt>judge</dt><dd>settle a rubric: deterministic first, one turn per ask, verdict kept</dd></div>
         </dl>
         <h3 class="lg-h lg-h-2">And the environment they run in</h3>
         <p class="ships-p"><code>provision</code> builds the repository's own environment before
@@ -876,6 +889,7 @@ pass rate    <span class="y">n/a — nothing decided</span>
       <a href="docs/getting-started.html">Getting started</a>
       <a href="docs/cookbook.html">Cookbook</a>
       <a href="docs/extending.html">Extending</a>
+      <a href="diagrams.html">Diagrams</a>
     </nav>
     <nav aria-label="Project">
       <h4>Project</h4>
