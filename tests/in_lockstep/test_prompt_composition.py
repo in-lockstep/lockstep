@@ -221,6 +221,7 @@ def test_every_ai_adapter_reports_what_it_composes() -> None:
     again, silently, which is the defect this closes."""
     from in_lockstep.adapters.ai.backport import AiBackportResolver
     from in_lockstep.adapters.ai.fix import DiagnoseThenFix
+    from in_lockstep.adapters.ai.judge import AiJudge
     from in_lockstep.adapters.ai.oneshot import Oneshot
     from in_lockstep.adapters.ai.review import AiReview
     from in_lockstep.adapters.ai.rfe import AiRfe
@@ -234,6 +235,7 @@ def test_every_ai_adapter_reports_what_it_composes() -> None:
         (AiTriage(), "triage/analyst"),
         (AiRfe(), "rfe/drafter"),
         (AiBackportResolver(), "backport/conflict-resolver"),
+        (AiJudge(), "judge/rubric"),
     ):
         assert isinstance(adapter, Inspectable), f"{type(adapter).__name__} is not inspectable"
         composed = adapter.compositions()
@@ -260,3 +262,20 @@ def test_a_context_added_through_plus_lands_after_the_skills_and_after_the_body(
     context_at = composed.index("<!-- context: acme/arch -->")
     assert body_at < skill_at < context_at
     assert layered.projection("security")[-2:] == ["skill:acme/how", "context:acme/arch"]
+
+
+def test_gate_judge_2_the_judge_the_framework_composes_is_the_one_the_corpus_froze() -> None:
+    """GATE-JUDGE-2. The fourteen compiler-era entries are held to a projection, because the
+    composer was free to change delimiters. The judge was composed by this composer and frozen
+    as bytes, so bytes are what it is held to: a body or guardrail edit under `prompts/judge/`
+    is a re-recording somebody commits beside it, the way a cassette is."""
+    import hashlib
+
+    from in_lockstep.prompts.judge import RubricJudgePrompt, judge_layers
+
+    entry = json.loads((CORPUS.parent / "corpus-shipped.json").read_text())["shipped/judge/rubric-judge"]
+    frozen = (CORPUS.parent / "prompts" / "shipped" / "judge" / "rubric-judge.txt").read_text()
+    live = RubricJudgePrompt().system(judge_layers())
+    assert judge_layers().projection(RubricJudgePrompt().body_label()) == entry["projection"]
+    assert live == frozen, "the composed judge prompt moved; re-freeze it in the same commit"
+    assert hashlib.sha256(live.encode()).hexdigest() == entry["sha256"]

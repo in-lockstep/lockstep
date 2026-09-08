@@ -132,6 +132,10 @@ class CorpusImprover:
         return tuple(out)
 
     def rubrics(self, baseline: Baseline, answers: Sequence[Answered]) -> tuple[JudgeAsk, ...]:
+        """One ask per case per arm whose deterministic half passed -- and none for an arm that
+        failed it. Deterministic first (O7, `GATE-JUDGE-2`): `verdict_of` already reads a failed
+        check as a failed case whatever a judge would say, so a verdict on that arm could change
+        nothing, and a model call that cannot change the answer is spend on nothing."""
         by_case = {a.case: a for a in answers}
         wanted = set(baseline.cases)
         asks: list[JudgeAsk] = []
@@ -140,9 +144,14 @@ class CorpusImprover:
             if case.name not in wanted or rubric is None or not rubric.scored:
                 continue
             recorded = str(case.recorded.get("content", ""))
-            asks.append(_ask(case.name, "before", rubric, recorded))
+            if _deterministic_holds(case, recorded):
+                asks.append(_ask(case.name, "before", rubric, recorded))
             answer = by_case.get(case.name)
-            if answer is not None and answer.status == "answered":
+            if (
+                answer is not None
+                and answer.status == "answered"
+                and _deterministic_holds(case, answer.content)
+            ):
                 asks.append(_ask(case.name, "after", rubric, answer.content))
         return tuple(asks)
 
@@ -183,6 +192,12 @@ class CorpusImprover:
             verdict=verdict_of(before, after),
             dropped=tuple(dropped),
         )
+
+
+def _deterministic_holds(case: Case, content: str) -> bool:
+    """Whether the checks a script can settle did not fail on this answer. A case with no checks
+    holds: there was nothing to fail, and the rubric is the only question it asks."""
+    return grade(case, as_answer(content))["deterministic_passed"] is not False
 
 
 def _ask(case: str, arm: str, rubric: Rubric, answer: str) -> JudgeAsk:
