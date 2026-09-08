@@ -21,7 +21,6 @@ once, recording, on one tape.
 from __future__ import annotations
 
 import asyncio
-import re
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -132,34 +131,17 @@ def test_the_check_does_not_run_a_lens_that_is_not_bound() -> None:
     assert outcome.status is Status.BLOCKED and empty.asked == []
 
 
-ASPECT_FLAG = re.compile(r"--aspect\s+([\w-]+)")
-
-
-def test_this_repositorys_check_runs_every_bound_lens_once_recording_on_one_tape(lenses: set[str]) -> None:
-    """`lockstep.yml` invokes the framework once for the whole lens set (GATE-CI-4), `--record`
-    on, one `--cassette` so the single harvest downstream sees every lens, and writes the comment
-    bodies the publish job posts (GATE-REVIEW-6).
-
-    Two spellings are honest for one merge. Configuration loads from the TRUSTED ref -- the base
-    branch -- while a pull request's workflow file comes from the merge ref, so the pull request
-    that registers `review/all-lenses` in `.lockstep/lockstep.py` cannot also switch the file to
-    it: its own check would run a file naming a workflow the base branch's module does not
-    register (run 34171482674 did exactly that). Until the flip lands, the legacy `review` with
-    every bound lens as an `--aspect` holds GATE-REVIEW-5's direction the old way; after it, the
-    fan-out names no lens and this test's legacy branch is the one to delete.
-    """
+def test_this_repositorys_check_runs_the_fan_out_once_recording_on_one_tape(lenses: set[str]) -> None:
+    """`lockstep.yml` names the workflow and nothing else (GATE-CI-4): one invocation, no
+    `--aspect` list to go stale, `--record` on, one `--cassette` so the single harvest downstream
+    sees every lens, and the comment directory the publish job posts from (GATE-REVIEW-6). The
+    flip landed one merge after the registration, because configuration loads from the trusted
+    ref while the workflow file comes from the merge ref (run 34171482674 was refused by name)."""
     run = " ".join(_step()["run"].split())
+    assert run.count("in-lockstep run review/all-lenses") == 1, run
+    assert "--aspect" not in run, "the lens list went back into the file"
     assert "||" not in run and "for " not in run and "exit " not in run, "the loop went back into shell"
     assert run.count("--cassette") == 1 and "--record" in run
-    if "in-lockstep run review/all-lenses" in run:
-        assert run.count("in-lockstep run review/all-lenses") == 1, run
-        assert "--aspect" not in run, "the lens list went back into the file"
-        assert "--arg comments=review-comments" in run
-        return
-    assert run.count("in-lockstep review") == 1, "several invocations stop at the first failure"
-    listed = set(ASPECT_FLAG.findall(run))
-    assert listed == lenses, (
-        f"the legacy review step runs {sorted(listed)} and the bound adapter declares {sorted(lenses)}; "
-        f"switch the step to `run review/all-lenses` now that the module registers it"
-    )
-    assert "--comment-out review-comments" in run
+    assert "--arg comments=review-comments" in run
+    # The shipped four are among what this repository binds, so the workflow will run them.
+    assert {"security", "intent", "performance", "tests"} <= lenses
