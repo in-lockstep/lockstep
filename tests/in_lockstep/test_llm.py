@@ -145,6 +145,19 @@ def test_gate_auth_1_every_registered_provider_constructs_with_the_environment_e
         provider = registration.factory(registration.settings, Credentials.none())
     except ImportError as e:
         pytest.skip(f"{name}: its SDK is not installed here ({e})")
+    except RuntimeError as e:
+        # A fact about the host, not a provider reaching past its arguments. Handed no
+        # credential, the Anthropic SDK runs its own chain, and that chain looks for a config
+        # file under the user's home -- so `Path.home()` is called, and on a host that cannot say
+        # where home is it RAISES rather than returning nothing. That is a container running as a
+        # uid with no `/etc/passwd` entry and no `HOME`, which is what GitHub's docker gives a
+        # `--user` run and what podman does not: podman fabricates an entry, which is why two
+        # paid `/implement` runs died here (#373) and no local rebuild of the same container ever
+        # reproduced it. Skipped by name where the host cannot answer, and checked everywhere it
+        # can, the way GATE-DOGFOOD-1 skips where `gh` is absent.
+        if "home directory" not in str(e):
+            raise
+        pytest.skip(f"{name}: this host cannot say where home is, so its SDK cannot construct ({e})")
     except (MissingCredential, ValueError) as refused:
         # Refused by name, which is the other honest answer: the credential, or for a cloud
         # registration the region, that nothing handed in and the environment did not supply.
@@ -754,3 +767,31 @@ def test_a_tagged_id_or_an_absent_one_is_accepted(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", value)
     assert _anthropic_workspace() == value.strip()
+
+
+def test_gate_auth_1_a_host_that_cannot_say_where_home_is_is_skipped_not_passed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-AUTH-1. The third honest outcome, and the one that cost two paid runs to name.
+
+    Handed no credential, an SDK may run its own chain, and Anthropic's looks for a config file
+    under the user's home -- so `Path.home()` is called, and where the host can answer neither
+    from `HOME` nor from the passwd database it raises. A container running as a uid with no
+    entry is exactly that host: GitHub's docker gives a `--user` run no entry, podman fabricates
+    one, and the difference is why #373 failed twice in CI and nowhere else. Skipped by name
+    rather than passed, so the gate is not quietly weakened where it cannot be checked, and not
+    failed, because the provider did nothing wrong.
+    """
+    import pwd
+
+    from in_lockstep.ai.bootstrap import default_registry
+    from in_lockstep.llm.interface import Credentials
+
+    def homeless(uid: int) -> object:
+        raise KeyError(f"getpwuid(): uid not found: {uid}")
+
+    monkeypatch.setattr(pwd, "getpwuid", homeless)
+    registration = default_registry()._registrations["anthropic"]
+    monkeypatch.setattr(os, "environ", {})
+    with pytest.raises(RuntimeError, match="home directory"):
+        registration.factory(registration.settings, Credentials.none())
