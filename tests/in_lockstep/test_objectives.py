@@ -185,12 +185,12 @@ def test_the_ledgers_are_not_empty():
     """A positive control. Every assertion below is over a parse, and a regex that stopped
     matching would make all of them pass over nothing — the vacuity `GATE-TEST-8` was written
     against, and the same one `test_gates.py` had to be given after the fact."""
-    # Twelve since #240 settled what the mission named and no objective carried. The number is
-    # pinned rather than derived on purpose: this is the positive control, and a control that
-    # counted whatever it found would pass over an empty parse, which is the vacuity it exists
-    # against.
-    assert len(_titles(CLAUDE_MD.read_text())) == 12
-    assert len(_ledger(OBJECTIVES_MD.read_text())) == 12
+    # Twelve since #240 settled what the mission named and no objective carried; thirteen since
+    # PR-19 gave the mission's *disciplined* clause a row of its own (O13). The number is pinned
+    # rather than derived on purpose: this is the positive control, and a control that counted
+    # whatever it found would pass over an empty parse, which is the vacuity it exists against.
+    assert len(_titles(CLAUDE_MD.read_text())) == 13
+    assert len(_ledger(OBJECTIVES_MD.read_text())) == 13
     assert len(_gate_status(GATES_MD.read_text())) > 50
 
 
