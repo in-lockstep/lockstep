@@ -1,4 +1,4 @@
-"""Backport: deterministic first, a model only on conflict (roadmap item 25).
+"""Backport: deterministic first, a model only on conflict.
 
 The claims under test, in the order a release manager cares about them: the right commits are
 found (by `Ticket:` trailer, the read half of the trailer discipline), a clean pick costs nothing
