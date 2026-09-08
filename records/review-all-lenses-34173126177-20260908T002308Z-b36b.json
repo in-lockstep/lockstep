@@ -1,0 +1,100 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "f1bb38e02df8f48b548e6140457ad2436be766af"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 69278,
+  "ci_actor": "tpouyer",
+  "ci_run": "34173126177",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.281465,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 131,
+        "message": "GITHUB_BASE_REF interpolated into a shell argument without quoting",
+        "path": ".github/workflows/lockstep.yml",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f1bb38e02df8f48b548e6140457ad2436be766af",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.140732,
+  "output_tokens": 1440,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34173126177-20260908T002308Z-b36b",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "verb": "review",
+      "wall_seconds": 8.207
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "verb": "review",
+      "wall_seconds": 4.287
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 131,
+            "message": "GITHUB_BASE_REF interpolated into a shell argument without quoting",
+            "path": ".github/workflows/lockstep.yml",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "verb": "review",
+      "wall_seconds": 13.188
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "verb": "review",
+      "wall_seconds": 5.357
+    }
+  ],
+  "tokens": 1464,
+  "ts": "2026-09-08T00:23:23+00:00",
+  "wall_seconds": 31.039,
+  "workflow": "review/all-lenses"
+}
