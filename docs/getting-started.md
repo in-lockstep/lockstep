@@ -437,7 +437,9 @@ The subject is derived from the one declared `Improvable` body the merge touched
 so, and whether a lower failure rate means the change helped is your reading, not the command's.
 
 `--by` selects what one row aggregates over, and it applies to that grouped table and to
-`--format json` — not to the full report, which always groups by kind. Pass it without either and
+`--format json` — not to the full report, which always groups by kind, and by workflow id under that
+for the runs that carry one, so `judge/corpus` and `improve/measure` each get their own line. Pass it
+without either and
 the report says so rather than dropping your question. The one exception is `--by actor`, which
 expands the full report's *who and how* section into a table per asker — outcome mix, turns and
 spend per succeeded run, findings per run — and the spread between askers, each number with the

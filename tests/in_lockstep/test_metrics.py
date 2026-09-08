@@ -799,3 +799,39 @@ def test_two_spellings_of_one_person_are_two_askers_not_a_guess() -> None:
         _asked("labeled:tpouyer", ts="2026-09-02T00:00:00+00:00", via="approval"),
     ]
     assert len(build(records).team.actors) == 2
+
+
+# -- by workflow --------------------------------------------------------------------------------
+
+
+def test_runs_that_carry_a_workflow_id_get_a_row_each_under_by_workflow_and_bare_reviews_get_none() -> None:
+    """`by kind` folds every dispatched run into `workflow`, so two judge runs and a learning-loop
+    run read as three workflows and nothing more. The second table names them, over the records
+    that carry an id only: a bare review carries none, and it is left out rather than becoming
+    the largest row under an absence."""
+    report = build(
+        [
+            _record(kind="workflow", workflow="judge/corpus", wall_seconds=3.0),
+            _record(kind="workflow", workflow="judge/corpus", wall_seconds=5.0),
+            _record(kind="workflow", workflow="improve/measure", status="failed"),
+            _record(),
+        ]
+    )
+    rows = {g.name: g for g in report.runs_by_workflow}
+    assert set(rows) == {"judge/corpus", "improve/measure"}
+    assert rows["judge/corpus"].runs == 2
+    assert rows["judge/corpus"].failure_rate == 0.0
+    assert rows["judge/corpus"].seconds.value == 4.0
+    assert rows["improve/measure"].failure_rate == 1.0
+    text = "\n".join(as_text(report))
+    assert "by workflow" in text
+    assert "judge/corpus" in text and "improve/measure" in text
+    assert "By workflow" in as_html(report)
+
+
+def test_a_ledger_of_bare_reviews_prints_no_by_workflow_section() -> None:
+    """An empty heading would read as a section somebody forgot to fill."""
+    report = build([_record(), _record()])
+    assert report.runs_by_workflow == []
+    assert "by workflow" not in "\n".join(as_text(report))
+    assert "By workflow" not in as_html(report)
