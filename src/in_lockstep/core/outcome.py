@@ -133,6 +133,27 @@ class Cost:
     # run that mixes a live call with a replayed one has a fraction rather than a flag.
     billed_tokens: int = 0
 
+    def beyond(self, other: Cost) -> Cost:
+        """What of this cost `other` does not already hold, field by field, never below zero.
+
+        Exists for one caller: `RunContext.do`, which charges an outcome's cost onto the run's
+        `Spend` -- and an AI adapter has already charged that same `Spend` turn by turn through
+        the invoker it was handed. Charging the outcome again counted every model call twice
+        (GATE-COST-7). What is charged is the outcome's cost beyond what the `Spend` moved during
+        the call: for a deterministic adapter that is the whole cost, for an AI adapter it is
+        nothing but the wall clock the invoker did not measure.
+        """
+        return Cost(
+            input_tokens=max(0, self.input_tokens - other.input_tokens),
+            output_tokens=max(0, self.output_tokens - other.output_tokens),
+            cache_read_tokens=max(0, self.cache_read_tokens - other.cache_read_tokens),
+            cache_write_tokens=max(0, self.cache_write_tokens - other.cache_write_tokens),
+            usd=max(0.0, self.usd - other.usd),
+            wall_seconds=max(0.0, self.wall_seconds - other.wall_seconds),
+            priced_tokens=max(0, self.priced_tokens - other.priced_tokens),
+            billed_tokens=max(0, self.billed_tokens - other.billed_tokens),
+        )
+
     @property
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
