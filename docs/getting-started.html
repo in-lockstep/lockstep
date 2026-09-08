@@ -75,6 +75,8 @@ in-lockstep init</code></pre>
 <pre data-lang="text"><code>wrote .lockstep/lockstep.py
   detected stack: python; tests: pytest; lint: ruff; provision: uv sync --locked
 wrote .gitignore
+no origin remote yet, so the GitHub trampoline is written; `init --host gitlab` for the other.
+config    local working tree
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged `apply` job the
@@ -87,7 +89,8 @@ What a run keeps:
   it wrote -- because a session re-sends its history every turn.
   Redaction masks the credential shapes it knows; it never masks source.
 
-  Locally, only under --record: .lockstep/cassettes/&lt;verb&gt;.json, gitignored.
+  Locally: .lockstep/cassettes/&lt;verb&gt;.json, gitignored. `--no-record` declines,
+  per run; nothing is kept for a run you decline, and nothing asks again.
   In CI the recording is written OUTSIDE the checkout, and dies with the runner.
   What survives is the cases harvested from it: the question that was asked, and
   which files and commands the session reached for -- addresses, not contents.
@@ -96,7 +99,7 @@ What a run keeps:
   which says how many days it is kept.
   Run records are the exception and are meant to survive: an orphan branch.</code></pre>
 <p>That writes three files. <code>.lockstep/lockstep.py</code> is your lifecycle. <code>.github/workflows/lockstep.yml</code> is a trampoline: it invokes the CLI and contains no lifecycle logic, because a CI host requires its own YAML and that YAML belongs to the host. The <code>.gitignore</code> covers what a run writes — appended to yours if you have one, and only the lines it is missing.</p>
-<p><code>init --review</code> adds a fourth, <code>.github/workflows/review.yml</code>: a reviewer comments <code>/review tests</code> on a pull request and that one lens runs and posts its findings, from a job that holds no provider key. The lens is resolved against the ones your module binds, so <code>in-lockstep ls</code> is the list a comment may name. <code>--implement</code> and <code>--fix</code> scaffold the write verbs the same way.</p>
+<p><code>init --review</code> adds a fourth, <code>.github/workflows/review.yml</code>: a reviewer comments <code>/review tests</code> on a pull request and that one lens runs and posts its findings, from a job that holds no provider key. The lens is resolved against the ones your module binds, so <code>in-lockstep ls</code> is the list a comment may name. <code>--implement</code> and <code>--fix</code> scaffold the write verbs the same way. The trampoline <code>init</code> writes posts each lens's verdict and findings as its own sticky comment on the pull request, from a job that holds no key; this repository's own required check is one <code>review/all-lenses</code> run that fans out over every bound lens the same way.</p>
 <p>The closing paragraph is the whole disclosure, and it is printed rather than filed because the default it describes is on: the trampoline records every review it pays for. An inference nobody kept is an opportunity spent and discarded, which is why recording is not a flag you remember to pass. Delete the two steps in the trampoline if you would rather keep nothing; they are commented where they sit and nothing else depends on them.</p>
 <h2 id="where-things-live">Where things live</h2>
 <pre data-lang=""><code>.lockstep/lockstep.py     your lifecycle, committed and reviewed
@@ -203,7 +206,7 @@ review/security  succeeded
 tokens    5361 in, 443 out
 cost      $0.0000  (replayed; nothing was billed)
 spans     (lockstep.py declares its own middleware; the CLI is not in that chain)
-ledger    lockstep-history:records/review-security.json  (local; `in-lockstep history --push` to publish)</code></pre>
+ledger    lockstep-history:records/review-security-20260908T133723Z-73ab.json  (local; `in-lockstep history --push` to publish)</code></pre>
 <p>Those findings are what the model actually said about that pull request; the replay is deterministic and free. The note is the fixture being honest: a cassette is keyed on the whole composed prompt, the shipped prompts have moved since this one was recorded, and rather than fail on a key miss a reader cannot fix, the demo replays what was actually sent and says so. Cassettes sit at the <code>LLMInput</code>/<code>LLMOutput</code> seam rather than at HTTP, so one recorded against a provider replays against a different one, and they capture tool IO as well as model IO.</p>
 <p><code>--dry-run</code> is the cheaper cousin, a canned answer that proves the wiring. It needs a diff to review, so a repository with a single commit refuses it with <code>review.no_content</code>, which is the control working: make a second commit first.</p>
 <pre data-lang="bash"><code>in-lockstep review --dry-run --base HEAD~1</code></pre>
@@ -235,28 +238,61 @@ in-lockstep implement --ticket '#42' --approve --budget 2.00 --out .lockstep/cha
 <h2 id="what-the-ledger-says-afterwards">What the ledger says afterwards</h2>
 <p>Every run leaves a record on the <code>lockstep-history</code> orphan branch. <code>report</code> aggregates them. It also says whether the history it is summing has been rewritten:</p>
 <pre data-lang="bash"><code>in-lockstep report</code></pre>
-<pre data-lang="text"><code>kind    runs  failed  tokens      cost      mean
-review     1       0        15  $  0.0000  $0.0000
+<pre data-lang="text"><code>records   1  2026-09-08 → 2026-09-08
 
-1 record(s); `in-lockstep history --explain &lt;run&gt;` for any one of them
-history   append-only across the retained chain</code></pre>
-<p>Absent is not zero here: a column nobody measured renders <code>-</code> rather than a reassuring 0. One run's record, every field, in words:</p>
+outcomes
+  failed        0%  (0 of 1)
+  decided none  0%  (0 of 1)
+  blocked       0  (a control stopping a run is the control working; not in a rate)
+
+effort
+  median run    0.0s
+  slowest 10%   0.0s
+  turns         —  (no record carries one; only implementing verbs write it)
+
+spend
+  total         $0.0000
+  per run       $0.0000
+  tokens        5,804
+  runs          0 billed, 1 replayed  (of 1)
+
+what it found
+  findings      2  (2.0 per run)
+    review.security              2
+
+by kind
+  review            1 run(s)     0% failed   0.0s median
+
+attempts per ticket
+  —  (no record carries a ticket)
+
+who and how
+  —                        1 run(s)   (carried no identity: a local run; `lockstep.identity = GitAuthor()` records one)
+
+A dash is a number nobody measured. It is not a zero.
+history   append-only across the retained chain
+ledger    read refs/heads/lockstep-history; origin/lockstep-history — (not fetched)
+bundles   — (pass --scm to ask the host how many run records are still in artifacts)</code></pre>
+<p>Absent is not zero here: a number nobody measured renders <code>—</code> rather than a reassuring 0. One run's record, every field, in words:</p>
 <pre data-lang="bash"><code>in-lockstep history --explain review-security</code></pre>
-<pre data-lang="text"><code>run       review-security
+<pre data-lang="text"><code>run       review-security-20260908T133723Z-73ab
 what      review  security
 status    succeeded
-when      2026-08-30T02:47:19+00:00
-head      309a05d0553d6ea7258317bb674e17eb2f2ac537
+when      2026-09-08T13:37:23+00:00
+head      c2e976176c6b03621ba4f6bcffc9e8df2acbf4cf
 branch    main
 config    local working tree
 model     anthropic:claude-sonnet-4-6
 subject   review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6
-spend     $0.0000  (15 tokens, 0.038s)</code></pre>
+spend     $0.0000  (5804 tokens, 0.036s)
+findings  2
+          actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters
+          actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment</code></pre>
 <p><code>subject</code> is which runs this one is comparable with — the verb, the lens, the prompt and the model, identified by a <strong>hash of the composed prompt</strong> rather than by the declared version, because editing a prompt without bumping its version is the normal way a prompt gets edited. The <code>@1</code> is that declared version, carried for you to read and never for identity, so a measurement is right whether or not anybody remembered to bump it.</p>
 <p>This line prints the subject in words. To group runs by it:</p>
 <pre data-lang="bash"><code>in-lockstep report --by subject --by-kind</code></pre>
 <p>Once a prompt change has merged -- one the improve loop proposed, or one a person made -- the question is whether the runs after it differ from the runs before it. <code>report --around</code> cuts the ledger into those two windows on one subject and prints each metric's before, after and delta, with the run count on each side and no verdict:</p>
-<pre data-lang="bash"><code>in-lockstep report --around #41            # the pull request's merge commit, from the host
+<pre data-lang="bash"><code>in-lockstep report --around '#41'          # the pull request's merge commit, from the host
 in-lockstep report --around 17e034b --subject review/security</code></pre>
 <pre data-lang="text"><code>around    17e034b259c4  (2026-09-07T17:09:46-04:00)
 subject   review/security
@@ -268,7 +304,7 @@ after     2 run(s) since
 
 measured over 107 and 2 runs; the delta is a number, not a verdict</code></pre>
 <p>The subject is derived from the one declared <code>Improvable</code> body the merge touched, or named with <code>--subject</code> when the merge touched none. A window thinner than five runs prints a dash and says so, and whether a lower failure rate means the change helped is your reading, not the command's.</p>
-<p><code>--by</code> selects what one row aggregates over, and it applies to that grouped table and to <code>--format json</code> — not to the full report, which always groups by kind. Pass it without either and the report says so rather than dropping your question. The one exception is <code>--by actor</code>, which expands the full report's <em>who and how</em> section into a table per asker — outcome mix, turns and spend per succeeded run, findings per run — and the spread between askers, each number with the runs it came from. Askers are stable pseudonyms, numbered by first appearance, unless you pass <code>--names</code>; the signal is the spread, not the person. A run nobody is recorded as asking for is a <code>—</code> row with its count, and is in no spread. Every local run is such a run until the repository opts in:</p>
+<p><code>--by</code> selects what one row aggregates over, and it applies to that grouped table and to <code>--format json</code> — not to the full report, which always groups by kind, and by workflow id under that for the runs that carry one, so <code>judge/corpus</code> and <code>improve/measure</code> each get their own line. Pass it without either and the report says so rather than dropping your question. The one exception is <code>--by actor</code>, which expands the full report's <em>who and how</em> section into a table per asker — outcome mix, turns and spend per succeeded run, findings per run — and the spread between askers, each number with the runs it came from. Askers are stable pseudonyms, numbered by first appearance, unless you pass <code>--names</code>; the signal is the spread, not the person. A run nobody is recorded as asking for is a <code>—</code> row with its count, and is in no spread. Every local run is such a run until the repository opts in:</p>
 <pre data-lang="python"><code>from in_lockstep import GitAuthor
 
 lockstep.identity = GitAuthor()</code></pre>
@@ -291,11 +327,12 @@ lockstep.models.route(Verb.TRIAGE, "local:qwen3-8b")</code></pre>
                  and the per-day ceiling the substrate enforced no longer exists.
 NOTE    DOC120  could not read this repository's default branch; branch protection was not checked
                  gh said: no git remotes found
+NOTE    DOC125  could not read this repository's Actions permissions; whether a propose job can open a change was not checked
 WARNING DOC130  no egress enforcement is declared
                  Set IN_LOCKSTEP_EGRESS=enforced where the host constrains egress. Runs that hold write
                  or execute tools, or that read untrusted content, are refused without it.
 
-3 finding(s), 2 error(s)</code></pre>
+4 finding(s), 1 error(s)</code></pre>
 <p>That is a fresh repository being told the truth, not a broken install: nothing is attested yet, so <code>doctor</code> fails.</p>
 <p>Moving model invocation in-process removed an execution substrate that was also an egress firewall, an out-of-process spend ceiling and a privilege split. <code>doctor</code> checks what replaced each, and <code>docs/controls-crosswalk.md</code> is the honest accounting, including what was lost rather than replaced. The <a href="cookbook.html">cookbook</a> has the recipes that turn each finding green.</p>
   </article>
