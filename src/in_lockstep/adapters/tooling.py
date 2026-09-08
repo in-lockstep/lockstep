@@ -203,6 +203,32 @@ def rebase(paths: tuple[str, ...], package: str) -> tuple[str, ...]:
     return tuple(p[len(prefix) :] if p.startswith(prefix) else p for p in paths)
 
 
+def relative(paths: tuple[str, ...], cwd: str | None) -> tuple[str, ...]:
+    """Paths as the runner will see them from `cwd`, whichever side of a container mount it runs on.
+
+    A sandbox mounts the tree it is given at a fixed path inside the image, so a host absolute
+    path handed to a containerized runner names nothing there. `run selfcheck` with no `--paths`
+    defaults to the repository's own absolute root, and pytest answered `ERROR: file or directory
+    not found: /home/runner/work/lockstep/lockstep` -- exit 4, no summary, and a verdict about a
+    suite that never ran. It is why `--paths .` had always worked and the default never did, and
+    it went unseen because nothing ran a containerized Test outside a paid model run until
+    `GATE-CI-5`.
+
+    Relative to the working directory the runner is given, the same path names the same file on
+    both sides, so this is a translation rather than a special case for containers. A path
+    already relative needs none; a path outside `cwd` gets none, because there is no honest one
+    -- it names something the container cannot see and saying so by leaving it alone is better
+    than inventing a path that resolves to the wrong file.
+    """
+    if not cwd:
+        return paths
+    base = os.path.abspath(cwd)
+    return tuple(
+        os.path.relpath(os.path.abspath(p), base) if os.path.isabs(p) and _under(p, base) else p
+        for p in paths
+    )
+
+
 def _under(path: str, root: str) -> bool:
     try:
         Path(os.path.abspath(path)).relative_to(Path(os.path.abspath(root)))

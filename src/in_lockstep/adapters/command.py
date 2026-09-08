@@ -177,6 +177,9 @@ class CommandTest:
             paths = tooling.rebase(paths, package)
         else:
             cwd = self.cwd or repo_root
+        # Whichever branch set it, an absolute path inside `cwd` is made relative to it: the
+        # same file on both sides of a container mount (GATE-TOOLING-4).
+        paths = tooling.relative(paths, cwd)
         selector = [*self.selector_arg, inp.selector] if (inp.selector and self.selector_arg) else []
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         cmd = [argv0, *self.command[1:], *selector, *inp.args, *paths]

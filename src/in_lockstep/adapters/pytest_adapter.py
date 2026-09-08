@@ -77,6 +77,9 @@ class PytestTest:
             paths = tooling.rebase(paths, package)
         else:
             cwd = repo_root
+        # Whichever branch set it, an absolute path inside `cwd` is made relative to it: the
+        # same file on both sides of a container mount (GATE-TOOLING-4).
+        paths = tooling.relative(paths, cwd)
         cmd = [
             interpreter,
             "-m",
