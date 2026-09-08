@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "/implement from a comment: three jobs, two credentials",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1040,
+      620
+    ],
+    "column_fit": "spread"
+  },
+  "participants": [
+    {
+      "id": "person",
+      "type": "external",
+      "label": "A person",
+      "sublabel": "comments /implement"
+    },
+    {
+      "id": "host",
+      "type": "cloud",
+      "label": "GitHub",
+      "sublabel": "issue_comment"
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "gate job",
+      "sublabel": "no credential"
+    },
+    {
+      "id": "work",
+      "type": "backend",
+      "label": "implement job",
+      "sublabel": "provider key, contents: read"
+    },
+    {
+      "id": "artifact",
+      "type": "database",
+      "label": "Artifact",
+      "sublabel": "changeset + bundle"
+    },
+    {
+      "id": "propose",
+      "type": "security",
+      "label": "propose job",
+      "sublabel": "write token, no provider"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 255,
+      "label": "Authorize the asker"
+    },
+    {
+      "from": 268,
+      "to": 420,
+      "label": "Model job"
+    },
+    {
+      "from": 434,
+      "to": 570,
+      "label": "Write job"
+    }
+  ],
+  "messages": [
+    {
+      "from": "person",
+      "to": "host",
+      "y": 160,
+      "label": "/implement on #59",
+      "variant": "emphasis"
+    },
+    {
+      "from": "host",
+      "to": "gate",
+      "y": 201,
+      "label": "run on the default branch",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gate",
+      "to": "host",
+      "y": 242,
+      "label": "in-lockstep gate: 0 or 3",
+      "variant": "return",
+      "note": "MEMBER, OWNER or CODEOWNERS; bots refused"
+    },
+    {
+      "from": "host",
+      "to": "work",
+      "y": 283,
+      "label": "provision, doctor",
+      "variant": "default"
+    },
+    {
+      "from": "work",
+      "to": "artifact",
+      "y": 324,
+      "label": "changeset, scorecard, history bundle",
+      "variant": "emphasis",
+      "note": "after run implement/from-ticket --approved-by"
+    },
+    {
+      "from": "work",
+      "to": "host",
+      "y": 365,
+      "label": "ai-generated issue on failure",
+      "variant": "dashed"
+    },
+    {
+      "from": "artifact",
+      "to": "propose",
+      "y": 406,
+      "label": "download to $RUNNER_TEMP",
+      "variant": "emphasis"
+    },
+    {
+      "from": "propose",
+      "to": "host",
+      "y": 447,
+      "label": "draft pull request",
+      "variant": "emphasis",
+      "note": "ChangeGuard runs again; the branch is run-scoped"
+    },
+    {
+      "from": "propose",
+      "to": "host",
+      "y": 488,
+      "label": "history --from-bundle --push",
+      "variant": "dashed"
+    },
+    {
+      "from": "host",
+      "to": "person",
+      "y": 529,
+      "label": "implement/report comments on the ticket",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "gate",
+      "from": 195,
+      "to": 250,
+      "type": "security"
+    },
+    {
+      "participant": "work",
+      "from": 277,
+      "to": 372,
+      "type": "backend"
+    },
+    {
+      "participant": "artifact",
+      "from": 318,
+      "to": 454,
+      "type": "database"
+    },
+    {
+      "participant": "propose",
+      "from": 441,
+      "to": 495,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "The asker, not the text",
+      "items": [
+        "The gate is a Python function with tests, run by a job holding nothing",
+        "The issue body stays untrusted whoever asked"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Never co-resident",
+      "items": [
+        "The job that talks to a model cannot write",
+        "The job that writes has no provider extra installed"
+      ]
+    }
+  ]
+}

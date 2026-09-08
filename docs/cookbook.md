@@ -63,6 +63,8 @@ This repository's own [.lockstep/lockstep.py](../.lockstep/lockstep.py) is the f
 version, including the `WorktreeRunner` wrap that keeps a model-chosen command's writes off the
 live tree.
 
+Drawn: [chat-ops](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html) for the jobs, [implement strategies](https://in-lockstep.github.io/lockstep/diagrams/implement-strategies.html) for red then green.
+
 ## 4. A rolling daily spend ceiling
 
 The per-run budget bounds one run. This bounds a runaway *trigger*, a chat-ops loop firing all
@@ -224,3 +226,5 @@ That appends a note to the branch — who, why, when, and what the commit rewrot
 and `doctor` print the note where `TAMPERED` was. A rewrite in any other commit is still an alarm,
 and the note itself is protected by the same check. A flag nobody can acknowledge is one everybody
 learns to read past.
+
+Drawn: [the ledger](https://in-lockstep.github.io/lockstep/diagrams/ledger.html), from a run to `origin/lockstep-history` and back to `report`.

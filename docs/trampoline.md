@@ -49,6 +49,8 @@ should say so in a comment at the top of its trampoline rather than quietly weak
    with a message rather than failing: a red check the contributor cannot fix teaches everyone
    to ignore red.
 
+The contract as a sequence, comment to pull request, is [chat-ops](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html); the write jobs it protects are drawn in [implement](https://in-lockstep.github.io/lockstep/diagrams/implement.html) and [fix](https://in-lockstep.github.io/lockstep/diagrams/fix.html), the read verb in [review](https://in-lockstep.github.io/lockstep/diagrams/review.html), and how the record leaves a read-only job in [the ledger](https://in-lockstep.github.io/lockstep/diagrams/ledger.html).
+
 ## The job split, by verb
 
 A read-only verb (review) needs **two jobs**: the review itself, with the provider key and read

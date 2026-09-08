@@ -9,6 +9,8 @@ the same function; where it is weaker or gone, it says so. The intent is that no
 missing control by having an incident, and that nobody believes a control is present because a
 framework type shares its vocabulary.
 
+The controls below, as they sit in the running process, are drawn in [the security model](https://in-lockstep.github.io/lockstep/diagrams/security-model.html).
+
 ## What the substrate provided
 
 **Status discipline.** A row that says *Replaced* means the replacement runs. Four rows below said

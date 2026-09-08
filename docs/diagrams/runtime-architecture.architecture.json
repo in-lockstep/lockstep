@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "in-lockstep Runtime Architecture",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "run-path",
+        "label": "A run, end to end",
+        "focus": [
+          "cli",
+          "loader",
+          "context",
+          "container",
+          "ai_adapter",
+          "invoker",
+          "registry",
+          "provider",
+          "ledger"
+        ],
+        "note": "From the command to the model and back to the ledger record."
+      },
+      {
+        "id": "privileged",
+        "label": "The privileged tier",
+        "focus": [
+          "redact",
+          "egress",
+          "guard",
+          "sandbox",
+          "invoker"
+        ],
+        "note": "Controls a module's middleware chain cannot switch off."
+      },
+      {
+        "id": "hosts",
+        "label": "Hosts and evidence",
+        "focus": [
+          "trampoline",
+          "scm",
+          "tickets",
+          "ledger",
+          "artifacts",
+          "evaluation"
+        ],
+        "note": "Where a run's evidence goes and how CI drives the same process."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "trampoline",
+      "type": "cloud",
+      "label": "CI trampolines",
+      "sublabel": "GitHub Actions, GitLab CI",
+      "row": 0,
+      "col": 0,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "in-lockstep CLI",
+      "sublabel": "composition root",
+      "row": 0,
+      "col": 1,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "loader",
+      "type": "security",
+      "label": "Lifecycle loader",
+      "sublabel": "lockstep.py, trusted ref",
+      "row": 0,
+      "col": 2,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "context",
+      "type": "backend",
+      "label": "RunContext",
+      "sublabel": "spend, deadline, kill switch",
+      "row": 1,
+      "col": 1,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "container",
+      "type": "backend",
+      "label": "Container",
+      "sublabel": "verb -> adapter",
+      "row": 1,
+      "col": 2,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "middleware",
+      "type": "backend",
+      "label": "Middleware",
+      "sublabel": "budget, approval, otel",
+      "row": 1,
+      "col": 3,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "ai_adapter",
+      "type": "backend",
+      "label": "AI adapters",
+      "sublabel": "review, triage, implement...",
+      "row": 2,
+      "col": 2,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "det_adapter",
+      "type": "backend",
+      "label": "Deterministic",
+      "sublabel": "build, test, validate, run",
+      "row": 2,
+      "col": 1,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "Sandbox + worktree",
+      "sublabel": "container, no network",
+      "row": 3,
+      "col": 1,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "invoker",
+      "type": "backend",
+      "label": "AiInvoker",
+      "sublabel": "retry, price, scan, settle",
+      "row": 2,
+      "col": 3,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "backend",
+      "label": "ProviderRegistry",
+      "sublabel": "routes, caps, prices",
+      "row": 2,
+      "col": 4,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "provider",
+      "type": "external",
+      "label": "Model providers",
+      "sublabel": "Anthropic, OpenAI, Ollama...",
+      "row": 2,
+      "col": 5,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "redact",
+      "type": "security",
+      "label": "Redact + sink",
+      "sublabel": "every write masked",
+      "row": 3,
+      "col": 3,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "egress",
+      "type": "security",
+      "label": "EgressPolicy",
+      "sublabel": "probe-verified",
+      "row": 3,
+      "col": 4,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "ChangeGuard",
+      "sublabel": "tiered path policy",
+      "row": 3,
+      "col": 2,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "Ledger",
+      "sublabel": "orphan branch, append-only",
+      "row": 4,
+      "col": 3,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "artifacts",
+      "type": "database",
+      "label": "Run artifacts",
+      "sublabel": "changeset, scorecard, bundle",
+      "row": 4,
+      "col": 2,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "scm",
+      "type": "external",
+      "label": "SCM host",
+      "sublabel": "GitHub / GitLab",
+      "row": 4,
+      "col": 0,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "tickets",
+      "type": "external",
+      "label": "Ticket source",
+      "sublabel": "issues and chat-ops",
+      "row": 1,
+      "col": 0,
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "evaluation",
+      "type": "database",
+      "label": "Evaluation",
+      "sublabel": "corpus, verdict sidecars",
+      "row": 4,
+      "col": 4,
+      "size": [
+        160,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Privileged tier: outside any middleware chain",
+      "wraps": [
+        "redact",
+        "egress",
+        "guard",
+        "sandbox"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "In-process run",
+      "wraps": [
+        "context",
+        "container",
+        "middleware",
+        "ai_adapter",
+        "det_adapter",
+        "invoker",
+        "registry"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ci-drives",
+      "from": "trampoline",
+      "to": "cli",
+      "label": "run <workflow>",
+      "variant": "emphasis",
+      "labelDy": -19
+    },
+    {
+      "id": "cli-loads",
+      "from": "cli",
+      "to": "loader",
+      "label": "trusted ref",
+      "variant": "security",
+      "labelDy": -19
+    },
+    {
+      "id": "loader-binds",
+      "from": "loader",
+      "to": "container",
+      "label": "binds",
+      "labelDy": 24
+    },
+    {
+      "id": "cli-context",
+      "from": "cli",
+      "to": "context",
+      "label": "context()",
+      "labelDy": 24
+    },
+    {
+      "id": "context-do",
+      "from": "context",
+      "to": "container",
+      "label": "ctx.do()",
+      "variant": "emphasis"
+    },
+    {
+      "id": "container-mw",
+      "from": "container",
+      "to": "middleware",
+      "label": "by capability",
+      "labelDy": -19
+    },
+    {
+      "id": "mw-ai",
+      "from": "middleware",
+      "to": "ai_adapter",
+      "label": "spends"
+    },
+    {
+      "id": "mw-det",
+      "from": "middleware",
+      "to": "det_adapter",
+      "label": "executes",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "ai-invoker",
+      "from": "ai_adapter",
+      "to": "invoker",
+      "variant": "emphasis"
+    },
+    {
+      "id": "invoker-registry",
+      "from": "invoker",
+      "to": "registry",
+      "label": "priced model",
+      "labelDy": -19
+    },
+    {
+      "id": "registry-provider",
+      "from": "registry",
+      "to": "provider",
+      "label": "generate()",
+      "variant": "emphasis",
+      "labelDy": -19
+    },
+    {
+      "id": "det-sandbox",
+      "from": "det_adapter",
+      "to": "sandbox",
+      "label": "commands",
+      "labelDy": 24
+    },
+    {
+      "id": "ai-guard",
+      "from": "ai_adapter",
+      "to": "guard",
+      "label": "staged writes",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "invoker-egress",
+      "from": "invoker",
+      "to": "egress",
+      "label": "check first",
+      "variant": "security"
+    },
+    {
+      "id": "invoker-redact",
+      "from": "invoker",
+      "to": "redact",
+      "label": "record",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "redact-ledger",
+      "from": "redact",
+      "to": "ledger",
+      "label": "masked",
+      "labelDy": 24
+    },
+    {
+      "id": "guard-artifacts",
+      "from": "guard",
+      "to": "artifacts",
+      "label": "changeset",
+      "labelDy": 24
+    },
+    {
+      "id": "artifacts-scm",
+      "from": "artifacts",
+      "to": "scm",
+      "label": "propose",
+      "variant": "dashed"
+    },
+    {
+      "id": "tickets-cli",
+      "from": "tickets",
+      "to": "cli",
+      "label": "chat-ops",
+      "variant": "dashed"
+    },
+    {
+      "id": "ledger-eval",
+      "from": "ledger",
+      "to": "evaluation",
+      "label": "harvest, judge, around",
+      "variant": "dashed",
+      "labelDy": -26
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One process, two tiers",
+      "items": [
+        "Middleware is the module's chain; the privileged tier runs outside it",
+        "Every model call goes through one invoker and one registry"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Determinism first",
+      "items": [
+        "Tests, lint, build and run are the repository's own commands",
+        "A model is reached only where a judgment is required"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Evidence",
+      "items": [
+        "Every run leaves a masked, append-only record",
+        "The corpus and the judge read those records back"
+      ]
+    }
+  ],
+  "layout": {
+    "mode": "grid",
+    "cols": 6,
+    "cellW": 160,
+    "cellH": 60,
+    "gapX": 64,
+    "gapY": 56
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Human boundaries: park, resume, continue",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "run",
+      "label": "The run"
+    },
+    {
+      "id": "store",
+      "label": "Shared store, host"
+    },
+    {
+      "id": "stop",
+      "label": "Refused or expired",
+      "variant": "exception"
+    },
+    {
+      "id": "resume",
+      "label": "A fresh run"
+    }
+  ],
+  "phases": [
+    {
+      "id": "park_p",
+      "label": "Park",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "wait",
+      "label": "Wait, in the system of record",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "cont",
+      "label": "Continue",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "running",
+    "park",
+    "record",
+    "marker",
+    "acted",
+    "tick",
+    "continuation"
+  ],
+  "nodes": [
+    {
+      "id": "running",
+      "lane": "run",
+      "col": 0,
+      "type": "backend",
+      "label": "Running",
+      "sublabel": "at a human boundary",
+      "width": 136
+    },
+    {
+      "id": "park",
+      "lane": "run",
+      "col": 1,
+      "type": "backend",
+      "label": "ctx.park(boundary)",
+      "sublabel": "resume= a stable id",
+      "width": 136
+    },
+    {
+      "id": "local",
+      "lane": "stop",
+      "col": 1,
+      "type": "security",
+      "label": "park.local_store",
+      "sublabel": "BLOCKED by name",
+      "width": 136
+    },
+    {
+      "id": "record",
+      "lane": "store",
+      "col": 2,
+      "type": "database",
+      "label": "Barrier record",
+      "sublabel": "compare-and-set",
+      "width": 136
+    },
+    {
+      "id": "marker",
+      "lane": "store",
+      "col": 3,
+      "type": "external",
+      "label": "Marker on the PR",
+      "sublabel": "label + sticky comment",
+      "width": 136
+    },
+    {
+      "id": "acted",
+      "lane": "resume",
+      "col": 3,
+      "type": "external",
+      "label": "A person acts",
+      "sublabel": "approve, or resume --as",
+      "width": 136
+    },
+    {
+      "id": "expired",
+      "lane": "stop",
+      "col": 4,
+      "type": "security",
+      "label": "Expired",
+      "sublabel": "sweep closes it",
+      "width": 136
+    },
+    {
+      "id": "tick",
+      "lane": "resume",
+      "col": 4,
+      "type": "security",
+      "label": "Tick",
+      "sublabel": "one swap wins",
+      "width": 136
+    },
+    {
+      "id": "continuation",
+      "lane": "resume",
+      "col": 5,
+      "type": "backend",
+      "label": "Continuation",
+      "sublabel": "parent_run_id set",
+      "width": 136
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "running",
+      "to": "park",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "park",
+      "to": "local",
+      "label": "LOCAL store",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e3",
+      "from": "park",
+      "to": "record",
+      "label": "shared store",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "record",
+      "to": "marker",
+      "variant": "default"
+    },
+    {
+      "id": "e5",
+      "from": "marker",
+      "to": "acted",
+      "label": "notified",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "acted",
+      "to": "tick",
+      "label": "event, actor, verdict",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "tick",
+      "to": "continuation",
+      "label": "barrier complete",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "marker",
+      "to": "expired",
+      "label": "past expires",
+      "variant": "security",
+      "role": "error"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Nothing waits in memory",
+      "items": [
+        "The state is on the ledger and in the host; the process exits",
+        "A continuation is an ordinary workflow with a stable id"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Exactly one continuation",
+      "items": [
+        "Eight concurrent ticks: one swap wins, seven re-read",
+        "Duplicate deliveries collapse on (run, branch, event)"
+      ]
+    }
+  ]
+}

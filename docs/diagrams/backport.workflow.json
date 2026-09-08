@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "backport: git first, a model only on conflict",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1040,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "git",
+      "label": "Deterministic: plain git"
+    },
+    {
+      "id": "model",
+      "label": "AiBackportResolver: only if asked, only on a conflict"
+    },
+    {
+      "id": "stop",
+      "label": "Refused",
+      "variant": "exception"
+    },
+    {
+      "id": "out",
+      "label": "Staged"
+    }
+  ],
+  "phases": [
+    {
+      "id": "pick",
+      "label": "Cherry-pick",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "resolve",
+      "label": "Resolve",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "stage",
+      "label": "Stage",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "commits",
+    "pick",
+    "conflict",
+    "resolver",
+    "contained",
+    "changeset"
+  ],
+  "nodes": [
+    {
+      "id": "commits",
+      "lane": "git",
+      "col": 0,
+      "type": "backend",
+      "label": "commits_between",
+      "sublabel": "trailers, provenance",
+      "width": 140
+    },
+    {
+      "id": "pick",
+      "lane": "git",
+      "col": 1,
+      "type": "backend",
+      "label": "cherry-pick -x",
+      "sublabel": "onto the target base",
+      "width": 140
+    },
+    {
+      "id": "clean",
+      "lane": "out",
+      "col": 1,
+      "type": "database",
+      "label": "Clean pick",
+      "sublabel": "no model was called",
+      "width": 140
+    },
+    {
+      "id": "conflict",
+      "lane": "git",
+      "col": 2,
+      "type": "security",
+      "label": "Conflict",
+      "sublabel": "markers in named paths",
+      "width": 140
+    },
+    {
+      "id": "refused",
+      "lane": "stop",
+      "col": 2,
+      "type": "security",
+      "label": "Refused",
+      "sublabel": "no --resolve, or unapproved",
+      "width": 140
+    },
+    {
+      "id": "resolver",
+      "lane": "model",
+      "col": 3,
+      "type": "backend",
+      "label": "One turn",
+      "sublabel": "commit patch + conflicted files",
+      "tag": "budget + approval",
+      "width": 140
+    },
+    {
+      "id": "contained",
+      "lane": "model",
+      "col": 4,
+      "type": "security",
+      "label": "Containment",
+      "sublabel": "only conflicted paths may change",
+      "width": 140
+    },
+    {
+      "id": "stray",
+      "lane": "stop",
+      "col": 5,
+      "type": "security",
+      "label": "Failed",
+      "sublabel": "wrote an unconflicted path",
+      "width": 140
+    },
+    {
+      "id": "changeset",
+      "lane": "out",
+      "col": 4,
+      "type": "database",
+      "label": "ChangeSet",
+      "sublabel": "apply --base opens it",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "commits",
+      "to": "pick",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "pick",
+      "to": "clean",
+      "label": "applies cleanly",
+      "variant": "default"
+    },
+    {
+      "id": "e3",
+      "from": "pick",
+      "to": "conflict",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "conflict",
+      "to": "refused",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e5",
+      "from": "conflict",
+      "to": "resolver",
+      "label": "--resolve",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "resolver",
+      "to": "contained",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "contained",
+      "to": "stray",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e8",
+      "from": "contained",
+      "to": "changeset",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Determinism first",
+      "items": [
+        "A pick that applies cleanly never reaches a model",
+        "The resolver is a verb because it may write; it is gated like one"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Contained",
+      "items": [
+        "A resolution touching a path that did not conflict fails by name",
+        "Provenance trailers survive the pick"
+      ]
+    }
+  ]
+}

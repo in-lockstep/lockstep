@@ -1,0 +1,253 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "improve: the record teaches the prompts",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "measure",
+      "label": "improve/measure: provider key, no write token"
+    },
+    {
+      "id": "stop",
+      "label": "Refused before spending",
+      "variant": "exception"
+    },
+    {
+      "id": "propose",
+      "label": "improve/propose: write token, no provider key"
+    },
+    {
+      "id": "person",
+      "label": "A person"
+    }
+  ],
+  "phases": [
+    {
+      "id": "read",
+      "label": "Read the record",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "draft",
+      "label": "Draft, measure, judge",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "open",
+      "label": "Propose and park",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "trend",
+    "baseline",
+    "drafter",
+    "measure_n",
+    "scorecard",
+    "open_pr",
+    "park",
+    "review"
+  ],
+  "nodes": [
+    {
+      "id": "trend",
+      "lane": "measure",
+      "col": 0,
+      "type": "database",
+      "label": "Ledger census",
+      "sublabel": "a recurring finding",
+      "width": 140
+    },
+    {
+      "id": "baseline",
+      "lane": "measure",
+      "col": 1,
+      "type": "backend",
+      "label": "Baseline",
+      "sublabel": "corpus cases the body fails",
+      "width": 140
+    },
+    {
+      "id": "drafter",
+      "lane": "measure",
+      "col": 2,
+      "type": "backend",
+      "label": "ctx.do(Draft)",
+      "sublabel": "whole revised body",
+      "width": 140
+    },
+    {
+      "id": "measure_n",
+      "lane": "measure",
+      "col": 3,
+      "type": "backend",
+      "label": "Measure + Judge",
+      "sublabel": "both arms, judged",
+      "tag": "same Spend, same tape",
+      "width": 140
+    },
+    {
+      "id": "scorecard",
+      "lane": "measure",
+      "col": 4,
+      "type": "database",
+      "label": "Scorecard artifact",
+      "sublabel": "only when improved",
+      "width": 140
+    },
+    {
+      "id": "refused",
+      "lane": "stop",
+      "col": 1,
+      "type": "security",
+      "label": "Refused by name",
+      "sublabel": "no trend or grant",
+      "width": 140
+    },
+    {
+      "id": "regressed",
+      "lane": "stop",
+      "col": 4,
+      "type": "security",
+      "label": "Not proposed",
+      "sublabel": "kept as attempt",
+      "width": 140
+    },
+    {
+      "id": "open_pr",
+      "lane": "propose",
+      "col": 4,
+      "type": "backend",
+      "label": "Open the proposal",
+      "sublabel": "ceiling enforced here",
+      "width": 140
+    },
+    {
+      "id": "park",
+      "lane": "propose",
+      "col": 5,
+      "type": "messagebus",
+      "label": "Park on pr_review",
+      "sublabel": "shared-store barrier",
+      "width": 140
+    },
+    {
+      "id": "review",
+      "lane": "person",
+      "col": 5,
+      "type": "external",
+      "label": "Review, then resume",
+      "sublabel": "resume --as approved",
+      "width": 140
+    },
+    {
+      "id": "after",
+      "lane": "propose",
+      "col": 3,
+      "type": "backend",
+      "label": "improve/after-review",
+      "sublabel": "the continuation",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "trend",
+      "to": "baseline",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "baseline",
+      "to": "refused",
+      "label": "nothing qualifies",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e3",
+      "from": "baseline",
+      "to": "drafter",
+      "label": "a case fails",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "drafter",
+      "to": "measure_n",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "measure_n",
+      "to": "scorecard",
+      "label": "improved",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "measure_n",
+      "to": "regressed",
+      "label": "not improved",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e7",
+      "from": "scorecard",
+      "to": "open_pr",
+      "label": "read back",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "open_pr",
+      "to": "park",
+      "variant": "default"
+    },
+    {
+      "id": "e9",
+      "from": "park",
+      "to": "review",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e10",
+      "from": "review",
+      "to": "after",
+      "label": "tick launches",
+      "variant": "dashed",
+      "role": "return",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "route": "bottom-channel"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Only what the corpus can show",
+      "items": [
+        "A draft that loses one case is regressed whatever it gained",
+        "Rubrics are judged on both arms; verdicts are kept beside the case"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "A person decides",
+      "items": [
+        "The proposal is a pull request somebody reads",
+        "The run parks on the review and resumes when they act"
+      ]
+    }
+  ]
+}

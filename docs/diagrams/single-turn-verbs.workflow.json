@@ -1,0 +1,249 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Single-turn verbs: review, triage, rfe",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1040,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "adapter",
+      "label": "Adapter: AiReview, AiTriage, AiRfe"
+    },
+    {
+      "id": "invoker",
+      "label": "AiInvoker"
+    },
+    {
+      "id": "stop",
+      "label": "Blocked or errored",
+      "variant": "exception"
+    },
+    {
+      "id": "out",
+      "label": "Outcome"
+    }
+  ],
+  "phases": [
+    {
+      "id": "compose",
+      "label": "Compose",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "call",
+      "label": "One turn",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "settle",
+      "label": "Settle and check",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "gather",
+    "prompt",
+    "pre",
+    "generate",
+    "settle",
+    "checks",
+    "outcome"
+  ],
+  "nodes": [
+    {
+      "id": "gather",
+      "lane": "adapter",
+      "col": 0,
+      "type": "backend",
+      "label": "Gather context",
+      "sublabel": "diff, issue, or idea: untrusted",
+      "width": 140
+    },
+    {
+      "id": "prompt",
+      "lane": "adapter",
+      "col": 1,
+      "type": "backend",
+      "label": "Compose",
+      "sublabel": "guardrails, body, skills",
+      "width": 140
+    },
+    {
+      "id": "empty",
+      "lane": "stop",
+      "col": 0,
+      "type": "security",
+      "label": "review.no_content",
+      "sublabel": "nothing to send",
+      "width": 140
+    },
+    {
+      "id": "pre",
+      "lane": "invoker",
+      "col": 2,
+      "type": "security",
+      "label": "Pre-flight",
+      "sublabel": "egress, caps, price, reserve",
+      "tag": "refuse by name",
+      "width": 140
+    },
+    {
+      "id": "generate",
+      "lane": "invoker",
+      "col": 3,
+      "type": "backend",
+      "label": "generate()",
+      "sublabel": "scanned, retried, recorded",
+      "width": 140
+    },
+    {
+      "id": "blocked",
+      "lane": "stop",
+      "col": 2,
+      "type": "security",
+      "label": "BLOCKED",
+      "sublabel": "a control refused",
+      "width": 140
+    },
+    {
+      "id": "errored",
+      "lane": "stop",
+      "col": 3,
+      "type": "security",
+      "label": "ERRORED",
+      "sublabel": "provider could not answer",
+      "width": 140
+    },
+    {
+      "id": "settle",
+      "lane": "invoker",
+      "col": 4,
+      "type": "backend",
+      "label": "settle()",
+      "sublabel": "parse, validate, one re-prompt",
+      "width": 140
+    },
+    {
+      "id": "checks",
+      "lane": "adapter",
+      "col": 5,
+      "type": "backend",
+      "label": "Arithmetic",
+      "sublabel": "path in the diff, line in a hunk",
+      "width": 140
+    },
+    {
+      "id": "unshaped",
+      "lane": "stop",
+      "col": 4,
+      "type": "security",
+      "label": "unparseable",
+      "sublabel": "or truncated",
+      "width": 140
+    },
+    {
+      "id": "outcome",
+      "lane": "out",
+      "col": 5,
+      "type": "database",
+      "label": "Outcome",
+      "sublabel": "findings, cost, decided",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "gather",
+      "to": "prompt",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "gather",
+      "to": "empty",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e3",
+      "from": "prompt",
+      "to": "pre",
+      "label": "run(schema)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "pre",
+      "to": "blocked",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e5",
+      "from": "pre",
+      "to": "generate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "generate",
+      "to": "errored",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e7",
+      "from": "generate",
+      "to": "settle",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "settle",
+      "to": "unshaped",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e9",
+      "from": "settle",
+      "to": "checks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e10",
+      "from": "checks",
+      "to": "outcome",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Thin adapters",
+      "items": [
+        "Loop bounds, tools, ceilings and recording belong to the invoker",
+        "A lens differs in prose and bounds; a verb differs in capability"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Blocked is not failed",
+      "items": [
+        "A control refusing is the control working",
+        "Findings are warnings; the check still exits 0"
+      ]
+    }
+  ]
+}

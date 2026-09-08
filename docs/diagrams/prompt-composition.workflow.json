@@ -1,0 +1,247 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Prompt composition: what the model is told, and what keys the record",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "sources",
+      "label": "Sources, by tier"
+    },
+    {
+      "id": "layers",
+      "label": "Layers, in a fixed order"
+    },
+    {
+      "id": "composed",
+      "label": "Composed"
+    },
+    {
+      "id": "keyed",
+      "label": "Keyed"
+    }
+  ],
+  "phases": [
+    {
+      "id": "declare",
+      "label": "Declared",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "compose",
+      "label": "Composed",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "key",
+      "label": "Keyed",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "shipped",
+    "guardrails",
+    "body",
+    "skills",
+    "system",
+    "subject"
+  ],
+  "nodes": [
+    {
+      "id": "shipped",
+      "lane": "sources",
+      "col": 0,
+      "type": "backend",
+      "label": "Shipped",
+      "sublabel": "two-key .md bodies",
+      "width": 140
+    },
+    {
+      "id": "plugin",
+      "lane": "sources",
+      "col": 1,
+      "type": "backend",
+      "label": "Standards package",
+      "sublabel": "tighten-only layers",
+      "width": 140
+    },
+    {
+      "id": "module",
+      "lane": "sources",
+      "col": 2,
+      "type": "security",
+      "label": "lockstep.py",
+      "sublabel": "layers=, emphasis=",
+      "width": 140
+    },
+    {
+      "id": "guardrails",
+      "lane": "layers",
+      "col": 1,
+      "type": "security",
+      "label": "Guardrails",
+      "sublabel": "baseline first, verbatim",
+      "width": 140
+    },
+    {
+      "id": "body",
+      "lane": "layers",
+      "col": 2,
+      "type": "backend",
+      "label": "Body",
+      "sublabel": "one .md, plus emphasis",
+      "width": 140
+    },
+    {
+      "id": "skills",
+      "lane": "layers",
+      "col": 3,
+      "type": "backend",
+      "label": "Skills, contexts",
+      "sublabel": "format, house context",
+      "width": 140
+    },
+    {
+      "id": "package",
+      "lane": "composed",
+      "col": 3,
+      "type": "database",
+      "label": "Context package",
+      "sublabel": "items with provenance",
+      "width": 140
+    },
+    {
+      "id": "system",
+      "lane": "composed",
+      "col": 4,
+      "type": "backend",
+      "label": "System prompt",
+      "sublabel": "show-prompt renders it",
+      "width": 140
+    },
+    {
+      "id": "corpus",
+      "lane": "keyed",
+      "col": 3,
+      "type": "database",
+      "label": "Frozen corpus",
+      "sublabel": "order and sha frozen",
+      "width": 140
+    },
+    {
+      "id": "subject",
+      "lane": "keyed",
+      "col": 5,
+      "type": "database",
+      "label": "EvalSubject",
+      "sublabel": "composed sha, not version",
+      "width": 140
+    },
+    {
+      "id": "cassette",
+      "lane": "composed",
+      "col": 5,
+      "type": "database",
+      "label": "Cassette key",
+      "sublabel": "hash of the request",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "shipped",
+      "to": "guardrails",
+      "label": "baseline",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "plugin",
+      "to": "guardrails",
+      "label": "plus()",
+      "variant": "default"
+    },
+    {
+      "id": "e3",
+      "from": "module",
+      "to": "body",
+      "label": "emphasis or subclass",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e4",
+      "from": "guardrails",
+      "to": "body",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "body",
+      "to": "skills",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "skills",
+      "to": "system",
+      "label": "in that order",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e7",
+      "from": "package",
+      "to": "cassette",
+      "label": "the user turn",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e8",
+      "from": "system",
+      "to": "cassette",
+      "label": "edit = re-record",
+      "variant": "default"
+    },
+    {
+      "id": "e9",
+      "from": "system",
+      "to": "subject",
+      "label": "report --by subject",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e10",
+      "from": "skills",
+      "to": "corpus",
+      "label": "frozen",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Prose stays prose",
+      "items": [
+        "A body is a markdown file with name and description only",
+        "Model and ceilings live in the module, never in a header"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Identity is a hash",
+      "items": [
+        "Editing a prompt invalidates every cassette made against it",
+        "A subject moves when the composed text moves, bumped or not"
+      ]
+    }
+  ]
+}

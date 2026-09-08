@@ -33,6 +33,8 @@ distribution mechanism is a claim about where in this stack a stranger's code ma
 Policy is the exception and stays the exception: layers merge tighten-only, so order decides who is
 printed, not who wins.
 
+Drawn: [`docs/diagrams/extension-resolution.html`](https://in-lockstep.github.io/lockstep/diagrams/extension-resolution.html).
+
 **A pack writes into band three and nowhere else.** There is no fifth band, and nothing lets a third
 party land at `Tier.EXPLICIT` on its own. A pack that is installed and not named in `lockstep.py`
 has no effect whatsoever, which `GATE-PACK-1` holds.

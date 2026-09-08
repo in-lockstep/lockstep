@@ -1,0 +1,221 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "fix: reproduce, then repair",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1130,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "host",
+      "label": "Host"
+    },
+    {
+      "id": "model_job",
+      "label": "Model job: fix/from-ticket"
+    },
+    {
+      "id": "stop",
+      "label": "Refusals and failures",
+      "variant": "exception"
+    },
+    {
+      "id": "write_job",
+      "label": "Write job: fix/propose + fix/report"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ask",
+      "label": "Ask",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "diagnose",
+      "label": "DiagnoseThenFix",
+      "fromCol": 1,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "propose",
+      "label": "Propose",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "comment",
+    "reproducer",
+    "red",
+    "fix",
+    "green",
+    "propose",
+    "pr"
+  ],
+  "nodes": [
+    {
+      "id": "comment",
+      "lane": "host",
+      "col": 0,
+      "type": "external",
+      "label": "/fix comment",
+      "sublabel": "or an ai-generated issue",
+      "width": 140
+    },
+    {
+      "id": "reproducer",
+      "lane": "model_job",
+      "col": 1,
+      "type": "backend",
+      "label": "Write a reproducer",
+      "sublabel": "a test that fails on the bug",
+      "width": 140
+    },
+    {
+      "id": "red",
+      "lane": "model_job",
+      "col": 2,
+      "type": "security",
+      "label": "Test, expect=fail",
+      "sublabel": "in a container",
+      "tag": "confirm red",
+      "width": 140
+    },
+    {
+      "id": "fix",
+      "lane": "model_job",
+      "col": 3,
+      "type": "backend",
+      "label": "Write the fix",
+      "sublabel": "shown the red test",
+      "width": 140
+    },
+    {
+      "id": "green",
+      "lane": "model_job",
+      "col": 4,
+      "type": "security",
+      "label": "Test, expect=pass",
+      "sublabel": "reproducer plus fix",
+      "tag": "confirm green",
+      "width": 140
+    },
+    {
+      "id": "not_repro",
+      "lane": "stop",
+      "col": 2,
+      "type": "security",
+      "label": "fix.not_reproduced",
+      "sublabel": "the reproducer passed",
+      "width": 140
+    },
+    {
+      "id": "not_fixed",
+      "lane": "stop",
+      "col": 3,
+      "type": "security",
+      "label": "fix.not_fixed",
+      "sublabel": "still red",
+      "width": 140
+    },
+    {
+      "id": "propose",
+      "lane": "write_job",
+      "col": 4,
+      "type": "backend",
+      "label": "fix/propose",
+      "sublabel": "title from the ticket",
+      "width": 140
+    },
+    {
+      "id": "pr",
+      "lane": "host",
+      "col": 5,
+      "type": "external",
+      "label": "Pull request",
+      "sublabel": "closes the ticket",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "comment",
+      "to": "reproducer",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e2",
+      "from": "reproducer",
+      "to": "red",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e3",
+      "from": "red",
+      "to": "not_repro",
+      "label": "passed",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e4",
+      "from": "red",
+      "to": "fix",
+      "label": "red",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "fix",
+      "to": "green",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "green",
+      "to": "not_fixed",
+      "label": "still red",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e7",
+      "from": "green",
+      "to": "propose",
+      "label": "green: staged",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "propose",
+      "to": "pr",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Red before green",
+      "items": [
+        "A reproducer that passes captured nothing, and the run says so",
+        "Both suite runs happen in a container, on a throwaway worktree"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Bounded",
+      "items": [
+        "Every turn is priced before it is made",
+        "A failed attempt becomes an ai-generated issue, not a silent retry"
+      ]
+    }
+  ]
+}
