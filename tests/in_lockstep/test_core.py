@@ -1494,3 +1494,17 @@ def test_gate_cost_7_what_an_outcome_reports_beyond_the_shared_spend_is_charged_
     asyncio.run(ctx.do(Thing("x")))
     assert ctx.spend.charged.usd == 1.5
     assert ctx.spend.charged.wall_seconds == 2.0
+
+
+def test_gate_record_6_a_turn_counts_each_tool_it_asked_for_by_name() -> None:
+    """GATE-RECORD-6. The `Spend` keeps where the turns went, one count per call and not per
+    turn: a turn that read three files is three `read_file` calls, and a turn that answered is a
+    turn with no calls. It rides beside `turns` because it is the same kind of fact -- what the
+    run did under its ceiling -- and a record reads both from here."""
+    spend = Spend()
+    spend.charge_turn(Cost(usd=0.1), tools=("read_file", "read_file", "search_text"))
+    spend.charge_turn(Cost(usd=0.1), tools=("read_file",))
+    spend.charge_turn(Cost(usd=0.1))
+    assert spend.turns == 3
+    assert spend.tool_calls == {"read_file": 3, "search_text": 1}
+    assert Spend().tool_calls == {}, "a run that called nothing measured nothing"

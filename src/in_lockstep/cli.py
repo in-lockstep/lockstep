@@ -750,6 +750,7 @@ def _write_workflow_ledger(
             "status": status,
             "reason": reason,
             "decided": decided,
+            **_turns_taken(ctx),
             # What ran, in order, so `history --explain` can name the step that went red and a
             # reader of the raw record does not have to take the verdict on trust.
             "steps": _steps_with_subjects(lockstep, ctx.steps),
@@ -2069,6 +2070,13 @@ def _explain_run(run_id: str) -> None:
     if tokens is not None or cost is not None:
         spent = f"${float(cost):.4f}" if isinstance(cost, (int, float)) else "unmeasured"
         click.echo(f"{'spend':<10}{spent}  ({tokens} tokens, {record.get('wall_seconds', '?')}s)")
+    turns = record.get("turns")
+    if turns is not None:
+        calls = record.get("tool_calls")
+        by_name = (
+            ", ".join(f"{name} {n}" for name, n in sorted(calls.items())) if isinstance(calls, dict) else ""
+        )
+        click.echo(f"{'turns':<10}{turns}" + (f"  ({by_name})" if by_name else ""))
     findings = record.get("findings")
     if isinstance(findings, dict) and findings.get("count"):
         click.echo(f"{'findings':<10}{findings['count']}")
@@ -4594,6 +4602,20 @@ def _eval_subject(lockstep: Any, *, kind: str, aspect: str, model_id: str) -> An
     )
 
 
+def _turns_taken(ctx: Any) -> dict[str, Any]:
+    """How many model calls the run made, and what they asked for, by tool name (GATE-RECORD-6).
+
+    Read from the run's `Spend` rather than from a strategy's report, because the `Spend` is the
+    one counter every invoker in the run charges through -- a delegated child's turns included,
+    which no report sees -- and it is the number the turn ceiling was enforced against, so the
+    record says what was bounded. Absent, not zero, on a context that carries no `Spend`.
+    """
+    spend = getattr(ctx, "spend", None)
+    if spend is None:
+        return {}
+    return {"turns": spend.turns, "tool_calls": dict(sorted(spend.tool_calls.items()))}
+
+
 def _write_ledger(
     lockstep: Any, ctx: Any, outcome: Any, aspect: str, model_id: str, *, kind: str = "review"
 ) -> None:
@@ -4632,6 +4654,7 @@ def _write_ledger(
             # different problem from cost.budget_exceeded, and `status` calls both "errored".
             "reason": outcome.reason,
             "decided": outcome.decided,
+            **_turns_taken(ctx),
             "tokens": outcome.cost.total_tokens,
             "input_tokens": outcome.cost.input_tokens,
             "output_tokens": outcome.cost.output_tokens,
@@ -5215,7 +5238,7 @@ def _write_implement_ledger(
             "status": outcome.status.value,
             "reason": outcome.reason,
             "decided": outcome.decided,
-            "turns": report.turns if report is not None else 0,
+            **_turns_taken(ctx),
             # The paths, not the contents. A ledger record is committed to git and meant to
             # stay diffable; the change itself is the artifact, and duplicating it here would
             # write every proposed file into a permanent record twice.

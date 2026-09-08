@@ -49,7 +49,15 @@ from ...privileged import sink
 # same id the run's artifacts carry. It is the join `report --scm` and `history --from-artifacts`
 # use to say whether a bundled record has reached the branch without downloading the bundle
 # (#294). Absent outside CI. Additive, bumped for the reason 4 gives, nothing numeric.
-SCHEMA = 8
+#
+# 9: every record written by a run that holds a `Spend` carries `turns` -- the model calls the run
+# made, the count its turn ceiling was enforced against -- and `tool_calls`, how many times each
+# tool was asked for by name. Before this only `implement` and `fix` records carried a turn count,
+# read from the strategy's report, so a workflow record and a review record had none and no record
+# said where the turns went; `GATE-PROGRESS-1` recorded the gap. A delegated child's turns are in
+# its parent's count because they charge the parent's `Spend`. Additive, bumped for the reason 4
+# gives. `summarize` already averaged `turns` over the records that had one; now more do.
+SCHEMA = 9
 EPOCH = "in-process"
 LEGACY_EPOCH = "ghaw"
 
