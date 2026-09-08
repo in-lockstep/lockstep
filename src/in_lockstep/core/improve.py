@@ -190,6 +190,16 @@ class Verdict:
     reason: str = ""
     evidence: tuple[str, ...] = ()
     judge: str = ""
+    #: The replay key, copied from the ask this answered. A verdict that carries its key can be
+    #: handed back to `Judge(known=...)` and replayed over the same rubric and the same answer
+    #: without a call; one that carries none (a person's, typed at a terminal) settles its case
+    #: and arm and is never replayed, because nothing says what it was a verdict ON.
+    rubric_sha256: str = ""
+    answer_sha256: str = ""
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.rubric_sha256, self.answer_sha256)
 
     def as_record(self) -> dict[str, Any]:
         return {
@@ -199,6 +209,8 @@ class Verdict:
             "reason": self.reason,
             "evidence": list(self.evidence),
             "judge": self.judge,
+            "rubric_sha256": self.rubric_sha256,
+            "answer_sha256": self.answer_sha256,
         }
 
 

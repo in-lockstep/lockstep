@@ -57,6 +57,7 @@ class Verb:
     RFE: ClassVar[Verb]
     DEBUG: ClassVar[Verb]
     IMPROVE: ClassVar[Verb]
+    JUDGE: ClassVar[Verb]
 
     def __new__(cls, value: str) -> Verb:
         key = value.strip().lower()
@@ -125,6 +126,12 @@ SHIPPED_VERBS = (
     # the harvested corpus before proposing it (O5). Shipped because the framework ships the
     # process; routed like any other verb, so the drafting model is the adopter's choice.
     "improve",
+    # The judge: one rubric over one answer, a level on the rubric's scale with a reason. Shipped
+    # as a verb rather than folded into `improve` because it is routed apart (O11): the grading
+    # model is a choice of its own, usually the free local one, and a verb is the unit a route
+    # names. It is asked only what no script could settle -- the deterministic half is graded
+    # first and a case that failed it is never sent (O7, `GATE-JUDGE-2`).
+    "judge",
 )
 
 for _shipped in SHIPPED_VERBS:

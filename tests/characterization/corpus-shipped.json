@@ -177,6 +177,25 @@
     "sha256": "2641d9ed77273db70a22d0414aca8ce7d363fbb56b80d933c4e3f4ef63f7e2fc",
     "signature_without_body": "guardrail:baseline|guardrail:implement/implementing|skill:implement/change-format"
   },
+  "shipped/judge/rubric-judge": {
+    "enforce": {
+      "daily_ai_credits": null,
+      "deny_tools": [],
+      "max_ai_credits": null,
+      "max_turns": null,
+      "network": "",
+      "per_run_ai_credits": null,
+      "permissions": "",
+      "scan_input": "warn"
+    },
+    "projection": [
+      "guardrail:baseline",
+      "guardrail:judge/judging",
+      "body:judge/rubric-judge"
+    ],
+    "sha256": "fcb00870e57602d6b875926d73d2f5776ef6dd5e062c5f8b5057e6d1bbaae722",
+    "signature_without_body": "guardrail:baseline|guardrail:judge/judging"
+  },
   "shipped/retro/retro-analyst": {
     "enforce": {
       "daily_ai_credits": null,

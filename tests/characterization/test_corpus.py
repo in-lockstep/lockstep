@@ -111,8 +111,10 @@ def test_enforce_ceilings_are_monotone(scope: str, key: str, entry: dict[str, An
 
 
 def test_corpus_covers_every_shipped_agent() -> None:
-    """All 14 shipped library prompts are frozen, not just the ones this repo inherits."""
+    """All 15 shipped library prompts are frozen, not just the ones this repo inherits. Fourteen
+    came from the compiler; the judge (`GATE-JUDGE-2`) was composed by the framework and frozen
+    the same way, so a body edit there is a re-recording somebody commits, like the others."""
     shipped = _load("corpus-shipped.json")
-    assert len(shipped) == 14, f"expected 14 shipped prompts, captured {len(shipped)}"
+    assert len(shipped) == 15, f"expected 15 shipped prompts, captured {len(shipped)}"
     families = {k.split("/")[1] for k in shipped}
-    assert families == {"fix", "implement", "retro", "review", "triage"}
+    assert families == {"fix", "implement", "judge", "retro", "review", "triage"}
