@@ -11,44 +11,44 @@ It also bounded O5. This check runs with `--record` and harvests, so it is where
 corpus comes from, and a single-lens check makes a single-lens corpus — leaving the improvement
 loop of #163 evidence about a quarter of what the framework ships.
 
-The comparison below is against the lenses the BOUND adapter declares rather than a list of four
-written here. A gate that hardcoded the shipped set would go stale the moment somebody added a
-fifth, which is the failure it exists to prevent one layer down.
+Since Phase 5 the check is `review/all-lenses`, one fan-out whose branches are declared from the
+BOUND adapter's own lens map, so the file names no lens and cannot go stale the way a list in
+YAML does. What this file holds, then, is that the workflow really does fan out over exactly the
+bound set -- both directions, with a stub adapter -- and that `lockstep.yml` runs that workflow
+once, recording, on one tape.
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 import yaml
 
-from in_lockstep.cli import _review_lenses
+from in_lockstep.cli import _ensure_review_bound, _review_lenses
+from in_lockstep.core.container import Container
+from in_lockstep.core.context import RepoInfo, RunContext
+from in_lockstep.core.outcome import Finding, Outcome, Status
+from in_lockstep.core.verbs import Capability, Verb
 from in_lockstep.core.workflow import restore, snapshot
 from in_lockstep.loader import load
+from in_lockstep.workflows.review import bound_lenses, review_all_lenses
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "lockstep.yml"
 
-# `--aspect security --aspect intent …`: one invocation of `review`, which loops over the lenses
-# itself and exits with the worst status. The loop used to be shell in the workflow (#314).
-ASPECT_FLAG = re.compile(r"--aspect\s+([\w-]+)")
-
 
 @pytest.fixture
-def lenses():
-    """The lenses a review run in THIS repository would actually have.
-
-    Loaded through the module rather than read off `prompts.review.LENSES`, because the question
-    the gate asks is what the bound adapter declares. This repository binds no `Review` of its own
-    today and the two answers agree — but a gate that only holds while they agree is a gate about
-    the shipped default, not about the check.
-    """
+def lenses() -> Any:
+    """The lenses a review run in THIS repository would actually have: the module loaded, the
+    shipped adapter bound the way `run` binds it, and the set read off `compositions()`."""
     state = snapshot()
     module, _ref = load(str(ROOT))
     try:
+        _ensure_review_bound(module.lockstep)
         known = _review_lenses(module.lockstep)
         assert known is not None, "this repository's Review adapter must declare its lenses"
         yield set(known)
@@ -61,58 +61,105 @@ def _step() -> dict[str, Any]:
     return next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
 
 
-def _aspects_run() -> list[str]:
-    found = ASPECT_FLAG.findall(_step()["run"])
-    assert found, f"no --aspect in the review step:\n{_step()['run']}"
-    return found
+class _Lensed:
+    """A Review adapter that declares its lenses and records which it was asked for."""
+
+    verb: ClassVar[Verb] = Verb.REVIEW
+    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+
+    def __init__(self, *names: str, red: str = "") -> None:
+        self.names = names
+        self.red = red
+        self.asked: list[str] = []
+
+    def compositions(self) -> dict[str, object]:
+        return {f"review/{n}": object() for n in self.names}
+
+    async def invoke(self, ctx: Any, request: Any) -> Outcome[Any]:
+        self.asked.append(request.aspect)
+        await asyncio.sleep(0.01)
+        if request.aspect == self.red:
+            return Outcome(
+                status=Status.FAILED,
+                reason="review.rejected",
+                findings=(Finding(id=f"review.{self.red}", message="no"),),
+            )
+        return Outcome(
+            status=Status.SUCCEEDED, findings=(Finding(id=f"review.{request.aspect}", message="a note"),)
+        )
 
 
-def test_the_lens_set_is_not_empty(lenses):
-    """A positive control. Both sides of the comparison below are parsed, and two empty sets agree
-    with each other perfectly — the vacuity every ratchet in this repository has had to be given."""
+def _ctx(adapter: Any | None) -> RunContext:
+    from in_lockstep.adapters.ai.review import Review
+
+    container = Container()
+    if adapter is not None:
+        container.bind(Review, adapter)
+    return RunContext(run_id="r", repo=RepoInfo(root="."), container=container)
+
+
+def test_the_lens_set_is_not_empty(lenses: set[str]) -> None:
+    """A positive control: this repository binds at least the four shipped lenses."""
     assert len(lenses) >= 4
-    assert len(_aspects_run()) >= 4
 
 
-def test_the_required_check_exercises_every_lens_that_is_bound(lenses):
-    """`GATE-REVIEW-5`. The direction that matters: adding a lens must turn this red.
-
-    A lens the framework declares and the enforced check never runs is a lens shipped on our word.
-    The message names the missing ones rather than the counts, because the fix is to add them to
-    the loop — or to decide out loud that they are not worth the money, which is a decision this
-    file should make somebody write down.
-    """
-    unexercised = lenses - set(_aspects_run())
-    assert not unexercised, (
-        f"the required review check never runs {sorted(unexercised)}. Add them to the aspect loop "
-        f"in {WORKFLOW.relative_to(ROOT)}, or say in that file why they are not worth the spend."
+def test_the_required_check_exercises_every_lens_that_is_bound(tmp_path: Path) -> None:
+    """`GATE-REVIEW-5`. The direction that matters: a lens the adapter declares is a branch the
+    workflow runs, whatever its name and however many there are -- five here, one of them
+    nothing the framework ships -- and every branch runs even when one of them fails."""
+    adapter = _Lensed("security", "intent", "performance", "tests", "licensing", red="intent")
+    ctx = _ctx(adapter)
+    assert bound_lenses(ctx) == ("intent", "licensing", "performance", "security", "tests")
+    outcome = asyncio.run(review_all_lenses(ctx, "main", "HEAD", comments=str(tmp_path / "bodies")))
+    assert sorted(adapter.asked) == ["intent", "licensing", "performance", "security", "tests"]
+    assert outcome.status is Status.FAILED and outcome.reason == "review.rejected", (
+        "the worst verdict is the run's"
     )
+    assert sorted(f.id for f in outcome.findings) == sorted(f"review.{n}" for n in adapter.names)
+    assert [s.step for s in ctx.steps] == ["intent", "licensing", "performance", "security", "tests"]
+    bodies = sorted(p.name for p in (tmp_path / "bodies").glob("*.md"))
+    assert bodies == ["intent.md", "licensing.md", "performance.md", "security.md", "tests.md"]
+    assert "<!-- in-lockstep:review:licensing -->" in (tmp_path / "bodies" / "licensing.md").read_text()
 
 
-def test_the_check_does_not_run_a_lens_that_is_not_bound(lenses):
-    """The other direction, and not symmetric with it. A name in the loop that no adapter declares
-    is a run that refuses — `GATE-REVIEW-3` makes the refusal loud — but it refuses after the job
-    has installed the provider extra and minted a credential, and it fails a required check for a
-    typo. Cheaper to catch here."""
-    unknown = set(_aspects_run()) - lenses
-    assert not unknown, f"the review loop names {sorted(unknown)}, which no bound lens declares"
+def test_the_check_does_not_run_a_lens_that_is_not_bound() -> None:
+    """The other direction: no adapter, or one that declares nothing, is a refusal by name and
+    zero model calls, not a run over a list written somewhere else."""
+    outcome = asyncio.run(review_all_lenses(_ctx(None), "main", "HEAD"))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "review.no_lenses"
+    empty = _Lensed()
+    outcome = asyncio.run(review_all_lenses(_ctx(empty), "main", "HEAD"))
+    assert outcome.status is Status.BLOCKED and empty.asked == []
 
 
-def test_every_lens_runs_even_when_one_of_them_fails():
-    """Failing fast would let a transient refusal in the first lens cost the recordings of the
-    three behind it, and this check is where most of the eval corpus comes from. The loop and
-    the worst-status rule are `review`'s own (GATE-CI-4, `test_cli.py`), so what this file has to
-    hold is that the step hands every lens to ONE invocation rather than running four steps,
-    which would stop at the first red one."""
+ASPECT_FLAG = re.compile(r"--aspect\s+([\w-]+)")
+
+
+def test_this_repositorys_check_runs_every_bound_lens_once_recording_on_one_tape(lenses: set[str]) -> None:
+    """`lockstep.yml` invokes the framework once for the whole lens set (GATE-CI-4), `--record`
+    on, one `--cassette` so the single harvest downstream sees every lens, and writes the comment
+    bodies the publish job posts (GATE-REVIEW-6).
+
+    Two spellings are honest for one merge. Configuration loads from the TRUSTED ref -- the base
+    branch -- while a pull request's workflow file comes from the merge ref, so the pull request
+    that registers `review/all-lenses` in `.lockstep/lockstep.py` cannot also switch the file to
+    it: its own check would run a file naming a workflow the base branch's module does not
+    register (run 34171482674 did exactly that). Until the flip lands, the legacy `review` with
+    every bound lens as an `--aspect` holds GATE-REVIEW-5's direction the old way; after it, the
+    fan-out names no lens and this test's legacy branch is the one to delete.
+    """
     run = " ".join(_step()["run"].split())
-    assert run.count("in-lockstep review") == 1, "several invocations stop at the first failure"
     assert "||" not in run and "for " not in run and "exit " not in run, "the loop went back into shell"
-
-
-def test_the_lenses_share_one_tape_so_the_harvest_sees_them_all():
-    """A cassette is keyed on the whole composed prompt, so four lenses accumulate into one file
-    rather than overwrite each other — and the single harvest step downstream covers the lot. Four
-    tapes would need four harvests, and the one that got forgotten would be silent."""
-    run = _step()["run"]
-    assert run.count("--cassette") == 1
-    assert "--record" in run
+    assert run.count("--cassette") == 1 and "--record" in run
+    if "in-lockstep run review/all-lenses" in run:
+        assert run.count("in-lockstep run review/all-lenses") == 1, run
+        assert "--aspect" not in run, "the lens list went back into the file"
+        assert "--arg comments=review-comments" in run
+        return
+    assert run.count("in-lockstep review") == 1, "several invocations stop at the first failure"
+    listed = set(ASPECT_FLAG.findall(run))
+    assert listed == lenses, (
+        f"the legacy review step runs {sorted(listed)} and the bound adapter declares {sorted(lenses)}; "
+        f"switch the step to `run review/all-lenses` now that the module registers it"
+    )
+    assert "--comment-out review-comments" in run

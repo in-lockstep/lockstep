@@ -4525,3 +4525,19 @@ def test_resume_and_park_refuse_a_local_store_by_name(repo: Path) -> None:
     assert resumed.exit_code != 0 and "SHARED store" in resumed.output
     listed = CliRunner().invoke(main, ["ls", "--parked"])
     assert "nothing parks on it" in listed.output
+
+
+def test_run_parked_ok_exits_zero_and_says_the_park_is_the_outcome(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A proposing job's run is meant to end waiting on a person; `--parked-ok` is the flag that
+    says so, the way `--blocked-ok` does for a scheduled refusal, and the log still names it."""
+    import in_lockstep.platform.hosted as hosted
+
+    _git_repo_with_origin(repo)
+    _lifecycle(repo).write_text(_PARKING_MODULE.format(shared="True"))
+    monkeypatch.setattr(hosted, "hosted_scm", lambda *a, **k: object())
+    result = CliRunner().invoke(main, ["run", "demo/park", "--parked-ok"])
+    assert result.exit_code == 0, result.output
+    assert "parked    human.pr_review; resume with" in result.output
+    assert "exit      0: parked, and --parked-ok" in result.output

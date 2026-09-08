@@ -14,7 +14,7 @@ import asyncio
 import hashlib
 import os
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar
@@ -584,7 +584,8 @@ class RunContext:
         *,
         resume: str | None = None,
         max_parallel: int | None = None,
-        **branches: ActionCall | HumanBranch,
+        branches: Mapping[str, ActionCall | HumanBranch] | None = None,
+        **named: ActionCall | HumanBranch,
     ) -> JoinResult:
         """Run declared branches concurrently and return when every one is terminal.
 
@@ -610,6 +611,10 @@ class RunContext:
         accepted and ignored. No task outlives the call: the watcher is cancelled and awaited,
         every branch is awaited, and what returns is the whole result or a raised cancellation.
         """
+        # Two spellings, one set: `**named` reads at a call site with a fixed set of branches,
+        # and `branches=` is for a set computed at run time (every lens an adapter declares)
+        # without fighting the keyword-only arguments beside it.
+        branches = {**(branches or {}), **named}
         human = {name: b for name, b in branches.items() if isinstance(b, HumanBranch)}
         machine = {name: b for name, b in branches.items() if not isinstance(b, HumanBranch)}
         if human:

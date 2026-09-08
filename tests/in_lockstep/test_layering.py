@@ -329,7 +329,12 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: to a record and which write launches the continuation live in `core/human.py` and
 #: `platform/barrier.py`, where `test_core.py` and `test_barrier.py` reach them over a bare origin
 #: without a CliRunner.
-CLI_HELPER_STATEMENTS = 1238
+#: 1238 -> 1247 with PR-13, composing: `_ensure_review_bound` binds the shipped `AiReview` under
+#: the module's ceilings when `run` dispatches a workflow and the module bound no `Review`, the
+#: binding `review` already made a few lines into its own body. Which lenses run, and how a
+#: fan-out joins them, live in `workflows/review.py`, where `test_enforced_review.py` reaches
+#: them with a stub adapter.
+CLI_HELPER_STATEMENTS = 1247
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

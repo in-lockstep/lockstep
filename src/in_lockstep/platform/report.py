@@ -17,6 +17,8 @@ unprivileged job recorded when it ran the suite against the staged change (item 
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -192,6 +194,23 @@ def _cover_note(changeset: Any) -> list[str]:
     if notes:
         lines += ["**Notes from the run:**", *(f"- {note}" for note in notes), ""]
     return lines
+
+
+def write_review_comments(directory: str | Path, outcomes: Mapping[str, Any]) -> tuple[Path, ...]:
+    """One sticky-comment body per lens into `directory`, the shape `review --comment-out <dir>`
+    writes and `comment --body-file <dir>` posts: `<lens>.md`, each ending in its own marker.
+    Through the sink, like every write that leaves the process; the body carries a model's words
+    about the diff it was given."""
+    from ..privileged import sink
+
+    target = Path(directory)
+    target.mkdir(parents=True, exist_ok=True)
+    written = []
+    for lens, outcome in outcomes.items():
+        path = target / f"{lens}.md"
+        sink.write_text_atomic(path, review_comment(lens, outcome))
+        written.append(path)
+    return tuple(written)
 
 
 def _verdict_line(verdict: Any) -> str:

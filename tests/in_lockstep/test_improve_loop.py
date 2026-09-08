@@ -760,3 +760,89 @@ def test_measure_asks_each_probe_on_its_own_model_and_keeps_going_past_an_errore
     )
     assert built == ["stub:one"], "one invoker per model, not per probe"
     assert outcome.cost.usd == pytest.approx(0.001)
+
+
+# -- the proposal parks on its own review (Phase 5, PR-13) -----------------------------------------
+
+
+class _Numbered(_Host):
+    async def open_change(self, changeset: Any, **kwargs: Any) -> ChangeRequest:
+        self.opened.append(kwargs)
+        return ChangeRequest(
+            id="7",
+            url="https://example.test/pull/7",
+            branch="in-lockstep/improve/propose/r",
+            title="t",
+            number=7,
+        )
+
+
+class _Shared:
+    scope = "shared"
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    async def append(self, run_id: str, record: dict[str, object]) -> None:
+        pass
+
+    async def read(self, run_id: str) -> dict[str, object] | None:
+        return None
+
+    async def compare_and_set(self, key: str, expected: str | None, new: str) -> bool:
+        if self.values.get(key) != expected:
+            return False
+        self.values[key] = new
+        return True
+
+    async def state(self, key: str) -> str | None:
+        return self.values.get(key)
+
+
+def test_an_opened_proposal_parks_on_its_review_when_the_store_is_shared_and_says_so_when_it_is_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The proposal entered the person's queue as a draft, and what the loop learns from it is a
+    human event. On a SHARED store the run parks on the pull request's review with the change
+    and the body in its payload; on a LOCAL store nothing can park (GATE-OUT-6), the proposal
+    is still open, and the run says so rather than failing."""
+    import json
+
+    monkeypatch.chdir(tmp_path)
+    _staged(tmp_path)
+    host: Any = _Numbered()
+    store = _Shared()
+    ctx = RunContext(
+        run_id="propose-test",
+        repo=RepoInfo(root=str(tmp_path)),
+        container=Container(),
+        improvable=(IMPROVABLE,),
+        ledger=store,
+    )
+    outcome = asyncio.run(improve_propose(ctx, host, artifact=str(tmp_path / CHANGESET)))
+    assert outcome.status is Status.PARKED and outcome.reason == "human.pr_review"
+    record = json.loads(store.values["barrier/propose-test"])
+    assert record["resume"] == "improve/after-review"
+    assert record["payload"] == {
+        "change": "https://example.test/pull/7",
+        "number": 7,
+        "label": IMPROVABLE.label,
+    }
+    assert record["branches"][""]["boundary"]["target"] == "7"
+
+    outcome = _propose(tmp_path, _Numbered())
+    assert outcome.status is Status.SUCCEEDED
+    assert "parked    not: the ledger is none" in capsys.readouterr().out
+
+
+def test_the_continuation_records_the_persons_verdict_and_nothing_else() -> None:
+    from in_lockstep.core.human import Resumption
+    from in_lockstep.workflows.improve import improve_after_review
+
+    ctx = RunContext(run_id="after", repo=RepoInfo(root="."), container=Container())
+    accepted = Resumption("propose-test", "", "e1", "tim", "approved", payload={"change": "u"})
+    outcome = asyncio.run(improve_after_review(ctx, accepted))
+    assert outcome.status is Status.SUCCEEDED and outcome.reason == "human.approved"
+    assert outcome.value == {"change": "u", "actor": "tim", "verdict": "approved", "parent": "propose-test"}
+    declined = Resumption("propose-test", "", "e2", "ann", "changes_requested")
+    assert asyncio.run(improve_after_review(ctx, declined)).status is Status.FAILED

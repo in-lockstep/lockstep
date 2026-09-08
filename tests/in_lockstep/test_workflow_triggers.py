@@ -316,6 +316,7 @@ MAX_STATEMENTS = {
     "improve.yml": 11,
     "review.yml": 10,
     "reconcile.yml": 2,
+    "resume.yml": 3,
 }
 
 #: Every workflow the framework's lifecycle runs through; `ci.yml` and `release-python.yml` are
@@ -634,9 +635,11 @@ def test_gate_review_6_each_lens_is_posted_as_its_own_comment_by_the_job_holding
             continue
         review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
         reviewed = re.sub(r"\\\s*\n\s*", " ", " ".join(s.get("run", "") for s in review["steps"]))
-        assert re.search(r"in-lockstep review .*--comment-out review-comments\b", reviewed), (
-            f"{name}: the review job writes no comment body"
-        )
+        assert re.search(
+            r"in-lockstep review .*--comment-out review-comments\b"
+            r"|in-lockstep run review/all-lenses .*--arg comments=review-comments\b",
+            reviewed,
+        ), f"{name}: the review job writes no comment body"
         upload = next(s for s in review["steps"] if "upload-artifact" in str(s.get("uses", "")))
         assert "review-comments/" in str(upload["with"]["path"]).split(), f"{name}: the artifact carries none"
         assert publish["permissions"].get("pull-requests") == "write", f"{name}: publish cannot comment"
@@ -682,6 +685,25 @@ def test_gate_ledger_10_every_workflow_that_bundles_a_record_uploads_it_under_th
                 assert uploaded == name, (
                     f"{label}:{job} uploads its bundle as {uploaded!r}; the sweep lists {name!r}"
                 )
+
+
+def test_the_resume_trampoline_holds_the_write_token_and_no_provider_credential() -> None:
+    """Design §13.3 in its dispatch form. What runs is decided by the tick and the continuation
+    the barrier names; nothing here calls a model, so the job may hold the write token the
+    continuation's record and the pull request's label need, and nothing else."""
+    spec = _load("resume.yml")
+    assert spec["on"] == {"workflow_dispatch": spec["on"]["workflow_dispatch"]}
+    (job,) = spec["jobs"].values()
+    assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
+    assert not _spends(job), "the resume job can reach a model"
+    statements = _statements("resume.yml")
+    assert any(
+        s.startswith('uv run in-lockstep resume --run "$RUN" --as "$VERDICT" --by "$GITHUB_ACTOR"')
+        for s in statements
+    ), statements
+    assert "uv run in-lockstep history --push" in statements
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    assert "github.event.inputs" not in runs, "an input reached a shell script; pass it through env"
 
 
 def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:
@@ -765,7 +787,10 @@ def _review_scripts(text: str) -> list[str]:
     back as one string, and because this must see the file an adopter reads.
     """
     joined = re.sub(r"\\\s*\n\s*", " ", text)
-    return [line for line in joined.splitlines() if re.search(r"\bin-lockstep review\b", line)]
+    # `review` at a terminal, or the fan-out workflow this repository's required check runs.
+    return [
+        line for line in joined.splitlines() if re.search(r"\bin-lockstep (?:review\b|run review/)", line)
+    ]
 
 
 def test_gate_record_1_every_ci_review_records_its_inference() -> None:

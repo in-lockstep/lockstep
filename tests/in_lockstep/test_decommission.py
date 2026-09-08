@@ -94,7 +94,7 @@ def test_the_repository_configures_itself_in_python() -> None:
 def test_the_trampoline_carries_no_lifecycle_logic() -> None:
     """It invokes the CLI. Which workflows exist, and what they do, live in Python."""
     text = (ROOT / ".github" / "workflows" / "lockstep.yml").read_text()
-    assert "in-lockstep review" in text
+    assert "in-lockstep review" in text or "in-lockstep run review/all-lenses" in text
     # A timeout, because without one the CI default is 360 minutes rather than the 20 the
     # compiler used to emit.
     assert "timeout-minutes:" in text

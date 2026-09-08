@@ -28,6 +28,7 @@ from typing import Any
 from ..adapters.ai import Draft, Measure
 from ..adapters.ai.strategy import blocked
 from ..core.context import RunContext
+from ..core.human import HumanBoundary, Resumption
 from ..core.improve import IMPROVED, Improver, Scorecard
 from ..core.outcome import Finding, Outcome, Severity, Status
 from ..core.types import ChangeSet, FileChange
@@ -40,6 +41,7 @@ from ..platform.scm import Scm
 
 MEASURE = "improve/measure"
 PROPOSE = "improve/propose"
+AFTER_REVIEW = "improve/after-review"
 
 
 async def improve_measure(ctx: RunContext, improver: Improver) -> Outcome[Any]:
@@ -249,10 +251,52 @@ async def improve_propose(ctx: RunContext, scm: Scm, artifact: str = CHANGESET) 
         run_id=ctx.run_id,
     )
     print(f"change    {change.url or change.branch}")
-    return Outcome(status=Status.SUCCEEDED, value=change)
+    # Then wait for the person (§13): the proposal entered their queue as a draft, and what the
+    # loop learns from it -- accepted, changed, declined -- is a human event, not a run. On a
+    # SHARED store the run parks on the pull request's review and `improve/after-review` is
+    # what their event starts; on a LOCAL store nothing can park (`GATE-OUT-6`), and the
+    # proposal is still open, so that is said and the run succeeds as it always did.
+    number = getattr(change, "number", None)
+    store = ctx.ledger
+    if number is None or store is None or getattr(store, "scope", "local") != "shared":
+        why = (
+            "no change request number"
+            if number is None
+            else f"the ledger is {type(store).__name__ if store else 'none'}"
+        )
+        print(f"parked    not: {why}; the proposal waits in the review queue without a barrier")
+        return Outcome(status=Status.SUCCEEDED, value=change)
+    return await ctx.park(
+        HumanBoundary.pr_review(int(number)),
+        resume=AFTER_REVIEW,
+        payload={"change": change.url or change.branch, "number": int(number), "label": body.label},
+    )
+
+
+async def improve_after_review(ctx: RunContext, r: Resumption) -> Outcome[Any]:
+    """The continuation a person's review of a proposal starts (§13.4).
+
+    What the loop does with a verdict is small on purpose: the proposal is a pull request and
+    the person merged it or did not; this run records which, by whom, as the run that closed the
+    lifecycle the parked one opened, so `history --explain` shows the chain and `report` counts
+    the outcome. It does not re-measure, re-open or argue.
+    """
+    verdict = "accepted" if r.affirmative else "declined"
+    print(f"proposal  {r.payload.get('change', '?')} {verdict} by {r.actor} ({r.verdict})")
+    return Outcome(
+        status=Status.SUCCEEDED if r.affirmative else Status.FAILED,
+        reason=f"human.{r.verdict}",
+        value={
+            "change": r.payload.get("change"),
+            "actor": r.actor,
+            "verdict": r.verdict,
+            "parent": r.parent_run_id,
+        },
+    )
 
 
 def register() -> None:
     """Claim the `improve/*` ids. Called by an adopter's `lockstep.py`, never on import."""
     workflow(id=MEASURE)(improve_measure)
     workflow(id=PROPOSE)(improve_propose)
+    workflow(id=AFTER_REVIEW)(improve_after_review)
