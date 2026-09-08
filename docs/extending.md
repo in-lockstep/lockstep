@@ -362,8 +362,25 @@ lockstep.models.route("improve", "anthropic:claude-opus-4-6")
 improve.register()
 ```
 
-The judge is the person on the pull request. A rubric expectation is `outstanding` on both arms,
-and the body says so rather than printing a pass.
+A rubric expectation is put to the bound judge on both arms, one ask per case per arm, as one
+step of the same run -- so the judge's calls share the measurement's budget, its reconciliation
+and its tape. The judge is a verb of its own, `judge`, routed apart from the drafter because a
+grading model is a choice of its own; this repository routes it at the free local model. A
+verdict is kept beside the case in a `.verdicts.jsonl` sidecar keyed by the rubric's and the
+answer's content hashes, so a rubric judged once over one answer is replayed rather than paid for
+again, and an answer that changed by a byte is judged afresh. A rubric the judge did not answer,
+or one no judge is bound for, stays `outstanding` on both arms and the body says so rather than
+printing a pass; the person on the pull request is the judge of last resort.
+
+`in-lockstep eval run --judge --corpus evidence/cases --budget 0.10` judges the promoted corpus
+on its recorded answers, as a recorded run under a ceiling. Plain `eval run` never spends.
+
+```python
+from in_lockstep.adapters.ai import AiJudge, Judge
+
+lockstep.bind(Judge, AiJudge())
+lockstep.models.route("judge", "local:qwen3-8b")
+```
 
 A harvested case records the model it was answered by as `<registration>:<model>`: the
 registration name the run routed to, and the bare id that registration was sent. The after arm

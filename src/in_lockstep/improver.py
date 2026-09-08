@@ -51,7 +51,7 @@ from .core.improve import (
     Scorecard,
     Verdict,
 )
-from .evaluation import Case, load_cases
+from .evaluation import Case, load_cases, summarize
 from .evaluation.cases import Rubric, grade
 
 
@@ -193,11 +193,106 @@ class CorpusImprover:
             dropped=tuple(dropped),
         )
 
+    def corpus_rubrics(self) -> tuple[JudgeAsk, ...]:
+        return _corpus_rubrics(self.corpus)
+
+    def known_verdicts(self) -> tuple[Verdict, ...]:
+        return _known_verdicts(self.corpus)
+
+    def sidecar_for(self, case: str) -> Path:
+        return _sidecar_for(self.corpus, case)
+
+    def judged(self, verdicts: Sequence[Verdict]) -> Mapping[str, Any]:
+        return _judged(self.corpus, verdicts)
+
+
+#: The arm `eval run --judge` judges: the answer a case was recorded with, which is the only
+#: answer a corpus has until a draft makes another. Named apart from `before` because a verdict
+#: on it is a fact about the corpus, not about one measurement's baseline.
+RECORDED_ARM = "recorded"
+
+#: The suffix a case's verdict sidecar carries. `.jsonl` and not `.json`, so `load_cases`'s
+#: `rglob("*.json")` never reads a sidecar as a case, and appended rather than rewritten, so the
+#: case file a person promoted is never touched by a run.
+SIDECAR_SUFFIX = ".verdicts.jsonl"
+
 
 def _deterministic_holds(case: Case, content: str) -> bool:
     """Whether the checks a script can settle did not fail on this answer. A case with no checks
     holds: there was nothing to fail, and the rubric is the only question it asks."""
     return grade(case, as_answer(content))["deterministic_passed"] is not False
+
+
+def _corpus_rubrics(corpus: Path) -> tuple[JudgeAsk, ...]:
+    asks: list[JudgeAsk] = []
+    for case in load_cases(corpus):
+        rubric = case.rubric
+        if rubric is None or not rubric.scored:
+            continue
+        recorded = str(case.recorded.get("content", ""))
+        if not recorded or not _deterministic_holds(case, recorded):
+            continue
+        asks.append(_ask(case.name, RECORDED_ARM, rubric, recorded))
+    return tuple(asks)
+
+
+def _sidecar_for(corpus: Path, case: str) -> Path:
+    for known in load_cases(corpus):
+        if known.name == case and known.path is not None:
+            return known.path.with_name(known.path.stem + SIDECAR_SUFFIX)
+    # A case the corpus does not hold has no home beside one; it is filed at the root, named,
+    # rather than dropped, so a verdict that was paid for is not lost to a rename.
+    return corpus / f"{case}{SIDECAR_SUFFIX}"
+
+
+def _known_verdicts(corpus: Path) -> tuple[Verdict, ...]:
+    out: list[Verdict] = []
+    for path in sorted(corpus.rglob(f"*{SIDECAR_SUFFIX}")):
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+            except ValueError:
+                # One bad line is not a reason to forget every verdict beside it; it is skipped
+                # and the pair it would have keyed is simply judged again.
+                continue
+            if not isinstance(raw, dict) or not isinstance(raw.get("level"), int):
+                continue
+            out.append(
+                Verdict(
+                    case=str(raw.get("case", "")),
+                    arm=str(raw.get("arm", "")),
+                    level=int(raw["level"]),
+                    reason=str(raw.get("reason", "")),
+                    evidence=tuple(str(e) for e in raw.get("evidence") or ()),
+                    judge=str(raw.get("judge", "")),
+                    rubric_sha256=str(raw.get("rubric_sha256", "")),
+                    answer_sha256=str(raw.get("answer_sha256", "")),
+                )
+            )
+    return tuple(out)
+
+
+def _judged(corpus: Path, verdicts: Sequence[Verdict]) -> Mapping[str, Any]:
+    by_case = {v.case: v for v in verdicts if v.arm == RECORDED_ARM}
+    results = []
+    lines: list[str] = []
+    for case in load_cases(corpus):
+        recorded = str(case.recorded.get("content", ""))
+        result = grade(case, as_answer(recorded), _verdict_of(by_case.get(case.name)))
+        results.append(result)
+        if case.rubric is not None and case.rubric.scored:
+            if result.get("rubric_passed") is None:
+                lines.append(f"{case.name:<40} —  outstanding: {result.get('rubric_reason') or 'no verdict'}")
+            else:
+                word = "passed" if result["rubric_passed"] else "failed"
+                lines.append(
+                    f"{case.name:<40} {result['rubric_level']}  {word}: {result.get('rubric_reason', '')}"
+                )
+    summary = dict(summarize(results))
+    summary["lines"] = lines
+    return summary
 
 
 def _ask(case: str, arm: str, rubric: Rubric, answer: str) -> JudgeAsk:
@@ -236,8 +331,8 @@ def as_answer(content: str) -> Any:
 
 
 def arm_of(results: Sequence[Mapping[str, Any]]) -> Arm:
-    """One side, from graded results. `passed` and `failed` are the deterministic verdicts; a
-    rubric nobody judged is `outstanding` and is in neither."""
+    """One side, from graded results. `passed` and `failed` are the settled verdicts; a rubric
+    nobody judged is `outstanding`, and its case is in neither unless its checks already failed."""
     failures = tuple(
         Failure(case=str(r["case"]), check=str(c["check"]), detail=str(c["detail"]))
         for r in results
@@ -262,7 +357,12 @@ def arm_of(results: Sequence[Mapping[str, Any]]) -> Arm:
 
 
 def _settled(result: Mapping[str, Any]) -> bool:
-    """A case one half of which said something and the other half of which is not still waiting."""
+    """A case one half of which failed -- no verdict on the other could rescue it -- or one half
+    of which said something while the other is not still waiting. The same reading `summarize`
+    makes: a tightened case that also states a rubric is a FAILED case, not an outstanding one,
+    or the loop would refuse `nothing_to_improve` on the very case a person tightened."""
+    if result.get("deterministic_passed") is False or result.get("rubric_passed") is False:
+        return True
     return not result.get("rubric_outstanding") and (
         result.get("deterministic_passed") is not None or result.get("rubric_passed") is not None
     )

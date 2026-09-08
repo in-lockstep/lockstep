@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 
@@ -307,3 +308,24 @@ class Improver(Protocol):
     def score(
         self, baseline: Baseline, answers: Sequence[Answered], verdicts: Sequence[Verdict] = ()
     ) -> Scorecard: ...
+
+    def corpus_rubrics(self) -> tuple[JudgeAsk, ...]:
+        """Every promoted case's rubric over the answer it was recorded with, as one ask each on
+        the `recorded` arm -- and none for a case whose deterministic half fails that answer,
+        which no verdict could rescue (`GATE-JUDGE-2`). What `eval run --judge` sends."""
+        ...
+
+    def known_verdicts(self) -> tuple[Verdict, ...]:
+        """Verdicts already given and kept beside the corpus, each carrying its replay key, so a
+        rubric judged once is not paid for twice (`GATE-JUDGE-3`)."""
+        ...
+
+    def sidecar_for(self, case: str) -> Path:
+        """Where a case's verdicts are kept: a `.verdicts.jsonl` beside the case, appended and
+        never rewritten, so the case a person promoted stays the bytes they read."""
+        ...
+
+    def judged(self, verdicts: Sequence[Verdict]) -> Mapping[str, Any]:
+        """The corpus settled with these verdicts on the `recorded` arm: the summary `eval run`
+        prints, with a line per rubric saying the level and why."""
+        ...

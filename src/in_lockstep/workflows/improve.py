@@ -16,8 +16,10 @@ BLOCKED outcome with a reason a person can act on:
     a draft could only stay level or fall, and nothing is spent to learn that.
 
 What "better" means here is deliberately narrow and stated: a draft that passes a case the
-current body fails, and fails none the current body passes. A rubric nobody judged is
-`outstanding` on both arms, and the person on the pull request is the judge the loop declares.
+current body fails, and fails none the current body passes. A rubric is put to the bound judge
+on both arms, one ask each, sharing the run's budget and tape (`GATE-JUDGE-3`); a rubric the
+judge did not answer, or one no judge is bound for, stays `outstanding` on both arms, and the
+person on the pull request is the judge of last resort the loop declares.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..adapters.ai import Draft, Measure
+from ..adapters.ai import Draft, Judge, Measure
 from ..adapters.ai.strategy import blocked
 from ..core.context import RunContext
 from ..core.human import HumanBoundary, Resumption
@@ -38,6 +40,7 @@ from ..platform.ledger import store_for
 from ..platform.propose import open_reviewable
 from ..platform.report import improve_body, scorecard_lines
 from ..platform.scm import Scm
+from ..platform.verdicts import append_verdicts
 
 MEASURE = "improve/measure"
 PROPOSE = "improve/propose"
@@ -150,7 +153,28 @@ async def improve_measure(ctx: RunContext, improver: Improver) -> Outcome[Any]:
     measured = await ctx.do(Measure(probes=probes))
     if measured.status is not Status.SUCCEEDED:
         return measured
-    scorecard = improver.score(baseline, tuple(measured.value or ()))
+    answers = tuple(measured.value or ())
+    # The rubric half, after the deterministic half and only where a judge is bound. One step
+    # sharing the run's `Spend`, its reconciliation and its tape, so the measurement's bill is
+    # the measurement's. An unbound `Judge` is not a refusal: the rubrics stay outstanding, the
+    # scorecard says so, and the loop measures what it can, as it did before a judge existed.
+    verdicts: tuple[Any, ...] = ()
+    asks = improver.rubrics(baseline, answers)
+    if asks and ctx.container.has(Judge):
+        judged = await ctx.do(Judge(asks=asks, known=improver.known_verdicts()))
+        verdicts = tuple(getattr(judged.value, "verdicts", ()) or ())
+        replayed = set(getattr(judged.value, "replayed", ()) or ())
+        # Kept whatever the judge's status: a verdict paid for is a verdict, and the next
+        # measurement replays it rather than buying it again.
+        append_verdicts(improver, tuple(v for v in verdicts if f"{v.case}/{v.arm}" not in replayed))
+        if judged.status is not Status.SUCCEEDED:
+            # A ceiling firing mid-judgement is the control working; the run stops here rather
+            # than scoring a comparison the judge only half-answered.
+            return judged
+        print(f"judged    {len(verdicts)} rubric verdict(s), {len(replayed)} replayed")
+    elif asks:
+        print(f"judged    —  {len(asks)} rubric(s) outstanding: no Judge is bound")
+    scorecard = improver.score(baseline, answers, verdicts=verdicts)
     for line in scorecard_lines(scorecard):
         print(line)
 
