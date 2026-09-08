@@ -54,4 +54,11 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv sync
-      - run: uv run in-lockstep run selfcheck
+      # `ApprovalGate` is bound in this repository's module and gates on EXECUTES_CODE, which
+      # `PytestTest` declares and means -- so dispatching Test needs a grant, and the gate's own
+      # docstring says a command that passes none makes it unopenable rather than strict (#189).
+      # Nobody is watching a push, so the grant is `--approved-by` and the name recorded is
+      # whoever caused the run, the same spelling `implement.yml` uses after its gate job. Never
+      # `--approve`: that one claims a human is watching this run, and in CI that is a false
+      # record rather than a convenience.
+      - run: uv run in-lockstep run selfcheck --approved-by "${{ github.actor }}"

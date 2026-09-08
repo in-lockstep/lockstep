@@ -954,6 +954,15 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
         "no job in ci.yml runs the suite through the bound Test verb, so the container path a "
         "model's run takes is exercised only by a paid run (#373)"
     )
+    # The grant, and which one. `ApprovalGate` gates on EXECUTES_CODE, so the dispatch needs one
+    # or the job blocks; `--approve` would open it by claiming a human is watching a push, which
+    # is a false record rather than a convenience, and it is the shortcut somebody reaches for
+    # when the job goes red.
+    for dispatch in dispatches:
+        assert "--approved-by" in dispatch, f"{dispatch}: dispatches Test with no grant"
+        assert "--approve " not in dispatch and not dispatch.endswith("--approve"), (
+            f"{dispatch}: `--approve` says a person is watching this run, and nobody watches a push"
+        )
 
     state = snapshot()
     try:
