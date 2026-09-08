@@ -2975,6 +2975,18 @@ def doctor_cmd(strict: bool, fmt: str) -> None:
         raise SystemExit(EXIT_FAILED)
 
 
+def _framework_provisions(lockstep: Any) -> list[Any]:
+    """Every framework-provisioned tool a bound adapter names in `provisions`, once each."""
+    seen: list[Any] = []
+    for binding in lockstep.container.resolved():
+        if isinstance(binding.impl, type):
+            continue
+        for extra in getattr(binding.impl, "provisions", ()) or ():
+            if not any(extra is s for s in seen):
+                seen.append(extra)
+    return seen
+
+
 @main.command(name="provision")
 def provision_cmd() -> None:
     """Build the repository's own environment, from what is bound to Provision.
@@ -3005,6 +3017,8 @@ def provision_cmd() -> None:
         click.echo(f"provision  DISABLED  ({DISABLE_ENV} is set; nothing executes)")
         raise SystemExit(EXIT_BLOCKED)
     lockstep, _ = _default_lockstep()
+    extras = _framework_provisions(lockstep)
+    outcome: Any = None
     if not lockstep.container.has(Provision):
         # Which absence it is. A module is the truth when there is one and detection was not
         # consulted, so a uv.lock beside a module scaffolded before Provision existed is not
@@ -3018,16 +3032,25 @@ def provision_cmd() -> None:
             "lockstep.bind(Provision, CommandProvision([...])) to .lockstep/lockstep.py to say how"
         )
         click.echo(f"provision  not bound  ({why})")
+    else:
+        adapter: Any = lockstep.container.resolve(Provision)
+        if isinstance(adapter, Locatable):
+            for resolution in adapter.locations(lockstep.repo.root):
+                click.echo(f"           {resolution.render()}")
+        outcome = asyncio.run(adapter.invoke(SimpleNamespace(repo=lockstep.repo), Provision()))
+        for step in getattr(outcome.value, "steps", ()) or ():
+            click.echo(f"           ran {step}")
+        reason = f"  ({outcome.reason})" if outcome.reason else ""
+        click.echo(f"provision  {outcome.status.value}{reason}")
+    # What the framework provisions for itself, after what the adopter's module said (#375): a
+    # bound adapter that needs a tool the framework installs into its own cache names it in
+    # `provisions`, and this is the job that reaches the network for it. Idempotent, so a warm
+    # cache is a probe; a refusal is printed by name and is what every query would return.
+    for extra in extras:
+        refusal = asyncio.run(extra.ensure_installed())
+        click.echo(f"{type(extra).__name__.lower():<11}{'ready' if refusal is None else refusal}")
+    if outcome is None:
         return
-    adapter: Any = lockstep.container.resolve(Provision)
-    if isinstance(adapter, Locatable):
-        for resolution in adapter.locations(lockstep.repo.root):
-            click.echo(f"           {resolution.render()}")
-    outcome = asyncio.run(adapter.invoke(SimpleNamespace(repo=lockstep.repo), Provision()))
-    for step in getattr(outcome.value, "steps", ()) or ():
-        click.echo(f"           ran {step}")
-    reason = f"  ({outcome.reason})" if outcome.reason else ""
-    click.echo(f"provision  {outcome.status.value}{reason}")
     for finding in outcome.findings[:5]:
         click.echo(f"  {finding.id}: {finding.message}")
     if outcome.blocked:

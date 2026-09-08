@@ -1,0 +1,311 @@
+"""Graft, provisioned by the framework into its own cache, and an index it builds before a model
+starts (#375).
+
+[Graft](https://github.com/trailhq/Graft) builds a per-symbol code graph with tree-sitter and
+answers `ask`, `grep`, `callers`, `skeleton` and `map` from it. Its own onboarding -- a global
+install, `graft init`, hooks into an agent's directory, a `graft/` directory it gitignores for you
+-- is an agent-integration story. The framework's story is that the tool is there when a verb
+runs, or refuses by name, and the adopter installs and configures nothing (O2). This module is
+that story's deterministic half: where Graft lives, how it gets there, when the index is rebuilt,
+and what every Graft process is and is not handed (O6). The tool a model calls is built on it.
+
+Six facts from running Graft 0.16.0, each of which decides something below:
+
+1. Its plain-text output carries an instruction addressed to the model ("tell the user the total
+   graft tokens saved this turn"). Every query here is `--json`; the framework renders text.
+2. Its CLI loads `.env` from the current directory (`import "dotenv/config"`). Every Graft
+   process runs with `cwd` in the cache, never in the repository, and the tree is a positional
+   argument; the environment is the sandbox's pass-through set plus the four names below, so
+   nothing Graft could read is present to begin with.
+3. A build is byte-deterministic, so the fingerprint is a promise the record can keep.
+4. Its content-hash cache survives a change of root path: building a materialised worktree into
+   an index last built from the repository re-parses the files that differ and replays the rest.
+   The index directory is therefore per repository, with a fingerprint sidecar, rather than per
+   fingerprint: a fresh directory per fingerprint would throw that replay away on every edit.
+5. A query reads source text from the positional root, not from the index. A build and every
+   query over it name the same tree.
+6. The install compiles one grammar (Kotlin ships no prebuilt binary), so `npm ci` runs its
+   lifecycle scripts and needs a C/C++ toolchain and `python3` beside Node >= 20. A failed
+   compile is reported with that sentence rather than npm's stack.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import shutil
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
+from importlib import resources
+from pathlib import Path
+from typing import Protocol
+
+from ...core.types import Resolution
+from ...privileged import sink
+from ..sandbox import Sandbox, SandboxResult
+from ..worktree import WorktreeError, _git
+
+GRAFT_PACKAGE = "@nanonets/graft"
+#: Pinned here and in `package-lock.json` beside this module, by version and by integrity. A
+#: docs test holds the two together; bumping one without the other fails the build.
+GRAFT_VERSION = "0.16.0"
+#: What `@nanonets/graft`'s `engines` field asks for.
+NODE_MAJOR = 20
+#: On every Graft process, without exception. Telemetry off by construction rather than by a
+#: setting somebody could forget; no rebuild behind the framework's back, so a query answers from
+#: the index the fingerprint describes; no `.gitignore` edit even though `--dir` already keeps
+#: Graft out of the tree.
+GRAFT_ENV = {"DO_NOT_TRACK": "1", "GRAFT_NO_REFRESH": "1", "GRAFT_NO_GITIGNORE": "1"}
+#: Never on a Graft argv. `--deep` and `blast --name` are Graft's model layer, under Graft's own
+#: key, which this framework does not hold and would not route around its own recorder; the rest
+#: are Graft's agent-integration surface. Checked at the one place an argv is composed, as a
+#: framework invariant rather than a model-facing refusal: no caller here can ask for them.
+FORBIDDEN = frozenset(
+    {"--deep", "--lsp", "--name", "init", "mcp", "viz", "upgrade", "uninstall", "telemetry"}
+)
+QUERY_TIMEOUT = 60.0
+BUILD_TIMEOUT = 300.0
+INSTALL_TIMEOUT = 900.0
+TAIL_LINES = 20
+
+
+def cache_root() -> Path:
+    """Where the framework keeps what it provisions for itself: outside every repository.
+
+    `$RUNNER_TEMP` under CI, the way the cassette default in `cli.py` chooses it, so a job's
+    install and index die with the runner; `$XDG_CACHE_HOME` or `~/.cache` elsewhere, so a laptop
+    installs once. Never the repository, and never a global npm prefix: nothing the framework
+    provisions is something the adopter has to notice, commit, or clean up.
+    """
+    if os.environ.get("CI") and os.environ.get("RUNNER_TEMP"):
+        return Path(os.environ["RUNNER_TEMP"]) / "in-lockstep"
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".cache") / "in-lockstep"
+
+
+class Runner(Protocol):
+    """What Graft is run through: `Sandbox.run`'s shape, built with the environment below."""
+
+    async def run(
+        self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0
+    ) -> SandboxResult: ...
+
+
+def _sandbox(network: bool, env: dict[str, str]) -> Sandbox:
+    return Sandbox(allow_network=network, extra_env=env)
+
+
+def _tail(result: SandboxResult) -> str:
+    lines = (result.stderr or result.stdout).strip().splitlines()
+    return "\n".join(lines[-TAIL_LINES:])
+
+
+@dataclass
+class Graft:
+    """Graft in the framework's cache: provisioned, fingerprinted, and run with nothing in hand.
+
+    `sandbox_factory` is how a test watches what ran: it is handed `(network, env)` and returns
+    the runner every Graft process goes through. The default builds a `Sandbox` with no image --
+    a subprocess on this host with the ambient credentials dropped -- because Graft reads the
+    repository and writes only its cache, and the model never chooses its argv.
+    """
+
+    cache: Path = field(default_factory=cache_root)
+    version: str = GRAFT_VERSION
+    sandbox_factory: Callable[[bool, dict[str, str]], Runner] = _sandbox
+    #: How many installs this instance attempted. A test reads it to prove a host without Node
+    #: attempted none.
+    installs: int = 0
+    #: How many index builds this instance ran. A test reads it to prove a second query over the
+    #: same tree built nothing.
+    builds: int = 0
+
+    # -- where things are ----------------------------------------------------------------------
+
+    @property
+    def prefix(self) -> Path:
+        return self.cache / "graft" / self.version
+
+    @property
+    def binary(self) -> Path:
+        return self.prefix / "node_modules" / ".bin" / "graft"
+
+    @property
+    def home(self) -> Path:
+        """`HOME` for every Graft process. Graft writes version-check state under `homedir()`;
+        the adopter's home is not where a framework-provisioned tool keeps its bookkeeping."""
+        return self.cache / "graft" / "home"
+
+    def index_dir(self, repo_root: str) -> Path:
+        digest = hashlib.sha256(str(Path(repo_root).resolve()).encode()).hexdigest()[:12]
+        return self.cache / "graft" / "index" / digest
+
+    def _env(self) -> dict[str, str]:
+        return {**GRAFT_ENV, "HOME": str(self.home)}
+
+    def _runner(self, *, network: bool = False) -> Runner:
+        self.home.mkdir(parents=True, exist_ok=True)
+        return self.sandbox_factory(network, self._env())
+
+    async def _run(self, argv: list[str], *, network: bool = False, timeout: float) -> SandboxResult:
+        forbidden = FORBIDDEN.intersection(argv)
+        if forbidden:
+            raise ValueError(f"never on a Graft argv: {', '.join(sorted(forbidden))}")
+        # Fact 2: the cache, never the repository, so Graft's dotenv finds nothing to load.
+        return await self._runner(network=network).run(argv, cwd=str(self.cache), timeout=timeout)
+
+    # -- the host ------------------------------------------------------------------------------
+
+    async def node_refusal(self) -> str | None:
+        """`None` when a Node the pin can run is on PATH, else the refusal, naming what was found."""
+        found = await self._run(["node", "--version"], timeout=QUERY_TIMEOUT)
+        if found.exit_code != 0:
+            return (
+                f"refused: search_code.no_node: code search needs Node >= {NODE_MAJOR} on PATH and "
+                f"found none ({_tail(found) or 'node is not installed'})"
+            )
+        version = found.stdout.strip()
+        try:
+            major = int(version.lstrip("v").split(".")[0])
+        except ValueError:
+            major = 0
+        if major < NODE_MAJOR:
+            return (
+                f"refused: search_code.no_node: code search needs Node >= {NODE_MAJOR} and found "
+                f"{version or 'an unversioned node'}"
+            )
+        return None
+
+    def locations(self, root: str) -> tuple[Resolution, ...]:
+        """Where Node and Graft are, for `ls` and `doctor`. Graft's probe is its version, so a
+        cache holding the wrong pin is `DOC181` rather than a surprise at the first query."""
+        node = shutil.which("node")
+        graft = str(self.binary) if self.binary.exists() else None
+        return (
+            Resolution(
+                tool="node",
+                path=node,
+                how="on PATH",
+                tried=("node on PATH",),
+                probe=(node, "--version") if node else (),
+            ),
+            Resolution(
+                tool="graft",
+                path=graft,
+                how=f"provisioned into {self.prefix}",
+                tried=(f"{self.binary} (`in-lockstep provision` installs it)",),
+                probe=(graft, "--version") if graft else (),
+            ),
+        )
+
+    # -- provisioning --------------------------------------------------------------------------
+
+    async def installed_version(self) -> str | None:
+        if not self.binary.exists():
+            return None
+        probe = await self._run([str(self.binary), "--version"], timeout=QUERY_TIMEOUT)
+        return probe.stdout.strip() if probe.exit_code == 0 else None
+
+    async def ensure_installed(self) -> str | None:
+        """Graft at the pinned version, in the cache. `None`, or the refusal every query returns.
+
+        Idempotent, and the second call is a probe: a prefix whose `graft --version` answers the
+        pin is left alone, which is what lets `in-lockstep provision` run it in every work job and
+        a session run it again at start without a second install. The network is reached only on
+        the install, through a runner that allows it, and never during a model turn: a query with
+        no `graft` on disk refuses, it does not fetch.
+        """
+        if await self.installed_version() == self.version:
+            return None
+        if (refusal := await self.node_refusal()) is not None:
+            return refusal
+        self.prefix.mkdir(parents=True, exist_ok=True)
+        package = resources.files("in_lockstep.adapters.graft")
+        for name in ("package.json", "package-lock.json"):
+            sink.write_text_atomic(self.prefix / name, package.joinpath(name).read_text())
+        self.installs += 1
+        # `npm ci`, not `npm install`: the lockfile is the pin, by version and by integrity, and
+        # a resolver that could pick a newer version would make "which Graft indexed this" a
+        # question the record could not answer. `--prefix` keeps the install in the cache and off
+        # the adopter's global prefix. Lifecycle scripts run, for fact 6.
+        install = await self._run(
+            ["npm", "ci", "--prefix", str(self.prefix), "--no-audit", "--no-fund"],
+            network=True,
+            timeout=INSTALL_TIMEOUT,
+        )
+        if install.exit_code != 0:
+            tail = _tail(install)
+            toolchain = (
+                " One grammar is compiled at install: a C/C++ toolchain and python3 are required."
+                if "gyp" in tail
+                else ""
+            )
+            return (
+                f"refused: search_code.unavailable: `npm ci` for {GRAFT_PACKAGE}@{self.version} into "
+                f"{self.prefix} exited {install.exit_code}.{toolchain}\n{tail}"
+            )
+        if (got := await self.installed_version()) != self.version:
+            return (
+                f"refused: search_code.unavailable: {self.binary} answers {got or 'nothing'} after the "
+                f"install, not {self.version}"
+            )
+        return None
+
+    # -- the index -----------------------------------------------------------------------------
+
+    async def fingerprint(self, repo_root: str, staged: Iterable[tuple[str, str | None]] = ()) -> str:
+        """What the index describes: HEAD, every tracked file as it is on disk, and the session's
+        staged set. Over-approximate on purpose -- a spurious rebuild costs a stat pass through
+        Graft's own cache, an under-approximation is a query answered from a tree that is not the
+        one the session sees -- so a dirty checkout is fingerprinted by its bytes, not by HEAD."""
+        digest = hashlib.sha256()
+        try:
+            digest.update((await _git(repo_root, "rev-parse", "HEAD")).encode())
+            digest.update((await _git(repo_root, "ls-files", "-s")).encode())
+            dirty = await _git(repo_root, "status", "--porcelain", "--untracked-files=all")
+        except WorktreeError as e:
+            # Not a repository, or one with no commit: the tree's bytes are all there is to say.
+            digest.update(f"no-git:{e}".encode())
+            dirty = ""
+        for line in sorted(dirty.splitlines()):
+            path = Path(repo_root) / line[3:].split(" -> ")[-1]
+            digest.update(line.encode())
+            if path.is_file():
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
+        for name, contents in sorted(staged):
+            digest.update(name.encode())
+            digest.update(b"deleted" if contents is None else hashlib.sha256(contents.encode()).digest())
+        return digest.hexdigest()
+
+    async def ensure_index(self, repo_root: str, tree: str, fingerprint: str) -> str | None:
+        """The index over `tree`, built unless the sidecar already says this fingerprint.
+
+        `tree` is the repository, or the worktree the staged set was materialised into (fact 4:
+        that costs the changed files, not a re-index). The sidecar is written after a successful
+        build and only then, so a build that failed is retried by the next query rather than
+        remembered as done. `None`, or the refusal the query returns.
+        """
+        index = self.index_dir(repo_root)
+        sidecar = index / "fingerprint"
+        if sidecar.is_file() and sidecar.read_text() == fingerprint:
+            return None
+        index.mkdir(parents=True, exist_ok=True)
+        self.builds += 1
+        built = await self._run([str(self.binary), "--dir", str(index), "build", tree], timeout=BUILD_TIMEOUT)
+        if built.exit_code != 0:
+            return (
+                f"refused: search_code.no_index: `graft build` over {tree} exited {built.exit_code}\n"
+                f"{_tail(built)}"
+            )
+        sink.write_text_atomic(sidecar, fingerprint)
+        return None
+
+    async def query(
+        self, repo_root: str, argv: list[str], *, timeout: float = QUERY_TIMEOUT
+    ) -> SandboxResult:
+        """One Graft query over the index for `repo_root`. `argv` is the subcommand and its
+        arguments, tree included, as the caller composed it; `--json` is appended here because
+        fact 1 makes it a property of every query rather than a choice."""
+        return await self._run(
+            [str(self.binary), "--dir", str(self.index_dir(repo_root)), *argv, "--json"], timeout=timeout
+        )
