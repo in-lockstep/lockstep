@@ -29,6 +29,7 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -2153,6 +2154,108 @@ def _ledger_line(ledger: Any) -> str:
     )
 
 
+def _around_report(records: list[dict[str, Any]], around: str, subject: str) -> None:
+    """`report --around`: resolve the merge, pick the subject, cut the windows, compare, render.
+
+    Composing and translating, none of it deciding: which records fall on which side is
+    `windows_around`'s, the arithmetic and the epoch refusal are `compare()`'s, and the text is
+    `metrics.around_lines`'s. What is here is the three refusals a person can act on -- a merge
+    that is not one, a subject nothing resolves, a subject nobody recorded -- each by name.
+    """
+    from . import metrics
+    from .platform.ledger.store import MIN_RUNS, LedgerError, compare, windows_around
+
+    # Loaded once and only if a question needs it -- a pull request number, or a subject to
+    # derive -- because loading the module registers its workflows, and twice is a duplicate.
+    loaded: dict[str, Any] = {}
+
+    def module() -> Any:
+        if "lockstep" not in loaded:
+            loaded["lockstep"], _recorder = _default_lockstep()
+        return loaded["lockstep"]
+
+    sha, when = _resolve_merge(around, module)
+    key = subject or _subject_of_merge(sha, module)
+    before, after = windows_around(records, ts=when, subject=key)
+    if not before and not after:
+        raise click.ClickException(
+            f"no record carries the subject {key!r} on either side of {sha[:12]}. A subject is the "
+            f"first word of `history --explain`'s `subject` line (`review/security`) or its key; "
+            f"`report --by subject --by-kind` lists the ones this ledger holds."
+        )
+    try:
+        rows = compare(before, after)
+    except LedgerError as e:
+        raise click.ClickException(str(e)) from None
+    for line in metrics.around_lines(
+        rows,
+        subject=key,
+        merge=sha[:12],
+        when=when.isoformat(timespec="seconds"),
+        before_runs=len(before),
+        after_runs=len(after),
+        min_runs=MIN_RUNS,
+    ):
+        click.echo(line)
+
+
+def _resolve_merge(around: str, module: Callable[[], Any]) -> tuple[str, Any]:
+    """A merge, as a commit and the tz-aware moment it landed. `#N` or a bare number asks the
+    bound host for the pull request's merge commit and is refused by name when it was not
+    merged; anything else is a commit git can show, and its committer date is the moment."""
+    import re as _re
+    import subprocess
+    from datetime import datetime
+
+    if _re.fullmatch(r"#?\d+", around):
+        number = int(around.lstrip("#"))
+        try:
+            host: Any = _bound_scm(module())
+        except Exception as e:  # noqa: BLE001 - the refusal names the reason, whatever raised it
+            raise click.ClickException(f"cannot resolve pull request {number}: {e}") from None
+        lookup = getattr(host, "merged_change", None)
+        if lookup is None:
+            raise click.ClickException(
+                f"{type(host).__name__} cannot say when a pull request merged; pass the merge commit instead"
+            )
+        merged = asyncio.run(lookup(number))
+        if merged is None:
+            raise click.ClickException(
+                f"pull request {number} is not merged, or is not a pull request; `report --around` "
+                f"compares the runs before a merge with the runs after it, so there has to be one"
+            )
+        sha, merged_at = merged
+        return sha, datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
+    shown = subprocess.run(
+        ["git", "show", "-s", "--format=%H%n%cI", f"{around}^{{commit}}"], capture_output=True, text=True
+    )
+    if shown.returncode != 0:
+        raise click.ClickException(f"{around!r} is not a commit git can show: {shown.stderr.strip()}")
+    sha, iso = shown.stdout.strip().splitlines()[:2]
+    return sha, datetime.fromisoformat(iso)
+
+
+def _subject_of_merge(sha: str, module: Callable[[], Any]) -> str:
+    """The subject a merged change is about, from the one declared `Improvable` body it touched.
+    Refused by name when it touched none, or more than one: a subject nobody stated is not one to
+    guess at, and `--subject` is the line that states it."""
+    import subprocess
+
+    touched = subprocess.run(
+        ["git", "show", "--name-only", "--format=", sha], capture_output=True, text=True
+    ).stdout.split()
+    declared = tuple(getattr(module(), "improve", ()) or ())
+    hits = [body for body in declared if body.body in touched]
+    if len(hits) == 1:
+        return str(hits[0].label)
+    bodies = ", ".join(body.body for body in declared) or "(none declared)"
+    why = "more than one" if hits else "no"
+    raise click.ClickException(
+        f"{sha[:12]} touched {why} declared Improvable body (declared: {bodies}), so its subject "
+        f"cannot be derived; pass `--subject <strategy id or key>` to say which runs to compare"
+    )
+
+
 def _report_host() -> tuple[Any, str]:
     """The host `report --scm` asks, or None and the reason it could not be found. Never raises.
 
@@ -2261,7 +2364,29 @@ def _with_delivery(report: Any, host: Any, reason: str) -> Any:
     is_flag=True,
     help="Also ask the host what happened to the work: merges, and how long issues stayed open.",
 )
-def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: str, with_scm: bool) -> None:
+@click.option(
+    "--around",
+    default="",
+    metavar="SHA|#PR",
+    help="Compare the runs after this merge with the runs before it, on one subject. No verdict.",
+)
+@click.option(
+    "--subject",
+    default="",
+    metavar="STRATEGY|KEY",
+    help="--around: the subject both windows share (`review/security`, or a subject key). Derived "
+    "from the merged change's declared Improvable body when omitted.",
+)
+def report_cmd(
+    group_by: str,
+    names: bool,
+    fmt: str,
+    grouped: bool,
+    html_path: str,
+    with_scm: bool,
+    around: str,
+    subject: str,
+) -> None:
     """What the ledger adds up to: runs, failures, spend, effort, and what it keeps finding.
 
     Reads whichever store this repository records into — the orphan branch in a git repository,
@@ -2276,6 +2401,11 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
     section into a table per asker -- outcome mix, turns and spend per success, findings per run --
     and the spread between askers, each number with the runs it came from. Askers are pseudonyms
     unless `--names` is passed, because a report that reads as a leaderboard is gamed or resented.
+
+    `--around <merge>` is the question the improve loop could not answer until Phase 7: did the
+    runs after a merged proposal differ from the runs before it? Two windows on one subject, each
+    metric before, after and delta, each window with its run count, and no verdict -- whether a
+    lower failure rate means the change helped is the reader's call (`GATE-LEDGER-2`).
     """
     from . import metrics
     from .platform.ledger.store import summarize
@@ -2287,6 +2417,9 @@ def report_cmd(group_by: str, names: bool, fmt: str, grouped: bool, html_path: s
             f"{type(ledger).__name__} cannot list records; report needs a store that can"
         )
     records = reader()
+    if around:
+        _around_report(records, around, subject)
+        return
     if not records:
         click.echo("no records yet; the first run that writes a ledger record creates them")
         return

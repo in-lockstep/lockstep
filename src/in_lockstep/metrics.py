@@ -1463,3 +1463,67 @@ th {{ color:#6E727C; font-weight:500; font-size:12px; text-transform:uppercase; 
 
 def _note(text: str) -> str:
     return f"<div class=note>{_esc(text)}</div>"
+
+
+def around_lines(
+    rows: list[dict[str, Any]],
+    *,
+    subject: str,
+    merge: str,
+    when: str,
+    before_runs: int,
+    after_runs: int,
+    min_runs: int,
+) -> list[str]:
+    """`report --around`, as text: both windows named with their run counts, each metric's
+    before, after and delta, and `—` carrying why where a window is too thin to say anything.
+
+    No verdict. Whether a lower failure rate after a merge means the change helped is a person's
+    reading, and the numbers print with their denominators so that reading can be made. A leaf
+    like everything in this module: it takes `compare()`'s rows and returns strings.
+    """
+    out = [
+        f"around    {merge}  ({when})",
+        f"subject   {subject}",
+        f"before    {before_runs} run(s) on that subject, up to that moment",
+        f"after     {after_runs} run(s) since",
+        "",
+        f"{'':<10}{'before':>10}  {'after':>10}  {'delta':>10}",
+    ]
+
+    def cell(value: float | None, *, money: bool = False, pct: bool = False) -> str:
+        if value is None:
+            return "—"
+        if money:
+            return f"${value:.4f}"
+        if pct:
+            return f"{value:.0%}"
+        return f"{value:,.1f}"
+
+    def delta(a: float | None, b: float | None, *, money: bool = False, pct: bool = False) -> str:
+        if a is None or b is None:
+            return "—"
+        d = b - a
+        sign = "+" if d > 0 else ""
+        if money:
+            return f"{sign}${d:.4f}" if d >= 0 else f"-${-d:.4f}"
+        if pct:
+            return f"{sign}{d:.0%}" if d else "0%"
+        return f"{sign}{d:,.1f}"
+
+    for row in rows:
+        if row.get("verdict") != "measured":
+            out.append(
+                f"{'':<10}{'—':>10}  {'—':>10}  {'—':>10}   too few runs: {row.get('before_runs', 0)} "
+                f"before and {row.get('after_runs', 0)} after, and {min_runs} on each side is the floor"
+            )
+            continue
+        fa, fb = row.get("failure_rate_before"), row.get("failure_rate_after")
+        ca, cb = row.get("mean_cost_before"), row.get("mean_cost_after")
+        out.append(
+            f"{'failed':<10}{cell(fa, pct=True):>10}  {cell(fb, pct=True):>10}  {delta(fa, fb, pct=True):>10}"
+        )
+        costs = f"{cell(ca, money=True):>10}  {cell(cb, money=True):>10}  {delta(ca, cb, money=True):>10}"
+        out.append(f"{'mean cost':<10}{costs}")
+    out += ["", f"measured over {before_runs} and {after_runs} runs; the delta is a number, not a verdict"]
+    return out

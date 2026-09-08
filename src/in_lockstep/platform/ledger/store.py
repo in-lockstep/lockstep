@@ -226,6 +226,46 @@ def summarize(records: list[dict[str, object]], *, by: str = "kind") -> dict[str
     return stats
 
 
+def windows_around(
+    records: list[dict[str, object]], *, ts: object, subject: str
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """The two windows `report --around` compares: records on one subject before a moment, and
+    the records on it after (`GATE-LEDGER-2`'s caller).
+
+    `subject` is matched two ways, because a merged proposal CHANGES the subject key: the key is
+    a hash of the composed prompt, so the runs after a body change carry a different key from the
+    runs before, and keying both windows on one hash would put every run on one side. What both
+    windows share is the label's strategy -- `review/security` -- so a subject that is a
+    strategy id matches on the label's first word, and one that is a 32-hex key matches the key
+    exactly, for a caller that wants one composition and knows it. A record with no `ts`, or no
+    subject, cannot be placed and is in neither window: a measurement nobody took is not one.
+
+    Pure, and given the records, so a test hands it a list; `compare()` is the arithmetic.
+    """
+    from datetime import datetime
+
+    assert isinstance(ts, datetime) and ts.tzinfo is not None, "a tz-aware moment, so records compare"
+    before: list[dict[str, object]] = []
+    after: list[dict[str, object]] = []
+    for record in records:
+        key = str(record.get("subject") or "")
+        label = str(record.get("subject_label") or "")
+        strategy = label.split(" ", 1)[0] if label else ""
+        if subject not in (key, strategy):
+            continue
+        raw = record.get("ts")
+        if not isinstance(raw, str):
+            continue
+        try:
+            when = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if when.tzinfo is None:
+            continue
+        (before if when < ts else after).append(record)
+    return before, after
+
+
 def compare(
     before: list[dict[str, object]],
     after: list[dict[str, object]],

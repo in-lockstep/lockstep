@@ -345,7 +345,14 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: and prints how many it replayed. Which key a verdict answers to is `improver.py`'s
 #: (`corpus_rubrics`, `known_verdicts`); whether a kept verdict settles or fails a case is
 #: `grade`'s and `summarize`'s.
-CLI_HELPER_STATEMENTS = 1277
+#: 1277 -> 1327 with PR-18, composing and translating: `_around_report` loads the module once
+#: and calls three things in order, `_resolve_merge` turns `#N` or a sha into a commit and a
+#: tz-aware moment (the host's answer or git's, each refused by name), and `_subject_of_merge`
+#: turns a merge's touched files into the one declared body's label or a refusal that names
+#: `--subject`. Which records fall in which window is `windows_around`'s, the arithmetic and the
+#: epoch refusal are `compare()`'s, and the text is `metrics.around_lines`'s, where
+#: `test_platform.py` reaches all three with a list.
+CLI_HELPER_STATEMENTS = 1327
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

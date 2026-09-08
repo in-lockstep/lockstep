@@ -367,6 +367,32 @@ This line prints the subject in words. To group runs by it:
 in-lockstep report --by subject --by-kind
 ```
 
+Once a prompt change has merged -- one the improve loop proposed, or one a person made -- the
+question is whether the runs after it differ from the runs before it. `report --around` cuts the
+ledger into those two windows on one subject and prints each metric's before, after and delta,
+with the run count on each side and no verdict:
+
+```bash
+in-lockstep report --around #41            # the pull request's merge commit, from the host
+in-lockstep report --around 17e034b --subject review/security
+```
+
+```text
+around    17e034b259c4  (2026-09-07T17:09:46-04:00)
+subject   review/security
+before    107 run(s) on that subject, up to that moment
+after     2 run(s) since
+
+              before       after       delta
+                   —           —           —   too few runs: 107 before and 2 after, and 5 on each side is the floor
+
+measured over 107 and 2 runs; the delta is a number, not a verdict
+```
+
+The subject is derived from the one declared `Improvable` body the merge touched, or named with
+`--subject` when the merge touched none. A window thinner than five runs prints a dash and says
+so, and whether a lower failure rate means the change helped is your reading, not the command's.
+
 `--by` selects what one row aggregates over, and it applies to that grouped table and to
 `--format json` — not to the full report, which always groups by kind. Pass it without either and
 the report says so rather than dropping your question. The one exception is `--by actor`, which

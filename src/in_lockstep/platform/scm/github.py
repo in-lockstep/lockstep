@@ -470,6 +470,24 @@ class GitHubScm:
         base, head = str(data.get("baseRefName") or ""), str(data.get("headRefOid") or "")
         return (base, head) if base and head else None
 
+    async def merged_change(self, number: int) -> tuple[str, str] | None:
+        """The merge commit and the moment one pull request was merged, or `None` when it was
+        not -- still open, closed unmerged, or not a pull request at all. `report --around #N`
+        reads it. Not on the `Scm` port, like `change_refs` and for the same reason."""
+        try:
+            raw = self._gh_json("pr", "view", str(number), "--json", "state,mergedAt,mergeCommit")
+        except RuntimeError as e:
+            if _NOT_A_PULL_REQUEST.search(str(e)):
+                return None
+            raise
+        data = raw if isinstance(raw, dict) else {}
+        if str(data.get("state") or "") != "MERGED":
+            return None
+        commit = data.get("mergeCommit")
+        sha = str(commit.get("oid") or "") if isinstance(commit, dict) else ""
+        merged_at = str(data.get("mergedAt") or "")
+        return (sha, merged_at) if sha and merged_at else None
+
     async def remarks(self, number: int) -> tuple[Remark, ...]:
         """Everything said on one pull request: the thread, the review verdicts, the line notes.
 
