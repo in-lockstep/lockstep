@@ -386,6 +386,15 @@
       "label": "records",
       "variant": "dashed",
       "labelDy": 24
+    },
+    {
+      "id": "c16",
+      "from": "tools",
+      "to": "invoker",
+      "label": "delegate: child loop, one spend, one tape",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left"
     }
   ],
   "cards": [

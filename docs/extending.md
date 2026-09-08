@@ -979,6 +979,16 @@ is for, and `TDD` (above) is what runs the suite against the staged change direc
 accumulated history, so the thing that actually stops a long session is the per-turn spend check,
 which refuses *before* the call that would cross the ceiling.
 
+**`delegate` is opt-in, and a child inherits every bound.** `lockstep.use(Oneshot(delegation=True))`
+hands the session one more tool: hand a single self-contained task to a nested session over a
+subset of its own tools, named per call, and get the child's final text back as a tool result. A
+name the session does not hold is refused by name, the child never holds `delegate`, and it runs
+through the same provider, the same `Spend` and the same transcript as its parent -- so a recording
+provider records it, a child turn that would cross the run's ceiling is refused inside the child,
+and its turn cap and deadline are whatever the parent had left. Its answer takes the same redaction
+and injection scan every tool result does. Off by default because a session that can start
+sessions is one whose turn cap no longer bounds its model calls on its own; the budget still does.
+
 ### `TDD`
 
 Test-first, enforced by the strategy rather than requested in a prompt. It runs in two model steps

@@ -67,7 +67,7 @@
       "col": 1,
       "type": "backend",
       "label": "Turn loop",
-      "sublabel": "read, search, write, run_script",
+      "sublabel": "read, write, run, delegate",
       "tag": "40 turns, priced",
       "width": 140
     },

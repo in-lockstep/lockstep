@@ -145,8 +145,13 @@ class AiStrategy:
         workflow_id: str = "",
         prompts: Mapping[str, Any] | None = None,
         layers: PromptLayers | None = None,
+        delegation: bool = False,
     ) -> None:
         self.invoker_factory = invoker_factory
+        #: Whether the session may hand a task to a nested session over a narrower tool set
+        #: (`delegate`, #332). Off unless the module says so: it is the one builtin that turns a
+        #: turn cap into a bound on this loop rather than on every model call the run makes.
+        self.delegation = delegation
         #: Empty defaults to the run's own repository (`ctx.repo.root`) at session time.
         self.repo_root = repo_root
         self.policy = policy or InvokePolicy(max_turns=DEFAULT_TURNS, max_tokens=DEFAULT_MAX_TOKENS)
@@ -236,6 +241,7 @@ class AiStrategy:
             # the same argument `AGENCY` makes about a frozenset that was hand-copied three times.
             tests=_test_runner(ctx, root, workspace),
             max_test_runs=self.policy.max_test_runs,
+            delegation=self.delegation,
         )
         layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
         if type(self).reads_house_rules:
