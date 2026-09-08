@@ -125,6 +125,14 @@ class PytestTest:
         # with no summary decides nothing; a non-zero exit with no summary is the runner failing,
         # which is `errored` and not evidence about the change.
         if not summarized:
+            # What it printed, because the exit code alone is not something anybody can act on.
+            # A container job dispatching this got `pytest exited 4` and nothing else, and the
+            # usage error behind it -- which pytest had written to stderr -- was recoverable
+            # from no record, no log and no finding. Same argument as GATE-VERDICT-2 makes about
+            # a failing test's message, one layer down: the runner failing IS the evidence here,
+            # and a verdict that drops it sends the next reader back to reproduce what the run
+            # already knew.
+            printed = _tail(text)
             if exit_code != 0:
                 return Outcome(
                     status=Status.ERRORED,
@@ -136,12 +144,18 @@ class PytestTest:
                             message=(
                                 f"pytest exited {exit_code} without a summary line; the suite did not "
                                 f"report, so nothing was decided about the change"
+                                + (f". It printed: {printed}" if printed else " and printed nothing")
                             ),
                             severity=Severity.ERROR,
                         ),
                     ),
                 )
-            return _undecided(report, "test.no_summary", "pytest exited 0 without a summary line")
+            return _undecided(
+                report,
+                "test.no_summary",
+                "pytest exited 0 without a summary line"
+                + (f". It printed: {printed}" if printed else " and printed nothing"),
+            )
         if report.passed + report.failed == 0:
             # A summary that counts nothing executed -- every test skipped or deselected -- is the
             # exit-5 case wearing a different exit code.
@@ -184,6 +198,12 @@ class PytestTest:
         )
 
 
+def _tail(text: str) -> str:
+    """The last of what the runner printed, on one line, bounded."""
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    return " / ".join(lines)[-RUNNER_OUTPUT_CHARS:] if lines else ""
+
+
 def _undecided(report: TestReport, finding: str, why: str) -> Outcome[TestReport]:
     """A suite that ran nothing is neither red nor green. Reporting it as SUCCEEDED with
     `decided=True` would be the reassuring number -- a suite that ran nothing looking exactly
@@ -200,6 +220,11 @@ def _undecided(report: TestReport, finding: str, why: str) -> Outcome[TestReport
 #: values; a message is one line of pytest's summary and rarely longer, but a parametrised
 #: repr can run to kilobytes, and a finding is read on a ticket.
 MESSAGE_CHARS = 240
+#: How much of a silent runner's own output a finding carries. The tail, not the head: a usage
+#: error, a traceback and an import failure all end with the sentence that names the cause, and
+#: the banner above it is the part somebody can reconstruct. Sized so the whole thing survives
+#: `Finding.as_record`'s own cap rather than being clipped again on the way to the ledger.
+RUNNER_OUTPUT_CHARS = 320
 
 
 def _case(line: str) -> TestCase:
