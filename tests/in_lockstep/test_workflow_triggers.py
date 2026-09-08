@@ -964,11 +964,11 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
     # it exists to cover is never run.
     for name, job in (ci.get("jobs") or {}).items():
         runs = [str(step.get("run") or "") for step in job.get("steps") or [] if isinstance(step, dict)]
-        dispatch = next((i for i, r in enumerate(runs) if "in-lockstep run selfcheck" in r), None)
-        if dispatch is None:
+        at = next((i for i, r in enumerate(runs) if "in-lockstep run selfcheck" in r), None)
+        if at is None:
             continue
         provision = next((i for i, r in enumerate(runs) if "in-lockstep provision" in r), None)
-        assert provision is not None and provision < dispatch, (
+        assert provision is not None and provision < at, (
             f"{name}: dispatches the suite without provisioning first, so the venv it mounts is "
             f"not the one a model's run gets and the tests needing an optional SDK skip"
         )
