@@ -847,3 +847,60 @@ def test_a_run_context_carries_the_store_its_record_goes_to(tmp_path: Path) -> N
     ctx = lockstep.context("r1")
     assert isinstance(ctx.ledger, GitLedger) and ctx.ledger.scope == "local"
     assert RunContext.__dataclass_fields__["ledger"].default is None
+
+
+def test_a_depth_one_publisher_absorbs_a_bundle_carrying_ids_the_remote_already_holds(tmp_path: Path) -> None:
+    """#352's publish step. A runner's bundle carries the whole branch, the leaked fixture ids
+    included, and the publishing job absorbs it from a depth-one checkout with no local
+    `lockstep-history`: the refusal must ask the remote what it already holds, or every publish
+    refuses its own bundle by ids a person has not yet removed -- which is what happened to each
+    one after #346. A bundle carrying a fixture id the remote does NOT hold is still refused."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    seed = _repo(tmp_path / "seed")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=seed, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=seed, check=True, capture_output=True)
+    asyncio.run(GitLedger(root=seed).append("triage-412", {"kind": "triage"}))  # the leak, as it happened
+    subprocess.run(
+        ["git", "push", "-q", "origin", f"refs/heads/{DEFAULT_BRANCH}:refs/heads/{DEFAULT_BRANCH}"],
+        cwd=seed,
+        check=True,
+        capture_output=True,
+    )
+
+    # A runner at full depth: its branch starts from the remote's, so its bundle carries the leak.
+    runner = _repo(tmp_path / "runner")
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=runner, check=True)
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "-q",
+            "origin",
+            f"+refs/heads/{DEFAULT_BRANCH}:refs/remotes/origin/{DEFAULT_BRANCH}",
+        ],
+        cwd=runner,
+        check=True,
+    )
+    asyncio.run(GitLedger(root=runner).append("review-security-20260907T000000Z-ab12", {"kind": "review"}))
+    bundle = GitLedger(root=runner).bundle(tmp_path / "runner.bundle")
+
+    # The publisher: depth one, no lockstep-history ref of any kind.
+    publisher = tmp_path / "publisher"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", str(origin), str(publisher)], check=True, capture_output=True
+    )
+    ledger = GitLedger(root=publisher)
+    assert ledger.head() is None
+    ledger.absorb(bundle, run_id="77")
+    assert sorted(str(r["run_id"]) for r in ledger.records()) == [
+        "review-security-20260907T000000Z-ab12",
+        "triage-412",
+    ]
+    ledger.push()
+
+    # A NEW fixture id, which the remote does not hold, is still refused at the same seam.
+    rogue = _repo(tmp_path / "rogue")
+    asyncio.run(GitLedger(root=rogue).append("wayfinder-chart-local", {"kind": "workflow"}))
+    with pytest.raises(HistoryError, match="wayfinder-chart-local"):
+        ledger.absorb(GitLedger(root=rogue).bundle(tmp_path / "rogue.bundle"), run_id="78")

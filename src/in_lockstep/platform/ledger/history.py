@@ -225,6 +225,29 @@ class GitLedger:
         mine, theirs = self._record_names(local), self._record_names(remote)
         return Divergence(read=self.ref, local_only=len(mine - theirs), remote_only=len(theirs - mine))
 
+    def _held_by_the_branch(self) -> set[str]:
+        """Every record name the shared branch already carries, as far as this checkout can see:
+        the remote-tracking ref, and the remote itself after one fetch.
+
+        The fixture refusal exempts these, and it has to ask the REMOTE: a bundle a runner made
+        carries the whole branch, the leaked records included, and the publishing job absorbs it
+        from a depth-one checkout that holds no local `lockstep-history` at all. Asking only the
+        local refs there exempted nothing, and every publish after #346 refused its own bundle
+        by the four ids a person has not yet removed (#352's publish step) -- the nightly sweep
+        would have too. A fetch that fails (no remote, offline) exempts what the local refs hold.
+        """
+        held: set[str] = set()
+        # The remote side only. The local ref is what a push is about to publish, and exempting
+        # its own records would exempt exactly the fixture this refusal exists to stop.
+        commit = self._commit_at(self.remote_ref)
+        if commit:
+            held |= self._record_names(commit)
+        if self._try("fetch", "--quiet", self.remote, f"+{self.ref}:{self.remote_ref}") is not None:
+            commit = self._commit_at(self.remote_ref)
+            if commit:
+                held |= self._record_names(commit)
+        return held
+
     def _record_names(self, commit: str) -> set[str]:
         return set((self._try("ls-tree", "--name-only", f"{commit}:{RECORDS}") or "").splitlines())
 
@@ -571,10 +594,8 @@ class GitLedger:
             raise HistoryError("there is no history here to push")
         # Before the push and not only inside the reconcile a rejection triggers: a first push to
         # an empty remote is fast-forward and would carry a fixture record straight through.
-        theirs = self._commit_at(self.remote_ref)
         refuse_fixture_ids(
-            (str(r.get("run_id", "")) for r in self.records()),
-            already=self._record_names(theirs) if theirs else (),
+            (str(r.get("run_id", "")) for r in self.records()), already=self._held_by_the_branch()
         )
         try:
             self._git("push", self.remote, f"{self.ref}:{self.ref}")
@@ -702,7 +723,10 @@ class GitLedger:
             # checked the same way one that merges into it is.
             self._git("fetch", str(source), f"+{self.ref}:{_INCOMING_SCRATCH}")
             try:
-                refuse_fixture_ids(self._record_names(self._git("rev-parse", _INCOMING_SCRATCH)))
+                refuse_fixture_ids(
+                    self._record_names(self._git("rev-parse", _INCOMING_SCRATCH)),
+                    already=self._held_by_the_branch(),
+                )
                 self._git("update-ref", self.ref, self._git("rev-parse", _INCOMING_SCRATCH), "")
             finally:
                 self._try("update-ref", "-d", _INCOMING_SCRATCH)
@@ -717,10 +741,9 @@ class GitLedger:
             # absorbs nobody meant.
             self._git("fetch", str(source), f"+{self.ref}:{_INCOMING_SCRATCH}")
             try:
-                head = self.head()
                 refuse_fixture_ids(
                     self._record_names(self._git("rev-parse", _INCOMING_SCRATCH)),
-                    already=self._record_names(head) if head else (),
+                    already=self._held_by_the_branch(),
                 )
                 self._merge_ref(_INCOMING_SCRATCH, run_id=run_id)
             finally:
