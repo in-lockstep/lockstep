@@ -491,13 +491,22 @@ class RunContext:
         started = time.monotonic()
 
         async def terminal() -> Outcome[Any]:
+            # What the run's `Spend` held before the adapter ran. An AI adapter charges that same
+            # `Spend` turn by turn through the invoker it was handed (`routed_invoker` passes
+            # `ctx.spend`, and GATE-COST-6 depends on that sharing), and its outcome reports the
+            # same money again. Charging the outcome in full counted every model call twice: the
+            # ledger carried `cost_usd` at exactly 2x `outcome_cost_usd` on every fix, implement
+            # and judge record, and every `CostBudget` ceiling tripped at half its stated value
+            # (GATE-COST-7). Only what the outcome reports BEYOND what the `Spend` moved is charged
+            # here: the whole cost of a deterministic adapter, and the wall clock of an AI one.
+            already = self.spend.charged
             result: Outcome[Any] = await action.invoke(self, call.input)
             # Charged here, innermost, rather than after the chain unwinds — otherwise a
             # middleware reconciling actual spend against its ceiling looks at the accumulator
             # before this call was ever added to it, and every overrun reads as within budget.
             if result.cost.wall_seconds == 0.0:
                 result = result.with_cost(replace(result.cost, wall_seconds=time.monotonic() - started))
-            self.spend.charge(result.cost)
+            self.spend.charge(result.cost.beyond(self.spend.charged.beyond(already)))
             return result
 
         chain: Next = compose([*self.middleware, *call.middleware], terminal, self, call)

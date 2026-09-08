@@ -1432,3 +1432,65 @@ def test_a_barrier_tick_is_a_pure_transition_deduped_on_the_event_and_completing
         HumanBoundary.choice(["a", "b"], on="#3").as_record()
     ) == HumanBoundary.choice(["a", "b"], on="#3")
     assert "review of #41 by tim" in HumanBoundary.pr_review(41, reviewer="tim").describe()
+
+
+# -- GATE-COST-7: an outcome is charged once ---------------------------------------------------
+
+
+class _SpendsThroughTheRun:
+    """Stands in for an AI adapter: charges the run's `Spend` turn by turn, the way `AiInvoker`
+    does with the `ctx.spend` it is handed, and reports the same money on its outcome."""
+
+    verb: ClassVar[Verb] = Verb.TEST
+    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+
+    def __init__(self, turns: tuple[Cost, ...], *, reported: Cost | None = None) -> None:
+        self.turns = turns
+        self.reported = reported
+
+    async def invoke(self, ctx, inp):
+        total = Cost()
+        for turn in self.turns:
+            ctx.spend.charge_turn(turn)
+            total = total + turn
+        return Outcome(status=Status.SUCCEEDED, value=inp, cost=self.reported or total)
+
+
+def test_gate_cost_7_an_adapter_that_charged_the_runs_spend_turn_by_turn_is_not_charged_again() -> None:
+    """GATE-COST-7. Three turns of $1 through the shared `Spend`, an outcome reporting $3: the run
+    has spent $3, not $6. This is the doubling every fix, implement and judge record carried."""
+    turns = (Cost(usd=1.0, input_tokens=100, output_tokens=10, billed_tokens=110, priced_tokens=110),) * 3
+    ctx, _ = ctx_with((Thing, _SpendsThroughTheRun(turns)))
+    outcome = asyncio.run(ctx.do(Thing("x")))
+    assert outcome.cost.usd == 3.0
+    assert ctx.spend.charged.usd == 3.0
+    assert ctx.spend.charged.input_tokens == 300
+    assert ctx.spend.charged.billed_tokens == 330
+
+
+def test_gate_cost_7_a_deterministic_adapters_cost_is_still_charged_in_full() -> None:
+    """GATE-COST-7 changes nothing for an adapter that spends through nothing: its outcome is
+    the only account of what it cost, and the wall clock it did not measure is filled in."""
+    ctx, _ = ctx_with((Thing, Ok(cost=Cost(usd=0.25, input_tokens=5))))
+    asyncio.run(ctx.do(Thing("x")))
+    assert ctx.spend.charged.usd == 0.25
+    assert ctx.spend.charged.input_tokens == 5
+    assert ctx.spend.charged.wall_seconds > 0.0
+
+
+def test_gate_cost_7_what_an_outcome_reports_beyond_the_shared_spend_is_charged_once() -> None:
+    """GATE-COST-7, the mixed case: an adapter charged $1 through the run and reports $1.50,
+    because it also paid for something the invoker never saw. The run has spent $1.50 -- the
+    extra fifty cents once, the dollar not twice -- and the wall clock the invoker measured is
+    not added to again."""
+    ctx, _ = ctx_with(
+        (
+            Thing,
+            _SpendsThroughTheRun(
+                (Cost(usd=1.0, wall_seconds=2.0),), reported=Cost(usd=1.5, wall_seconds=2.0)
+            ),
+        )
+    )
+    asyncio.run(ctx.do(Thing("x")))
+    assert ctx.spend.charged.usd == 1.5
+    assert ctx.spend.charged.wall_seconds == 2.0
