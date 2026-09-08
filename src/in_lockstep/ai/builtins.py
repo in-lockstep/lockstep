@@ -66,6 +66,13 @@ DEFAULT_TEST_RUNS = 3
 #: is start another turn-loop -- and only the invoker holds the provider, the spend, the transcript
 #: and the policy a nested loop has to share (#332).
 DELEGATE_TOOL = "delegate"
+SEARCH_TOOL = "search_code"
+SEARCH_MODES = ("ask", "grep", "callers", "skeleton", "map")
+#: Under `max_tool_result_chars`, so a search answer is never the thing truncation cuts.
+MAX_SEARCH_CHARS = 12_000
+DEFAULT_SEARCH_LIMIT = 10
+MAX_SEARCH_LIMIT = 40
+MAX_SEARCH_DEPTH = 3
 
 # What a model may run, by argv[0]. An allowlist rather than a denylist, because the interesting
 # property is "somebody wrote this down", and a denylist of shells is trivially defeated by the
@@ -124,6 +131,38 @@ class CommandRunner(Protocol):
     """
 
     async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any: ...
+
+
+@dataclass(frozen=True)
+class Hit:
+    """One line of a code-search answer, with the path it names so the guard can judge it."""
+
+    path: str
+    line: str
+
+
+@dataclass(frozen=True)
+class SearchAnswer:
+    """What a code-search backend says: hits, or a refusal by name, or that nothing matched."""
+
+    hits: tuple[Hit, ...] = ()
+    refusal: str | None = None
+    empty: str = "(no matches)"
+
+
+class CodeSearch(Protocol):
+    """Whatever answers `search_code`. Structural, for the reason `CommandRunner` is: the shipped
+    backend is Graft in the framework's cache (`adapters.graft`), which `ai` may not import, and
+    the seam is what lets a test hand in an answer without a Node on the machine.
+
+    `staged` is the session's own writes, so the backend can answer over the tree the session
+    sees rather than the disk (GATE-WORKSPACE-1); `args` is what the model asked, already
+    bounded by the tool.
+    """
+
+    async def __call__(
+        self, mode: str, args: dict[str, object], staged: tuple[tuple[str, str | None], ...]
+    ) -> SearchAnswer: ...
 
 
 @dataclass
@@ -248,8 +287,17 @@ def _restore_masked(target: Path, contents: str, redact: Redact) -> tuple[str, i
     return rebuilt, len(values)
 
 
-def read_only(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
-    """What a reviewer needs: look at the tree it was asked about, and nothing else."""
+def read_only(
+    workspace: Workspace, *, code_search: CodeSearch | None = None
+) -> tuple[ToolSet, ToolRunnerImpl]:
+    """What a reviewer needs: look at the tree it was asked about, and nothing else.
+
+    `code_search` adds `search_code`, a symbol-level search over an index the framework built
+    (#375). Handed in rather than always on, and not only because the backend lives in `adapters`:
+    a tool's name is part of every recorded request's key, so a tool in every read-only session
+    would stop the shipped review cassette replaying and move every corpus entry. A strategy says
+    `code_search=True`; a session without it has no `search_code` to reach.
+    """
     tools = ToolSet.of(
         Tool(
             server=BUILTIN_SERVER,
@@ -295,16 +343,51 @@ def read_only(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
             capabilities=frozenset({Capability.READS_REPO}),
         ),
     )
-    return tools, ToolRunnerImpl(workspace)
+    if code_search is not None:
+        tools = tools | ToolSet.of(
+            Tool(
+                server=BUILTIN_SERVER,
+                name=SEARCH_TOOL,
+                description=(
+                    "Search the code graph instead of reading files. It covers HEAD plus what you "
+                    "have staged in this session, so a symbol you just wrote is found at its staged "
+                    "line. mode=ask: a task in words, ranked symbols with path:lines. mode=grep: a "
+                    "regex, hits grouped by the enclosing symbol. mode=callers: who calls a symbol "
+                    "(direction=in) or what it calls (direction=out), depth up to 3. mode=skeleton: "
+                    "one file's signatures without bodies (file=). mode=map: the repository's "
+                    "directories and hubs. Prefer this to read_file for finding code; read what it "
+                    "points at."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": list(SEARCH_MODES)},
+                        "query": {"type": "string", "description": "The task, regex or symbol name."},
+                        "file": {"type": "string", "description": "For mode=skeleton: the file."},
+                        "scope": {"type": "string", "description": "A path prefix to search within."},
+                        "direction": {"type": "string", "enum": ["in", "out"]},
+                        "depth": {"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_DEPTH},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_LIMIT},
+                    },
+                    "required": ["mode"],
+                },
+                capabilities=frozenset({Capability.READS_REPO}),
+            )
+        )
+    runner = ToolRunnerImpl(workspace)
+    runner.code_search = code_search
+    return tools, runner
 
 
-def read_write(workspace: Workspace) -> tuple[ToolSet, ToolRunnerImpl]:
+def read_write(
+    workspace: Workspace, *, code_search: CodeSearch | None = None
+) -> tuple[ToolSet, ToolRunnerImpl]:
     """Adds staging a change. Declares WRITES_FILES, which is what makes policy see it.
 
     That declaration is load-bearing in two places at once: egress enforcement becomes
     mandatory, and `ApprovalGate` gates the action.
     """
-    tools, runner = read_only(workspace)
+    tools, runner = read_only(workspace, code_search=code_search)
     tools = tools | ToolSet.of(
         Tool(
             server=BUILTIN_SERVER,
@@ -362,6 +445,7 @@ def read_write_execute(
     script_timeout: float = DEFAULT_SCRIPT_TIMEOUT,
     max_test_runs: int = DEFAULT_TEST_RUNS,
     delegation: bool = False,
+    code_search: CodeSearch | None = None,
 ) -> tuple[ToolSet, ToolRunnerImpl]:
     """Read, stage, and run a command. The most capable set the framework ships.
 
@@ -378,7 +462,7 @@ def read_write_execute(
     while every call refuses. That is deliberate: a tool set's declaration is what policy sees, so
     a set that could execute on some other configuration must not read as harmless on this one.
     """
-    tools, runner = read_write(workspace)
+    tools, runner = read_write(workspace, code_search=code_search)
     runner.commands = commands
     runner.tests = tests
     runner.allowed_commands = allowed_commands
@@ -520,6 +604,10 @@ class ToolRunnerImpl:
     #: What the last productive call did, for the finding that names it.
     last_progress: str = ""
     _last_tested: tuple[tuple[str, str | None], ...] | None = None
+    #: Answers `search_code`. Injected for the reason `tests` is, and absent means the tool was
+    #: never declared, so there is nothing to refuse: `read_only` adds the tool and the backend
+    #: together.
+    code_search: CodeSearch | None = None
 
     async def __call__(self, server: str, name: str, args: dict[str, object]) -> str:
         if server != BUILTIN_SERVER:  # pragma: no cover - ToolSet resolves before this
@@ -533,6 +621,7 @@ class ToolRunnerImpl:
             "delete_file": self._delete,
             "run_script": self._script,
             "run_tests": self._tests,
+            SEARCH_TOOL: self._search_code,
         }.get(name)
         if handler is None:  # pragma: no cover - ToolSet resolves before this
             return f"refused: no builtin tool named {name!r}"
@@ -540,6 +629,63 @@ class ToolRunnerImpl:
         # One handler is async and the rest are not. Awaiting whatever comes back keeps that an
         # implementation detail of the handler rather than a fact every caller has to know.
         return await result if inspect.isawaitable(result) else result  # type: ignore[return-value]
+
+    async def _search_code(self, args: dict[str, object]) -> str:
+        """One question to the code graph, over the tree this session sees.
+
+        The model chooses the mode and the words; everything about how the backend is run --
+        the argv, the environment, the index, the tree -- is the framework's, so the only thing
+        checked here is the question's shape. Every hit passes the read guard before it is shown,
+        silently, the way `search_text` skips a protected file: a search is how somebody looks
+        for a credential, and the index does not know what the guard knows.
+        """
+        if self.code_search is None:  # pragma: no cover - never declared without a backend
+            return "refused: search_code.unavailable: no code search is bound for this run"
+        mode = str(args.get("mode", ""))
+        if mode not in SEARCH_MODES:
+            return f"refused: search_code.bad_mode: mode must be one of {', '.join(SEARCH_MODES)}"
+        query = str(args.get("query", "") or "")
+        file = str(args.get("file", "") or "")
+        if mode in ("ask", "grep", "callers") and not query.strip():
+            return f"refused: search_code.no_query: mode={mode} needs a query"
+        if mode == "skeleton" and not file.strip():
+            return "refused: search_code.no_file: mode=skeleton needs file="
+        bounded: dict[str, object] = {
+            "query": query.strip(),
+            "file": file.strip(),
+            "scope": str(args.get("scope", "") or "").strip(),
+            "direction": "out" if args.get("direction") == "out" else "in",
+            "depth": max(1, min(MAX_SEARCH_DEPTH, _int(args.get("depth"), 1))),
+            "limit": max(1, min(MAX_SEARCH_LIMIT, _int(args.get("limit"), DEFAULT_SEARCH_LIMIT))),
+        }
+        staged = tuple((c.path, c.contents) for c in self.workspace.changes)
+        try:
+            answer = await self.code_search(mode, bounded, staged)
+        except Exception as e:  # noqa: BLE001 - a tool result is a message, never a crash
+            return f"error: search_code could not answer: {e}"
+        if answer.refusal is not None:
+            return answer.refusal
+        shown = [
+            hit.line
+            for hit in answer.hits
+            if not hit.path
+            or (
+                self.workspace.guard.check_read(hit.path) is None
+                and self.workspace.inside(self.workspace.resolve(hit.path))
+            )
+        ]
+        if not shown:
+            return answer.empty
+        # `limit` bounds the ranked modes. A skeleton or a map is one answer, not a ranking, and
+        # ten lines of either would be a file with its middle missing; the character cap bounds those.
+        ranked = mode in ("ask", "grep", "callers")
+        limit = _int(bounded["limit"], DEFAULT_SEARCH_LIMIT) if ranked else len(shown)
+        text = "\n".join(shown[:limit])
+        if len(shown) > limit:
+            text += f"\n…[{len(shown) - limit} more; raise limit or narrow the query]"
+        if len(text) > MAX_SEARCH_CHARS:
+            text = text[:MAX_SEARCH_CHARS] + "\n…[truncated; narrow the query]"
+        return text
 
     async def _tests(self, args: dict[str, object]) -> str:
         """Run the suite over what this session has staged, and say what happened.
@@ -859,3 +1005,11 @@ __all__ = [
     "read_write",
     "read_write_execute",
 ]
+
+
+def _int(value: object, default: int) -> int:
+    """A model's integer argument, or the default: never a crash over a string it sent."""
+    try:
+        return int(str(value)) if value not in (None, "") else default
+    except ValueError:
+        return default

@@ -32,18 +32,21 @@ Six facts from running Graft 0.16.0, each of which decides something below:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
-from ...core.types import Resolution
+from ...ai.builtins import Hit, SearchAnswer
+from ...core.outcome import Finding, Severity
+from ...core.types import ChangeSet, FileChange, Resolution
 from ...privileged import sink
 from ..sandbox import Sandbox, SandboxResult
-from ..worktree import WorktreeError, _git
+from ..worktree import WorktreeError, _git, materialize
 
 GRAFT_PACKAGE = "@nanonets/graft"
 #: Pinned here and in `package-lock.json` beside this module, by version and by integrity. A
@@ -303,9 +306,186 @@ class Graft:
     async def query(
         self, repo_root: str, argv: list[str], *, timeout: float = QUERY_TIMEOUT
     ) -> SandboxResult:
-        """One Graft query over the index for `repo_root`. `argv` is the subcommand and its
-        arguments, tree included, as the caller composed it; `--json` is appended here because
-        fact 1 makes it a property of every query rather than a choice."""
+        """One Graft query over the index for `repo_root`. `argv` is the subcommand, its options,
+        `--` and its positionals, as `argv_for` composes them; `--json` goes in right after the
+        subcommand because fact 1 makes it a property of every query rather than a choice, and
+        Graft takes it only there: not before the subcommand, and not after `--`."""
         return await self._run(
-            [str(self.binary), "--dir", str(self.index_dir(repo_root)), *argv, "--json"], timeout=timeout
+            [str(self.binary), "--dir", str(self.index_dir(repo_root)), argv[0], "--json", *argv[1:]],
+            timeout=timeout,
         )
+
+
+def argv_for(mode: str, args: dict[str, object], tree: str, *, scope: str = "") -> list[str]:
+    """The Graft argv for one bounded question, options first and every model-chosen token after
+    `--`, so a regex or a symbol beginning with a dash is a pattern and never an option. The
+    model chose the words; the framework chose everything else."""
+    query, file = str(args.get("query", "")), str(args.get("file", ""))
+    where = str(args.get("scope", "") or scope)
+    narrow = ["--in", where] if where else []
+    if mode == "ask":
+        return ["ask", *narrow, "--", query, tree]
+    if mode == "grep":
+        return ["grep", *narrow, "--", query, tree]
+    if mode == "callers":
+        direction = "out" if args.get("direction") == "out" else "in"
+        return ["callers", "--direction", direction, "-d", str(args.get("depth", 1)), "--", query, tree]
+    if mode == "skeleton":
+        return ["skeleton", "--", file, tree]
+    if mode == "map":
+        return ["map", "--", tree]
+    raise ValueError(f"no such search mode: {mode}")
+
+
+def _path_of(pointer: str) -> str:
+    return pointer.split(":", 1)[0]
+
+
+def render(mode: str, payload: dict[str, Any]) -> tuple[Hit, ...]:
+    """Graft's JSON as lines a model already knows how to read, one `Hit` per line with the path
+    it names. Every note Graft attaches is dropped here: those are Graft's sentences to a model,
+    and the framework does not forward a third party's prompt text (fact 1)."""
+    hits: list[Hit] = []
+    if mode == "ask":
+        for hit in payload.get("hits", ()):
+            pointer = str(hit.get("pointer", ""))
+            line = f"{pointer}  {hit.get('title', '')}  {hit.get('snippet', '')}".rstrip()
+            hits.append(Hit(_path_of(pointer), line))
+    elif mode == "grep":
+        for group in payload.get("groups", ()):
+            symbol = group.get("symbol") or {}
+            where = f"  (in {symbol.get('kind', '')} {symbol.get('name', '')})" if symbol else ""
+            path = str(group.get("path", ""))
+            for hit in group.get("hits", ()):
+                text = str(hit.get("text", "")).strip()[:200]
+                hits.append(Hit(path, f"{path}:{hit.get('line', '')}: {text}{where}"))
+    elif mode == "callers":
+        for match in payload.get("matches", ()):
+            symbol = match.get("symbol") or {}
+            edges = match.get("hits") or ()
+            path = str(symbol.get("path", ""))
+            head = f"{path}:{symbol.get('span', '')}  {symbol.get('kind', '')} {symbol.get('name', '')}"
+            hits.append(Hit(path, f"{head}  {len(edges)} edge(s)"))
+            for edge in edges:
+                line = (
+                    f"  {edge.get('path', '')}:{edge.get('span', '')}  {edge.get('kind', '')} "
+                    f"{edge.get('name', '')}  ({edge.get('relation', '')}, depth {edge.get('depth', '')})"
+                )
+                hits.append(Hit(str(edge.get("path", "")), line))
+    elif mode == "skeleton":
+        file = str(payload.get("file", ""))
+        for entry in payload.get("entries", ()):
+            line = (
+                f"{file}:{entry.get('span', '')}  {entry.get('kind', '')} {entry.get('name', '')}"
+                f"  {entry.get('signature', '')}"
+            )
+            hits.append(Hit(file, line))
+    elif mode == "map":
+        totals = payload.get("totals") or {}
+        summary = (
+            f"{totals.get('files', '?')} files · {totals.get('symbols', '?')} symbols · "
+            f"{totals.get('edges', '?')} edges"
+        )
+        hits.append(Hit("", summary))
+        for entry in payload.get("dirs", ()):
+            hubs = ", ".join(
+                f"{h.get('name', '')} ({h.get('inDegree', '?')}←)" for h in entry.get("hubs", ())
+            )
+            path = str(entry.get("path", ""))
+            counts = f"{entry.get('files', '?')} files · {entry.get('symbols', '?')} symbols"
+            line = f"{path}/  {counts}  hubs: {hubs}"
+            hits.append(Hit(path, line))
+        for hot in payload.get("hotspots", ()):
+            path = str(hot.get("path", ""))
+            line = (
+                f"hotspot  {path}:{hot.get('span', '')}  {hot.get('kind', '')} {hot.get('name', '')}"
+                f"  {hot.get('inDegree', '?')}←"
+            )
+            hits.append(Hit(path, line))
+    return tuple(hits)
+
+
+@dataclass
+class GraftSearch:
+    """`search_code`'s backend: Graft over the tree this session sees (#375).
+
+    One per run. With nothing staged the tree is the repository; with staged writes the staged
+    set is materialised into a throwaway worktree for the query, the way `run_tests` materialises
+    it for a suite, and the index is built over that tree -- fact 4 makes that the changed files'
+    parse rather than a re-index, and fact 5 is why the query runs while the worktree exists.
+    The fingerprint covers the staged set, so a query after a new write rebuilds and a query after
+    none does not; the sidecar is what makes two queries over one staged set build once.
+
+    What it saw goes on the record through `notes()`: the Graft version and the index fingerprint
+    when a query ran or `prepare` built, or the refusal by name when the tool refused, so two runs
+    that searched different trees say so and a run that went on without the tool says that.
+    """
+
+    graft: Graft
+    repo_root: str
+    #: A default `--in` for every query, for a Test bound at a package directory (#372).
+    scope: str = ""
+    _refusal: str | None = field(default=None, init=False)
+    _fingerprint: str = field(default="", init=False)
+
+    async def prepare(self) -> None:
+        """Install if the cache is cold and build the index over the repository, before the first
+        model call. A refusal is kept for the record and returned by every query; it is not raised,
+        because a run goes on without the tool (GATE-SEARCH-1)."""
+        if (refusal := await self.graft.ensure_installed()) is not None:
+            self._refusal = refusal
+            return
+        fingerprint = await self.graft.fingerprint(self.repo_root)
+        refusal = await self.graft.ensure_index(self.repo_root, self.repo_root, fingerprint)
+        if refusal is not None:
+            self._refusal = refusal
+            return
+        self._refusal, self._fingerprint = None, fingerprint
+
+    async def __call__(
+        self, mode: str, args: dict[str, object], staged: tuple[tuple[str, str | None], ...]
+    ) -> SearchAnswer:
+        if (refusal := await self.graft.ensure_installed()) is not None:
+            self._refusal = refusal
+            return SearchAnswer(refusal=refusal)
+        fingerprint = await self.graft.fingerprint(self.repo_root, staged)
+        if not staged:
+            return await self._answer(mode, args, self.repo_root, fingerprint)
+        changes = ChangeSet(changes=tuple(FileChange(path=p, contents=c) for p, c in staged))
+        async with materialize(self.repo_root, changes) as tree:
+            return await self._answer(mode, args, tree, fingerprint)
+
+    async def _answer(self, mode: str, args: dict[str, object], tree: str, fingerprint: str) -> SearchAnswer:
+        if (refusal := await self.graft.ensure_index(self.repo_root, tree, fingerprint)) is not None:
+            self._refusal = refusal
+            return SearchAnswer(refusal=refusal)
+        self._refusal, self._fingerprint = None, fingerprint
+        result = await self.graft.query(self.repo_root, argv_for(mode, args, tree, scope=self.scope))
+        try:
+            payload = json.loads(result.stdout)
+        except ValueError:
+            if result.exit_code != 0:
+                return SearchAnswer(
+                    refusal=(
+                        f"refused: search_code.no_index: `graft {mode}` exited {result.exit_code}\n"
+                        f"{_tail(result)}"
+                    )
+                )
+            # Graft answers an unknown symbol in prose rather than JSON; the framework's own words.
+            return SearchAnswer(empty=f"no symbol {str(args.get('query', ''))!r} in the index")
+        if not isinstance(payload, dict):  # pragma: no cover - Graft always answers an object
+            return SearchAnswer(refusal=f"refused: search_code.no_index: `graft {mode}` answered no object")
+        return SearchAnswer(hits=render(mode, payload))
+
+    def notes(self) -> tuple[Finding, ...]:
+        """What the record carries: the version and fingerprint the run searched, or why it could
+        not. NOTE severity, never blocking: the tool's absence is a fact about the run, not a
+        verdict on the change."""
+        if self._refusal is not None:
+            parts = self._refusal.split(":", 2)
+            code = parts[1].strip() if len(parts) > 1 else "search_code.unavailable"
+            return (Finding(id=code, message=self._refusal, severity=Severity.NOTE),)
+        if self._fingerprint:
+            message = f"graft {self.graft.version} · index {self._fingerprint[:12]}"
+            return (Finding(id="search_code.index", message=message, severity=Severity.NOTE),)
+        return ()

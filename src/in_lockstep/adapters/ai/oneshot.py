@@ -33,7 +33,7 @@ from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from .implement import Implement, ImplementReport, ImplementStrategy
-from .strategy import PhaseError, read_reply, reported, run_phase
+from .strategy import PhaseError, read_reply, reported, run_phase, search_notes
 
 
 class Oneshot(ImplementStrategy):
@@ -123,6 +123,7 @@ class Oneshot(ImplementStrategy):
             malformed=malformed,
             invocations=(invocation,),
             prefix="implement",
+            notes=search_notes(session),
         )
 
         if report.empty:

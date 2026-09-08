@@ -43,6 +43,7 @@ from .strategy import (
     read_reply,
     reported,
     run_phase,
+    search_notes,
     test_findings,
 )
 
@@ -269,7 +270,13 @@ class DiagnoseThenFix(FixStrategy):
             turns=repro_inv.turn_count + fix_inv.turn_count,
             idle_turns=fix_inv.idle_turns,
         )
-        findings = reported(full, malformed=malformed, invocations=(repro_inv, fix_inv), prefix="fix")
+        findings = reported(
+            full,
+            malformed=malformed,
+            invocations=(repro_inv, fix_inv),
+            prefix="fix",
+            notes=search_notes(session),
+        )
 
         async with materialize(session.repo_root, full) as tree:
             green = await ctx.do(_test_spec(tree, "pass"))

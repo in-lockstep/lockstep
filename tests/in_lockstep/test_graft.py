@@ -19,7 +19,15 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from in_lockstep.adapters.graft import GRAFT_ENV, GRAFT_VERSION, NODE_MAJOR, Graft, _sandbox, cache_root
+from in_lockstep.adapters.graft import (
+    GRAFT_ENV,
+    GRAFT_VERSION,
+    NODE_MAJOR,
+    Graft,
+    _sandbox,
+    argv_for,
+    cache_root,
+)
 from in_lockstep.adapters.sandbox import SandboxResult
 from in_lockstep.cli import main
 
@@ -173,7 +181,7 @@ def test_gate_search_1_every_graft_process_is_sealed(tmp_path: Path, monkeypatch
     assert asyncio.run(graft.ensure_installed()) is None
     print_ = asyncio.run(graft.fingerprint(str(repo)))
     assert asyncio.run(graft.ensure_index(str(repo), str(repo), print_)) is None
-    asyncio.run(graft.query(str(repo), ["grep", "x", str(repo)]))
+    asyncio.run(graft.query(str(repo), argv_for("grep", {"query": "-x"}, str(repo))))
     assert fake.calls, "nothing ran"
     for call in fake.calls:
         for name, value in GRAFT_ENV.items():
@@ -182,7 +190,8 @@ def test_gate_search_1_every_graft_process_is_sealed(tmp_path: Path, monkeypatch
         assert call.cwd == str(graft.cache), "fact 2: Graft's dotenv must find nothing to load"
         assert "--deep" not in call.command
     query = fake.calls[-1].command
-    assert query[-1] == "--json" and query[1:3] == ["--dir", str(graft.index_dir(str(repo)))]
+    assert query[1:5] == ["--dir", str(graft.index_dir(str(repo))), "grep", "--json"]
+    assert query[5:] == ["--", "-x", str(repo)], "the model's words come after `--`, so a dash is a pattern"
     with pytest.raises(ValueError, match="never on a Graft argv"):
         asyncio.run(graft.query(str(repo), ["build", "--deep", str(repo)]))
     env = _sandbox(False, graft._env()).clean_env()
