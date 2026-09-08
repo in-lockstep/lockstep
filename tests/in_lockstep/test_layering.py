@@ -359,7 +359,11 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: 1341 -> 1351 for `GATE-RECORD-6`, translating: `_turns_taken` reads `turns` and `tool_calls`
 #: off the run's `Spend` for the three record writers and `--explain` renders the line. What a
 #: turn is and what it charges stays `Spend.charge_turn`'s, where `test_core.py` reaches it.
-CLI_HELPER_STATEMENTS = 1351
+#: 1351 -> 1360 for `GATE-SEARCH-1`, composing: `provision` runs the framework's own installs
+#: (`_framework_provisions` gathers what bound adapters name in `provisions`) after the adopter's
+#: bound step, and no longer returns early when nothing is bound to `Provision`. What an install
+#: is and where it goes stays `adapters.graft`'s, where `test_graft.py` reaches it.
+CLI_HELPER_STATEMENTS = 1360
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is
