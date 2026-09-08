@@ -1,0 +1,45 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34167911350",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.049246,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 130,
+        "message": "Assertion checks only that a succeeded run exists, not that its artifact was named correctly.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 678,
+        "message": "Test detects bundling via `history --bundle` substring; a scaffold that spells the flag differently would be silently skipped.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "127090dfa031cb17a2cffab088363994d9a0f67b",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 561,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T225017Z-e038",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 564,
+  "ts": "2026-09-07T22:50:33+00:00",
+  "wall_seconds": 16.096
+}
