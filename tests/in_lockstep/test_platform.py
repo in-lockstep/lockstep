@@ -1141,3 +1141,58 @@ def test_gate_ledger_2_two_seeded_windows_produce_a_delta_per_metric_and_a_thin_
         "too few runs" in line and "1 after" in line and f"{MIN_RUNS} on each side" in line for line in thin
     )
     assert all("$" not in line for line in thin), "a thin window renders no number"
+
+
+def test_gate_ledger_2_a_lens_step_carrying_a_subject_is_a_window_entry_of_its_own() -> None:
+    """GATE-LEDGER-2's finding, the reading half: a fan-out's four lenses are four comparable runs
+    of their subjects, each with the parent's moment and its own status and bill; the parent
+    record carries no subject and falls in no window."""
+    from datetime import UTC, datetime
+
+    from in_lockstep.platform.ledger.store import windows_around
+
+    parent = {
+        "epoch": "in-process",
+        "run_id": "review-all-lenses-1",
+        "kind": "workflow",
+        "status": "succeeded",
+        "ts": "2026-09-08T00:00:00+00:00",
+        "cost_usd": 0.5,
+        "steps": [
+            {
+                "step": "security",
+                "verb": "review",
+                "status": "failed",
+                "cost_usd": 0.2,
+                "tokens": 10,
+                "subject": "s-key",
+                "subject_label": "review/security S@1 on m",
+            },
+            {
+                "step": "tests",
+                "verb": "review",
+                "status": "succeeded",
+                "cost_usd": 0.3,
+                "subject": "t-key",
+                "subject_label": "review/tests T@1 on m",
+            },
+            {"step": "test", "verb": "test", "status": "succeeded"},
+        ],
+    }
+    before, after = windows_around([parent], ts=datetime(2026, 9, 1, tzinfo=UTC), subject="review/security")
+    assert before == []
+    (entry,) = after
+    assert (entry["status"], entry["cost_usd"], entry["tokens"], entry["run_id"]) == (
+        "failed",
+        0.2,
+        10,
+        "review-all-lenses-1",
+    )
+    assert entry["ts"] == parent["ts"] and entry["epoch"] == "in-process" and entry["kind"] == "review"
+    assert (
+        windows_around([parent], ts=datetime(2026, 9, 1, tzinfo=UTC), subject="review/tests")[1][0][
+            "cost_usd"
+        ]
+        == 0.3
+    )
+    assert windows_around([parent], ts=datetime(2026, 9, 1, tzinfo=UTC), subject="workflow") == ([], [])

@@ -352,7 +352,11 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: `--subject`. Which records fall in which window is `windows_around`'s, the arithmetic and the
 #: epoch refusal are `compare()`'s, and the text is `metrics.around_lines`'s, where
 #: `test_platform.py` reaches all three with a list.
-CLI_HELPER_STATEMENTS = 1327
+#: 1327 -> 1341 with the fix to `GATE-LEDGER-2`'s finding, composing: `_steps_with_subjects`
+#: stamps each review lens step of a workflow record with the subject `_write_ledger` already
+#: computes for a bespoke review run, on the lens's routed model. What a subject IS stays
+#: `evaluation.subject`'s; which record a step becomes in a window is `windows_around`'s.
+CLI_HELPER_STATEMENTS = 1341
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

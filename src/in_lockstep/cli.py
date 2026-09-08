@@ -29,7 +29,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -683,6 +683,32 @@ def _record(ledger: Any, run_id: str, payload: dict[str, Any]) -> None:
     click.echo(f"ledger    {ledger.location(run_id)}")
 
 
+def _steps_with_subjects(lockstep: Any, steps: Sequence[Any]) -> list[dict[str, Any]]:
+    """The run's step records, each review lens carrying the subject its own record would.
+
+    Since PR-13 the required check is one `review/all-lenses` run whose four lenses are steps,
+    and a step carried no `subject`, so every lens run since was invisible to `report --around`
+    and to `--by subject` (the finding `GATE-LEDGER-2`'s row recorded). The subject is computed
+    the way `_write_ledger` computes it for a bespoke `review` run: the bound composition for
+    `review/<step>` and the model the route table names for that lens, or nothing when either
+    cannot be known -- a subject guessed is worse than none.
+    """
+    from .ai.bootstrap import routed_model
+
+    routes = dict(getattr(getattr(lockstep, "models", None), "routes", None) or {})
+    out: list[dict[str, Any]] = []
+    for step in steps:
+        record = step.as_record(max_findings=_LEDGER_MAX_STEP_FINDINGS)
+        if step.verb == "review" and step.step:
+            model = routed_model(routes, "review", step.step)
+            subject = _eval_subject(lockstep, kind="review", aspect=step.step, model_id=model)
+            if subject is not None:
+                record["subject"] = subject.key
+                record["subject_label"] = subject.label()
+        out.append(record)
+    return out
+
+
 def _write_workflow_ledger(
     lockstep: Any, ctx: Any, workflow_id: str, result: Any, args: dict[str, str]
 ) -> None:
@@ -726,7 +752,7 @@ def _write_workflow_ledger(
             "decided": decided,
             # What ran, in order, so `history --explain` can name the step that went red and a
             # reader of the raw record does not have to take the verdict on trust.
-            "steps": [step.as_record(max_findings=_LEDGER_MAX_STEP_FINDINGS) for step in ctx.steps],
+            "steps": _steps_with_subjects(lockstep, ctx.steps),
             # `total_tokens` is input plus output and EXCLUDES the cache, which is exactly the
             # number that stops making sense once caching is on. Run 33582850420 recorded 62,190
             # tokens for $13.84 — a thirty-three-fold drop against the run before it, and no way to

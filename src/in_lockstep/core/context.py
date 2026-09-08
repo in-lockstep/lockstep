@@ -337,6 +337,12 @@ class StepOutcome:
             "status": outcome.status.value,
             "decided": outcome.decided,
             "wall_seconds": round(outcome.cost.wall_seconds, 3),
+            # The step's own bill, so a step that is a comparable unit on its own -- one lens of
+            # a fan-out -- can be compared without borrowing the run's total. Measured, not
+            # inferred: the invoker charged this outcome, and a deterministic step's zero is a
+            # measured zero.
+            "cost_usd": round(outcome.cost.usd, 6),
+            "tokens": outcome.cost.total_tokens,
             "findings": {
                 "count": len(outcome.findings),
                 "items": [f.as_record() for f in outcome.findings[:max_findings]],
