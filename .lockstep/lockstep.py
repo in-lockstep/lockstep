@@ -417,7 +417,11 @@ lockstep.workshop = Workshop(
 # defensible under the `UnsandboxedEgress` binding above. Wrapped in `WorktreeRunner`, so what the
 # container bind-mounts read-write is a throwaway worktree of HEAD, not the live tree: without the
 # wrap, a model's command could write `.git/hooks` or this very file past ChangeGuard.
-tdd = lockstep.use(TDD)
+#
+# `delegation=True` hands the session `delegate` (#332): one bounded task to a nested loop over a
+# subset of its own tools, on the same spend and the same tape. Enabled here so the next
+# `/implement` on this repository exercises it; no run has yet, and O10's row says so.
+tdd = lockstep.use(TDD(delegation=True))
 
 
 # -- the fixing verb ----------------------------------------------------------------
