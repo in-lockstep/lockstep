@@ -27,6 +27,7 @@ That is the reason it exists as a layer rather than as part of the workflow.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -45,11 +46,13 @@ from .core.improve import (
     Baseline,
     Failure,
     Improvable,
+    JudgeAsk,
     Probe,
     Scorecard,
+    Verdict,
 )
 from .evaluation import Case, load_cases
-from .evaluation.cases import grade
+from .evaluation.cases import Rubric, grade
 
 
 class CorpusImprover:
@@ -128,8 +131,27 @@ class CorpusImprover:
             out.append(Probe(case=case.name, model=_model_of(case), request=request))
         return tuple(out)
 
-    def score(self, baseline: Baseline, answers: Sequence[Answered]) -> Scorecard:
+    def rubrics(self, baseline: Baseline, answers: Sequence[Answered]) -> tuple[JudgeAsk, ...]:
         by_case = {a.case: a for a in answers}
+        wanted = set(baseline.cases)
+        asks: list[JudgeAsk] = []
+        for case in load_cases(self.corpus):
+            rubric = case.rubric
+            if case.name not in wanted or rubric is None or not rubric.scored:
+                continue
+            recorded = str(case.recorded.get("content", ""))
+            asks.append(_ask(case.name, "before", rubric, recorded))
+            answer = by_case.get(case.name)
+            if answer is not None and answer.status == "answered":
+                asks.append(_ask(case.name, "after", rubric, answer.content))
+        return tuple(asks)
+
+    def score(
+        self, baseline: Baseline, answers: Sequence[Answered], verdicts: Sequence[Verdict] = ()
+    ) -> Scorecard:
+        by_case = {a.case: a for a in answers}
+        # A verdict settles the rubric of one case on one arm; the rest stay outstanding.
+        settled = {(v.case, v.arm): v for v in verdicts}
         wanted = set(baseline.cases)
         cases = {c.name: c for c in load_cases(self.corpus) if c.name in wanted}
         measured: list[str] = []
@@ -145,8 +167,14 @@ class CorpusImprover:
                 dropped.append((name, answer.detail or answer.status))
                 continue
             case = cases[name]
-            before.append(grade(case, as_answer(str(case.recorded.get("content", "")))))
-            after.append(grade(case, as_answer(answer.content)))
+            before.append(
+                grade(
+                    case,
+                    as_answer(str(case.recorded.get("content", ""))),
+                    _verdict_of(settled.get((name, "before"))),
+                )
+            )
+            after.append(grade(case, as_answer(answer.content), _verdict_of(settled.get((name, "after")))))
             measured.append(name)
         return Scorecard(
             cases=tuple(measured),
@@ -155,6 +183,24 @@ class CorpusImprover:
             verdict=verdict_of(before, after),
             dropped=tuple(dropped),
         )
+
+
+def _ask(case: str, arm: str, rubric: Rubric, answer: str) -> JudgeAsk:
+    record = rubric.as_record()
+    return JudgeAsk(
+        case=case,
+        arm=arm,
+        rubric=record,
+        answer=answer,
+        rubric_sha256=hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest(),
+        answer_sha256=hashlib.sha256(answer.encode()).hexdigest(),
+    )
+
+
+def _verdict_of(verdict: Verdict | None) -> dict[str, Any] | None:
+    if verdict is None:
+        return None
+    return {"level": verdict.level, "reason": verdict.reason, "evidence": list(verdict.evidence)}
 
 
 def carries(case: Case, body_text: str) -> bool:
@@ -184,13 +230,31 @@ def arm_of(results: Sequence[Mapping[str, Any]]) -> Arm:
         for c in r["checks"]
         if not c["passed"]
     )
+    # A judged rubric that failed is a failure of the arm, named like a check (GATE-JUDGE-1).
+    failures += tuple(
+        Failure(case=str(r["case"]), check="rubric", detail=str(r.get("rubric_reason", "")))
+        for r in results
+        if r.get("rubric_passed") is False
+    )
     return Arm(
         measured=len(results),
-        passed=sum(1 for r in results if r["deterministic_passed"] is True),
-        failed=sum(1 for r in results if r["deterministic_passed"] is False),
+        passed=sum(1 for r in results if _settled(r) and _passed(r)),
+        failed=sum(1 for r in results if _settled(r) and not _passed(r)),
         outstanding=sum(1 for r in results if r.get("rubric_outstanding")),
         failures=failures,
+        judged=sum(1 for r in results if r.get("rubric_passed") is not None),
     )
+
+
+def _settled(result: Mapping[str, Any]) -> bool:
+    """A case one half of which said something and the other half of which is not still waiting."""
+    return not result.get("rubric_outstanding") and (
+        result.get("deterministic_passed") is not None or result.get("rubric_passed") is not None
+    )
+
+
+def _passed(result: Mapping[str, Any]) -> bool:
+    return result.get("deterministic_passed") is not False and result.get("rubric_passed") is not False
 
 
 def verdict_of(before: Sequence[Mapping[str, Any]], after: Sequence[Mapping[str, Any]]) -> str:
@@ -203,9 +267,15 @@ def verdict_of(before: Sequence[Mapping[str, Any]], after: Sequence[Mapping[str,
     if not before:
         return UNMEASURED
     pairs = list(zip(before, after, strict=True))
-    if any(b["deterministic_passed"] is True and a["deterministic_passed"] is False for b, a in pairs):
+
+    def outcome(r: Mapping[str, Any]) -> bool | None:
+        # A settled case is passed or failed, both halves considered; an outstanding one is
+        # neither and cannot flip a verdict in either direction.
+        return _passed(r) if _settled(r) else None
+
+    if any(outcome(b) is True and outcome(a) is False for b, a in pairs):
         return REGRESSED
-    if any(b["deterministic_passed"] is False and a["deterministic_passed"] is True for b, a in pairs):
+    if any(outcome(b) is False and outcome(a) is True for b, a in pairs):
         return IMPROVED
     return UNCHANGED
 

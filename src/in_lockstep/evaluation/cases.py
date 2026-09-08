@@ -5,8 +5,9 @@ Ported from the compiler-era harness with its central contract intact. Two halve
 **Deterministic** — schema, equals, contains, absent, count. A machine settles these, and they
 either passed or they did not.
 
-**Rubric** — a judgement a model has to make. Until a judge has made it, the case is *outstanding*
-rather than passed. That distinction is the whole point of the file: a suite that reports 100%
+**Rubric** — a judgement a model has to make, parsed into criteria, a scale and a bar. Until a
+judge has made it, the case is *outstanding* rather than passed; a verdict handed to `grade`
+settles it either way. That distinction is the whole point of the file: a suite that reports 100%
 while half of it was never judged is a reassuring number computed from no evidence, and once it
 lands in a baseline it is compared against forever.
 
@@ -17,6 +18,7 @@ why an outcome carries `decided` alongside its status.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,13 +36,113 @@ class CaseError(ValueError):
     """A case that cannot mean what it says."""
 
 
+#: A rubric's defaults when a case states only the text: five levels, and four is the bar. Stated
+#: once, here, so a judged rubric and a case author reading it agree on what "passed" meant.
+RUBRIC_LEVELS = 5
+RUBRIC_MINIMUM = 4
+#: The object spelling the shipped corpus uses: `criteria` (a sentence or a list), `levels` (a
+#: number of rungs, or a mapping of rung to what an answer on it looks like -- the anchors a
+#: judge is shown), and `min`, the rung a passing answer reaches; `minimum` is the same key
+#: spelled out.
+RUBRIC_KEYS = ("criteria", "levels", "min", "minimum")
+
+
 @dataclass(frozen=True)
 class Rubric:
+    """A judgement a model has to make, as a question a judge can answer with an integer.
+
+    `criteria` are the things a passing answer does; `levels` is how many rungs the judge's
+    scale has, and `minimum` the rung a passing answer reaches. A case writes either the text
+    alone -- one criterion, five levels, four to pass -- or an object naming all three, and
+    `parse` refuses at load what no judge could satisfy (`minimum` above `levels`, a scale of
+    nothing, no criterion at all), the way `_refuse_unsatisfiable_counts` refuses a count with no
+    integer in its range: a rubric whose result cannot depend on the answer is not a rubric.
+    """
+
     text: str
+    criteria: tuple[str, ...] = ()
+    levels: int = RUBRIC_LEVELS
+    minimum: int = RUBRIC_MINIMUM
+    #: What an answer on a given rung looks like, where the case says: `(5, "names the mechanism
+    #: and the fix")`. The judge is shown these; a rubric with none is graded on the criteria alone.
+    anchors: tuple[tuple[int, str], ...] = ()
 
     @property
     def scored(self) -> bool:
-        return bool(self.text)
+        return bool(self.criteria)
+
+    @classmethod
+    def parse(cls, raw: object, *, name: str = "case") -> Rubric:
+        if isinstance(raw, str):
+            text = raw.strip()
+            if not text:
+                raise CaseError(f"{name}: a rubric with no text asks the judge nothing")
+            return cls(text=text, criteria=(text,))
+        if not isinstance(raw, dict):
+            raise CaseError(
+                f"{name}: a rubric is a sentence or an object of {list(RUBRIC_KEYS)}, not {raw!r}"
+            )
+        unknown = sorted(set(raw) - set(RUBRIC_KEYS))
+        if unknown:
+            raise CaseError(
+                f"{name}: rubric names {unknown}, which no judge reads; it takes {list(RUBRIC_KEYS)}"
+            )
+        criteria_raw = raw.get("criteria")
+        if isinstance(criteria_raw, str):
+            criteria_raw = [criteria_raw]
+        criteria = tuple(str(c).strip() for c in (criteria_raw or []) if str(c).strip())
+        if not criteria:
+            raise CaseError(f"{name}: a rubric with no criteria asks the judge nothing")
+        if "min" in raw and "minimum" in raw:
+            raise CaseError(f"{name}: rubric says both `min` and `minimum`; they are one bar")
+        levels_raw = raw.get("levels", RUBRIC_LEVELS)
+        anchors: tuple[tuple[int, str], ...] = ()
+        if isinstance(levels_raw, dict):
+            rungs: list[tuple[int, str]] = []
+            for key, what in levels_raw.items():
+                try:
+                    rung = int(str(key))
+                except ValueError:
+                    raise CaseError(
+                        f"{name}: rubric level {key!r} is not a rung a judge can answer with"
+                    ) from None
+                if rung < 1:
+                    raise CaseError(f"{name}: rubric level {rung} is below the scale; rungs start at 1")
+                rungs.append((rung, str(what)))
+            if not rungs:
+                raise CaseError(f"{name}: a rubric with no levels is a scale no answer sits on")
+            anchors = tuple(sorted(rungs))
+            levels = max(rung for rung, _ in anchors)
+        else:
+            levels = levels_raw
+        minimum_raw = raw.get("minimum", raw.get("min", RUBRIC_MINIMUM))
+        for label, value in (("levels", levels), ("min", minimum_raw)):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise CaseError(f"{name}: rubric {label} is {value!r}; a judge answers with an integer")
+        assert isinstance(levels, int) and isinstance(minimum_raw, int)  # noqa: S101 - narrowed above
+        minimum = minimum_raw
+        if levels < 1:
+            raise CaseError(f"{name}: a rubric with {levels} level(s) is a scale no answer sits on")
+        if not 1 <= minimum <= levels:
+            raise CaseError(
+                f"{name}: rubric min {minimum} is outside its {levels} level(s); "
+                f"{'no' if minimum > levels else 'every'} answer would pass, whatever it said"
+            )
+        return cls(
+            text="; ".join(criteria), criteria=criteria, levels=levels, minimum=minimum, anchors=anchors
+        )
+
+    def as_record(self) -> dict[str, Any]:
+        return {
+            "criteria": list(self.criteria),
+            "levels": self.levels,
+            "min": self.minimum,
+            "anchors": [[rung, what] for rung, what in self.anchors],
+        }
+
+    def settles(self, level: int) -> bool:
+        """Whether a judge's level is a pass. The one place the bar is read."""
+        return level >= self.minimum
 
 
 @dataclass(frozen=True)
@@ -62,8 +164,8 @@ class Case:
 
     @property
     def rubric(self) -> Rubric | None:
-        text = self.expect.get("rubric")
-        return Rubric(str(text)) if text else None
+        raw = self.expect.get("rubric")
+        return Rubric.parse(raw, name=self.name) if raw else None
 
     @property
     def deterministic(self) -> dict[str, Any]:
@@ -85,6 +187,8 @@ class Case:
         if not expect:
             raise CaseError(f"{name}: a case with no expectation cannot fail")
         _refuse_unsatisfiable_counts(expect, name=name)
+        if expect.get("rubric"):
+            Rubric.parse(expect["rubric"], name=name)  # refused here, before a judge is ever paid
         harvested = raw.get("harvested") or {}
         recorded = raw.get("recorded") or {}
         return cls(
@@ -203,8 +307,16 @@ def _count_says(want: Any) -> str:
     return " and ".join(bounds)
 
 
-def grade(case: Case, output: Any) -> dict[str, Any]:
-    """Settle the deterministic half. The rubric half is recorded as outstanding, not assumed."""
+def grade(case: Case, output: Any, verdict: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Settle the deterministic half; settle the rubric half only with a verdict handed in.
+
+    `verdict` is a judge's answer -- `level` (an integer on the rubric's scale), `reason`, and
+    whatever `evidence` it quoted -- and this function does not care who the judge was: a model
+    behind `Judge`, a person at a terminal, a sidecar replaying a level already given. Without
+    one the rubric stays `outstanding`, which is not a pass (`GATE-OUT-2`, `GATE-JUDGE-1`). A
+    verdict for a case with no rubric is ignored rather than counted: an answer to a question
+    nobody asked is not evidence.
+    """
     checks: list[dict[str, Any]] = []
 
     for key, expected in case.deterministic.items():
@@ -252,14 +364,30 @@ def grade(case: Case, output: Any) -> dict[str, Any]:
             checks.append({"check": "equals", "passed": output == expected, "detail": ""})
 
     rubric = case.rubric
-    return {
+    result: dict[str, Any] = {
         "case": case.name,
         "checks": checks,
         "deterministic_passed": all(c["passed"] for c in checks) if checks else None,
         # Outstanding, not passed. A judge has to answer this and has not yet.
         "rubric_outstanding": bool(rubric and rubric.scored),
         "rubric": rubric.text if rubric else "",
+        "rubric_passed": None,
     }
+    if rubric is not None and rubric.scored and verdict is not None:
+        level = verdict.get("level")
+        if isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= rubric.levels:
+            # A level off the scale is not a verdict, and the rubric stays outstanding rather than
+            # being read as whichever side of the bar a bad number happens to fall on.
+            result["rubric_reason"] = (
+                f"judge answered {level!r}, not a level on a {rubric.levels}-point scale"
+            )
+            return result
+        result["rubric_outstanding"] = False
+        result["rubric_passed"] = rubric.settles(level)
+        result["rubric_level"] = level
+        result["rubric_reason"] = str(verdict.get("reason", ""))
+        result["rubric_evidence"] = [str(e) for e in (verdict.get("evidence") or [])]
+    return result
 
 
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -268,17 +396,34 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     Returning 1.0 for a suite that decided nothing would put a perfect score computed from no
     evidence into a baseline, and it would be compared against forever.
     """
+    # Decided: nothing left outstanding, and at least one half actually said something -- a
+    # deterministic check, or a rubric a judge settled. A judged rubric decides a case on its
+    # own; a case with checks and an unjudged rubric is still outstanding, because half an
+    # answer is not one.
     decided = [
-        r for r in results if r.get("deterministic_passed") is not None and not r.get("rubric_outstanding")
+        r
+        for r in results
+        if not r.get("rubric_outstanding")
+        and (r.get("deterministic_passed") is not None or r.get("rubric_passed") is not None)
     ]
     outstanding = [r for r in results if r.get("rubric_outstanding")]
-    passed = [r for r in decided if r["deterministic_passed"]]
+    passed = [r for r in decided if _passed(r)]
+    judged = [r for r in results if r.get("rubric_passed") is not None]
     return {
         "total": len(results),
         "decided": len(decided),
         "outstanding": len(outstanding),
+        "judged": len(judged),
         "passed": len(passed),
         "pass_rate": (len(passed) / len(decided)) if decided else None,
-        # `ok` stays true when nothing was decided: a run is not blocked by its own honesty.
-        "ok": all(r["deterministic_passed"] is not False for r in results),
+        # `ok` stays true when nothing was decided: a run is not blocked by its own honesty. A
+        # judged rubric that failed is a failure like a check that failed (GATE-JUDGE-1).
+        "ok": all(
+            r["deterministic_passed"] is not False and r.get("rubric_passed") is not False for r in results
+        ),
     }
+
+
+def _passed(result: Mapping[str, Any]) -> bool:
+    """Both halves that were settled agree it passed; a half that was not settled abstains."""
+    return result.get("deterministic_passed") is not False and result.get("rubric_passed") is not False

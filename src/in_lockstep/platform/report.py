@@ -273,13 +273,37 @@ def scorecard_lines(scorecard: Any) -> list[str]:
     out = [f"measured  {before.measured} case(s), both arms"]
     for name, arm in (("before", before), ("after", after)):
         outstanding = f"{arm.outstanding} outstanding" if arm.outstanding else "—"
-        out.append(f"{name:<9} {arm.passed} passed, {arm.failed} failed, {outstanding}")
+        judged = f", {arm.judged} judged" if getattr(arm, "judged", 0) else ""
+        out.append(f"{name:<9} {arm.passed} passed, {arm.failed} failed, {outstanding}{judged}")
         for failure in arm.failures:
             out.append(f"          {failure.case}: {failure.check} {failure.detail}".rstrip())
     for case, why in scorecard.dropped:
         out.append(f"dropped   {case}: {why}")
     out.append(f"verdict   {scorecard.verdict}")
     return out
+
+
+def _judged_by(before: Any, after: Any) -> str:
+    """Who settled what. The deterministic checks are the grader's; a rubric is the judge's where
+    one answered and the person's where none did, and the sentence says how many of each."""
+    judged = getattr(before, "judged", 0) + getattr(after, "judged", 0)
+    outstanding = before.outstanding + after.outstanding
+    if judged and not outstanding:
+        return (
+            f"**Judged by:** the deterministic checks above were settled by the grader `eval run` "
+            f"uses, and the {judged} rubric expectation(s) by a judge whose verdicts ride the run's "
+            f"record; this pull request is still a person's to accept."
+        )
+    if judged:
+        return (
+            f"**Judged by:** the grader for the deterministic checks, a judge for {judged} rubric "
+            f"expectation(s), and a person — this pull request — for the {outstanding} still `—`."
+        )
+    return (
+        "**Judged by:** a person — this pull request. The deterministic checks above were settled "
+        "by the grader `eval run` uses; no judge answered, so a rubric expectation is `—` "
+        "rather than passed."
+    )
 
 
 def improve_body(scorecard: Any, rationale: str, *, run_id: str, label: str) -> str:
@@ -303,9 +327,7 @@ def improve_body(scorecard: Any, rationale: str, *, run_id: str, label: str) -> 
         + (f"; {len(scorecard.dropped)} dropped" if scorecard.dropped else "")
         + ".",
         "",
-        "**Judged by:** a person — this pull request. The deterministic checks above were settled "
-        "by the grader `eval run` uses; no judge model is bound, so a rubric expectation is `—` "
-        "rather than passed.",
+        _judged_by(before, after),
         "",
         f"**Measurement run:** `{run_id}` — `in-lockstep history --explain {run_id}` prints its "
         "record, and the paid arm's inferences were recorded on that run's tape.",
