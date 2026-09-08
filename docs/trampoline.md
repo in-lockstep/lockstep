@@ -53,8 +53,10 @@ The contract as a sequence, comment to pull request, is [chat-ops](https://in-lo
 
 ## The job split, by verb
 
-A read-only verb (review) needs **two jobs**: the review itself, with the provider key and read
-access and nothing else, and a `publish` job with the write token and no provider, which pushes
+A read-only verb (review) needs **two jobs**: the review itself, here `in-lockstep run
+review/all-lenses`, one fan-out over every lens the bound adapter declares under one budget and
+one tape, with the provider key and read access and nothing else, and a `publish` job with the
+write token and no provider, which pushes
 the review's record and posts each lens's verdict and findings as its own sticky comment from
 the bodies `--comment-out` wrote. A write-capable verb (implement, fix) needs **three**:
 
@@ -107,6 +109,10 @@ With no protection rules configured, the change request itself is the review. Th
 AI changes as drafts and marks them ready only when their tests passed, so nothing red lands in a
 human's queue either way.
 
+A run that ends at a human boundary parks instead of failing: `run --parked-ok` exits 0, the
+barrier lives in the shared ledger under `refs/lockstep/state/`, and the continuation is a separate
+job holding the write token and nothing that can reach a model.
+
 ## The two shipped mappings
 
 | Contract clause | GitHub Actions | GitLab CI |
@@ -114,7 +120,8 @@ human's queue either way.
 | Trigger, read verb | `on: pull_request` | `rules: $CI_PIPELINE_SOURCE == "merge_request_event"` |
 | Trigger, read verb on request | `issue_comment` (`/review <lens>`); the lens is resolved in Python against the lenses the module binds, the pull request's refs are asked of the host, and a job holding the write token and no provider SDK posts the body the reviewing job wrote | none: GitLab CI has no issue-comment trigger. The review job runs on every merge request; a lens on request is `in-lockstep review --aspect <lens>` locally, or a pipeline run with variables driving the same command |
 | Trigger, write verb | `issue_comment` (`/implement`, `/fix`), plus `issues: labeled` (`ai-generated`). The comment trigger fires on an **issue or a pull request**, since a reviewer asks for the next attempt where they are reading; the comment's number is passed through and `ticket_for` resolves it, never an `if:` expression | run-pipeline-with-variables (`LOCKSTEP_ISSUE`, and `LOCKSTEP_VERB=fix` for the fixing verb; `implement` otherwise), manually or via the trigger API, on one gate/work/propose pair. GitLab CI has no issue-comment or issue-label trigger; a webhook bridge can supply one |
-| Trigger, learning loop | `schedule:` in `improve.yml` (this repository's own file; no scaffold writes it), `improve/measure --record --blocked-ok` then `improve/propose` on the propose split | a pipeline schedule on the default branch setting `LOCKSTEP_IMPROVE=1`; the `measure` and `improve-propose` jobs run the same two commands |
+| Trigger, learning loop | `schedule:` in `improve.yml` (this repository's own file; no scaffold writes it), `improve/measure --record --blocked-ok` then `improve/propose --blocked-ok --parked-ok` on the propose split; the proposal parks on its own review, and `resume.yml` starts `improve/after-review` |
+| Trigger, resume | `workflow_dispatch` in `resume.yml` taking the parked run id (`in-lockstep ls --parked`) and a verdict; `in-lockstep resume --run --as --by "$GITHUB_ACTOR"` with `contents: write` and `pull-requests: write`, no provider credential, then `history --push`. The webhook form that would filter on `lockstep:parked` is not built | none written; the same command from a pipeline run with variables | a pipeline schedule on the default branch setting `LOCKSTEP_IMPROVE=1`; the `measure` and `improve-propose` jobs run the same two commands |
 | Base ref through | `origin/${GITHUB_BASE_REF}` | `origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}`, after an explicit `git fetch` (MR pipelines do not fetch the target branch) |
 | Who asked | `github.event.comment.user.login` + `author_association`, verified by the gate job | `GITLAB_USER_LOGIN`; no `author_association` exists, so the gate answers from CODEOWNERS, read from a checkout the job `rules:` pin to the default branch, because the asker picks the pipeline's ref |
 | Credential scoping | per-job `permissions:` + step-scoped `secrets`, enforced by the file itself | environment-scoped variables (`lockstep-work`: provider key + `read_api` token; `lockstep-propose`: the write-capable token). **Weaker, and operator-contingent:** GitLab's default variable scope is every environment, so an unscoped variable silently puts both credentials in both jobs. The file cannot enforce the split, only the variable configuration can |

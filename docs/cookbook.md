@@ -76,7 +76,8 @@ export IN_LOCKSTEP_DAILY_LIMIT=10.00
 ```
 
 Honest scope: the window sums this clone's ledger, so a runner that never fetched
-`lockstep-history` sums less than the truth. The provider console's organisation limit
+`lockstep-history` sums less than the truth; `in-lockstep history --pull` folds the remote's
+records in first, and pushes nothing. Two concurrent runs still race the read. The provider console's organisation limit
 (`IN_LOCKSTEP_ORG_SPEND_LIMIT`, attested to `doctor`) remains the durable backstop.
 
 ## 5. House guardrails in every review
@@ -148,9 +149,13 @@ Cassettes sit at the `LLMInput`/`LLMOutput` seam, so a recording replays against
 provider, and tool IO is captured alongside model IO.
 
 ```bash
-in-lockstep review --base origin/main --record       # one real call, writes the cassette
-in-lockstep review --base origin/main --offline      # deterministic and free, from here on
+in-lockstep review --base origin/main --cassette "$TMPDIR/review.json"            # one real call; recording is the default
+in-lockstep review --base origin/main --offline --cassette "$TMPDIR/review.json"  # deterministic and free, from here on
 ```
+
+Name the cassette on both lines: `--offline` with no `--cassette` replays the shipped fixture, not
+what you recorded. A tape lives outside the repository, which is why the default is `$RUNNER_TEMP`
+or `$TMPDIR`.
 
 The replay refuses to silently call out when the prompt no longer matches the recording. A
 changed guardrail means re-recording, and it says so rather than billing you quietly.
@@ -210,6 +215,10 @@ it was not rewritten:
 in-lockstep report --by model     # aggregates, and flags any record rewritten after append
 in-lockstep doctor                # DOC167, an ERROR — tampering fails a required check
 ```
+
+After a proposal merges, `in-lockstep report --around <sha|#PR>` compares the runs on that subject
+after the merge with the runs before it, and prints a delta rather than a verdict, with `—` where
+either window is too thin.
 
 The check reads the retained chain. A force-push that *replaced* the chain is the remote's to
 refuse. Protect `lockstep-history` with a ruleset blocking force-pushes and deletions. Appends

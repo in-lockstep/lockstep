@@ -28,6 +28,8 @@ Seven principles govern the design:
 
 ## 2. What it looks like to use
 
+*(A sketch from before the pivot. The shapes held; the names did not all survive: `lockstep.notify`, `ctx.escalate`, `ctx.update_change`, `Verdict.CHANGES_REQUESTED` and `expires=timedelta(...)` do not exist, `Verdict` is a judge's rubric verdict, and the built `park`/`resume` are in §13 as amended.)*
+
 A project adopts in-lockstep by adding one module at the repo root. This example is the complete "configuration" — note that it is executable Python, not a manifest:
 
 ```python
@@ -241,25 +243,26 @@ Resolution order: explicit `lockstep.bind` in your module → project plugins (P
 
 `@workflow` registers a plain async function; control flow is native Python. Each `ctx.do` is a *step*, keyed by an id derived from call site + input hash (overridable with `step=`). With a `StateStore` configured (default: filesystem under `.in-lockstep/runs/`, adapters for S3/GCS), completed step outcomes are checkpointed, and `in-lockstep run --recover <run-id>` replays completed steps from the store and continues — surviving CI timeouts and spot-instance death (R1-SRE-1). Checkpointing is opt-out-able; without it the model is "just a Python function," preserving the simplicity story. Recovery covers *machine* failure only — a run never waits on a person. Human waits end the run at a boundary (§13); `--recover` restarts the same interrupted run, while `resume` (§13.3) starts a new linked run from a human's event.
 
-### 4.7 Fan-out / fan-in *(added in v0.4)*
+### 4.7 Fan-out / fan-in *(added in v0.4; built 2026-09-07, see §17.11)*
 
 Workflows can run branches concurrently and gate continuation on all of them completing. Branches are declared, not started:
 
 ```python
 join = await ctx.fan_out(
-    security = ctx.call(Review, spec, strategy="security"),      # §5.7 strategies
-    standard = ctx.call(Review, spec, strategy="standard"),
-    smells   = ctx.call(Review, spec, strategy="code-smells"),
-    tim      = ctx.human(HumanBoundary.pr_review(pr, reviewer="tim")),
+    security = ctx.call(Review(base=base, head=head, aspect="security"), step="security"),
+    standard = ctx.call(Review(base=base, head=head, aspect="intent"), step="intent"),
+    tim      = ctx.human(HumanBoundary.pr_review(pr)),
     resume   = "release/after-reviews",
     max_parallel = 3,
 )
 return join            # PARKED here — the "tim" branch is a human boundary
 ```
 
+*(As built, 2026-09-07.)* A strategy is bound, not passed (§18.1): a branch is `ctx.call(<request>, step=)`. `branches=` takes a mapping computed at run time, which is how `review/all-lenses` builds one branch per lens the bound adapter declares; `**named` takes a fixed set. Branches share the run's `Spend`, tape and kill switch (`GATE-COST-6`, `GATE-ASYNC-3b`); each has its own `scope_path` and step list. Per-branch cassettes, `--replay --branch` and per-branch spans are not built.
+
 Machine branches execute concurrently, bounded by `max_parallel` and sharing the run's `CostBudget` — fan-out multiplies spend, so the budget is joint, never per-branch (R4-SRE-1). Each branch is its own step for checkpointing and recovery, its own cassette for replay (`--replay <run> --branch security`), and its own span nested under a fan-out span (R4-DX-1).
 
-**The barrier.** Continuation is contingent on every branch reaching a *terminal* state — `SUCCEEDED`, `FAILED`, `ERRORED` (after retries), or `EXPIRED`. Completion is not success (R4-STAFF-1): the barrier answers "is everyone done"; what the mix *means* is the continuation's decision. If all branches are machine-only and none parks, `fan_out` returns the `JoinResult` inline and the function simply continues — pure in-run fan-in. If any branch is human, or parks internally, the framework writes a **barrier record** to the ledger (per-branch states, head SHA, per-branch expiry) and the run ends `PARKED`. Each human event then resumes a framework-supplied *barrier tick* — the §13.3 claim machine applied per branch — which records that branch's outcome; the tick whose ledger write completes the barrier launches the declared continuation with the full result, and exactly one write does, because ledger writes are ordered (§15.3, R4-SRE-2). Human branches notify their own audiences on park; an expired branch joins as `EXPIRED` via `sweep` rather than holding the barrier open forever.
+**The barrier.** Continuation is contingent on every branch reaching a *terminal* state — `SUCCEEDED`, `FAILED`, `ERRORED` (after retries), or `EXPIRED`. Completion is not success (R4-STAFF-1): the barrier answers "is everyone done"; what the mix *means* is the continuation's decision. If all branches are machine-only and none parks, `fan_out` returns the `JoinResult` inline and the function simply continues — pure in-run fan-in. If any branch is human, or parks internally, the framework writes a **barrier record** to the ledger (per-branch states, head SHA, per-branch expiry) and the run ends `PARKED`. Each human event then resumes a framework-supplied *barrier tick* — the §13.3 claim machine applied per branch — which records that branch's outcome; the tick whose ledger write completes the barrier launches the declared continuation with the full result, and exactly one write does, because ledger writes are ordered (§15.3, R4-SRE-2). A branch the kill switch cancelled joins `BLOCKED` under `killswitch`. *(2026-09-08)* Nothing notifies and nothing expires a branch: `sweep` and §14 are not built, and `EXPIRED` is a state the barrier accepts and nothing yet writes.
 
 ```python
 @workflow(id="release/after-reviews")
@@ -273,7 +276,7 @@ async def after_reviews(ctx, r: Resumption):
 
 The shipped fan-out, `review/all-lenses`, is drawn in [`docs/diagrams/review.html`](https://in-lockstep.github.io/lockstep/diagrams/review.html).
 
-Aggregation — quorums, weighted verdicts, "security overrides all" — is ordinary code or a bound `ReviewAggregator` policy. The framework's contract is only the barrier.
+Aggregation — quorums, weighted verdicts, "security overrides all" — is ordinary code in the continuation; a bound `ReviewAggregator` policy was proposed and is not built. A continuation receives the barrier's per-branch view (`Resumption.join`: status, reason, decided, actor per branch), not the branches' `Outcome`s; findings do not cross the process boundary and are re-read from the ledger. The framework's contract is only the barrier.
 
 
 ## 5. The AI subsystem
@@ -463,7 +466,7 @@ Every `Outcome` artifact gets an `ArtifactRef` (kind, content hash, storage ref)
 
 `in-lockstep trace PROJ-123` walks all four layers and prints every run, commit, PR, artifact, and eval score associated with a ticket.
 
-## 8. Evaluation and the learning loop
+## 8. Evaluation and the learning loop *(amended 2026-09-08: see §8.4 and §17.11 for what shipped)*
 
 The requirement: measure AI-generated artifacts over time, and improve the *local implementation* using that measurement, through commits/PRs. The design closes an elegant loop: because prompts, exemplars, and routing policy are code (§5.3), "learning" means "open a PR against your own repo," which the same lifecycle then reviews, tests, and merges. The framework improves through the process it automates, with humans at the merge gate.
 
@@ -491,7 +494,7 @@ class Evaluator(Protocol):
 
 `in-lockstep eval` runs a prompt/model/recipe against a fixture corpus with cassette-recorded context, entirely offline where possible, producing a scorecard diff between versions. Fixtures come from history: `in-lockstep eval bootstrap` harvests them retroactively — merged framework-authored diffs become positive exemplars, reverted/rejected ones become negatives and regression cases (R2-QA-1 — solves the cold-start problem for new adopters). The corpus lives in `.in-lockstep/evals/`.
 
-### 8.4 The Improver — learning as pull requests
+### 8.4 The Improver — learning as pull requests *(built 2026-09-06 to 2026-09-08 as `improve/measure`, `improve/propose`, `improve/after-review` and the `judge` verb)*
 
 ```python
 class Improver(Protocol):
@@ -499,6 +502,8 @@ class Improver(Protocol):
 ```
 
 A shipped meta-workflow, `improve`, runs on a schedule: collect signals → aggregate per `EvalSubject` → where evidence clears a configured threshold, generate a proposal (revise a prompt's guidance, add/remove few-shot exemplars from harvested cases, adjust `ModelRouter` policy, tune a context recipe) → run the offline harness on the proposal → **open a PR** with the scorecard diff embedded in the body. Governance is structural: learning PRs carry a `lockstep-learning` label, require human review like any change, and CI on that PR re-runs `in-lockstep eval` — a prompt change that regresses the corpus cannot merge (R1-QA-3). Reject the PR and the evidence threshold rises for that proposal class. Nothing self-modifies at runtime; the only learning channel is the reviewed commit.
+
+*(As built.)* No `SignalCollector`, `Evaluator` or `EvalStore` exists under those names. `Improver.attribute()` reads ledger records for a recurring finding; `improve/measure` (provider key, no write token) drafts a change to the one declared body and measures both arms against the promoted corpus, putting every rubric to the `judge` verb, routed like any verb rather than pinned to a different model than the producer; `improve/propose` (write token, no key) opens the draft and parks on its review; `improve/after-review` is the continuation. Verdicts are kept beside each case in a `.verdicts.jsonl` sidecar and replayed. `eval harvest` (not `eval bootstrap`) builds cases from a recording, the promoted corpus is `evidence/cases/`, and `report --around <merge>` is the post-merge comparison §8.1 describes: two windows on one subject, a delta and no verdict. No `lockstep-learning` label exists.
 
 ## 9. Observability and reproducibility
 
@@ -529,12 +534,12 @@ As built: [`docs/diagrams/security-model.html`](https://in-lockstep.github.io/lo
 
 ```
 in-lockstep init                      # scaffold lockstep.py from detected stack; paved-road templates
-in-lockstep run <workflow|verb> [--trigger …] [--offline] [--replay ID] [--recover ID] [--no-middleware]
-in-lockstep resume --event <kind:ref> | --run ID --as <verdict> --by <user>   # human-boundary continuation (§13)
-in-lockstep sweep                 # escalation/expiry scan over parked runs (§13.6)
-in-lockstep eval [bootstrap|report]   # §8.3
-in-lockstep trace <ticket|run|commit> # §7.4
-in-lockstep ls [--parked]             # resolved config; parked runs awaiting humans, with ages
+in-lockstep run <workflow> [--arg k=v] [--recover ID] [--cassette F] [--budget USD] [--parked-ok] [--no-middleware]
+in-lockstep resume --run ID --as <verdict> --by <who> [--branch B] [--event ID] [--text …]   # human-boundary continuation (§13)
+in-lockstep eval [run|harvest|report] [--judge]   # §8.3
+in-lockstep history --explain <run>   # one run's record; `trace` was not built
+in-lockstep ls [--parked]             # resolved config; parked runs awaiting humans
+# `sweep` is not built (§13.6)
 in-lockstep doctor                    # auth, SCM reach, provider reach, pins, import-purity lint
 ```
 
@@ -557,15 +562,15 @@ jobs:
       - run: in-lockstep run fix_ci --trigger ci:${{ github.event.workflow_run.id }}
 ```
 
-A GitLab CI component with the same shape ships alongside, as does a container image (`ghcr.io/in-lockstep/runner`) for cold-start-sensitive pipelines (R1-DEVOPS-3). Kill switch: `IN_LOCKSTEP_DISABLE=1` at org/repo level halts all runs before any middleware executes.
+A GitLab CI file with the same shape ships from `init --host gitlab`. The container image this sentence once named was deleted on 2026-09-02, and no `in-lockstep/setup` action exists; the fix-ci example above is illustrative, and `.github/workflows/fix.yml` with §17.10 is what runs. Kill switch: `IN_LOCKSTEP_DISABLE=1` at org/repo level halts all runs before any middleware executes.
 
 ## 12. Packaging, extension, and stability *(amended — see §18.2, §18.3)*
 
 Import-time purity: `lockstep.py` may construct objects and bind, but must not perform IO at import; `in-lockstep doctor` lints this by importing the module under a recording shim (R1-STAFF-4). Extension is via ordinary subclassing plus entry points (`in_lockstep.adapters`, `in_lockstep.workflows`, `in_lockstep.evaluators`). API stability: `in_lockstep.*` root namespace is semver-stable; incubating pieces live under `in_lockstep.x.*` until promoted. Sync facade: every async API has a `.sync` mirror (`lockstep.sync.do(...)`) for scripts and REPL use; the core is async because model calls, SCM APIs, and subprocesses are all IO-bound and workflows fan out (R1-STAFF-1).
 
-## 13. Human boundaries *(added in v0.3)*
+## 13. Human boundaries *(added in v0.3; built 2026-09-07, see §17.11 and the as-built notes below)*
 
-Principle 7 in full: a run is a single machine-driven episode. The moment a person must weigh in, the run does not wait — it **parks**: state externalizes to the ledger and the system of record, notifications go out (§14), the process exits with status `PARKED`, and a **continuation workflow** starts as a fresh run when the human's event arrives. Long lifecycles are chains of short runs stitched by human events, not one long process. This buys the durable-execution outcome (waits of days or weeks) with none of its costs: no determinism rules on user code, no replay sandbox, no stateful server — workflows remain plain Python, and in-lockstep remains a library.
+Principle 7 in full: a run is a single machine-driven episode. The moment a person must weigh in, the run does not wait — it **parks**: state externalizes to the ledger and the system of record, notifications go out (§14; not built, the CLI prints the resume command instead), the process exits with status `PARKED`, and a **continuation workflow** starts as a fresh run when the human's event arrives. Long lifecycles are chains of short runs stitched by human events, not one long process. This buys the durable-execution outcome (waits of days or weeks) with none of its costs: no determinism rules on user code, no replay sandbox, no stateful server — workflows remain plain Python, and in-lockstep remains a library.
 
 The companion stance: **the human acts in the system of record** — approving the PR, transitioning the ticket, granting the host's environment approval — never in a bespoke UI. Notifications are signposts pointing at the place to act, not control surfaces (§14). Human decisions therefore inherit the SCM's and tracker's authentication, authorization, and audit for free, and the framework exposes no inbound endpoint.
 
@@ -576,35 +581,37 @@ As built: [`docs/diagrams/human-boundaries.html`](https://in-lockstep.github.io/
 ```python
 return await ctx.park(
     boundary: HumanBoundary,
+    *,
     resume: str,                                  # stable continuation id (§13.4)
-    payload: Mapping[str, Serializable] = {},     # what the continuation needs, serialized
-    notify: Sequence[NotifyRoute] | None = None,  # default: policy routes for Event.PARKED
-    expires: timedelta | None = None,
-) -> Outcome                                      # status=PARKED
+    payload: dict[str, Any] | None = None,        # what the continuation needs, serialized
+    expires_seconds: float | None = None,
+) -> Outcome[Parked]                              # status=PARKED
 ```
 
-Parking does four things: writes a `parked` block into the run's ledger file (boundary descriptor, continuation id, payload, head SHA, expiry); places a machine-readable marker in the system of record (fenced JSON block in the PR/MR body plus a `lockstep:parked` label, or a ticket property/comment); fires notifications; exits. Everything needed to resume lives in the repo and the host — nothing in memory, nothing in a service.
+*(As built.)* There is no `notify` parameter. On a `LOCAL` store the result is `BLOCKED` with reason `park.local_store`, naming the store, and a second park in one run is `park.already_parked`.
+
+Parking does three things *(as built)*: writes the barrier record `barrier/<run_id>` into the SHARED store by compare-and-set, create-if-absent; places the marker in the system of record, a `lockstep:parked` label and a sticky comment carrying the record, on a `pr_review` boundary; exits. Notifications are not built. Everything needed to resume lives in the repo and the host — nothing in memory, nothing in a service.
 
 ### 13.2 Boundary types
 
 | Boundary | Human act | Resume event |
 |---|---|---|
-| `HumanBoundary.pr_review(pr)` | approve / request changes / comment on the PR/MR | host review webhook |
+| `HumanBoundary.pr_review(pr)` | approve / request changes / comment on the PR/MR | `resume --run --as approved`, by hand or from `resume.yml` (the webhook form is not built) |
 | `HumanBoundary.ticket_transition(t, to=...)` | move the ticket (e.g. → Approved) | tracker webhook or poll |
 | `HumanBoundary.host_approval(env)` | GH environment / GL protected-env approval | host deployment event |
-| `HumanBoundary.choice(options)` | `/lockstep choose 2` as a PR or ticket comment | comment webhook |
+| `HumanBoundary.choice(options)` | a choice a person makes | `resume --as chosen:2` (the slash-command form is not built) |
 | `HumanBoundary.free_text(ask)` | `/lockstep guide "…"` as a comment | comment webhook |
 
 `choice` and `free_text` piggyback on comments deliberately: slash-commands inherit the host's identity, permissions, and audit trail, and need no new surface.
 
 ### 13.3 The resume flow
 
-Host event → resume trampoline (a webhook-triggered CI job; it filters on the `lockstep:parked` label so unrelated events cost nothing, and declares a host `concurrency` group per target so duplicate deliveries serialize — R3-DEVOPS-1, R3-SRE-2) → `in-lockstep resume --event pr_review:41` → the router reads the marker, loads the park record from the ledger, then:
+*(As built, 2026-09-07.)* The trampoline is `resume.yml`, a `workflow_dispatch` job a person runs naming the parked run and a verdict; the webhook-triggered form that filters on `lockstep:parked` is not built. `in-lockstep resume --run <id> --as <verdict> --by <who>` loads the barrier record and applies the event through the tick (`platform/barrier.py`). Of the four steps below, 1 and 2 are not built (the verdict is taken as given and the actor recorded), 3 is the per-branch `parked → resumed` record with a `complete` flag and dedupe on `(run_id, branch, event_id)`, and 4 is as written:
 
 1. **Verifies the condition** — is this event the boundary's completion (an approval, the right transition, a well-formed slash-command)?
 2. **Verifies the actor** — host-native authorization: an approval only counts from a user the host accepted as a reviewer; slash-commands are honored only from write-or-above roles (R3-SEC-2). Actor identity is recorded in the ledger.
 3. **Claims idempotently** — park lifecycle is a small state machine, `PARKED → RESUMING(event-id) → RESUMED(child-run-id) | EXPIRED`, with dedupe on `(run_id, event_id)`; webhook redelivery and double-submitted reviews collapse into one continuation (R3-SRE-2).
-4. **Invokes the continuation** as a fresh run carrying a `Resumption` (event, actor, verdict, comment text, rehydrated payload, staleness — §13.5), then clears the marker/label.
+4. **Invokes the continuation** as a fresh run carrying a `Resumption` (`parent_run_id`, `branch`, `event_id`, `actor`, `verdict`, `text`, `payload`, `join`, and `stale`, which is never measured — §13.5), then clears the marker/label.
 
 Local development and tests never need webhooks: `in-lockstep resume --run <id> --as approved --by tim` simulates any boundary event, and `RecordReplay` cassettes capture resumptions like everything else (R3-DX-1).
 
@@ -612,15 +619,15 @@ Local development and tests never need webhooks: `in-lockstep resume --run <id> 
 
 A continuation is an ordinary `@workflow` registered with a **stable id** — `@workflow(id="fix-ci/after-review")` — and park records reference that id, never the function name, so refactoring can't strand parked runs; `doctor` flags park records whose id no longer resolves (R3-STAFF-1). The child run carries `parent_run_id`; OTel span links join the traces; the ledger chains the runs, so `in-lockstep trace` shows the whole lifecycle across every park. A continuation may itself park — that is the normal shape of a long lifecycle.
 
-### 13.5 Staleness
+### 13.5 Staleness *(not built: `Resumption.stale` is carried and always `None`; `on_stale` does not exist)*
 
 The park record pins the head SHA at park time. On resume, `Resumption.staleness` reports whether the branch or base moved while humans deliberated. Policy `on_stale=` chooses `reassess` (default: re-run `validate` and `test` against the current head before acting), `rebase`, or `escalate` (R3-QA-1). Approval of a diff is not treated as approval of a different diff.
 
-### 13.6 Expiry and escalation
+### 13.6 Expiry and escalation *(not built, except `ls --parked`)*
 
 `sweep` is a shipped, scheduled meta-workflow (cron trampoline) that scans parked runs: past a soft threshold it walks the route's escalation ladder (e.g. Slack re-ping → PagerDuty after 24h), digest-batched so fifty stale parks make one message, not fifty (R3-SRE-1); past `expires` it closes the run `BLOCKED(expired)`, clears the marker, and comments on the ticket. Parked inventory is first-class: `in-lockstep ls --parked` lists boundary, owner, and age; a bounded-dimension age metric feeds dashboards so handoffs are visible work, not silent rot (R3-EM-1).
 
-## 14. Notifications *(added in v0.3)*
+## 14. Notifications *(added in v0.3; not built — §17.11)*
 
 Alerting follows the same pluggable pattern as every other subsystem: one protocol, shipped adapters, routing as code, everything interceptable.
 
@@ -667,7 +674,7 @@ Shipped resolvers: `JiraAssignees` — users assigned on the ticket(s) *associat
 
 **Storm control** (R3-SRE-1). Dedup on `correlation_key`, per-key `Throttle`, and `digest=` batching for sweep-class events. A flapping workflow produces one escalating thread, not a paged-out on-call.
 
-## 15. Multi-repo workspaces *(added in v0.4)*
+## 15. Multi-repo workspaces *(added in v0.4; deferred with N6 — §17.11. The SHARED store §15.3 describes is built for one repository: `GitLedger(shared=True)` over `refs/lockstep/state/<key>`)*
 
 ### 15.1 Topology
 
@@ -896,7 +903,7 @@ are re-checked at the same point, for the same structural reason.
 
 An unpriced model is `BLOCKED` before any call, never priced by a default table.
 
-**The daily cross-run ceiling is a recorded loss.** `per_agent_daily_ai_credits` was enforced
+**The daily cross-run ceiling is a recorded loss** *(partly recovered: `IN_LOCKSTEP_DAILY_LIMIT` refuses a run pre-start over a rolling per-clone window; weaker than the substrate's shared partition, and `docs/controls-crosswalk.md` row 3 says how)*. `per_agent_daily_ai_credits` was enforced
 out-of-process, per agent workflow per day, before the agent started. Provider-side org spend limits
 are stronger on enforcement location but replace a per-repo partition with an org-wide pool — one
 runaway repo can consume every other consumer's budget. This is booked as a loss with its
@@ -1038,6 +1045,8 @@ compare-and-set and ends the run `PARKED`; `in-lockstep resume` is the tick, and
 completes the barrier launches the continuation. Not built: the webhook resume trampoline and §14
 notifications (resume is a command), `sweep`'s expiry ladder (§13.6), and `Resumption.staleness`
 (§13.5, always None).
+
+*Amended 2026-09-08.* `fan_out` takes `ctx.human()` branches beside machine ones (`branches=` for a computed set): the machine branches run, the barrier record is written with the human branches parked, and the run ends `PARKED`, so amendment 1's "machine branches only" no longer holds. The SHARED store is `GitLedger(shared=True)` over `refs/lockstep/state/<key>`, and this repository binds it. `review/all-lenses` is one fan-out over every bound lens and is the required check here; `improve/propose` parks on its own draft and `improve/after-review` continues it; `resume.yml` is the dispatch trampoline. §8.2's rubric evaluator shipped as the `judge` verb (`judge/corpus`, `eval run --judge`), routed like any verb. Still not built, and said in each section: webhook resume, §14, `sweep`, `Resumption.stale`, `ReviewAggregator`, per-branch tapes and spans, and §15 (N6).
 
 ### 17.12 Rounds 5–7 review record
 

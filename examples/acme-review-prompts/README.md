@@ -97,6 +97,9 @@ have to lie about the pack that ships one small class.
 and after changing it. Two cases here, and the second is the one that matters: a lens that always
 finds something is a lens nobody can act on.
 
-The rubric halves need a judge. Until one has answered, they are *outstanding* rather than passed
-— which is what `in-lockstep eval` reports, and why a pack's own numbers are a starting point
+The rubric halves need a judge. Until one has answered, they are *outstanding* rather than passed,
+which is what `in-lockstep eval run` reports offline. `eval run --judge` puts each rubric to the
+bound `Judge` (`lockstep.bind(Judge, AiJudge())`, routed by `lockstep.models.route("judge", ...)`)
+and keeps every verdict in a `<case>.verdicts.jsonl` sidecar beside the case, so a rubric judged
+once is replayed rather than paid for again. A pack's own numbers are still a starting point
 rather than a verdict.

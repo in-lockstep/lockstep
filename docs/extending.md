@@ -44,8 +44,9 @@ to do the same.
 `Provision` is the verb that builds the environment those resolutions look in first, and the
 scaffolded work jobs run `in-lockstep provision` before `doctor`. Detection binds it only from a
 lockfile that exists, through that lockfile's own tool: `uv sync --locked`, `poetry install`,
-`pdm sync`, `pipenv sync`, `npm ci`, `yarn install --frozen-lockfile` or `pnpm install
---frozen-lockfile`. A layout it does not read is one line in the module,
+`pdm sync`, `pipenv sync`, `npm ci`, `yarn install --frozen-lockfile`, `pnpm install
+--frozen-lockfile`, `bundle install`, `composer install`, `mix deps.get` or `swift package
+resolve`, and `dotnet restore` from the project file alone, because the SDK guarantees it. A layout it does not read is one line in the module,
 `lockstep.bind(Provision, CommandProvision([["nix", "develop"]]))`. `CommandProvision` runs its
 steps in order and stops at the first that fails. It is the one shipped adapter whose sandbox
 allows the network, because reaching a registry is its job; it still drops every credential,
@@ -314,7 +315,8 @@ editing a prompt body does.
 ## The learning loop
 
 `in-lockstep improve` is the framework reading its own record and proposing a change to one of
-its prompts, as a pull request a person reads. It runs in three refusals and two model calls, and
+its prompts, as a pull request a person reads. It runs in three refusals, two drafting-and-measuring model calls and one judge ask per rubric per
+arm, and
 the refusals come first.
 
 **A trend has to qualify.** The census `improve --explain` prints — a finding id that recurs
@@ -349,7 +351,11 @@ Then it drafts, on the model routed for `improve`, and re-asks every attributabl
 the draft on the model that case was recorded on. The scorecard has both arms over the same cases;
 `improved` means a case the current body failed now passes and none was lost, and only
 `improved` is staged. `in-lockstep run improve/propose` opens it, counting what is already open
-on the host first. Bind the adapter and the corpus, register the process, and it runs the same
+on the host first, and then parks on that pull request's review
+(`ctx.park(HumanBoundary.pr_review(...))`) when the bound `LedgerStore` is shared;
+`improve/after-review` is the continuation a person's verdict starts, through
+`in-lockstep resume --run <id> --as approved --by <login>` or the `resume.yml` dispatch. On a local
+store the proposal is opened and nothing parks, and the run says so. Bind the adapter and the corpus, register the process, and it runs the same
 way at a terminal and from `.github/workflows/improve.yml`:
 
 ```python
@@ -454,6 +460,51 @@ where one HTTP attempt is one HTTP attempt, and `AiInvoker` carries that layer.
 What you cannot do here is redaction, egress or residency. Those are privileged: they run outside
 this chain because `--no-middleware` exists, and a debugging flag must not be able to switch off
 the thing keeping credentials out of a committed record.
+
+## Fan-out, and a run that waits on a person
+
+A workflow runs several actions at once with `ctx.fan_out`, and the join is one `JoinResult`: its
+status is the worst branch's, its cost the sum, and it is `decided` only if every branch was. The
+branches share one budget, one tape and one kill switch, so four lenses cost one ceiling rather
+than four. `review/all-lenses`, this repository's required check, is one fan-out over every lens
+the bound adapter declares ([drawn](https://in-lockstep.github.io/lockstep/diagrams/review.html)).
+
+```python
+from typing import Any
+
+from in_lockstep import Outcome, RunContext, workflow
+from in_lockstep.adapters.ai import Review
+
+
+@workflow(id="review/two-lenses")
+async def two_lenses(ctx: RunContext, base: str, head: str) -> Outcome[Any]:
+    join = await ctx.fan_out(
+        security=ctx.call(Review(base=base, head=head, aspect="security")),
+        tests=ctx.call(Review(base=base, head=head, aspect="tests")),
+    )
+    return join.as_outcome()
+```
+
+A run can also end at a human boundary and continue when the person acts.
+`ctx.park(HumanBoundary.pr_review(41), resume="improve/after-review")` writes a barrier record into
+the shared store, ends the run `PARKED` (exit 4, with the resume command printed), and labels the
+pull request `lockstep:parked`. `in-lockstep ls --parked` lists what is waiting;
+`in-lockstep resume --run <id> --as approved --by <login>` applies the event and starts the
+continuation, which receives a `Resumption` by annotation: who acted, what they said, and the
+barrier's view of every branch ([drawn](https://in-lockstep.github.io/lockstep/diagrams/human-boundaries.html)).
+A park needs a store other machines can see, which is one line:
+
+```python
+from pathlib import Path
+
+from in_lockstep.core.ports import LedgerStore
+from in_lockstep.platform.ledger import GitLedger
+
+lockstep.bind(LedgerStore, GitLedger(root=Path(lockstep.repo.root), shared=True))
+```
+
+On the default local store `ctx.park` returns `BLOCKED` naming the store rather than waiting for
+an answer no other machine could give.
 
 ## Packs: an extension that travels
 
@@ -1077,7 +1128,10 @@ the result. See *A verb of your own* and *A strategy* above.
 
 **Where this is honest about its limits.** The *shapes* are host-agnostic. `Scm` (`platform/scm`),
 `TicketSource` (`platform/tickets`) and `LedgerStore` (`core/ports/`) are protocols, and nothing in
-`core` knows what GitHub is.
+`core` knows what GitHub is. `LedgerStore` also declares `compare_and_set` and a `scope`: the
+shipped `GitLedger` is `LOCAL` by default and `SHARED` with `shared=True`, where the swap is a
+`--force-with-lease` push against `refs/lockstep/state/<key>` on the remote, so the remote is the
+coordinator and a park or a resume from any machine reads the same record.
 
 Both hosts now have implementations: `GitHubScm`/`GitHubIssues` and `GitLabScm`/`GitLabIssues`
 ship, and `hosted_scm()`/`hosted_tickets()` in `platform/hosted.py` pick the detected host's pair
@@ -1199,6 +1253,9 @@ adding required reviewers to it in repository settings makes it real.
 
 The three jobs and the two credentials are drawn as a sequence in [chat-ops](https://in-lockstep.github.io/lockstep/diagrams/chat-ops.html), and the workflow they drive in [implement](https://in-lockstep.github.io/lockstep/diagrams/implement.html).
 
-**What bounds the spend** is the actor gate, a per-issue concurrency group, and `--budget`. There
-is no per-day ceiling. See `docs/controls-crosswalk.md`, which records that as a loss rather than
-a replacement. A member who wants to spend $2 forty times can.
+**What bounds the spend** is the actor gate, a per-issue concurrency group, `--budget`, and, where
+an organisation sets it, `IN_LOCKSTEP_DAILY_LIMIT`: a rolling 24-hour per-repository window summed
+from the ledger and refused before a run starts. It sums the ledger this clone can read, so a
+runner that never fetched `lockstep-history` (`history --pull`) sums less than the truth; row 3 of
+`docs/controls-crosswalk.md` records it as replaced and weaker. Without the variable, a member who
+wants to spend $2 forty times can.

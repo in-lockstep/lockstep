@@ -7,6 +7,13 @@ make check     # ruff format + lint, mypy --strict, pytest — what CI runs
 make cov       # the two-sided coverage ratchet
 ```
 
+A pull request here also gets the framework's own review: the required check is one
+`review/all-lenses` run over every lens `.lockstep/lockstep.py` binds, each lens posting its own
+sticky comment. It reads the module from the base ref, so a change cannot rewrite the constraints
+that review it. Two more gates are worth knowing before the first run: test classes end in
+`Tests`, never begin with `Test`, and every write that leaves the process goes through
+`privileged.sink`; `CLAUDE.md` explains both.
+
 `make cov` fails below the committed floor **and** more than two points above it. A rise is a
 required one-line update to `.coverage-floor`, so the number in the repository is always the
 number that is true.
@@ -32,16 +39,14 @@ Most review feedback here is one of these, so it is cheaper to read them first:
    status, and `docs/controls-crosswalk.md` exists because four rows once said "Replaced" about
    exactly that. New controls land with their caller, or with a row that says they have none.
 
-Workflow-created commits use Conventional Commit syntax. Human commits here use a sentence that
-says what changed and why.
+Every commit uses Conventional Commit syntax, `feat(scope):`, `fix(scope):`, `docs(scope):`, and
+its body says what was wrong and why the fix is the right shape, not what files changed.
+Workflow-created commits are shaped by `conventional_subject()` and CI reads them.
 
 ## Wanted contributions
 
 Sized and genuinely wanted. Each is a recorded gap (the roadmap they were once numbered against exists in no file now; the README's capability matrix and `design/gates.md` are where a gap is recorded):
 
-- **Backport workflow**: deterministic-first (cherry-pick via plain git, escalate to
-  a model only on conflict). The verb exists; nothing serves it.
-- **RFE workflow**: rides the triage vertical rather than growing its own.
 - **Flaky-test adapter**: detect, quarantine with a ticket trailer
   (`GATE-TESTGUARD-1` refuses silencing without one), report.
 - **A hosted OpenAI-compatible provider recipe**: the seam (an explicit

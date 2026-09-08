@@ -18,6 +18,8 @@ in-lockstep init
 wrote .lockstep/lockstep.py
   detected stack: python; tests: pytest; lint: ruff; provision: uv sync --locked
 wrote .gitignore
+no origin remote yet, so the GitHub trampoline is written; `init --host gitlab` for the other.
+config    local working tree
 wrote .github/workflows/lockstep.yml
 
 One job, because reviewing is read-only. Add the privileged `apply` job the
@@ -30,7 +32,8 @@ What a run keeps:
   it wrote -- because a session re-sends its history every turn.
   Redaction masks the credential shapes it knows; it never masks source.
 
-  Locally, only under --record: .lockstep/cassettes/<verb>.json, gitignored.
+  Locally: .lockstep/cassettes/<verb>.json, gitignored. `--no-record` declines,
+  per run; nothing is kept for a run you decline, and nothing asks again.
   In CI the recording is written OUTSIDE the checkout, and dies with the runner.
   What survives is the cases harvested from it: the question that was asked, and
   which files and commands the session reached for -- addresses, not contents.
@@ -48,7 +51,10 @@ yours if you have one, and only the lines it is missing.
 `init --review` adds a fourth, `.github/workflows/review.yml`: a reviewer comments `/review tests`
 on a pull request and that one lens runs and posts its findings, from a job that holds no provider
 key. The lens is resolved against the ones your module binds, so `in-lockstep ls` is the list a
-comment may name. `--implement` and `--fix` scaffold the write verbs the same way.
+comment may name. `--implement` and `--fix` scaffold the write verbs the same way. The trampoline
+`init` writes posts each lens's verdict and findings as its own sticky comment on the pull request,
+from a job that holds no key; this repository's own required check is one `review/all-lenses` run
+that fans out over every bound lens the same way.
 
 The closing paragraph is the whole disclosure, and it is printed rather than filed because the
 default it describes is on: the trampoline records every review it pays for. An inference nobody
@@ -249,7 +255,7 @@ review/security  succeeded
 tokens    5361 in, 443 out
 cost      $0.0000  (replayed; nothing was billed)
 spans     (lockstep.py declares its own middleware; the CLI is not in that chain)
-ledger    lockstep-history:records/review-security.json  (local; `in-lockstep history --push` to publish)
+ledger    lockstep-history:records/review-security-20260908T133723Z-73ab.json  (local; `in-lockstep history --push` to publish)
 ```
 
 Those findings are what the model actually said about that pull request; the replay is
@@ -332,14 +338,44 @@ in-lockstep report
 ```
 
 ```text
-kind    runs  failed  tokens      cost      mean
-review     1       0        15  $  0.0000  $0.0000
+records   1  2026-09-08 → 2026-09-08
 
-1 record(s); `in-lockstep history --explain <run>` for any one of them
+outcomes
+  failed        0%  (0 of 1)
+  decided none  0%  (0 of 1)
+  blocked       0  (a control stopping a run is the control working; not in a rate)
+
+effort
+  median run    0.0s
+  slowest 10%   0.0s
+  turns         —  (no record carries one; only implementing verbs write it)
+
+spend
+  total         $0.0000
+  per run       $0.0000
+  tokens        5,804
+  runs          0 billed, 1 replayed  (of 1)
+
+what it found
+  findings      2  (2.0 per run)
+    review.security              2
+
+by kind
+  review            1 run(s)     0% failed   0.0s median
+
+attempts per ticket
+  —  (no record carries a ticket)
+
+who and how
+  —                        1 run(s)   (carried no identity: a local run; `lockstep.identity = GitAuthor()` records one)
+
+A dash is a number nobody measured. It is not a zero.
 history   append-only across the retained chain
+ledger    read refs/heads/lockstep-history; origin/lockstep-history — (not fetched)
+bundles   — (pass --scm to ask the host how many run records are still in artifacts)
 ```
 
-Absent is not zero here: a column nobody measured renders `-` rather than a reassuring 0. One
+Absent is not zero here: a number nobody measured renders `—` rather than a reassuring 0. One
 run's record, every field, in words:
 
 ```bash
@@ -347,16 +383,19 @@ in-lockstep history --explain review-security
 ```
 
 ```text
-run       review-security
+run       review-security-20260908T133723Z-73ab
 what      review  security
 status    succeeded
-when      2026-08-30T02:47:19+00:00
-head      309a05d0553d6ea7258317bb674e17eb2f2ac537
+when      2026-09-08T13:37:23+00:00
+head      c2e976176c6b03621ba4f6bcffc9e8df2acbf4cf
 branch    main
 config    local working tree
 model     anthropic:claude-sonnet-4-6
 subject   review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6
-spend     $0.0000  (15 tokens, 0.038s)
+spend     $0.0000  (5804 tokens, 0.036s)
+findings  2
+          actions/save/action.yml:29 review.security: Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters
+          actions/save/action.yml:23 review.security: GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment
 ```
 
 `subject` is which runs this one is comparable with — the verb, the lens, the prompt and the model,
@@ -377,7 +416,7 @@ ledger into those two windows on one subject and prints each metric's before, af
 with the run count on each side and no verdict:
 
 ```bash
-in-lockstep report --around #41            # the pull request's merge commit, from the host
+in-lockstep report --around '#41'          # the pull request's merge commit, from the host
 in-lockstep report --around 17e034b --subject review/security
 ```
 
@@ -469,11 +508,12 @@ ERROR   DOC101  no provider-side organisation spend limit is attested
                  and the per-day ceiling the substrate enforced no longer exists.
 NOTE    DOC120  could not read this repository's default branch; branch protection was not checked
                  gh said: no git remotes found
+NOTE    DOC125  could not read this repository's Actions permissions; whether a propose job can open a change was not checked
 WARNING DOC130  no egress enforcement is declared
                  Set IN_LOCKSTEP_EGRESS=enforced where the host constrains egress. Runs that hold write
                  or execute tools, or that read untrusted content, are refused without it.
 
-3 finding(s), 2 error(s)
+4 finding(s), 1 error(s)
 ```
 
 That is a fresh repository being told the truth, not a broken install: nothing is attested yet,
