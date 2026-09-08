@@ -64,23 +64,32 @@ class PytestTest:
         interpreter = resolved.path
 
         report_dir = Path(tempfile.mkdtemp(prefix="in-lockstep-test-"))
+        # `inp.root` (a materialized worktree) wins over the bound `cwd` wins over the repo's
+        # root, so a staged change can be tested without rebinding this adapter -- and a bound
+        # package directory is kept INSIDE the worktree rather than replaced by it, with the
+        # model's root-relative paths rebased to it (`tooling.within`, GATE-TOOLING-4).
+        paths = tuple(inp.paths or ())
+        cwd: str | None
+        if inp.root:
+            cwd, package = tooling.within(
+                inp.root, self.cwd, getattr(getattr(ctx, "repo", None), "root", None)
+            )
+            paths = tooling.rebase(paths, package)
+        else:
+            cwd = repo_root
         cmd = [
             interpreter,
             "-m",
             "pytest",
             *self.args,
             *inp.args,
-            *(inp.paths or ()),
+            *paths,
         ]
         if inp.selector:
             cmd += ["-k", inp.selector]
 
         try:
-            # `inp.root` (a materialized worktree) wins over the bound `cwd` wins over the repo's
-            # root, so a staged change can be tested without rebinding this adapter.
-            result = await self.sandbox.run(
-                cmd, cwd=inp.root or self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-            )
+            result = await self.sandbox.run(cmd, cwd=cwd)
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)
 

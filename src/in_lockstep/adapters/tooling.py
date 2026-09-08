@@ -24,7 +24,7 @@ from pathlib import Path
 
 from ..core.types import VENV_BIN, Resolution
 
-__all__ = ["REPOSITORY_VENV", "VENV_BIN", "binary", "interpreter"]
+__all__ = ["REPOSITORY_VENV", "VENV_BIN", "binary", "interpreter", "within"]
 
 #: The `how` of a tool found in the repository's own environment, which is the one answer an
 #: adapter substitutes for a bare name at run time: PATH would find the same binary the sandbox's
@@ -159,3 +159,53 @@ def _within(executable: str, top: Path) -> bool:
         return (where.parent.resolve() / where.name).is_relative_to(top)
     except OSError:  # pragma: no cover
         return False
+
+
+def within(root: str, cwd: str | None, repo_root: str | None) -> tuple[str, str]:
+    """Where a bound `cwd` lands inside a materialised worktree, and the package path it names.
+
+    A Test bound at a package directory of a monorepo -- `PytestTest(cwd=f"{repo}/libs/core")` --
+    used to run at the worktree's top the moment a strategy passed `Test(root=tree)`: the root
+    replaced the cwd outright, so the suite ran two directories above its own `pyproject.toml`
+    and collected nothing, and the change was judged on a suite that never ran. The worktree is
+    a copy of the whole repository, so the bound directory exists inside it at the same relative
+    path; that is where the run belongs, and the second value is that path, for rebasing the
+    paths a model named from the repository's root (GATE-TOOLING-4).
+
+    Returns `(root, "")` when nothing is bound, or when the bound directory is not under the
+    repository at all: a worktree cannot contain a directory outside the tree it copies, and the
+    old answer -- the root -- is the only one there is.
+    """
+    if not cwd:
+        return root, ""
+    if not os.path.isabs(cwd):
+        rel = os.path.normpath(cwd)
+    elif repo_root and _under(cwd, repo_root):
+        rel = os.path.relpath(os.path.abspath(cwd), os.path.abspath(repo_root))
+    else:
+        return root, ""
+    if rel in ("", "."):
+        return root, ""
+    return os.path.join(root, rel), rel
+
+
+def rebase(paths: tuple[str, ...], package: str) -> tuple[str, ...]:
+    """Paths a model named from the repository's root, as the package directory sees them.
+
+    `run_tests(paths=["libs/core/tests/unit_tests/test_x.py"])` is the model's view, and it is
+    right -- the workspace it stages into is the repository. A suite that runs at `libs/core`
+    needs `tests/unit_tests/test_x.py`; one that is already package-relative is left alone, so a
+    path that never carried the prefix is not mangled into one that does not exist.
+    """
+    if not package:
+        return paths
+    prefix = package.rstrip("/") + "/"
+    return tuple(p[len(prefix) :] if p.startswith(prefix) else p for p in paths)
+
+
+def _under(path: str, root: str) -> bool:
+    try:
+        Path(os.path.abspath(path)).relative_to(Path(os.path.abspath(root)))
+    except ValueError:
+        return False
+    return True
