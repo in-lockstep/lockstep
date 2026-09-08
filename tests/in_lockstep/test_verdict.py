@@ -198,3 +198,39 @@ def test_a_silent_runners_message_survives_the_record_whole() -> None:
     assert "the line that says why" in finding.message
     assert finding.as_record()["message"] == finding.message, "the record clipped what the tail kept"
     assert len(finding.message) <= Finding.MAX_RECORDED_MESSAGE
+
+
+_ERRORED = """\
+==================================== ERRORS ====================================
+_______________ ERROR at teardown of test_thing[anthropic] _______________
+    raise KeyError(name)
+E   KeyError: 'getpwuid(): uid not found: 1001'
+=========================== short test summary info ============================
+ERROR tests/in_lockstep/test_llm.py::test_thing[anthropic]
+1 error in 2.10s
+"""
+
+
+def test_gate_verdict_2_a_failure_with_no_reason_carries_pytest_own_error_line() -> None:
+    """GATE-VERDICT-2. `FAILED <id> - <why>` keeps the why; `ERROR <id>` has none, and the
+    sentence naming the cause is in the traceback block above it. So a verdict could still name a
+    test and say nothing about it, which is where the container job of GATE-CI-5 landed: one
+    failing test, named, with the reason in no record and no log."""
+    outcome = _run(1, _ERRORED)
+    (finding,) = outcome.findings
+    assert "test_thing[anthropic]" in finding.message
+    assert "pytest said: KeyError: 'getpwuid(): uid not found: 1001'" in finding.message
+
+
+def test_a_reason_pytest_did_give_is_not_repeated_from_the_traceback() -> None:
+    """The fallback is a fallback. A summary line that carries its own reason is the better
+    answer -- it is per test, where the traceback tail is per run -- so it wins alone."""
+    stdout = (
+        "E   AssertionError: assert 1 == 2\n"
+        "=========================== short test summary info ============================\n"
+        "FAILED tests/x.py::test_a - AssertionError: assert 1 == 2\n"
+        "1 failed in 0.10s\n"
+    )
+    (finding,) = _run(1, stdout).findings
+    assert "test_a - AssertionError: assert 1 == 2" in finding.message
+    assert "pytest said" not in finding.message

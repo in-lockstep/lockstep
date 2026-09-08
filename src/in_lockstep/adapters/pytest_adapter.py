@@ -181,12 +181,16 @@ class PytestTest:
             named = "; ".join(_named(c) for c in failing[:10]) + (
                 f" (+{len(failing) - 10} more)" if len(failing) > 10 else ""
             )
+            # When not one of them carried a reason, pytest's own error lines are the only
+            # account of what happened, and the adapter is holding them.
+            said = "" if any(c.message for c in failing) else _errors(text)
             findings = (
                 Finding(
                     id="test.expectation_unmet",
                     message=(
                         f"expected the suite to {inp.expect}, {report.failed} failed of {report.total}"
                         + (f": {named}" if named else "")
+                        + (f". pytest said: {said}" if said else "")
                     ),
                     severity=Severity.ERROR,
                     blocking=True,
@@ -199,6 +203,23 @@ class PytestTest:
             findings=findings,
             cost=Cost(wall_seconds=report.duration_seconds),
         )
+
+
+def _errors(text: str) -> str:
+    """pytest's own error lines, for when its summary line carried no reason.
+
+    `FAILED <id> - <why>` is the usual shape and `GATE-VERDICT-2` keeps the `<why>`. A test that
+    ERRORS rather than fails prints `ERROR <id>` with no reason at all, and the sentence naming
+    the cause sits in the traceback block above it, on the `E   ` lines. So a verdict could still
+    name a test and say nothing about it -- the half #312 and #378 each closed the other side of
+    -- and the container job of `GATE-CI-5` landed in exactly that hole: one failing test, named,
+    with no reason anywhere in the record or the log.
+
+    De-duplicated, because one assertion repeats its line across parametrised cases, and bounded
+    the same way the runner's own output is.
+    """
+    lines = [line[4:].strip() for line in text.splitlines() if line.startswith("E   ")]
+    return " / ".join(dict.fromkeys(line for line in lines if line))[-RUNNER_OUTPUT_CHARS:]
 
 
 def _tail(text: str) -> str:
