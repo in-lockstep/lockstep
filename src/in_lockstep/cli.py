@@ -507,6 +507,49 @@ def _ensure_review_bound(lockstep: Any) -> None:
     )
 
 
+def _ensure_judge_bound(lockstep: Any) -> None:
+    """Bind the shipped `AiJudge` when the module bound no `Judge`, as `_ensure_review_bound`
+    does for `Review`: the route is the module's, and a repository that wrote one line
+    (`models.route("judge", ...)`) should not need a second to say which adapter serves it."""
+    from .adapters.ai.judge import AiJudge, Judge
+
+    if lockstep.container.has(Judge):
+        return
+    lockstep.bind(Judge, AiJudge())
+
+
+def _eval_judge(root: Path, budget: float | None) -> None:
+    """`eval run --judge`: the `judge/corpus` workflow over `root`, as a run.
+
+    Composing, not deciding: the module is loaded so the route, the budget and the tape are the
+    repository's; the shipped judge and the shipped workflow are bound when the module bound
+    neither; and `_run_registered` does what it does for every workflow, so the record, the exit
+    code and the redaction are the same as `run judge/corpus`. What the judge sends, what is
+    replayed and what a verdict settles live in `improver.py` and `workflows/judge.py`.
+    """
+    from .improver import CorpusImprover
+    from .workflows import judge as judge_workflows
+
+    lockstep, recorder = _default_lockstep()
+    if budget is not None:
+        from .core.spend import Budget
+
+        lockstep.budget = Budget(usd=budget)
+    _ensure_judge_bound(lockstep)
+    if judge_workflows.CORPUS not in {r.id for r in registered()}:
+        judge_workflows.register()
+    _run_registered(
+        lockstep,
+        recorder,
+        get(judge_workflows.CORPUS),
+        (),
+        False,
+        None,
+        record=_recording(record=None),
+        extra={"improver": CorpusImprover(root)},
+    )
+
+
 def _ls_parked(lockstep: Any) -> None:
     """Parked inventory is first-class (§13.6): every barrier the shared store holds, with what
     each branch waits for and who resumed what."""
@@ -1647,7 +1690,20 @@ def _as_answer(content: str) -> Any:
     "--into", default="", type=click.Path(), help="harvest: where to write them. Defaults to --corpus."
 )
 @click.option("--family", default="", help="harvest: a directory to group the new cases under.")
-def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: str) -> None:
+@click.option(
+    "--judge",
+    is_flag=True,
+    help="run: put every rubric to the bound judge, as a recorded run. Without it, nothing is spent.",
+)
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="--judge: hard ceiling, in USD. Without one, lockstep.py must declare a budget.",
+)
+def eval_cmd(
+    action: str, corpus: str, from_cassette: str, into: str, family: str, judge: bool, budget: float | None
+) -> None:
     """Build cases from recorded runs, and settle them offline.
 
     `harvest` turns a cassette into cases — real requests that were really sent, with expectations
@@ -1657,11 +1713,15 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
     Deterministic expectations are settled. Rubric expectations are reported as OUTSTANDING,
     because a judge has not answered them — recording them as passes would put a perfect score
     computed from no evidence into a baseline that is then compared against forever.
+
+    `run --judge` is the one form that spends: it is a run of the `judge/corpus` workflow, on the
+    model routed for `judge`, recorded and priced like every other run, and every verdict it
+    gets is kept beside its case so the next `--judge` pays only for what changed. Plain `run`
+    stays what `make check` calls: offline, nothing billed.
     """
     from pathlib import Path as _Path
 
-    from .evaluation import load_cases, summarize
-    from .evaluation.cases import grade
+    from .evaluation import load_cases
 
     root = _Path(corpus) if corpus else _Path(__file__).parent / "corpus"
 
@@ -1681,12 +1741,20 @@ def eval_cmd(action: str, corpus: str, from_cassette: str, into: str, family: st
         return
 
     if action == "run":
+        if judge:
+            _eval_judge(root, budget)
+            return
         _eval_run(cases)
         return
 
-    # No model runs here: this reports what the corpus asks of one.
-    results = [grade(case, None) for case in cases]
-    summary = summarize(results)
+    # No model runs here and no answer exists, so nothing is decided: this reports what the
+    # corpus asks of one. It used to grade each case against `None` and let `summarize` count
+    # what fell out, which read as "outstanding" only for as long as an unjudged rubric hid a
+    # failed check; once a failing half decides a case (GATE-JUDGE-3), a check graded against
+    # no answer is a failure, and a report that printed `0%` over nothing would be the
+    # reassuring-looking number this ledger refuses.
+    scored = sum(1 for case in cases if case.rubric is not None and case.rubric.scored)
+    summary: dict[str, Any] = {"total": len(cases), "decided": 0, "outstanding": scored, "pass_rate": None}
 
     by_family: dict[str, int] = {}
     for case in cases:

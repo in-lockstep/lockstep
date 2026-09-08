@@ -396,16 +396,13 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     Returning 1.0 for a suite that decided nothing would put a perfect score computed from no
     evidence into a baseline, and it would be compared against forever.
     """
-    # Decided: nothing left outstanding, and at least one half actually said something -- a
-    # deterministic check, or a rubric a judge settled. A judged rubric decides a case on its
-    # own; a case with checks and an unjudged rubric is still outstanding, because half an
-    # answer is not one.
-    decided = [
-        r
-        for r in results
-        if not r.get("rubric_outstanding")
-        and (r.get("deterministic_passed") is not None or r.get("rubric_passed") is not None)
-    ]
+    # Decided: a half that FAILED, whatever the other half is still waiting on -- both halves
+    # must agree for a case to pass, so one failing half is the whole answer -- or nothing left
+    # outstanding and at least one half that said something. A case with passing checks and an
+    # unjudged rubric is still outstanding, because half a pass is not one; a case with failing
+    # checks and an unjudged rubric is failed, because no verdict could rescue it, and reading it
+    # as outstanding hid every tightened case that also stated a rubric (`GATE-JUDGE-3`).
+    decided = [r for r in results if _decided(r)]
     outstanding = [r for r in results if r.get("rubric_outstanding")]
     passed = [r for r in decided if _passed(r)]
     judged = [r for r in results if r.get("rubric_passed") is not None]
@@ -422,6 +419,15 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             r["deterministic_passed"] is not False and r.get("rubric_passed") is not False for r in results
         ),
     }
+
+
+def _decided(result: Mapping[str, Any]) -> bool:
+    """One half failed, or neither is waiting and one spoke."""
+    if result.get("deterministic_passed") is False or result.get("rubric_passed") is False:
+        return True
+    return not result.get("rubric_outstanding") and (
+        result.get("deterministic_passed") is not None or result.get("rubric_passed") is not None
+    )
 
 
 def _passed(result: Mapping[str, Any]) -> bool:

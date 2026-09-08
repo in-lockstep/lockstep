@@ -56,7 +56,19 @@ in-lockstep/lockstep#48 through the security lens — the recording the package 
 the first promotion because it was the one that published nothing new.
 
 Self-contained matters (`GATE-EVAL-4`): a case carries the answer its expectations came from, so it
-settles with no cassette anywhere. The tape it was harvested from was destroyed with the CI runner
+settles with no cassette anywhere.
+
+```
+evidence/cases/<family>/<name>.verdicts.jsonl    what a judge decided about that case, appended
+```
+
+A case that states a rubric gets a sidecar the first time a judge answers it: `eval run --judge`
+over this directory, or `improve/measure` judging both arms. One JSON line per verdict -- the
+level, the reason, what was quoted, which model judged, and the content hashes of the rubric and
+the answer it was a verdict on. The case file is never rewritten; the sidecar is the run's own
+record, and a pair already in it is replayed rather than paid for again (`GATE-JUDGE-3`). The cap
+above counts cases, not sidecars, and a sidecar is committed the way a case is: by a person, in a
+pull request that reads it. The tape it was harvested from was destroyed with the CI runner
 that made it, and `harvested.cassette` is provenance rather than a dependency.
 
 `cases/` holds **only** case files. `load_cases` is `rglob("*.json")` and `Case.parse` refuses any

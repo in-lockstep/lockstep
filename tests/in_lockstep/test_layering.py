@@ -334,7 +334,13 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: binding `review` already made a few lines into its own body. Which lenses run, and how a
 #: fan-out joins them, live in `workflows/review.py`, where `test_enforced_review.py` reaches
 #: them with a stub adapter.
-CLI_HELPER_STATEMENTS = 1247
+#: 1247 -> 1263 with PR-16, composing: `_eval_judge` loads the module, binds the shipped judge
+#: when none is bound (`_ensure_judge_bound`, the `_ensure_review_bound` shape), registers the
+#: shipped `judge/corpus` workflow when the module did not, and hands the corpus to
+#: `_run_registered`. What the judge is asked, what is replayed and what a verdict settles live in
+#: `improver.py` and `workflows/judge.py`, where `test_judge_loop.py` reaches them without a
+#: CliRunner.
+CLI_HELPER_STATEMENTS = 1263
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

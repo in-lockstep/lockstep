@@ -18,7 +18,7 @@ from pathlib import Path
 
 from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
-from in_lockstep.adapters.ai import TDD, AiImprove, DiagnoseThenFix, Draft, Measure
+from in_lockstep.adapters.ai import TDD, AiImprove, AiJudge, DiagnoseThenFix, Draft, Judge, Measure
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
@@ -355,6 +355,12 @@ lockstep.models.route("fix", "anthropic:claude-sonnet-4-6")
 # each re-asks a promoted case against the model that case was recorded on, because a comparison
 # that also changed the model would be a comparison of two things.
 lockstep.models.route("improve", "anthropic:claude-opus-4-6")
+# The judge takes the free INTERNAL path triage takes. Grading one answer against a rubric a
+# person wrote is a bounded reading task, it runs once per rubric per arm on every measurement,
+# and a verdict from a local model is a verdict this repository can afford to re-ask when the
+# rubric changes. The route is a line, so a repository that wants a stronger judge changes it
+# here and nowhere else (O11).
+lockstep.models.route("judge", "local:qwen3-8b")
 
 # -- the workshop -------------------------------------------------------------------
 #
@@ -489,6 +495,11 @@ improving = AiImprove()
 lockstep.bind(Draft, improving)
 lockstep.bind(Measure, improving)
 lockstep.bind(Improver, CorpusImprover("evidence/cases"))
+# The judge, bound apart from the improver because it is routed apart: `improve/measure` asks it
+# one question per rubric per arm, and `eval run --judge` asks it over the promoted corpus. A
+# rubric it has not answered stays `outstanding` (GATE-JUDGE-1); one it has is kept beside the
+# case and never paid for twice (GATE-JUDGE-3).
+lockstep.bind(Judge, AiJudge())
 
 # -- the processes ------------------------------------------------------------------
 #
@@ -506,11 +517,15 @@ lockstep.bind(Improver, CorpusImprover("evidence/cases"))
 from in_lockstep.workflows import fix as fix_workflows  # noqa: E402
 from in_lockstep.workflows import implement as implement_workflows  # noqa: E402
 from in_lockstep.workflows import improve as improve_workflows  # noqa: E402
+from in_lockstep.workflows import judge as judge_workflows  # noqa: E402
 from in_lockstep.workflows import review as review_workflows  # noqa: E402
 
 implement_workflows.register()
 fix_workflows.register()
 improve_workflows.register()
+# `judge/corpus`: the promoted corpus's rubrics, judged on the recorded arm and kept beside each
+# case. `eval run --judge` dispatches it.
+judge_workflows.register()
 # `review/all-lenses`: the required check, as one fan-out over every lens the bound adapter
 # declares (GATE-REVIEW-5, GATE-COST-6). `lockstep.yml` invokes it and nothing else.
 review_workflows.register()

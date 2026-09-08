@@ -12,7 +12,19 @@
     },
     "schema": [
       "findings"
-    ]
+    ],
+    "rubric": {
+      "criteria": [
+        "Names the mechanism by which the unquoted or interpolated input reaches the shell, not only that it does",
+        "Says what an actor who controls the input could make the command do"
+      ],
+      "levels": {
+        "5": "both criteria met with the exact expression quoted",
+        "3": "the mechanism named, the consequence vague",
+        "1": "restates that quoting is a best practice"
+      },
+      "min": 4
+    }
   },
   "harvested": {
     "cassette": "src/in_lockstep/cassettes/review-security.json",
