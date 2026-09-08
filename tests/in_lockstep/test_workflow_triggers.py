@@ -958,6 +958,21 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
     # or the job blocks; `--approve` would open it by claiming a human is watching a push, which
     # is a false record rather than a convenience, and it is the shortcut somebody reaches for
     # when the job goes red.
+    # And the environment is the one a model's run gets, built the same way. `uv sync` alone
+    # leaves out the extras `Provision` installs, and a suite missing an optional SDK skips the
+    # tests that need it rather than failing -- so a job without this goes green while the case
+    # it exists to cover is never run.
+    for name, job in (ci.get("jobs") or {}).items():
+        runs = [str(step.get("run") or "") for step in job.get("steps") or [] if isinstance(step, dict)]
+        at = next((i for i, r in enumerate(runs) if "in-lockstep run selfcheck" in r), None)
+        if at is None:
+            continue
+        provision = next((i for i, r in enumerate(runs) if "in-lockstep provision" in r), None)
+        assert provision is not None and provision < at, (
+            f"{name}: dispatches the suite without provisioning first, so the venv it mounts is "
+            f"not the one a model's run gets and the tests needing an optional SDK skip"
+        )
+
     for dispatch in dispatches:
         assert "--approved-by" in dispatch, f"{dispatch}: dispatches Test with no grant"
         assert "--approve " not in dispatch and not dispatch.endswith("--approve"), (

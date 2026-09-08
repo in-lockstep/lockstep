@@ -54,6 +54,13 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv sync
+      # `provision` first, the way the work jobs run it, because the environment is half of what
+      # this job is for. `uv sync` alone leaves out the extras the module's Provision installs,
+      # and a suite missing an optional SDK SKIPS the tests that need it -- so the job went green
+      # while the very failure it was built to catch was not being run (12 tests, including the
+      # one #373 died on twice). The venv this mounts has to be the venv a model's run gets, or
+      # the job proves something narrower than it appears to.
+      - run: uv run in-lockstep provision
       # `ApprovalGate` is bound in this repository's module and gates on EXECUTES_CODE, which
       # `PytestTest` declares and means -- so dispatching Test needs a grant, and the gate's own
       # docstring says a command that passes none makes it unopenable rather than strict (#189).
