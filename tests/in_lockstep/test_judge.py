@@ -480,3 +480,22 @@ def test_a_ceiling_firing_mid_corpus_keeps_the_verdicts_already_paid_for() -> No
     assert [(v.case, v.level) for v in outcome.value.verdicts] == [("a", 5)]
     assert outcome.value.calls == 2 and len(scripted.asked) == 2, "the third ask was never sent"
     assert outcome.cost.usd == pytest.approx(0.001)
+
+
+def test_a_provider_that_could_not_be_reached_errors_the_judge_and_decides_nothing() -> None:
+    """The first real `judge/corpus` run here dialled an Ollama nobody had started, and the
+    record said `decided: true` over zero verdicts (run judge-corpus-20260908T023019Z-c427).
+    ERRORED is infrastructure, not a control refusing, and it is not a decision either."""
+    from in_lockstep.adapters.ai import AiJudge, Judge
+    from in_lockstep.ai.invoker import InvocationFailed
+    from in_lockstep.core.outcome import Status
+
+    asks = (_ask("a", "before", "x"), _ask("b", "before", "y"))
+    scripted = _Scripted(
+        json.dumps({"level": 5, "reason": "good"}),
+        InvocationFailed("provider.transient", "All connection attempts failed"),
+    )
+    outcome = _judge(AiJudge(lambda ctx: scripted), Judge(asks=asks))
+    assert outcome.status is Status.ERRORED and outcome.reason == "provider.transient"
+    assert not outcome.decided, "a judge nobody could reach decided nothing"
+    assert [(v.case, v.level) for v in outcome.value.verdicts] == [("a", 5)], "what was paid for is kept"
