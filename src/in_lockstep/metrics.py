@@ -180,6 +180,13 @@ class Report:
     window: tuple[str, str] | None = None
 
     runs_by_kind: list[Group] = field(default_factory=list)
+    #: The same rows again, one per workflow id, over the records that carry one. `by kind` folds
+    #: every dispatched run into `workflow`, which hid the judge and the learning loop behind a
+    #: single line: a second engineer reading the report could see that fifty workflows ran and
+    #: not that two of them were `judge/corpus`. Records with no workflow id (a bare `review`,
+    #: a triage) are left out rather than grouped under an absence, because here the absence is
+    #: the ordinary case and a `(unrecorded)` row would be the largest one on the page.
+    runs_by_workflow: list[Group] = field(default_factory=list)
     runs_by_model: list[Group] = field(default_factory=list)
     by_week: list[tuple[str, int, float]] = field(default_factory=list)
 
@@ -681,6 +688,7 @@ def build(records: list[dict[str, Any]], *, names: bool = False) -> Report:
         records=total,
         window=(stamps[0], stamps[-1]) if stamps else None,
         runs_by_kind=_group(records, "kind"),
+        runs_by_workflow=_group([r for r in records if r.get("workflow")], "workflow"),
         runs_by_model=_group(records, "model"),
         by_week=_weeks(records),
         failure_rate=_share(verdicts, lambda r: r.get("status") in FAILED),
@@ -992,6 +1000,21 @@ def as_trend_text(trends: list[Trend], *, limit: int = TOP_N) -> list[str]:
     return out
 
 
+def _group_lines(groups: list[Group], *, width: int) -> list[str]:
+    """One line per breakdown row, in the shape `by kind` has always printed. The failure rate is
+    over the row's judged runs, and a row whose runs carry no verdict says how many rather than
+    counting them as passed."""
+    lines: list[str] = []
+    for group in groups:
+        rate = "—" if group.failure_rate is None else f"{group.failure_rate:.0%}"
+        unjudged = group.runs - group.judged
+        lines += [
+            f"  {group.name:<{width}} {group.runs:>4} run(s)   {rate:>4} failed   "
+            f"{group.seconds.render('s')} median" + (f"   ({unjudged} with no verdict)" if unjudged else "")
+        ]
+    return lines
+
+
 def as_text(report: Report, *, actors: bool = False) -> list[str]:
     """The terminal form. One screen, and every number carrying its denominator.
 
@@ -1059,13 +1082,12 @@ def as_text(report: Report, *, actors: bool = False) -> list[str]:
         out += [f"    {name:<28} {count}"]
 
     out += ["", "by kind"]
-    for group in report.runs_by_kind:
-        rate = "—" if group.failure_rate is None else f"{group.failure_rate:.0%}"
-        unjudged = group.runs - group.judged
-        out += [
-            f"  {group.name:<14} {group.runs:>4} run(s)   {rate:>4} failed   "
-            f"{group.seconds.render('s')} median" + (f"   ({unjudged} with no verdict)" if unjudged else "")
-        ]
+    out += _group_lines(report.runs_by_kind, width=14)
+    # Only when some record carries a workflow id: a ledger of bare reviews has nothing to say
+    # here, and an empty heading would read as a section somebody forgot to fill.
+    if report.runs_by_workflow:
+        out += ["", "by workflow"]
+        out += _group_lines(report.runs_by_workflow, width=22)
 
     out += ["", "attempts per ticket"]
     for ticket, runs, cost in report.attempts_by_ticket:
@@ -1207,6 +1229,7 @@ def as_html(report: Report, *, title: str = "in-lockstep — what the ledger say
         _bars("Turns per piece of work", [(n, m.value or 0) for n, m in report.turns_by_strategy], GOLD, ""),
         _bars("What it keeps finding", report.top_findings, MINT, ""),
         _kinds_table(report),
+        _workflows_table(report),
         _team_section(report),
         _delivery(report),
         _foot(report),
@@ -1301,16 +1324,24 @@ def _bars(heading: str, rows: list[tuple[str, Any]], colour: str, unit: str) -> 
 
 
 def _kinds_table(report: Report) -> str:
-    if not report.runs_by_kind:
+    return _group_table(report.runs_by_kind, heading="By kind of work", column="kind")
+
+
+def _workflows_table(report: Report) -> str:
+    return _group_table(report.runs_by_workflow, heading="By workflow", column="workflow")
+
+
+def _group_table(groups: list[Group], *, heading: str, column: str) -> str:
+    if not groups:
         return ""
     rows = "".join(
         f"<tr><td>{_esc(g.name)}</td><td>{g.runs}</td>"
         f"<td>{'—' if g.failure_rate is None else f'{g.failure_rate:.0%}'}</td>"
         f"<td>{_esc(g.seconds.render('s'))}</td><td>{_esc(_money(g.cost))}</td></tr>"
-        for g in report.runs_by_kind
+        for g in groups
     )
-    return f"""<section><h2>By kind of work</h2><div class=scroll><table>
-<tr><th>kind</th><th>runs</th><th>failed</th><th>median</th><th>spend</th></tr>{rows}</table></div></section>"""
+    return f"""<section><h2>{_esc(heading)}</h2><div class=scroll><table>
+<tr><th>{column}</th><th>runs</th><th>failed</th><th>median</th><th>spend</th></tr>{rows}</table></div></section>"""
 
 
 def _team_section(report: Report) -> str:
