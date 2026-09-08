@@ -1,0 +1,198 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "7c593a6823733bda865161d5da7673c507ce01cc"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 71366,
+  "ci_actor": "tpouyer",
+  "ci_run": "34249768989",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.331234,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 80,
+        "message": "Fallback branch uses `repo_root` but `repo_root` is not defined in this scope after the refactor.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 27,
+        "message": "`rebase` is exported in `__all__` only implicitly \u2014 it is missing from the updated `__all__` list.",
+        "path": "src/in_lockstep/adapters/tooling.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 95,
+        "message": "The final unit test for `within` with `cwd == repo_root` may not exercise the right boundary.",
+        "path": "tests/in_lockstep/test_monorepo_cwd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 183,
+        "message": "Relative `cwd` is joined directly into `root` without traversal validation.",
+        "path": "src/in_lockstep/adapters/tooling.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 75,
+        "message": "CommandTest test does not assert that paths are not duplicated when selector_arg is empty.",
+        "path": "tests/in_lockstep/test_monorepo_cwd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 71,
+        "message": "`cwd` falls through to `repo_root` in the `else` branch, but `repo_root` is not defined at that point in the new code.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7c593a6823733bda865161d5da7673c507ce01cc",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.165617,
+  "output_tokens": 4236,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34249768989-20260908T161417Z-fee7",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.046093,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 80,
+            "message": "Fallback branch uses `repo_root` but `repo_root` is not defined in this scope after the refactor.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 27,
+            "message": "`rebase` is exported in `__all__` only implicitly \u2014 it is missing from the updated `__all__` list.",
+            "path": "src/in_lockstep/adapters/tooling.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 95,
+            "message": "The final unit test for `within` with `cwd == repo_root` may not exercise the right boundary.",
+            "path": "tests/in_lockstep/test_monorepo_cwd.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 854,
+      "verb": "review",
+      "wall_seconds": 23.407
+    },
+    {
+      "cost_usd": 0.034854,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 90,
+      "verb": "review",
+      "wall_seconds": 4.483
+    },
+    {
+      "cost_usd": 0.040336,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 183,
+            "message": "Relative `cwd` is joined directly into `root` without traversal validation.",
+            "path": "src/in_lockstep/adapters/tooling.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 449,
+      "verb": "review",
+      "wall_seconds": 11.837
+    },
+    {
+      "cost_usd": 0.044334,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 75,
+            "message": "CommandTest test does not assert that paths are not duplicated when selector_arg is empty.",
+            "path": "tests/in_lockstep/test_monorepo_cwd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 71,
+            "message": "`cwd` falls through to `repo_root` in the `else` branch, but `repo_root` is not defined at that point in the new code.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 737,
+      "verb": "review",
+      "wall_seconds": 18.239
+    }
+  ],
+  "tokens": 4260,
+  "ts": "2026-09-08T16:14:41+00:00",
+  "wall_seconds": 57.966,
+  "workflow": "review/all-lenses"
+}
