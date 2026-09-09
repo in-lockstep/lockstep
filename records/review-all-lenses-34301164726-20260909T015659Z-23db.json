@@ -1,0 +1,201 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "26c7301bc4aeb8a1a986ae8a887f9ac42fc9d3e5"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 37827,
+  "ci_actor": "tpouyer",
+  "ci_run": "34301164726",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.172037,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 306,
+        "message": "Reachability check is a raw substring scan; dead code or comment mentions would satisfy it.",
+        "path": "tests/in_lockstep/test_prompt_composition.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 38,
+        "message": "`families <= set(SHIPPED_VERBS)` fires after the explicit equality check, so it can only add signal if SHIPPED_VERBS is a strict superset of the explicit set.",
+        "path": "tests/in_lockstep/test_knowledge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 301,
+        "message": "All .py source files are read and concatenated into one string to search for each body filename.",
+        "path": "tests/in_lockstep/test_prompt_composition.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 301,
+        "message": "Test concatenates and greps all .py source files; search string is derived from filesystem paths without normalization.",
+        "path": "tests/in_lockstep/test_prompt_composition.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 303,
+        "message": "Source scan is a substring search over concatenated Python source, so a path fragment in a comment, docstring, or unrelated string literal counts as 'reachable'.",
+        "path": "tests/in_lockstep/test_prompt_composition.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 44,
+        "message": "The `families <= SHIPPED_VERBS` assertion does not catch the inverse: a shipped verb with no prompt family.",
+        "path": "tests/in_lockstep/test_knowledge.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "26c7301bc4aeb8a1a986ae8a887f9ac42fc9d3e5",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.172037,
+  "output_tokens": 2010,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34301164726-20260909T015659Z-23db",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.044698,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 306,
+            "message": "Reachability check is a raw substring scan; dead code or comment mentions would satisfy it.",
+            "path": "tests/in_lockstep/test_prompt_composition.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 38,
+            "message": "`families <= set(SHIPPED_VERBS)` fires after the explicit equality check, so it can only add signal if SHIPPED_VERBS is a strict superset of the explicit set.",
+            "path": "tests/in_lockstep/test_knowledge.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 627,
+      "verb": "review",
+      "wall_seconds": 18.807
+    },
+    {
+      "cost_usd": 0.041724,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 301,
+            "message": "All .py source files are read and concatenated into one string to search for each body filename.",
+            "path": "tests/in_lockstep/test_prompt_composition.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 414,
+      "verb": "review",
+      "wall_seconds": 12.879
+    },
+    {
+      "cost_usd": 0.041926,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 301,
+            "message": "Test concatenates and greps all .py source files; search string is derived from filesystem paths without normalization.",
+            "path": "tests/in_lockstep/test_prompt_composition.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 421,
+      "verb": "review",
+      "wall_seconds": 12.108
+    },
+    {
+      "cost_usd": 0.043689,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 303,
+            "message": "Source scan is a substring search over concatenated Python source, so a path fragment in a comment, docstring, or unrelated string literal counts as 'reachable'.",
+            "path": "tests/in_lockstep/test_prompt_composition.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 44,
+            "message": "The `families <= SHIPPED_VERBS` assertion does not catch the inverse: a shipped verb with no prompt family.",
+            "path": "tests/in_lockstep/test_knowledge.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 560,
+      "verb": "review",
+      "wall_seconds": 16.067
+    }
+  ],
+  "tokens": 2022,
+  "tool_calls": {},
+  "ts": "2026-09-09T01:57:18+00:00",
+  "turns": 4,
+  "wall_seconds": 18.807,
+  "workflow": "review/all-lenses"
+}
