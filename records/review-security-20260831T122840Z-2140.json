@@ -1,0 +1,61 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.055713,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 3207,
+        "message": "The `--corpus` path from `extra` is passed to `collect()` and then to `load_cases()` without any restriction on where it may point. An attacker who can supply a `--corpus` argument (or influence the value passed to it) can point it at any directory on disk \u2014 including outside the repository \u2014 and cause the trial to load and execute case files from that location. The immediate impact is arbitrary file read of any `.json` files reachable from the given path; if `load_cases` or `grade` deserialises\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 161,
+        "message": "The `extra` path received from the CLI is used directly in `collect()` with only an `is_dir()` check before being handed to `load_cases()`. There is no check that `extra.resolve()` is within the working tree or any other trusted boundary. The same path-traversal concern as the CLI entry point: a caller supplying `../../` or an absolute path outside the project reaches arbitrary directories. The `is_dir()` guard prevents a missing-path error but does not constrain where the path may point.",
+        "path": "src/in_lockstep/trial.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 3197,
+        "message": "When `--record` is set, the code calls `credentials_for(auth, selected.provider)` and builds a `RecordingProvider`. The model string passed via `--model` is taken from user input and used unsanitised to select a provider and construct a `Model` object. If `Model()` or `registry.provider_for()` uses the string to look up or construct a network endpoint, a malformed or adversarially chosen model string could redirect recording traffic. I cannot see the internals of `Model` or `registry.provider_fo\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 236,
+        "message": "In `_review_case`, the `diff` string extracted from `case.input` is placed directly into a `Review` request that is passed to `adapter.invoke`. The source of `diff` is a case file loaded from disk (pack corpus or `--corpus` path). If a crafted corpus file contains a `diff` value designed to exploit downstream prompt handling \u2014 for instance, injecting reviewer instructions \u2014 it reaches the prompt construction layer without sanitisation. When replaying a cassette this is inert; when `--record` is \u2026[truncated]",
+        "path": "src/in_lockstep/trial.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "40d68e6894e29487b1fae585d0a58cac881725e2",
+  "input_tokens": 14966,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 721,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T122840Z-2140",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 15687,
+  "ts": "2026-08-31T12:29:02+00:00",
+  "wall_seconds": 22.097
+}

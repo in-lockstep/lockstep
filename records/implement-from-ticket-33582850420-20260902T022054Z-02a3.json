@@ -1,0 +1,64 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#150"
+  },
+  "branch": "main",
+  "ci_actor": "tpouyer",
+  "config": "local working tree",
+  "cost_usd": 13.841082,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_green",
+        "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_platform.py",
+        "path": "tests/in_lockstep/test_platform.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/base.py",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/adapters/backport.py",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 13 failed of 1644",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "209078363e98c08e558ef38bba691d623d0b4b44",
+  "kind": "workflow",
+  "outcome_cost_usd": 6.920541,
+  "reason": "tdd.not_green",
+  "run_id": "implement-from-ticket-33582850420-20260902T022054Z-02a3",
+  "schema": 4,
+  "status": "failed",
+  "tokens": 62190,
+  "ts": "2026-09-02T02:33:07+00:00",
+  "wall_seconds": 783.965,
+  "workflow": "implement/from-ticket"
+}

@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.026232,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 106,
+        "message": "Prompt-injection surface on AI triage acknowledged but understated",
+        "path": "design/strategy-selection.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 86,
+        "message": "Ledger record of untrusted signals is a gate, but GATE-SELECT-2 is not enforced until the mechanism is built",
+        "path": "design/strategy-selection.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e46b9f6a2dbd06a4040a96440403f836afe1b631",
+  "input_tokens": 5809,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 587,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T131042Z-d055",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 6396,
+  "ts": "2026-08-31T13:11:00+00:00",
+  "wall_seconds": 18.304
+}

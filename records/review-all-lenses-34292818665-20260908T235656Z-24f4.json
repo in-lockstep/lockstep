@@ -1,0 +1,100 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "05078f5f11a44e2675d150f2c7ecac712f3bb9a6"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 8635,
+  "ci_actor": "tpouyer",
+  "ci_run": "34292818665",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.036152,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "05078f5f11a44e2675d150f2c7ecac712f3bb9a6",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.036152,
+  "output_tokens": 249,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34292818665-20260908T235656Z-24f4",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.009215,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 86,
+      "verb": "review",
+      "wall_seconds": 6.681
+    },
+    {
+      "cost_usd": 0.008987,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 56,
+      "verb": "review",
+      "wall_seconds": 5.005
+    },
+    {
+      "cost_usd": 0.009084,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 56,
+      "verb": "review",
+      "wall_seconds": 4.72
+    },
+    {
+      "cost_usd": 0.008866,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 63,
+      "verb": "review",
+      "wall_seconds": 2.913
+    }
+  ],
+  "tokens": 261,
+  "tool_calls": {},
+  "ts": "2026-09-08T23:57:03+00:00",
+  "turns": 4,
+  "wall_seconds": 6.681,
+  "workflow": "review/all-lenses"
+}

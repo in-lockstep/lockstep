@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.071664,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 509,
+        "message": "actor_of() returns user-controlled strings from ledger records without sanitization, and those strings are later embedded verbatim into HTML via _team_section().",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "09b307ab849ea33422667defe4bf6460082ece08",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 430,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T033516Z-816f",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 433,
+  "ts": "2026-09-06T03:35:31+00:00",
+  "wall_seconds": 14.828
+}

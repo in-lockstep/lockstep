@@ -1,0 +1,38 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34067513823",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.052802,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "aa8214714ba84e30624b691d3d20937a5faaad7f",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 47,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T234017Z-9887",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 50,
+  "ts": "2026-09-06T23:40:20+00:00",
+  "wall_seconds": 3.255
+}

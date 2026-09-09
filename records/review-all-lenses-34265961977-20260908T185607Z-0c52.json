@@ -1,0 +1,167 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "42dfe341bb29c657edf41518b46ee04dd7f2f15b"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 58567,
+  "ci_actor": "tpouyer",
+  "ci_run": "34265961977",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.238637,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 468,
+        "message": "Generator expression passed to `charge_turn` may be exhausted before iteration begins.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5241,
+        "message": "The `implement`/`fix` path now drops `report.turns` entirely; the description does not say what happens when `ctx.spend` is absent on those paths.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2554,
+        "message": "Workflow test asserts `turns == 0` and `tool_calls == {}`, so it cannot fail when the fields are present but wrong.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1849,
+        "message": "`assert record['tool_calls'] is dict` does not check the dict contents.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "42dfe341bb29c657edf41518b46ee04dd7f2f15b",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.238637,
+  "output_tokens": 1265,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34265961977-20260908T185607Z-0c52",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.062912,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 468,
+            "message": "Generator expression passed to `charge_turn` may be exhausted before iteration begins.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 5241,
+            "message": "The `implement`/`fix` path now drops `report.turns` entirely; the description does not say what happens when `ctx.spend` is absent on those paths.",
+            "path": "src/in_lockstep/cli.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 545,
+      "verb": "review",
+      "wall_seconds": 25.699
+    },
+    {
+      "cost_usd": 0.056638,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 112,
+      "verb": "review",
+      "wall_seconds": 8.831
+    },
+    {
+      "cost_usd": 0.05621,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 77,
+      "verb": "review",
+      "wall_seconds": 6.622
+    },
+    {
+      "cost_usd": 0.062878,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2554,
+            "message": "Workflow test asserts `turns == 0` and `tool_calls == {}`, so it cannot fail when the fields are present but wrong.",
+            "path": "tests/in_lockstep/test_cli.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 1849,
+            "message": "`assert record['tool_calls'] is dict` does not check the dict contents.",
+            "path": "tests/in_lockstep/test_cli.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 543,
+      "verb": "review",
+      "wall_seconds": 15.883
+    }
+  ],
+  "tokens": 1277,
+  "tool_calls": {},
+  "ts": "2026-09-08T18:56:32+00:00",
+  "turns": 4,
+  "wall_seconds": 25.699,
+  "workflow": "review/all-lenses"
+}

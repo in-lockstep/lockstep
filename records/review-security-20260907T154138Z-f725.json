@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34139585501",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.02831,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 113,
+        "message": "Host PATH entry `/venv/bin` appended last \u2014 verify this ordering is enforced and not overridable by a container entrypoint.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "46b77a0d5e1dcbc6d340355b6c3c35979d02068f",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 310,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T154138Z-f725",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 313,
+  "ts": "2026-09-07T15:41:48+00:00",
+  "wall_seconds": 10.509
+}

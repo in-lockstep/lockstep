@@ -1,0 +1,181 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "4b2b36b722a5f064a98bee35d4461fb4ed514445"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 41015,
+  "ci_actor": "tpouyer",
+  "ci_run": "34261023318",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.176252,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 510,
+        "message": "beyond() called on the delta of charged states, not on the outcome cost \u2014 the nesting reads backwards",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 148,
+        "message": "wall_seconds subtraction in beyond() may leave a non-zero result for an AI adapter, contrary to the docstring",
+        "path": "src/in_lockstep/core/outcome.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1467,
+        "message": "Test asserts wall_seconds > 0 but not that it was not double-counted.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1448,
+        "message": "`_SpendsThroughTheRun` uses `charge_turn` \u2014 if that method does not exist or behaves differently from what `AiInvoker` uses, the test does not model the real doubling scenario.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 505,
+        "message": "No test covers the case where the outcome reports LESS than what the shared Spend moved.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4b2b36b722a5f064a98bee35d4461fb4ed514445",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.176252,
+  "output_tokens": 1494,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34261023318-20260908T180613Z-0315",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.046291,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 510,
+            "message": "beyond() called on the delta of charged states, not on the outcome cost \u2014 the nesting reads backwards",
+            "path": "src/in_lockstep/core/context.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 148,
+            "message": "wall_seconds subtraction in beyond() may leave a non-zero result for an AI adapter, contrary to the docstring",
+            "path": "src/in_lockstep/core/outcome.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 534,
+      "verb": "review",
+      "wall_seconds": 15.808
+    },
+    {
+      "cost_usd": 0.040093,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 106,
+      "verb": "review",
+      "wall_seconds": 19.463
+    },
+    {
+      "cost_usd": 0.03986,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 84,
+      "verb": "review",
+      "wall_seconds": 5.157
+    },
+    {
+      "cost_usd": 0.050008,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 1467,
+            "message": "Test asserts wall_seconds > 0 but not that it was not double-counted.",
+            "path": "tests/in_lockstep/test_core.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 1448,
+            "message": "`_SpendsThroughTheRun` uses `charge_turn` \u2014 if that method does not exist or behaves differently from what `AiInvoker` uses, the test does not model the real doubling scenario.",
+            "path": "tests/in_lockstep/test_core.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 505,
+            "message": "No test covers the case where the outcome reports LESS than what the shared Spend moved.",
+            "path": "src/in_lockstep/core/context.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 782,
+      "verb": "review",
+      "wall_seconds": 26.149
+    }
+  ],
+  "tokens": 1506,
+  "ts": "2026-09-08T18:06:41+00:00",
+  "wall_seconds": 26.149,
+  "workflow": "review/all-lenses"
+}

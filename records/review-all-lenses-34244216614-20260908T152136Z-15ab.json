@@ -1,0 +1,247 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "8db2e27597b1f3ecfd0052f47782451a8e61aa8f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 147062,
+  "ci_actor": "tpouyer",
+  "ci_run": "34244216614",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.611255,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 793,
+        "message": "`InvocationBlocked` cost is silently short in the parent's run record.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 757,
+        "message": "`turns_left` calculation excludes the parent's current turn correctly, but the off-by-one deserves explicit confirmation.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 505,
+        "message": "Child loop runs serially inside a single parent tool-dispatch iteration, multiplying model round-trips per parent turn.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 773,
+        "message": "Tool-name validation iterates caller-supplied strings without length or character constraints.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2317,
+        "message": "No test asserts that a parent with zero turns left is refused before any child call is made.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2290,
+        "message": "The 'cost rides back into parent Invocation.cost' assertion relies on `result.cost.usd == pytest.approx(spend.charged.usd)`, but only checks approximate equality, not that child cost specifically contributed.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "8db2e27597b1f3ecfd0052f47782451a8e61aa8f",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.305627,
+  "output_tokens": 3980,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34244216614-20260908T152136Z-15ab",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.077795,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 793,
+            "message": "`InvocationBlocked` cost is silently short in the parent's run record.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 757,
+            "message": "`turns_left` calculation excludes the parent's current turn correctly, but the off-by-one deserves explicit confirmation.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 602,
+      "verb": "review",
+      "wall_seconds": 19.208
+    },
+    {
+      "cost_usd": 0.074971,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 505,
+            "message": "Child loop runs serially inside a single parent tool-dispatch iteration, multiplying model round-trips per parent turn.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 399,
+      "verb": "review",
+      "wall_seconds": 13.453
+    },
+    {
+      "cost_usd": 0.074799,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 773,
+            "message": "Tool-name validation iterates caller-supplied strings without length or character constraints.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 381,
+      "verb": "review",
+      "wall_seconds": 13.627
+    },
+    {
+      "cost_usd": 0.078061,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2317,
+            "message": "No test asserts that a parent with zero turns left is refused before any child call is made.",
+            "path": "tests/in_lockstep/test_ai.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2290,
+            "message": "The 'cost rides back into parent Invocation.cost' assertion relies on `result.cost.usd == pytest.approx(spend.charged.usd)`, but only checks approximate equality, not that child cost specifically contributed.",
+            "path": "tests/in_lockstep/test_ai.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 620,
+      "verb": "review",
+      "wall_seconds": 16.067
+    }
+  ],
+  "tokens": 4004,
+  "ts": "2026-09-08T15:21:56+00:00",
+  "wall_seconds": 62.355,
+  "workflow": "review/all-lenses"
+}

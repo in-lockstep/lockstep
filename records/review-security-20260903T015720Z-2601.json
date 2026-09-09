@@ -1,0 +1,71 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.133517,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 504,
+        "message": "install hook output reaches the finding message without length-bounding before the truncation point",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 471,
+        "message": "argv0 used in the finding message comes from the step list supplied by caller-controlled configuration, not from resolution",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1507,
+        "message": "provision command invokes the adapter outside the middleware chain and bypasses ApprovalGate, as documented, but with no runtime enforcement that the binding is from a trusted ref",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b16aaa66f70f241063682d9984b5bf403dabeaf8",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 902,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260903T015720Z-2601",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 905,
+  "ts": "2026-09-03T01:57:47+00:00",
+  "wall_seconds": 27.575
+}

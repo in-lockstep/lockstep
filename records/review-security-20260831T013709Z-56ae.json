@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.040761,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 110,
+        "message": "The `use()` method calls `strategy()` (instantiating the class with no arguments) when passed a type, then calls `complete(self)` where `complete` is `adapter.complete_for`. The `complete_for` method receives the full `Lockstep` instance, giving it access to `lockstep.policy`, `lockstep.repo`, `lockstep.container`, and any other module-level state. If a third-party or user-supplied strategy subclass overrides `complete_for`, it can read and mutate arbitrary Lockstep state during what appears to \u2026[truncated]",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 172,
+        "message": "In `complete_for`, the WorktreeRunner wrap is applied only when `self.commands is not None`. When `self.commands` is None and `workshop` is also None (or `workshop.commands` is None), the method returns the `request` type without setting a runner, which is the documented safe default. However, if `workshop` is set but `workshop.commands` is None, the policy is completed from the workshop but `self.commands` remains None \u2014 a strategy that receives an `InvokePolicy` indicating execution capability\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1e98942c35ddc736f651a2e3a8b392229c75fae3",
+  "input_tokens": 9692,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 779,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T013709Z-56ae",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 10471,
+  "ts": "2026-08-31T01:37:31+00:00",
+  "wall_seconds": 21.169
+}

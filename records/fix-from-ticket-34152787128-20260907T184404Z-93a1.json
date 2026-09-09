@@ -1,0 +1,65 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 1138314,
+  "cache_write_tokens": 74512,
+  "ci_actor": "tpouyer",
+  "ci_run": "34152787128",
+  "config": "local working tree",
+  "cost_usd": 0.714946,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.no_progress",
+        "message": "stopped after 20 turn(s) in a row that staged nothing and tested nothing new (the ceiling is 20); the last productive one was none: nothing was ever staged. 0 staged change(s) are returned unproposed.",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "3eab0c36595e09b90bcdecbc6346a09683c70b06",
+  "input_tokens": 44,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.357473,
+  "output_tokens": 6260,
+  "priced_fraction": 1.0,
+  "reason": "fix.no_progress",
+  "run_id": "fix-from-ticket-34152787128-20260907T184404Z-93a1",
+  "schema": 8,
+  "status": "blocked",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.no_progress",
+            "message": "stopped after 20 turn(s) in a row that staged nothing and tested nothing new (the ceiling is 20); the last productive one was none: nothing was ever staged. 0 staged change(s) are returned unproposed.",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "fix.no_progress",
+      "status": "blocked",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 88.1
+    }
+  ],
+  "tokens": 6304,
+  "ts": "2026-09-07T18:45:33+00:00",
+  "wall_seconds": 88.1,
+  "workflow": "fix/from-ticket"
+}

@@ -1,0 +1,166 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "4d1897db2eaa51c135c04db4e9c1c8bf65fb45fb"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 36502,
+  "ci_actor": "tpouyer",
+  "ci_run": "34240107210",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.172145,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1335,
+        "message": "`column` header value in `_group_table` is passed unsanitised through `_esc` but the heading is escaped \u2014 the column name is caller-controlled and currently safe, but the pattern is asymmetric.",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1347,
+        "message": "`column` is inserted into HTML without escaping in `_group_table`.",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 822,
+        "message": "Median assertion uses a hardcoded expected value (4.0) but does not verify the unit or render path.",
+        "path": "tests/in_lockstep/test_metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 799,
+        "message": "No test for the column header value in the HTML output of the new workflow table.",
+        "path": "tests/in_lockstep/test_metrics.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4d1897db2eaa51c135c04db4e9c1c8bf65fb45fb",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.086072,
+  "output_tokens": 2346,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34240107210-20260908T144343Z-050f",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.02141,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1335,
+            "message": "`column` header value in `_group_table` is passed unsanitised through `_esc` but the heading is escaped \u2014 the column name is caller-controlled and currently safe, but the pattern is asymmetric.",
+            "path": "src/in_lockstep/metrics.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 298,
+      "verb": "review",
+      "wall_seconds": 11.282
+    },
+    {
+      "cost_usd": 0.018842,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 112,
+      "verb": "review",
+      "wall_seconds": 6.337
+    },
+    {
+      "cost_usd": 0.022164,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 1347,
+            "message": "`column` is inserted into HTML without escaping in `_group_table`.",
+            "path": "src/in_lockstep/metrics.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 327,
+      "verb": "review",
+      "wall_seconds": 10.569
+    },
+    {
+      "cost_usd": 0.023657,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 822,
+            "message": "Median assertion uses a hardcoded expected value (4.0) but does not verify the unit or render path.",
+            "path": "tests/in_lockstep/test_metrics.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 799,
+            "message": "No test for the column header value in the HTML output of the new workflow table.",
+            "path": "tests/in_lockstep/test_metrics.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 448,
+      "verb": "review",
+      "wall_seconds": 15.622
+    }
+  ],
+  "tokens": 2370,
+  "ts": "2026-09-08T14:44:00+00:00",
+  "wall_seconds": 43.809,
+  "workflow": "review/all-lenses"
+}

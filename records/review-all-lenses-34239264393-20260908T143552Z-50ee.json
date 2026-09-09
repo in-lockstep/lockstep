@@ -1,0 +1,114 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "df738635e4f3094748a1f0322df6a5f233778c8f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 78838,
+  "ci_actor": "tpouyer",
+  "ci_run": "34239264393",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.314014,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "Three gates updated but GATE-LEDGER-9, GATE-LEDGER-10, GATE-LEDGER-11, GATE-CI-2 and others that carry 'Post-1.0' or roadmap-item language in their prose are left untouched.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "df738635e4f3094748a1f0322df6a5f233778c8f",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.157007,
+  "output_tokens": 1220,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34239264393-20260908T143552Z-50ee",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.042905,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "message": "Three gates updated but GATE-LEDGER-9, GATE-LEDGER-10, GATE-LEDGER-11, GATE-CI-2 and others that carry 'Post-1.0' or roadmap-item language in their prose are left untouched.",
+            "path": "design/gates.md",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 408,
+      "verb": "review",
+      "wall_seconds": 14.708
+    },
+    {
+      "cost_usd": 0.037651,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 43,
+      "verb": "review",
+      "wall_seconds": 3.04
+    },
+    {
+      "cost_usd": 0.038019,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 61,
+      "verb": "review",
+      "wall_seconds": 6.663
+    },
+    {
+      "cost_usd": 0.038432,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 110,
+      "verb": "review",
+      "wall_seconds": 5.672
+    }
+  ],
+  "tokens": 1244,
+  "ts": "2026-09-08T14:36:07+00:00",
+  "wall_seconds": 30.084,
+  "workflow": "review/all-lenses"
+}

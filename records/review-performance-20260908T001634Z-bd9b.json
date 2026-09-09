@@ -1,0 +1,37 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34172751496",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.022996,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 247,
+        "message": "`_held_by_the_branch` does a `git fetch` on every call, and it is now called twice per `absorb` in the merge path.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "3fd75fa92e863700b67a6bc2c85532a7d6c624df",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 509,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260908T001634Z-bd9b",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 512,
+  "ts": "2026-09-08T00:16:48+00:00",
+  "wall_seconds": 14.055
+}

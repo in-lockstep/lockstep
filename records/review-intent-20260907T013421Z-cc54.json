@@ -1,0 +1,48 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34073412927",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.06182,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 37,
+        "message": "`base_url()` falls back to `self._settings.base_url` when the client attribute is absent, which means a proxy in `ANTHROPIC_BASE_URL` that the SDK absorbed before the fix could still slip through if `_client.base_url` is falsy for any reason.",
+        "path": "src/in_lockstep/llm/providers/_claude_base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 303,
+        "message": "Gemini's `base_url` is set to `\"\"` (empty string) when `gemini_endpoint` is `None`, which is the shape `register` now refuses for `endpoint`.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9003555f6b13290787957aa5865f3baae5065129",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 736,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T013421Z-cc54",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 739,
+  "ts": "2026-09-07T01:34:41+00:00",
+  "wall_seconds": 20.506
+}

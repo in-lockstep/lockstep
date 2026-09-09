@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34167911350",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.042302,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 169,
+        "message": "Static artifact name `lockstep-run` allows a concurrent or queued run on the same repository to overwrite another run's artifact before the download job consumes it.",
+        "path": ".github/workflows/fix.yml",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "127090dfa031cb17a2cffab088363994d9a0f67b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 459,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T224939Z-e08e",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 462,
+  "ts": "2026-09-07T22:49:58+00:00",
+  "wall_seconds": 19.289
+}

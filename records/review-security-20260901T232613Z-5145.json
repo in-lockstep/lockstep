@@ -1,0 +1,51 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.024207,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 86,
+        "message": "Silent swallowing of refresh exceptions may obscure credential theft or exfiltration attempts.",
+        "path": "src/in_lockstep/llm/interface.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 59,
+        "message": "Fallback to captured `id_token` in the lambda means the stale token from construction time is still reachable after refresh fails.",
+        "path": "src/in_lockstep/llm/providers/anthropic.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a1b1db33241a6ac4aafc8f0195d67264ba66d77c",
+  "input_tokens": 5044,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 605,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T232613Z-5145",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5649,
+  "ts": "2026-09-01T23:26:31+00:00",
+  "wall_seconds": 17.608
+}

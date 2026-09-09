@@ -1,0 +1,37 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34139585501",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.027043,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 281,
+        "message": "Assertion checks presence of `--init` in argv but not its position relative to other flags.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "46b77a0d5e1dcbc6d340355b6c3c35979d02068f",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 247,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T154204Z-90ff",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 250,
+  "ts": "2026-09-07T15:42:15+00:00",
+  "wall_seconds": 11.135
+}

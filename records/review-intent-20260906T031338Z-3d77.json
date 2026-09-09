@@ -1,0 +1,109 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.192046,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 117,
+        "message": "The workflow prints \"opens nothing here\" before running, which is true for `improve/measure`, but the message is emitted unconditionally from `_improve_measure` in `cli.py` (line 2005 in the new file) regardless of whether the run ultimately stages a changeset. This is cosmetic but could mislead a terminal user into thinking nothing was written when something was staged.",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 180,
+        "message": "In `_measure`, invokers are cached by `probe.model` string, and the recording wrap (`recorded(invoker.provider, log)`) is applied only on first construction per model. If two probes share the same model string but the first probe's factory call somehow returns a fresh invoker (e.g. a custom `probe_factory`), the second probe reuses the cached \u2014 and already-wrapped \u2014 invoker correctly. This is fine for the default factory but worth noting: a `probe_factory` that returns a stateful object expectin\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 88,
+        "message": "The `improve/measure` step translates exit code 3 (BLOCKED) to success with `test \"${status:-0}\" -eq 3 && \u2026 && exit 0`. If the process exits with a signal (negative exit in bash, or >128), `${status:-0}` is that value, and the `exit \"${status:-0}\"` at the end propagates it as a non-zero exit, which is correct. However, if the process is killed and bash represents it as a large positive number (e.g. 130 for SIGINT), the step fails the job \u2014 this is the intended behaviour and is not a bug, but the\u2026[truncated]",
+        "path": ".github/workflows/improve.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 480,
+        "message": "The change removes `blocked` records from the `failure_rate` denominator by introducing `verdicts = [r for r in judged if not _refused(r)]`. The diff does not show the definition of `_refused`, so I cannot verify its predicate. If `_refused` matches on `status == 'blocked'` only, records with other non-verdict statuses that were already excluded by the `judged` filter are handled correctly. If it matches more broadly, it could silently shrink the denominator further. I could not see `_refused`'s\u2026[truncated]",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 170,
+        "message": "The `improve_propose` workflow reads the artifact path from the `artifact` parameter (defaulting to `CHANGESET`), but `read_changeset` and `read_scorecard` are called with that same string. The `read_scorecard` function was added in this diff and its implementation tolerates a missing `scorecard` key by returning `None`, which is then refused as `improve.unmeasured`. This is the intended behaviour. No gap found here \u2014 noting it was checked.",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 214,
+        "message": "The proposal is always opened as a draft (`ready=False`), and the loop never calls `mark_ready`. The PR body tells the reviewer this. The test at line 543 asserts `not host.ready`. This matches the stated intent. No gap \u2014 noting it was verified against the description's claim that 'the person judging' marks it ready.",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a8e35b6679440d22eaac5c5f56a53093dc585f79",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1046,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T031338Z-3d77",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1049,
+  "ts": "2026-09-06T03:14:07+00:00",
+  "wall_seconds": 29.317
+}

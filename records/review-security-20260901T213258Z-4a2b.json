@@ -1,0 +1,57 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04875,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 430,
+        "message": "Ledger records are reflected verbatim into ticket comments without sanitisation.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 4533,
+        "message": "Same unescaped ledger-to-comment path exists in the cli.py copy of the report workflows.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b361b47b2fee1f18264bda59b80440d1a4a6fdd7",
+  "input_tokens": 13525,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 545,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T213258Z-4a2b",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 14070,
+  "ts": "2026-09-01T21:33:15+00:00",
+  "wall_seconds": 17.009
+}

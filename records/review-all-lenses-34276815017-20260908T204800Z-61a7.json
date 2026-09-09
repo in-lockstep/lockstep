@@ -1,0 +1,151 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "1affc4d9d499cd52ad607cb983b40f6dc5c127b0"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 6455,
+  "cache_write_tokens": 25236,
+  "ci_actor": "tpouyer",
+  "ci_run": "34276815017",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.110753,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 976,
+        "message": "Test loads the live module at import time but does not assert on the `sandbox.image` string value.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 62,
+        "message": "The `container` job has no `needs:` dependency on the `check` job.",
+        "path": ".github/workflows/ci.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 62,
+        "message": "`github.actor` interpolated directly into a shell `run` step, enabling expression injection.",
+        "path": ".github/workflows/ci.yml",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1affc4d9d499cd52ad607cb983b40f6dc5c127b0",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.110752,
+  "output_tokens": 943,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34276815017-20260908T204800Z-61a7",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.030876,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 976,
+            "message": "Test loads the live module at import time but does not assert on the `sandbox.image` string value.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 62,
+            "message": "The `container` job has no `needs:` dependency on the `check` job.",
+            "path": ".github/workflows/ci.yml",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 452,
+      "verb": "review",
+      "wall_seconds": 16.189
+    },
+    {
+      "cost_usd": 0.025014,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 60,
+      "verb": "review",
+      "wall_seconds": 5.539
+    },
+    {
+      "cost_usd": 0.029087,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 62,
+            "message": "`github.actor` interpolated directly into a shell `run` step, enabling expression injection.",
+            "path": ".github/workflows/ci.yml",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 331,
+      "verb": "review",
+      "wall_seconds": 12.096
+    },
+    {
+      "cost_usd": 0.025776,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 112,
+      "verb": "review",
+      "wall_seconds": 5.46
+    }
+  ],
+  "tokens": 955,
+  "tool_calls": {},
+  "ts": "2026-09-08T20:48:16+00:00",
+  "turns": 4,
+  "wall_seconds": 16.189,
+  "workflow": "review/all-lenses"
+}

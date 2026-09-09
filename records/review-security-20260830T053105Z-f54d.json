@@ -1,0 +1,37 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.009996,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 7,
+        "message": "Hardcoded absolute path exposes local username and filesystem layout",
+        "path": ".claude/launch.json",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0420f019b383caee77f34de242fb4312e5fd7e80",
+  "input_tokens": 2167,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 233,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T053105Z-f54d",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 2400,
+  "ts": "2026-08-30T05:31:14+00:00",
+  "wall_seconds": 9.231
+}

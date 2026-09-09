@@ -1,0 +1,55 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.049351,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1966,
+        "message": "_workflow_ids uses a regex over inspect.getsource(module.register) to discover workflow ids, but this is fragile in a way the diff partially acknowledges: if ruff format or any reformatter splits the workflow(id=\"...\") call across lines the regex returns an empty set silently. test_the_id_discovery_is_not_vacuous asserts this is non-empty today, but a format change between runs would produce the exact quiet failure the test describes. The description says `show-workflow` replaces `--eject`; it d\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1979,
+        "message": "_workflow_function also uses a regex over register()'s source and additionally does a `getattr` on the module using a captured identifier from that regex. If the decorator call and the function definition are on separate lines, the pattern `workflow(id=\"...\")\\((\\w+)\\)` will not match. This is the single-function lookup path and its failure mode is a ClickException rather than a silent empty set, but the caller checked membership first using _workflow_ids \u2014 so if _workflow_ids matches but _workfl\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1906,
+        "message": "The diff removes --eject and all supporting machinery (_ejected_source, _wrap_long_imports) and adds show-workflow. The description claims this is what the change does. Both halves are present in the diff. However, _without_duplicate_imports and _without_duplicate_definitions are still called in _scaffold_implement and _scaffold_fix (lines ~5373-5383, ~5419-5427) without the _wrap_long_imports wrapper that used to follow them. The description does not mention whether the removal of _wrap_long_im\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0aec03f0456acfa67c9936492a6c6159a83cafcc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 845,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T164059Z-91ce",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 848,
+  "ts": "2026-09-05T16:41:23+00:00",
+  "wall_seconds": 23.916
+}

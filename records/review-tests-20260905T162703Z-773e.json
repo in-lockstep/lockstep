@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.040944,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 168,
+        "message": "No test covers `show-workflow <family>` (printing a whole module) or `show-workflow --registered`.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 181,
+        "message": "`assert one.output.strip() in inspect.getsource(implement)` is a substring test that would pass even if `show-workflow implement/report` printed any prefix of the module source; it does not uniquely assert that the correct function was isolated.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1974,
+        "message": "`_workflow_ids` uses a regex over `inspect.getsource(module.register)` to discover workflow IDs; no test covers the case where the regex matches zero IDs (e.g. if the `register` function's source format changes), which would silently cause `show-workflow <family>` to list no workflows and `show-workflow <id>` to always fail with a misleading error.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "dd408d9c8fbcf1005ab6adea5872cd4b9418bc63",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 546,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T162703Z-773e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 549,
+  "ts": "2026-09-05T16:27:18+00:00",
+  "wall_seconds": 15.615
+}

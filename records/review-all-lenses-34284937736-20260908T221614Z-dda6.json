@@ -1,0 +1,200 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "bdbbb9dece4127ae41c90af4b5d89c0748695458"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 23563,
+  "ci_actor": "tpouyer",
+  "ci_run": "34284937736",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.120287,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 157,
+        "message": "String match 'home directory' is locale- and SDK-version-sensitive.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 806,
+        "message": "Pinning test patches `bootstrap.default_registry` but calls the parametrised test by name \u2014 coupling to a non-public call signature.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 157,
+        "message": "RuntimeError skip guard matches on substring 'home directory' \u2014 any provider that embeds that phrase in an unrelated error is silently skipped rather than failed.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 809,
+        "message": "The pinning test calls the parametrised function directly; monkeypatch.setattr on `bootstrap.default_registry` may not reach the name the function under test actually resolves.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 821,
+        "message": "The `except BaseException` arm catches `pytest.skip` raised by the skip-not-passed path \u2014 but that is the desired failure signal, yet the message says 'excused, not failed', conflating two different skip sources.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 793,
+        "message": "The new pinning test patches `pwd.getpwuid` but does not unset `HOME`; if `HOME` is set the Anthropic SDK may never call `getpwuid`, making the test assert on a path that is never reached.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bdbbb9dece4127ae41c90af4b5d89c0748695458",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.120287,
+  "output_tokens": 2126,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34284937736-20260908T221614Z-dda6",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.0314,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 157,
+            "message": "String match 'home directory' is locale- and SDK-version-sensitive.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 806,
+            "message": "Pinning test patches `bootstrap.default_registry` but calls the parametrised test by name \u2014 coupling to a non-public call signature.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 632,
+      "verb": "review",
+      "wall_seconds": 18.185
+    },
+    {
+      "cost_usd": 0.023131,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 66,
+      "verb": "review",
+      "wall_seconds": 4.335
+    },
+    {
+      "cost_usd": 0.028584,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 157,
+            "message": "RuntimeError skip guard matches on substring 'home directory' \u2014 any provider that embeds that phrase in an unrelated error is silently skipped rather than failed.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 423,
+      "verb": "review",
+      "wall_seconds": 12.156
+    },
+    {
+      "cost_usd": 0.037171,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 809,
+            "message": "The pinning test calls the parametrised function directly; monkeypatch.setattr on `bootstrap.default_registry` may not reach the name the function under test actually resolves.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 821,
+            "message": "The `except BaseException` arm catches `pytest.skip` raised by the skip-not-passed path \u2014 but that is the desired failure signal, yet the message says 'excused, not failed', conflating two different skip sources.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 793,
+            "message": "The new pinning test patches `pwd.getpwuid` but does not unset `HOME`; if `HOME` is set the Anthropic SDK may never call `getpwuid`, making the test assert on a path that is never reached.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1017,
+      "verb": "review",
+      "wall_seconds": 24.465
+    }
+  ],
+  "tokens": 2138,
+  "tool_calls": {},
+  "ts": "2026-09-08T22:16:40+00:00",
+  "turns": 4,
+  "wall_seconds": 24.465,
+  "workflow": "review/all-lenses"
+}

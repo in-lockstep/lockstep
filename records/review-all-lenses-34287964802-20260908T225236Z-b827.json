@@ -1,0 +1,135 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "40a5f0620913b47b90f9e212f95ddfb6e7f9e974"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 23883,
+  "ci_actor": "tpouyer",
+  "ci_run": "34287964802",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.101222,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 969,
+        "message": "Assertion only checks jobs that dispatch `in-lockstep run selfcheck`; a job renamed or restructured to dispatch differently would be silently skipped.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 969,
+        "message": "Test only checks jobs that contain `in-lockstep run selfcheck`; a job that renames or rewraps the call would silently skip the assertion.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "40a5f0620913b47b90f9e212f95ddfb6e7f9e974",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.101222,
+  "output_tokens": 775,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34287964802-20260908T225236Z-b827",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.02708,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 969,
+            "message": "Assertion only checks jobs that dispatch `in-lockstep run selfcheck`; a job renamed or restructured to dispatch differently would be silently skipped.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 324,
+      "verb": "review",
+      "wall_seconds": 10.93
+    },
+    {
+      "cost_usd": 0.023192,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 50,
+      "verb": "review",
+      "wall_seconds": 3.331
+    },
+    {
+      "cost_usd": 0.023769,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 82,
+      "verb": "review",
+      "wall_seconds": 4.345
+    },
+    {
+      "cost_usd": 0.027182,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 969,
+            "message": "Test only checks jobs that contain `in-lockstep run selfcheck`; a job that renames or rewraps the call would silently skip the assertion.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 331,
+      "verb": "review",
+      "wall_seconds": 9.506
+    }
+  ],
+  "tokens": 787,
+  "tool_calls": {},
+  "ts": "2026-09-08T22:52:48+00:00",
+  "turns": 4,
+  "wall_seconds": 10.93,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,75 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044743,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 57,
+        "message": "Positive control asserts counts but not values, so it can pass with the wrong lenses.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 44,
+        "message": "`_step()` is called twice in `_aspects_run()` but this is a latent issue; the more immediate gap is that `_step()` has no test of its own selector and silently raises `StopIteration` if the step name changes.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 108,
+        "message": "`test_the_lenses_share_one_tape_so_the_harvest_sees_them_all` asserts `run.count('--cassette') == 1` but this would also pass if `--cassette` appeared zero times.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 97,
+        "message": "No test covers the behaviour that `exit $status` reflects the worst status rather than the last one. The test checks the string is present but cannot verify the shell arithmetic is correct.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "cd8c93dab76d98e3102291642ca9f8034614a311",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 845,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T130631Z-c7d5",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 848,
+  "ts": "2026-09-05T13:06:52+00:00",
+  "wall_seconds": 20.72
+}

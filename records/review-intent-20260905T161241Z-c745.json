@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.161649,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 173,
+        "message": "The comment in `implement_from_ticket` mentions `via=tdd` but the call is `ctx.do(Implement(ticket=source))` with no `via` argument \u2014 the comment is stale from the repository's own module which did use `via=tdd`. Minor documentation mismatch, not a behavioural gap.",
+        "path": "src/in_lockstep/workflows/implement.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5258,
+        "message": "The `_ejected_source` function uses a regex to convert `workflow(id=\"...\")` call registrations back into decorators, and separately strips the `register()` function. If the shipped module ever uses a `@workflow(id=...)` decorator directly (rather than the call form in `register()`), the regex `workflow\\(id=\"([^\"]+)\"\\)\\((\\w+)\\)` will not match and the ejected source will have no decorated functions \u2014 it will define them but register nothing. This is a latent fragility rather than a current defect\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5104,
+        "message": "The description says the change makes `init` write a reference rather than a copy, and it does. The `--eject` flag is added, `_scaffold_implement` and `_scaffold_fix` are updated to branch on it, `_SCAFFOLD_IMPLEMENT_MODULE` and `_SCAFFOLD_FIX_MODULE` are removed, and `REGISTER_TAIL` plus `_ejected_source` are added. This matches the stated intent completely. The split of scaffold content into `_SCAFFOLD_IMPLEMENT_CONFIG` / `_SCAFFOLD_FIX_CONFIG` (bindings, routes, middleware) and a separate pro\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 157,
+        "message": "The marker-based guard in `test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs` is conditional: if the marker string is not found in the shipped source the assertion is silently skipped. This means the test can pass vacuously if the marker is ever renamed or removed in the framework. A stronger form would assert that the marker IS in the shipped source before checking the ejected output, making a missing marker a test failure rather than a no-op.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c9fc5de53f78a07b945e7e140f49b0bf864e3bbd",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 726,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T161241Z-c745",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 729,
+  "ts": "2026-09-05T16:13:02+00:00",
+  "wall_seconds": 20.625
+}

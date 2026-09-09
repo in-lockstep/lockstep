@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34168497502",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04238,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 362,
+        "message": "Unsanitized `key` flows into a git ref name used in `ls-remote` and `fetch`; `_safe` adequacy is not visible in this diff.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e1149646abed261de1355227cad3abcc0e27aa27",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 524,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T225923Z-40f3",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 527,
+  "ts": "2026-09-07T22:59:40+00:00",
+  "wall_seconds": 17.121
+}

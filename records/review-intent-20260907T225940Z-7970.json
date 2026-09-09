@@ -1,0 +1,53 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34168497502",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044657,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 348,
+        "message": "_state reads the sha from ls-remote then fetches by ref, but uses the pre-fetch sha for cat-file \u2014 a concurrent push between ls-remote and fetch could make the sha stale.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 322,
+        "message": "_swap writes the `new` blob unconditionally with hash-object -w before knowing whether the push will succeed, leaving orphaned loose objects on failed swaps.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 27,
+        "message": "LedgerScope is re-exported from core.ports here but the public import surface for callers of this module is not shown to be tested \u2014 minor omission in the description.",
+        "path": "src/in_lockstep/platform/ledger/__init__.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e1149646abed261de1355227cad3abcc0e27aa27",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 697,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T225940Z-7970",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 700,
+  "ts": "2026-09-07T22:59:58+00:00",
+  "wall_seconds": 18.234
+}
