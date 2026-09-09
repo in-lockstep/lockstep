@@ -124,6 +124,16 @@ Everything else about tests:
 - Name a test after the property it protects, not the function it calls. The suite reads as a list
   of claims about the system: `test_a_stored_request_hashes_back_to_the_key_it_is_filed_under`.
 - A test discharging a gate must name it, in the test name or the docstring — see *Gates* below.
+- **A fixture whose git commands name `main` must pin the branch**, with `git branch -M main`
+  straight after `git init` — the spelling eight fixtures here already use. `git init` takes
+  whatever `init.defaultBranch` says, which is `main` on a laptop that set it and `master` on the
+  runner, which did not. Unpinned, the fixture builds `master`, the first command naming `main`
+  fails — `git push -u origin main` is the usual one — and the test fails on its own setup rather
+  than on what it is testing, **on CI only**. A `git init` that never names a branch needs
+  nothing, which is why most here do not pin. This has cost two runs: a human's, written up at
+  `tests/in_lockstep/test_config_ref.py`, and an `/implement` on #373 that wrote the trap,
+  diagnosed it correctly, and then spent its whole idle allowance hunting for a conftest that
+  would set the default instead of pinning the branch.
 
 ## Commands
 
