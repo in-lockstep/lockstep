@@ -25,3 +25,14 @@ One test. A suite of variations makes the failure harder to read and slower to p
 
 If the analysis has `confidence: low` and no usable `reproduction`, write what you can and say
 plainly in a comment what you were unable to pin down.
+
+Your reproducer is run in a container with no network and no credentials, over a throwaway copy
+of the tree, so one that wants a remote, a clock, a key or a subprocess cannot have the real one.
+Take the seam the code already offers — the argument, the constructor parameter, the attribute a
+caller substitutes — and put your own in its place.
+
+Never loosen the code so the real call can fail quietly instead. **If a call site has to give up a
+check for your reproducer to pass, the reproducer is wrong, not the call site.** A dropped
+`check=True`, a swallowed error, a narrowed assertion each buy a green run and take away the signal
+that was the reason to write anything down. Where you genuinely cannot find a seam, say so in a
+comment and leave that behaviour untested rather than weakening it.
