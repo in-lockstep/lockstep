@@ -35,6 +35,7 @@ from ..worktree import head_state, materialize, staged_refusal
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import (
     PhaseError,
+    elsewhere_only,
     not_a_verdict,
     read_reply,
     reported,
@@ -299,7 +300,25 @@ class TDD(ImplementStrategy):
             green = await ctx.do(Test(root=tree, expect="pass"))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
-        if green.status is not Status.SUCCEEDED or not green.decided:
+        foreign = elsewhere_only(green, full) if green.decided else ()
+        if foreign:
+            # Every failure is in a file this change did not touch, so the claim below -- that the
+            # implementation did not make the staged test pass -- would be false. The change is
+            # complete and its own tests are green; the suite is red for a reason this run did not
+            # cause, which is a fact for a person and not grounds to destroy the work. It travels
+            # with the failures named, and the propose half opens it as a draft (#405).
+            findings.append(
+                Finding(
+                    id="tdd.suite_red_elsewhere",
+                    message=(
+                        f"the staged tests passed; {len(foreign)} failure(s) elsewhere in the suite, "
+                        f"in files this change did not touch: {', '.join(foreign[:5])}"
+                        + (f" …and {len(foreign) - 5} more" if len(foreign) > 5 else "")
+                    ),
+                    severity=Severity.WARNING,
+                )
+            )
+        elif green.status is not Status.SUCCEEDED or not green.decided:
             return Outcome(
                 status=Status.FAILED,
                 reason="tdd.not_green",

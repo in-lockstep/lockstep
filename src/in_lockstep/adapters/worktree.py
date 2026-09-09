@@ -175,7 +175,11 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
     async with materialize(repo_root, changeset) as tree:
         outcome = await ctx.do(Test(root=tree))
     report = outcome.value if outcome.value is not None else TestReport()
-    return TestVerdict.of(outcome.status.value, outcome.decided, report)
+    # The paths this change staged, so the verdict can tell a change that fails its own tests from
+    # a suite that is red somewhere else. The two are one number apart and mean opposite things.
+    return TestVerdict.of(
+        outcome.status.value, outcome.decided, report, changed=tuple(c.path for c in changeset.changes)
+    )
 
 
 async def staged_diff(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD") -> str:

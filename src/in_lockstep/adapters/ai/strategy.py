@@ -726,6 +726,30 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(v) for v in value if isinstance(v, (str, int, float)))
 
 
+def elsewhere_only(outcome: Any, changeset: ChangeSet) -> tuple[str, ...]:
+    """The failing cases in files this change did not touch -- or `()` when any of them is its own.
+
+    A strategy's green run asks the WHOLE suite to pass, and reports any redness as the model
+    failing its own test. Those are two states that mean opposite things: a change whose own tests
+    are red does not satisfy its specification, and a change that is complete while the suite is red
+    elsewhere is a fact about the repository or about the environment the suite ran in. Run
+    34363672287 was told the first about the second and $11.29 of correct work was discarded (#405).
+
+    Empty on any overlap, deliberately: a run with one of its own tests red is the model's to fix
+    whatever else is failing beside it, and the safe direction is the one that keeps it responsible.
+    """
+    from ...core.types import failures_elsewhere
+
+    report = getattr(outcome, "value", None)
+    if report is None or not getattr(report, "cases", ()):
+        # Nothing to attribute. A runner that reported counts and no cases cannot say whose failure
+        # it was, and guessing "not yours" is how a red suite becomes a pull request.
+        return ()
+    staged = tuple(c.path for c in changeset.changes)
+    foreign = failures_elsewhere(report, staged)
+    return foreign if len(foreign) == report.failed else ()
+
+
 def test_findings(outcome: Any) -> tuple[Finding, ...]:
     """A Test verb's own blocking findings, carried up so a red/green failure explains itself."""
     return tuple(

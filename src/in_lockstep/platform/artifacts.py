@@ -43,7 +43,7 @@ FIX_CHANGESET = "fix-changeset"
 
 #: The verdict fields carried in the artifact. Counts and a status — no model prose, no file
 #: contents — so unlike `summary` they need no redaction.
-_VERDICT_FIELDS = ("status", "decided", "total", "passed", "failed", "skipped")
+_VERDICT_FIELDS = ("status", "decided", "total", "passed", "failed", "skipped", "elsewhere")
 
 
 class MalformedArtifact(Exception):
@@ -247,6 +247,7 @@ def read_verdict(artifact: str | Path) -> TestVerdict | None:
             passed=int(raw.get("passed", 0) or 0),
             failed=int(raw.get("failed", 0) or 0),
             skipped=int(raw.get("skipped", 0) or 0),
+            elsewhere=int(raw.get("elsewhere", 0) or 0),
         )
     except (ValueError, TypeError):
         # A verdict whose counts are not numbers is not a verdict. Read it as "not tested" rather

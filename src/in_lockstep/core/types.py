@@ -84,6 +84,19 @@ class TestVerdict:
     passed: int = 0
     failed: int = 0
     skipped: int = 0
+    #: How many of `failed` are in files this change did not touch.
+    #:
+    #: Two states that look identical in a count and mean opposite things. A change whose OWN tests
+    #: are red does not satisfy its own specification and is not proposable. A change that is
+    #: complete while the suite is red somewhere else is a fact about the repository, or about the
+    #: environment the suite ran in, and destroying the change to report it spends a run and
+    #: delivers nothing. Run 34363672287 was told "the implementation did not make the staged test
+    #: pass" about a change whose own 35 tests passed and whose four failures were in a file it
+    #: never touched, and $11.29 of correct work went in the bin (#405).
+    #:
+    #: A count rather than the names, because a verdict is counts and a status so it serialises on
+    #: the redacted side of the artifact; the names travel as findings.
+    elsewhere: int = 0
 
     @property
     def green(self) -> bool:
@@ -114,9 +127,16 @@ class TestVerdict:
         return self.decided and self.status == "failed"
 
     @classmethod
-    def of(cls, status: str, decided: bool, report: TestReport) -> TestVerdict:
+    def of(
+        cls, status: str, decided: bool, report: TestReport, *, changed: tuple[str, ...] = ()
+    ) -> TestVerdict:
         """From a Test Outcome's status/decided flags and its report. Kept to primitives so `core`
-        need not import `Outcome` — the caller unpacks `outcome.status.value` and `outcome.decided`."""
+        need not import `Outcome` — the caller unpacks `outcome.status.value` and `outcome.decided`.
+
+        `changed` is the paths the change under test staged. Given them, the verdict can say how
+        many failures are somebody else's; without them it says nothing, which is the honest answer
+        for a caller that did not know.
+        """
         return cls(
             status=status,
             decided=decided,
@@ -124,7 +144,40 @@ class TestVerdict:
             passed=report.passed,
             failed=report.failed,
             skipped=report.skipped,
+            elsewhere=len(failures_elsewhere(report, changed)) if changed else 0,
         )
+
+    @property
+    def only_elsewhere(self) -> bool:
+        """Red, and every failure is in a file this change did not touch.
+
+        The state that must not be reported as a change failing its own test. `failed` is compared
+        rather than trusted alone: a run with no failures is not "only elsewhere", and a partial
+        overlap — some of its own tests red as well — is the model's to fix like any other.
+        """
+        return self.red and self.failed > 0 and self.elsewhere == self.failed
+
+
+def failures_elsewhere(report: TestReport, changed: tuple[str, ...]) -> tuple[str, ...]:
+    """The failing cases whose file is not one this change staged.
+
+    A pytest node id is `path/to/test_x.py::test_y`, so the file is what precedes the first `::`.
+    A case whose id carries no such path -- a collection error, a runner that reports names rather
+    than ids -- is counted as the change's own: an unattributable failure is not evidence that
+    somebody else broke something, and the safe direction is the one that keeps the model
+    responsible for it.
+    """
+    mine = {path.replace("\\", "/") for path in changed}
+    out = []
+    for case in report.cases:
+        if case.outcome not in ("failed", "error"):
+            continue
+        head, sep, _ = case.id.partition("::")
+        where = head.replace("\\", "/")
+        if not sep or not where or where in mine:
+            continue
+        out.append(case.id)
+    return tuple(out)
 
 
 @dataclass(frozen=True)

@@ -153,7 +153,14 @@ async def fix_propose(
             print(f"escalated {opened.key}")
         return Outcome(status=Status.FAILED, reason=reason, value=opened)
 
-    if verdict is not None and verdict.red:
+    if verdict is not None and verdict.only_elsewhere:
+        # Red, and every failure is in a file this change did not touch. Escalating here files a
+        # bug report about somebody else's failure and spends an attempt on it; discarding the
+        # change destroys work that is complete. So it travels, as a DRAFT -- `ready` below is
+        # false on any red verdict -- with the count in the body, and a person decides whether the
+        # suite was already broken or this environment broke it (#405).
+        print(f"suite     {verdict.failed} failure(s), none in the files this change staged")
+    elif verdict is not None and verdict.red:
         # A fix that made its own reproducer pass and broke something else is still a failure, and
         # it used to be the one failure this verb could not see: it opened ready for review on the
         # strength of the reproducer alone. Same escalation implement makes, for the same reason —
