@@ -633,11 +633,17 @@ async def _checked(
     fix, and reading that as the whole answer would make this depend on one tool's choice of what
     to print. A second pass costs a subprocess and says exactly what stands.
     """
-    from ..worktree import materialize
+    from ..worktree import materialize, staged_refusal
 
     if not ctx.container.has(Validate):
         # O1's rule: nothing is invented where the repository declared nothing.
         return None, "", ""
+    # The same question `Test` and `Build` are asked: a binding that EXECUTES what a model wrote
+    # must run in a container, or the run refuses by name (GATE-SANDBOX-2, #410).  `staged_refusal`
+    # recognises adapters that declare they do not execute -- `RuffValidate` says `READS_REPO` and
+    # nothing else -- and lets them through.
+    if (why := staged_refusal(ctx, Validate)) is not None:
+        return None, "", f"the change was not checked: {why}"
     async with materialize(session.repo_root, changeset) as tree:
         outcome = await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths)))
     report = outcome.value if isinstance(outcome.value, ValidationReport) else None
@@ -866,13 +872,15 @@ def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
     Run 34294139197 opened a pull request whose suite passed and whose lint failed on four errors
     a validator would have named in a second.
 
-    No `staged_refusal` here, and the difference from `_test_runner` is the point: a suite
-    EXECUTES what the model wrote, which is why GATE-SANDBOX-2 requires a container for it, and a
-    validator READS it. Both shipped Validate adapters declare `READS_REPO` and nothing else. A
-    binding whose validator does execute the tree would need the same rule, and the row says so.
+    `staged_refusal` is asked here the same way `_test_runner` asks it: a binding that EXECUTES
+    what a model wrote -- `CommandValidate` bound to `make lint`, `npm run lint` -- must run in a
+    container, because `mypy.ini`, `ruff.toml` and `eslint.config.js` are all writable by a model
+    and each turns the command it configures into arbitrary execution on the host (#410).  A
+    binding that only READS the tree -- `RuffValidate` -- is unaffected, because `staged_refusal`
+    checks the adapter's declared capabilities.
     """
     from ...core.types import Validate
-    from ..worktree import materialize
+    from ..worktree import materialize, staged_refusal
 
     async def run(paths: tuple[str, ...] = ()) -> str:
         container = getattr(ctx, "container", None)
@@ -884,6 +892,12 @@ def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
                 "refused: nothing is staged yet, so this would check the code exactly as it "
                 "already is. Write your change first, then run."
             )
+        # Before the worktree exists.  The model reads this as a tool result and can carry on
+        # without the checks; the strategy's own final check refuses the same way, so a session
+        # that ends here is not a session that quietly ran its validator on the host
+        # (GATE-SANDBOX-2, #410).
+        if (why := staged_refusal(ctx, Validate)) is not None:
+            return f"refused (sandbox.host_fallback): {why}"
         async with materialize(root, staged) as tree:
             outcome = await ctx.do(Validate(root=tree, paths=paths))
         return _validation(outcome)

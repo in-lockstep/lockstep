@@ -136,13 +136,34 @@ def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     it is about executing what a model wrote. A build runs the repository's own build scripts over
     model-authored source -- a `setup.py`, a `build.rs`, a postinstall -- which is the same
     exposure with a different file extension.
+
+    Since #410 the check recognises adapters that declare they do NOT execute. A binding whose
+    declared capabilities do not include `EXECUTES_CODE` has told the framework it only reads the
+    tree -- `RuffValidate` is the canonical case: ruff is a binary that parses, its config is
+    TOML rules not code, and refusing it would regress every repository that binds it.
     """
+    from ..core.verbs import Capability, capabilities_of
     from .sandbox import host_fallback
 
     container = getattr(ctx, "container", None)
     if container is None or not container.has(verb):
         return None
-    adapter = container.resolve(verb)
+    resolve = getattr(container, "resolve", None)
+    if resolve is None:
+        # A container without `resolve` cannot be inspected for capabilities or sandbox; the
+        # real Container always has it, but a test double that only implements `has` has said
+        # everything it is going to say, and refusing on what it did not say is not honest.
+        return None
+    adapter = resolve(verb)
+    # A binding that does not declare EXECUTES_CODE needs no container: ruff is a binary that
+    # parses, its config is TOML rules not code, and a model-staged `ruff.toml` changes which
+    # rules run and nothing else.  Refusing it would break every repository that binds
+    # `RuffValidate`.  `CommandValidate` defaults to EXECUTES_CODE since #410, because a
+    # repository's own `make lint` runs recipes and a model can author the files those recipes
+    # read -- `mypy.ini`, `eslint.config.js` -- so the deny list is not the fix; the container
+    # is the control that does not depend on enumerating files.
+    if Capability.EXECUTES_CODE not in capabilities_of(adapter):
+        return None
     why = host_fallback(getattr(adapter, "sandbox", None), named=verb.__name__)
     if why is None:
         return None

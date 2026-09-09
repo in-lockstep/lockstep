@@ -74,9 +74,14 @@ class _Builder:
 
     def __init__(self, *, fails: int = 0) -> None:
         from in_lockstep.adapters.sandbox import Sandbox
+        from in_lockstep.core.verbs import Capability
 
         #: What `staged_refusal` reads: a runner that declares a container is one a model's staged
-        #: code may be executed in.
+        #: code may be executed in, and an adapter that declares `EXECUTES_CODE` is one whose
+        #: sandbox the rule checks (#410).
+        self.capabilities: frozenset[Capability] = frozenset(
+            {Capability.EXECUTES_CODE, Capability.READS_REPO}
+        )
         self.sandbox: Any = Sandbox(image="declared-for-this-test", require_container=True)
         self.seen: list[Build] = []
         self.fails = fails
