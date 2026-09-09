@@ -472,3 +472,26 @@ def test_gate_validate_2_the_checks_run_before_the_green_is_confirmed(repo: Path
     contents = {c.path: c.contents for c in outcome.value.changeset.changes}
     assert contents["calc.py"] == "def add(a, b):\n    return a + b\n", "the repair is what travels"
     assert outcome.value.validation is not None and outcome.value.validation.clean
+
+
+def test_gate_report_1_an_unparsed_cover_note_stays_on_the_report(repo: Path) -> None:
+    """GATE-REPORT-1. `read_reply` keeps the text of a reply that was not the JSON the schema asked
+    for, so the work is not thrown away — and #389 published it, because the change set's summary
+    is what a pull-request body renders. It stays on the report, where the record has it, and out
+    of the set that travels."""
+    thinking = "Good. Now let me verify there are no issues with how the mock signature works…"
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),
+            _done("staged the failing test"),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            LLMOutput(content=thinking),
+        ]
+    )
+    outcome = _run(provider, repo)
+
+    assert outcome.status is Status.SUCCEEDED, outcome.findings
+    assert outcome.value is not None
+    assert outcome.value.summary == thinking, "the text is still kept for the record"
+    assert outcome.value.changeset.summary == "", "and never in what a body renders"
+    assert any(f.id == "implement.unstructured" for f in outcome.findings)

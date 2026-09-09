@@ -178,6 +178,22 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
     return TestVerdict.of(outcome.status.value, outcome.decided, report)
 
 
+async def staged_diff(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD") -> str:
+    """A unified diff of `changeset` against `ref`, as a reader would see it on a pull request.
+
+    The change is a set of whole file contents, which is what a model wrote and not what a reviewer
+    reads. `Describe` is given this instead, because a description written from whole files
+    describes the files; one written from a diff describes the change.
+
+    `git add -A` first, in the throwaway worktree and nowhere else: a file the change CREATES is
+    untracked, and `git diff` alone would leave the new files -- usually the most interesting part
+    -- out of the document the description is written from.
+    """
+    async with materialize(repo_root, changeset, ref=ref) as tree:
+        await _git(tree, "add", "-A")
+        return await _git(tree, "diff", "--cached")
+
+
 async def _git(repo_root: str, *args: str) -> str:
     proc = await asyncio.create_subprocess_exec(
         "git",

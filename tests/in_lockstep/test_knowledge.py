@@ -38,6 +38,7 @@ def test_every_shipped_family_has_prompts() -> None:
         "rfe",
         "improve",
         "judge",
+        "describe",
     }
     assert families <= set(SHIPPED_VERBS), (
         f"prompt families that name no shipped verb: {sorted(families - set(SHIPPED_VERBS))}"

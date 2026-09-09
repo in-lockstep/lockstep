@@ -41,6 +41,7 @@ from ..platform.artifacts import (
     ATTEMPT,
     FIX_CHANGESET,
     read_changeset,
+    read_description,
     read_validation,
     read_verdict,
     write_changeset,
@@ -50,7 +51,7 @@ from ..platform.propose import escalate, open_reviewable
 from ..platform.report import fix_body
 from ..platform.scm import Scm, TargetRefused
 from ..platform.tickets import TicketSource
-from ._shared import last_unsuccessful, pointed_at
+from ._shared import described, last_unsuccessful, pointed_at
 
 
 async def fix_from_ticket(
@@ -97,9 +98,15 @@ async def fix_from_ticket(
         # fix this loop ever produced passed its own reproducer and broke a test elsewhere; it was
         # proposed as ready for review on the strength of the half that passed.
         verdict = await verdict_over_staged(ctx, ctx.repo.root, report.changeset)
+        # As implement does, and for the same reason: the propose job cannot call a model.
+        description = await described(ctx, source, report.changeset, verdict)
         # As implement does, and for the same reason: the propose job cannot re-run the checks.
         written = write_changeset(
-            FIX_CHANGESET, report.changeset, verdict=verdict, validation=report.validation
+            FIX_CHANGESET,
+            report.changeset,
+            verdict=verdict,
+            validation=report.validation,
+            description=description,
         )
         print(f"staged    reproducer + fix -> {written}")
     return outcome
@@ -181,7 +188,7 @@ async def fix_propose(
             # summary is prose of any length. `Fix #319` is what this read when the summary was
             # empty (#343) -- the fallback of a fallback, and the one a reader actually saw.
             title=issue.title or changeset.summary or f"Fix {ticket}",
-            body=fix_body(changeset, verdict, validation),
+            body=fix_body(changeset, verdict, validation, read_description(artifact)),
             ticket=ticket,
             workflow="fix",
             run_id=ctx.run_id,

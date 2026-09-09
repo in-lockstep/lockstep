@@ -58,6 +58,7 @@ class Verb:
     DEBUG: ClassVar[Verb]
     IMPROVE: ClassVar[Verb]
     JUDGE: ClassVar[Verb]
+    DESCRIBE: ClassVar[Verb]
 
     def __new__(cls, value: str) -> Verb:
         key = value.strip().lower()
@@ -132,6 +133,13 @@ SHIPPED_VERBS = (
     # names. It is asked only what no script could settle -- the deterministic half is graded
     # first and a case that failed it is never sent (O7, `GATE-JUDGE-2`).
     "judge",
+    # The reviewer-facing account of a change, written by a model that did NOT do the work: it is
+    # handed the ticket, the diff and the verdict, and nothing of the session. That is the whole
+    # point -- a session's own summary is addressed to the framework at the end of its turn, and
+    # everything it leaves out is exactly what a reader is missing. #389 opened a pull request
+    # whose first paragraph was the model reasoning about its own test mocks (#398). Routed apart
+    # like `judge`, because summarising is not engineering and the model for it is a cheap one.
+    "describe",
 )
 
 for _shipped in SHIPPED_VERBS:

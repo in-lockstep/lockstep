@@ -83,7 +83,13 @@ class Oneshot(ImplementStrategy):
 
         summary, notes, unfinished, malformed = read_reply(invocation.content)
 
-        changeset = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+        # A reply that did not parse keeps its text on the REPORT, where the ledger and a person
+        # reading the record can have it -- and out of the change set, which is what a pull-request
+        # body renders. `read_reply` keeps the text so the work is not thrown away; publishing it
+        # was never what that was for, and #389's opening paragraph was a model reasoning about its
+        # own test mocks because this line did not exist (#398).
+        staged_summary = "" if malformed else summary
+        changeset = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
 
         # The repository's own checks over what was staged, and a bounded repair of what they
         # found. Deterministic first: what the validator can fix costs no turn at all.
@@ -92,7 +98,7 @@ class Oneshot(ImplementStrategy):
         )
         # Rebuilt rather than patched: `validated` writes through the workspace, so this is the
         # same assembly as above and there is one place a staged set comes from.
-        changeset = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+        changeset = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
 
         # The whole change set, checked as a unit. The per-file check already ran at the tool
         # boundary, and this is not a repeat of it: `check_test_shape` is a rule about the shape

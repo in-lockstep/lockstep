@@ -135,7 +135,7 @@ def _validation_line(validation: Any) -> str:
     """What the repository's own checks said, for a pull-request body.
 
     `None` is "nothing checked this", never "clean". The distinction is the same one
-    `_verdict_line` draws about a suite: a reviewer told a change passed checks that never ran has
+    `verdict_line` draws about a suite: a reviewer told a change passed checks that never ran has
     been told something false, and this repository's rule is that a number nobody measured renders
     as absent.
     """
@@ -151,18 +151,63 @@ def _validation_line(validation: Any) -> str:
     return f"**{len(findings)} unresolved finding(s)**, which is why this is a draft:\n{listed}{more}"
 
 
-def implement_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
+def closes(ticket: str) -> str:
+    """The line that makes merging this close the ticket, or nothing.
+
+    The machine-readable block already carries `"Ticket": "#42"`, which is exact and which the host
+    does nothing with: somebody merging a framework-opened change had to remember to close the
+    issue by hand (#398). This is the human-facing half, and it is deliberately not a replacement
+    for the block -- a later run parses the block, and a person's tooling reads this.
+
+    Only a `#<number>`, because only that is a closing reference on the hosts this ships for. A
+    Jira key is a real ticket and `Closes PROJ-12` closes nothing, so it is left to the block
+    rather than written as a sentence that looks like it did something.
+    """
+    key = str(ticket or "").strip()
+    return f"Closes {key}" if key.startswith("#") and key[1:].isdigit() else ""
+
+
+def _description(description: Any) -> list[str]:
+    """What a reviewer reads first: the account written for them, or nothing.
+
+    `None` means nothing wrote one -- no describer bound, a call a ceiling refused, or a reply that
+    did not parse -- and the caller falls back to the run's own cover note. What never happens
+    again is the third case being published: #389's opening paragraph was a model reasoning about
+    its own test mocks, kept as the summary because the cover note was not the JSON the schema
+    asked for.
+    """
+    if not description:
+        return []
+    summary = " ".join(str(description.get("summary", "") or "").split())
+    changes = [str(c).strip() for c in description.get("changes", ()) or () if str(c).strip()]
+    risks = [str(r).strip() for r in description.get("risks", ()) or () if str(r).strip()]
+    lines: list[str] = []
+    if summary:
+        lines += [summary, ""]
+    if changes:
+        lines += ["**What changed:**", *(f"- {c}" for c in changes), ""]
+    if risks:
+        lines += ["**Worth a closer look:**", *(f"- {r}" for r in risks), ""]
+    return lines
+
+
+def implement_body(changeset: Any, verdict: Any, validation: Any = None, description: Any = None) -> str:
     """The PR body for a change an implement run staged: the untrusted-input warning it must always
     carry, plus what the run's own test said about the change.
 
     `verdict` is a `TestVerdict` or None. None means no Test verb was bound, so the change arrives
     unverified and the body says exactly that rather than implying a green it never earned.
     """
+    # The description first when there is one, and the run's own cover note only when there is
+    # not: two accounts of one change, one written for a reader and one written for the framework,
+    # and printing both would make the reader work out which is which.
+    account = _description(description) or _cover_note(changeset)
     lines = [
-        *_cover_note(changeset),
+        *account,
+        *([closing, ""] if (closing := closes(getattr(changeset, "ticket", ""))) else []),
         _UNTRUSTED_WARNING,
         "",
-        f"**Tests:** {_verdict_line(verdict)}",
+        f"**Tests:** {verdict_line(verdict)}",
         "",
         f"**Checks:** {_validation_line(validation)}",
         "",
@@ -171,7 +216,7 @@ def implement_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
     return "\n".join(lines)
 
 
-def fix_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
+def fix_body(changeset: Any, verdict: Any, validation: Any = None, description: Any = None) -> str:
     """The PR body for a change a fix run staged: what it did, and what the suite said about it.
 
     Two sentences of provenance rather than `implement_body`'s one, because a fix arrives having
@@ -182,12 +227,13 @@ def fix_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
     exactly the run this function was written after.
     """
     lines = [
-        *_cover_note(changeset),
+        *(_description(description) or _cover_note(changeset)),
+        *([closing, ""] if (closing := closes(getattr(changeset, "ticket", ""))) else []),
         "A reproducer for this bug was written, confirmed red, and this change makes it pass.",
         "",
         _UNTRUSTED_WARNING,
         "",
-        f"**Tests:** {_verdict_line(verdict)}",
+        f"**Tests:** {verdict_line(verdict)}",
         "",
         f"**Checks:** {_validation_line(validation)}",
         "",
@@ -237,7 +283,7 @@ def write_review_comments(directory: str | Path, outcomes: Mapping[str, Any]) ->
     return tuple(written)
 
 
-def _verdict_line(verdict: Any) -> str:
+def verdict_line(verdict: Any) -> str:
     if verdict is None:
         return "not run — no test verb is bound, so this change is unverified."
     if verdict.status == "blocked":
