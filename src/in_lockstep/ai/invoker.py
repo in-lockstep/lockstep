@@ -104,25 +104,34 @@ class InvokePolicy:
     # ceiling — a bound on what one invocation may consume — and because a repository that wants a
     # model to iterate harder should raise it in the same place it raises the turn cap.
     max_test_runs: int = DEFAULT_TEST_RUNS
-    # A tool result is model input. An unbounded one is an unbounded prompt next turn.
-    #
-    # A WHOLE READ, because the largest legitimate tool result is one. This ran at 20,000 while
-    # `read_file` cut at 40,000, so every read of a long file was cut a second time -- by a bound
-    # that appended `…[truncated]` and nothing else, over the top of the sentence `_window` had
-    # just appended naming `offset` and `limit`. A model was told a file was cut and never told how
-    # to reach the rest, which is precisely what #402 added the range parameters to end; measured,
-    # `strategy.py` reached a model as 38% of itself and `.lockstep/lockstep.py` as 50%, both with
-    # a bare marker (#412).
-    #
-    # Expressed as `MAX_READ_CHARS` rather than restated as a number, so the two cannot drift apart
-    # again, and `_window` bounds a read INCLUDING its own notice, so a read never reaches the cut
-    # in `_dispatch` at all. Belt and braces on purpose: the arithmetic is what makes it correct
-    # today and the shared constant is what keeps it correct after somebody edits one of them.
-    max_tool_result_chars: int = MAX_READ_CHARS
+    # The largest a single `read_file` result may be. The shipped default was measured against
+    # this repository -- 97% of its Python files fit whole -- which is a fine way to pick a default
+    # and no way to pick a number nobody else can change, so `Workshop(max_read_chars=...)` states
+    # it and the policy stack may lower it (#414). It is the ADOPTER's to set: see
+    # `ToolRunnerImpl.max_read_chars` for why a model still cannot.
+    max_read_chars: int = MAX_READ_CHARS
     scan_tool_results: bool = True
     # From the policy stack. Both were resolved and read by nothing but `ls` until GATE-POLICY-1.
     deny_tools: tuple[str, ...] = ()
     scan_input: str = "warn"
+
+    @property
+    def max_tool_result_chars(self) -> int:
+        """The bound on ANY tool result, which is a whole read and never less.
+
+        A tool result is model input; an unbounded one is an unbounded prompt next turn. This was a
+        field of its own at 20,000 while `read_file` cut at 40,000, so every read of a long file
+        was cut a second time -- by a bound that appended `…[truncated]` and nothing else, over the
+        top of the sentence `_window` had just appended naming `offset` and `limit` (#412). #413
+        set it to `MAX_READ_CHARS` so the two could not be edited apart.
+
+        Derived rather than settable, because making both configurable would put that defect back
+        in through the front door: a repository raising its read window and leaving this at the
+        shipped default would be cut in half again, and nothing would say so. One number an adopter
+        states. If a reason ever appears to bound other tool results differently from reads, that
+        is a second field with its own argument, and it may only go ABOVE this.
+        """
+        return self.max_read_chars
 
     @classmethod
     def under(
@@ -133,6 +142,7 @@ class InvokePolicy:
         max_tokens: int | None = None,
         deadline_seconds: float | None = None,
         max_idle_turns: int | None = None,
+        max_read_chars: int | None = None,
     ) -> InvokePolicy:
         """An adapter's own needs, tightened by whatever the policy stack contributed.
 
@@ -147,11 +157,17 @@ class InvokePolicy:
         ceiling = resolved.max_turns
         idle = max_idle_turns if max_idle_turns is not None else cls.max_idle_turns
         idle_ceiling = resolved.max_idle_turns
+        # The same `min`, for the same reason: what a repository asks for, tightened by what the
+        # stack contributed. A layer may narrow the window a model reads through and may not widen
+        # one (#414).
+        read = max_read_chars if max_read_chars is not None else cls.max_read_chars
+        read_ceiling = resolved.max_read_chars
         return cls(
             max_turns=min(max_turns, ceiling) if ceiling is not None else max_turns,
             max_tokens=max_tokens if max_tokens is not None else cls.max_tokens,
             deadline_seconds=deadline_seconds,
             max_idle_turns=min(idle, idle_ceiling) if idle_ceiling is not None else idle,
+            max_read_chars=min(read, read_ceiling) if read_ceiling is not None else read,
             deny_tools=tuple(resolved.deny_tools),
             scan_input=resolved.scan_input or "warn",
         )

@@ -836,6 +836,31 @@ module: the resolved policy floor, the repo root, and the workshop's runner wrap
 `WorktreeRunner`. It completes what was left unset and overrides nothing, so
 `lockstep.use(TDD(policy=InvokePolicy(max_turns=8)))` keeps the policy you named.
 
+`Workshop` is also where you state what a session may consume. Every field is a ceiling, and a
+contributed policy layer may lower one but never raise it:
+
+```python
+from in_lockstep import Workshop
+
+lockstep.workshop = Workshop(
+    max_turns=30,
+    max_idle_turns=20,
+    max_tokens=8192,
+    deadline_seconds=1800.0,
+    max_read_chars=120_000,
+)
+```
+
+`max_read_chars` is the one whose right value is a property of your tree rather than of ours. It
+bounds a single `read_file` result, and the shipped default of 64,000 characters was measured
+against this framework's own repository — about 16,000 tokens, and 97% of its Python files whole.
+A repository of short modules pays for a window it never fills, on every read, on every later turn;
+one carrying generated clients an order of magnitude larger cannot read its own code. Raise it and
+a model opens a long file in one call instead of four, which is usually the cheaper trade because
+each extra turn re-sends everything the session has accumulated. What no value here changes is that
+the model cannot move it: `read_file`'s `offset` shifts the window and `limit` selects lines, and
+neither is a byte budget.
+
 `bind` remains the primitive and the long spelling still works:
 
 ```python

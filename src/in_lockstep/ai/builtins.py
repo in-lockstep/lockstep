@@ -338,7 +338,10 @@ def _restore_masked(target: Path, contents: str, redact: Redact) -> tuple[str, i
 
 
 def read_only(
-    workspace: Workspace, *, code_search: CodeSearch | None = None
+    workspace: Workspace,
+    *,
+    code_search: CodeSearch | None = None,
+    max_read_chars: int = MAX_READ_CHARS,
 ) -> tuple[ToolSet, ToolRunnerImpl]:
     """What a reviewer needs: look at the tree it was asked about, and nothing else.
 
@@ -441,18 +444,24 @@ def read_only(
         )
     runner = ToolRunnerImpl(workspace)
     runner.code_search = code_search
+    # Every session type, not only the one that executes: a review reads files exactly as an
+    # implement does, and a cap honoured in one and not the other is two answers to one question.
+    runner.max_read_chars = max_read_chars
     return tools, runner
 
 
 def read_write(
-    workspace: Workspace, *, code_search: CodeSearch | None = None
+    workspace: Workspace,
+    *,
+    code_search: CodeSearch | None = None,
+    max_read_chars: int = MAX_READ_CHARS,
 ) -> tuple[ToolSet, ToolRunnerImpl]:
     """Adds staging a change. Declares WRITES_FILES, which is what makes policy see it.
 
     That declaration is load-bearing in two places at once: egress enforcement becomes
     mandatory, and `ApprovalGate` gates the action.
     """
-    tools, runner = read_only(workspace, code_search=code_search)
+    tools, runner = read_only(workspace, code_search=code_search, max_read_chars=max_read_chars)
     tools = tools | ToolSet.of(
         Tool(
             server=BUILTIN_SERVER,
@@ -509,6 +518,7 @@ def read_write_execute(
     allowed_commands: tuple[str, ...] = ALLOWED_COMMANDS,
     script_timeout: float = DEFAULT_SCRIPT_TIMEOUT,
     max_test_runs: int = DEFAULT_TEST_RUNS,
+    max_read_chars: int = MAX_READ_CHARS,
     delegation: bool = False,
     code_search: CodeSearch | None = None,
     validates: ValidateRunner | None = None,
@@ -528,7 +538,7 @@ def read_write_execute(
     while every call refuses. That is deliberate: a tool set's declaration is what policy sees, so
     a set that could execute on some other configuration must not read as harmless on this one.
     """
-    tools, runner = read_write(workspace, code_search=code_search)
+    tools, runner = read_write(workspace, code_search=code_search, max_read_chars=max_read_chars)
     runner.commands = commands
     runner.tests = tests
     runner.allowed_commands = allowed_commands
@@ -715,6 +725,14 @@ class ToolRunnerImpl:
     #: costs wall-clock, and a model that runs it after every edit exhausts its turns before it
     #: finishes. Set from `InvokePolicy.max_test_runs` at the binding site.
     max_test_runs: int = DEFAULT_TEST_RUNS
+    #: The largest a `read_file` result may be, from `InvokePolicy.max_read_chars` at the binding
+    #: site (#414). HERE rather than read from the module constant, so a repository can state the
+    #: size of its own files -- and here rather than as a tool argument, which is the whole of
+    #: `GATE-READ-1`'s "not negotiable by the caller": the caller in that clause is the MODEL,
+    #: which reaches `_window` through `offset` and `limit` and must not be able to widen its own
+    #: prompt by asking. An adopter writing `lockstep.py` is not that caller. This field is set
+    #: once when the session is built and no request can move it.
+    max_read_chars: int = MAX_READ_CHARS
     _test_runs: int = 0
     #: How many calls have moved the session forward: a write or delete the workspace accepted,
     #: or a suite run over a change set it had not run before. `AiInvoker` reads it before and
@@ -911,7 +929,7 @@ class ToolRunnerImpl:
                     return f"error: no file at {path} (you staged its deletion)"
                 # The staged version goes through the same window as the disk version: a file a
                 # session wrote is exactly the file it is most likely to be too long to read back.
-                return _window(change.contents, path, offset, limit)
+                return _window(change.contents, path, offset, limit, self.max_read_chars)
         target = self.workspace.resolve(path)
         if not target.is_file():
             return f"error: no file at {path}"
@@ -923,7 +941,7 @@ class ToolRunnerImpl:
             text = target.read_text()
         except (OSError, UnicodeDecodeError) as e:
             return f"error: {e}"
-        return _window(text, path, offset, limit)
+        return _window(text, path, offset, limit, self.max_read_chars)
 
     def _staged(self) -> dict[str, str | None]:
         """This session's own writes, the last one per path, keyed the way the tree is walked."""
@@ -1151,7 +1169,7 @@ class ToolRunnerImpl:
         return f"exit {exit_code} ({how})\n{body}"
 
 
-def _window(text: str, path: str, offset: int, limit: int) -> str:
+def _window(text: str, path: str, offset: int, limit: int, cap: int = MAX_READ_CHARS) -> str:
     """What a read returns: the whole file, or the lines asked for, capped either way.
 
     The cap stays where it is and a caller cannot raise it: what a read returns is re-sent on every
@@ -1170,7 +1188,7 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
     lines = text.splitlines(keepends=True)
     total = len(lines)
     if not (offset or limit):
-        if len(text) <= MAX_READ_CHARS:
+        if len(text) <= cap:
             return text
         # The notice is inside the budget, not on top of it. Appending it past the cap is what put
         # it where the invoker's own truncation removed it, and the model was then told a file had
@@ -1179,7 +1197,7 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
             f"\n…[truncated; {path} has {total} line(s) and {len(text)} chars. Pass `offset` "
             f"(1-based) and `limit` to read any part of it]"
         )
-        return text[: MAX_READ_CHARS - len(notice)] + notice
+        return text[: cap - len(notice)] + notice
     start = max(offset - 1, 0)
     if start >= total:
         # An answer rather than an error: the model asked about a place, and where the file ends is
@@ -1191,7 +1209,7 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
     # The header and the notice are inside the budget too, for the reason above: what this function
     # returns is bounded by `MAX_READ_CHARS` whole, so nothing downstream has to cut it again.
     notice = f"\n…[truncated; the range you asked for is {len(body)} chars. Raise `offset` to read on]"
-    room = max(0, MAX_READ_CHARS - len(head) - len(notice))
+    room = max(0, cap - len(head) - len(notice))
     if len(body) > room:
         return head + body[:room] + notice
     return head + body

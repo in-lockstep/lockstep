@@ -40,6 +40,10 @@ class Policy:
     #: Consecutive turns that stage nothing and test nothing new before a session stops (#337).
     #: A ceiling like `max_turns`: a contribution can only lower it.
     max_idle_turns: int | None = None
+    #: The largest a single `read_file` result may be, in characters (#414). A ceiling like the
+    #: two above, and lowering is the only direction that makes sense: a layer that narrowed what
+    #: a model may pull into a prompt is a control, and one that silently widened it is not.
+    max_read_chars: int | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,7 @@ class ResolvedPolicy:
     scan_input: str = ""
     max_turns: int | None = None
     max_idle_turns: int | None = None
+    max_read_chars: int | None = None
 
 
 def _lowest(a: int | None, b: int | None) -> int | None:
@@ -83,4 +88,5 @@ class PolicyStack:
                 merged = replace(merged, scan_input=layer.scan_input)
             merged = replace(merged, max_turns=_lowest(merged.max_turns, layer.max_turns))
             merged = replace(merged, max_idle_turns=_lowest(merged.max_idle_turns, layer.max_idle_turns))
+            merged = replace(merged, max_read_chars=_lowest(merged.max_read_chars, layer.max_read_chars))
         return merged

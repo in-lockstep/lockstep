@@ -1537,6 +1537,7 @@ def ls_cmd(parked: bool) -> None:
             f" deny_tools={len(resolved.deny_tools)}"
             f" max_turns={resolved.max_turns if resolved.max_turns is not None else '(unset)'}"
             f" max_idle_turns={resolved.max_idle_turns if resolved.max_idle_turns is not None else '(unset)'}"
+            f" max_read_chars={resolved.max_read_chars if resolved.max_read_chars is not None else '(unset)'}"
         )
 
     routes = lockstep.models.routes
