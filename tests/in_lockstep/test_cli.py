@@ -4696,12 +4696,18 @@ def test_gate_ledger_2_a_commit_resolves_to_its_own_sha_and_committer_moment(
     from in_lockstep.cli import _resolve_merge
 
     monkeypatch.chdir(tmp_path)
-    subprocess.run(["git", "init", "-q"], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "x").write_text("x\n")
-    subprocess.run(["git", "add", "x"], check=True)
+    # `cwd=` although the chdir above would serve: a call that says where it runs cannot be broken
+    # by what ran before it, and the suite is executed from a materialised worktree by every model
+    # run this repository makes.
+    subprocess.run(["git", "add", "x"], cwd=tmp_path, check=True)
     env = {**os.environ, "GIT_COMMITTER_DATE": "2026-09-10T12:00:00+00:00"}
     subprocess.run(
-        ["git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "m"], check=True, env=env
+        ["git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "m"],
+        cwd=tmp_path,
+        check=True,
+        env=env,
     )
     sha, when = _resolve_merge("HEAD", lambda: None)
     assert len(sha) == 40 and when.isoformat() == "2026-09-10T12:00:00+00:00"

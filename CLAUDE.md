@@ -124,6 +124,16 @@ Everything else about tests:
 - Name a test after the property it protects, not the function it calls. The suite reads as a list
   of claims about the system: `test_a_stored_request_hashes_back_to_the_key_it_is_filed_under`.
 - A test discharging a gate must name it, in the test name or the docstring — see *Gates* below.
+- **A test that shells out to `git` must say where it runs** — `cwd=`, or `git -C <path>`. A call
+  that inherits the working directory is a call that passes for whoever wrote it: a person runs the
+  suite from this repository, and the framework runs it from a materialised worktree whose `.git` is
+  a *file* pointing outside the container's mount. `git ls-remote /valid/path` reads the ambient
+  repository's config before it looks at the path in its argv, so a dangling gitlink makes it
+  `fatal: not a git repository: (null)` with a perfectly good argument. Four tests in
+  `test_fork_propose.py` did that: green on a laptop, green in a worktree, green in CI's container
+  job, red in every model run — and run 34363672287 was told `tdd.not_green` about a change whose
+  own tests passed, at $11.29. `git init`, `git clone`, `git --version` and `git -C` need no ambient
+  repository and are exempt; `test_suite_runs_where_the_framework_runs_it.py` enforces the rest.
 - **A fixture whose git commands name `main` must pin the branch**, with `git branch -M main`
   straight after `git init` — the spelling eight fixtures here already use. `git init` takes
   whatever `init.defaultBranch` says, which is `main` on a laptop that set it and `master` on the
