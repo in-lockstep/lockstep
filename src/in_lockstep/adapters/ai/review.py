@@ -29,6 +29,7 @@ from ...prompts.review import (
     as_lens,
     review_layers,
 )
+from ..graft import Graft
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ class AiReview:
         # with it, because a tool result the loop has no turn left to read is only expense.
         self.tools = tools
         self.run_tool = run_tool
+
         # `docs/extending.md` shows how to write a house prompt and, until this parameter, no way
         # to install one: there is no `bind_prompt`, and `invoke` read the module-global `LENSES`.
         # The only routes were mutating that global from a config file — a side effect on import,
@@ -124,6 +126,33 @@ class AiReview:
         self.lenses: Mapping[str, type[ReviewPrompt] | Lens] = (
             dict(lenses) if lenses is not None else dict(LENSES)
         )
+        #: One `Graft`, built only when a bound lens asked for a blast radius. Held on the adapter
+        #: rather than made per review so `provisions` can name it: `in-lockstep provision`
+        #: installs what an adapter declares, and a review job that had to install Graft on its
+        #: first PR would pay for it on every PR after (#375's `provisions` rule).
+        self.graft = Graft() if any(as_lens(d).blast_radius for d in self.lenses.values()) else None
+
+    @property
+    def provisions(self) -> tuple[Any, ...]:
+        """What the framework installs for this adapter before a run. Empty unless a lens asked."""
+        return (self.graft,) if self.graft is not None else ()
+
+    async def _blast(self, inp: Review, root: str, lens: Lens) -> tuple[str, str]:
+        """This change's blast radius, for a lens that asked. `(rendered, note)`, never a raise.
+
+        What a diff cannot show is what depends on the lines it touched: on one real change here,
+        109 of the 142 impacted symbols were outside the diff. That is arithmetic over the
+        repository's own call graph, so it is computed rather than left for a model to ask about
+        with a tool -- a reviewer's blind spot is not something a session knows to look for (O7).
+
+        Per lens, because it is not equally useful to each: the security and intent lenses are
+        asking what this change reaches, and a style-shaped lens is asking about the lines in
+        front of it, where a page of call sites is budget the diff needs.
+        """
+        if self.graft is None or not lens.blast_radius or not inp.base:
+            return "", ""
+        fingerprint = await self.graft.fingerprint(root)
+        return await self.graft.blast(root, inp.base, root, fingerprint)
 
     def compositions(self) -> dict[str, Composition]:
         """What `show-prompt` and `ls` read: this adapter's lenses, under their qualified labels.
@@ -175,7 +204,8 @@ class AiReview:
         # This lens's ceilings, or the adapter's. `Lens.under` says which way each may move.
         policy: InvokePolicy = lens.under(self.policy)
         root = self.repo_root or str(getattr(getattr(ctx, "repo", None), "root", "") or ".")
-        package = self._gather(inp, root)
+        radius, blast_note = await self._blast(inp, root, lens)
+        package = self._gather(inp, root, radius)
 
         if not package.items:
             # Refused rather than asked. A model handed no diff answers anyway, and whether that
@@ -372,7 +402,7 @@ class AiReview:
         return Outcome(
             status=Status.SUCCEEDED,
             value=report,
-            findings=findings + injection_findings + omitted,
+            findings=findings + injection_findings + omitted + _blast_note(radius, blast_note),
             cost=invocation.cost,
             decided=not invocation.exhausted,
             reason="exhausted" if invocation.exhausted else None,
@@ -388,7 +418,7 @@ class AiReview:
         invoker: Invoker = resolve_invoker(self.invoker_factory, type(self).verb, ctx, aspect=aspect)
         return invoker
 
-    def _gather(self, inp: Review, root: str) -> ContextPackage:
+    def _gather(self, inp: Review, root: str, radius: str = "") -> ContextPackage:
         diff = inp.diff or _git_diff(root, inp.base, inp.head, inp.paths)
         if not diff.strip():
             # An empty diff is not a clean review, and running one would produce a confident
@@ -405,9 +435,47 @@ class AiReview:
                 path=f"{inp.base}..{inp.head}",
             )
         ]
+        if radius:
+            items.append(
+                ContextItem(
+                    kind="impact",
+                    content=radius,
+                    # Derived from the tree under review, which is the contributor's: the symbol
+                    # names in it were written by the party being reviewed, exactly as the diff
+                    # was. That the framework computed the shape does not make the words ours.
+                    provenance=Provenance.UNTRUSTED_EXTERNAL,
+                    path=f"{inp.base}..{inp.head}#impact",
+                )
+            )
         return self.curator.curate(
             items, ContextNeed(base=inp.base, head=inp.head, token_budget=inp.token_budget)
         )
+
+
+def _blast_note(radius: str, why: str) -> tuple[Finding, ...]:
+    """What the record says about the blast radius: that it was given, or why it was not.
+
+    On the outcome rather than only in the log, for the reason `search_code.index` is: two reviews
+    of the same change that saw different context are two different reviews, and a reader of the
+    ledger has to be able to tell which one they are reading.
+    """
+    if radius:
+        return (
+            Finding(
+                id="review.blast",
+                message=f"the lens was given this change's blast radius ({len(radius)} chars)",
+                severity=Severity.NOTE,
+            ),
+        )
+    if why:
+        return (
+            Finding(
+                id="review.blast.unavailable",
+                message=f"the lens ran without a blast radius: {why}",
+                severity=Severity.NOTE,
+            ),
+        )
+    return ()
 
 
 def _git_diff(root: str, base: str, head: str, paths: tuple[str, ...]) -> str:

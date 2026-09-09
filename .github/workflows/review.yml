@@ -103,6 +103,16 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           python-version: '3.11'
+      # `provision` FIRST, then the extra this job needs — the order `lockstep.yml` learned by
+      # turning a required check red: provision executes what the module binds, and a bare
+      # `uv sync --locked` there uninstalls `--extra anthropic`.
+      #
+      # It is here so this review sees what the required check sees. Two reviews of one change
+      # that saw different context are two different reviews, and the `review/all-lenses` job has
+      # provisioned since it was written. What provision installs for this is Graft, which the
+      # security and intent lenses ask for: measured at 34s cold, 5s to index this repository and
+      # 0.5s for the radius itself.
+      - run: uv run in-lockstep provision
       # With the provider extra: model SDKs are optional dependencies, so the job that calls a
       # model has to ask for one. `post` deliberately does not.
       - run: uv sync --extra anthropic

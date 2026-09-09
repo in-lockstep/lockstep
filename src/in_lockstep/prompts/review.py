@@ -155,6 +155,19 @@ class Lens:
     layers: PromptLayers | None = None
     max_turns: int | None = None
     max_tokens: int | None = None
+    #: Whether this lens is given the change's BLAST RADIUS: what depends on the lines it touched
+    #: and is not in the diff, plus the test modules covering that.
+    #:
+    #: Per lens rather than per adapter, because it is not equally useful to each. A correctness
+    #: or security lens is asking what this change reaches -- which is exactly what a diff cannot
+    #: show, and 109 of the 142 symbols one real change impacted here were outside it. A style
+    #: lens is asking about the lines in front of it, and a page of call sites is noise that costs
+    #: budget the diff needs.
+    #:
+    #: Off by default, and that is deliberate beyond taste: it changes the composed prompt, so a
+    #: lens that turns it on invalidates recordings made against that lens. #375's `search_code`
+    #: is opt-in per strategy for the same reason.
+    blast_radius: bool = False
 
     def stack(self, default: PromptLayers) -> PromptLayers:
         """This lens's layers, or the adapter's."""

@@ -23,14 +23,17 @@ from in_lockstep.adapters.ai import (
     AiDescribe,
     AiImprove,
     AiJudge,
+    AiReview,
     Describe,
     DiagnoseThenFix,
     Draft,
     Judge,
     Measure,
 )
+from in_lockstep.adapters.ai.review import Review
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.sandbox import Sandbox
+from in_lockstep.ai.invoker import InvokePolicy
 from in_lockstep.core.changes import DENY_ALWAYS, DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
 from in_lockstep.core.improve import Improvable, Improver
 from in_lockstep.core.policy import Policy
@@ -45,6 +48,7 @@ from in_lockstep.platform.ledger import GitLedger
 from in_lockstep.platform.scm import GitHubScm, Scm
 from in_lockstep.platform.tickets import GitHubIssues, TicketSource
 from in_lockstep.privileged.egress import EgressPolicy, UnsandboxedEgress
+from in_lockstep.prompts.review import LENSES, Lens
 
 lockstep = Lockstep.detect()
 
@@ -561,6 +565,41 @@ lockstep.bind(Judge, AiJudge())
 # the run's own cover note instead -- which is the honest fallback and what every run before
 # #398 had.
 lockstep.bind(Describe, AiDescribe())
+
+# The two lenses that are asking what this change REACHES get the blast radius: what depends on
+# the lines it touched and is not in the diff, plus the test modules covering that -- computed
+# from the repository's own call graph by Graft, no model call, and handed to the lens as context
+# rather than offered as a tool. A reviewer's blind spot is not something a session knows to look
+# for, which is why it is arithmetic here and not a `search_code` the model may or may not use.
+#
+# Measured on this repository before it was bound: the index is 4.9s cold for 227 files, a blast
+# is 0.5s, and one real sixteen-file change here impacted 142 symbols of which 109 were outside
+# the diff -- 5 KB rendered, against 186 KB of raw JSON that is mostly the diff again.
+#
+# Not `performance`, which is asking about the work the changed lines do, and not `tests`, whose
+# case is the strongest of the four and is deliberately left for a second decision: its half of
+# this is `testModules`, and giving it the whole radius is a different question.
+#
+# Bound here rather than shipped on, for the reason `search_code` is opt-in per strategy: it
+# changes the composed prompt, so it invalidates recordings made against these lenses, and it
+# makes `in-lockstep provision` install Graft for whoever binds it.
+lockstep.bind(
+    Review,
+    AiReview(
+        repo_root=lockstep.repo.root,
+        lenses={
+            "security": Lens(prompt=LENSES["security"], blast_radius=True),
+            "intent": Lens(prompt=LENSES["intent"], blast_radius=True),
+            "performance": LENSES["performance"],
+            "tests": LENSES["tests"],
+        },
+        # What `cli._default_review` would have applied. Binding here skips that default, so the
+        # ceilings are restated rather than silently relaxed to `AiReview`'s own one-turn default.
+        policy=InvokePolicy.under(
+            lockstep.policy.resolve(), max_turns=1, max_tokens=4096, deadline_seconds=300
+        ),
+    ),
+)
 
 # -- the processes ------------------------------------------------------------------
 #

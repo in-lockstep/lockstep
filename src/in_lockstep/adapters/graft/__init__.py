@@ -315,6 +315,125 @@ class Graft:
             timeout=timeout,
         )
 
+    async def blast(self, repo_root: str, base: str, tree: str, fingerprint: str) -> tuple[str, str]:
+        """The blast radius of a diff against `base`, rendered — or an empty answer and a reason.
+
+        `(rendered, note)`, never a raise: a review whose radius could not be computed is a review
+        that runs with the diff alone, which is what every review did before this. The reason is
+        kept so the outcome can say the lens ran without it rather than leaving a reader to wonder
+        which kind of quiet this was.
+        """
+        if (missing := await self.ensure_index(repo_root, tree, fingerprint)) is not None:
+            return "", missing
+        result = await self._run(
+            [str(self.binary), *blast_argv(tree, base, self.index_dir(repo_root))],
+            timeout=BLAST_TIMEOUT,
+        )
+        if result.exit_code != 0:
+            return "", f"review.blast.failed: graft blast exited {result.exit_code}\n{_tail(result)}"
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except ValueError:
+            return "", "review.blast.unreadable: graft blast did not answer with JSON"
+        if not isinstance(payload, dict):
+            return "", "review.blast.unreadable: graft blast did not answer with an object"
+        return blast_render(payload), ""
+
+
+#: How far `blast` walks the incoming edges. Two hops is Graft's own default and the right one
+#: here: one hop is the direct callers, which a reviewer often has in the diff already, and "all"
+#: is the transitive closure of a hub symbol, which for a framework like this one is most of the
+#: repository. The depth is the framework's, never a lens's: a number a prompt could raise is a
+#: prompt that can spend the review's budget on itself.
+BLAST_DEPTH = 2
+BLAST_TIMEOUT = 120.0
+
+
+def blast_argv(tree: str, base: str, index: Path) -> list[str]:
+    """The argv for one blast radius. Every token is the framework's; nothing here is model-chosen.
+
+    `--format json` rather than the `--json` every other query takes, because `blast` does not
+    have that flag -- it answers `error: unknown option '--json'`, which is the kind of thing that
+    is cheaper to find by running it than by reading for it.
+
+    `--no-owners` is not a preference. By default `blast` reads git history and names the people
+    behind each affected area, and that is contributor identities flowing into a model prompt to
+    answer a question -- who to tag -- that this framework does not ask and would not delegate.
+
+    `--name` would name the areas with an LLM call under Graft's own key. It is in `FORBIDDEN`, so
+    this cannot compose it even by mistake.
+    """
+    return [
+        "blast",
+        "--dir",
+        str(index),
+        "--base",
+        base,
+        "--format",
+        "json",
+        "--no-owners",
+        "-d",
+        str(BLAST_DEPTH),
+        tree,
+    ]
+
+
+def blast_render(payload: dict[str, Any], *, max_files: int = 40, max_symbols: int = 8) -> str:
+    """What a reviewer is told, out of what `blast` answers.
+
+    The raw JSON is not it: 186 KB for a sixteen-file change here, most of it the diff's own hunks,
+    which the review already has in front of it. What a diff cannot show is what DEPENDS on the
+    lines it touched -- 109 of the 142 impacted symbols in that same change were outside it -- and
+    which test modules cover that. Rendered, those are 5 KB.
+
+    Bounded by files and by symbols per file, because a change that touches a hub reaches most of
+    a repository and a list that long stops being read. What was left out is said rather than
+    silently dropped.
+    """
+    changed = {str(entry.get("path", "")) for entry in payload.get("changed", []) or ()}
+    outside: dict[str, list[str]] = {}
+    for entry in payload.get("impacted", []) or ():
+        path = str(entry.get("path", ""))
+        name = str(entry.get("name", ""))
+        if not path or path in changed or not name:
+            continue
+        outside.setdefault(path, [])
+        if name not in outside[path]:
+            outside[path].append(name)
+    if not outside:
+        return ""
+
+    lines = [
+        "What this change reaches and the diff does not show — from the repository's own call "
+        f"graph, {BLAST_DEPTH} hops out. Symbols that depend on the changed lines:",
+        "",
+    ]
+    for path in sorted(outside)[:max_files]:
+        names = sorted(outside[path])
+        shown = ", ".join(names[:max_symbols])
+        more = f" (+{len(names) - max_symbols} more)" if len(names) > max_symbols else ""
+        lines.append(f"- {path}: {shown}{more}")
+    if len(outside) > max_files:
+        lines.append(f"- …and {len(outside) - max_files} more files")
+
+    covering = sorted(
+        {
+            file
+            for module in payload.get("testModules", []) or ()
+            for file in (module.get("files") or ())
+            if str(file) not in changed
+        }
+    )
+    if covering:
+        lines += [
+            "",
+            "Test modules covering that reach, which this change does not touch:",
+            *(f"- {file}" for file in covering[:max_files]),
+        ]
+        if len(covering) > max_files:
+            lines.append(f"- …and {len(covering) - max_files} more")
+    return "\n".join(lines)
+
 
 def argv_for(mode: str, args: dict[str, object], tree: str, *, scope: str = "") -> list[str]:
     """The Graft argv for one bounded question, options first and every model-chosen token after

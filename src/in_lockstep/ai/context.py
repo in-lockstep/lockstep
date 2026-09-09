@@ -153,7 +153,19 @@ class ContextCurator:
     #: nothing in particular. `verdict` outranks `attempt` because it is small and it is the half
     #: that makes resuming work — told only its own diff a model defends it, told which tests
     #: failed it debugs. If only one survives a tight budget, that one should be the failures.
-    priority: tuple[str, ...] = ("diff", "test-failure", "file", "ticket", "log", "verdict", "attempt")
+    priority: tuple[str, ...] = (
+        "diff",
+        # After the diff and before everything else: the blast radius is ABOUT the diff -- what
+        # depends on the lines it touched and is not in it -- so a budget that cannot hold both
+        # keeps the subject and drops the commentary, and one that can puts them together.
+        "impact",
+        "test-failure",
+        "file",
+        "ticket",
+        "log",
+        "verdict",
+        "attempt",
+    )
 
     #: Kinds whose trim drops the OLDEST items rather than the newest. A diff and a conversation
     #: want opposite ends kept: the newest comment on a thread is the one that changed something,
