@@ -1,0 +1,249 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "978bca5127aff8369ff9cd823f1b37055d826299"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 53259,
+  "ci_actor": "tpouyer",
+  "ci_run": "34298756254",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.233672,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 566,
+        "message": "Tool is declared in `read_write_execute` even when no `validates` runner is passed.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 549,
+        "message": "`_validate_runner` checks `container.has(Validate)` but the outer `_validate` handler in `builtins.py` checks `self.validates is None` \u2014 the two refusal guards test different things.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 706,
+        "message": "Path list iterated twice when it could be iterated once.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 690,
+        "message": "`_validate` catches bare `Exception` and swallows it into a string \u2014 correct for a tool result, but `asyncio.CancelledError` is not a subclass of `Exception` in Python 3.8+ so cancellation propagates correctly; no issue.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 699,
+        "message": "Path tokens are filtered for leading dashes but not for traversal sequences before reaching the subprocess.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 66,
+        "message": "`inp.root` is used as a working directory without verifying it is inside (or a descendant of) the repository root.",
+        "path": "src/in_lockstep/adapters/ruff_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 275,
+        "message": "Same `inp.root` used as `cwd` in `CommandValidate` with no visible confinement check.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 107,
+        "message": "Two independent behaviours asserted in one test; the second assertion may never be reached.",
+        "path": "tests/in_lockstep/test_validate_tool.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 155,
+        "message": "No test for the 50-finding truncation path in _validation.",
+        "path": "tests/in_lockstep/test_validate_tool.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "978bca5127aff8369ff9cd823f1b37055d826299",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.233672,
+  "output_tokens": 2261,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34298756254-20260909T012042Z-951d",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.060005,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 566,
+            "message": "Tool is declared in `read_write_execute` even when no `validates` runner is passed.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 549,
+            "message": "`_validate_runner` checks `container.has(Validate)` but the outer `_validate` handler in `builtins.py` checks `self.validates is None` \u2014 the two refusal guards test different things.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 683,
+      "verb": "review",
+      "wall_seconds": 20.318
+    },
+    {
+      "cost_usd": 0.054932,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 706,
+            "message": "Path list iterated twice when it could be iterated once.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 690,
+            "message": "`_validate` catches bare `Exception` and swallows it into a string \u2014 correct for a tool result, but `asyncio.CancelledError` is not a subclass of `Exception` in Python 3.8+ so cancellation propagates correctly; no issue.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 330,
+      "verb": "review",
+      "wall_seconds": 10.515
+    },
+    {
+      "cost_usd": 0.061899,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 699,
+            "message": "Path tokens are filtered for leading dashes but not for traversal sequences before reaching the subprocess.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 66,
+            "message": "`inp.root` is used as a working directory without verifying it is inside (or a descendant of) the repository root.",
+            "path": "src/in_lockstep/adapters/ruff_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 275,
+            "message": "Same `inp.root` used as `cwd` in `CommandValidate` with no visible confinement check.",
+            "path": "src/in_lockstep/adapters/command.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 788,
+      "verb": "review",
+      "wall_seconds": 20.786
+    },
+    {
+      "cost_usd": 0.056837,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 107,
+            "message": "Two independent behaviours asserted in one test; the second assertion may never be reached.",
+            "path": "tests/in_lockstep/test_validate_tool.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 155,
+            "message": "No test for the 50-finding truncation path in _validation.",
+            "path": "tests/in_lockstep/test_validate_tool.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 472,
+      "verb": "review",
+      "wall_seconds": 13.766
+    }
+  ],
+  "tokens": 2273,
+  "tool_calls": {},
+  "ts": "2026-09-09T01:21:05+00:00",
+  "turns": 4,
+  "wall_seconds": 20.786,
+  "workflow": "review/all-lenses"
+}
