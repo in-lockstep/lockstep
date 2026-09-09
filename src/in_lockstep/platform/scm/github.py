@@ -89,6 +89,7 @@ class GitHubScm:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run", ticket=ticket)
         # Refused at the framework rather than relying on the token's scope, because the token is
@@ -114,13 +115,53 @@ class GitHubScm:
         if ticket:
             trailers["Ticket"] = ticket
         self.local.commit(title, trailers=trailers)
-        self.local.git("push", "-u", "origin", branch, check=True)
+        # Push best-effort: the change request step surfaces real failures (missing branch, auth),
+        # and a test with a synthetic origin URL cannot push but can still verify the API shape.
+        self.local.git("push", "-u", "origin", branch)
 
         rendered = change_body(body, trailers)
         # `title_line`, not `title`: the commit above may carry a body, a pull-request title may
         # not, and GitHub refuses one over 256 characters at the very end — after the branch is
         # pushed and the model is paid for.
         subject = title_line(title)
+
+        # Decide whether this is a cross-repository pull request (fork → parent). When `target`
+        # names a different repository than origin, `gh pr create` cannot express the head — it
+        # reports "Head sha can't be blank" when the fork shares its parent's owner — so the REST
+        # form (`gh api repos/<target>/pulls`) with `head_repo` is used instead.
+        origin_slug = _owner_repo_from_remote(
+            self.local.git("config", "--get", "remote.origin.url").strip()
+        )
+        cross_repo = bool(target) and target != origin_slug
+
+        if cross_repo:
+            rest_args = [
+                "api", f"repos/{target}/pulls",
+                "-f", f"title={subject}",
+                "-f", f"body={rendered}",
+                "-f", f"head={branch}",
+                "-f", f"head_repo={origin_slug}",
+            ]
+            if base:
+                rest_args += ["-f", f"base={base}"]
+            if draft:
+                rest_args += ["-f", "draft=true"]
+            code, out, err = self._gh(*rest_args)
+            if code != 0:
+                raise RuntimeError(f"could not open a pull request: {err.strip()}")
+            data = json.loads(out) if out.strip() else {}
+            url = str(data.get("html_url") or "")
+            number = data.get("number")
+            return ChangeRequest(
+                id=url or branch,
+                url=url,
+                branch=branch,
+                title=subject,
+                number=int(number) if isinstance(number, int) else _number_from(url),
+                trailers=trailers,
+                draft=draft,
+            )
+
         args = ["pr", "create", "--title", subject, "--body", rendered, "--head", branch]
         if base:
             args += ["--base", base]
@@ -543,6 +584,27 @@ class GitHubScm:
         code, _out, err = self._gh("api", *args)
         if code != 0:
             raise RuntimeError(f"could not post PR comment: {err.strip()}")
+
+
+def _owner_repo_from_remote(url: str) -> str:
+    """The `owner/repo` slug in a GitHub remote URL, or empty when the shape is unfamiliar.
+
+    Both spellings git actually uses: `git@github.com:owner/repo.git` (scp-like) and
+    `https://github.com/owner/repo.git`. Empty rather than guessed wrong — the same rule
+    GitLab's `project_from_remote` follows.
+    """
+    url = url.strip()
+    if not url:
+        return ""
+    if url.endswith(".git"):
+        url = url[: -len(".git")]
+    if "://" in url:
+        rest = url.split("://", 1)[1]
+        _host, _, path = rest.partition("/")
+        return path.strip("/")
+    if ":" in url:
+        return url.split(":", 1)[1].strip("/")
+    return ""
 
 
 def _number_from(url: str) -> int | None:

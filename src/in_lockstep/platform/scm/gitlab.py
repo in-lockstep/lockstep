@@ -197,6 +197,7 @@ class GitLabScm:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run", ticket=ticket)
         # Refused at the framework rather than relying on the token's scope, because the token is

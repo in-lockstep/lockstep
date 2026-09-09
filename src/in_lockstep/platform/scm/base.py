@@ -424,6 +424,7 @@ class Scm(Protocol):
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest: ...
 
     async def mark_ready(self, change: ChangeRequest) -> None:
@@ -664,13 +665,15 @@ class GitLocal:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         """Local git has no pull requests; it makes the branch and stops there.
 
         `base` starts the branch somewhere other than HEAD — a release line, for a backport.
         Empty keeps the old behaviour: the branch grows from wherever the tree stands. `draft` has
         no meaning without a host, so the returned request reports `draft=False`: a local branch is
-        as ready as it gets.
+        as ready as it gets. `target` is accepted for protocol conformance but ignored — local git
+        has no remote to open a change request on.
         """
         branch = branch_for(workflow or "change", run_id or "local", ticket=ticket)
         self.assert_run_scoped(branch)
