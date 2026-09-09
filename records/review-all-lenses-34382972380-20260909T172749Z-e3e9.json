@@ -1,0 +1,183 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "f261aa67ad096e9d532e4aa42d7cde537801b29f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 59931,
+  "ci_actor": "tpouyer",
+  "ci_run": "34382972380",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.251297,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 626,
+        "message": "Description branch for 'none available' directs to `run_tests` and `run_validate` unconditionally.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 600,
+        "message": "Undeclared change: `allowed_commands` is now exported as `ALLOWED_COMMANDS` (imported by `doctor.py` and the test file).",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 791,
+        "message": "`asyncio.run()` inside `_probe_executables` creates a new event loop each call.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "Program names from ALLOWED_COMMANDS are interpolated directly into a sh -c script string without quoting or validation.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 542,
+        "message": "`_Image.run` detects the trailing `exit 0` by literal string match on a resplit fragment.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f261aa67ad096e9d532e4aa42d7cde537801b29f",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.251297,
+  "output_tokens": 1768,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34382972380-20260909T172749Z-e3e9",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.06422,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 626,
+            "message": "Description branch for 'none available' directs to `run_tests` and `run_validate` unconditionally.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 600,
+            "message": "Undeclared change: `allowed_commands` is now exported as `ALLOWED_COMMANDS` (imported by `doctor.py` and the test file).",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 547,
+      "verb": "review",
+      "wall_seconds": 18.283
+    },
+    {
+      "cost_usd": 0.060917,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 791,
+            "message": "`asyncio.run()` inside `_probe_executables` creates a new event loop each call.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 312,
+      "verb": "review",
+      "wall_seconds": 10.671
+    },
+    {
+      "cost_usd": 0.062814,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "message": "Program names from ALLOWED_COMMANDS are interpolated directly into a sh -c script string without quoting or validation.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 432,
+      "verb": "review",
+      "wall_seconds": 23.13
+    },
+    {
+      "cost_usd": 0.063347,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 542,
+            "message": "`_Image.run` detects the trailing `exit 0` by literal string match on a resplit fragment.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 489,
+      "verb": "review",
+      "wall_seconds": 14.321
+    }
+  ],
+  "tokens": 1780,
+  "tool_calls": {},
+  "ts": "2026-09-09T17:28:14+00:00",
+  "turns": 4,
+  "wall_seconds": 23.13,
+  "workflow": "review/all-lenses"
+}
