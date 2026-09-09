@@ -153,6 +153,40 @@ is a question for the provider, and this repository is GitHub-hosted, so it has 
 the exchange. The scaffold says so at the lines themselves, and a scoped protected variable
 holding a long-lived key is the documented alternative rather than a fallback.
 
+## A fork proposing to what it forked from
+
+A fork's checkout is the fork and the work is the parent's. Say so once, on the propose and
+from-ticket steps, and one flag moves all three things that follow from it -- the ticket the run
+reads, the thread it answers, and the repository the pull request is opened on:
+
+```
+in-lockstep run implement/from-ticket --arg ticket="#42" --arg target=owner/original ...
+in-lockstep run implement/propose     --arg ticket="#42" --arg target=owner/original ...
+```
+
+Empty is the checkout's own repository, which is every repository that is not a fork, so the flag
+can be passed unconditionally by a trampoline that computes it.
+
+Two things are worth knowing before you wire it.
+
+**The credential decides, and it says so early.** A fork's workflow token can read the parent and
+cannot write it. That is the ordinary state rather than a misconfiguration, so the run checks
+before it pushes anything and refuses by name -- `scm.no_rights_on_target` -- with the working
+tree, the remote and the run's spend untouched. What was staged is still in the artifact, and the
+ticket says who can finish it: `in-lockstep apply --from-artifact <the artifact> --target
+owner/original`, run by someone whose credential may write there. Only a person's credential, or a
+token the fork declares, can open a change on the parent; nothing in this framework can grant that.
+
+**`gh pr create` cannot open this pull request.** A fork that shares its parent's owner cannot be
+named as a head at all, so the framework uses the REST endpoint with `head_repo`. That is a fact
+about the host rather than about this adapter, and it is why the flag exists instead of a
+documented one-liner.
+
+On GitLab the flag is accepted and declined by name: a merge request across projects needs a
+target project id and a registered fork relationship, and no instance has ever executed this
+adapter. A tracker that cannot be pointed at another repository -- Jira, whose project is not an
+`owner/repo` -- refuses the same way, before the ticket is read.
+
 ## Porting to another host
 
 Jenkins, Tekton, Buildkite: anything that can run a shell command and pass a file between two

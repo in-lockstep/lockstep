@@ -12,6 +12,53 @@ from typing import Any
 from ..core.context import RunContext
 
 
+async def pointed_at(target: str, ticket: str, tickets: Any, scm: Any) -> tuple[Any, Any, str, str]:
+    """The ports and the ticket key a run is about, for the repository it is FOR -- with lines to
+    print. Returns `(tickets, scm, key, notes)`.
+
+    What a fork needs. Its checkout is the fork and the work is the parent's: the ticket to
+    implement, the review of the last attempt and the thread to answer are all over there, and
+    unless it is said, each is read wherever the host tool infers -- which from a fork is the
+    parent by luck of forkhood, until the `GH_REPO` pin a fork needs takes even that away.
+
+    The narrowing and the resolution are ONE function because their order is not a preference.
+    `ticket_for` asks the host whether a number is a change request, and asking that before the
+    adapter knows which repository it is about asks the wrong repository -- on GitHub, where issue
+    and pull-request numbers share a sequence, that returns a confident wrong answer rather than
+    an error. Two statements a caller writes in either order would eventually be written in the
+    wrong one.
+
+    An empty target returns exactly what it was handed, so a repository that is not a fork never
+    reaches an adapter method that did not exist before #373. A target that names something
+    narrows BOTH ports: reading the ticket from one repository and answering on another is worse
+    than either alone.
+
+    Raises `Unsupported` when a bound port cannot be pointed anywhere -- a Jira source, a GitLab
+    project, plain git -- naming which one refused. Never a quiet fallback to this repository: a
+    run that read the wrong ticket implements work nobody asked for, and nothing downstream would
+    say so.
+    """
+    from ..platform.conversation import ticket_for
+
+    if target:
+        tickets, scm = _narrowed(tickets, target, "tickets"), _narrowed(scm, target, "scm")
+    key, where = await ticket_for(ticket, scm)
+    return tickets, scm, key, f"target    {target}\n{where}" if target else where
+
+
+def _narrowed(port: Any, target: str, named: str) -> Any:
+    from ..core.ports import Unsupported
+
+    narrow = getattr(port, "for_repo", None)
+    if narrow is None:
+        # A port that predates the narrowing, or a third party's. Absent is not "yes": the rule
+        # `TicketSource`'s refusing defaults are written on.
+        raise Unsupported(
+            f"the bound {named} ({type(port).__name__}) cannot be pointed at {target}: it has no for_repo()"
+        )
+    return narrow(target)
+
+
 def last_unsuccessful(ctx: RunContext, ticket: str, family: str) -> dict[str, Any] | None:
     """The newest recorded run of THIS family, for this ticket, that did not succeed.
 

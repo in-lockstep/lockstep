@@ -374,6 +374,14 @@ def test_a_runs_row_names_something_that_ships() -> None:
             and _importable("in_lockstep.adapters", "CommandProvision")
         ),
         "GitHub": "gate" in commands,
+        # Three halves, one per place the claim is made: the refusal a fork's CI gets by name, the
+        # narrowing that points a run's reads at the parent, and the terminal spelling -- because
+        # O3 is what makes the last one part of the claim rather than a convenience.
+        "Fork to upstream": (
+            _importable("in_lockstep.platform.scm", "TargetRefused")
+            and hasattr(__import__("in_lockstep.platform.scm", fromlist=["GitHubScm"]).GitHubScm, "for_repo")
+            and "target" in {p.name for p in main.commands["apply"].params}
+        ),
         "Keyless CI (federation)": _importable("in_lockstep.ai.bootstrap", "ANTHROPIC_FEDERATION_AUDIENCE"),
         "Org standards as a package": _importable("in_lockstep.core.standards", "load_standards"),
         "Spend controls": _importable("in_lockstep.core.spend", "DailySpendExceeded"),

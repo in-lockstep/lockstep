@@ -35,24 +35,28 @@ from ..adapters.ai import Implement
 from ..adapters.worktree import verdict_over_staged
 from ..core.context import RunContext
 from ..core.outcome import Outcome, Status
+from ..core.ports import Unsupported
 from ..core.workflow import workflow
 from ..platform.artifacts import ATTEMPT, CHANGESET, read_changeset, read_verdict, write_changeset
-from ..platform.conversation import ticket_for, with_review
+from ..platform.conversation import with_review
 from ..platform.propose import escalate, open_reviewable
 from ..platform.report import implement_body
-from ..platform.scm import Scm
+from ..platform.scm import Scm, TargetRefused
 from ..platform.tickets import TicketSource
-from ._shared import last_unsuccessful
+from ._shared import last_unsuccessful, pointed_at
 
 
 async def implement_from_ticket(
-    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, actor: str = ""
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, actor: str = "", target: str = ""
 ) -> Outcome[Any]:
     """Read the ticket and the review of the last attempt, implement it, leave it staged.
 
     `tickets` and `scm` arrive from the bindings above — the signature names the ports, the
     dispatcher fills them. Writes nothing. The change set travels to the job that holds a write
     token, and crosses the guard again when it gets there.
+
+    `target` names the repository the run is FOR, when that is not the checkout's own -- a fork
+    proposing to what it forked from. Empty is this repository, which is every run before #373.
 
     `with_review` is what makes a second `/implement` a reply rather than a retry: it gathers what
     people said on the open pull request this workflow opened last time — including the notes
@@ -66,7 +70,14 @@ async def implement_from_ticket(
     # `via=tdd` says at the execution site what serves this request — the same adapter the module
     # binds above, named here so the reader of this line knows Implement means red-then-green
     # without scrolling to the binding.
-    key, where = await ticket_for(ticket, scm)
+    try:
+        tickets, scm, key, where = await pointed_at(target, ticket, tickets, scm)
+    except Unsupported as e:
+        # Refused before anything is read, and by name: a bound port that cannot be pointed at the
+        # target would otherwise answer about this repository, which is the confusion the flag
+        # exists to end.
+        print(f"refused   {e}")
+        return Outcome(status=Status.FAILED, reason="scm.target_unsupported")
     print(where)
     source, note = await with_review(await tickets.get(key), scm)
     print(note)
@@ -107,7 +118,12 @@ async def implement_from_ticket(
 
 
 async def implement_propose(
-    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, artifact: str = CHANGESET
+    ctx: RunContext,
+    ticket: str,
+    tickets: TicketSource,
+    scm: Scm,
+    artifact: str = CHANGESET,
+    target: str = "",
 ) -> Outcome[Any]:
     """Open a change from a staged artifact, and say on the ticket what happened.
 
@@ -118,7 +134,14 @@ async def implement_propose(
     # The same resolution the unprivileged half did, run again rather than threaded between
     # jobs: both halves are handed the number the comment was left on, and a fact both can
     # derive is not one to carry across an artifact boundary where it would arrive untrusted.
-    ticket, where = await ticket_for(ticket, scm)
+    try:
+        tickets, scm, ticket, where = await pointed_at(target, ticket, tickets, scm)
+    except Unsupported as e:
+        # Refused before anything is read, and by name: a bound port that cannot be pointed at the
+        # target would otherwise answer about this repository, which is the confusion the flag
+        # exists to end.
+        print(f"refused   {e}")
+        return Outcome(status=Status.FAILED, reason="scm.target_unsupported")
     print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
@@ -150,20 +173,36 @@ async def implement_propose(
     ready = verdict is not None and verdict.green
     # Fetched before the change is opened, because the title comes from it now.
     issue = await tickets.get(ticket)
-    change = await open_reviewable(
-        scm,
-        changeset,
-        ready=ready,
-        # The ticket's own title, not the model's `summary`. A summary is free prose: run
-        # 33578430422 put a thousand characters of the model's running commentary here, and the
-        # host refused the pull request after the work was done and green. The issue title is a
-        # person's one-line statement of the same thing, which is what a title wants.
-        title=issue.title or changeset.summary or f"Implement {ticket}",
-        body=implement_body(changeset, verdict),
-        ticket=ticket,
-        workflow="implement",
-        run_id=ctx.run_id,
-    )
+    try:
+        change = await open_reviewable(
+            scm,
+            changeset,
+            ready=ready,
+            # The ticket's own title, not the model's `summary`. A summary is free prose: run
+            # 33578430422 put a thousand characters of the model's running commentary here, and
+            # the host refused the pull request after the work was done and green. The issue title
+            # is a person's one-line statement of the same thing, which is what a title wants.
+            title=issue.title or changeset.summary or f"Implement {ticket}",
+            body=implement_body(changeset, verdict),
+            ticket=ticket,
+            workflow="implement",
+            run_id=ctx.run_id,
+            # Where the branch and the pull request are created, named here rather than inherited
+            # from the narrowing above: the write is the act that must be unambiguous.
+            target=target,
+        )
+    except TargetRefused as e:
+        # Nothing was pushed -- the credential was checked first -- so the work is in the artifact
+        # and a person with write access can finish it. Said on the ticket rather than only in a
+        # job log, because the person who asked for this is reading the thread.
+        await tickets.comment(
+            issue,
+            f"`/implement` staged a change but could not open it on `{target}`: {e}\n\n"
+            f"The change is in this run's artifact. Someone with write access there can open it "
+            f"with `in-lockstep apply --from-artifact <the artifact> --target {target}`.",
+        )
+        print(f"refused   {e}")
+        return Outcome(status=Status.FAILED, reason=e.reason)
     await tickets.comment(
         issue,
         f"`/implement` opened {change.url or change.branch} as "
@@ -174,7 +213,9 @@ async def implement_propose(
     return Outcome(status=Status.SUCCEEDED, value=change)
 
 
-async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm) -> Outcome[None]:
+async def implement_report(
+    ctx: RunContext, ticket: str, tickets: TicketSource, scm: Scm, target: str = ""
+) -> Outcome[None]:
     """Say on the ticket that the run failed, when the half that would have said so never ran.
 
     `implement/propose` answers on every outcome it sees — a change opened, no change staged, tests
@@ -190,7 +231,14 @@ async def implement_report(ctx: RunContext, ticket: str, tickets: TicketSource, 
     reason, the cost and the findings are all in the ledger, and a workflow that took them as
     arguments would be a workflow whose YAML had to know what happened.
     """
-    key, where = await ticket_for(ticket, scm)
+    try:
+        tickets, scm, key, where = await pointed_at(target, ticket, tickets, scm)
+    except Unsupported as e:
+        # Refused before anything is read, and by name: a bound port that cannot be pointed at the
+        # target would otherwise answer about this repository, which is the confusion the flag
+        # exists to end.
+        print(f"refused   {e}")
+        return Outcome(status=Status.FAILED, reason="scm.target_unsupported")
     print(where)
     source = await tickets.get(key)
     record = last_unsuccessful(ctx, key, "implement/")
