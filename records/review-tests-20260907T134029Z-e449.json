@@ -1,0 +1,79 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34127524510",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.135556,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 167,
+        "message": "Multi-aspect test asserts run-ids exist but never asserts the worst-status exit on a mixed result.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 193,
+        "message": "`--blocked-ok` test does not verify the ledger record is still written.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2963,
+        "message": "`_worse` rank dict gives every unknown Status a rank of 2, silently treating novel statuses as worse than BLOCKED.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 340,
+        "message": "New per-file caps are sized to today's counts, but the test does not assert what each file's count actually is.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5980bc9c8842fd98d69814aef539713960f7a565",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 868,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T134029Z-e449",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 871,
+  "ts": "2026-09-07T13:40:53+00:00",
+  "wall_seconds": 24.657
+}

@@ -1,0 +1,112 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34123898485",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.128274,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 12,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 310,
+        "message": "Live container test asserts 'socket: refused' but --network=none may produce a different OSError message.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 287,
+        "message": "_image_present uses 'image exists' then falls back to 'image inspect'; 'image exists' is podman-specific and docker returns exit 1 always for unknown subcommands.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 222,
+        "message": "The spending threshold assert (>= 4) has no comment naming which jobs it expects to count, making it fragile to workflow restructuring.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 265,
+        "message": "test_gate_sandbox_2_run_tests_refuses_a_host_runner_and_materialises_nothing does not assert that provider.calls is empty \u2014 no model was asked.",
+        "path": "tests/in_lockstep/test_run_tests_tool.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: .ssh/",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_ssh",
+        "message": "critical: id_ed25519",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "727f997ace2f8c52d3164698eb31fac5c1270000",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 942,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T124932Z-d0e9",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 945,
+  "ts": "2026-09-07T12:49:59+00:00",
+  "wall_seconds": 27.072
+}

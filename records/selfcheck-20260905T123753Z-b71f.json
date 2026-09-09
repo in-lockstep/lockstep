@@ -1,0 +1,57 @@
+{
+  "approval": {
+    "attended": true,
+    "by": "tpouyer"
+  },
+  "args": {},
+  "billed_fraction": null,
+  "branch": "feat/recording-is-what-a-run-does",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "9ed29c9ff1dc42641ab035995225402eb52a2ca3",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": null,
+  "run_id": "selfcheck-20260905T123753Z-b71f",
+  "schema": 6,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "validate",
+      "verb": "validate",
+      "wall_seconds": 0.02
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "test",
+      "verb": "test",
+      "wall_seconds": 126.39
+    }
+  ],
+  "tokens": 0,
+  "ts": "2026-09-05T12:40:00+00:00",
+  "wall_seconds": 126.41,
+  "workflow": "selfcheck"
+}

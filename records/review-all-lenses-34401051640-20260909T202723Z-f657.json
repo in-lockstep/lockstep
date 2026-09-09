@@ -1,0 +1,204 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "6a9457a2871e19c6c8eeb7eb123aecc7ee28a728"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 54135,
+  "ci_actor": "tpouyer",
+  "ci_run": "34401051640",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.224042,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 110,
+        "message": "test_gate_read_1_a_read_is_never_cut_twice checks `_window` output length, not what the model receives.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 235,
+        "message": "`_bounded` is not called when `text` is exactly `cap` characters; off-by-one is benign but asymmetric with `_window`.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3509 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3509 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 110,
+        "message": "Invoker-delivery guarantee is only asserted for whole-file reads, not for ranged reads.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 139,
+        "message": "test_a_file_between_the_two_old_caps_arrives_whole asserts equality to raw body, but _delivered strips redaction and may reformat content.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3509 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "6a9457a2871e19c6c8eeb7eb123aecc7ee28a728",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.224042,
+  "output_tokens": 1400,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34401051640-20260909T202723Z-f657",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.060579,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 110,
+            "message": "test_gate_read_1_a_read_is_never_cut_twice checks `_window` output length, not what the model receives.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 235,
+            "message": "`_bounded` is not called when `text` is exactly `cap` characters; off-by-one is benign but asymmetric with `_window`.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3509 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 578,
+      "verb": "review",
+      "wall_seconds": 25.662
+    },
+    {
+      "cost_usd": 0.04862,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 120,
+      "verb": "review",
+      "wall_seconds": 6.277
+    },
+    {
+      "cost_usd": 0.053758,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3509 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 102,
+      "verb": "review",
+      "wall_seconds": 12.404
+    },
+    {
+      "cost_usd": 0.061085,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 110,
+            "message": "Invoker-delivery guarantee is only asserted for whole-file reads, not for ranged reads.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 139,
+            "message": "test_a_file_between_the_two_old_caps_arrives_whole asserts equality to raw body, but _delivered strips redaction and may reformat content.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3509 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 612,
+      "verb": "review",
+      "wall_seconds": 26.265
+    }
+  ],
+  "tokens": 1412,
+  "tool_calls": {},
+  "ts": "2026-09-09T20:27:50+00:00",
+  "turns": 4,
+  "wall_seconds": 26.265,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.046562,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1957,
+        "message": "_workflow_ids relies on a regex over register()'s source to enumerate ids, but the diff does more than it says in one direction.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1979,
+        "message": "_workflow_function uses a second, tighter regex to map an id to a function name; a reformatting that splits the decorator call across lines would cause show-workflow <id> to raise ClickException for an id the listing just advertised.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1941,
+        "message": "show-workflow --registered changes working directory implicitly via _default_lockstep(); the diff does not show what that function does.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1949,
+        "message": "The listing path (no name, no --registered) hard-codes only 'implement' and 'fix' as families.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "975a7e272daceacdb67e6632f0cbc7eedaeef605",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 941,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T165015Z-027d",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 944,
+  "ts": "2026-09-05T16:50:41+00:00",
+  "wall_seconds": 25.467
+}

@@ -1,0 +1,210 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "9fb779efbae0ceb9a71f17e8b70b333d27b42f40"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 19995,
+  "ci_actor": "tpouyer",
+  "ci_run": "34369728782",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.098627,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 60,
+        "message": "SPAWNERS includes 'call' but subprocess.call is not used anywhere; more importantly, check_output takes its first argument differently in some patterns.",
+        "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 55,
+        "message": "The detector only inspects argv literals; a call that builds the list in a variable would go undetected.",
+        "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 57,
+        "message": "AST checker resolves test files via Path.rglob on a path derived from __file__, not from user input \u2014 but the pattern collects and formats file paths into an assertion message.",
+        "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 68,
+        "message": "Detector only matches literal-list argv; a variable or f-string argv silently passes.",
+        "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 95,
+        "message": "Control test does not verify that the fixed callers in test_fork_propose.py are seen as clean.",
+        "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "`_resolve_merge` is still called without a cwd and would fail in the same worktree environment.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: tests/in_lockstep/test_cli.py:4714 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9fb779efbae0ceb9a71f17e8b70b333d27b42f40",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.098627,
+  "output_tokens": 1574,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34369728782-20260909T152238Z-c07b",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.0245,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 60,
+            "message": "SPAWNERS includes 'call' but subprocess.call is not used anywhere; more importantly, check_output takes its first argument differently in some patterns.",
+            "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 55,
+            "message": "The detector only inspects argv literals; a call that builds the list in a variable would go undetected.",
+            "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 395,
+      "verb": "review",
+      "wall_seconds": 17.364
+    },
+    {
+      "cost_usd": 0.019936,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 76,
+      "verb": "review",
+      "wall_seconds": 5.129
+    },
+    {
+      "cost_usd": 0.023424,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 57,
+            "message": "AST checker resolves test files via Path.rglob on a path derived from __file__, not from user input \u2014 but the pattern collects and formats file paths into an assertion message.",
+            "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 302,
+      "verb": "review",
+      "wall_seconds": 11.635
+    },
+    {
+      "cost_usd": 0.030766,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 68,
+            "message": "Detector only matches literal-list argv; a variable or f-string argv silently passes.",
+            "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 95,
+            "message": "Control test does not verify that the fixed callers in test_fork_propose.py are seen as clean.",
+            "path": "tests/in_lockstep/test_suite_runs_where_the_framework_runs_it.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "message": "`_resolve_merge` is still called without a cwd and would fail in the same worktree environment.",
+            "path": "tests/in_lockstep/test_cli.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.line_not_in_hunk",
+            "message": "1 finding(s) kept without a line: tests/in_lockstep/test_cli.py:4714 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 813,
+      "verb": "review",
+      "wall_seconds": 23.858
+    }
+  ],
+  "tokens": 1586,
+  "tool_calls": {},
+  "ts": "2026-09-09T15:23:04+00:00",
+  "turns": 4,
+  "wall_seconds": 23.858,
+  "workflow": "review/all-lenses"
+}

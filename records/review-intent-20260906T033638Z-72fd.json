@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.067116,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 558,
+        "message": "Spread min/max uses `or 0.0` to guard against `None`, but `value` should only be `None` for rows already filtered out by the `is not None` check. The guard is harmless but masks a logic error if a `Measured` with `value=None` somehow passes the filter \u2014 it would sort as 0.0 rather than being excluded, producing a misleading spread. Worth a comment or an assert instead.",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 613,
+        "message": "In `_spread_value`, the condition `not measured.complete` causes the denominator suffix to be omitted for partial measurements, but the docstring says 'ALWAYS with the runs it came from'. For a partial value the denominator is exactly the information a reader needs. The implementation contradicts its own stated intent.",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1797,
+        "message": "The `metrics.keyed_by_actor` call is inside the `else` branch (grouped/json path) but the `from . import metrics` import was moved to the top of `report_cmd`. This is fine at runtime, but the import is now unconditional where it was previously deferred \u2014 a minor regression for startup cost that the description does not mention.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 188,
+        "message": "GATE-TEAM-2 row ends 'Nothing records it yet.Filed as #289.' \u2014 missing space before 'Filed'. Cosmetic, but this is a design document that reads as authoritative prose.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bc0338e421194b9c2ccba6a32d37b358f2530fdf",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 490,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T033638Z-72fd",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 493,
+  "ts": "2026-09-06T03:36:53+00:00",
+  "wall_seconds": 14.653
+}

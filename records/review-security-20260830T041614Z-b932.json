@@ -1,0 +1,67 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.095235,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 261,
+        "message": "Path traversal in `_conflicted_files`: `conflict.paths` entries come from git's `diff --name-only --diff-filter=U` output, which is repository history, but the entries are joined to the worktree root with `Path(tree) / path` and read without any check that the resolved path stays inside `tree`. A path of `../../etc/passwd` (or a symlink that resolves outside the tree) would be read and sent to the model. The containment check in `_write_resolutions` applies only to writes, not reads.",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 211,
+        "message": "Patch content (up to `MAX_PATCH_CHARS = 20_000`) is included in the model's context with provenance label `TRUSTED_REPO`, and the injection scan is described as running over it. However, the guardrail prompt (`guardrail-backport.md`) reminds the model that file contents and patches are data, but does not prevent a model that ignores or is confused by the guardrail from acting on embedded instructions. This is a known, documented residual risk \u2014 flagging it because the patch is the highest-entrop\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 291,
+        "message": "`_changeset_between` reads file contents with `Path(work.root) / path` where `path` is parsed from `git diff --name-status --no-renames` output, with no guard that the path stays inside `work.root`. The same class of concern as the `_conflicted_files` read: symlink or path traversal via a crafted git diff line would cause an arbitrary file read whose contents enter the `ChangeSet`.",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1838,
+        "message": "The `--base` value supplied to `apply_cmd` is passed through to `Scm.open_change(base=...)` (line 1160) without a leading-dash guard. The `apply_cmd` already validated against direct injection in prior code paths, but `--base` is new in this diff. If `base` reaches a git subprocess as a positional argument that git interprets as a flag (e.g. `--base=-x`), option confusion is possible. The `backport_cmd` option-confusion guard (`str(value).startswith('-')`) is present for refs in `BackportSpec`, \u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a5110088478c0ea63a84818cf8f15db0fd00ce17",
+  "input_tokens": 24630,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1423,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T041614Z-b932",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 26053,
+  "ts": "2026-08-30T04:16:50+00:00",
+  "wall_seconds": 35.948
+}

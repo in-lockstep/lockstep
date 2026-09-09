@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.027474,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 291,
+        "message": "The `is_command` decorator-detection heuristic could be fooled by a helper function whose name happens to contain the substring 'command' or 'group' (e.g., a helper named `_format_command_summary`), silently excluding it from the count and allowing real logic to accumulate undetected.",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 305,
+        "message": "The top-level `for node in tree.body` loop skips all module-level non-function statements (assignments, class bodies, bare expressions). If logic migrates from a helper into a module-level construct it would be invisible to the counter, defeating the gate.",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 316,
+        "message": "The string-constant docstring exclusion compares `inner.value.value` after a `getattr`, but `ast.Constant` nodes can also appear as the first statement of a class body inside a helper. No test verifies that a nested class docstring is handled correctly (excluded or counted) rather than raising or silently misbehaving.",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 319,
+        "message": "No test asserts that `_helper_statements` returns a known value for a small, hand-written fixture; the only assertion is on the live `cli.py` count. If the counter has a bug that causes systematic under-counting, both assertions pass and the gate is silently broken.",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7b9a6e897a096b7d32edaa909a5d91ef801c5aca",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 818,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T013626Z-851e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 821,
+  "ts": "2026-09-06T01:36:49+00:00",
+  "wall_seconds": 23.168
+}

@@ -1,0 +1,343 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "20c2e01a006615709452d190e836d58a2cce0573"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 145446,
+  "ci_actor": "tpouyer",
+  "ci_run": "34174146969",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.619444,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 18,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 164,
+        "message": "Case.rubric property calls Rubric.parse on every access, raising CaseError mid-flight.",
+        "path": "src/in_lockstep/evaluation/cases.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 276,
+        "message": "scorecard_lines uses getattr fallback for `judged` on Arm, inconsistently with the rest of the function.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 185,
+        "message": "rubrics and score both call load_cases(self.corpus), doubling corpus I/O when both are called in sequence.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- g -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- s -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 140,
+        "message": "`load_cases` is called twice per scoring run \u2014 once in `rubrics`, once in `score` \u2014 loading and parsing the corpus from disk both times.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- g -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- s -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 381,
+        "message": "Unsanitized model output reflected into `rubric_reason` and `rubric_evidence` fields with no length bound.",
+        "path": "src/in_lockstep/evaluation/cases.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 144,
+        "message": "`rubrics()` exposes the full recorded answer text (potentially containing redacted-but-visible content) in a `JudgeAsk` that may be serialized and sent to a judge model.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- g -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- s -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 108,
+        "message": "The `rubrics` method's empty-return path (no rubric-bearing case) is not asserted.",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 170,
+        "message": "`rubrics` is not tested for the case where a probe answer is absent (unanswered case).",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 181,
+        "message": "The `_judged_by` report helper introduced in `report.py` has no test.",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 89,
+        "message": "The `summarize` `ok` field for a mix of outstanding and judged-failed results is not asserted.",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- g -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- s -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "20c2e01a006615709452d190e836d58a2cce0573",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.309722,
+  "output_tokens": 4930,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34174146969-20260908T004150Z-00ed",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 164,
+            "message": "Case.rubric property calls Rubric.parse on every access, raising CaseError mid-flight.",
+            "path": "src/in_lockstep/evaluation/cases.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 276,
+            "message": "scorecard_lines uses getattr fallback for `judged` on Arm, inconsistently with the rest of the function.",
+            "path": "src/in_lockstep/platform/report.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 185,
+            "message": "rubrics and score both call load_cases(self.corpus), doubling corpus I/O when both are called in sequence.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- g -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- s -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "verb": "review",
+      "wall_seconds": 21.057
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 140,
+            "message": "`load_cases` is called twice per scoring run \u2014 once in `rubrics`, once in `score` \u2014 loading and parsing the corpus from disk both times.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- g -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- s -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "verb": "review",
+      "wall_seconds": 10.552
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 381,
+            "message": "Unsanitized model output reflected into `rubric_reason` and `rubric_evidence` fields with no length bound.",
+            "path": "src/in_lockstep/evaluation/cases.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 144,
+            "message": "`rubrics()` exposes the full recorded answer text (potentially containing redacted-but-visible content) in a `JudgeAsk` that may be serialized and sent to a judge model.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- g -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- s -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "verb": "review",
+      "wall_seconds": 18.502
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 6,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 108,
+            "message": "The `rubrics` method's empty-return path (no rubric-bearing case) is not asserted.",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 170,
+            "message": "`rubrics` is not tested for the case where a probe answer is absent (unanswered case).",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 181,
+            "message": "The `_judged_by` report helper introduced in `report.py` has no test.",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 89,
+            "message": "The `summarize` `ok` field for a mix of outstanding and judged-failed results is not asserted.",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- g -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- s -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "verb": "review",
+      "wall_seconds": 20.606
+    }
+  ],
+  "tokens": 4954,
+  "ts": "2026-09-08T00:42:13+00:00",
+  "wall_seconds": 70.716,
+  "workflow": "review/all-lenses"
+}

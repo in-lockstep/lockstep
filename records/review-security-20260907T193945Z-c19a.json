@@ -1,0 +1,40 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34156417414",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.037783,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 662,
+        "message": "`_current` treats any staged `change.contents` as readable without consulting `check_read`, so a protected path that was staged earlier in the session can be read back via `edit_file`.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "448020ef645c4f763c26d10271011fa7ab411b7f",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 541,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T193945Z-c19a",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 544,
+  "ts": "2026-09-07T19:40:03+00:00",
+  "wall_seconds": 18.504
+}

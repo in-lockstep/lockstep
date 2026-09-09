@@ -1,0 +1,200 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "28029b8a1384ac0bc5315702fe27f41449a08867"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 46539,
+  "ci_actor": "tpouyer",
+  "ci_run": "34278018639",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.202277,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 200,
+        "message": "`_tail` joins all lines then slices the join, so long individual lines can displace later lines entirely.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 185,
+        "message": "Test name does not match the gate it claims to discharge (`test_gate_ci_5` is in `test_verdict.py`).",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 64,
+        "message": "`github.actor` interpolated directly into a shell command via `${{ github.actor }}`.",
+        "path": ".github/workflows/ci.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 201,
+        "message": "Unbounded subprocess output reflected into finding messages without sanitization.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 196,
+        "message": "`finding.as_record()[\"message\"] == finding.message` can pass even if clipping occurs, if both are clipped to the same value.",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 954,
+        "message": "`dispatches` is built from steps containing `in-lockstep run selfcheck`; a step that dispatches with a flag variant or different spacing would be missed.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "28029b8a1384ac0bc5315702fe27f41449a08867",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.202277,
+  "output_tokens": 1848,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34278018639-20260908T210048Z-e1ce",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.05258,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 200,
+            "message": "`_tail` joins all lines then slices the join, so long individual lines can displace later lines entirely.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 185,
+            "message": "Test name does not match the gate it claims to discharge (`test_gate_ci_5` is in `test_verdict.py`).",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 608,
+      "verb": "review",
+      "wall_seconds": 22.004
+    },
+    {
+      "cost_usd": 0.044986,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 87,
+      "verb": "review",
+      "wall_seconds": 4.604
+    },
+    {
+      "cost_usd": 0.052809,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 64,
+            "message": "`github.actor` interpolated directly into a shell command via `${{ github.actor }}`.",
+            "path": ".github/workflows/ci.yml",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 201,
+            "message": "Unbounded subprocess output reflected into finding messages without sanitization.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 602,
+      "verb": "review",
+      "wall_seconds": 20.29
+    },
+    {
+      "cost_usd": 0.051902,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 196,
+            "message": "`finding.as_record()[\"message\"] == finding.message` can pass even if clipping occurs, if both are clipped to the same value.",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 954,
+            "message": "`dispatches` is built from steps containing `in-lockstep run selfcheck`; a step that dispatches with a flag variant or different spacing would be missed.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 563,
+      "verb": "review",
+      "wall_seconds": 20.765
+    }
+  ],
+  "tokens": 1860,
+  "tool_calls": {},
+  "ts": "2026-09-08T21:01:11+00:00",
+  "turns": 4,
+  "wall_seconds": 22.004,
+  "workflow": "review/all-lenses"
+}

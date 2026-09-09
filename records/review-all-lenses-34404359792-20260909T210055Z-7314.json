@@ -1,0 +1,252 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "fb11c04564f0eb8c7c7786892bc365668b803e04"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 17746,
+  "cache_write_tokens": 69138,
+  "ci_actor": "tpouyer",
+  "ci_run": "34404359792",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.307206,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 209,
+        "message": "`test_every_session_type_honours_the_configured_window` imports `read_only` but uses the bare name without importing it from `in_lockstep.ai.builtins`.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 130,
+        "message": "`max_tool_result_chars` is now a derived property, but `test_lens.py` and `test_ai.py` are not touched \u2014 tests there may still set or read it as a field.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 84,
+        "message": "`Workshop.max_read_chars` defaults to `None`, but `InvokePolicy.max_read_chars` defaults to `MAX_READ_CHARS` \u2014 the resolution path through `InvokePolicy.under` is the only place this is reconciled.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (6027 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 157,
+        "message": "A workshop-supplied max_read_chars above the framework default passes through with no upper bound when no policy layer contributes a ceiling.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (6027 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 233,
+        "message": "Test asserts `max_read_chars` on the runner but uses `object()` as the module, which may silently skip policy resolution.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 283,
+        "message": "No test for the case where `max_read_chars` flows through `read_write_execute` via `AiStrategy` (the execute path).",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 289,
+        "message": "`test_a_policy_layer_may_lower_the_read_window_and_may_not_raise_it` passes `max_read_chars=CONFIGURED` to `InvokePolicy.under` but leaves `max_turns` at 10 \u2014 the assertion checks `max_read_chars` on the returned policy, not on a runner, so the test does not prove the value reaches the tool that reads.",
+        "path": "tests/in_lockstep/test_read_delivery.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (6027 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "fb11c04564f0eb8c7c7786892bc365668b803e04",
+  "input_tokens": 15,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.307206,
+  "output_tokens": 2838,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34404359792-20260909T210055Z-7314",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.077923,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 209,
+            "message": "`test_every_session_type_honours_the_configured_window` imports `read_only` but uses the bare name without importing it from `in_lockstep.ai.builtins`.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 130,
+            "message": "`max_tool_result_chars` is now a derived property, but `test_lens.py` and `test_ai.py` are not touched \u2014 tests there may still set or read it as a field.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 84,
+            "message": "`Workshop.max_read_chars` defaults to `None`, but `InvokePolicy.max_read_chars` defaults to `MAX_READ_CHARS` \u2014 the resolution path through `InvokePolicy.under` is the only place this is reconciled.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (6027 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 782,
+      "verb": "review",
+      "wall_seconds": 34.489
+    },
+    {
+      "cost_usd": 0.059266,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 119,
+      "verb": "review",
+      "wall_seconds": 10.882
+    },
+    {
+      "cost_usd": 0.090973,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 157,
+            "message": "A workshop-supplied max_read_chars above the framework default passes through with no upper bound when no policy layer contributes a ceiling.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (6027 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1095,
+      "verb": "review",
+      "wall_seconds": 43.077
+    },
+    {
+      "cost_usd": 0.079044,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 233,
+            "message": "Test asserts `max_read_chars` on the runner but uses `object()` as the module, which may silently skip policy resolution.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 283,
+            "message": "No test for the case where `max_read_chars` flows through `read_write_execute` via `AiStrategy` (the execute path).",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 289,
+            "message": "`test_a_policy_layer_may_lower_the_read_window_and_may_not_raise_it` passes `max_read_chars=CONFIGURED` to `InvokePolicy.under` but leaves `max_turns` at 10 \u2014 the assertion checks `max_read_chars` on the returned policy, not on a runner, so the test does not prove the value reaches the tool that reads.",
+            "path": "tests/in_lockstep/test_read_delivery.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (6027 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 857,
+      "verb": "review",
+      "wall_seconds": 31.501
+    }
+  ],
+  "tokens": 2853,
+  "tool_calls": {},
+  "ts": "2026-09-09T21:01:40+00:00",
+  "turns": 5,
+  "wall_seconds": 43.077,
+  "workflow": "review/all-lenses"
+}

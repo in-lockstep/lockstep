@@ -1,0 +1,53 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34165474040",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.080011,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1130,
+        "message": "test_gate_async_3b cleans up the env var only via monkeypatch, but does not assert no tasks outlive the call.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1099,
+        "message": "_Counting.compare_and_set increments writes; if fan_out ever called it, GATE-OUT-7 would fail without explanation.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1054,
+        "message": "No test covers the 'branch not yet started when the switch is thrown is refused by run_call' path.",
+        "path": "tests/in_lockstep/test_core.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6b19dc04afe2d89f46ca62b207a708c56bab22d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 868,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T220714Z-a71e",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 871,
+  "ts": "2026-09-07T22:07:36+00:00",
+  "wall_seconds": 22.157
+}

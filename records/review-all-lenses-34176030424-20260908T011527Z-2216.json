@@ -1,0 +1,407 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "a54ad747c0e3e0b485b7fc76605efc7679339c55"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 178950,
+  "ci_actor": "tpouyer",
+  "ci_run": "34176030424",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.755495,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 24,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 175,
+        "message": "Cost accumulation skips the settled invocation's cost when `settle` replaces the original.",
+        "path": "src/in_lockstep/adapters/ai/judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 209,
+        "message": "`Verdict.as_record` now emits `rubric_sha256` and `answer_sha256`, but `Verdict.parse` (if it exists) is not visible in this diff.",
+        "path": "src/in_lockstep/core/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 139,
+        "message": "Lazy import of `resolve_invoker` inside the hot path is unexplained.",
+        "path": "src/in_lockstep/adapters/ai/judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: judge/judging -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- context: acme/arch -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: judge/judging -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- context: acme/arch -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 149,
+        "message": "Rubric fields from an untrusted case file are cast with `int()` and `str()` without length or content bounds before reaching the model prompt.",
+        "path": "src/in_lockstep/adapters/ai/judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 122,
+        "message": "System prompt is assembled by string concatenation; a schema_instruction containing `-->` or guardrail delimiters could break the visual boundary the model relies on.",
+        "path": "src/in_lockstep/adapters/ai/judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: judge/judging -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- context: acme/arch -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 403,
+        "message": "`test_an_unshaped_reply_or_an_off_scale_level_leaves_that_rubric_outstanding` asserts `outcome.cost.usd == pytest.approx(0.004)` but the scripted invoker returns `Cost(usd=0.001)` per call and `settle` makes one re-prompt, totalling 4 raw calls \u00d7 0.001 = 0.004. The assertion is correct only if `settle` is billed as a separate invocation and `_Scripted.run` returns a fresh `_invocation(...)` for the re-prompt too. Reading `_Scripted`: it pops the next reply verbatim, and `\"still not json\"` is a s\u2026[truncated]",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 362,
+        "message": "No test covers `EgressRefused` mid-corpus returning BLOCKED with partial verdicts kept.",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 329,
+        "message": "No test covers `InvocationFailed` (the ERRORED path), which has different status and findings structure from BLOCKED.",
+        "path": "tests/in_lockstep/test_judge.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: judge/judging -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- context: acme/arch -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a54ad747c0e3e0b485b7fc76605efc7679339c55",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.377747,
+  "output_tokens": 5624,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34176030424-20260908T011527Z-2216",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 7,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 175,
+            "message": "Cost accumulation skips the settled invocation's cost when `settle` replaces the original.",
+            "path": "src/in_lockstep/adapters/ai/judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 209,
+            "message": "`Verdict.as_record` now emits `rubric_sha256` and `answer_sha256`, but `Verdict.parse` (if it exists) is not visible in this diff.",
+            "path": "src/in_lockstep/core/improve.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 139,
+            "message": "Lazy import of `resolve_invoker` inside the hot path is unexplained.",
+            "path": "src/in_lockstep/adapters/ai/judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: judge/judging -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- context: acme/arch -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "verb": "review",
+      "wall_seconds": 25.817
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: judge/judging -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- context: acme/arch -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "verb": "review",
+      "wall_seconds": 7.883
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 6,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 149,
+            "message": "Rubric fields from an untrusted case file are cast with `int()` and `str()` without length or content bounds before reaching the model prompt.",
+            "path": "src/in_lockstep/adapters/ai/judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 122,
+            "message": "System prompt is assembled by string concatenation; a schema_instruction containing `-->` or guardrail delimiters could break the visual boundary the model relies on.",
+            "path": "src/in_lockstep/adapters/ai/judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: judge/judging -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- context: acme/arch -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "verb": "review",
+      "wall_seconds": 21.716
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 7,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 403,
+            "message": "`test_an_unshaped_reply_or_an_off_scale_level_leaves_that_rubric_outstanding` asserts `outcome.cost.usd == pytest.approx(0.004)` but the scripted invoker returns `Cost(usd=0.001)` per call and `settle` makes one re-prompt, totalling 4 raw calls \u00d7 0.001 = 0.004. The assertion is correct only if `settle` is billed as a separate invocation and `_Scripted.run` returns a fresh `_invocation(...)` for the re-prompt too. Reading `_Scripted`: it pops the next reply verbatim, and `\"still not json\"` is a s\u2026[truncated]",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 362,
+            "message": "No test covers `EgressRefused` mid-corpus returning BLOCKED with partial verdicts kept.",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 329,
+            "message": "No test covers `InvocationFailed` (the ERRORED path), which has different status and findings structure from BLOCKED.",
+            "path": "tests/in_lockstep/test_judge.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: judge/judging -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- context: acme/arch -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "verb": "review",
+      "wall_seconds": 26.938
+    }
+  ],
+  "tokens": 5648,
+  "ts": "2026-09-08T01:15:56+00:00",
+  "wall_seconds": 82.354,
+  "workflow": "review/all-lenses"
+}

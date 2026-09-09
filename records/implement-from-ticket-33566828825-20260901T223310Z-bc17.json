@@ -1,0 +1,43 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#139"
+  },
+  "branch": "main",
+  "ci_actor": "tpouyer",
+  "config": "local working tree",
+  "cost_usd": 31.53279,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_red",
+        "message": "the staged test did not fail against the current code, so it specifies nothing to implement. A test-first change starts from a test that is red for the right reason.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to fail, 0 failed of 1581",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "076c3f6fdfa8e490de5cca3af143b98130dce388",
+  "kind": "workflow",
+  "outcome_cost_usd": 15.766395,
+  "reason": "tdd.not_red",
+  "run_id": "implement-from-ticket-33566828825-20260901T223310Z-bc17",
+  "schema": 4,
+  "status": "failed",
+  "tokens": 2049146,
+  "ts": "2026-09-01T22:36:31+00:00",
+  "wall_seconds": 220.75,
+  "workflow": "implement/from-ticket"
+}

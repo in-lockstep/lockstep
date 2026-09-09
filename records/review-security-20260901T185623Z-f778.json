@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.052218,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 65,
+        "message": "Cassette path accepted from CLI user input and passed directly to `Path.read_text()` without any confinement check. An attacker (or a confused user) who controls the `--from` argument can supply any path readable by the process \u2014 including files outside `.lockstep/cassettes/`. The content is then JSON-parsed and the structured fields (`request`, `content`) are written through the redacting sink, but the path traversal itself is not bounded. This is not a sanitisation complaint in the abstract: `\u2026[truncated]",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 862,
+        "message": "The `into` directory for harvested cases defaults to `root`, which itself defaults to `Path(__file__).parent / 'corpus'` \u2014 the shipped corpus directory inside the installed package. A user who runs `eval harvest --from <cassette>` without `--into` writes case files into the package installation tree. This is a low-severity self-inflicted write, but if the package is installed in a shared or writable location (e.g. a CI image layer, a system Python) the write destination is not the repository wor\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 155,
+        "message": "The exception message on a failed `path.read_text()` is surfaced verbatim to the CLI via `NothingToHarvest`: `f'could not read {path}: {e}'`. On most systems `e` for a missing file is `[Errno 2] No such file or directory: '/the/full/path'`, and for a permission error it is `[Errno 13] Permission denied`. Neither leaks a secret, but the OS error string for files that exist but are unreadable confirms existence of the path. This matters when `--from` is caller-controlled in an automated context.",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "af453669cbd1a1bee0fa4565f6d943189758342b",
+  "input_tokens": 13436,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 794,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T185623Z-f778",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 14230,
+  "ts": "2026-09-01T18:56:50+00:00",
+  "wall_seconds": 26.59
+}

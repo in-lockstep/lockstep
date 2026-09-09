@@ -1,0 +1,30 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.050795,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "6314c8400336df836d49aa5896c44245bc6bdc0a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 160,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260905T225432Z-e6b3",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "b67d9b23e6b52ff09aa7acdc96f8844e",
+  "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 163,
+  "ts": "2026-09-05T22:54:38+00:00",
+  "wall_seconds": 6.587
+}

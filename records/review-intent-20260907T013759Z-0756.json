@@ -1,0 +1,56 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34073611160",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.059616,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 36,
+        "message": "`getattr` fallback silently accepts a client that exposes `base_url` as a non-string attribute.",
+        "path": "src/in_lockstep/llm/providers/_claude_base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 2527,
+        "message": "`unknown` is computed unconditionally but then filtered only when `routes` is set; without routes it reports every unknown endpoint regardless of what this repo actually routes.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 308,
+        "message": "Gemini receives `base_url=gemini_endpoint or \"\"`, so when no region is set the settings carry an empty string while `endpoint` is `None`.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9e33d7b08ef018cd34224688137eae667076453b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 741,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T013759Z-0756",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 744,
+  "ts": "2026-09-07T01:38:20+00:00",
+  "wall_seconds": 20.763
+}

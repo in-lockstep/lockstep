@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.079269,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 102,
+        "message": "Regex parsed from untrusted file content is used to drive test assertions without path traversal or injection risk, but the ROOT path construction (line 34) resolves relative to the test file's location \u2014 if the test file were relocated or a symlink placed above it, `parents[2]` could resolve to an unexpected directory and silently read attacker-controlled markdown.",
+        "path": "tests/in_lockstep/test_objectives.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 112,
+        "message": "GATE-POLICY-2 is documented as unmet: five Policy fields (network, permissions, and three credit fields) are merged, printed by ls, and reported in the receipt but enforced by nothing.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "40ee46a83328f4663f906e037d8c9f514bbc9f37",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 407,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T120909Z-6ad7",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 410,
+  "ts": "2026-09-05T12:09:23+00:00",
+  "wall_seconds": 14.574
+}

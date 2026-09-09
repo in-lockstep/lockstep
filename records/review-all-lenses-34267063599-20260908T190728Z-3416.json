@@ -1,0 +1,233 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "848186e4304ee8aedbda101dc39c22811ce2a3e7"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 31907,
+  "ci_actor": "tpouyer",
+  "ci_run": "34267063599",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.159542,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 648,
+        "message": "_files uses posixpath.normpath for staged keys but str(p.relative_to(root)) for disk entries, which can produce different separators on Windows.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 668,
+        "message": "Staged entries whose contents is None are removed from the dict, but the staged dict still holds that key; _search then dereferences staged[rel] for every path==None entry without checking whether the key exists there.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 340,
+        "message": "The search-result assertion hard-codes line order but does not exercise a staged file that also exists on disk with different contents being searched \u2014 only a purely new staged file (b.py) and a modified one (a.py).",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 634,
+        "message": "`_staged()` iterates all workspace changes on every call; each tool calls it independently.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 643,
+        "message": "`_files()` builds a full dict of the repo tree before applying the glob, growing with repo size.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 629,
+        "message": "Path normalization in `_staged()` may allow a staged path to bypass the guard by differing from the disk-walk key.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 351,
+        "message": "Test for staged deletion does not assert that `search_text` also excludes the deleted file from its results.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 358,
+        "message": "No test covers a staged write to a protected path being excluded from `list_files` and `search_text`.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "848186e4304ee8aedbda101dc39c22811ce2a3e7",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.159542,
+  "output_tokens": 2657,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34267063599-20260908T190728Z-3416",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.040333,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 648,
+            "message": "_files uses posixpath.normpath for staged keys but str(p.relative_to(root)) for disk entries, which can produce different separators on Windows.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 668,
+            "message": "Staged entries whose contents is None are removed from the dict, but the staged dict still holds that key; _search then dereferences staged[rel] for every path==None entry without checking whether the key exists there.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 340,
+            "message": "The search-result assertion hard-codes line order but does not exercise a staged file that also exists on disk with different contents being searched \u2014 only a purely new staged file (b.py) and a modified one (a.py).",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 706,
+      "verb": "review",
+      "wall_seconds": 21.536
+    },
+    {
+      "cost_usd": 0.040704,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 634,
+            "message": "`_staged()` iterates all workspace changes on every call; each tool calls it independently.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 643,
+            "message": "`_files()` builds a full dict of the repo tree before applying the glob, growing with repo size.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 716,
+      "verb": "review",
+      "wall_seconds": 19.116
+    },
+    {
+      "cost_usd": 0.040726,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 629,
+            "message": "Path normalization in `_staged()` may allow a staged path to bypass the guard by differing from the disk-walk key.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 711,
+      "verb": "review",
+      "wall_seconds": 18.877
+    },
+    {
+      "cost_usd": 0.037779,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 351,
+            "message": "Test for staged deletion does not assert that `search_text` also excludes the deleted file from its results.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 358,
+            "message": "No test covers a staged write to a protected path being excluded from `list_files` and `search_text`.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 536,
+      "verb": "review",
+      "wall_seconds": 17.217
+    }
+  ],
+  "tokens": 2669,
+  "tool_calls": {},
+  "ts": "2026-09-08T19:07:49+00:00",
+  "turns": 4,
+  "wall_seconds": 21.536,
+  "workflow": "review/all-lenses"
+}

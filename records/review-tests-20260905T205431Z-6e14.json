@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.032101,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 295,
+        "message": "The sentinel assertion checks `shipped` is non-empty but does not verify the regex actually matched ids that look like workflow ids \u2014 an empty `register()` body or a refactored registration syntax would still satisfy it.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 239,
+        "message": "The new `test_every_layer_named_in_allowed_exists` test does not assert anything about layers that exist on disk but are absent from ALLOWED \u2014 that direction is covered by `test_arrows_point_down_only` as noted, but the comment implies the two tests together close the gap; confirming that the referenced test actually covers the other direction is something a reviewer of this diff cannot verify because `test_arrows_point_down_only` is not in the diff.",
+        "path": "tests/in_lockstep/test_layering.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 300,
+        "message": "The `_python_blocks` helper is called but its definition is not in the diff \u2014 cannot verify it correctly extracts fenced python blocks from markdown, including the new `show-workflow` and `implement/from-label` snippets added in the same PR.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1e9bdd421f71ad79110ff08787f2bb0787c0f8ed",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 667,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T205431Z-6e14",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 670,
+  "ts": "2026-09-05T20:54:51+00:00",
+  "wall_seconds": 19.243
+}
