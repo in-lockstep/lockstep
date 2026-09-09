@@ -37,7 +37,14 @@ from ..core.context import RunContext
 from ..core.outcome import Outcome, Status
 from ..core.ports import Unsupported
 from ..core.workflow import workflow
-from ..platform.artifacts import ATTEMPT, CHANGESET, read_changeset, read_verdict, write_changeset
+from ..platform.artifacts import (
+    ATTEMPT,
+    CHANGESET,
+    read_changeset,
+    read_validation,
+    read_verdict,
+    write_changeset,
+)
 from ..platform.conversation import with_review
 from ..platform.propose import escalate, open_reviewable
 from ..platform.report import implement_body
@@ -112,7 +119,10 @@ async def implement_from_ticket(
         # open — a reviewer should learn whether the change passed from the pull request, not by
         # waiting for CI on a branch a model wrote.
         verdict = await verdict_over_staged(ctx, ctx.repo.root, report.changeset)
-        written = write_changeset(CHANGESET, report.changeset, verdict=verdict)
+        # What the repository's own checks said travels with the change, because the job that
+        # decides whether to ask for review holds a write token and no provider credential: it
+        # cannot re-run anything, so an answer that did not travel is one it has to do without.
+        written = write_changeset(CHANGESET, report.changeset, verdict=verdict, validation=report.validation)
         print(f"staged    {len(report.changeset.changes)} change(s) -> {written}")
     return outcome
 
@@ -145,6 +155,7 @@ async def implement_propose(
     print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
+    validation = read_validation(artifact)
 
     if not changeset.changes:
         # Still a comment. A trigger that answers only on success leaves somebody watching a
@@ -170,7 +181,11 @@ async def implement_propose(
     # Draft unless the suite went green. An unverified change — no verdict at all, because nothing
     # was staged to run against or the Test verb refused — is not a failure, but it has not earned
     # a place in somebody's review queue either.
-    ready = verdict is not None and verdict.green
+    # Green AND clean. A change whose lint failed is precisely a change that should not be asking
+    # for a person's time, and the repository already said what it wants to be judged by. An
+    # unchecked change (`validation is None`: nothing bound, or a validator that could not report)
+    # is not blocked by this -- absent is not failing, the same reading a missing verdict gets.
+    ready = verdict is not None and verdict.green and (validation is None or validation.clean)
     # Fetched before the change is opened, because the title comes from it now.
     issue = await tickets.get(ticket)
     try:
@@ -183,7 +198,7 @@ async def implement_propose(
             # the host refused the pull request after the work was done and green. The issue title
             # is a person's one-line statement of the same thing, which is what a title wants.
             title=issue.title or changeset.summary or f"Implement {ticket}",
-            body=implement_body(changeset, verdict),
+            body=implement_body(changeset, verdict, validation),
             ticket=ticket,
             workflow="implement",
             run_id=ctx.run_id,

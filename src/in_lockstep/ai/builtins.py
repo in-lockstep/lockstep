@@ -36,7 +36,7 @@ import inspect
 import posixpath
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -197,6 +197,34 @@ class Workspace:
 
     def changeset(self, *, summary: str = "", ticket: str = "", notes: tuple[str, ...] = ()) -> ChangeSet:
         return ChangeSet(changes=tuple(self.changes), summary=summary, ticket=ticket, notes=notes)
+
+    def restage(self, path: str, contents: str) -> bool:
+        """Replace the contents of a file this session already staged. Says whether it changed one.
+
+        For a deterministic repair: the repository's own validator, run over the staged tree with
+        its fixer on, rewrites files the model wrote, and those bytes have to become what the
+        session holds -- or a later turn reads the unfixed version and the fix is lost when the
+        change set is rebuilt.
+
+        **Never adds a path.** A fixer that created a file did not create one this session is
+        proposing, and the change set is the model's answer to the ticket rather than everything
+        that happened to appear in a worktree.
+
+        **The author stays what it was.** `ChangeAuthor.FRAMEWORK` exempts an entry from the guard,
+        so relabelling a model's file to record who reformatted it would trade a control for a
+        label. Who ran the fixer is recorded as a finding on the outcome instead, where a reader
+        gets it and the guard is unaffected -- and the guard is re-run over the entry here, because
+        the bytes are new even though the path is not.
+        """
+        for index, change in enumerate(self.changes):
+            if change.path != path or change.deleted or change.contents == contents:
+                continue
+            fixed = replace(change, contents=contents)
+            if self.guard.check_change(fixed, workflow_id=self.workflow_id) is not None:
+                return False
+            self.changes[index] = fixed
+            return True
+        return False
 
     def resolve(self, path: str) -> Path:
         return self.root / posixpath.normpath(path.replace("\\", "/"))

@@ -21,7 +21,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ..core.types import ChangeAuthor, ChangeSet, FileChange, TestVerdict
+from ..core.types import (
+    ChangeAuthor,
+    ChangeSet,
+    FileChange,
+    TestVerdict,
+    ValidationFinding,
+    ValidationReport,
+)
 from ..privileged.redact import Redact
 
 FILENAME = "changeset.json"
@@ -57,12 +64,18 @@ def write_changeset(
     *,
     redact: Redact | None = None,
     verdict: TestVerdict | None = None,
+    validation: ValidationReport | None = None,
     scorecard: Mapping[str, Any] | None = None,
 ) -> Path:
     """Serialize, metadata masked, contents verbatim. Returns where it landed.
 
     `verdict`, when the change was tested before it was staged, rides alongside so the propose job
     can report it. Omitted when no Test ran, which `read_verdict` reads back as "not tested".
+
+    `validation` is the same arrangement for the repository's own validator: the propose job holds
+    a write token and no provider credential, so it cannot re-run anything -- what the checks said
+    has to travel with the change or the decision to ask a human for review is made without it.
+    Omitted when nothing checked, which `read_validation` reads back as None rather than clean.
     """
     mask = redact or Redact()
     path = payload_path(artifact)
@@ -84,6 +97,13 @@ def write_changeset(
     }
     if verdict is not None:
         document["verdict"] = {field: getattr(verdict, field) for field in _VERDICT_FIELDS}
+    if validation is not None:
+        # Masked like the summary: a finding's message is a linter's text about a model's file,
+        # and a rule that quotes the offending line quotes whatever was on it.
+        document["validation"] = [
+            {"rule": f.rule, "message": mask.text(f.message), "path": f.path, "line": f.line}
+            for f in validation.findings
+        ]
     if scorecard is not None:
         # The measurement a prompt proposal was opened on, in the same document as the change it
         # measured, so the two cannot travel apart: a proposal read back with no scorecard is one
@@ -128,6 +148,40 @@ def read_changeset(artifact: str | Path) -> ChangeSet:
         # one carrying something other than a list, reads as a change with no notes.
         notes=tuple(str(n) for n in raw_notes if isinstance(n, str)) if isinstance(raw_notes, list) else (),
     )
+
+
+def read_validation(artifact: str | Path) -> ValidationReport | None:
+    """What the repository's own validator said about this change, or None when nothing checked it.
+
+    A sibling of `read_verdict`, for the same caller and with the same rule: absent is not clean.
+    A propose job reading None must say the change is unchecked rather than that it passed, which
+    is why this returns None and not an empty report -- an empty `ValidationReport` IS clean, and
+    the two facts have opposite consequences for whether a human is asked to review.
+    """
+    path = payload_path(artifact)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except ValueError:
+        return None
+    raw = data.get("validation") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return None
+    findings = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        line = entry.get("line")
+        findings.append(
+            ValidationFinding(
+                rule=str(entry.get("rule") or ""),
+                message=str(entry.get("message") or ""),
+                path=str(entry.get("path") or ""),
+                line=int(line) if isinstance(line, int) else None,
+            )
+        )
+    return ValidationReport(findings=tuple(findings))
 
 
 def read_verdict(artifact: str | Path) -> TestVerdict | None:

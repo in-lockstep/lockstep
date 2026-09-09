@@ -25,6 +25,12 @@ DEFAULT_PATHS: tuple[str, ...] = (".",)
 class RuffValidate:
     verb: ClassVar[Verb] = Verb.VALIDATE
     capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+    #: `Validate(fix=True)` means something here: ruff repairs what it can and reports the rest.
+    #: Declared rather than assumed, because a strategy runs the fixer over a model's staged files
+    #: before spending a turn on them, and "run this linter with --fix" is not a thing that can be
+    #: guessed about an arbitrary `CommandValidate` -- a repository's `make lint` may take no such
+    #: flag, or may take one that does something else entirely.
+    fixes: ClassVar[bool] = True
 
     def __init__(
         self,

@@ -25,16 +25,25 @@ refuses up front rather than degrade to an untested oneshot in disguise.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, ClassVar
 
 from ...ai.structured import schema_instruction as _schema_instruction
-from ...core.outcome import Finding, Outcome, Severity, Status
+from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from ..worktree import head_state, materialize, staged_refusal
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
-from .strategy import PhaseError, not_a_verdict, read_reply, reported, run_phase, search_notes, test_findings
+from .strategy import (
+    PhaseError,
+    not_a_verdict,
+    read_reply,
+    reported,
+    run_phase,
+    search_notes,
+    test_findings,
+    validated,
+    with_directive,
+)
 
 
 async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]:
@@ -95,17 +104,6 @@ _RED_DIRECTIVE = (
 )
 
 
-def _with_directive(base: list[Any], directive: str) -> list[Any]:
-    """The rendered messages with a phase directive folded into the last (user) message.
-
-    `replace` clones the message with new content, so this appends the step's instruction without
-    importing the `Message` type from the `llm` layer — which `adapters` may not reach — and without
-    a second consecutive user message some providers dislike.
-    """
-    last = base[-1]
-    return [*base[:-1], replace(last, content=f"{last.content}\n\n{directive}")]
-
-
 def _green_directive(tests: ChangeSet) -> str:
     listing = "\n\n".join(
         f"`{c.path}`:\n```\n{c.contents}\n```" for c in tests.changes if c.contents is not None
@@ -163,7 +161,7 @@ class TDD(ImplementStrategy):
             red_inv = await run_phase(
                 session,
                 system,
-                _with_directive(base, _RED_DIRECTIVE),
+                with_directive(base, _RED_DIRECTIVE),
                 package,
                 prefix="implement",
                 schema=IMPLEMENT_SCHEMA,
@@ -228,7 +226,7 @@ class TDD(ImplementStrategy):
             green_inv = await run_phase(
                 session,
                 system,
-                _with_directive(base, _green_directive(tests)),
+                with_directive(base, _green_directive(tests)),
                 package,
                 prefix="implement",
                 schema=IMPLEMENT_SCHEMA,
@@ -239,7 +237,18 @@ class TDD(ImplementStrategy):
 
         summary, notes, unfinished, malformed = read_reply(green_inv.content)
         full = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
-        cost = red_inv.cost + green_inv.cost
+
+        # The repository's own checks, over what this session staged, BEFORE the green run below.
+        # Order matters: a deterministic fix and a repair turn both change the code, so confirming
+        # green first would prove it of bytes that no longer travel. This way both claims -- it
+        # lints clean, it makes the test pass -- are claims about the same change.
+        validation = await validated(
+            ctx, session, full, system=system, messages=base, package=package, prefix="implement"
+        )
+        # Rebuilt, not patched: `validated` writes through the workspace, which is the one place a
+        # staged set is assembled.
+        full = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+        cost = red_inv.cost + green_inv.cost + sum((i.cost for i in validation.invocations), Cost())
 
         refusals = session.guard.check(full, workflow_id=session.workspace.workflow_id)
         if refusals:
@@ -265,16 +274,19 @@ class TDD(ImplementStrategy):
             notes=notes,
             unfinished=unfinished,
             strategy=self.id,
-            turns=red_inv.turn_count + green_inv.turn_count,
+            turns=red_inv.turn_count
+            + green_inv.turn_count
+            + sum(i.turn_count for i in validation.invocations),
             idle_turns=green_inv.idle_turns,
+            validation=validation.report,
         )
         findings = reported(
             report.changeset,
             unfinished=report.unfinished,
             malformed=malformed,
-            invocations=(red_inv, green_inv),
+            invocations=(red_inv, green_inv, *validation.invocations),
             prefix="implement",
-            notes=search_notes(session),
+            notes=search_notes(session) + validation.findings(),
         )
 
         async with materialize(session.repo_root, full) as tree:

@@ -11,6 +11,7 @@ staged-and-injection findings.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -21,7 +22,7 @@ from ...ai.prompt import Composition, PromptLayers, compositions
 from ...ai.structured import SchemaError, parse
 from ...core.changes import ChangeGuard
 from ...core.outcome import Finding, Outcome, Severity, Status
-from ...core.types import ChangeSet
+from ...core.types import ChangeSet, Validate, ValidationFinding, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...privileged.egress import EgressRefused
 from .instructions import house_rules
@@ -393,6 +394,242 @@ async def run_phase(
             )
         )
     return invocation
+
+
+#: How many model turns a run may spend repairing what the repository's own validator found. One,
+#: deliberately: the findings are named with their rule and location, so a model that cannot act on
+#: them in a turn is not going to be helped by a second, and every round is paid for out of the
+#: ceiling the run declared. Unrepaired findings are not lost -- they travel with the change and
+#: keep it out of a reviewer's queue.
+VALIDATE_REPAIR_ROUNDS = 1
+
+
+def with_directive(base: list[Any], directive: str) -> list[Any]:
+    """The rendered messages with a phase directive folded into the last (user) message.
+
+    `replace` clones the message with new content, so this appends the step's instruction without
+    importing the `Message` type from the `llm` layer -- which `adapters` may not reach -- and
+    without a second consecutive user message some providers dislike.
+    """
+    last = base[-1]
+    return [*base[:-1], replace(last, content=f"{last.content}\n\n{directive}")]
+
+
+@dataclass(frozen=True)
+class Validation:
+    """What the repository's own validator said about what a run staged, and what was done about it.
+
+    `report is None` is the honest absent: no Validate verb is bound, or the validator could not
+    report. Absent is not clean -- `clean` says so -- because a change nothing checked and a change
+    that passed its checks are different facts, and only one of them has earned a reviewer's queue.
+    """
+
+    #: None when nothing checked this change. Never an empty report standing in for one.
+    report: ValidationReport | None = None
+    #: Paths the deterministic pass rewrote, before any model call was made.
+    fixed: tuple[str, ...] = ()
+    #: The repair turns actually made, so a strategy can add their cost and turns to its own.
+    invocations: tuple[Any, ...] = ()
+    #: Why a repair did not happen, when findings remained and no turn was made.
+    unrepaired: str = ""
+
+    @property
+    def checked(self) -> bool:
+        return self.report is not None
+
+    @property
+    def clean(self) -> bool:
+        return self.report is not None and self.report.clean
+
+    def findings(self) -> tuple[Finding, ...]:
+        """What travels on the outcome. Notes, not blocking: the change is still the run's product,
+        and whether an unclean change may ask for review is the propose half's decision to make."""
+        out: list[Finding] = []
+        if self.fixed:
+            out.append(
+                Finding(
+                    id="validate.fixed",
+                    message=(
+                        f"the repository's own validator fixed {len(self.fixed)} file(s) with no "
+                        f"model call: {', '.join(self.fixed)}"
+                    ),
+                    severity=Severity.NOTE,
+                )
+            )
+        if self.report is None:
+            return tuple(out)
+        out += [
+            Finding(
+                id=f"validate.{f.rule.lower()}" if f.rule else "validate.finding",
+                message=f"{f.message} (unrepaired)",
+                severity=Severity.WARNING,
+                path=f.path,
+                line=f.line,
+            )
+            for f in self.report.findings[:25]
+        ]
+        if self.unrepaired:
+            out.append(Finding(id="validate.unrepaired", message=self.unrepaired, severity=Severity.WARNING))
+        return tuple(out)
+
+
+async def validated(
+    ctx: Any,
+    session: Any,
+    changeset: ChangeSet,
+    *,
+    system: str,
+    messages: list[Any],
+    package: Any,
+    prefix: str,
+    rounds: int = VALIDATE_REPAIR_ROUNDS,
+) -> Validation:
+    """Run the repository's own Validate over what this session staged, and repair what it says.
+
+    The half `Test` already had. A strategy does not ask the model to run its tests -- it stages
+    them into a worktree and runs them itself, between phases, and hands the result back. Nothing
+    did that for Validate, so a run's lint was whatever the model chose to check with
+    `run_validate`, and CI was the first thing to see the answer twice (run 34294139197, and the
+    four ruff errors on the pull request #389 opened).
+
+    Two tiers, cheapest first.
+
+    **The deterministic one, with no model call.** Where the bound adapter says it can fix
+    (`fixes = True`; `RuffValidate` does, a generic `CommandValidate` must not be assumed to), the
+    validator runs over the materialised tree with its fixer on and the result is restaged. Import
+    sorting is arithmetic wearing a prompt, and a turn spent on it is a turn bought at model prices.
+
+    **Then at most `rounds` repair turns.** The remaining findings go back to the session naming
+    each one's rule, path and line -- `GATE-VERDICT-2`'s rule about a red suite: a verdict that
+    says a check failed and not which one sends the session back to run it again to learn what the
+    run already knew.
+
+    **This mutates the session's workspace and returns no change set.** Both tiers write there --
+    the fixer through `restage`, the repair turn through the tool boundary like any other write --
+    so the caller rebuilds its own change set from the workspace afterwards, exactly as it built it
+    before. A second return value would be a second place the staged set is assembled, and the two
+    would eventually disagree about which one travels.
+
+    Scoped to the paths this run staged. A validator pointed at the whole tree reports the
+    repository's existing debt, and a run that spends its turns on code it never touched widens
+    its own diff to satisfy findings nobody asked it to answer for.
+    """
+    from ..worktree import materialize
+
+    container = getattr(ctx, "container", None)
+    paths = tuple(c.path for c in changeset.changes if not c.deleted)
+    if not paths or container is None or not container.has(Validate):
+        # O1's rule: nothing is invented where the repository declared nothing. The absence is
+        # visible rather than silent -- `Validation.checked` is False and the propose half reads
+        # that as unverified rather than as clean.
+        return Validation()
+
+    adapter = container.resolve(Validate)
+    fixed: tuple[str, ...] = ()
+    if getattr(adapter, "fixes", False):
+        async with materialize(session.repo_root, changeset) as tree:
+            await ctx.do(Validate(root=tree, paths=paths, fix=True))
+            fixed = _restaged(session.workspace, changeset, tree)
+        if fixed:
+            changeset = replace(changeset, changes=tuple(session.workspace.changes))
+
+    invocations: list[Any] = []
+    unrepaired = ""
+    for attempt in range(rounds + 1):
+        # A read after the fixer rather than the fixer's own output: `--fix` reports what it could
+        # not fix, and reading that as the whole answer would make this depend on one tool's
+        # choice of what to print. A second pass costs a subprocess and says exactly what stands.
+        async with materialize(session.repo_root, changeset) as tree:
+            outcome = await ctx.do(Validate(root=tree, paths=paths))
+        report = outcome.value if isinstance(outcome.value, ValidationReport) else None
+        if report is None:
+            # The validator did not report -- not installed, or it failed to run. Absent is not
+            # clean, and it is not this run's failure either: the change stands, unchecked, and
+            # says so.
+            return Validation(
+                report=None,
+                fixed=fixed,
+                invocations=tuple(invocations),
+                unrepaired=f"the validator did not report: {outcome.reason or outcome.status.value}",
+            )
+        if report.clean or attempt == rounds:
+            if not report.clean and attempt == rounds and rounds:
+                unrepaired = f"{len(report.findings)} finding(s) survived {rounds} repair turn(s)"
+            return Validation(
+                report=report, fixed=fixed, invocations=tuple(invocations), unrepaired=unrepaired
+            )
+        try:
+            invocation = await run_phase(
+                session,
+                system,
+                with_directive(messages, _repair_directive(report)),
+                package,
+                prefix=f"{prefix}.validate",
+                # No schema: this turn's product is its writes, not a cover note, and requiring
+                # structured output would refuse a model registered without it over a step that
+                # never reads the reply.
+            )
+        except PhaseError as e:
+            # A refused or exhausted repair is not this run's failure. The change was complete
+            # before the repair was attempted, and returning the ceiling's refusal here would
+            # throw away a finished change to report an optional turn that could not be made --
+            # so the findings travel instead, and the propose half keeps the change a draft.
+            reason = getattr(e.outcome, "reason", None) or e.outcome.status.value
+            return Validation(
+                report=report,
+                fixed=fixed,
+                invocations=tuple(invocations),
+                unrepaired=f"the repair turn was not made ({reason}); the findings stand",
+            )
+        invocations.append(invocation)
+        changeset = replace(changeset, changes=tuple(session.workspace.changes))
+    return Validation(report=None, fixed=fixed, invocations=tuple(invocations))
+
+
+def _restaged(workspace: Any, changeset: ChangeSet, tree: str) -> tuple[str, ...]:
+    """Fold a fixer's edits back into the session's staged writes. Returns the paths it changed.
+
+    Only paths the session already staged, and only their contents: a fixer that created a file
+    did not create one this session is proposing, and a fixer that deleted one is not how a
+    deletion gets into a change set.
+    """
+    changed: list[str] = []
+    for change in changeset.changes:
+        if change.deleted:
+            continue
+        try:
+            after = (Path(tree) / change.path).read_text()
+        except OSError:
+            continue
+        if after != change.contents and workspace.restage(change.path, after):
+            changed.append(change.path)
+    return tuple(changed)
+
+
+def _repair_directive(report: ValidationReport) -> str:
+    """What the model is told about its own findings, and the two rules that make fixing them work.
+
+    The prose is here rather than in a prompt body on purpose. A body is read before there is
+    anything to fix; this is read at the moment of the act, and it is the only moment either rule
+    means anything -- a model handed "fix these four findings" can satisfy that by deleting the
+    code that produced them.
+    """
+    listed = "\n".join(_finding_line(f) for f in report.findings[:40])
+    more = f"\n  …[{len(report.findings) - 40} more]" if len(report.findings) > 40 else ""
+    return (
+        f"This repository's own validator ran over what you staged and reported "
+        f"{len(report.findings)} finding(s):\n{listed}{more}\n\n"
+        "Fix them, and then stop. Two rules, because both failures look like success:\n"
+        "- Fix the finding, not the code that caused it. Deleting the code, weakening what it "
+        "checks, or silencing the rule makes the finding go away without doing the work.\n"
+        "- Change only what these findings name. This is not an opportunity to revise the rest of "
+        "the change."
+    )
+
+
+def _finding_line(finding: ValidationFinding) -> str:
+    where = f"{finding.path}:{finding.line}" if finding.line is not None else finding.path
+    return f"  {where}: {finding.rule} {finding.message}".rstrip()
 
 
 def read_reply(content: str) -> tuple[str, tuple[str, ...], tuple[str, ...], bool]:

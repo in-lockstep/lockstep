@@ -131,7 +131,27 @@ _UNTRUSTED_WARNING = (
 )
 
 
-def implement_body(changeset: Any, verdict: Any) -> str:
+def _validation_line(validation: Any) -> str:
+    """What the repository's own checks said, for a pull-request body.
+
+    `None` is "nothing checked this", never "clean". The distinction is the same one
+    `_verdict_line` draws about a suite: a reviewer told a change passed checks that never ran has
+    been told something false, and this repository's rule is that a number nobody measured renders
+    as absent.
+    """
+    if validation is None:
+        return "not checked — no Validate verb is bound, so nothing ran the repository's own checks"
+    findings = tuple(getattr(validation, "findings", ()) or ())
+    if not findings:
+        return "clean — the repository's own checks passed over this change"
+    listed = "\n".join(
+        f"- `{f.path}:{f.line}` {f.rule} {f.message}".replace(":None", "") for f in findings[:10]
+    )
+    more = f"\n- …and {len(findings) - 10} more" if len(findings) > 10 else ""
+    return f"**{len(findings)} unresolved finding(s)**, which is why this is a draft:\n{listed}{more}"
+
+
+def implement_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
     """The PR body for a change an implement run staged: the untrusted-input warning it must always
     carry, plus what the run's own test said about the change.
 
@@ -144,12 +164,14 @@ def implement_body(changeset: Any, verdict: Any) -> str:
         "",
         f"**Tests:** {_verdict_line(verdict)}",
         "",
+        f"**Checks:** {_validation_line(validation)}",
+        "",
         marker("implement"),
     ]
     return "\n".join(lines)
 
 
-def fix_body(changeset: Any, verdict: Any) -> str:
+def fix_body(changeset: Any, verdict: Any, validation: Any = None) -> str:
     """The PR body for a change a fix run staged: what it did, and what the suite said about it.
 
     Two sentences of provenance rather than `implement_body`'s one, because a fix arrives having
@@ -166,6 +188,8 @@ def fix_body(changeset: Any, verdict: Any) -> str:
         _UNTRUSTED_WARNING,
         "",
         f"**Tests:** {_verdict_line(verdict)}",
+        "",
+        f"**Checks:** {_validation_line(validation)}",
         "",
         marker("fix"),
     ]
