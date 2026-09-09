@@ -271,6 +271,18 @@ class GitLabScm:
             draft=draft,
         )
 
+    def for_repo(self, project: str) -> GitLabScm:
+        """Refused, for the reason `open_change` declines a cross-project target: every call here
+        addresses `_project_path()`, and pointing that at another project would claim a capability
+        no instance has ever executed. A refusal a workflow can name beats a request that reaches
+        an API nobody has watched answer."""
+        from ...core.ports import Unsupported
+
+        raise Unsupported(
+            f"this GitLab adapter reads one project; {project} would need a cross-project read "
+            f"nothing here has executed"
+        )
+
     async def mark_ready(self, change: ChangeRequest) -> None:
         """Strip the `Draft:` prefix — the merge request is asking for human review now. Keyed on
         the iid the request carries; a request with none is left as it is rather than guessed at.

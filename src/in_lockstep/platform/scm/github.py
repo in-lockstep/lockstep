@@ -53,11 +53,50 @@ class GitHubScm:
         *,
         guard: ChangeGuard | None = None,
         token: str = "",
+        repo: str = "",
     ) -> None:
         # Host features layer over plain git; they do not replace it.
         self.local = GitLocal(root, guard=guard)
         self.root = Path(root)
         self.token = token
+        #: Whose conversation this adapter reads and answers in, when that is not the repository
+        #: `gh` infers from the checkout. See `for_repo` for which calls honour it and which
+        #: deliberately do not.
+        self.repo = repo
+
+    def for_repo(self, repo: str) -> GitHubScm:
+        """This adapter, reading the conversation on another repository -- what a fork needs to
+        implement from the ticket, and the review of the last attempt, that live on the parent.
+
+        **The rule, because half the calls here must not move.** A call that addresses a NUMBER
+        follows the narrowing: an issue or pull request number belongs to a repository, and asking
+        the wrong one is either an error or, worse, an answer about somebody else's #17. A call
+        about THIS CHECKOUT'S OWN RUNS does not: `run_artifacts`, `download_artifact`,
+        `delivery_rows` and `open_changes_by_workflow` are about the CI that is executing, which is
+        the fork's, whoever the change is for.
+
+        And the write does not, deliberately. `open_change` takes `target` as an argument of its
+        own, so where a branch and a pull request are created is named at the call that creates
+        them rather than inherited from an adapter somebody narrowed three functions earlier. One
+        spelling per act: this one is for reading and answering, that one is for writing.
+        """
+        import copy
+
+        clone = copy.copy(self)
+        # A shallow copy on purpose: the same checkout, the same guard, the same credential. What
+        # differs is one string.
+        clone.repo = repo
+        return clone
+
+    def _at(self) -> tuple[str, ...]:
+        """`--repo <slug>`, or nothing at all -- for the `gh pr` calls that address a number."""
+        return ("--repo", self.repo) if self.repo else ()
+
+    def _path(self, path: str) -> str:
+        """A `gh api` path with the repository filled in. `gh` substitutes `{owner}/{repo}` from
+        the checkout, which is the inference this exists to replace, so the narrowed adapter puts
+        its own slug there instead."""
+        return path.replace("{owner}/{repo}", self.repo) if self.repo else path
 
     def diff(self, base: Ref, head: Ref = "HEAD") -> Diff:
         return self.local.diff(base, head)
@@ -304,30 +343,40 @@ class GitHubScm:
             raise RuntimeError(f"could not mark PR #{change.number} ready: {err.strip()}")
 
     async def comment(self, target: int, body: str) -> None:
-        self._gh("pr", "comment", str(target), "--body", body)
+        self._gh("pr", "comment", str(target), *self._at(), "--body", body)
 
     async def upsert_comment(self, target: int, body: str, marker: str) -> None:
         """One sticky comment per marker: edit the framework's own prior comment in place rather
         than adding one per run, so a re-review updates the thread instead of burying it.
 
         `gh api` substitutes `{owner}`/`{repo}` from the checkout, so this needs no repository
-        argument. The marker rides at the end of the body, invisible in the rendered markdown, and
-        is how the next run finds this comment among the thread's.
+        argument -- unless the adapter was narrowed with `for_repo`, when `_path` fills in that
+        repository instead, because the number being commented on is that repository's. The marker
+        rides at the end of the body, invisible in the rendered markdown, and is how the next run
+        finds this comment among the thread's.
         """
         marked = f"{body}\n\n{marker}" if marker not in body else body
         # `--paginate`, because the framework's own comment is the newest one and the endpoint
         # returns the OLDEST thirty first: on a PR with more than thirty comments, a single page
         # never contains our marker, so every run would post a fresh duplicate — the exact
         # thread-burying this exists to prevent. `--paginate` merges every page into one array.
-        existing = self._gh_json("api", "--paginate", f"repos/{{owner}}/{{repo}}/issues/{target}/comments")
+        existing = self._gh_json(
+            "api", "--paginate", self._path(f"repos/{{owner}}/{{repo}}/issues/{target}/comments")
+        )
         for comment in existing if isinstance(existing, list) else []:
             if marker in str(comment.get("body", "")):
                 cid = comment.get("id")
                 self._api_write(
-                    "-X", "PATCH", f"repos/{{owner}}/{{repo}}/issues/comments/{cid}", "-f", f"body={marked}"
+                    "-X",
+                    "PATCH",
+                    self._path(f"repos/{{owner}}/{{repo}}/issues/comments/{cid}"),
+                    "-f",
+                    f"body={marked}",
                 )
                 return
-        self._api_write(f"repos/{{owner}}/{{repo}}/issues/{target}/comments", "-f", f"body={marked}")
+        self._api_write(
+            self._path(f"repos/{{owner}}/{{repo}}/issues/{target}/comments"), "-f", f"body={marked}"
+        )
 
     async def mark_parked(self, number: int, run_id: str, resume: str, waiting_for: str) -> None:
         """The park, where the person will act (§13.1): the `lockstep:parked` label -- what a
@@ -340,9 +389,15 @@ class GitHubScm:
 
         # The label has to exist before it can be applied; `--force` makes creating it idempotent.
         self._gh(
-            "label", "create", PARKED_LABEL, "--force", "--description", "an in-lockstep run is waiting here"
+            "label",
+            "create",
+            PARKED_LABEL,
+            *self._at(),
+            "--force",
+            "--description",
+            "an in-lockstep run is waiting here",
         )
-        code, _out, err = self._gh("pr", "edit", str(number), "--add-label", PARKED_LABEL)
+        code, _out, err = self._gh("pr", "edit", str(number), *self._at(), "--add-label", PARKED_LABEL)
         if code != 0:
             raise RuntimeError(f"could not label #{number}: {err.strip()}")
         block = json.dumps(
@@ -360,7 +415,7 @@ class GitHubScm:
         from ...core.human import PARKED_LABEL
         from ..report import marker
 
-        self._gh("pr", "edit", str(number), "--remove-label", PARKED_LABEL)
+        self._gh("pr", "edit", str(number), *self._at(), "--remove-label", PARKED_LABEL)
         await self.upsert_comment(
             number, f"## in-lockstep resumed\n\nRun `{run_id}` continued.", marker("parked")
         )
@@ -380,6 +435,7 @@ class GitHubScm:
         raw = self._gh_json(
             "pr",
             "list",
+            *self._at(),
             "--state",
             "open",
             "--limit",
@@ -577,7 +633,7 @@ class GitHubScm:
         than guesses when its shape is ambiguous.
         """
         try:
-            raw = self._gh_json("pr", "view", str(number), "--json", "body,headRefName")
+            raw = self._gh_json("pr", "view", str(number), *self._at(), "--json", "body,headRefName")
         except RuntimeError:
             # `gh pr view` on an issue number fails, which is the answer rather than an error.
             return None
@@ -605,7 +661,7 @@ class GitHubScm:
         no change requests to have refs for.
         """
         try:
-            raw = self._gh_json("pr", "view", str(number), "--json", "baseRefName,headRefOid")
+            raw = self._gh_json("pr", "view", str(number), *self._at(), "--json", "baseRefName,headRefOid")
         except RuntimeError as e:
             # `gh pr view` on an issue number fails, which is the answer rather than an error —
             # the same three-way reading `ticket_of` above documents. Only that failure, though:
@@ -625,7 +681,9 @@ class GitHubScm:
         not -- still open, closed unmerged, or not a pull request at all. `report --around #N`
         reads it. Not on the `Scm` port, like `change_refs` and for the same reason."""
         try:
-            raw = self._gh_json("pr", "view", str(number), "--json", "state,mergedAt,mergeCommit")
+            raw = self._gh_json(
+                "pr", "view", str(number), *self._at(), "--json", "state,mergedAt,mergeCommit"
+            )
         except RuntimeError as e:
             if _NOT_A_PULL_REQUEST.search(str(e)):
                 return None
@@ -651,7 +709,7 @@ class GitHubScm:
         a prompt and meaning only to `upsert_comment`.
         """
         out: list[Remark] = []
-        view = self._gh_json("pr", "view", str(number), "--json", "comments,reviews")
+        view = self._gh_json("pr", "view", str(number), *self._at(), "--json", "comments,reviews")
         data = view if isinstance(view, dict) else {}
 
         for c in (data.get("comments") or [])[:MAX_REMARKS]:
@@ -669,7 +727,7 @@ class GitHubScm:
         # arrive too big for the curator anyway.
         try:
             notes = self._gh_json(
-                "api", f"repos/{{owner}}/{{repo}}/pulls/{number}/comments?per_page={MAX_REMARKS}"
+                "api", self._path(f"repos/{{owner}}/{{repo}}/pulls/{number}/comments?per_page={MAX_REMARKS}")
             )
         except RuntimeError:
             # A token without `pull-requests: read` reaches the two above through the issues

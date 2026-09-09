@@ -146,6 +146,22 @@ class TicketSource(Protocol):
     async def add_labels(self, ticket: Ticket, *labels: str) -> None:  # pragma: no cover
         raise Unsupported("this TicketSource does not label")
 
+    def for_repo(self, repo: str) -> TicketSource:  # pragma: no cover - default refuses
+        """This source, reading and answering on `repo` instead of wherever it reads by default.
+
+        Synchronous and returning a source rather than taking a repository on every method: a
+        workflow narrows once, before it spends anything, and everything downstream is handed a
+        source that already knows where it is pointed — where a per-call argument would have to be
+        threaded through `ticket_for`, `with_review` and `escalate` and could be forgotten at one
+        of them.
+
+        Refusing by default rather than being absent, like every optional method here. A tracker
+        with no notion of another repository must say so: silently returning itself would answer a
+        fork's question with the parent's issue, or the parent's with the fork's, and nothing in
+        the answer would say which one it read.
+        """
+        raise Unsupported(f"this TicketSource cannot read another repository ({repo})")
+
     async def transition(
         self, ticket: Ticket, state: TicketState, *, raw: str = ""
     ) -> None:  # pragma: no cover - default refuses
