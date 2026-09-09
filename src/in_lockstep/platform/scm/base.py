@@ -721,3 +721,12 @@ class GitLocal:
     async def mark_ready(self, change: ChangeRequest) -> None:
         """No-op: local git has no draft state to leave."""
         return None
+
+    def for_repo(self, repo: str) -> GitLocal:
+        """Refused: there is no host here whose conversation could be read, on this repository or
+        any other. `open_change` accepts `target` and ignores it because a branch still gets made;
+        there is no equivalent half-answer to reading a ticket's review thread, and returning
+        `self` would answer a question about another repository with this one's silence."""
+        from ...core.ports import Unsupported
+
+        raise Unsupported(f"plain git reads no change-request conversation, on {repo} or anywhere")

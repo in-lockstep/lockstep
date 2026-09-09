@@ -59,7 +59,9 @@ def _accepts(method: object, keyword: str, problems: list[str], owner: str) -> N
 
 def assert_ticket_source(impl: object) -> None:
     """Structurally a `TicketSource`: required methods present and async, optional methods
-    either implemented or inherited as `Unsupported`-raising defaults — never absent."""
+    either implemented or inherited as `Unsupported`-raising defaults — never absent. `for_repo`
+    is the one synchronous member: it narrows the source to another repository and returns one,
+    rather than reaching a tracker."""
     problems: list[str] = []
     methods = {
         name: _method(impl, name, must_be_async=True, problems=problems)
@@ -69,6 +71,7 @@ def assert_ticket_source(impl: object) -> None:
         _accepts(methods["search"], "limit", problems, "search")
     if methods["transition"] is not None:
         _accepts(methods["transition"], "raw", problems, "transition")
+    _method(impl, "for_repo", must_be_async=False, problems=problems)
     if not isinstance(impl, TicketSource):
         problems.append("does not satisfy the TicketSource protocol")
     if problems:

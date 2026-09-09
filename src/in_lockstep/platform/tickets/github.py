@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .base import Ticket, TicketDraft, TicketSource, TicketState, TicketType, criteria_from
@@ -17,6 +17,15 @@ MAX_COMMENTS = 40
 class GitHubIssues(TicketSource):
     root: Path = Path(".")
     token: str = ""
+    #: Which repository to read and answer on, when that is not the one `gh` infers from the
+    #: checkout. Empty is that inference, which is every caller before #373 — and from a fork the
+    #: inference is the PARENT, so a fork's own issues need this as much as a parent's do.
+    repo: str = ""
+
+    def for_repo(self, repo: str) -> GitHubIssues:
+        """This source, pointed at another repository. The checkout and the credential are the
+        same; only where the questions are asked changes."""
+        return replace(self, repo=repo)
 
     def _gh_raw(self, *args: str) -> tuple[int, str, str]:
         """The single subprocess seam: exit code, stdout, stderr. Every other helper is built on
@@ -24,8 +33,12 @@ class GitHubIssues(TicketSource):
         import os
 
         env = {**os.environ, "GH_TOKEN": self.token} if self.token else None
+        # Injected here rather than at each call: every one of them is an `issue` subcommand and
+        # every `issue` subcommand takes `--repo`, so one place cannot leave one behind. A method
+        # that did not want the flag would have to reach past this seam, which is a visible act.
+        addressed = [*args, "--repo", self.repo] if self.repo else list(args)
         result = subprocess.run(
-            ["gh", *args], cwd=self.root, capture_output=True, text=True, timeout=60, env=env
+            ["gh", *addressed], cwd=self.root, capture_output=True, text=True, timeout=60, env=env
         )
         return result.returncode, result.stdout, result.stderr
 
