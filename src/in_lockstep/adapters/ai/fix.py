@@ -233,7 +233,13 @@ class DiagnoseThenFix(FixStrategy):
             return e.outcome
 
         summary, notes, unfinished, malformed = read_reply(fix_inv.content)
-        full = session.workspace.changeset(summary=summary, ticket=ticket.key)
+        # A reply that did not parse keeps its text on the REPORT, where the ledger and a person
+        # reading the record can have it -- and out of the change set, which is what a pull-request
+        # body renders. `read_reply` keeps the text so the work is not thrown away; publishing it
+        # was never what that was for, and #389's opening paragraph was a model reasoning about its
+        # own test mocks because this line did not exist (#398).
+        staged_summary = "" if malformed else summary
+        full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key)
 
         # The repository's own checks, before the green run below rather than after it: a
         # deterministic fix and a repair turn both change the code, and a green proved of bytes
@@ -251,7 +257,7 @@ class DiagnoseThenFix(FixStrategy):
         # Rebuilt from the workspace, which is where both tiers wrote -- and the split below keys
         # on the reproducer's paths, so a repair turn's edits land on the fix half where they
         # belong without this having to say so.
-        full = session.workspace.changeset(summary=summary, ticket=ticket.key)
+        full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key)
         cost = repro_inv.cost + fix_inv.cost + sum((i.cost for i in validation.invocations), Cost())
 
         refusals = session.guard.check(full, workflow_id=session.workspace.workflow_id)
@@ -279,7 +285,7 @@ class DiagnoseThenFix(FixStrategy):
         # ticket number and described by nothing (#343).
         fix_only = ChangeSet(
             changes=tuple(c for c in full.changes if c.path not in repro_paths),
-            summary=summary,
+            summary=staged_summary,
             notes=notes,
             ticket=ticket.key,
         )

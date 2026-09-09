@@ -18,7 +18,17 @@ from pathlib import Path
 
 from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, CommandValidate, Provision, PytestTest
-from in_lockstep.adapters.ai import TDD, AiImprove, AiJudge, DiagnoseThenFix, Draft, Judge, Measure
+from in_lockstep.adapters.ai import (
+    TDD,
+    AiDescribe,
+    AiImprove,
+    AiJudge,
+    Describe,
+    DiagnoseThenFix,
+    Draft,
+    Judge,
+    Measure,
+)
 from in_lockstep.adapters.pytest_adapter import Test
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.core.changes import DENY_ALWAYS, DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
@@ -378,6 +388,12 @@ lockstep.models.route("improve", "anthropic:claude-opus-4-6")
 # else (O11).
 lockstep.models.route("judge", "anthropic:claude-haiku-4-5")
 
+# Summarising, not engineering: the describer is handed a diff and asked what it does, which is
+# the cheapest capable model's job rather than the one that wrote the change. Routed apart for
+# exactly that reason -- a verb is the unit a route names, and a description that cost what an
+# implementation costs would be a reason to stop writing them.
+lockstep.models.route("describe", "anthropic:claude-haiku-4-5")
+
 # -- the workshop -------------------------------------------------------------------
 #
 # What every AI strategy below is completed from, declared once. It used to be typed once per verb,
@@ -531,6 +547,11 @@ lockstep.bind(Improver, CorpusImprover("evidence/cases"))
 # rubric it has not answered stays `outstanding` (GATE-JUDGE-1); one it has is kept beside the
 # case and never paid for twice (GATE-JUDGE-3).
 lockstep.bind(Judge, AiJudge())
+# What a reviewer reads first on a pull request this framework opened. Bound here rather than
+# left to detection because it is a model call, and a repository that has not routed one gets
+# the run's own cover note instead -- which is the honest fallback and what every run before
+# #398 had.
+lockstep.bind(Describe, AiDescribe())
 
 # -- the processes ------------------------------------------------------------------
 #

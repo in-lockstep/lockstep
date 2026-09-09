@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.context import RunContext
+from ..core.outcome import Status
 
 
 async def pointed_at(target: str, ticket: str, tickets: Any, scm: Any) -> tuple[Any, Any, str, str]:
@@ -44,6 +45,47 @@ async def pointed_at(target: str, ticket: str, tickets: Any, scm: Any) -> tuple[
         tickets, scm = _narrowed(tickets, target, "tickets"), _narrowed(scm, target, "scm")
     key, where = await ticket_for(ticket, scm)
     return tickets, scm, key, f"target    {target}\n{where}" if target else where
+
+
+async def described(ctx: Any, ticket: Any, changeset: Any, verdict: Any) -> Any:
+    """The reviewer-facing account of a staged change, or None when nothing wrote one.
+
+    Called where the provider credential is -- the work job -- because the job that opens the
+    change holds a write token and no provider key, and `implement.yml` says so at the line that
+    grants federation: "gate and propose call no model". So this runs beside `verdict_over_staged`
+    and travels in the same artifact, for the same reason the verdict does.
+
+    **What it is given is the point.** The ticket, a DIFF of the staged change, and the framework's
+    own measured line -- and nothing of the session that produced any of it. A session's summary is
+    addressed to the framework at the end of its turn, and everything it omits is exactly what a
+    reader is missing; a describer whose situation is the reader's cannot make that mistake. #389
+    opened a pull request whose first paragraph was a model reasoning about its own test mocks.
+
+    None on every failure, and never a raised one: no Describe bound (most repositories), a ceiling
+    that refused the turn, a reply that did not parse. The change is the run's product and this is
+    an account of it, so a body that falls back to the run's own cover note is worse and a run that
+    failed for want of one would be absurd.
+    """
+    from ..adapters.ai.describe import Describe
+    from ..adapters.worktree import staged_diff
+    from ..platform.report import verdict_line
+
+    if not getattr(ctx, "container", None) or not ctx.container.has(Describe):
+        return None
+    diff = await staged_diff(ctx.repo.root, changeset)
+    outcome = await ctx.do(
+        Describe(
+            key=str(getattr(ticket, "key", "") or ""),
+            title=str(getattr(ticket, "title", "") or ""),
+            ticket=str(getattr(ticket, "description", "") or ""),
+            diff=diff,
+            verdict=verdict_line(verdict),
+        )
+    )
+    if outcome.status is not Status.SUCCEEDED or outcome.value is None:
+        print(f"describe  none ({outcome.reason or outcome.status.value}); the run's own note stands")
+        return None
+    return outcome.value
 
 
 def _narrowed(port: Any, target: str, named: str) -> Any:

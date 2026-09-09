@@ -236,7 +236,13 @@ class TDD(ImplementStrategy):
             return e.outcome
 
         summary, notes, unfinished, malformed = read_reply(green_inv.content)
-        full = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+        # A reply that did not parse keeps its text on the REPORT, where the ledger and a person
+        # reading the record can have it -- and out of the change set, which is what a pull-request
+        # body renders. `read_reply` keeps the text so the work is not thrown away; publishing it
+        # was never what that was for, and #389's opening paragraph was a model reasoning about its
+        # own test mocks because this line did not exist (#398).
+        staged_summary = "" if malformed else summary
+        full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
 
         # The repository's own checks, over what this session staged, BEFORE the green run below.
         # Order matters: a deterministic fix and a repair turn both change the code, so confirming
@@ -247,7 +253,7 @@ class TDD(ImplementStrategy):
         )
         # Rebuilt, not patched: `validated` writes through the workspace, which is the one place a
         # staged set is assembled.
-        full = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+        full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
         cost = red_inv.cost + green_inv.cost + sum((i.cost for i in validation.invocations), Cost())
 
         refusals = session.guard.check(full, workflow_id=session.workspace.workflow_id)

@@ -65,6 +65,7 @@ def write_changeset(
     redact: Redact | None = None,
     verdict: TestVerdict | None = None,
     validation: ValidationReport | None = None,
+    description: Any = None,
     scorecard: Mapping[str, Any] | None = None,
 ) -> Path:
     """Serialize, metadata masked, contents verbatim. Returns where it landed.
@@ -97,6 +98,16 @@ def write_changeset(
     }
     if verdict is not None:
         document["verdict"] = {field: getattr(verdict, field) for field in _VERDICT_FIELDS}
+    if description is not None:
+        # The reviewer-facing account, written in the job that had a provider credential. It has
+        # to travel, because the job that opens the change holds a write token and no provider key
+        # -- it could not write this, and a body it composed from the run's own cover note is the
+        # document #398 is about.
+        document["description"] = {
+            "summary": mask.text(str(getattr(description, "summary", "") or "")),
+            "changes": [mask.text(str(c)) for c in getattr(description, "changes", ()) or ()],
+            "risks": [mask.text(str(r)) for r in getattr(description, "risks", ()) or ()],
+        }
     if validation is not None:
         # Masked like the summary: a finding's message is a linter's text about a model's file,
         # and a rule that quotes the offending line quotes whatever was on it.
@@ -148,6 +159,32 @@ def read_changeset(artifact: str | Path) -> ChangeSet:
         # one carrying something other than a list, reads as a change with no notes.
         notes=tuple(str(n) for n in raw_notes if isinstance(n, str)) if isinstance(raw_notes, list) else (),
     )
+
+
+def read_description(artifact: str | Path) -> dict[str, Any] | None:
+    """The reviewer-facing description written beside this change, or None when there is none.
+
+    A dict rather than the adapter's `Description`: `platform` may not import `adapters`, and what
+    the body needs is three fields. None is the honest absent -- no describer bound, a call the
+    ceiling refused, or a reply that did not parse -- and the caller falls back to what the run
+    itself said rather than to silence.
+    """
+    path = payload_path(artifact)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except ValueError:
+        return None
+    raw = data.get("description") if isinstance(data, dict) else None
+    if not isinstance(raw, dict):
+        return None
+    summary = str(raw.get("summary") or "")
+    changes = [str(c) for c in raw.get("changes") or [] if str(c).strip()]
+    risks = [str(r) for r in raw.get("risks") or [] if str(r).strip()]
+    if not summary and not changes:
+        return None
+    return {"summary": summary, "changes": changes, "risks": risks}
 
 
 def read_validation(artifact: str | Path) -> ValidationReport | None:
