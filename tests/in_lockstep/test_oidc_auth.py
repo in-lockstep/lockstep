@@ -311,13 +311,51 @@ def test_the_client_gets_the_federation_credentials_object(monkeypatch: pytest.M
     assert "federation-rule-id" not in headers, "an exchange parameter is not a request header"
 
 
-def test_an_empty_credential_passes_no_credential_argument_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An empty api_key is not nothing to the SDK — any explicit credential argument suppresses
-    its env chain, and passing one is what kept federation unreachable."""
+def test_an_empty_credential_suppresses_the_sdks_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GATE-AUTH-1 — an empty credential must suppress the SDK's ambient chain.
+
+    The previous test (`test_an_empty_credential_passes_no_credential_argument_at_all`) asserted
+    that no credential kwarg reached the SDK at all, which is what ALLOWED it to read
+    ANTHROPIC_API_KEY and ~/.anthropic from the environment.  This test asserts the opposite: an
+    explicit `credentials` provider that holds nothing MUST be passed, so the SDK's
+    `has_explicit_credential` is true and neither `os.environ` nor `default_credentials()` is
+    consulted.  The credential provider must name what was missing when called.
+    """
     from in_lockstep.llm.interface import Credentials
 
     kwargs = _client_kwargs(monkeypatch, Credentials.none())
-    assert "api_key" not in kwargs and "credentials" not in kwargs
+    # An explicit `credentials` kwarg must be present — it is what suppresses the chain.
+    assert "api_key" not in kwargs, "no api_key should be passed for an empty credential"
+    assert "credentials" in kwargs, (
+        "an empty credential must pass an explicit `credentials` provider to suppress "
+        "the SDK's ambient chain (ANTHROPIC_API_KEY, ~/.anthropic config)"
+    )
+    # The provider must fail naming what is missing when called.
+    provider = kwargs["credentials"]
+    with pytest.raises(RuntimeError, match="(?i)credential"):
+        provider(force_refresh=False)
+
+
+def test_a_planted_env_key_does_not_reach_a_client_built_with_no_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GATE-AUTH-1 — the concrete defect.
+
+    On main today, constructing with Credentials.none() lets the SDK fall through to
+    ANTHROPIC_API_KEY in the environment.  After the fix, the client must hold no key even when
+    one is planted.
+    """
+    pytest.importorskip("anthropic", reason="needs the SDK to construct a real client")
+    from in_lockstep.llm.interface import Credentials, ProviderSettings
+    from in_lockstep.llm.providers.anthropic import AnthropicProvider
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-planted-by-the-environment")
+    settings = ProviderSettings()
+    client = AnthropicProvider(settings, Credentials.none())._make_client(settings, Credentials.none())
+    assert client.api_key is None, (
+        f"the client holds {client.api_key!r}: construction with Credentials.none() must suppress "
+        f"the SDK's chain so the provider never reaches past its arguments"
+    )
 
 
 def test_a_static_key_reaches_the_client_as_before(monkeypatch: pytest.MonkeyPatch) -> None:

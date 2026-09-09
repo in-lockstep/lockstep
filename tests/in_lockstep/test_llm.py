@@ -774,6 +774,13 @@ def test_gate_auth_1_a_host_that_cannot_say_where_home_is_is_skipped_not_passed(
 ) -> None:
     """GATE-AUTH-1. The third honest outcome, and the one that cost two paid runs to name.
 
+    Still true after #387, which is not what that change first claimed. Suppressing the SDK's
+    ambient chain stops it reading a CREDENTIAL from the environment or the config file — but the
+    client resolves its config directory during construction anyway, through
+    `_read_active_config_pointer -> _config_dir -> Path.home()`, and that read is what raises on a
+    homeless host. Probed against `anthropic==1.2.0` with an explicit provider passed: the
+    construction still dies there. So this stays a skip, and the row says why.
+
     Handed no credential, an SDK may run its own chain, and Anthropic's looks for a config file
     under the user's home -- so `Path.home()` is called, and where the host can answer neither
     from `HOME` nor from the passwd database it raises. A container running as a uid with no
