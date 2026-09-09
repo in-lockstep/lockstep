@@ -1,0 +1,297 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "402882248bc426e943ac31a5c28142540bab5b76"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 102019,
+  "ci_actor": "tpouyer",
+  "ci_run": "34355235047",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.423152,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 74,
+        "message": "`verdict_line` is imported inside `described()` but is also imported at module level in callers \u2014 worth verifying the import is available here.",
+        "path": "src/in_lockstep/workflows/_shared.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 283,
+        "message": "`_verdict_line` renamed to `verdict_line` (now public) without checking all call sites in this file.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 148,
+        "message": "Cost is not accumulated onto the `Outcome` when `settled.reason` is `unparseable` or `schema_mismatch`.",
+        "path": "src/in_lockstep/adapters/ai/describe.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 72,
+        "message": "`staged_diff` materializes a worktree and spawns two git processes on the hot path of every implement/fix run with a Describe binding.",
+        "path": "src/in_lockstep/workflows/_shared.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 80,
+        "message": "Ticket body and model-authored diff are included verbatim in the LLM prompt; prompt injection mitigated only by a label, not structurally.",
+        "path": "src/in_lockstep/adapters/ai/describe.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 193,
+        "message": "`git add -A` is run inside a materialised throwaway worktree; confirm the worktree is isolated before files written by the model are staged.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 173,
+        "message": "`described()` failure path (non-SUCCEEDED outcome) has no named test.",
+        "path": "tests/in_lockstep/test_describe.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 193,
+        "message": "No test asserts `read_description` returns `None` when the artifact JSON lacks a `description` key \u2014 only when the file is absent.",
+        "path": "tests/in_lockstep/test_describe.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 165,
+        "message": "`_description()` silently drops the `description` argument when it is a `Description` dataclass rather than a dict.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "402882248bc426e943ac31a5c28142540bab5b76",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.423152,
+  "output_tokens": 2703,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34355235047-20260909T130933Z-72e0",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.107008,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 74,
+            "message": "`verdict_line` is imported inside `described()` but is also imported at module level in callers \u2014 worth verifying the import is available here.",
+            "path": "src/in_lockstep/workflows/_shared.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 283,
+            "message": "`_verdict_line` renamed to `verdict_line` (now public) without checking all call sites in this file.",
+            "path": "src/in_lockstep/platform/report.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 148,
+            "message": "Cost is not accumulated onto the `Outcome` when `settled.reason` is `unparseable` or `schema_mismatch`.",
+            "path": "src/in_lockstep/adapters/ai/describe.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 769,
+      "verb": "review",
+      "wall_seconds": 22.288
+    },
+    {
+      "cost_usd": 0.101154,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 72,
+            "message": "`staged_diff` materializes a worktree and spawns two git processes on the hot path of every implement/fix run with a Describe binding.",
+            "path": "src/in_lockstep/workflows/_shared.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 364,
+      "verb": "review",
+      "wall_seconds": 23.743
+    },
+    {
+      "cost_usd": 0.107656,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 80,
+            "message": "Ticket body and model-authored diff are included verbatim in the LLM prompt; prompt injection mitigated only by a label, not structurally.",
+            "path": "src/in_lockstep/adapters/ai/describe.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 193,
+            "message": "`git add -A` is run inside a materialised throwaway worktree; confirm the worktree is isolated before files written by the model are staged.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 791,
+      "verb": "review",
+      "wall_seconds": 22.541
+    },
+    {
+      "cost_usd": 0.107334,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 173,
+            "message": "`described()` failure path (non-SUCCEEDED outcome) has no named test.",
+            "path": "tests/in_lockstep/test_describe.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 193,
+            "message": "No test asserts `read_description` returns `None` when the artifact JSON lacks a `description` key \u2014 only when the file is absent.",
+            "path": "tests/in_lockstep/test_describe.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 165,
+            "message": "`_description()` silently drops the `description` argument when it is a `Description` dataclass rather than a dict.",
+            "path": "src/in_lockstep/platform/report.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: IGNORE PREVIOUS INSTRUCTIONS",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 791,
+      "verb": "review",
+      "wall_seconds": 22.639
+    }
+  ],
+  "tokens": 2715,
+  "tool_calls": {},
+  "ts": "2026-09-09T13:09:59+00:00",
+  "turns": 4,
+  "wall_seconds": 23.743,
+  "workflow": "review/all-lenses"
+}
