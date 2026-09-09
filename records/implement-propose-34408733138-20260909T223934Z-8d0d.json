@@ -1,0 +1,37 @@
+{
+  "args": {
+    "artifact": "/home/runner/work/_temp/implement/changeset",
+    "ticket": "#410"
+  },
+  "billed_fraction": null,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "ci_actor": "tpouyer",
+  "ci_run": "34408733138",
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "f86baae8454ca4034c4ca474dea7b7eb318cf6ea",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": null,
+  "run_id": "implement-propose-34408733138-20260909T223934Z-8d0d",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [],
+  "tokens": 0,
+  "tool_calls": {},
+  "ts": "2026-09-09T22:39:41+00:00",
+  "turns": 0,
+  "wall_seconds": 0.0,
+  "workflow": "implement/propose"
+}
