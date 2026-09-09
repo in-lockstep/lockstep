@@ -116,26 +116,25 @@ lockstep.guard = ChangeGuard(
 # subprocess where no runtime is; the model-staged callers refuse before materialising instead.
 _PY = f"{sys.version_info.major}.{sys.version_info.minor}"
 _VENV = f"{lockstep.repo.root}/.venv"
-lockstep.bind(
-    Test,
-    PytestTest(
-        args=["-q", "--no-header"],
-        sandbox=Sandbox(
-            image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
-            mounts=((_VENV, "/venv"),),
-            # `src` on the path as well as the venv's packages, because this repository is
-            # installed editable and an editable install is a `.pth` file, which Python reads in a
-            # site directory and not on PYTHONPATH -- so `python -m mypy` and the CLI run as a
-            # subprocess could not import the package inside the container. The venv's `bin`
-            # LAST on PATH, so `python` is the image's (the venv's is a symlink to a host path)
-            # and `ruff`, which the suite resolves by name, is the one the host built.
-            extra_env={
-                "PYTHONPATH": f"/venv/lib/python{_PY}/site-packages:/work/src",
-                "PATH": "/usr/local/bin:/usr/bin:/bin:/venv/bin",
-            },
-        ),
-    ),
+# ONE sandbox, named once and bound twice, because Test and Validate need the same thing for the
+# same reason and two copies of this dict are two things to keep in step. The image carries `make`,
+# `python`, `python3` and `uv`, measured rather than assumed, which is what `make lint typecheck`
+# needs below.
+_CONTAINED = Sandbox(
+    image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
+    mounts=((_VENV, "/venv"),),
+    # `src` on the path as well as the venv's packages, because this repository is
+    # installed editable and an editable install is a `.pth` file, which Python reads in a
+    # site directory and not on PYTHONPATH -- so `python -m mypy` and the CLI run as a
+    # subprocess could not import the package inside the container. The venv's `bin`
+    # LAST on PATH, so `python` is the image's (the venv's is a symlink to a host path)
+    # and `ruff`, which the suite resolves by name, is the one the host built.
+    extra_env={
+        "PYTHONPATH": f"/venv/lib/python{_PY}/site-packages:/work/src",
+        "PATH": "/usr/local/bin:/usr/bin:/bin:/venv/bin",
+    },
 )
+lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], sandbox=_CONTAINED))
 # What this repository actually gates itself on, rather than the one tool of the several its
 # checks run (#396). `make lint` is ruff's check AND its formatter's; `typecheck` is mypy, which a
 # `ruff` binding cannot see at all -- so a model-authored change that type-checked wrong passed our
@@ -146,9 +145,20 @@ lockstep.bind(
 # repository's environment: `make lint typecheck` in a materialised worktree of HEAD is 8s, since
 # `uv run` builds the tree's venv from the lockfile out of a warm cache. `RuffValidate` remains
 # the shipped fallback for a repository that configured ruff and declared no target of its own.
+#
+# CONTAINED, on the same sandbox as Test, and it has to be since #410: `CommandValidate` declares
+# `EXECUTES_CODE`, because `make lint typecheck` runs recipes and a model can author the files
+# those recipes read. `mypy.ini` is ALLOWED by `ChangeGuard` and mypy reads it before the denied
+# `pyproject.toml`; a `plugins = evil.py` line in it executes during `uv run mypy`, proved by
+# running it. So `Sandbox()` with no image here was a validator executing model-authored code on
+# the host holding this run's credential, and `staged_refusal` refuses it by name now.
+#
+# A model could not have written this line. `.lockstep/` is tier 1, so the acceptance criterion
+# asking for it in #410 was one the framework forbids an agent from satisfying; it is a person's
+# edit, and this comment is where that is written down.
 lockstep.bind(
     Validate,
-    CommandValidate(["make", "lint", "typecheck"], fix=["make", "fmt"], sandbox=Sandbox()),
+    CommandValidate(["make", "lint", "typecheck"], fix=["make", "fmt"], sandbox=_CONTAINED),
 )
 
 # The environment the two above run in. Detection would derive this same line from `uv.lock`, and

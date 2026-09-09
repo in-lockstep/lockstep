@@ -25,7 +25,15 @@ def _call(runner: Any, **args: Any) -> str:
 
 
 class _Ctx:
-    """The two things the runner reaches for: a container that answers `has`, and `do`."""
+    """What the runner reaches for: a container that answers `has` and `resolve`, and `do`.
+
+    `resolve` since #410, and it is not a formality. `staged_refusal` asks the container what the
+    bound adapter DECLARES before it materialises anything, so a double that answers only `has`
+    cannot express the thing under test. This one resolves to an adapter declaring `READS_REPO`
+    and nothing else -- the `RuffValidate` shape -- so the container rule correctly does not fire
+    and these tests stay about what they are about: the tool's worktree, not the sandbox rule,
+    which `test_validate_sandbox.py` covers in both directions.
+    """
 
     def __init__(self, outcome: Outcome[Any] | None, *, bound: bool = True) -> None:
         self.outcome = outcome
@@ -33,10 +41,18 @@ class _Ctx:
         self.seen: list[Validate] = []
         ctx = self
 
+        class _Reads:
+            capabilities = frozenset({Capability.READS_REPO})
+            sandbox = None
+
         class _Container:
             @staticmethod
             def has(verb: type) -> bool:
                 return ctx.bound
+
+            @staticmethod
+            def resolve(verb: type) -> Any:
+                return _Reads()
 
         self.container = _Container()
         self.repo = type("R", (), {"root": "."})()

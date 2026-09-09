@@ -283,3 +283,32 @@ def test_detection_ruff_binds_a_validator_that_reads(tmp_path: Path) -> None:
     adapter = bindings[Validate]
     assert Capability.EXECUTES_CODE not in adapter.capabilities
     assert Capability.READS_REPO in adapter.capabilities
+
+
+def test_gate_sandbox_2_a_container_it_cannot_inspect_is_not_silently_cleared() -> None:
+    """A security control's unknown case is loud, not permissive.
+
+    `staged_refusal` reached `container.resolve` through a `getattr(..., None)` with an early
+    `return None`, added so a test double implementing only `has` would not raise. That turns a
+    crash into a silent pass: a container this code cannot inspect is one it cannot clear, and
+    returning "no refusal" says it cleared it. The real `Container` always resolves, and a double
+    that cannot has not modelled the thing under test -- so the honest answer to an uninspectable
+    container is to fail where somebody sees it (#410).
+    """
+    import pytest
+
+    from in_lockstep.adapters.worktree import staged_refusal
+
+    class _OnlyHas:
+        @staticmethod
+        def has(verb: type) -> bool:
+            return True
+
+    class _Ctx:
+        container: Any
+
+    ctx = _Ctx()
+    ctx.container = _OnlyHas()
+
+    with pytest.raises(AttributeError):
+        staged_refusal(ctx, Validate)

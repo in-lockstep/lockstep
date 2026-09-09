@@ -148,13 +148,12 @@ def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     container = getattr(ctx, "container", None)
     if container is None or not container.has(verb):
         return None
-    resolve = getattr(container, "resolve", None)
-    if resolve is None:
-        # A container without `resolve` cannot be inspected for capabilities or sandbox; the
-        # real Container always has it, but a test double that only implements `has` has said
-        # everything it is going to say, and refusing on what it did not say is not honest.
-        return None
-    adapter = resolve(verb)
+    # `container.resolve` directly, not through a `getattr` that returns None when it is absent.
+    # That spelling was added here so a test double implementing only `has` would not raise, and
+    # it turned a crash into a silent pass on a security control: a container this code cannot
+    # inspect is one it cannot clear, and the honest failure is loud. The real `Container` always
+    # resolves, and a double that cannot has not modelled the thing under test (#410).
+    adapter = container.resolve(verb)
     # A binding that does not declare EXECUTES_CODE needs no container: ruff is a binary that
     # parses, its config is TOML rules not code, and a model-staged `ruff.toml` changes which
     # rules run and nothing else.  Refusing it would break every repository that binds
