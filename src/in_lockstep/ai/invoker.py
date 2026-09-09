@@ -45,7 +45,7 @@ from ..llm.types import LLMInput, LLMOutput, Message, ToolCall
 from ..privileged.egress import EgressPolicy
 from ..privileged.redact import Redact
 from . import injection
-from .builtins import DEFAULT_TEST_RUNS, DELEGATE_TOOL
+from .builtins import DEFAULT_TEST_RUNS, DELEGATE_TOOL, MAX_READ_CHARS
 from .context import ContextPackage, Provenance
 from .pricing import CostTable
 from .retry import RetryPolicy
@@ -105,7 +105,20 @@ class InvokePolicy:
     # model to iterate harder should raise it in the same place it raises the turn cap.
     max_test_runs: int = DEFAULT_TEST_RUNS
     # A tool result is model input. An unbounded one is an unbounded prompt next turn.
-    max_tool_result_chars: int = 20_000
+    #
+    # A WHOLE READ, because the largest legitimate tool result is one. This ran at 20,000 while
+    # `read_file` cut at 40,000, so every read of a long file was cut a second time -- by a bound
+    # that appended `…[truncated]` and nothing else, over the top of the sentence `_window` had
+    # just appended naming `offset` and `limit`. A model was told a file was cut and never told how
+    # to reach the rest, which is precisely what #402 added the range parameters to end; measured,
+    # `strategy.py` reached a model as 38% of itself and `.lockstep/lockstep.py` as 50%, both with
+    # a bare marker (#412).
+    #
+    # Expressed as `MAX_READ_CHARS` rather than restated as a number, so the two cannot drift apart
+    # again, and `_window` bounds a read INCLUDING its own notice, so a read never reaches the cut
+    # in `_dispatch` at all. Belt and braces on purpose: the arithmetic is what makes it correct
+    # today and the shared constant is what keeps it correct after somebody edits one of them.
+    max_tool_result_chars: int = MAX_READ_CHARS
     scan_tool_results: bool = True
     # From the policy stack. Both were resolved and read by nothing but `ls` until GATE-POLICY-1.
     deny_tools: tuple[str, ...] = ()
@@ -211,6 +224,20 @@ _FAILURE_REASONS: tuple[tuple[type[LLMError], str], ...] = (
     (RateLimitError, "provider.rate_limited"),
     (TransientError, "provider.transient"),
 )
+
+
+def _bounded(text: str, cap: int) -> str:
+    """A tool result cut to the prompt bound, saying what it dropped.
+
+    `…[truncated]` alone is what a model works around rather than acts on: it cannot tell a result
+    that was nearly whole from one that was a tenth, and it has no number to narrow the next query
+    with. The sizes are what make the cut actionable -- ask for less, or ask a different way.
+
+    A `read_file` result does not reach here: `max_tool_result_chars` is a whole read and `_window`
+    bounds one including its own notice (#412). This is the bound on everything else -- a delegated
+    child's answer, an adopter's own tool -- which is why it cannot name `offset` and `limit`.
+    """
+    return f"{text[:cap]}\n…[truncated: {cap} of {len(text)} chars shown, {len(text) - cap} dropped]"
 
 
 def _failure_reason(error: LLMError) -> str:
@@ -733,7 +760,7 @@ class AiInvoker:
 
         text = self.redact.text(str(raw))
         if len(text) > policy.max_tool_result_chars:
-            text = text[: policy.max_tool_result_chars] + "\n…[truncated]"
+            text = _bounded(text, policy.max_tool_result_chars)
 
         findings: list[injection.Finding] = []
         if policy.scan_tool_results:
