@@ -105,8 +105,15 @@ def _sent(call: tuple[str, ...]) -> dict[str, str]:
 
 
 def _pushed(tmp_path: Path) -> list[str]:
+    # `cwd=`, and it is load-bearing rather than tidy. Without it this inherits the process's
+    # working directory, which for a person is a repository and for a MODEL's run is a materialised
+    # worktree whose `.git` is a file pointing outside the container's mount. `git ls-remote` reads
+    # the ambient repository's config before it looks at the path it was given, so a dangling
+    # gitlink makes it `fatal: not a git repository: (null)` -- with a valid explicit path in the
+    # argv. That failed four tests in this file on every model run and none anywhere else.
     listed = subprocess.run(
         ["git", "ls-remote", "--heads", str(tmp_path / "origin.git")],
+        cwd=tmp_path,
         capture_output=True,
         text=True,
         check=True,
