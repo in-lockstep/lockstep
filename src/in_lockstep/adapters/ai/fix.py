@@ -39,6 +39,7 @@ from .strategy import (
     AGENCY,
     AiStrategy,
     PhaseError,
+    elsewhere_only,
     not_a_verdict,
     read_reply,
     reported,
@@ -314,7 +315,24 @@ class DiagnoseThenFix(FixStrategy):
             green = await ctx.do(_test_spec(tree, "pass"))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
-        if green.status is not Status.SUCCEEDED:
+        foreign = elsewhere_only(green, full) if green.decided else ()
+        if foreign:
+            # As in TDD, and for the same reason: every failure is in a file this change did not
+            # touch, so "the change did not make the reproducer pass" would be false. The
+            # reproducer went red and then green; the suite is red for a reason this run did not
+            # cause. It travels with the failures named (#405).
+            findings.append(
+                Finding(
+                    id="fix.suite_red_elsewhere",
+                    message=(
+                        f"the reproducer passed; {len(foreign)} failure(s) elsewhere in the suite, "
+                        f"in files this change did not touch: {', '.join(foreign[:5])}"
+                        + (f" …and {len(foreign) - 5} more" if len(foreign) > 5 else "")
+                    ),
+                    severity=Severity.WARNING,
+                )
+            )
+        elif green.status is not Status.SUCCEEDED:
             return Outcome(
                 status=Status.FAILED,
                 reason="fix.not_fixed",

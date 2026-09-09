@@ -175,7 +175,14 @@ async def implement_propose(
         await tickets.comment(await tickets.get(ticket), "`/implement` staged no change.")
         return Outcome(status=Status.FAILED, reason="implement.no_changes")
 
-    if verdict is not None and verdict.red:
+    if verdict is not None and verdict.only_elsewhere:
+        # Red, and every failure is in a file this change did not touch. Escalating here files a
+        # bug report about somebody else's failure and spends an attempt on it; discarding the
+        # change destroys work that is complete. So it travels, as a DRAFT -- `ready` below is
+        # false on any red verdict -- with the count in the body, and a person decides whether the
+        # suite was already broken or this environment broke it (#405).
+        print(f"suite     {verdict.failed} failure(s), none in the files this change staged")
+    elif verdict is not None and verdict.red:
         # `red`, not `not green`: an errored suite — the runner never started — is not evidence
         # that this change is broken, and escalating on it files a bug report about code nobody
         # tested and then spends the loop's attempts on it. A change whose tests actually RAN and
