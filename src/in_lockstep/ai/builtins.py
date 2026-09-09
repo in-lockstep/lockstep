@@ -76,6 +76,13 @@ DEFAULT_TEST_RUNS = 3
 #: and the policy a nested loop has to share (#332).
 DELEGATE_TOOL = "delegate"
 SEARCH_TOOL = "search_code"
+#: The tools a session orients with. A turn that calls one of these with arguments the session has
+#: not used before has asked a question it had not asked, which is what a reading phase IS -- and
+#: before the first write it is the only movement there is to measure (#416). `run_script` is out
+#: deliberately: the row excludes it, and a command that runs against HEAD answers about a tree the
+#: session has not changed. `run_tests` and `run_validate` are out because they are already counted
+#: -- or deliberately not -- by `progress`.
+ORIENTING_TOOLS = frozenset({"read_file", "list_files", "search_text", SEARCH_TOOL})
 SEARCH_MODES = ("ask", "grep", "callers", "skeleton", "map")
 #: Under `max_tool_result_chars`, so a search answer is never the thing truncation cuts.
 MAX_SEARCH_CHARS = 12_000
@@ -750,6 +757,16 @@ class ToolRunnerImpl:
     #: never declared, so there is nothing to refuse: `read_only` adds the tool and the backend
     #: together.
     code_search: CodeSearch | None = None
+    #: How many DISTINCT questions this session has asked: a call to an `ORIENTING_TOOLS` name with
+    #: arguments it had not used before (#416). Deliberately NOT `progress`, and read separately by
+    #: the loop: a question answered is not a change made, and folding the two would set
+    #: `last_progress` during a reading phase and halve the doubled pre-staging allowance in the
+    #: middle of the phase that allowance exists for.
+    explored: int = 0
+    #: What has been asked, so a repeat can be told from a new question. The arguments are part of
+    #: the key: `read_file` at offset 1 and at offset 600 are two questions about one file, which
+    #: is how a model reads something too long to hold, and re-reading one window four times is not.
+    _asked: set[tuple[str, tuple[tuple[str, str], ...]]] = field(default_factory=set)
 
     async def __call__(self, server: str, name: str, args: dict[str, object]) -> str:
         if server != BUILTIN_SERVER:  # pragma: no cover - ToolSet resolves before this
@@ -768,6 +785,15 @@ class ToolRunnerImpl:
         }.get(name)
         if handler is None:  # pragma: no cover - ToolSet resolves before this
             return f"refused: no builtin tool named {name!r}"
+        if name in ORIENTING_TOOLS:
+            # Counted on the ASKING, not on the answer. A read the guard refuses and a search that
+            # matches nothing both told the session something it did not know, and a rule that
+            # counted only successful answers would make "the file is not there" cost a turn of
+            # allowance. One place, before dispatch, so no handler can forget it.
+            asked = (name, tuple(sorted((str(k), repr(v)) for k, v in args.items())))
+            if asked not in self._asked:
+                self._asked.add(asked)
+                self.explored += 1
         result = handler(args)
         # One handler is async and the rest are not. Awaiting whatever comes back keeps that an
         # implementation detail of the handler rather than a fact every caller has to know.
