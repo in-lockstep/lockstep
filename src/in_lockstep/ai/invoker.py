@@ -450,6 +450,10 @@ class AiInvoker:
         idle = 0
         last_progress = ""
         progressed = getattr(run_tool, "progress", None) if run_tool is not None else None
+        # And, separately, how many distinct questions it has asked. Read from a second counter
+        # rather than folded into the first, because the two mean different things and only one of
+        # them ends a reading phase (#416).
+        explores = getattr(run_tool, "explored", None) if run_tool is not None else None
 
         # A denied tool is removed from the dispatch table, so it cannot be called rather than
         # being refused when called. `ToolSet` IS the dispatch table; there is nothing to reach.
@@ -547,6 +551,7 @@ class AiInvoker:
                 )
             )
             before = getattr(run_tool, "progress", None)
+            asked_before = getattr(run_tool, "explored", None)
             for call in output.tool_calls:
                 dispatched = await self._dispatch(
                     call, tools, run_tool, policy, system=system, started=started, index=index
@@ -562,22 +567,45 @@ class AiInvoker:
                     )
                 )
             after = getattr(run_tool, "progress", None)
+            asked_after = getattr(run_tool, "explored", None)
             if progressed is None:
                 productive = True
             else:
                 productive = isinstance(before, int) and isinstance(after, int) and after > before
+            # A question this session had not asked before. Before the first write it is the only
+            # movement there is to measure, and measuring nothing is how run 34402407065 was
+            # stopped: forty calls, forty of them distinct, across fifteen files, ending "Now I
+            # have a thorough understanding. Let me write the failing test." -- and cut one turn
+            # short, because a counter that only sees staged writes cannot tell forty different
+            # questions from forty repeats of one (#416).
+            asked_something_new = (
+                explores is not None
+                and isinstance(asked_before, int)
+                and isinstance(asked_after, int)
+                and asked_after > asked_before
+            )
             turns[-1].productive = productive
             if productive:
                 idle = 0
                 last_progress = f"turn {index}: {getattr(run_tool, 'last_progress', '') or 'progressed'}"
+            elif not last_progress and asked_something_new:
+                # Orienting. `idle` resets and `last_progress` deliberately does NOT: it is what
+                # doubles the allowance below, and setting it here would halve the allowance in
+                # the middle of the phase the doubling exists for. AFTER the first write this
+                # branch is unreachable, which is the half the #319 evidence supports -- twenty
+                # turns of reading over a change already staged is wandering, and still stops.
+                idle = 0
             else:
                 idle += 1
             # Twice the ceiling before anything has been staged, the ceiling after. A session has
             # to read before it can write, and the sixth `/fix` on this repository's own #319
             # was stopped at turn 20 with nothing staged, 88 seconds in, reading the code it was
             # about to change (#337): the reading phase the row said would not be cut off, cut
-            # off. Once it has written, twenty turns without another write or a new suite run is
-            # wandering; before it has, the same twenty is the job.
+            # off. Doubling it was a guess at how much reading a job needs, and the guess ran out
+            # again on a wider ticket, which is why what is COUNTED changed above rather than this
+            # number changing a second time. Once it has written, twenty turns without another
+            # write or a new suite run is wandering; before it has, a turn that asked nothing new
+            # is the one that counts against the session.
             allowance = policy.max_idle_turns * (1 if last_progress else 2)
             if idle >= allowance:
                 # Stopped, not exhausted: the turns were there and the session was not using

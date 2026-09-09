@@ -225,7 +225,12 @@ def test_gate_progress_1_a_reading_phase_gets_twice_the_ceiling_before_the_first
     stalled = Scripted([_call("read_file", path="src/greet.py")])
     outcome = asyncio.run(_adapter(stalled, repo, policy=policy).invoke(Ctx(), Implement(ticket=_ticket())))
     assert outcome.status is Status.BLOCKED and outcome.reason == "implement.no_progress"
-    assert len(stalled.calls) == 6, "twice the ceiling of three, then no more"
+    # Seven, not six: the FIRST read of a file is a question this session had not asked, so it is
+    # not an idle turn (#416). The six after it repeat it exactly and are, which is what still
+    # stops this session -- a session re-reading one window is the case the ceiling is for, and a
+    # session asking a different question each turn is not. `test_orientation.py` holds both
+    # halves; the number here moves by exactly the one turn the first question earns.
+    assert len(stalled.calls) == 7, "one new question, then twice the ceiling of three repeating it"
 
 
 def test_a_session_that_keeps_moving_is_not_stopped_by_the_idle_ceiling(repo: Path) -> None:
