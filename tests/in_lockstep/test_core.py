@@ -353,6 +353,7 @@ def test_a_policy_field_that_enforces_nothing_is_not_offered() -> None:
         "scan_input",
         "max_turns",
         "max_idle_turns",
+        "max_read_chars",
     }
     assert {f.name for f in fields(Policy)} == {
         "name",
@@ -362,6 +363,11 @@ def test_a_policy_field_that_enforces_nothing_is_not_offered() -> None:
         "max_turns",
         # Composed by `under()` like `max_turns`, and printed by `ls` beside it (#337).
         "max_idle_turns",
+        # The same, for the bound on what one read pulls into a prompt (#414). It earns its place
+        # here the way this test demands: `under()` takes the lowest of it and what the repository
+        # asked for, and `test_a_policy_layer_may_lower_the_read_window_and_may_not_raise_it`
+        # drives that through the stack rather than trusting the field's presence.
+        "max_read_chars",
     }
 
 

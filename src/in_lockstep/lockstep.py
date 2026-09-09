@@ -71,6 +71,20 @@ class Workshop:
     #: Consecutive turns that stage nothing and test nothing new before the session stops
     #: `blocked` as `<verb>.no_progress` (#337). `InvokePolicy.max_idle_turns` says why twenty.
     max_idle_turns: int = 20
+    #: The largest a single `read_file` result may be, in characters. The shipped default was
+    #: measured against THIS repository -- 64,000 covers 97% of its Python files whole -- and the
+    #: right number is a property of your files, not of ours: a repository of short modules pays
+    #: for a window it never fills, on every read, on every later turn, and one with generated
+    #: clients an order of magnitude larger cannot read its own code (#414). A contributed policy
+    #: layer may lower this and may not raise it. A MODEL can do neither: `read_file`'s `offset`
+    #: moves the window and `limit` selects lines, and neither is a byte budget, which is what
+    #: `GATE-READ-1` means by a cap not negotiable by the caller.
+    #:
+    #: `None` means "whatever the framework ships", rather than a number restated here: the
+    #: default belongs to `ai.builtins.MAX_READ_CHARS` and `lockstep` may not import `ai`
+    #: (layering), so copying it would be two numbers to keep in step. `InvokePolicy.under`
+    #: resolves the absence.
+    max_read_chars: int | None = None
 
 
 class Lockstep:

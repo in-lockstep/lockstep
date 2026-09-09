@@ -213,6 +213,7 @@ class AiStrategy:
                     max_idle_turns=workshop.max_idle_turns,
                     max_tokens=workshop.max_tokens,
                     deadline_seconds=workshop.deadline_seconds,
+                    max_read_chars=workshop.max_read_chars,
                 )
             if self.commands is None:
                 self.commands = workshop.commands
@@ -271,6 +272,10 @@ class AiStrategy:
             # the same argument `AGENCY` makes about a frozenset that was hand-copied three times.
             tests=_test_runner(ctx, root, workspace),
             max_test_runs=self.policy.max_test_runs,
+            # From the same policy, so a repository's `Workshop(max_read_chars=...)` reaches the
+            # tool that reads (#414). `read_only` and `read_write` take it too, for the sessions
+            # that never execute -- a review reads files exactly as an implement does.
+            max_read_chars=self.policy.max_read_chars,
             delegation=self.delegation,
             code_search=self._code_search(root),
             validates=_validate_runner(ctx, root, workspace),
