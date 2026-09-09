@@ -136,13 +136,33 @@ def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     it is about executing what a model wrote. A build runs the repository's own build scripts over
     model-authored source -- a `setup.py`, a `build.rs`, a postinstall -- which is the same
     exposure with a different file extension.
+
+    Since #410 the check recognises adapters that declare they do NOT execute. A binding whose
+    declared capabilities do not include `EXECUTES_CODE` has told the framework it only reads the
+    tree -- `RuffValidate` is the canonical case: ruff is a binary that parses, its config is
+    TOML rules not code, and refusing it would regress every repository that binds it.
     """
+    from ..core.verbs import Capability, capabilities_of
     from .sandbox import host_fallback
 
     container = getattr(ctx, "container", None)
     if container is None or not container.has(verb):
         return None
+    # `container.resolve` directly, not through a `getattr` that returns None when it is absent.
+    # That spelling was added here so a test double implementing only `has` would not raise, and
+    # it turned a crash into a silent pass on a security control: a container this code cannot
+    # inspect is one it cannot clear, and the honest failure is loud. The real `Container` always
+    # resolves, and a double that cannot has not modelled the thing under test (#410).
     adapter = container.resolve(verb)
+    # A binding that does not declare EXECUTES_CODE needs no container: ruff is a binary that
+    # parses, its config is TOML rules not code, and a model-staged `ruff.toml` changes which
+    # rules run and nothing else.  Refusing it would break every repository that binds
+    # `RuffValidate`.  `CommandValidate` defaults to EXECUTES_CODE since #410, because a
+    # repository's own `make lint` runs recipes and a model can author the files those recipes
+    # read -- `mypy.ini`, `eslint.config.js` -- so the deny list is not the fix; the container
+    # is the control that does not depend on enumerating files.
+    if Capability.EXECUTES_CODE not in capabilities_of(adapter):
+        return None
     why = host_fallback(getattr(adapter, "sandbox", None), named=verb.__name__)
     if why is None:
         return None

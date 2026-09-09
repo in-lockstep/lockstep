@@ -247,7 +247,15 @@ class CommandValidate:
     """`Validate` over any linter. `command` is the argv, e.g. `("npx", "eslint", ".")`."""
 
     verb: ClassVar[Verb] = Verb.VALIDATE
-    capabilities: ClassVar[frozenset[Capability]] = frozenset({Capability.READS_REPO})
+    # A repository's own `make lint` runs recipes, and a model can author the files those recipes
+    # read -- `mypy.ini`, `ruff.toml`, `eslint.config.js` -- so the command EXECUTES what the model
+    # wrote.  `READS_REPO` alone was the false statement that let #396's binding past
+    # GATE-SANDBOX-2; the deny list is not the fix, because denying every linter config is a list
+    # that will always lag the ecosystem it is chasing.  The container is the control that does not
+    # depend on enumerating files (#410).
+    capabilities: ClassVar[frozenset[Capability]] = frozenset(
+        {Capability.EXECUTES_CODE, Capability.READS_REPO}
+    )
 
     def __init__(
         self,
