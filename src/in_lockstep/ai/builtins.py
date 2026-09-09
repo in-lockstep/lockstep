@@ -46,8 +46,17 @@ from ..core.verbs import Capability
 from ..privileged.redact import MASK, Redact
 from .tools import BUILTIN_SERVER, Tool, ToolSet
 
-# A read that returns a whole vendored tree is a prompt nobody budgeted for.
-MAX_READ_CHARS = 40_000
+# A read that returns a whole vendored tree is a prompt nobody budgeted for. 64,000 characters is
+# about sixteen thousand tokens and covers 97% of this repository's own Python files whole; the six
+# above it -- `cli.py` at 407,760 characters leading -- are files nothing should be reading end to
+# end, and `search_code`'s `skeleton` and `map` modes are the answer for those.
+#
+# The number said 40,000 and a model received 20,000, because `InvokePolicy.max_tool_result_chars`
+# cut every tool result again at half this, and the cut landed exactly where `_window` puts the
+# sentence naming `offset` and `limit` (#412). Two fixes, because one of them can drift: `_window`
+# now returns at most this many characters INCLUDING what it appends to itself, and the invoker's
+# cap is this constant rather than a number of its own.
+MAX_READ_CHARS = 64_000
 MAX_LISTED = 200
 MAX_SEARCH_MATCHES = 80
 # Command output is model input next turn, and a test suite prints a great deal of it. Kept well
@@ -1147,7 +1156,7 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
 
     The cap stays where it is and a caller cannot raise it: what a read returns is re-sent on every
     later turn, so an uncapped read is an uncapped prompt. What is new is being able to say WHICH
-    forty thousand characters. Without that, a model handed a long file saw its first fifth and
+    `MAX_READ_CHARS` characters. Without that, a model handed a long file saw its first fifth and
     nothing else, ever -- run 34361896059 spent turns trying to reach line 800 of a file it was
     editing, and two of the cases harvested from it are that attempt (#402).
 
@@ -1163,10 +1172,14 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
     if not (offset or limit):
         if len(text) <= MAX_READ_CHARS:
             return text
-        return (
-            f"{text[:MAX_READ_CHARS]}\n…[truncated at {MAX_READ_CHARS} chars; {path} has {total} "
-            f"line(s). Pass `offset` (1-based) and `limit` to read any part of it]"
+        # The notice is inside the budget, not on top of it. Appending it past the cap is what put
+        # it where the invoker's own truncation removed it, and the model was then told a file had
+        # been cut with no way stated to reach the rest -- the behaviour #402 existed to end.
+        notice = (
+            f"\n…[truncated; {path} has {total} line(s) and {len(text)} chars. Pass `offset` "
+            f"(1-based) and `limit` to read any part of it]"
         )
+        return text[: MAX_READ_CHARS - len(notice)] + notice
     start = max(offset - 1, 0)
     if start >= total:
         # An answer rather than an error: the model asked about a place, and where the file ends is
@@ -1175,11 +1188,12 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
     window = lines[start : start + limit] if limit else lines[start:]
     body = "".join(window)
     head = f"[{path} lines {start + 1}-{start + len(window)} of {total}]\n"
-    if len(body) > MAX_READ_CHARS:
-        return (
-            f"{head}{body[:MAX_READ_CHARS]}\n…[truncated at {MAX_READ_CHARS} chars of the range "
-            f"you asked for; raise `offset` to read on]"
-        )
+    # The header and the notice are inside the budget too, for the reason above: what this function
+    # returns is bounded by `MAX_READ_CHARS` whole, so nothing downstream has to cut it again.
+    notice = f"\n…[truncated; the range you asked for is {len(body)} chars. Raise `offset` to read on]"
+    room = max(0, MAX_READ_CHARS - len(head) - len(notice))
+    if len(body) > room:
+        return head + body[:room] + notice
     return head + body
 
 

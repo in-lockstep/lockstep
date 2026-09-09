@@ -139,9 +139,13 @@ def test_a_huge_read_is_truncated_and_says_how_to_read_the_rest(workspace: Works
     (workspace.root / "big.txt").write_text("x\n" * MAX_READ_CHARS)
     _, run = read_only(workspace)
     answer = asyncio.run(run("builtin", "read_file", {"path": "big.txt"}))
-    assert "truncated at 40000 chars" in answer
+    assert "truncated" in answer
     assert f"has {MAX_READ_CHARS} line(s)" in answer, "the size it could not show"
     assert "`offset`" in answer and "`limit`" in answer, "and how to ask for the rest"
+    # Inside the cap, not on top of it. Appending the sentence past `MAX_READ_CHARS` is what put it
+    # where the invoker's own bound removed it, and a model was then told a file was cut with no
+    # way stated to reach the rest (#412). `test_read_delivery.py` asserts it survives delivery.
+    assert len(answer) <= MAX_READ_CHARS
 
 
 def test_listing_matches_a_glob(workspace: Workspace) -> None:
@@ -414,24 +418,29 @@ def test_gate_read_1_the_cap_still_bounds_a_range(workspace: Workspace) -> None:
     (workspace.root / "wide.txt").write_text("".join("x" * 200 + "\n" for _ in range(1000)))
     _, run = read_only(workspace)
     answer = asyncio.run(run("builtin", "read_file", {"path": "wide.txt", "offset": 1, "limit": 999}))
-    assert len(answer) < MAX_READ_CHARS + 400
-    assert "truncated at 40000 chars of the range you asked for" in answer
+    assert len(answer) <= MAX_READ_CHARS, "the header and the notice are inside the cap too (#412)"
+    assert "truncated" in answer and "Raise `offset` to read on" in answer
 
 
 def test_gate_read_1_a_staged_file_is_readable_past_the_cap(workspace: Workspace) -> None:
     """GATE-READ-1 meets GATE-WORKSPACE-1. What a session staged is what it sees -- and a file a
     session WROTE is the one it is most likely to be unable to read back, which is how a change to
     a 192k document was staged by something that had seen a fifth of it."""
+    from in_lockstep.ai.builtins import MAX_READ_CHARS
+
     _, run = read_write(workspace)
-    body = "".join(f"staged {n}\n" for n in range(1, 5001))
+    # Derived from the cap rather than a round number, so raising the cap cannot leave this test
+    # asserting truncation of a file that now fits -- which is what a literal 5,000 did (#412).
+    lines = MAX_READ_CHARS // 8
+    body = "".join(f"staged {n}\n" for n in range(1, lines + 1))
     asyncio.run(run("builtin", "write_file", {"path": "big.py", "contents": body}))
 
     whole = asyncio.run(run("builtin", "read_file", {"path": "big.py"}))
-    assert "truncated" in whole and "has 5000 line(s)" in whole
+    assert "truncated" in whole and f"has {lines} line(s)" in whole
 
-    answer = asyncio.run(run("builtin", "read_file", {"path": "big.py", "offset": 4998, "limit": 2}))
-    assert "staged 4998\nstaged 4999\n" in answer, "the end of a staged file is reachable"
-    assert "staged 1\n" not in answer
+    end = asyncio.run(run("builtin", "read_file", {"path": "big.py", "offset": lines - 2, "limit": 2}))
+    assert f"staged {lines - 2}\nstaged {lines - 1}\n" in end, "the end of a staged file is reachable"
+    assert "staged 1\n" not in end
 
 
 def test_a_range_is_still_refused_where_the_whole_file_would_be(workspace: Workspace) -> None:
