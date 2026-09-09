@@ -576,9 +576,11 @@ lockstep.bind(Describe, AiDescribe())
 # is 0.5s, and one real sixteen-file change here impacted 142 symbols of which 109 were outside
 # the diff -- 5 KB rendered, against 186 KB of raw JSON that is mostly the diff again.
 #
-# Not `performance`, which is asking about the work the changed lines do, and not `tests`, whose
-# case is the strongest of the four and is deliberately left for a second decision: its half of
-# this is `testModules`, and giving it the whole radius is a different question.
+# `tests` is here for the half of the radius that is literally its subject: `testModules` names the
+# test files covering what the change reaches, which turns into the one sentence a tests lens
+# exists to say -- this change reaches X, these tests cover X, and none of them are in the diff.
+# Not `performance`, which is asking about the work the changed lines themselves do; a page of
+# call sites is budget its diff needs.
 #
 # Bound here rather than shipped on, for the reason `search_code` is opt-in per strategy: it
 # changes the composed prompt, so it invalidates recordings made against these lenses, and it
@@ -590,8 +592,8 @@ lockstep.bind(
         lenses={
             "security": Lens(prompt=LENSES["security"], blast_radius=True),
             "intent": Lens(prompt=LENSES["intent"], blast_radius=True),
+            "tests": Lens(prompt=LENSES["tests"], blast_radius=True),
             "performance": LENSES["performance"],
-            "tests": LENSES["tests"],
         },
         # What `cli._default_review` would have applied. Binding here skips that default, so the
         # ceilings are restated rather than silently relaxed to `AiReview`'s own one-turn default.
