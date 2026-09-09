@@ -712,9 +712,10 @@ class GitHubScm:
         view = self._gh_json("pr", "view", str(number), *self._at(), "--json", "comments,reviews")
         data = view if isinstance(view, dict) else {}
 
-        for c in (data.get("comments") or [])[:MAX_REMARKS]:
+        # The NEWEST remarks, not the first: the answer is almost always at the end of a thread.
+        for c in (data.get("comments") or [])[-MAX_REMARKS:]:
             out.append(Remark(author=_login(c.get("author")), body=_clean(c.get("body")), kind="comment"))
-        for r in (data.get("reviews") or [])[:MAX_REMARKS]:
+        for r in (data.get("reviews") or [])[-MAX_REMARKS:]:
             state = str(r.get("state") or "")
             body = _clean(r.get("body"))
             # A bare COMMENTED review with no body is the envelope around line notes and says

@@ -73,8 +73,11 @@ class GitHubIssues(TicketSource):
             labels=labels,
             assignees=tuple(str(a.get("login", "")) for a in data.get("assignees", []) or []),
             acceptance_criteria=criteria_from(body),
+            # The NEWEST comments, not the first: the answer is almost always at the end of a
+            # thread — a reviewer correcting a premise, a person settling a question — and the
+            # oldest are what a reader skims.
             comments=tuple(
-                str(c.get("body", ""))[:4000] for c in (data.get("comments") or [])[:MAX_COMMENTS]
+                str(c.get("body", ""))[:4000] for c in (data.get("comments") or [])[-MAX_COMMENTS:]
             ),
             raw_state=str(data.get("state") or ""),
         )

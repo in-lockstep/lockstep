@@ -155,14 +155,30 @@ class ContextCurator:
     #: failed it debugs. If only one survives a tight budget, that one should be the failures.
     priority: tuple[str, ...] = ("diff", "test-failure", "file", "ticket", "log", "verdict", "attempt")
 
+    #: Kinds whose trim drops the OLDEST items rather than the newest. A diff and a conversation
+    #: want opposite ends kept: the newest comment on a thread is the one that changed something,
+    #: while a diff's opening hunks are the ones that define the change. The sort reverses the
+    #: path for these kinds so that the newest items consume the budget first and the oldest are
+    #: what falls off when there is not enough room.
+    _NEWEST_FIRST_KINDS: frozenset[str] = frozenset(("ticket", "review"))
+
     def curate(self, items: list[ContextItem], need: ContextNeed) -> ContextPackage:
-        ordered = sorted(
-            items,
-            key=lambda i: (
-                self.priority.index(i.kind) if i.kind in self.priority else len(self.priority),
-                i.path,
-            ),
-        )
+        def _sort_key(i: ContextItem) -> tuple[int, str, int]:
+            priority = self.priority.index(i.kind) if i.kind in self.priority else len(self.priority)
+            # Conversation items (ticket comments and reviews) are packed newest-first so the
+            # budget drops the OLDEST turns — the ones a reader skims — rather than the newest,
+            # which are the ones that changed something. A ticket body (no ``#comment`` in the
+            # path) is NOT reversed: a body's opening is where its subject is.
+            base, ordinal = _turn(i.path)
+            if i.kind in self._NEWEST_FIRST_KINDS and ordinal is not None:
+                # Newest first, by the number the path carries rather than by inverting the string:
+                # a key built from `chr(0xFFFF - ord(c))` raises on any character above the basic
+                # plane, and a sort key that can raise on a ticket key is a run that dies rendering
+                # its own context.
+                return (priority, base, -ordinal)
+            return (priority, i.path, 0)
+
+        ordered = sorted(items, key=_sort_key)
         kept: list[ContextItem] = []
         dropped: list[str] = []
         used = 0
@@ -180,7 +196,28 @@ class ContextCurator:
                 continue
             kept.append(item)
             used += cost
+        # Conversation items were packed newest-first to give the budget to the recent turns;
+        # restore chronological order in the output so a model reads a thread as a thread.
+        kept.sort(
+            key=lambda i: (
+                self.priority.index(i.kind) if i.kind in self.priority else len(self.priority),
+                i.path,
+            )
+        )
         return ContextPackage(items=tuple(kept), dropped=tuple(dropped))
+
+
+def _turn(path: str) -> tuple[str, int | None]:
+    """A conversation path split into its subject and its position: `#42#comment-07` -> (`#42#comment`, 7).
+
+    `None` for anything else -- a ticket body, a file, a diff -- which is what keeps the reversal
+    to the items it is about. A body is not a turn in a thread, and its opening is where its
+    subject is.
+    """
+    head, sep, tail = path.rpartition("-")
+    if not sep or not tail.isdigit():
+        return path, None
+    return head, int(tail)
 
 
 def _path_of(chunk: str) -> str:
