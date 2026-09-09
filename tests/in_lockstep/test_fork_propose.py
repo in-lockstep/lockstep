@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 
+from in_lockstep.core.outcome import Status
 from in_lockstep.core.types import ChangeSet, FileChange
 from in_lockstep.platform.scm import GitHubScm, GitLocal, TargetRefused
 from in_lockstep.platform.scm.base import ChangeRequest
@@ -483,3 +484,229 @@ def test_the_conformance_check_requires_the_narrowing_of_a_ticket_source() -> No
 
     with pytest.raises(Nonconformant, match="for_repo"):
         assert_ticket_source(NoNarrowing())
+
+
+# -- the workflows ------------------------------------------------------------------------------
+
+
+class _Tickets:
+    """A ticket source that records where it was pointed and what it was asked."""
+
+    def __init__(self, repo: str = "") -> None:
+        self.repo = repo
+        self.said: list[str] = []
+        self.narrowed_to: list[str] = []
+
+    def for_repo(self, repo: str) -> _Tickets:
+        self.narrowed_to.append(repo)
+        clone = _Tickets(repo)
+        # One object, so a test can read what the narrowed copy was asked.
+        clone.said, clone.narrowed_to = self.said, self.narrowed_to
+        return clone
+
+    async def get(self, key: str) -> Ticket:
+        return Ticket(key=key, title="a title", description="what to do")
+
+    async def comment(self, ticket: Ticket, body: str) -> None:
+        self.said.append(body)
+
+
+class _Scm:
+    """An `Scm` that records the same, plus what `open_change` was told to write where."""
+
+    shared_numbering = True
+
+    def __init__(self, repo: str = "", *, refuses: TargetRefused | None = None) -> None:
+        self.repo = repo
+        self.refuses = refuses
+        self.asked_about: list[tuple[str, int]] = []
+        self.opened: list[dict[str, Any]] = []
+        self.narrowed_to: list[str] = []
+
+    def for_repo(self, repo: str) -> _Scm:
+        self.narrowed_to.append(repo)
+        clone = _Scm(repo, refuses=self.refuses)
+        clone.asked_about, clone.opened, clone.narrowed_to = self.asked_about, self.opened, self.narrowed_to
+        return clone
+
+    async def ticket_of(self, number: int) -> str | None:
+        self.asked_about.append((self.repo, number))
+        return None
+
+    async def open_change(self, cs: Any, **kwargs: Any) -> ChangeRequest:
+        if self.refuses is not None:
+            raise self.refuses
+        self.opened.append(kwargs)
+        return ChangeRequest(id="u", url="https://x/1", branch="b", title="t", number=1)
+
+    async def mark_ready(self, change: ChangeRequest) -> None:
+        return None
+
+
+class _Ctx:
+    def __init__(self, root: Path) -> None:
+        self.run_id = "r1"
+        self.max_attempts = 3
+        self.repo = type("R", (), {"root": str(root)})()
+
+
+def _staged(tmp_path: Path) -> str:
+    from in_lockstep.platform.artifacts import write_changeset
+
+    artifact = str(tmp_path / "changeset")
+    write_changeset(artifact, ChangeSet(changes=(FileChange(path="a.py", contents="x = 1\n"),), summary="s"))
+    return artifact
+
+
+def test_gate_fork_1_a_propose_pointed_at_a_target_reads_answers_and_writes_there(
+    tmp_path: Path,
+) -> None:
+    """GATE-FORK-1, end to end through the workflow. One flag moves all three: the ticket read,
+    the answer posted, and the repository the pull request is opened on."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    tickets, scm = _Tickets(), _Scm()
+    outcome = asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            tickets,  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+            target=PARENT,
+        )
+    )
+    assert outcome.status is Status.SUCCEEDED
+    assert tickets.narrowed_to == [PARENT] and scm.narrowed_to == [PARENT]
+    assert scm.opened and scm.opened[0]["target"] == PARENT
+    assert tickets.said, "the ticket was answered"
+
+
+def test_gate_fork_1_the_narrowing_happens_before_the_number_is_resolved(tmp_path: Path) -> None:
+    """GATE-FORK-1, an order that is not a preference. `ticket_for` asks the host whether a number
+    is a change request; asked of the wrong repository on GitHub, where issues and pull requests
+    share one sequence, that returns a confident wrong answer rather than an error."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    scm = _Scm()
+    asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            _Tickets(),  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+            target=PARENT,
+        )
+    )
+    assert scm.asked_about == [(PARENT, 373)], "the number was resolved against the checkout"
+
+
+def test_gate_fork_1_a_target_the_credential_cannot_write_leaves_the_work_where_a_person_finishes_it(
+    tmp_path: Path,
+) -> None:
+    """GATE-FORK-1, the refusal as a run sees it. Nothing was pushed, so the honest answer is not
+    an error in a job log: the change is in the artifact and the ticket says who can open it."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    refusal = TargetRefused("scm.no_rights_on_target", f"the credential cannot write {PARENT}")
+    tickets, scm = _Tickets(), _Scm(refuses=refusal)
+    outcome = asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            tickets,  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+            target=PARENT,
+        )
+    )
+    assert outcome.status is Status.FAILED
+    assert outcome.reason == "scm.no_rights_on_target", "the name, so a ledger can count it"
+    (said,) = tickets.said
+    assert "apply --from-artifact" in said and f"--target {PARENT}" in said
+
+
+def test_gate_fork_1_a_bound_port_that_cannot_be_pointed_elsewhere_refuses_before_anything_is_read(
+    tmp_path: Path,
+) -> None:
+    """GATE-FORK-1. A Jira source or a GitLab project cannot be pointed at `owner/repo`, and the
+    run must stop there rather than read this repository's ticket of the same number."""
+    from in_lockstep.workflows.fix import fix_propose
+
+    class _CannotPoint(_Tickets):
+        def for_repo(self, repo: str) -> Any:
+            from in_lockstep.core.ports import Unsupported
+
+            raise Unsupported("this tracker reads one project")
+
+    tickets, scm = _CannotPoint(), _Scm()
+    outcome = asyncio.run(
+        fix_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            tickets,  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+            target=PARENT,
+        )
+    )
+    assert outcome.status is Status.FAILED
+    assert outcome.reason == "scm.target_unsupported"
+    assert scm.asked_about == [] and tickets.said == [], "nothing was read and nothing was said"
+
+
+def test_gate_fork_1_a_port_with_no_narrowing_at_all_refuses_the_same_way(tmp_path: Path) -> None:
+    """GATE-FORK-1. The other way a port cannot be pointed: not a refusal it raises, but a method
+    it does not have -- a port written before #373, or a third party's. Absent is not "yes", the
+    rule `TicketSource`'s refusing defaults are written on, and this is the case a falsification
+    control caught being unasserted: the refusing adapter covered one branch and left this one
+    reading whatever the checkout infers."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    class _Older:
+        """A ticket source from before the narrowing existed."""
+
+        def __init__(self) -> None:
+            self.said: list[str] = []
+
+        async def get(self, key: str) -> Ticket:
+            return Ticket(key=key, title="t")
+
+        async def comment(self, ticket: Ticket, body: str) -> None:
+            self.said.append(body)
+
+    tickets, scm = _Older(), _Scm()
+    outcome = asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            tickets,  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+            target=PARENT,
+        )
+    )
+    assert outcome.status is Status.FAILED
+    assert outcome.reason == "scm.target_unsupported"
+    assert tickets.said == [] and scm.opened == [], "nothing was read, said or written"
+
+
+def test_a_run_with_no_target_narrows_nothing_at_all(tmp_path: Path) -> None:
+    """The flag is a fork's opt-in. Without it no port is asked for a method that did not exist
+    before #373, so a repository that is not a fork cannot be broken by this."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    tickets, scm = _Tickets(), _Scm()
+    outcome = asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#373",
+            tickets,  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+        )
+    )
+    assert outcome.status is Status.SUCCEEDED
+    assert tickets.narrowed_to == [] and scm.narrowed_to == []
+    assert scm.opened[0]["target"] == "", "and the write names no repository either"

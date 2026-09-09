@@ -53,6 +53,7 @@ still advertises.
 | RFE | runs | `rfe --idea` drafts the ticket; a human reads it, and `--create` files it through `TicketSource` |
 | Flaky-test adapter | planned | a wanted contribution, sized in [CONTRIBUTING.md](CONTRIBUTING.md); `GATE-TESTGUARD-1` already refuses silencing a test without a ticket, and nothing yet detects or quarantines one |
 | GitHub | runs | SCM, issues, chat-ops gate, trampolines |
+| Fork to upstream | runs | a fork opens its change on the repository it forked from: `open_change(target=)` through the REST form `gh pr create` cannot express, `--arg target=owner/repo` pointing a propose run's reads and answers there, `apply --target` at a terminal, and `scm.no_rights_on_target` refused before anything is pushed when the credential cannot write |
 | GitLab | partial | `GitLabScm`/`GitLabIssues` and `init --host gitlab` ship a file with the four verbs and a published review record, parity-tested against the GitHub trampolines in both directions; no pipeline has ever run it, and only an instance would move this row |
 | Keyless CI (federation) | runs | GitHub OIDC exchanged at Anthropic; no `ANTHROPIC_API_KEY` in secrets |
 | Org standards as a package | runs | `in_lockstep.standards` entry points at `Tier.PLUGIN`; worked example in `examples/acme-standards` |
