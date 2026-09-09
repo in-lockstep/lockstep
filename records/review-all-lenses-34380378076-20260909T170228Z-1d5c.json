@@ -1,0 +1,167 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "984de066a1b886d8cdd0e5aad8dbb431514f2f11"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 44219,
+  "ci_actor": "tpouyer",
+  "ci_run": "34380378076",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.187622,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1104,
+        "message": "Pre-run `carries` check uses the allowlist refusal branch's text, not the sandbox-absent branch.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 595,
+        "message": "`_script_description` intersects `allowed_commands` with `carries` but the intersection order may not match allowlist order if `allowed_commands` is not stable.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 468,
+        "message": "No test covers the intersection case where the sandbox declares programs and ALL allowed programs are present, verifying the happy-path description.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 437,
+        "message": "The 'stale declaration' test does not assert that `run_tests` redirect appears in the stale-declaration message.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "984de066a1b886d8cdd0e5aad8dbb431514f2f11",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.187622,
+  "output_tokens": 1451,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34380378076-20260909T170228Z-1d5c",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.051785,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1104,
+            "message": "Pre-run `carries` check uses the allowlist refusal branch's text, not the sandbox-absent branch.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 595,
+            "message": "`_script_description` intersects `allowed_commands` with `carries` but the intersection order may not match allowlist order if `allowed_commands` is not stable.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 700,
+      "verb": "review",
+      "wall_seconds": 24.099
+    },
+    {
+      "cost_usd": 0.042827,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 88,
+      "verb": "review",
+      "wall_seconds": 8.537
+    },
+    {
+      "cost_usd": 0.043314,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 114,
+      "verb": "review",
+      "wall_seconds": 6.666
+    },
+    {
+      "cost_usd": 0.049696,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 468,
+            "message": "No test covers the intersection case where the sandbox declares programs and ALL allowed programs are present, verifying the happy-path description.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 437,
+            "message": "The 'stale declaration' test does not assert that `run_tests` redirect appears in the stale-declaration message.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 561,
+      "verb": "review",
+      "wall_seconds": 16.032
+    }
+  ],
+  "tokens": 1463,
+  "tool_calls": {},
+  "ts": "2026-09-09T17:02:52+00:00",
+  "turns": 4,
+  "wall_seconds": 24.099,
+  "workflow": "review/all-lenses"
+}
