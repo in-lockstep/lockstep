@@ -116,10 +116,11 @@ lockstep.guard = ChangeGuard(
 # subprocess where no runtime is; the model-staged callers refuse before materialising instead.
 _PY = f"{sys.version_info.major}.{sys.version_info.minor}"
 _VENV = f"{lockstep.repo.root}/.venv"
-# ONE sandbox, named once and bound twice, because Test and Validate need the same thing for the
-# same reason and two copies of this dict are two things to keep in step. The image carries `make`,
-# `python`, `python3` and `uv`, measured rather than assumed, which is what `make lint typecheck`
-# needs below.
+# Named rather than inline because #419 will bind it twice. Today only `Test` uses it, and the
+# reason is worth reading before assuming `Validate` can have the same one: `PytestTest` runs
+# `python -m pytest`, and a venv's site-packages are path-independent, so mounting the host's
+# `.venv` and putting it on `PYTHONPATH` works. `uv run mypy` is not that -- it executes a console
+# script whose shebang was baked with the HOST's absolute venv path, which does not exist in here.
 _CONTAINED = Sandbox(
     image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
     mounts=((_VENV, "/venv"),),
@@ -146,19 +147,28 @@ lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], sandbox=_CONTAINED))
 # `uv run` builds the tree's venv from the lockfile out of a warm cache. `RuffValidate` remains
 # the shipped fallback for a repository that configured ruff and declared no target of its own.
 #
-# CONTAINED, on the same sandbox as Test, and it has to be since #410: `CommandValidate` declares
-# `EXECUTES_CODE`, because `make lint typecheck` runs recipes and a model can author the files
-# those recipes read. `mypy.ini` is ALLOWED by `ChangeGuard` and mypy reads it before the denied
-# `pyproject.toml`; a `plugins = evil.py` line in it executes during `uv run mypy`, proved by
-# running it. So `Sandbox()` with no image here was a validator executing model-authored code on
-# the host holding this run's credential, and `staged_refusal` refuses it by name now.
+# NOT CONTAINED, and that is a gap this file states rather than hides (#419). Since #410
+# `CommandValidate` declares `EXECUTES_CODE` -- correctly: `make lint typecheck` runs recipes over
+# files a model can author, and a `plugins = evil.py` in an ALLOWED `mypy.ini` executes during
+# `uv run mypy`. So `staged_refusal` REFUSES this binding for a model-staged run, and this
+# repository's own `/implement` and `/fix` do not check what they wrote. It fails closed, which is
+# the right direction and the reason it is easy not to notice.
 #
-# A model could not have written this line. `.lockstep/` is tier 1, so the acceptance criterion
-# asking for it in #410 was one the framework forbids an agent from satisfying; it is a person's
-# edit, and this comment is where that is written down.
+# It was contained, on `_CONTAINED` above, and that broke `run selfcheck` on CI within the hour
+# (run 34415733664). `make lint` shells out to `uv run`; `uv run` found `/work/.venv` -- the
+# WORKING TREE's venv, which is writable because the working tree has to be, where `mounts` are
+# `:ro` -- saw its interpreter symlink dangling the moment the image's Python patch differed from
+# the runner's (3.11.14 against 3.11.16, on a mutable image tag), and DELETED it to rebuild, which
+# needs a network the sandbox correctly does not have. The same delete took the suite down with
+# it in the same job: `test errored (pytest is not installed)`. Measured, not guessed:
+# `UV_NO_SYNC` does not prevent the delete, and pointing `UV_PROJECT_ENVIRONMENT` at a path inside
+# the image does -- but then `uv run` falls through to PATH, which serves `ruff` (a real binary)
+# and not `mypy` (a console script whose shebang carries the host's absolute venv path). Test
+# escapes all of this because `python -m pytest` needs only site-packages on `PYTHONPATH`, and
+# those are path-independent. The honest fix is an image carrying this repository's checks.
 lockstep.bind(
     Validate,
-    CommandValidate(["make", "lint", "typecheck"], fix=["make", "fmt"], sandbox=_CONTAINED),
+    CommandValidate(["make", "lint", "typecheck"], fix=["make", "fmt"], sandbox=Sandbox()),
 )
 
 # The environment the two above run in. Detection would derive this same line from `uv.lock`, and
