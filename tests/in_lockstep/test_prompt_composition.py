@@ -279,3 +279,36 @@ def test_gate_judge_2_the_judge_the_framework_composes_is_the_one_the_corpus_fro
     assert judge_layers().projection(RubricJudgePrompt().body_label()) == entry["projection"]
     assert live == frozen, "the composed judge prompt moved; re-freeze it in the same commit"
     assert hashlib.sha256(live.encode()).hexdigest() == entry["sha256"]
+
+
+# -- GATE-BODY-2: the package ships no prompt nothing reads --------------------------------------
+
+
+def test_gate_body_2_every_shipped_body_is_reachable_from_the_code_that_composes_it() -> None:
+    """GATE-BODY-2. A body no code names is prose that cannot be read, improved or replayed.
+
+    Nine were shipped that way: four from the multi-phase implement pipeline `implement/tdd.md`
+    replaced, two from the fix pipeline `fix.py`'s own docstring calls "two bodies", two for a
+    `retro` verb that does not exist, and `skills/change-format.md`, which describes handing a
+    change back through an output directory -- a mechanism writes stopped using when they became a
+    tool, and which `implement_layers` already names as how a prompt starts lying.
+
+    It cost something real: `implement/test-writer.md` is where guidance about writing tests would
+    obviously go, and a paragraph put there would have reached nobody (#391).
+
+    Reachable means named by a string literal somewhere under `src`, which is how both spellings
+    resolve -- `Body.from_file` for a body and `_text` for a guardrail or skill -- without this
+    test having to know which. A body offered to adopters rather than bound is still reachable:
+    name it in the code that offers it.
+    """
+    prompts = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "prompts"
+    src = " ".join(p.read_text() for p in (prompts.parent).rglob("*.py"))
+    orphans = sorted(
+        str(body.relative_to(prompts))
+        for body in prompts.rglob("*.md")
+        if f'"{body.relative_to(prompts).as_posix()}"' not in src
+    )
+    assert orphans == [], (
+        f"shipped but named by no code: {', '.join(orphans)}. Bind it, offer it by name, or "
+        f"delete it -- a body nothing reads is guidance that has already stopped being read."
+    )

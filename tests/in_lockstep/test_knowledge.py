@@ -18,6 +18,16 @@ CORPUS = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "corpus"
 
 
 def test_every_shipped_family_has_prompts() -> None:
+    """The census, and the rule behind it.
+
+    `retro` sat in this set for a verb that does not exist, so the list asserted a family nothing
+    could run -- the same rot `GATE-BODY-2` found one layer down, pinned one layer up. The derived
+    half below is what would have caught it: a family names a verb, or the prose in it is prose
+    nothing dispatches to. The explicit set stays because a new family should be a deliberate diff
+    rather than a directory somebody happened to add.
+    """
+    from in_lockstep.core.verbs import SHIPPED_VERBS
+
     families = {p.name for p in PROMPTS.iterdir() if p.is_dir() and p.name not in ("skills", "__pycache__")}
     assert families == {
         "review",
@@ -26,10 +36,12 @@ def test_every_shipped_family_has_prompts() -> None:
         "backport",
         "triage",
         "rfe",
-        "retro",
         "improve",
         "judge",
     }
+    assert families <= set(SHIPPED_VERBS), (
+        f"prompt families that name no shipped verb: {sorted(families - set(SHIPPED_VERBS))}"
+    )
 
 
 def test_the_eval_corpus_came_across_intact() -> None:

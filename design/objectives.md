@@ -302,7 +302,7 @@ remove. The table returns the day a gate qualifies; the test recomputes it eithe
 
 ## Held, and claimed by no objective
 
-**15 held gates are cited by no objective row.** The number is exact and the test recomputes it:
+**16 held gates are cited by no objective row.** The number is exact and the test recomputes it:
 it may not rise without a row claiming the gate or this sentence saying why it holds for nobody,
 and when it falls this sentence is lowered and the fall is the credit. Thirty-nine until Phase 5
 built `fan_out` and added two spend-and-time rows to it; forty-one until O13 claimed those two and
@@ -312,7 +312,10 @@ sixteen citations the audit named (#315) and retired `GATE-GUARD-3` with its sub
 What is left is apparatus, and every one of the fifteen is named here so that the next re-read
 starts from a list rather than a count. The two ledgers checking themselves: `GATE-TEST-1`,
 `GATE-TEST-2`, `GATE-TEST-7`, `GATE-TEST-8` -- consistency of the corpus and of these tables,
-serving every row rather than one. The transport's own discipline, held under `AiInvoker` and
+serving every row rather than one. `GATE-BODY-2` joins them and is the sixteenth: the
+prompt package checking that it ships nothing nobody reads, which serves every prompt rather than
+one and which no objective's words reach -- O5 improves the prompts that PRODUCED a recorded
+inference, and an orphan produced none. The transport's own discipline, held under `AiInvoker` and
 cited by no objective because no objective's sentence is about how a transport behaves:
 `GATE-ASYNC-1` to `-4` and `GATE-RETRY-1` to `-3`. The ledger's own shape: `GATE-LEDGER-5` and
 `GATE-LEDGER-6`, the epoch and the keys a record may not carry. And the two the plan asked the
