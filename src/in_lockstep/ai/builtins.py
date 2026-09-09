@@ -556,11 +556,7 @@ def read_write_execute(
         Tool(
             server=BUILTIN_SERVER,
             name="run_script",
-            description=(
-                "Run a command as an argv list — no shell, so no pipes, globs or redirection. "
-                f"Allowed programs: {', '.join(allowed_commands)}. Runs against the repository "
-                "working tree, which does NOT contain this run's staged writes."
-            ),
+            description=_script_description(allowed_commands, commands),
             parameters={
                 "type": "object",
                 "properties": {
@@ -607,6 +603,37 @@ def read_write_execute(
     if delegation:
         tools = with_delegation(tools)
     return tools, runner
+
+
+def _script_description(allowed_commands: tuple[str, ...], commands: CommandRunner | None) -> str:
+    """What `run_script` tells a model it can do, before the model spends a turn finding out.
+
+    A list of twelve programs under the word "Allowed" is read as an inventory, which is the only
+    reading available to something that cannot look. Where the sandbox declares what its image
+    declares, the description names the intersection instead -- the truth, before the first turn.
+    Where it declares nothing, the description says that the list is a policy rather than pretending
+    to knowledge nobody supplied.
+    """
+    shell = "Run a command as an argv list — no shell, so no pipes, globs or redirection. "
+    tree = " Runs against the repository working tree, which does NOT contain this run's staged writes."
+    executables = tuple(getattr(commands, "executables", ()) or ())
+    if not executables:
+        return (
+            f"{shell}Programs you MAY run: {', '.join(allowed_commands)} — a policy, not an "
+            f"inventory: this session's sandbox decides what is actually installed, and a program "
+            f"that is not there says so.{tree}"
+        )
+    here = tuple(program for program in allowed_commands if program in executables)
+    if not here:
+        return (
+            f"{shell}This session's sandbox carries none of the programs you may run, so every "
+            f"command is refused. Use `run_tests` and `run_validate`, which run the verbs this "
+            f"repository bound.{tree}"
+        )
+    return (
+        f"{shell}Programs available here: {', '.join(here)} — this session's sandbox declares them, "
+        f"and anything else is refused before it runs.{tree}"
+    )
 
 
 def with_delegation(tools: ToolSet) -> ToolSet:
@@ -1089,6 +1116,12 @@ class ToolRunnerImpl:
                 f"refused: {program!r} is not an allowed program. Allowed: "
                 f"{', '.join(self.allowed_commands)}."
             )
+        # What the sandbox says it has, when it says anything. Answered here rather than by
+        # starting a container and reading a 127 off it: the turn is the same either way, and the
+        # round trip is not. Empty means nobody declared, which is unknown and not "none".
+        executables = tuple(getattr(self.commands, "executables", ()) or ())
+        if executables and program not in executables:
+            return _not_in_this_sandbox(program, self, declared=False)
 
         requested = args.get("timeout_seconds")
         timeout = (
@@ -1097,6 +1130,12 @@ class ToolRunnerImpl:
         result = await self.commands.run(argv, cwd=str(self.workspace.root), timeout=timeout)
         exit_code = getattr(result, "exit_code", 1)
         how = getattr(result, "how", "unknown")
+        if exit_code == 127:
+            # The backstop, not the mechanism. A declaration decides what the model is told and
+            # never what is true, so a program that reaches here either was never declared -- an
+            # undeclared sandbox, which is one turn to find out -- or was declared and is missing,
+            # which is a stale `executables=` and says so.
+            return _not_in_this_sandbox(program, self, declared=bool(executables), how=how)
         # The tail, not the head. A test run's useful part is the failure summary at the end, and
         # truncating from the front is how a model ends up reasoning about the collection banner.
         body = _tail(str(getattr(result, "stdout", "")), str(getattr(result, "stderr", "")))
@@ -1142,6 +1181,54 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
             f"you asked for; raise `offset` to read on]"
         )
     return head + body
+
+def _executes_here(runner: ToolRunnerImpl) -> str:
+    """The tools in THIS session that run the repository's own bound verbs, named.
+
+    Derived, never tabulated. The first version of this carried a map from program name to advice
+    -- pytest to `run_tests`, ruff to `run_validate` -- which is the framework guessing at what a
+    program is for in somebody else's repository (`cargo` is build and test; `make` is whatever
+    the Makefile says) and, worse, asserting bindings that may not exist: telling a model to use
+    `run_tests` where no Test verb is bound sends it from one dead end to another. What is bound
+    is a fact this object holds.
+    """
+    have = []
+    if runner.tests is not None:
+        have.append("`run_tests` runs the bound Test verb over what you have staged")
+    if runner.validates is not None:
+        have.append("`run_validate` runs the bound Validate the same way")
+    if not have:
+        return (
+            " Nothing in this session executes the repository's own tools, so reason from what you can read."
+        )
+    return f" {'; '.join(have)} -- and both see your staged writes, which `run_script` does not."
+
+
+def _not_in_this_sandbox(program: str, runner: ToolRunnerImpl, *, declared: bool, how: str = "") -> str:
+    """What a model is told when a program it may run is not where the command would run.
+
+    Two facts and one instruction, because a bare `exit 127` is indistinguishable from a command
+    that ran and failed: the program is absent, the allowlist never said otherwise, and here is
+    what this session has instead. A model given only the first works around the tool by reading
+    source, which is not progress and burns an idle allowance (#401).
+
+    `declared` says which side was wrong. A sandbox that never listed its programs is simply
+    unknown, and finding out this way costs one turn. A sandbox that DECLARED this program and
+    does not have it is a stale declaration, and saying so points at the line to fix rather than
+    leaving somebody to conclude the tool is broken.
+    """
+    if declared:
+        head = (
+            f"error: {program!r} is declared in this session's sandbox `executables=` and is not "
+            f"installed in the image ({how or 'not found'}). The declaration is stale; fix it "
+            f"where the sandbox is bound."
+        )
+    else:
+        head = (
+            f"error: {program!r} is not in this session's sandbox. The allowed list is what you MAY "
+            f"run, not what is installed here."
+        )
+    return head + _executes_here(runner)
 
 
 def _tail(stdout: str, stderr: str) -> str:

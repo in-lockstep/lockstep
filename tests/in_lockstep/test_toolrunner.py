@@ -16,11 +16,18 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
 
-from in_lockstep.ai.builtins import ToolRunnerImpl, Workspace, read_only, read_write
+from in_lockstep.ai.builtins import (
+    ToolRunnerImpl,
+    Workspace,
+    read_only,
+    read_write,
+    read_write_execute,
+)
 from in_lockstep.cli import main
 from in_lockstep.core.verbs import Capability
 from in_lockstep.llm.interface import LLMProvider
@@ -433,3 +440,210 @@ def test_a_range_is_still_refused_where_the_whole_file_would_be(workspace: Works
     _, run = read_only(workspace)
     answer = asyncio.run(run("builtin", "read_file", {"path": ".env", "offset": 1, "limit": 1}))
     assert answer.startswith("refused:") and "SECRET" not in answer
+
+
+# -- GATE-SCRIPT-1: what a session may run, and what it can ------------------------------------------
+
+
+class _Runner:
+    """A command runner that records what it was asked and reports a missing binary as 127."""
+
+    def __init__(self, *, executables: tuple[str, ...] = (), exit_code: int = 127) -> None:
+        self.executables = executables
+        self.exit_code = exit_code
+        self.seen: list[list[str]] = []
+
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+        self.seen.append(list(command))
+        return type(
+            "R",
+            (),
+            {
+                "exit_code": self.exit_code,
+                "stdout": "2 failed" if self.exit_code == 1 else "",
+                "stderr": f"{command[0]}: not found" if self.exit_code == 127 else "",
+                "how": "container:docker",
+            },
+        )()
+
+
+async def _ok(paths: tuple[str, ...] = ()) -> str:
+    return "ok"
+
+
+def test_gate_script_1_a_sandbox_that_declares_its_programs_refuses_the_rest_before_running(
+    workspace: Workspace,
+) -> None:
+    """GATE-SCRIPT-1. The allowlist is what a model MAY run; the image decides what it CAN, and
+    where the sandbox says which, the answer costs no container start at all."""
+    runner = _Runner(executables=("python3",))
+    _, run = read_write_execute(workspace, commands=runner, tests=_ok)
+
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest", "-q"]}))
+    assert "'pytest' is not in this session's sandbox" in answer
+    assert "not what is installed here" in answer, "the allowlist never promised otherwise"
+    assert runner.seen == [], "a container was started to learn what the binding already said"
+
+    allowed = asyncio.run(run("builtin", "run_script", {"command": ["python3", "-c", "pass"]}))
+    assert runner.seen == [["python3", "-c", "pass"]], "a declared program still runs"
+    assert "not in this session's sandbox" not in allowed
+
+
+def test_gate_script_1_the_redirect_names_the_tools_this_session_actually_has(
+    workspace: Workspace,
+) -> None:
+    """GATE-SCRIPT-1, derived rather than tabulated. The first version of this carried a map from
+    program name to advice, which guessed what a program is for in somebody else's repository and,
+    worse, named `run_tests` where no Test verb is bound -- sending a model from one dead end to
+    another."""
+    both = _Runner(executables=("python3",))
+    _, run = read_write_execute(workspace, commands=both, tests=_ok, validates=_ok)
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest"]}))
+    assert "`run_tests`" in answer and "`run_validate`" in answer
+    assert "staged writes" in answer, "and why they are not run_script"
+
+    bare = _Runner(executables=("python3",))
+    _, run = read_write_execute(workspace, commands=bare)
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest"]}))
+    assert "`run_tests`" not in answer, "a tool nothing is bound to is not advice"
+    assert "Nothing in this session executes the repository's own tools" in answer
+
+
+def test_gate_script_1_a_declared_program_that_is_missing_says_the_declaration_is_stale(
+    workspace: Workspace,
+) -> None:
+    """GATE-SCRIPT-1, the backstop. A declaration decides what the model is TOLD and never what is
+    true: an image changes, a tuple does not, and the run that meets the drift should point at the
+    line to fix rather than leave somebody concluding the tool is broken."""
+    runner = _Runner(executables=("pytest",))
+    _, run = read_write_execute(workspace, commands=runner, tests=_ok)
+
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest", "-q"]}))
+    assert runner.seen, "a declared program is attempted, not refused"
+    assert "declaration is stale" in answer and "where the sandbox is bound" in answer
+
+
+def test_gate_script_1_an_undeclared_sandbox_still_learns_from_the_attempt(
+    workspace: Workspace,
+) -> None:
+    """GATE-SCRIPT-1. Empty is unknown, not "none": nothing is refused early, and a program that
+    turns out to be absent costs one turn and says so rather than returning a bare exit line."""
+    runner = _Runner()
+    _, run = read_write_execute(workspace, commands=runner, tests=_ok)
+
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest", "-q"]}))
+    assert runner.seen == [["pytest", "-q"]], "an undeclared sandbox is not second-guessed"
+    assert "not in this session's sandbox" in answer and "stale" not in answer
+
+
+def test_gate_script_1_the_declaration_decides_what_the_description_promises(
+    workspace: Workspace,
+) -> None:
+    """GATE-SCRIPT-1, where the model reads it before spending anything. A list of twelve programs
+    under the word "Allowed" is read as what is there, which is the only reading available to
+    something that cannot look."""
+    declared, _ = read_write_execute(workspace, commands=_Runner(executables=("python3", "make")))
+    described = declared.resolve("run_script").description
+    assert "Programs available here: python3, make" in described
+    assert "refused before it runs" in described
+    assert "pytest" not in described, "a program the image lacks is not offered"
+
+    unknown, _ = read_write_execute(workspace, commands=_Runner())
+    described = unknown.resolve("run_script").description
+    assert "a policy, not an inventory" in described
+
+    empty, _ = read_write_execute(workspace, commands=_Runner(executables=("cmake",)))
+    described = empty.resolve("run_script").description
+    assert "carries none of the programs you may run" in described
+
+
+def test_a_program_that_runs_and_fails_is_still_reported_as_a_failure(workspace: Workspace) -> None:
+    """The control on the redirect: 127 is "not there", and every other exit code is an answer
+    about the code. Folding the two together would tell a model its failing suite was missing."""
+    _, run = read_write_execute(workspace, commands=_Runner(executables=("pytest",), exit_code=1), tests=_ok)
+    answer = asyncio.run(run("builtin", "run_script", {"command": ["pytest", "-q"]}))
+    assert answer.startswith("exit 1 (container:docker)") and "2 failed" in answer
+    assert "not in this session's sandbox" not in answer and "stale" not in answer
+
+
+# -- GATE-SCRIPT-1: the declaration is checked where a probe is free --------------------------------
+
+
+class _Image:
+    """A runner standing in for a bound sandbox: an image, a declaration, and a shell."""
+
+    def __init__(self, *, has: tuple[str, ...], executables: tuple[str, ...] = (), shell: bool = True):
+        self.image = "example.test/image:tag"
+        self.executables = executables
+        self._has = has
+        self._shell = shell
+
+    async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+        if not self._shell:
+            return type("R", (), {"exit_code": 127, "stdout": "", "stderr": "sh: not found", "how": "x"})()
+        script = command[-1]
+        found = [p for p in self._has if f"command -v {p} " in script]
+        # A shell exits with the status of its LAST statement, and this models that, because it is
+        # the thing that went wrong for real: without a trailing `exit 0` the probe's status is the
+        # last `command -v`, which is 127 whenever the last program happens to be missing, and
+        # every image would be reported as unaskable. A double that always returned 0 would let
+        # that regression back in silently.
+        last = script.rsplit(";", 1)[-1].strip()
+        if last == "exit 0":
+            code = 0
+        else:
+            from in_lockstep.ai.builtins import ALLOWED_COMMANDS
+
+            asked = [p for p in ALLOWED_COMMANDS if f"command -v {p} " in last]
+            code = 0 if asked and asked[-1] in self._has else 127
+        return type(
+            "R", (), {"exit_code": code, "stdout": "\n".join(found) + "\n", "stderr": "", "how": "x"}
+        )()
+
+
+def _doctor_over(runner: Any) -> Any:
+    from in_lockstep.doctor import Report, _sandbox_executables
+
+    lockstep = type("L", (), {"workshop": type("W", (), {"commands": runner})()})()
+    report = Report()
+    _sandbox_executables(report, lockstep, Path("."))
+    return report
+
+
+def test_gate_script_1_doctor_says_what_to_declare_when_nothing_is_declared() -> None:
+    """GATE-SCRIPT-1. A declaration nobody can check goes stale silently, and one nobody can
+    DISCOVER has to be known in advance -- which is what a paid run found out by trying 36 times.
+    The probe belongs in a diagnostic, where a container start costs nothing that matters."""
+    report = _doctor_over(_Image(has=("python3", "make", "git")))
+    (finding,) = [c for c in report.checks if c.code == "DOC183"]
+    assert "carries 2 of the 12" in finding.message, "git is not one run_script offers"
+    assert 'executables=("python3", "make")' in finding.hint
+
+
+def test_gate_script_1_doctor_names_a_declaration_that_has_drifted_from_its_image() -> None:
+    """GATE-SCRIPT-1. An image changes and a tuple does not. The model is offered what the tuple
+    says, so the drift is a warning naming what is gone rather than a note."""
+    report = _doctor_over(_Image(has=("python3",), executables=("python3", "pytest")))
+    warnings = [c for c in report.checks if c.code == "DOC183" and c.severity.value == "warning"]
+    assert warnings and "pytest" in warnings[0].message
+    assert "drifted" in warnings[0].hint
+
+
+def test_a_declaration_that_matches_its_image_says_nothing() -> None:
+    """The quiet case, which is most of them: a check that speaks when there is nothing to say is
+    one people stop reading."""
+    assert _doctor_over(_Image(has=("python3", "make"), executables=("python3", "make"))).checks == []
+
+
+def test_an_image_that_cannot_be_asked_says_so_rather_than_reporting_it_empty() -> None:
+    """A distroless image has no `sh`, and a machine may have no runtime. Neither means the image
+    carries nothing, and reporting that would send somebody to fix a declaration that is right."""
+    report = _doctor_over(_Image(has=("python3",), executables=("python3",), shell=False))
+    (finding,) = [c for c in report.checks if c.code == "DOC183"]
+    assert "could not ask" in finding.message and "unchecked" in finding.message
+
+
+def test_a_runner_with_no_image_is_not_this_checks_business() -> None:
+    """`run_script` may be unbound, or bound to something that is not a container at all."""
+    assert _doctor_over(None).checks == []
+    assert _doctor_over(type("R", (), {"image": ""})()).checks == []
