@@ -24,7 +24,7 @@ from ...ai.invoker import AiInvoker, InvokePolicy
 from ...ai.prompt import PromptLayers
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
-from ...core.types import ChangeSet
+from ...core.types import ChangeSet, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...prompts.implement import PROMPTS, ImplementPrompt, implement_layers
 from .attempts import attempt_items
@@ -69,6 +69,11 @@ class ImplementReport:
     turns: int = 0
     #: Consecutive turns at the end that staged nothing and tested nothing new (#337).
     idle_turns: int = 0
+    #: What the repository's own validator said about this change, or None when nothing checked it
+    #: -- no Validate bound, or a validator that could not report. Absent is not clean: the propose
+    #: half reads None as unverified rather than as passing, the way it already reads a missing
+    #: test verdict.
+    validation: ValidationReport | None = None
 
     @property
     def empty(self) -> bool:

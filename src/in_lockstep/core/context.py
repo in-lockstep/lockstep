@@ -166,6 +166,11 @@ class RepoFacts:
     ruff: bool = False
     eslint: bool = False
     lint_command: tuple[str, ...] = ()  # a generic linter argv, e.g. ("npx", "eslint", ".")
+    #: What this repository runs to REPAIR what `lint_command` reports -- its own `make fmt`, or
+    #: whatever it calls that. Bound alongside the check so a strategy can repair a formatting
+    #: finding without spending a model turn on it; empty where the repository declares no such
+    #: target, which is not something to invent (`--fix` means nothing to `make lint`).
+    fix_command: tuple[str, ...] = ()
     build_command: tuple[str, ...] = ()  # e.g. ("make", "build") or ("npm", "run", "build")
     run_command: tuple[str, ...] = ()  # e.g. ("make", "run") or ("npm", "start")
     #: The steps that build the repository's own environment, in order, e.g.
@@ -244,10 +249,12 @@ class RepoFacts:
             out.append("tests: pytest")
         elif self.test_command:
             out.append(f"tests: {' '.join(self.test_command)}")
-        if self.ruff:
-            out.append("lint: ruff")
-        elif self.lint_command:
+        if self.lint_command:
             out.append(f"lint: {' '.join(self.lint_command)}")
+            if self.fix_command:
+                out.append(f"fix: {' '.join(self.fix_command)}")
+        elif self.ruff:
+            out.append("lint: ruff")
         if self.build_command:
             out.append(f"build: {' '.join(self.build_command)}")
         if self.run_command:

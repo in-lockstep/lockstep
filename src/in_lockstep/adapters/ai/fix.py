@@ -30,8 +30,8 @@ from ...ai.prompt import PromptLayers
 from ...ai.structured import schema_instruction as _schema_instruction
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
-from ...core.outcome import Finding, Outcome, Severity, Status
-from ...core.types import ChangeSet, Test
+from ...core.outcome import Cost, Finding, Outcome, Severity, Status
+from ...core.types import ChangeSet, Test, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
 from ..worktree import materialize, staged_refusal
@@ -45,6 +45,7 @@ from .strategy import (
     run_phase,
     search_notes,
     test_findings,
+    validated,
 )
 
 
@@ -71,6 +72,10 @@ class FixReport:
     turns: int = 0
     #: Consecutive turns at the end that staged nothing and tested nothing new (#337).
     idle_turns: int = 0
+    #: What the repository's own validator said about the whole change, or None when nothing
+    #: checked it. On the report rather than on either half, because the validator was pointed at
+    #: the set that travels and a finding does not belong to the reproducer or the fix by itself.
+    validation: ValidationReport | None = None
 
     @property
     def changeset(self) -> ChangeSet:
@@ -229,7 +234,25 @@ class DiagnoseThenFix(FixStrategy):
 
         summary, notes, unfinished, malformed = read_reply(fix_inv.content)
         full = session.workspace.changeset(summary=summary, ticket=ticket.key)
-        cost = repro_inv.cost + fix_inv.cost
+
+        # The repository's own checks, before the green run below rather than after it: a
+        # deterministic fix and a repair turn both change the code, and a green proved of bytes
+        # that no longer travel is a claim about something else.
+        repair_system, repair_messages = self._compose(session, "fix/fix-writer", fix_params, package)
+        validation = await validated(
+            ctx,
+            session,
+            full,
+            system=repair_system,
+            messages=repair_messages,
+            package=package,
+            prefix="fix",
+        )
+        # Rebuilt from the workspace, which is where both tiers wrote -- and the split below keys
+        # on the reproducer's paths, so a repair turn's edits land on the fix half where they
+        # belong without this having to say so.
+        full = session.workspace.changeset(summary=summary, ticket=ticket.key)
+        cost = repro_inv.cost + fix_inv.cost + sum((i.cost for i in validation.invocations), Cost())
 
         refusals = session.guard.check(full, workflow_id=session.workspace.workflow_id)
         if refusals:
@@ -267,15 +290,18 @@ class DiagnoseThenFix(FixStrategy):
             notes=notes,
             unfinished=unfinished,
             strategy=self.id,
-            turns=repro_inv.turn_count + fix_inv.turn_count,
+            turns=repro_inv.turn_count
+            + fix_inv.turn_count
+            + sum(i.turn_count for i in validation.invocations),
             idle_turns=fix_inv.idle_turns,
+            validation=validation.report,
         )
         findings = reported(
             full,
             malformed=malformed,
-            invocations=(repro_inv, fix_inv),
+            invocations=(repro_inv, fix_inv, *validation.invocations),
             prefix="fix",
-            notes=search_notes(session),
+            notes=search_notes(session) + validation.findings(),
         )
 
         async with materialize(session.repo_root, full) as tree:
@@ -311,18 +337,33 @@ class DiagnoseThenFix(FixStrategy):
             reason="exhausted" if fix_inv.exhausted else None,
         )
 
+    def _compose(
+        self, session: FixSession, prompt_id: str, params: FixParams, package: ContextPackage
+    ) -> tuple[str, Any]:
+        """The system prompt and rendered messages for one phase.
+
+        Its own function because two callers need the same pair and neither may derive it
+        separately: `_run` makes the phase, and the validate step's repair turn continues the same
+        conversation. Composing it twice is how the repair would end up asking a differently
+        instructed model than the one that wrote the code it is repairing.
+        """
+        lens = session.prompts[prompt_id]()
+        return (
+            lens.system(session.layers) + "\n\n" + _schema_instruction(FIX_SCHEMA),
+            lens.render(params, package),
+        )
+
     async def _run(
         self, session: FixSession, prompt_id: str, params: FixParams, package: ContextPackage
     ) -> Any:
         """One phase: compose the prompt's system + schema, render the user message, and run the
         model loop through `run_phase` — which raises `PhaseError` on a refusal, failure or
         truncation, caught once around both phases in `execute`."""
-        lens = session.prompts[prompt_id]()
-        system = lens.system(session.layers) + "\n\n" + _schema_instruction(FIX_SCHEMA)
+        system, messages = self._compose(session, prompt_id, params, package)
         return await run_phase(
             session,
             system,
-            lens.render(params, package),
+            messages,
             package,
             prefix="fix",
             schema=FIX_SCHEMA,

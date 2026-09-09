@@ -91,8 +91,11 @@ class Ctx:
         self.adapter = PytestTest(args=["-q"], sandbox=sandbox or Declared())
 
         class _Container:
-            def has(_self, _verb: object) -> bool:
-                return test_bound
+            def has(_self, verb: object) -> bool:
+                # Test and nothing else. It used to answer True to every verb, which was harmless
+                # only while nothing asked for a second one: the moment a strategy asked whether a
+                # Validate was bound, this fixture said yes and handed back a pytest runner.
+                return verb is Test and test_bound
 
             def resolve(_self, _verb: object) -> PytestTest:
                 return self.adapter

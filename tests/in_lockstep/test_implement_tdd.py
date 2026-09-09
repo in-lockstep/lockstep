@@ -27,7 +27,7 @@ from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.spend import Budget, Spend
-from in_lockstep.core.types import Test
+from in_lockstep.core.types import Test, Validate
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
@@ -103,21 +103,36 @@ class Declared(Sandbox):
 class Ctx:
     """A ctx whose Test verb is a real PytestTest, so the red/green runs are real."""
 
-    def __init__(self, *, test_bound: bool = True, sandbox: Runner | None = None) -> None:
+    def __init__(
+        self, *, test_bound: bool = True, sandbox: Runner | None = None, validator: Any = None
+    ) -> None:
         self.spend = Spend(budget=Budget(usd=5.0))
         self.run_id = "t"
         self.adapter = PytestTest(args=["-q"], sandbox=sandbox or Declared())
+        self.validator = validator
+        #: Which verbs were dispatched, in order — what GATE-VALIDATE-2's ordering claim reads.
+        self.order: list[str] = []
 
         class _Container:
-            def has(_self, _verb: object) -> bool:
-                return test_bound
+            def has(_self, verb: object) -> bool:
+                # Test, and Validate only when one was handed in. It used to answer True to every
+                # verb, which was harmless only while nothing asked for a second one: the moment a
+                # strategy asked whether a Validate was bound, this fixture said yes and handed
+                # back a pytest runner.
+                if verb is Validate:
+                    return validator is not None
+                return verb is Test and test_bound
 
-            def resolve(_self, _verb: object) -> PytestTest:
-                return self.adapter
+            def resolve(_self, verb: object) -> Any:
+                return self.validator if verb is Validate else self.adapter
 
         self.container = _Container()
 
-    async def do(self, request: Test) -> Outcome[Any]:
+    async def do(self, request: Any) -> Outcome[Any]:
+        self.order.append(type(request).__name__)
+        if isinstance(request, Validate):
+            checked: Outcome[Any] = await self.validator.invoke(self, request)
+            return checked
         return await self.adapter.invoke(self, request)
 
 
@@ -155,11 +170,16 @@ _FAILING_TEST = "from calc import add\n\n\ndef test_add():\n    assert add(2, 3)
 
 
 def _run(
-    provider: Scripted, repo: Path, *, test_bound: bool = True, sandbox: Runner | None = None
+    provider: Scripted,
+    repo: Path,
+    *,
+    test_bound: bool = True,
+    sandbox: Runner | None = None,
+    ctx: Ctx | None = None,
 ) -> Outcome[Any]:
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            Ctx(test_bound=test_bound, sandbox=sandbox), Implement(ticket=_ticket())
+            ctx or Ctx(test_bound=test_bound, sandbox=sandbox), Implement(ticket=_ticket())
         )
     )
 
@@ -399,3 +419,56 @@ def test_tdd_fails_when_the_implementation_leaves_the_test_red(repo: Path) -> No
     # The change is still carried so a person can see what it tried.
     assert outcome.value is not None
     assert set(outcome.value.changeset.paths()) == {"test_calc.py", "calc.py"}
+
+
+def test_gate_validate_2_the_checks_run_before_the_green_is_confirmed(repo: Path) -> None:
+    """GATE-VALIDATE-2, the ordering, which is not a preference.
+
+    A deterministic fix and a repair turn both change the code. Confirming green first would prove
+    it of bytes that no longer travel -- so the suite is run last, over what the checks left, and
+    both claims are claims about the same change.
+    """
+    from in_lockstep.core.types import ValidationFinding, ValidationReport
+
+    class _Validator:
+        """Reports one finding, then nothing: the second pass sees a repaired tree."""
+
+        fixes = False
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def invoke(self, ctx: Any, request: Validate) -> Outcome[ValidationReport]:
+            self.calls += 1
+            findings = (
+                (ValidationFinding(rule="F401", message="`os` imported but unused", path="calc.py"),)
+                if self.calls == 1
+                else ()
+            )
+            return Outcome(
+                status=Status.SUCCEEDED if not findings else Status.FAILED,
+                value=ValidationReport(findings=findings),
+            )
+
+    ctx = Ctx(validator=_Validator())
+    provider = Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),
+            _done("staged the failing test"),
+            _call("write_file", path="calc.py", contents="import os\n\n\ndef add(a, b):\n    return a + b\n"),
+            _done("implemented add()"),
+            # The repair turn: the unused import goes, and the implementation stays.
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            _done("removed the unused import"),
+        ]
+    )
+    outcome = _run(provider, repo, ctx=ctx)
+
+    assert outcome.status is Status.SUCCEEDED, outcome.findings
+    # Red, then the checks and their repair, and only then the green that decides. The trailing
+    # Test is revert-and-verify, which runs after everything.
+    assert ctx.order[:4] == ["Test", "Validate", "Validate", "Test"], ctx.order
+    assert outcome.value is not None
+    contents = {c.path: c.contents for c in outcome.value.changeset.changes}
+    assert contents["calc.py"] == "def add(a, b):\n    return a + b\n", "the repair is what travels"
+    assert outcome.value.validation is not None and outcome.value.validation.clean

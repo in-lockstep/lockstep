@@ -17,16 +17,16 @@ import sys
 from pathlib import Path
 
 from in_lockstep import Lockstep, Workshop
-from in_lockstep.adapters import CommandProvision, Provision, PytestTest, RuffValidate
+from in_lockstep.adapters import CommandProvision, CommandValidate, Provision, PytestTest
 from in_lockstep.adapters.ai import TDD, AiImprove, AiJudge, DiagnoseThenFix, Draft, Judge, Measure
 from in_lockstep.adapters.pytest_adapter import Test
-from in_lockstep.adapters.ruff_adapter import Validate
 from in_lockstep.adapters.sandbox import Sandbox
 from in_lockstep.core.changes import DENY_ALWAYS, DENY_UNLESS_GRANTED, ChangeGuard, PathPolicy
 from in_lockstep.core.improve import Improvable, Improver
 from in_lockstep.core.policy import Policy
 from in_lockstep.core.ports import LedgerStore
 from in_lockstep.core.spend import Budget
+from in_lockstep.core.types import Validate
 from in_lockstep.improver import CorpusImprover
 from in_lockstep.middleware import CostBudget, otel
 from in_lockstep.middleware.approval import ApprovalGate
@@ -122,7 +122,20 @@ lockstep.bind(
         ),
     ),
 )
-lockstep.bind(Validate, RuffValidate(sandbox=Sandbox()))
+# What this repository actually gates itself on, rather than the one tool of the several its
+# checks run (#396). `make lint` is ruff's check AND its formatter's; `typecheck` is mypy, which a
+# `ruff` binding cannot see at all -- so a model-authored change that type-checked wrong passed our
+# own checks and failed our own CI, which is the gap that decided this. `make fmt` is the repair
+# half: a formatting finding is fixed by a command rather than by a model turn.
+#
+# Measured before it was bound, because the objection to a target is that it needs the
+# repository's environment: `make lint typecheck` in a materialised worktree of HEAD is 8s, since
+# `uv run` builds the tree's venv from the lockfile out of a warm cache. `RuffValidate` remains
+# the shipped fallback for a repository that configured ruff and declared no target of its own.
+lockstep.bind(
+    Validate,
+    CommandValidate(["make", "lint", "typecheck"], fix=["make", "fmt"], sandbox=Sandbox()),
+)
 
 # The environment the two above run in. Detection would derive this same line from `uv.lock`, and
 # writing it down is what makes `in-lockstep provision` do something here: an explicit module wins

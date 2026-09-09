@@ -118,32 +118,39 @@ async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> 
     return state
 
 
-def staged_refusal(ctx: Any) -> str | None:
-    """Why the bound Test runner may not be handed a MODEL-staged tree, or None when it may.
+def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
+    """Why the runner bound to `verb` may not be handed a MODEL-staged tree, or None when it may.
 
-    One question, asked at every place a staged change is materialised for `Test` -- `run_tests`,
-    a strategy's red and green runs, and the verdict below -- and asked BEFORE the worktree
-    exists. A staged test file is code the model wrote on a ticket that is untrusted by
-    construction, and `Sandbox()` with no image runs it as a subprocess on this host with `HOME`
-    and an open socket (#308): `~/.ssh` readable, the persisted CI token in a linked worktree's
-    `.git` file one `git config` away. The repository's OWN suite run by a person is a different
-    situation and keeps the fallback; this is scoped to what a model staged. The reason is spelled
-    so a refusal names the line to add, because a control that says "no" without saying what
-    would make it "yes" is one somebody switches off.
+    One question, asked at every place a staged change is materialised for something that
+    EXECUTES it -- `run_tests`, a strategy's red and green runs, the verdict below, and the build
+    a strategy runs over what it staged -- and asked BEFORE the worktree exists. A staged file is
+    code the model wrote on a ticket that is untrusted by construction, and `Sandbox()` with no
+    image runs it as a subprocess on this host with `HOME` and an open socket (#308): `~/.ssh`
+    readable, the persisted CI token in a linked worktree's `.git` file one `git config` away. The
+    repository's OWN suite run by a person is a different situation and keeps the fallback; this is
+    scoped to what a model staged. The reason is spelled so a refusal names the line to add,
+    because a control that says "no" without saying what would make it "yes" is one somebody
+    switches off.
+
+    `verb` is a parameter rather than `Test` by name because the question was never about tests:
+    it is about executing what a model wrote. A build runs the repository's own build scripts over
+    model-authored source -- a `setup.py`, a `build.rs`, a postinstall -- which is the same
+    exposure with a different file extension.
     """
     from .sandbox import host_fallback
 
     container = getattr(ctx, "container", None)
-    if container is None or not container.has(Test):
+    if container is None or not container.has(verb):
         return None
-    adapter = container.resolve(Test)
-    why = host_fallback(getattr(adapter, "sandbox", None))
+    adapter = container.resolve(verb)
+    why = host_fallback(getattr(adapter, "sandbox", None), named=verb.__name__)
     if why is None:
         return None
+    named = verb.__name__
     return (
-        f"{why}. A test a model staged runs only in a container: bind Test with "
-        f'Sandbox(image="...", require_container=True), with `mounts=` for the environment the '
-        f"suite needs (see docs/extending.md), or run this verb where a container runtime is."
+        f"{why}. What a model staged is executed only in a container: bind {named} with "
+        f'Sandbox(image="...", require_container=True), with `mounts=` for the environment it '
+        f"needs (see docs/extending.md), or run this verb where a container runtime is."
     )
 
 

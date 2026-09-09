@@ -41,6 +41,7 @@ from ..platform.artifacts import (
     ATTEMPT,
     FIX_CHANGESET,
     read_changeset,
+    read_validation,
     read_verdict,
     write_changeset,
 )
@@ -96,7 +97,10 @@ async def fix_from_ticket(
         # fix this loop ever produced passed its own reproducer and broke a test elsewhere; it was
         # proposed as ready for review on the strength of the half that passed.
         verdict = await verdict_over_staged(ctx, ctx.repo.root, report.changeset)
-        written = write_changeset(FIX_CHANGESET, report.changeset, verdict=verdict)
+        # As implement does, and for the same reason: the propose job cannot re-run the checks.
+        written = write_changeset(
+            FIX_CHANGESET, report.changeset, verdict=verdict, validation=report.validation
+        )
         print(f"staged    reproducer + fix -> {written}")
     return outcome
 
@@ -129,6 +133,7 @@ async def fix_propose(
     print(where)
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
+    validation = read_validation(artifact)
 
     if not changeset.changes:
         # An empty artifact means the fix failed: `fix/from-ticket` stages only when its reproducer
@@ -159,7 +164,11 @@ async def fix_propose(
     # Ready only when the whole suite agrees with the reproducer. Without a verdict — no Test verb
     # bound, or a runner that never started — this opens a draft: the reproducer passing is a fact
     # about the bug, and nobody has checked the rest of the repository.
-    ready = verdict is not None and verdict.green
+    # Green AND clean. A change whose lint failed is precisely a change that should not be asking
+    # for a person's time, and the repository already said what it wants to be judged by. An
+    # unchecked change (`validation is None`: nothing bound, or a validator that could not report)
+    # is not blocked by this -- absent is not failing, the same reading a missing verdict gets.
+    ready = verdict is not None and verdict.green and (validation is None or validation.clean)
     # Fetched before the change is opened, because the title comes from it now.
     issue = await tickets.get(ticket)
     try:
@@ -172,7 +181,7 @@ async def fix_propose(
             # summary is prose of any length. `Fix #319` is what this read when the summary was
             # empty (#343) -- the fallback of a fallback, and the one a reader actually saw.
             title=issue.title or changeset.summary or f"Fix {ticket}",
-            body=fix_body(changeset, verdict),
+            body=fix_body(changeset, verdict, validation),
             ticket=ticket,
             workflow="fix",
             run_id=ctx.run_id,

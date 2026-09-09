@@ -33,7 +33,7 @@ from ...core.outcome import Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
 from .implement import Implement, ImplementReport, ImplementStrategy
-from .strategy import PhaseError, read_reply, reported, run_phase, search_notes
+from .strategy import PhaseError, read_reply, reported, run_phase, search_notes, validated
 
 
 class Oneshot(ImplementStrategy):
@@ -84,6 +84,16 @@ class Oneshot(ImplementStrategy):
         summary, notes, unfinished, malformed = read_reply(invocation.content)
 
         changeset = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+
+        # The repository's own checks over what was staged, and a bounded repair of what they
+        # found. Deterministic first: what the validator can fix costs no turn at all.
+        validation = await validated(
+            ctx, session, changeset, system=system, messages=messages, package=package, prefix="implement"
+        )
+        # Rebuilt rather than patched: `validated` writes through the workspace, so this is the
+        # same assembly as above and there is one place a staged set comes from.
+        changeset = session.workspace.changeset(summary=summary, ticket=ticket.key, notes=notes)
+
         # The whole change set, checked as a unit. The per-file check already ran at the tool
         # boundary, and this is not a repeat of it: `check_test_shape` is a rule about the shape
         # of a change rather than a path, so it is not expressible one file at a time. It passes
@@ -113,17 +123,23 @@ class Oneshot(ImplementStrategy):
             notes=notes,
             unfinished=unfinished,
             strategy=self.id,
-            turns=invocation.turn_count,
+            turns=invocation.turn_count + sum(i.turn_count for i in validation.invocations),
             idle_turns=invocation.idle_turns,
+            validation=validation.report,
         )
+
+        # One cost for the whole session, repair turns included: a turn this strategy chose to
+        # make is this strategy's spend, and a ledger that showed it anywhere else would be
+        # answering "what did this run cost" with a number that is not it.
+        cost = sum((i.cost for i in validation.invocations), invocation.cost)
 
         findings = reported(
             report.changeset,
             unfinished=report.unfinished,
             malformed=malformed,
-            invocations=(invocation,),
+            invocations=(invocation, *validation.invocations),
             prefix="implement",
-            notes=search_notes(session),
+            notes=search_notes(session) + validation.findings(),
         )
 
         if report.empty:
@@ -139,7 +155,7 @@ class Oneshot(ImplementStrategy):
                 status=Status.FAILED,
                 reason="exhausted" if invocation.exhausted else "implement.no_changes",
                 value=report,
-                cost=invocation.cost,
+                cost=cost,
                 findings=tuple(findings),
                 decided=not invocation.exhausted,
             )
@@ -147,7 +163,7 @@ class Oneshot(ImplementStrategy):
         return Outcome(
             status=Status.SUCCEEDED,
             value=report,
-            cost=invocation.cost,
+            cost=cost,
             findings=tuple(findings),
             # Exhaustion is not success and not failure: the turn cap stopped a session that had
             # not said it was done, so the staged change is whatever it had got to. `decided` is
