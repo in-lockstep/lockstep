@@ -70,6 +70,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
         _model_routes(report, lockstep)
         _pack_guardrails(report, lockstep)
         _tooling(report, lockstep, path)
+        _sandbox_executables(report, lockstep, path)
     if strict:
         _strict_policy(report, path)
         if lockstep is not None:
@@ -700,6 +701,109 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
                 probe_env=probe_env,
                 probe_cwd=probe_cwd,
             )
+
+
+def _sandbox_executables(report: Report, lockstep: Any, root: Path) -> None:
+    """What the `run_script` image actually has, against what the binding says it has.
+
+    `Sandbox(executables=...)` is a declaration, and a declaration nobody can check is one that
+    goes stale silently. This is where it is checked, because a probe here costs a container start
+    in a diagnostic rather than on every run before the first model call -- which is the reason the
+    tool itself does not probe.
+
+    It also makes the declaration DISCOVERABLE. Without this an adopter has to already know that
+    their image carries one of the twelve programs the tool offers, which is what a paid run found
+    out by trying 36 times (#401). Here they are handed the tuple to paste.
+    """
+    from .ai.builtins import ALLOWED_COMMANDS
+
+    runner = getattr(getattr(lockstep, "workshop", None), "commands", None)
+    # `Lockstep.use` wraps the bound runner in a `WorktreeRunner`, whose `inner` is the sandbox
+    # that owns the image. Unwrapped once rather than reached for by type, so an adopter's own
+    # wrapper is treated the same way.
+    runner = getattr(runner, "inner", runner)
+    image = str(getattr(runner, "image", "") or "")
+    if runner is None or not image:
+        # No image is not a finding: `run_script` may be unbound, or bound to a runner that is not
+        # a container at all, and neither is this check's business.
+        return
+
+    declared = tuple(getattr(runner, "executables", ()) or ())
+    found = _probe_executables(runner, root)
+    if found is None:
+        report.add(
+            "DOC183",
+            Severity.NOTE,
+            f"could not ask {image} what it carries, so `executables=` is unchecked",
+            "A container runtime and a pullable image are what this needs; the declaration is "
+            "still honoured, it is simply not verified here.",
+        )
+        return
+
+    offered = tuple(program for program in ALLOWED_COMMANDS if program in found)
+    if not declared:
+        # A tuple a person can paste: one item needs its trailing comma, more must not have one.
+        inner = ", ".join(f'"{program}"' for program in offered)
+        listed = f"{inner}," if len(offered) == 1 else inner
+        report.add(
+            "DOC183",
+            Severity.NOTE,
+            f"{image} carries {len(offered)} of the {len(ALLOWED_COMMANDS)} programs run_script "
+            f"offers, and the binding does not say so",
+            f"Declare it where the sandbox is bound: `executables=({listed})`. Without it a model "
+            f"is told it may run all {len(ALLOWED_COMMANDS)} and finds out otherwise a turn at a "
+            f"time.",
+        )
+        return
+
+    missing = tuple(program for program in declared if program not in found)
+    unlisted = tuple(program for program in offered if program not in declared)
+    if missing:
+        report.add(
+            "DOC183",
+            Severity.WARNING,
+            f"`executables=` names {', '.join(missing)}, which {image} does not carry",
+            "The declaration has drifted from the image. A model will be offered these and get a "
+            "stale-declaration error when it tries one.",
+        )
+    if unlisted:
+        report.add(
+            "DOC183",
+            Severity.NOTE,
+            f"{image} carries {', '.join(unlisted)}, which `executables=` does not name",
+            "Not wrong -- an undeclared program is simply refused before it runs -- but a model "
+            "could have used it.",
+        )
+
+
+def _probe_executables(runner: Any, root: Path) -> set[str] | None:
+    """Which of the programs `run_script` offers resolve inside the bound image, or None.
+
+    ONE container start, not one per program: the shell loop asks about all of them and prints the
+    ones it finds. `sh` is the assumption, and where it does not hold -- a distroless image -- the
+    probe cannot answer and says so rather than reporting an empty image.
+    """
+    import asyncio
+
+    from .ai.builtins import ALLOWED_COMMANDS
+
+    # `exit 0` at the end, and it is the whole reliability of this: without it the script's exit
+    # code is the last `command -v`, which is 127 whenever the last program happens to be missing.
+    # A probe that read that as "the shell is not there" would report every image as unaskable.
+    tests = "; ".join(
+        f"command -v {program} >/dev/null 2>&1 && echo {program}" for program in ALLOWED_COMMANDS
+    )
+    script = f"{tests}; exit 0"
+    try:
+        result = asyncio.run(runner.run(["sh", "-c", script], cwd=str(root), timeout=120.0))
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if getattr(result, "exit_code", 1) != 0:
+        # The script ends `exit 0`, so anything else means it did not run: 126 is the runner
+        # refusing (no container runtime), 127 is an image with no `sh`. Either way this learned
+        # nothing, and an empty set would read as "the image carries nothing".
+        return None
+    return {line.strip() for line in str(getattr(result, "stdout", "")).splitlines() if line.strip()}
 
 
 def _locations(

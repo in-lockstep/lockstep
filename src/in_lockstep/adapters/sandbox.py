@@ -110,6 +110,22 @@ class Sandbox:
     #: built is what lets `python:3.11-slim` run a repository's suite at all; read-only, so a
     #: staged test cannot rewrite the interpreter the next run uses.
     mounts: tuple[tuple[str, str], ...] = ()
+    #: Which programs this image actually has. Empty means nobody said, which is not the same as
+    #: "none" and is treated as unknown everywhere it is read.
+    #:
+    #: A model's `run_script` allowlist is a POLICY -- what it may run -- and this is the other
+    #: half: what it can. Nothing could tell the two apart, so the tool listed twelve programs to
+    #: a session whose image carried one, and a run spent 36 of its 95 turns finding that out by
+    #: trying (#401). Declared rather than probed: twelve container starts before the first model
+    #: call is real wall-clock on every run, and the person who chose the image is the one who
+    #: knows what is in it. Declared rather than inferred from the image name, for the reason O1
+    #: gives about detection that guesses.
+    #:
+    #: A declaration can go stale -- an image changes and the tuple does not -- so it decides what
+    #: the model is TOLD and never what is true: a program that runs anyway is not stopped, and one
+    #: that was declared and is missing says the declaration is wrong rather than blaming the
+    #: model.
+    executables: tuple[str, ...] = ()
 
     def clean_env(self) -> dict[str, str]:
         """What a subprocess sees: the pass-through set plus `extra_env`. Not what a container

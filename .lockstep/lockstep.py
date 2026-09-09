@@ -422,7 +422,16 @@ lockstep.models.route("describe", "anthropic:claude-haiku-4-5")
 # estimate, which bounds output by this number rather than by an expected value — that is the
 # intended coupling, not a side effect: asking for more room means the projection reserves more.
 lockstep.workshop = Workshop(
-    commands=Sandbox(image="docker.io/library/python:3.12-slim", require_container=True),
+    commands=Sandbox(
+        image="docker.io/library/python:3.12-slim",
+        require_container=True,
+        # What this image actually has, of the twelve `run_script` may run. Two, and saying so is
+        # the point: before this, a session was offered pytest, ruff, mypy, uv, make, npm, npx,
+        # node, go and cargo by an image carrying none of them, and one run spent 36 of its 95
+        # turns finding that out (#401). `doctor` probes the image and prints this tuple, so it is
+        # checked rather than remembered.
+        executables=("python", "python3"),
+    ),
     max_turns=100,
     max_tokens=20000,
     # The per-invocation deadline, raised with the run's wall ceiling above and for the same run;
