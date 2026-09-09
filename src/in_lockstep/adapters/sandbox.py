@@ -233,7 +233,7 @@ def _run_as_host_user(runtime: str) -> list[str]:
     return [*flags, "-e", "LOGNAME=sandbox", "-e", "USER=sandbox"]
 
 
-def host_fallback(runner: object) -> str | None:
+def host_fallback(runner: object, *, named: str = "Test") -> str | None:
     """Why a file a MODEL staged would run on this host under `runner`, or None when it would not.
 
     Asked before a worktree is materialised, so a refusal costs nothing and leaks nothing. The
@@ -247,15 +247,15 @@ def host_fallback(runner: object) -> str | None:
     runner nothing here can vouch for is not assumed to contain anything (O11).
     """
     if runner is None:
-        return "the bound Test adapter exposes no sandbox, so nothing says where a staged file would run"
+        return f"the bound {named} adapter exposes no sandbox, so nothing says where a staged file would run"
     if isinstance(runner, UnsandboxedRun):
-        return "the bound Test adapter runs through UnsandboxedRun, which is this host by name"
+        return f"the bound {named} adapter runs through UnsandboxedRun, which is this host by name"
     image = getattr(runner, "image", "")
     if not image:
-        return f"the bound Test adapter's {type(runner).__name__} names no container image"
+        return f"the bound {named} adapter's {type(runner).__name__} names no container image"
     if isinstance(runner, Sandbox) and not runner.require_container and runner.runtime() is None:
         return (
-            f"the bound Test adapter names {image} but neither {' nor '.join(CONTAINER_RUNTIMES)} is "
+            f"the bound {named} adapter names {image} but neither {' nor '.join(CONTAINER_RUNTIMES)} is "
             f"on PATH, so it would fall back to a subprocess on this host"
         )
     return None

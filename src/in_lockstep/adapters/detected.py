@@ -60,10 +60,21 @@ def detected_bindings(facts: RepoFacts) -> list[tuple[type[Any], Any]]:
     elif facts.test_command:
         out.append((Test, CommandTest(facts.test_command)))
 
-    if facts.ruff:
+    # The repository's own target beats the tool this could recognise (#396): what it gates itself
+    # on is what it wrote down, and its target is usually wider than one tool -- a `make lint` that
+    # runs a formatter's check and a linter, with `typecheck` beside it. `RuffValidate` stays the
+    # binding where a repository configured ruff and declared no target of its own, and it keeps
+    # the richer answer there: per-rule findings with a path and a line, where a target's output is
+    # one blob.
+    if facts.lint_command:
+        out.append(
+            (
+                Validate,
+                CommandValidate(facts.lint_command, fix=facts.fix_command),
+            )
+        )
+    elif facts.ruff:
         out.append((Validate, RuffValidate()))
-    elif facts.lint_command:
-        out.append((Validate, CommandValidate(facts.lint_command)))
 
     # Only what is actually in the file: a `build` target or script that exists. An invented
     # `make build` is a binding that fails at run time.

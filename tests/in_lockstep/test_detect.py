@@ -327,23 +327,63 @@ def test_a_makefile_target_beats_a_package_json_script_for_the_same_verb(tmp_pat
     assert facts.run_command == ("npm", "start")
 
 
-def test_pytest_and_ruff_still_beat_makefile_test_and_lint_targets(tmp_path: Path) -> None:
-    """The precedence, stated: structured output wins the verb where the structure matters. A fix
-    loop reproduces from pytest's per-test cases and a review reads ruff's per-rule findings;
-    `make test` and `make lint` would replace both with an exit code. Build has no structured
-    tool, so the Makefile serves it outright."""
+def test_pytest_beats_a_make_test_target_and_the_repositorys_own_lint_target_beats_ruff(
+    tmp_path: Path,
+) -> None:
+    """The precedence, restated after #396, and the two halves differ for a reason.
+
+    Test keeps the old rule: a fix loop reproduces from pytest's per-test cases, and `make test`
+    would replace them with an exit code.
+
+    Validate does not. What a repository gates itself on is what it wrote down, and its own target
+    is usually WIDER than the tool a config file names -- `make lint` runs the formatter's check
+    and the linter, `typecheck` is a second target beside it, and a `ruff` binding sees neither.
+    The cost is real and is the reason this was ever the other way round: a target's output is one
+    blob where ruff's is a finding per rule with a path and a line. Wider and blunter beats
+    narrower and sharper here, because a check nobody agreed to be judged by is worse than a
+    coarse one they wrote themselves.
+    """
     _write(
         tmp_path,
         {
             "pyproject.toml": "[tool.pytest.ini_options]\n[tool.ruff]\n",
-            "Makefile": "test:\n\tpytest\nlint:\n\truff check\nbuild:\n\tpython -m build\n",
+            "Makefile": (
+                "test:\n\tpytest\nlint:\n\truff check\ntypecheck:\n\tmypy src\n"
+                "fmt:\n\truff format\nbuild:\n\tpython -m build\n"
+            ),
         },
     )
     facts = _detect_facts(tmp_path)
-    assert facts.test_command == () and facts.lint_command == ()
-    kinds = {i: type(x) for i, x in detected_bindings(facts)}
-    assert kinds[Test] is PytestTest and kinds[Validate] is RuffValidate
-    assert kinds[Build] is CommandBuild
+    assert facts.test_command == (), "pytest still serves Test"
+    assert facts.lint_command == ("make", "lint", "typecheck"), "every checking target, in one call"
+    assert facts.fix_command == ("make", "fmt"), "and what the repository fixes with"
+    bound = dict(detected_bindings(facts))
+    assert type(bound[Test]) is PytestTest
+    assert type(bound[Validate]) is CommandValidate and type(bound[Build]) is CommandBuild
+    assert bound[Validate].fix == ("make", "fmt") and bound[Validate].fixes
+
+
+def test_a_validate_target_speaks_for_itself_and_check_is_never_taken(tmp_path: Path) -> None:
+    """`validate` is the name a repository uses when it means exactly this, so it wins outright.
+
+    `check` is refused however tempting: it conventionally aggregates the suite, so binding it
+    would run the tests twice per strategy -- the Test verb already runs them, with expectations --
+    and would rewrite files wherever it depends on a formatter.
+    """
+    _write(tmp_path, {"Makefile": "validate:\n\tscripts/validate.sh\nlint:\n\teslint .\n"})
+    assert _detect_facts(tmp_path).lint_command == ("make", "validate")
+
+    _write(tmp_path, {"Makefile": "check:\n\tmake lint test\n"})
+    assert _detect_facts(tmp_path).lint_command == (), "check runs the suite; Validate must not"
+
+
+def test_ruff_still_serves_a_repository_that_declared_no_target_of_its_own(tmp_path: Path) -> None:
+    """The tool is the fallback, not the loser: where there is nothing to defer to, ruff's per-rule
+    findings are the better answer and it keeps the verb."""
+    _write(tmp_path, {"pyproject.toml": "[tool.ruff]\n"})
+    facts = _detect_facts(tmp_path)
+    assert facts.lint_command == ()
+    assert type(dict(detected_bindings(facts))[Validate]) is RuffValidate
 
 
 def test_the_makefile_beats_package_json_for_test_as_it_does_for_build(tmp_path: Path) -> None:

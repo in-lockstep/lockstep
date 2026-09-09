@@ -36,6 +36,7 @@ from ..core.types import (
     TestCase,
     TestReport,
     Validate,
+    ValidationFinding,
     ValidationReport,
 )
 from ..core.verbs import Capability, Verb
@@ -254,19 +255,38 @@ class CommandValidate:
         *,
         cwd: str | None = None,
         sandbox: Runner | None = None,
+        fix: list[str] | tuple[str, ...] = (),
+        takes_paths: bool = False,
     ) -> None:
         if not command:
             raise ValueError("CommandValidate needs a command to run")
         self.command = tuple(command)
         self.cwd = cwd
         self.sandbox = sandbox or Sandbox()
+        #: What this repository runs to REPAIR what `command` reports -- its own `make fmt`, or
+        #: whatever it calls that. Declared rather than derived: `--fix` means something to ruff
+        #: and nothing to `make lint`, and a framework that appended a flag on the chance would be
+        #: running an unknown command against a model's files.
+        self.fix = tuple(fix)
+        #: Whether `command` accepts paths appended to it. False by default, which is the honest
+        #: default for an argv nobody here wrote: `make lint src/a.py` reads the path as a TARGET
+        #: and fails with "no rule to make", so a validator bound to a repository's own target
+        #: checks the whole tree. That is what such a target is -- a gate the repository keeps
+        #: green -- and it is why a failure after a change is attributable to the change.
+        self.takes_paths = takes_paths
+
+    @property
+    def fixes(self) -> bool:
+        """Whether `Validate(fix=True)` can do anything here. What a strategy asks before it
+        spends a model turn on something a command would have repaired for nothing."""
+        return bool(self.fix)
 
     def locations(self, root: str) -> tuple[Resolution, ...]:
         return _locations(self.command, self.cwd, root, self.sandbox)
 
     async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        paths = tuple(inp.paths or ())
+        paths = tuple(inp.paths or ()) if self.takes_paths else ()
         # The same rule the Test adapters follow: a materialised worktree replaces the root, a
         # bound package directory is kept inside it, and the paths are rebased and made relative
         # so they name the same file on both sides of a container mount (GATE-TOOLING-4).
@@ -275,6 +295,12 @@ class CommandValidate:
             cwd, package = tooling.within(inp.root, self.cwd, top)
             paths = tooling.rebase(paths, package)
         paths = tooling.relative(paths, cwd)
+        if inp.fix and self.fix:
+            # Repair first, then report what stands -- the contract `Validate(fix=True)` has, and
+            # the one `ruff check --fix` implements. The repair's own output is not the answer;
+            # the check that follows it is.
+            fixer, _ = _argv0(self.fix, self.cwd, ctx, self.sandbox)
+            await self.sandbox.run([fixer, *self.fix[1:]], cwd=cwd)
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         result = await self.sandbox.run([argv0, *self.command[1:], *paths], cwd=cwd)
         if (refused := _refused(result)) is not None:
@@ -285,20 +311,27 @@ class CommandValidate:
         # A generic linter has no structured output this can rely on, so the whole run is one
         # finding rather than one per rule — honest about what it knows. A repository that wants
         # per-rule findings binds an adapter that parses its linter's format, as `RuffValidate` does.
-        findings: tuple[Finding, ...] = ()
-        if not clean:
-            findings = (
+        # In the REPORT and not only in the findings, which is where this used to put it. An
+        # empty `ValidationReport` is a CLEAN one, so a caller reading the report -- which is what
+        # a strategy's check step and the pull-request body both do -- was told a failed `make
+        # lint` had found nothing.
+        said = _exited(self.command, result.exit_code, _tail(result.stdout, result.stderr))
+        report = ValidationReport(
+            findings=() if clean else (ValidationFinding(rule="validate", message=said),)
+        )
+        return Outcome(
+            status=Status.SUCCEEDED if clean else Status.FAILED,
+            value=report,
+            findings=()
+            if clean
+            else (
                 Finding(
                     id="validate.command_failed",
-                    message=_exited(self.command, result.exit_code, _tail(result.stdout, result.stderr)),
+                    message=said,
                     severity=Severity.ERROR,
                     blocking=True,
                 ),
-            )
-        return Outcome(
-            status=Status.SUCCEEDED if clean else Status.FAILED,
-            value=ValidationReport(),
-            findings=findings,
+            ),
             cost=Cost(),
         )
 
@@ -336,6 +369,13 @@ class CommandBuild:
 
     async def invoke(self, ctx: object, inp: Build) -> Outcome[BuildResult]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        # A materialised worktree replaces the root and a bound package directory is kept inside
+        # it -- the rule `Test` and `Validate` already follow (GATE-TOOLING-4), and the reason
+        # `Build` gained `root`: a change that does not compile is worth knowing before the model
+        # is asked anything else about it.
+        if inp.root:
+            top = getattr(getattr(ctx, "repo", None), "root", None)
+            cwd, _package = tooling.within(inp.root, self.cwd, top)
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
         cmd = [argv0, *self.command[1:], *([inp.target] if inp.target else []), *inp.args]
         result = await self.sandbox.run(cmd, cwd=cwd)

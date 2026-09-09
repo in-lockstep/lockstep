@@ -270,6 +270,11 @@ class Build:
 
     target: str = ""
     args: tuple[str, ...] = ()
+    #: Build this tree instead of the repository. The field `Test` has had and `Validate` gained
+    #: in #390, for the same caller and the same reason: a session's writes are staged rather than
+    #: on disk, so building them means materialising them into a worktree and pointing the verb
+    #: there. A change that does not compile is the first thing worth knowing about it.
+    root: str = ""
 
 
 @dataclass(frozen=True)

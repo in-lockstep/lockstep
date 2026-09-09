@@ -428,6 +428,9 @@ class Validation:
     report: ValidationReport | None = None
     #: Paths the deterministic pass rewrote, before any model call was made.
     fixed: tuple[str, ...] = ()
+    #: Why the change does not build, or why nothing built it. Empty when it built, and when no
+    #: Build verb is bound -- which is most repositories, and not a fact worth a finding.
+    build: str = ""
     #: The repair turns actually made, so a strategy can add their cost and turns to its own.
     invocations: tuple[Any, ...] = ()
     #: Why a repair did not happen, when findings remained and no turn was made.
@@ -445,6 +448,8 @@ class Validation:
         """What travels on the outcome. Notes, not blocking: the change is still the run's product,
         and whether an unclean change may ask for review is the propose half's decision to make."""
         out: list[Finding] = []
+        if self.build:
+            out.append(Finding(id="validate.build", message=self.build, severity=Severity.WARNING))
         if self.fixed:
             out.append(
                 Finding(
@@ -484,85 +489,68 @@ async def validated(
     prefix: str,
     rounds: int = VALIDATE_REPAIR_ROUNDS,
 ) -> Validation:
-    """Run the repository's own Validate over what this session staged, and repair what it says.
+    """Build what this session staged, check it, and repair what either one says.
 
     The half `Test` already had. A strategy does not ask the model to run its tests -- it stages
     them into a worktree and runs them itself, between phases, and hands the result back. Nothing
-    did that for Validate, so a run's lint was whatever the model chose to check with
-    `run_validate`, and CI was the first thing to see the answer twice (run 34294139197, and the
-    four ruff errors on the pull request #389 opened).
+    did that for the repository's own build and lint, so a run's checks were whatever the model
+    chose to run with `run_validate`, and CI was the first thing to see the answer twice (run
+    34294139197, and the four ruff errors on the pull request #389 opened).
 
-    Two tiers, cheapest first.
+    **The build comes first**, where the repository declares one. A change that does not compile is
+    the more important failure and the one that makes the rest secondary: findings about a tree
+    that does not build are answers to a question nobody has got to yet.
 
-    **The deterministic one, with no model call.** Where the bound adapter says it can fix
-    (`fixes = True`; `RuffValidate` does, a generic `CommandValidate` must not be assumed to), the
-    validator runs over the materialised tree with its fixer on and the result is restaged. Import
-    sorting is arithmetic wearing a prompt, and a turn spent on it is a turn bought at model prices.
+    **Then the check, cheapest tier first.** Where the bound adapter says it can fix (`fixes`;
+    `RuffValidate` does, and a `CommandValidate` bound with the repository's own `make fmt` does),
+    the validator runs over the materialised tree with its fixer on and the result is restaged.
+    Import sorting is arithmetic wearing a prompt, and a turn spent on it is a turn bought at model
+    prices.
 
-    **Then at most `rounds` repair turns.** The remaining findings go back to the session naming
-    each one's rule, path and line -- `GATE-VERDICT-2`'s rule about a red suite: a verdict that
-    says a check failed and not which one sends the session back to run it again to learn what the
-    run already knew.
+    **One repair budget across both gates, spent on the first thing that failed.** Two budgets
+    would be two turns, and O13 asks for a bound declared before the spend rather than one per
+    gate. The findings go back naming each one's rule, path and line -- `GATE-VERDICT-2`'s rule
+    about a red suite: a verdict that says a check failed and not which one sends the session back
+    to run it again to learn what the run already knew.
 
-    **This mutates the session's workspace and returns no change set.** Both tiers write there --
+    **This mutates the session's workspace and returns no change set.** Every tier writes there --
     the fixer through `restage`, the repair turn through the tool boundary like any other write --
     so the caller rebuilds its own change set from the workspace afterwards, exactly as it built it
     before. A second return value would be a second place the staged set is assembled, and the two
     would eventually disagree about which one travels.
-
-    Scoped to the paths this run staged. A validator pointed at the whole tree reports the
-    repository's existing debt, and a run that spends its turns on code it never touched widens
-    its own diff to satisfy findings nobody asked it to answer for.
     """
-    from ..worktree import materialize
-
-    container = getattr(ctx, "container", None)
     paths = tuple(c.path for c in changeset.changes if not c.deleted)
-    if not paths or container is None or not container.has(Validate):
-        # O1's rule: nothing is invented where the repository declared nothing. The absence is
-        # visible rather than silent -- `Validation.checked` is False and the propose half reads
-        # that as unverified rather than as clean.
+    if not paths or getattr(ctx, "container", None) is None:
         return Validation()
 
-    adapter = container.resolve(Validate)
-    fixed: tuple[str, ...] = ()
-    if getattr(adapter, "fixes", False):
-        async with materialize(session.repo_root, changeset) as tree:
-            await ctx.do(Validate(root=tree, paths=paths, fix=True))
-            fixed = _restaged(session.workspace, changeset, tree)
-        if fixed:
-            changeset = replace(changeset, changes=tuple(session.workspace.changes))
-
     invocations: list[Any] = []
+    fixed: tuple[str, ...] = ()
+    report: ValidationReport | None = None
+    build = ""
     unrepaired = ""
     for attempt in range(rounds + 1):
-        # A read after the fixer rather than the fixer's own output: `--fix` reports what it could
-        # not fix, and reading that as the whole answer would make this depend on one tool's
-        # choice of what to print. A second pass costs a subprocess and says exactly what stands.
-        async with materialize(session.repo_root, changeset) as tree:
-            outcome = await ctx.do(Validate(root=tree, paths=paths))
-        report = outcome.value if isinstance(outcome.value, ValidationReport) else None
-        if report is None:
-            # The validator did not report -- not installed, or it failed to run. Absent is not
-            # clean, and it is not this run's failure either: the change stands, unchecked, and
-            # says so.
-            return Validation(
-                report=None,
-                fixed=fixed,
-                invocations=tuple(invocations),
-                unrepaired=f"the validator did not report: {outcome.reason or outcome.status.value}",
-            )
-        if report.clean or attempt == rounds:
-            if not report.clean and attempt == rounds and rounds:
-                unrepaired = f"{len(report.findings)} finding(s) survived {rounds} repair turn(s)"
-            return Validation(
-                report=report, fixed=fixed, invocations=tuple(invocations), unrepaired=unrepaired
-            )
+        build, note = await _built(ctx, session, changeset)
+        problem = build
+        if not build:
+            if not fixed and _fixes(ctx):
+                fixed = await _fix_pass(ctx, session, changeset, paths)
+                if fixed:
+                    changeset = replace(changeset, changes=tuple(session.workspace.changes))
+            # `why`, not `note`: the build's note is still in flight below, and a second name
+            # for it here would silently drop a sandbox refusal in favour of an empty string.
+            report, said, why = await _checked(ctx, session, changeset, paths)
+            problem = said
+            unrepaired = why or unrepaired
+        build = build or note
+        if not problem or attempt == rounds:
+            if problem and attempt == rounds and rounds:
+                unrepaired = f"{rounds} repair turn(s) did not settle it"
+            break
         try:
             invocation = await run_phase(
                 session,
                 system,
-                with_directive(messages, _repair_directive(report)),
+                with_directive(messages, problem),
                 package,
                 prefix=f"{prefix}.validate",
                 # No schema: this turn's product is its writes, not a cover note, and requiring
@@ -573,17 +561,99 @@ async def validated(
             # A refused or exhausted repair is not this run's failure. The change was complete
             # before the repair was attempted, and returning the ceiling's refusal here would
             # throw away a finished change to report an optional turn that could not be made --
-            # so the findings travel instead, and the propose half keeps the change a draft.
+            # so what was found travels instead, and the propose half keeps the change a draft.
             reason = getattr(e.outcome, "reason", None) or e.outcome.status.value
-            return Validation(
-                report=report,
-                fixed=fixed,
-                invocations=tuple(invocations),
-                unrepaired=f"the repair turn was not made ({reason}); the findings stand",
-            )
+            unrepaired = f"the repair turn was not made ({reason}); what was found stands"
+            break
         invocations.append(invocation)
         changeset = replace(changeset, changes=tuple(session.workspace.changes))
-    return Validation(report=None, fixed=fixed, invocations=tuple(invocations))
+    return Validation(
+        report=report, fixed=fixed, build=build, invocations=tuple(invocations), unrepaired=unrepaired
+    )
+
+
+async def _built(ctx: Any, session: Any, changeset: ChangeSet) -> tuple[str, str]:
+    """Build the staged tree. Returns (what the model can fix, what it cannot) -- at most one.
+
+    A repository with no build target gets neither, and that is not a finding: most do not have
+    one, and inventing a build command would be the guess O1 refuses.
+    """
+    from ...core.types import Build
+    from ..worktree import materialize, staged_refusal
+
+    container = ctx.container
+    if not container.has(Build):
+        return "", ""
+    # The same question `Test` is asked, of the verb being run rather than of `Test` by name: a
+    # build executes the repository's own build scripts over model-authored source, which is the
+    # exposure GATE-SANDBOX-2 is about with a different file extension.
+    if (why := staged_refusal(ctx, Build)) is not None:
+        return "", f"the change was not built: {why}"
+    async with materialize(session.repo_root, changeset) as tree:
+        outcome = await ctx.do(Build(root=tree))
+    if outcome.status is Status.SUCCEEDED:
+        return "", ""
+    said = "\n".join(f.message for f in outcome.findings) or (outcome.reason or "the build did not succeed")
+    return (
+        "This repository's own build ran over what you staged and failed:\n\n"
+        f"{said}\n\nMake it build, and then stop. Fix the error rather than removing the code "
+        "that raised it, and change only what the failure names.",
+        "",
+    )
+
+
+def _fixes(ctx: Any) -> bool:
+    """Whether the bound validator says `Validate(fix=True)` means something to it."""
+    container = ctx.container
+    return bool(container.has(Validate) and getattr(container.resolve(Validate), "fixes", False))
+
+
+async def _fix_pass(ctx: Any, session: Any, changeset: ChangeSet, paths: tuple[str, ...]) -> tuple[str, ...]:
+    from ..worktree import materialize
+
+    async with materialize(session.repo_root, changeset) as tree:
+        await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths), fix=True))
+        return _restaged(session.workspace, changeset, tree)
+
+
+async def _checked(
+    ctx: Any, session: Any, changeset: ChangeSet, paths: tuple[str, ...]
+) -> tuple[ValidationReport | None, str, str]:
+    """Run the repository's own checks over the staged tree.
+
+    Returns the report, what to send a repair turn, and a note about why there is no report --
+    at most one of the last two says anything.
+
+    A read after the fixer rather than the fixer's own output: `--fix` reports what it could not
+    fix, and reading that as the whole answer would make this depend on one tool's choice of what
+    to print. A second pass costs a subprocess and says exactly what stands.
+    """
+    from ..worktree import materialize
+
+    if not ctx.container.has(Validate):
+        # O1's rule: nothing is invented where the repository declared nothing.
+        return None, "", ""
+    async with materialize(session.repo_root, changeset) as tree:
+        outcome = await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths)))
+    report = outcome.value if isinstance(outcome.value, ValidationReport) else None
+    if report is None:
+        # Absent is not clean, and it is not this run's failure either: the change stands,
+        # unchecked, and says so.
+        return None, "", f"the validator did not report: {outcome.reason or outcome.status.value}"
+    return report, "" if report.clean else _repair_directive(report), ""
+
+
+def _scoped(ctx: Any, paths: tuple[str, ...]) -> tuple[str, ...]:
+    """The staged paths, where the bound validator can take paths at all.
+
+    A tool lints what it is given, and scoping to the change keeps a run off the repository's
+    existing debt -- a run that spends turns on code it never touched widens its own diff to
+    answer for findings nobody asked it about. A repository's own TARGET takes no paths (`make
+    lint src/a.py` reads the path as a target), so there the whole tree is checked: that is what
+    such a target is, a gate the repository keeps green, which is what makes a failure after a
+    change attributable to the change.
+    """
+    return paths if getattr(ctx.container.resolve(Validate), "takes_paths", False) else ()
 
 
 def _restaged(workspace: Any, changeset: ChangeSet, tree: str) -> tuple[str, ...]:

@@ -31,6 +31,9 @@ class RuffValidate:
     #: guessed about an arbitrary `CommandValidate` -- a repository's `make lint` may take no such
     #: flag, or may take one that does something else entirely.
     fixes: ClassVar[bool] = True
+    #: ruff is a tool, not a target: it lints exactly the paths it is given, so a run can be
+    #: scoped to what a session staged rather than to the whole tree.
+    takes_paths: ClassVar[bool] = True
 
     def __init__(
         self,

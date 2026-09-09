@@ -23,6 +23,8 @@ from in_lockstep.adapters.ai.strategy import Validation, validated
 from in_lockstep.ai.builtins import Workspace
 from in_lockstep.core.outcome import Cost, Outcome, Status
 from in_lockstep.core.types import (
+    Build,
+    BuildResult,
     ChangeSet,
     FileChange,
     Test,
@@ -40,8 +42,15 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "in_lockstep"
 class _Validator:
     """A Validate adapter that records what it was asked, and can rewrite files like a fixer."""
 
-    def __init__(self, *, findings: tuple[ValidationFinding, ...] = (), fixes: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        findings: tuple[ValidationFinding, ...] = (),
+        fixes: bool = False,
+        takes_paths: bool = True,
+    ) -> None:
         self.fixes = fixes
+        self.takes_paths = takes_paths
         self.findings = findings
         self.seen: list[Validate] = []
         #: What a `fix=True` pass writes into the tree, path -> contents.
@@ -60,13 +69,47 @@ class _Validator:
         return Outcome(status=Status.SUCCEEDED if report.clean else Status.FAILED, value=report, cost=Cost())
 
 
+class _Builder:
+    """A Build adapter that records what it was asked and can fail on the first call only."""
+
+    def __init__(self, *, fails: int = 0) -> None:
+        from in_lockstep.adapters.sandbox import Sandbox
+
+        #: What `staged_refusal` reads: a runner that declares a container is one a model's staged
+        #: code may be executed in.
+        self.sandbox: Any = Sandbox(image="declared-for-this-test", require_container=True)
+        self.seen: list[Build] = []
+        self.fails = fails
+
+    async def invoke(self, ctx: Any, request: Build) -> Outcome[BuildResult]:
+        self.seen.append(request)
+        if len(self.seen) <= self.fails:
+            from in_lockstep.core.outcome import Finding, Severity
+
+            return Outcome(
+                status=Status.FAILED,
+                value=BuildResult(log="calc.py:3: undefined name `helper`"),
+                findings=(
+                    Finding(
+                        id="build.command_failed",
+                        message="calc.py:3: undefined name `helper`",
+                        severity=Severity.ERROR,
+                        blocking=True,
+                    ),
+                ),
+            )
+        return Outcome(status=Status.SUCCEEDED, value=BuildResult())
+
+
 class _Ctx:
     """A container that answers for the verbs actually bound, and a `do` that dispatches by type."""
 
-    def __init__(self, validator: _Validator | None = None, tester: Any = None) -> None:
+    def __init__(self, validator: _Validator | None = None, tester: Any = None, builder: Any = None) -> None:
         self.bound: dict[Any, Any] = {}
         if validator is not None:
             self.bound[Validate] = validator
+        if builder is not None:
+            self.bound[Build] = builder
         if tester is not None:
             self.bound[Test] = tester
         self.order: list[str] = []
@@ -289,7 +332,7 @@ def test_findings_that_survive_the_repair_are_reported_as_unrepaired(tmp_path: P
 
     assert len(result.invocations) == 1, "one round, then it stops"
     assert not result.clean
-    assert "survived 1 repair turn" in result.unrepaired
+    assert "did not settle it" in result.unrepaired
     ids = {f.id for f in result.findings()}
     assert "validate.e1" in ids and "validate.unrepaired" in ids
 
@@ -481,3 +524,131 @@ def test_gate_validate_2_every_strategy_that_reports_a_change_validates_it_first
         if "reported" in calls and "validated" not in calls:
             missing.append(path.name)
     assert not missing, f"these stage a change and never check it: {missing}"
+
+
+# -- the build, which comes first ------------------------------------------------------------------
+
+
+def test_gate_validate_2_the_build_runs_before_the_check(tmp_path: Path) -> None:
+    """GATE-VALIDATE-2. A change that does not compile is the more important failure, and it makes
+    the rest secondary: findings about a tree that does not build answer a question nobody has got
+    to yet."""
+    session = _Session(_repo(tmp_path), invoker=_Invoker(Workspace(root=tmp_path)))
+    validator, builder = _Validator(), _Builder()
+    ctx = _Ctx(validator, builder=builder)
+
+    _run(ctx, session, _staged(session))
+
+    assert ctx.order == ["Build", "Validate"], "the check waited for the build"
+
+
+def test_gate_validate_2_a_build_failure_is_what_the_repair_turn_is_given(tmp_path: Path) -> None:
+    """GATE-VALIDATE-2, one budget spent on the first thing that failed. Two budgets would be two
+    turns, and O13 asks for a bound declared before the spend rather than one per gate."""
+    session = _Session(_repo(tmp_path))
+    session.invoker = _Invoker(session.workspace, writes={"a.py": "repaired\n"})
+    validator, builder = _Validator(), _Builder(fails=1)
+    ctx = _Ctx(validator, builder=builder)
+
+    result = _run(ctx, session, _staged(session))
+
+    sent = str(session.invoker.messages[0][-1].content)
+    assert "undefined name `helper`" in sent, "the build's own words went back"
+    assert "Fix the error rather than removing the code that raised it" in sent
+    assert ctx.order == ["Build", "Build", "Validate"], "nothing was checked until it built"
+    assert result.build == "", "and once it built, there is nothing to report about the build"
+    assert len(result.invocations) == 1
+
+
+def test_a_build_that_still_fails_leaves_the_check_unrun_and_says_so(tmp_path: Path) -> None:
+    """The honest end state: the change does not build, so nothing checked it. Its suite will fail
+    too, which is what keeps it out of a review queue -- this is the part that says why."""
+    session = _Session(_repo(tmp_path))
+    session.invoker = _Invoker(session.workspace, writes={"a.py": "still broken\n"})
+    ctx = _Ctx(_Validator(), builder=_Builder(fails=9))
+
+    result = _run(ctx, session, _staged(session))
+
+    assert "Validate" not in ctx.order
+    assert "undefined name `helper`" in result.build
+    assert not result.checked, "unchecked, and not clean"
+    assert "validate.build" in {f.id for f in result.findings()}
+
+
+def test_gate_validate_2_a_build_that_cannot_be_contained_is_not_run_on_this_host(
+    tmp_path: Path,
+) -> None:
+    """GATE-VALIDATE-2 meets GATE-SANDBOX-2. A build runs the repository's own build scripts over
+    model-authored source -- a setup.py, a build.rs, a postinstall -- which is the exposure the
+    container rule is about with a different file extension. The question is asked of the verb
+    being run rather than of `Test` by name."""
+    from in_lockstep.adapters.sandbox import Sandbox
+
+    builder = _Builder()
+    builder.sandbox = Sandbox()  # no image, no container: the fallback the rule refuses
+    session = _Session(_repo(tmp_path), invoker=_Invoker(Workspace(root=tmp_path)))
+    ctx = _Ctx(_Validator(), builder=builder)
+
+    result = _run(ctx, session, _staged(session))
+
+    assert builder.seen == [], "nothing was built on this host"
+    assert "the change was not built" in result.build and "container" in result.build
+    assert ctx.order == ["Validate"], "and the check still ran: it reads the tree, it does not run it"
+
+
+def test_the_build_is_pointed_at_the_materialised_tree(tmp_path: Path) -> None:
+    """`Build.root`, the field `Test` had and `Validate` gained in #390. Without it the build runs
+    over the repository as it is on disk, which is the code the model did not write."""
+    session = _Session(_repo(tmp_path), invoker=_Invoker(Workspace(root=tmp_path)))
+    builder = _Builder()
+    _run(_Ctx(_Validator(), builder=builder), session, _staged(session))
+    (asked,) = builder.seen
+    assert asked.root and asked.root != session.repo_root
+
+
+# -- what the repository declares, over what a tool could be guessed -------------------------------
+
+
+def test_gate_validate_2_a_target_that_takes_no_paths_checks_the_whole_tree(tmp_path: Path) -> None:
+    """GATE-VALIDATE-2, the cost of preferring the repository's own target. `make lint src/a.py`
+    reads the path as a TARGET and fails, so a target-bound validator is not given paths -- it
+    checks the whole tree, which is what such a target is: a gate the repository keeps green."""
+    session = _Session(_repo(tmp_path), invoker=_Invoker(Workspace(root=tmp_path)))
+    validator = _Validator(takes_paths=False)
+    _run(_Ctx(validator), session, _staged(session))
+    (asked,) = validator.seen
+    assert asked.paths == (), "a target was handed no paths"
+    assert asked.root, "but still pointed at the staged tree"
+
+
+def test_a_command_validator_reports_its_failure_in_the_report_and_not_only_beside_it(
+    tmp_path: Path,
+) -> None:
+    """An empty `ValidationReport` is a CLEAN one. A failed `make lint` used to return one, so a
+    caller reading the report -- the check step, and the pull-request body -- was told a failing
+    gate had found nothing."""
+    from in_lockstep.adapters.command import CommandValidate
+
+    class _Sandbox:
+        def __init__(self) -> None:
+            self.ran: list[list[str]] = []
+
+        async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+            self.ran.append(command)
+            failed = command[-1] == "lint"
+            return type(
+                "R",
+                (),
+                {"exit_code": 1 if failed else 0, "stdout": "E501 line too long", "stderr": "", "how": "f"},
+            )()
+
+    sandbox = _Sandbox()
+    adapter = CommandValidate(["make", "lint"], fix=["make", "fmt"], sandbox=sandbox)
+    ctx = type("C", (), {"repo": type("R", (), {"root": str(tmp_path)})()})()
+
+    outcome = asyncio.run(adapter.invoke(ctx, Validate(fix=True)))
+
+    assert [c[-1] for c in sandbox.ran] == ["fmt", "lint"], "repair first, then report what stands"
+    assert outcome.value is not None and not outcome.value.clean
+    assert "E501 line too long" in outcome.value.findings[0].message
+    assert adapter.fixes and not adapter.takes_paths

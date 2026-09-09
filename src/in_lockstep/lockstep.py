@@ -561,10 +561,25 @@ def _detect_facts(root: Path) -> RepoFacts:
     clippy = rust and (has("clippy.toml", ".clippy.toml") or "[lints.clippy]" in cargo)
     golangci = go and has(".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
     lint_command: tuple[str, ...] = ()
-    if not ruff:
-        if "lint" in make_targets:
-            lint_command = ("make", "lint")
-        elif "lint" in scripts:
+    # The repository's OWN targets first, ahead of any tool this could recognise -- including
+    # ruff, which used to pre-empt everything (#396). What a repository gates itself on is what it
+    # wrote down, and a framework that binds a linter because it saw a config file is judging the
+    # change by rules the repository never agreed to. It is also usually WIDER: `make lint` here
+    # runs the formatter's check and the linter, and `typecheck` is a second target beside it,
+    # where a `ruff` binding sees neither.
+    #
+    # `validate` if the repository declares one, else every checking target it has, in one
+    # invocation. Deliberately NOT `check`: that name conventionally aggregates the suite as well,
+    # and a Validate that ran the suite would run it twice per strategy -- the Test verb already
+    # runs it, with expectations -- and would rewrite files wherever `check` depends on a
+    # formatter.
+    checking = tuple(t for t in ("lint", "typecheck") if t in make_targets)
+    if "validate" in make_targets:
+        lint_command = ("make", "validate")
+    elif checking:
+        lint_command = ("make", *checking)
+    if not lint_command and not ruff:
+        if "lint" in scripts:
             # The same principle `test`, `build` and `start` already follow: a written script is a
             # decision, and it beats the tool inferred from a config file -- a `biome check` or
             # `standard` script was not linted at all for as long as only eslint's config was
@@ -576,6 +591,21 @@ def _detect_facts(root: Path) -> RepoFacts:
             lint_command = ("cargo", "clippy")
         elif golangci:
             lint_command = ("golangci-lint", "run")
+
+    # The repair half of the same decision: what this repository runs to fix what its checks
+    # report. Only a target that exists -- an invented `make fmt` is a command that fails at the
+    # moment a strategy tries to save a model turn with it.
+    fix_command: tuple[str, ...] = ()
+    if lint_command[:1] == ("make",):
+        for target in ("fmt", "format"):
+            if target in make_targets:
+                fix_command = ("make", target)
+                break
+    elif lint_command[:1] == ("npm",):
+        for script in ("format", "fmt"):
+            if script in scripts:
+                fix_command = ("npm", "run", script)
+                break
 
     build_command: tuple[str, ...] = ()
     if "build" in make_targets:
@@ -713,6 +743,7 @@ def _detect_facts(root: Path) -> RepoFacts:
         ruff=ruff,
         eslint=eslint,
         lint_command=lint_command,
+        fix_command=fix_command,
         build_command=build_command,
         run_command=run_command,
         provision_commands=tuple(provision),
