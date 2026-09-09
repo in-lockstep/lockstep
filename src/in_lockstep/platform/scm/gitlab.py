@@ -34,6 +34,7 @@ from .base import (
     GitLocal,
     Ref,
     Remark,
+    TargetRefused,
     branch_for,
     change_body,
     conventional_subject,
@@ -197,11 +198,25 @@ class GitLabScm:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run", ticket=ticket)
         # Refused at the framework rather than relying on the token's scope, because the token is
         # ambient and can write any branch — same rule as every other host.
         self.local.assert_run_scoped(branch)
+
+        # A merge request across projects is a different call: it needs `target_project_id`, and
+        # the source project has to be a fork the target knows about. Nothing here has ever been
+        # executed against a GitLab instance (O3 says so, and README's row says `partial`), so this
+        # declines by name rather than shipping an untested spelling of it. A target naming THIS
+        # project is not cross-project and passes through, so a trampoline can pass the flag on
+        # either host.
+        if target and target != (self._project or project_from_remote(self._remote())):
+            raise TargetRefused(
+                "scm.cross_project_unsupported",
+                f"cannot open on {target}: a merge request across projects needs a target project "
+                f"id and a registered fork relationship, which this adapter does not implement.",
+            )
 
         # Conventional Commits: this commit and the merge-request title it becomes are created by
         # a workflow, so both must be one.
