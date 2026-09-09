@@ -20,6 +20,7 @@ from .base import (
     GitLocal,
     Ref,
     Remark,
+    TargetRefused,
     branch_for,
     change_body,
     conventional_subject,
@@ -78,6 +79,56 @@ class GitHubScm:
             raise RuntimeError(f"gh {' '.join(args)} failed: {err.strip()}")
         return json.loads(out) if out.strip() else None
 
+    def origin_slug(self) -> str:
+        """`owner/repo` for the repository this CHECKOUT pushes to, or empty when nothing says.
+
+        Not the repository `gh` would infer: from a fork `gh` infers the parent, which is right for
+        reading an issue and wrong for naming a head, and that single inference serving two
+        opposite purposes is the whole of #373.
+
+        Two sources, in the order `hosted_tickets` already reads GitLab's: the host's own statement
+        first (`GITHUB_REPOSITORY` is what Actions says the workflow is running for, and a fork's
+        run says the fork), then the origin remote's URL, which is all a laptop has. A checkout of
+        some OTHER repository under a workflow would make the two disagree, and the failure is
+        loud — GitHub refuses a `head_repo` that does not hold the branch — rather than a change
+        opened somewhere nobody looked.
+        """
+        import os
+
+        stated = os.environ.get("GITHUB_REPOSITORY", "").strip()
+        if stated:
+            return stated
+        return owner_repo_from_remote(self.local.git("config", "--get", "remote.origin.url").strip())
+
+    def _target_default_branch(self, target: str) -> str:
+        """Refuse unless the credential may push to `target`; answer with its default branch.
+
+        ONE request answers both questions, and it is made before anything local is written. The
+        rights half is what a fork's CI needs: its workflow token can read the parent and cannot
+        write it, so without this the run does its work, pays for its model calls, pushes a branch
+        and only then learns it was never going to be able to open anything. The default-branch
+        half is not a convenience: `POST /repos/{owner}/{repo}/pulls` REQUIRES `base`, where
+        `gh pr create` defaults it from the repository — so every propose call, which passes no
+        base at all, would 422 on the one path this exists to add.
+        """
+        code, out, err = self._gh("api", f"repos/{target}")
+        if code != 0:
+            raise TargetRefused(
+                "scm.no_rights_on_target",
+                f"the credential cannot read {target}: {err.strip() or f'gh exited {code}'}",
+            )
+        data = json.loads(out) if out.strip() else {}
+        data = data if isinstance(data, dict) else {}
+        permissions = data.get("permissions")
+        if not (isinstance(permissions, dict) and permissions.get("push")):
+            raise TargetRefused(
+                "scm.no_rights_on_target",
+                f"the credential can read {target} but not write it. A fork's workflow token has "
+                f"no rights on the repository it forked from; only a person's credential, or a "
+                f"token the fork declares, can open a change there.",
+            )
+        return str(data.get("default_branch") or "")
+
     async def open_change(
         self,
         cs: ChangeSet,
@@ -89,11 +140,31 @@ class GitHubScm:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         branch = branch_for(workflow or "change", run_id or "run", ticket=ticket)
         # Refused at the framework rather than relying on the token's scope, because the token is
         # ambient and can write any branch.
         self.local.assert_run_scoped(branch)
+
+        # Which repository this change is FOR, decided before a byte is written. An empty target —
+        # every caller before #373 — changes nothing at all: the branch goes to origin and
+        # `gh pr create` infers the rest exactly as it always has. A target that names origin is
+        # the same path, so a trampoline can pass the flag unconditionally.
+        origin = self.origin_slug()
+        elsewhere = bool(target) and target != origin
+        if elsewhere and not origin:
+            # The cross-repository form has to name the repository holding the branch, and there is
+            # nothing to name. Refused rather than sent empty: GitHub answers an empty `head_repo`
+            # by looking for the branch on the TARGET, so the guess does not fail — it opens the
+            # wrong change, or none, with no indication which happened.
+            raise TargetRefused(
+                "scm.unknown_origin",
+                f"cannot open on {target}: nothing says which repository this checkout pushes to. "
+                f"Set GITHUB_REPOSITORY, or give origin a GitHub URL.",
+            )
+        # Before the checkout, so a refusal leaves the working tree and the remote as it found them.
+        target_base = self._target_default_branch(target) if elsewhere else ""
 
         # Conventional Commits: this commit and the pull-request title it becomes are created by a
         # workflow, so both must be one. A summary that already declares a type is kept as is.
@@ -121,6 +192,17 @@ class GitHubScm:
         # not, and GitHub refuses one over 256 characters at the very end — after the branch is
         # pushed and the model is paid for.
         subject = title_line(title)
+        if elsewhere:
+            return self._open_across_repositories(
+                target,
+                origin,
+                branch=branch,
+                subject=subject,
+                rendered=rendered,
+                base=base or target_base,
+                draft=draft,
+                trailers=trailers,
+            )
         args = ["pr", "create", "--title", subject, "--body", rendered, "--head", branch]
         if base:
             args += ["--base", base]
@@ -143,13 +225,81 @@ class GitHubScm:
             draft=draft,
         )
 
+    def _open_across_repositories(
+        self,
+        target: str,
+        origin: str,
+        *,
+        branch: str,
+        subject: str,
+        rendered: str,
+        base: str,
+        draft: bool,
+        trailers: dict[str, str],
+    ) -> ChangeRequest:
+        """A fork's branch, opened on the repository it forked from, through the REST endpoint.
+
+        `gh pr create` cannot express this. A fork sharing its parent's owner cannot be named as
+        the head at all — `gh pr create` reports `Head sha can\'t be blank` — and the field that
+        does express it, `head_repo`, is one the porcelain does not expose. Verified on
+        in-lockstep/query-fork against in-lockstep/query-original: every `gh pr create` spelling
+        fails and this one opens the request.
+
+        `-F` for `draft`, not `-f`: `-f` sends the string "true", which the API reads as a string
+        where it wants a boolean.
+        """
+        if not base:
+            # The endpoint requires it and the target did not say what its default branch is. A
+            # refusal rather than a guess at `main`: a repository whose default is something else
+            # would get a change request opened against a branch that is not the one it merges to.
+            raise RuntimeError(f"{target} did not report a default branch; pass base= explicitly")
+        args = [
+            "api",
+            f"repos/{target}/pulls",
+            "-f",
+            f"title={subject}",
+            "-f",
+            f"body={rendered}",
+            "-f",
+            f"head={branch}",
+            "-f",
+            f"head_repo={origin}",
+            "-f",
+            f"base={base}",
+        ]
+        if draft:
+            args += ["-F", "draft=true"]
+        code, out, err = self._gh(*args)
+        if code != 0:
+            raise RuntimeError(f"could not open a pull request on {target}: {err.strip()}")
+        data = json.loads(out) if out.strip() else {}
+        data = data if isinstance(data, dict) else {}
+        url = str(data.get("html_url") or "")
+        number = data.get("number")
+        return ChangeRequest(
+            id=url or branch,
+            url=url,
+            branch=branch,
+            title=subject,
+            number=number if isinstance(number, int) else _number_from(url),
+            trailers=trailers,
+            draft=draft,
+            # Carried, because `mark_ready` runs later and against this repository rather than the
+            # one the checkout would infer.
+            repo=target,
+        )
+
     async def mark_ready(self, change: ChangeRequest) -> None:
         """Take the pull request out of draft — it is asking for human review now. Keyed on the
         number the request carries; a request with none (an open_change that returned only a branch)
         is left as it is rather than guessed at."""
         if change.number is None:
             return None
-        code, _out, err = self._gh("pr", "ready", str(change.number))
+        # `--repo` only when the request says it was opened elsewhere: without a target this is the
+        # call it has always been, and with one it must not be `gh`'s inference deciding which
+        # repository's #17 goes out of draft.
+        where = ["--repo", change.repo] if change.repo else []
+        code, _out, err = self._gh("pr", "ready", str(change.number), *where)
         if code != 0:
             raise RuntimeError(f"could not mark PR #{change.number} ready: {err.strip()}")
 
@@ -543,6 +693,28 @@ class GitHubScm:
         code, _out, err = self._gh("api", *args)
         if code != 0:
             raise RuntimeError(f"could not post PR comment: {err.strip()}")
+
+
+def owner_repo_from_remote(url: str) -> str:
+    """The `owner/repo` in a GitHub remote URL, or empty when the shape is unfamiliar.
+
+    Both spellings git actually writes: `git@github.com:owner/repo.git` and
+    `https://github.com/owner/repo.git`. Empty rather than guessed, the rule GitLab's
+    `project_from_remote` already follows — a wrong slug here names a real repository that is not
+    this one.
+    """
+    url = url.strip().removesuffix(".git")
+    if not url:
+        return ""
+    if "://" in url:
+        _host, _, path = url.split("://", 1)[1].partition("/")
+        return path.strip("/")
+    # scp-like: everything after the colon. A local path (`/tmp/origin`) has no colon and no
+    # scheme, and falls through to empty, which is the honest answer for a remote that is not a
+    # host at all.
+    if ":" in url:
+        return url.split(":", 1)[1].strip("/")
+    return ""
 
 
 def _number_from(url: str) -> int | None:

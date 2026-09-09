@@ -3120,8 +3120,22 @@ def egress_manifest_cmd() -> None:
     default="",
     help="Open the change against this branch instead of the default — a release line, for a backport.",
 )
+@click.option(
+    "--target",
+    default="",
+    metavar="OWNER/REPO",
+    help="Open the change on this repository instead of the checkout's own — a fork proposing to "
+    "the repository it forked from.",
+)
 def apply_cmd(
-    artifact: str, dry_run: bool, title: str, body: str, workflow_id: str, run_id: str, base: str
+    artifact: str,
+    dry_run: bool,
+    title: str,
+    body: str,
+    workflow_id: str,
+    run_id: str,
+    base: str,
+    target: str,
 ) -> None:
     """Apply a ChangeSet produced by an earlier, unprivileged run.
 
@@ -3181,6 +3195,10 @@ def apply_cmd(
                 # A backport's changeset is relative to its release line, and applied anywhere
                 # else it is a different change. Empty keeps the old behaviour.
                 base=base,
+                # The same flag the propose workflows take. It is here rather than only there
+                # because O3 asks for one process at a terminal and in CI, and a fork's
+                # submission that only a pipeline could make is one nobody can rehearse.
+                target=target,
             )
         )
     except DirectPushRefused as e:

@@ -77,13 +77,15 @@ def assert_ticket_source(impl: object) -> None:
 
 def assert_scm(impl: object) -> None:
     """Structurally an `Scm`: `diff` synchronous, `open_change` async and accepting `base=` (a
-    backport's target) and `draft=` (an AI change opens not-yet-for-review), and `mark_ready` async
-    (take it out of draft once its tests pass) — committed before third parties implemented."""
+    backport's target), `draft=` (an AI change opens not-yet-for-review) and `target=` (a fork
+    opening on the repository it forked from), and `mark_ready` async (take it out of draft once
+    its tests pass) — each committed before third parties implemented, which is the only moment a
+    keyword can be added to a protocol without breaking somebody."""
     problems: list[str] = []
     _method(impl, "diff", must_be_async=False, problems=problems)
     open_change = _method(impl, "open_change", must_be_async=True, problems=problems)
     if open_change is not None:
-        for keyword in ("title", "body", "ticket", "workflow", "run_id", "base", "draft"):
+        for keyword in ("title", "body", "ticket", "workflow", "run_id", "base", "draft", "target"):
             _accepts(open_change, keyword, problems, "open_change")
     _method(impl, "mark_ready", must_be_async=True, problems=problems)
     if not isinstance(impl, Scm):

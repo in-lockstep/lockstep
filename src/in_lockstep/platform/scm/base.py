@@ -157,6 +157,24 @@ class DirectPushRefused(Exception):
     """A write was attempted outside the run-scoped namespace."""
 
 
+class TargetRefused(RuntimeError):
+    """A change cannot be opened on the repository it was pointed at, and nothing was written.
+
+    Carries the refusal's NAME as well as its prose, because the name is what a workflow returns
+    as its outcome reason and what `report` counts later: `scm.no_rights_on_target` is a fork whose
+    CI token has no write access on the parent, which is an ordinary and expected state rather than
+    a bug, and it must be distinguishable in the ledger from a push that failed for some other
+    reason. A `RuntimeError`, so every caller that already handles `open_change` failing keeps
+    working unchanged; the name is what the callers who care read.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        # One spelling: the prose always opens with the name, rather than the name being repeated
+        # by every call site that formats this for a human.
+        super().__init__(f"{reason}: {message}")
+        self.reason = reason
+
+
 class GuardRefused(Exception):
     """A change touches a protected path."""
 
@@ -335,6 +353,12 @@ class ChangeRequest:
     #: change starts here by default and is marked ready once its tests pass and the workflow wants
     #: a human to look. Always False for a host with no draft concept (local git).
     draft: bool = False
+    #: The repository this request was opened on, when that is not the checkout's own — a fork
+    #: proposing to the repository it forked from. Empty means the checkout's, which is every
+    #: request opened before `target` existed. It rides here because `mark_ready` runs in a later
+    #: step: without it, a draft opened on the parent would be marked ready against whatever the
+    #: host tool infers from the checkout, which is the implicitness `target` exists to remove.
+    repo: str = ""
 
 
 #: How many change requests one ticket's conversation is gathered from, and how much of each is
@@ -424,6 +448,7 @@ class Scm(Protocol):
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest: ...
 
     async def mark_ready(self, change: ChangeRequest) -> None:
@@ -664,6 +689,7 @@ class GitLocal:
         run_id: str = "",
         base: Ref = "",
         draft: bool = False,
+        target: str = "",
     ) -> ChangeRequest:
         """Local git has no pull requests; it makes the branch and stops there.
 
@@ -671,6 +697,11 @@ class GitLocal:
         Empty keeps the old behaviour: the branch grows from wherever the tree stands. `draft` has
         no meaning without a host, so the returned request reports `draft=False`: a local branch is
         as ready as it gets.
+
+        `target` is accepted and ignored rather than refused: a repository to open on is a host's
+        idea, and a caller that names one is asking for something this adapter was never going to
+        do either way. Refusing here would break `apply --target` on a laptop with no host bound,
+        which is the one place a person most wants to see what the change looks like first.
         """
         branch = branch_for(workflow or "change", run_id or "local", ticket=ticket)
         self.assert_run_scoped(branch)
