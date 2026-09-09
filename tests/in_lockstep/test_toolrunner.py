@@ -121,13 +121,20 @@ def test_reading_a_real_file_works(workspace: Workspace) -> None:
     assert asyncio.run(run("builtin", "read_file", {"path": "notes.txt"})) == "hello"
 
 
-def test_a_huge_read_is_truncated(workspace: Workspace) -> None:
-    """A tool result is model input; an unbounded one is an unbounded prompt next turn."""
+def test_a_huge_read_is_truncated_and_says_how_to_read_the_rest(workspace: Workspace) -> None:
+    """A tool result is model input; an unbounded one is an unbounded prompt next turn.
+
+    And a truncation that does not say how to continue is what a model works around rather than
+    uses: run 34361896059 spent turns trying to reach line 800 of a file it was editing (#402).
+    """
     from in_lockstep.ai.builtins import MAX_READ_CHARS
 
-    (workspace.root / "big.txt").write_text("x" * (MAX_READ_CHARS + 100))
+    (workspace.root / "big.txt").write_text("x\n" * MAX_READ_CHARS)
     _, run = read_only(workspace)
-    assert "[truncated]" in asyncio.run(run("builtin", "read_file", {"path": "big.txt"}))
+    answer = asyncio.run(run("builtin", "read_file", {"path": "big.txt"}))
+    assert "truncated at 40000 chars" in answer
+    assert f"has {MAX_READ_CHARS} line(s)" in answer, "the size it could not show"
+    assert "`offset`" in answer and "`limit`" in answer, "and how to ask for the rest"
 
 
 def test_listing_matches_a_glob(workspace: Workspace) -> None:
@@ -366,3 +373,63 @@ def test_gate_workspace_1_the_three_readers_agree_and_the_guard_still_applies(wo
         asyncio.run(run("builtin", "search_text", {"pattern": "secret|key"}))
         == "note.txt:1: the key is not here"
     )
+
+
+# -- GATE-READ-1: a long file can be read past its truncation ---------------------------------------
+
+
+def test_gate_read_1_a_range_returns_the_lines_that_were_asked_for(workspace: Workspace) -> None:
+    """GATE-READ-1. Lines, not characters: the unit `search_text` answers in, the unit a traceback
+    names, and the unit a model asked in when it could not -- "extract lines 770-820"."""
+    (workspace.root / "long.py").write_text("".join(f"line {n}\n" for n in range(1, 1001)))
+    _, run = read_only(workspace)
+
+    answer = asyncio.run(run("builtin", "read_file", {"path": "long.py", "offset": 770, "limit": 3}))
+    assert "line 770\nline 771\nline 772\n" in answer
+    assert "line 769" not in answer and "line 773" not in answer
+    assert "[long.py lines 770-772 of 1000]" in answer, "the window says where it is in the file"
+
+
+def test_gate_read_1_a_range_past_the_end_answers_with_the_length(workspace: Workspace) -> None:
+    """GATE-READ-1. An answer, not an error and not silence: the model asked about a place, and
+    where the file ends is what it needed to know. Empty output reads as an empty file."""
+    (workspace.root / "short.py").write_text("one\ntwo\n")
+    _, run = read_only(workspace)
+    answer = asyncio.run(run("builtin", "read_file", {"path": "short.py", "offset": 90}))
+    assert answer == "error: short.py has 2 line(s), so line 90 is past its end"
+
+
+def test_gate_read_1_the_cap_still_bounds_a_range(workspace: Workspace) -> None:
+    """GATE-READ-1. A caller may move the window, never raise it: what a read returns is re-sent on
+    every later turn, so the ceiling is the invoker's and not the model's to choose."""
+    from in_lockstep.ai.builtins import MAX_READ_CHARS
+
+    (workspace.root / "wide.txt").write_text("".join("x" * 200 + "\n" for _ in range(1000)))
+    _, run = read_only(workspace)
+    answer = asyncio.run(run("builtin", "read_file", {"path": "wide.txt", "offset": 1, "limit": 999}))
+    assert len(answer) < MAX_READ_CHARS + 400
+    assert "truncated at 40000 chars of the range you asked for" in answer
+
+
+def test_gate_read_1_a_staged_file_is_readable_past_the_cap(workspace: Workspace) -> None:
+    """GATE-READ-1 meets GATE-WORKSPACE-1. What a session staged is what it sees -- and a file a
+    session WROTE is the one it is most likely to be unable to read back, which is how a change to
+    a 192k document was staged by something that had seen a fifth of it."""
+    _, run = read_write(workspace)
+    body = "".join(f"staged {n}\n" for n in range(1, 5001))
+    asyncio.run(run("builtin", "write_file", {"path": "big.py", "contents": body}))
+
+    whole = asyncio.run(run("builtin", "read_file", {"path": "big.py"}))
+    assert "truncated" in whole and "has 5000 line(s)" in whole
+
+    answer = asyncio.run(run("builtin", "read_file", {"path": "big.py", "offset": 4998, "limit": 2}))
+    assert "staged 4998\nstaged 4999\n" in answer, "the end of a staged file is reachable"
+    assert "staged 1\n" not in answer
+
+
+def test_a_range_is_still_refused_where_the_whole_file_would_be(workspace: Workspace) -> None:
+    """The guard judges the path, not the slice. A range is not a way round `check_read`."""
+    (workspace.root / ".env").write_text("SECRET=1\nMORE=2\n")
+    _, run = read_only(workspace)
+    answer = asyncio.run(run("builtin", "read_file", {"path": ".env", "offset": 1, "limit": 1}))
+    assert answer.startswith("refused:") and "SECRET" not in answer

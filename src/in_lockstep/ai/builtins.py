@@ -343,10 +343,25 @@ def read_only(
         Tool(
             server=BUILTIN_SERVER,
             name="read_file",
-            description="Read a UTF-8 text file from the repository.",
+            description=(
+                "Read a UTF-8 text file from the repository. A long file is truncated, and the "
+                "truncation says how many lines it has: pass `offset` and `limit` to read any part "
+                "of it, including past the truncation. Line numbers are the ones `search_text` "
+                "reports and the ones a traceback names."
+            ),
             parameters={
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
+                "properties": {
+                    "path": {"type": "string"},
+                    "offset": {
+                        "type": "integer",
+                        "description": "First line to return, 1-based. Omit to start at the top.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many lines to return. Omit for the rest of the file.",
+                    },
+                },
                 "required": ["path"],
             },
             capabilities=frozenset({Capability.READS_REPO}),
@@ -839,6 +854,7 @@ class ToolRunnerImpl:
 
     def _read(self, args: dict[str, object]) -> str:
         path = str(args.get("path", ""))
+        offset, limit = _int(args.get("offset"), 0), _int(args.get("limit"), 0)
         # `check_read`, not `check_path`. This asked the guard and then acted on ONE of its
         # answers: every tier-1 refusal but `outside-repo-root` was computed and thrown away, so
         # `read_file(".env")` returned the file. The guard was consulted and overruled.
@@ -857,8 +873,9 @@ class ToolRunnerImpl:
             if change.path == path:
                 if change.contents is None:
                     return f"error: no file at {path} (you staged its deletion)"
-                text = change.contents
-                return text[:MAX_READ_CHARS] + "\n…[truncated]" if len(text) > MAX_READ_CHARS else text
+                # The staged version goes through the same window as the disk version: a file a
+                # session wrote is exactly the file it is most likely to be too long to read back.
+                return _window(change.contents, path, offset, limit)
         target = self.workspace.resolve(path)
         if not target.is_file():
             return f"error: no file at {path}"
@@ -870,9 +887,7 @@ class ToolRunnerImpl:
             text = target.read_text()
         except (OSError, UnicodeDecodeError) as e:
             return f"error: {e}"
-        if len(text) > MAX_READ_CHARS:
-            return text[:MAX_READ_CHARS] + "\n…[truncated]"
-        return text
+        return _window(text, path, offset, limit)
 
     def _staged(self) -> dict[str, str | None]:
         """This session's own writes, the last one per path, keyed the way the tree is walked."""
@@ -1086,6 +1101,47 @@ class ToolRunnerImpl:
         # truncating from the front is how a model ends up reasoning about the collection banner.
         body = _tail(str(getattr(result, "stdout", "")), str(getattr(result, "stderr", "")))
         return f"exit {exit_code} ({how})\n{body}"
+
+
+def _window(text: str, path: str, offset: int, limit: int) -> str:
+    """What a read returns: the whole file, or the lines asked for, capped either way.
+
+    The cap stays where it is and a caller cannot raise it: what a read returns is re-sent on every
+    later turn, so an uncapped read is an uncapped prompt. What is new is being able to say WHICH
+    forty thousand characters. Without that, a model handed a long file saw its first fifth and
+    nothing else, ever -- run 34361896059 spent turns trying to reach line 800 of a file it was
+    editing, and two of the cases harvested from it are that attempt (#402).
+
+    Lines, not characters. That is the unit `search_text` answers in, the unit a traceback names,
+    and the unit the model asked in when it could not: "extract lines 770-820". `offset` is 1-based
+    for the same reason -- line 1 is the first line everywhere a person or a compiler counts.
+
+    A truncated answer says how to continue, because a model told only that a file was cut does
+    what that run did: work around the tool instead of using it.
+    """
+    lines = text.splitlines(keepends=True)
+    total = len(lines)
+    if not (offset or limit):
+        if len(text) <= MAX_READ_CHARS:
+            return text
+        return (
+            f"{text[:MAX_READ_CHARS]}\n…[truncated at {MAX_READ_CHARS} chars; {path} has {total} "
+            f"line(s). Pass `offset` (1-based) and `limit` to read any part of it]"
+        )
+    start = max(offset - 1, 0)
+    if start >= total:
+        # An answer rather than an error: the model asked about a place, and where the file ends is
+        # what it needed to know. Empty output would read as an empty file.
+        return f"error: {path} has {total} line(s), so line {offset} is past its end"
+    window = lines[start : start + limit] if limit else lines[start:]
+    body = "".join(window)
+    head = f"[{path} lines {start + 1}-{start + len(window)} of {total}]\n"
+    if len(body) > MAX_READ_CHARS:
+        return (
+            f"{head}{body[:MAX_READ_CHARS]}\n…[truncated at {MAX_READ_CHARS} chars of the range "
+            f"you asked for; raise `offset` to read on]"
+        )
+    return head + body
 
 
 def _tail(stdout: str, stderr: str) -> str:
