@@ -1182,6 +1182,7 @@ def _window(text: str, path: str, offset: int, limit: int) -> str:
         )
     return head + body
 
+
 def _executes_here(runner: ToolRunnerImpl) -> str:
     """The tools in THIS session that run the repository's own bound verbs, named.
 
