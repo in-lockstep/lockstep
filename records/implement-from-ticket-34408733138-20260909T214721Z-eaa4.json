@@ -1,0 +1,213 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#410"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 10877051,
+  "cache_write_tokens": 300400,
+  "ci_actor": "tpouyer",
+  "ci_run": "34408733138",
+  "config": "local working tree",
+  "cost_usd": 26.969746,
+  "decided": false,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/adapters/command.py",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/adapters/ai/strategy.py",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_validate_phase.py",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/adapters/worktree.py",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote design/gates.md",
+        "path": "design/gates.md",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_validate_sandbox.py",
+        "path": "tests/in_lockstep/test_validate_sandbox.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "search_code.index",
+        "message": "graft 0.16.0 \u00b7 index 28418e26bd35",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "tdd.fix_verified",
+        "message": "reverting the implementation returns the suite to red, so the change is load-bearing for its test.",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "f86baae8454ca4034c4ca474dea7b7eb318cf6ea",
+  "input_tokens": 234,
+  "kind": "workflow",
+  "outcome_cost_usd": 26.94926,
+  "output_tokens": 71757,
+  "priced_fraction": 1.0,
+  "reason": "exhausted",
+  "run_id": "implement-from-ticket-34408733138-20260909T214721Z-eaa4",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 26.94926,
+      "decided": false,
+      "findings": {
+        "count": 9,
+        "items": [
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/adapters/command.py",
+            "path": "src/in_lockstep/adapters/command.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/adapters/ai/strategy.py",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_validate_phase.py",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/adapters/worktree.py",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote design/gates.md",
+            "path": "design/gates.md",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_validate_sandbox.py",
+            "path": "tests/in_lockstep/test_validate_sandbox.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "search_code.index",
+            "message": "graft 0.16.0 \u00b7 index 28418e26bd35",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "tdd.fix_verified",
+            "message": "reverting the implementation returns the suite to red, so the change is load-bearing for its test.",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "exhausted",
+      "status": "succeeded",
+      "step": "implement",
+      "tokens": 71260,
+      "verb": "implement",
+      "wall_seconds": 2986.029
+    },
+    {
+      "cost_usd": 0.0,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "test.6",
+      "tokens": 0,
+      "verb": "test",
+      "wall_seconds": 106.7
+    },
+    {
+      "cost_usd": 0.020485,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "describe",
+      "tokens": 731,
+      "verb": "describe",
+      "wall_seconds": 17.954
+    }
+  ],
+  "tokens": 71991,
+  "tool_calls": {
+    "delegate": 3,
+    "edit_file": 23,
+    "read_file": 103,
+    "run_script": 18,
+    "run_tests": 5,
+    "run_validate": 2,
+    "search_code": 13,
+    "search_text": 79,
+    "write_file": 1
+  },
+  "ts": "2026-09-09T22:39:15+00:00",
+  "turns": 220,
+  "wall_seconds": 3110.683,
+  "workflow": "implement/from-ticket"
+}
