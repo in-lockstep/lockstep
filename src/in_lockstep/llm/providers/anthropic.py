@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 from ..interface import Credentials, ProviderSettings
 from ._claude_base import ClaudeTransport
@@ -59,8 +59,25 @@ class AnthropicProvider(ClaudeTransport):
                 service_account_id=settings.extra.get("federation-service-account-id") or None,
                 workspace_id=settings.extra.get("anthropic-workspace-id") or None,
             )
-        # else: no credential argument at all, so the SDK's documented chain engages —
-        # ANTHROPIC_API_KEY, then a profile, then ANTHROPIC_IDENTITY_TOKEN[_FILE] federation.
+        else:
+            # No credential at all. An explicit `credentials` provider that holds nothing
+            # suppresses the SDK's ambient chain — ANTHROPIC_API_KEY, ~/.anthropic config and
+            # ANTHROPIC_IDENTITY_TOKEN[_FILE] — by making `has_explicit_credential` true inside
+            # the client. Without this the SDK runs `default_credentials()`, which reads the
+            # environment AND a config file under the user's home; `Path.home()` raises on a
+            # host that can answer neither from HOME nor from the passwd database, and a planted
+            # key in the environment silently reaches a client the framework intended to hold
+            # nothing (#387). The provider names what is missing when called, so the eventual
+            # authentication error says which credential was absent rather than a bare 401.
+            def _no_credential(*, force_refresh: bool = False) -> NoReturn:
+                raise RuntimeError(
+                    "no credential was provided for the Anthropic provider. "
+                    "Set ANTHROPIC_API_KEY, or configure workload identity federation "
+                    "(ANTHROPIC_FEDERATION_RULE_ID + ANTHROPIC_ORGANIZATION_ID). "
+                    "Nothing was sent and nothing was charged."
+                )
+
+            kwargs["credentials"] = _no_credential
         if settings.base_url:
             kwargs["base_url"] = settings.base_url
 
