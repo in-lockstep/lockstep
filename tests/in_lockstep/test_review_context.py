@@ -59,8 +59,8 @@ def test_a_review_remark_is_distinguishable_from_the_original_request() -> None:
     """
     ticket = Ticket(key="#218", title="t", comments=("me too",), review=("@dana: not like that",))
     by_path = {i.path: i.kind for i in ticket.as_context()}
-    assert by_path["#218#comment"] == "ticket"
-    assert by_path["#218#review"] == "review"
+    assert by_path["#218#comment-00"] == "ticket"
+    assert by_path["#218#review-00"] == "review"
 
 
 def test_a_ticket_with_no_review_is_exactly_what_it_was() -> None:

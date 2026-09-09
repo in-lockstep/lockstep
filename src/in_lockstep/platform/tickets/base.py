@@ -90,14 +90,17 @@ class Ticket:
                 path=self.key,
             )
         ]
+        # Each comment carries its position in the path, so the dropped record names WHICH
+        # turns were left out rather than repeating a bare ``#key#comment`` for every one.
+        # Zero-padded so lexical order is chronological.
         items += [
             ContextItem(
                 kind="ticket",
                 content=comment,
                 provenance=Provenance.UNTRUSTED_EXTERNAL,
-                path=f"{self.key}#comment",
+                path=f"{self.key}#comment-{i:02d}",
             )
-            for comment in self.comments
+            for i, comment in enumerate(self.comments)
         ]
         # Same provenance, different path, because the two are not interchangeable to a reader:
         # a reviewer objecting on a pull request is answering work that already exists, and a
@@ -107,9 +110,9 @@ class Ticket:
                 kind="review",
                 content=remark,
                 provenance=Provenance.UNTRUSTED_EXTERNAL,
-                path=f"{self.key}#review",
+                path=f"{self.key}#review-{i:02d}",
             )
-            for remark in self.review
+            for i, remark in enumerate(self.review)
         ]
         return tuple(items)
 

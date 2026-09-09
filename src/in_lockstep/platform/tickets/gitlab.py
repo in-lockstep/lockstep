@@ -94,7 +94,7 @@ class GitLabIssues(TicketSource):
         return _to_ticket(data, self._comments(iid))
 
     def _comments(self, iid: str) -> tuple[str, ...]:
-        """The first `MAX_COMMENTS` things people actually wrote, oldest first.
+        """The NEWEST `MAX_COMMENTS` things people actually wrote, oldest first within that window.
 
         Notes are a second endpoint, and system notes — "changed the label", "mentioned in
         commit" — are machine narration interleaved with the conversation, not part of it. The
@@ -102,6 +102,17 @@ class GitLabIssues(TicketSource):
         page and filtering it: a busy issue's first page can be mostly narration, and capping
         before the filter silently drops the conversation the cap was meant to bound. GitHub's
         adapter caps the same set; its API just never interleaves the narration.
+
+        The cap keeps the NEWEST, not the first: the recent comments on a thread are the ones that
+        changed something — a reviewer correcting a premise, a person settling a question — and the
+        oldest are what a reader skims.
+
+        `sort=desc` is how that is done, and slicing the tail is not. This walk stops as soon as it
+        holds `MAX_COMMENTS`, so on a thread longer than one page an ascending walk never reaches
+        the end and a tail slice returns the newest of the FIRST hundred — which is still the
+        beginning of the conversation. Asking the server for descending order puts the answer on
+        page one; the window is reversed on the way out, so what the caller gets is oldest-first
+        within the newest N, which is how a thread reads.
         """
         import httpx
 
@@ -113,7 +124,7 @@ class GitLabIssues(TicketSource):
         for _ in range(10):
             try:
                 response = self._http().request(
-                    "GET", path, params={"per_page": 100, "sort": "asc", "page": page}
+                    "GET", path, params={"per_page": 100, "sort": "desc", "page": page}
                 )
             except httpx.HTTPError as e:
                 raise RuntimeError(f"gitlab GET {path}: {type(e).__name__}: {e}") from e
@@ -128,7 +139,7 @@ class GitLabIssues(TicketSource):
             page = str(response.headers.get("x-next-page", "") or "")
             if not page or len(out) >= MAX_COMMENTS:
                 break
-        return tuple(out[:MAX_COMMENTS])
+        return tuple(reversed(out[:MAX_COMMENTS]))
 
     async def comment(self, ticket: Ticket, body: str) -> None:
         try:
