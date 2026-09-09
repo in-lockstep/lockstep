@@ -266,8 +266,17 @@ class CommandValidate:
 
     async def invoke(self, ctx: object, inp: Validate) -> Outcome[ValidationReport]:
         cwd = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
+        paths = tuple(inp.paths or ())
+        # The same rule the Test adapters follow: a materialised worktree replaces the root, a
+        # bound package directory is kept inside it, and the paths are rebased and made relative
+        # so they name the same file on both sides of a container mount (GATE-TOOLING-4).
+        if inp.root:
+            top = getattr(getattr(ctx, "repo", None), "root", None)
+            cwd, package = tooling.within(inp.root, self.cwd, top)
+            paths = tooling.rebase(paths, package)
+        paths = tooling.relative(paths, cwd)
         argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
-        result = await self.sandbox.run([argv0, *self.command[1:], *(inp.paths or ())], cwd=cwd)
+        result = await self.sandbox.run([argv0, *self.command[1:], *paths], cwd=cwd)
         if (refused := _refused(result)) is not None:
             return refused
         if result.exit_code == 127:

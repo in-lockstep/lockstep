@@ -117,6 +117,19 @@ class TestRunner(Protocol):
     async def __call__(self, paths: tuple[str, ...] = ()) -> str: ...
 
 
+class ValidateRunner(Protocol):
+    """Runs the bound Validate verb over HEAD plus what this session has staged.
+
+    The seam `run_tests` has, for the verb beside it. A session's writes are staged rather than on
+    disk, so `run_script` -- which runs in a throwaway worktree of HEAD on purpose -- lints the
+    code as it already was and reports it clean, which is worse than reporting nothing. Injected
+    for the same reason `tests` is: materialising a change set lives in `adapters`, which `ai` may
+    not import.
+    """
+
+    async def __call__(self, paths: tuple[str, ...] = ()) -> str: ...
+
+
 class CommandRunner(Protocol):
     """Whatever actually executes a command. Structural on purpose.
 
@@ -446,6 +459,7 @@ def read_write_execute(
     max_test_runs: int = DEFAULT_TEST_RUNS,
     delegation: bool = False,
     code_search: CodeSearch | None = None,
+    validates: ValidateRunner | None = None,
 ) -> tuple[ToolSet, ToolRunnerImpl]:
     """Read, stage, and run a command. The most capable set the framework ships.
 
@@ -519,6 +533,34 @@ def read_write_execute(
             capabilities=frozenset({Capability.EXECUTES_CODE}),
         ),
     )
+    tools = tools | ToolSet.of(
+        Tool(
+            server=BUILTIN_SERVER,
+            name="run_validate",
+            description=(
+                "Run the repository's own validator (its linter or formatter check) over the "
+                "change you have staged, and return what it said. `run_script` cannot do this: it "
+                "runs against HEAD, so it reports the code as it was before your edit. Run this "
+                "before you finish -- a change that passes the suite and fails the validator is a "
+                "change CI rejects."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict to these paths. Empty checks what the binding checks.",
+                    }
+                },
+            },
+            # READS_REPO: a validator reads the tree and reports, where a suite executes it. That
+            # is why this needs no container and `run_tests` does (GATE-SANDBOX-2) -- both shipped
+            # Validate adapters declare READS_REPO and mean it.
+            capabilities=frozenset({Capability.READS_REPO}),
+        )
+    )
+    runner.validates = validates
     if delegation:
         tools = with_delegation(tools)
     return tools, runner
@@ -604,6 +646,9 @@ class ToolRunnerImpl:
     #: What the last productive call did, for the finding that names it.
     last_progress: str = ""
     _last_tested: tuple[tuple[str, str | None], ...] | None = None
+    #: Runs the bound Validate verb over what this session has staged. Absent makes
+    #: `run_validate` refuse, exactly as an absent runner makes `run_script` refuse.
+    validates: ValidateRunner | None = None
     #: Answers `search_code`. Injected for the reason `tests` is, and absent means the tool was
     #: never declared, so there is nothing to refuse: `read_only` adds the tool and the backend
     #: together.
@@ -621,6 +666,7 @@ class ToolRunnerImpl:
             "delete_file": self._delete,
             "run_script": self._script,
             "run_tests": self._tests,
+            "run_validate": self._validate,
             SEARCH_TOOL: self._search_code,
         }.get(name)
         if handler is None:  # pragma: no cover - ToolSet resolves before this
@@ -629,6 +675,38 @@ class ToolRunnerImpl:
         # One handler is async and the rest are not. Awaiting whatever comes back keeps that an
         # implementation detail of the handler rather than a fact every caller has to know.
         return await result if inspect.isawaitable(result) else result  # type: ignore[return-value]
+
+    async def _validate(self, args: dict[str, object]) -> str:
+        """Run the repository's own validator over what this session has staged.
+
+        The gap this closes: a session can test its staged writes and could not check them. Its
+        writes are staged rather than on disk, so `run_script ruff check` runs in a worktree of
+        HEAD -- deliberately, see `WorktreeRunner` -- and answers about the code as it already
+        was. A model that ran it got "clean" about a tree it had not changed, and CI was the first
+        thing to see the real answer. Run 34294139197 opened a pull request whose suite passed and
+        whose lint did not, on four errors ruff would have named in a second.
+
+        Not counted as progress (#337), and that is deliberate rather than an omission: a
+        validation over a change set is only new because a write made it new, and that write has
+        already counted. Counting both would let one edit buy two turns of allowance.
+        """
+        if self.validates is None:
+            return (
+                "refused: no Validate verb is bound, so there is nothing to run. Bind one in "
+                ".lockstep/lockstep.py to check staged writes the way run_tests checks them."
+            )
+        raw = args.get("paths") or ()
+        paths = tuple(str(p) for p in raw if str(p).strip()) if isinstance(raw, (list, tuple)) else ()
+        for token in paths:
+            if token.startswith("-"):
+                return (
+                    f"refused: {token!r} looks like an option, not a path; run_validate takes "
+                    f"paths only, so pass the file or directory and let the validator choose its flags."
+                )
+        try:
+            return await self.validates(paths)
+        except Exception as e:  # noqa: BLE001 - a tool result is a message, never a crash
+            return f"error: could not run the validator: {e}"
 
     async def _search_code(self, args: dict[str, object]) -> str:
         """One question to the code graph, over the tree this session sees.

@@ -134,6 +134,10 @@ class Validate:
     paths: tuple[str, ...] = ()
     rules: tuple[str, ...] = ()
     fix: bool = False
+    #: Validate this tree instead of the repository. The field `Test` already has, for the same
+    #: caller: a session's writes are staged rather than on disk, so the only way to check them is
+    #: to materialise them into a worktree and point the verb at it (`run_validate`).
+    root: str = ""
 
 
 @dataclass(frozen=True)
