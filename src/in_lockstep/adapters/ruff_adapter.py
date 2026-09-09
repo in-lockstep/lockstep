@@ -54,16 +54,24 @@ class RuffValidate:
             return Outcome.errored(
                 f"ruff is not installed for the repository; looked for {', '.join(resolved.tried)}"
             )
-        cmd = [resolved.path, "check", "--output-format", "json", *(inp.paths or DEFAULT_PATHS)]
+        # `inp.root` (a materialised worktree) wins over the bound `cwd` wins over the repo's
+        # root, the same precedence `PytestTest` uses and for the same caller: a session checking
+        # what it has staged rather than what is committed.
+        cwd = self.cwd or repo_root
+        paths = tuple(inp.paths or DEFAULT_PATHS)
+        if inp.root:
+            top = getattr(getattr(ctx, "repo", None), "root", None)
+            cwd, package = tooling.within(inp.root, self.cwd, top)
+            paths = tooling.rebase(paths, package)
+        paths = tooling.relative(paths, cwd)
+        cmd = [resolved.path, "check", "--output-format", "json", *paths]
         rules = [*self.select, *inp.rules]
         if rules:
             cmd += ["--select", ",".join(rules)]
         if inp.fix:
             cmd.append("--fix")
 
-        result = await self.sandbox.run(
-            cmd, cwd=self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        )
+        result = await self.sandbox.run(cmd, cwd=cwd)
         if result.exit_code == 127:
             return Outcome.errored(f"ruff at {resolved.path} could not be run ({resolved.how})")
 

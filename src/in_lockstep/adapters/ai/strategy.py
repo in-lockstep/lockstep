@@ -272,6 +272,7 @@ class AiStrategy:
             max_test_runs=self.policy.max_test_runs,
             delegation=self.delegation,
             code_search=self._code_search(root),
+            validates=_validate_runner(ctx, root, workspace),
         )
         layers: PromptLayers = self.layers if self.layers is not None else type(self)._layers_factory()
         if type(self).reads_house_rules:
@@ -518,6 +519,63 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
         return _rendered(outcome)
 
     return run
+
+
+def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
+    """A `ValidateRunner` over HEAD plus whatever this session has staged so far.
+
+    The sibling of `_test_runner`, and it exists because the asymmetry between them cost a run: a
+    session could test its staged writes and could not check them, so `run_script ruff check` --
+    which runs in a worktree of HEAD by design -- answered about code the model had not touched.
+    Run 34294139197 opened a pull request whose suite passed and whose lint failed on four errors
+    a validator would have named in a second.
+
+    No `staged_refusal` here, and the difference from `_test_runner` is the point: a suite
+    EXECUTES what the model wrote, which is why GATE-SANDBOX-2 requires a container for it, and a
+    validator READS it. Both shipped Validate adapters declare `READS_REPO` and nothing else. A
+    binding whose validator does execute the tree would need the same rule, and the row says so.
+    """
+    from ...core.types import Validate
+    from ..worktree import materialize
+
+    async def run(paths: tuple[str, ...] = ()) -> str:
+        container = getattr(ctx, "container", None)
+        if container is None or not container.has(Validate):
+            return "refused: no Validate verb is bound, so there is nothing to run."
+        staged = workspace.changeset()
+        if not staged.changes:
+            return (
+                "refused: nothing is staged yet, so this would check the code exactly as it "
+                "already is. Write your change first, then run."
+            )
+        async with materialize(root, staged) as tree:
+            outcome = await ctx.do(Validate(root=tree, paths=paths))
+        return _validation(outcome)
+
+    return run
+
+
+def _validation(outcome: Any) -> str:
+    """What the validator said, as the model needs to read it: the rule, where, and what.
+
+    Findings first and a count, never a bare status. `run_tests` learned this the expensive way
+    (GATE-VERDICT-2): a verdict that says a check failed and not which one sends the session back
+    to run it again to learn what the run already knew.
+    """
+    report = outcome.value
+    findings = tuple(getattr(report, "findings", ()) or ())
+    if outcome.status is not Status.SUCCEEDED and not findings:
+        reason = outcome.reason or outcome.status.value
+        return f"the validator did not report: {reason}"
+    if not findings:
+        return "clean: the validator found nothing."
+    listed = "\n".join(
+        f"  {getattr(f, 'path', '')}:{getattr(f, 'line', '')}: {getattr(f, 'rule', '')} "
+        f"{getattr(f, 'message', '')}".rstrip()
+        for f in findings[:50]
+    )
+    more = f"\n  …[{len(findings) - 50} more]" if len(findings) > 50 else ""
+    return f"{len(findings)} finding(s):\n{listed}{more}"
 
 
 def _rendered(outcome: Any) -> str:
