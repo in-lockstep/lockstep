@@ -34,7 +34,7 @@ from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
-from ..worktree import materialize, staged_refusal, staged_runner
+from ..worktree import prepared, staged_refusal, staged_runner
 from .strategy import (
     AGENCY,
     AiStrategy,
@@ -194,7 +194,9 @@ class DiagnoseThenFix(FixStrategy):
                     decided=not repro_inv.exhausted,
                 )
 
-            async with materialize(session.repo_root, reproducer) as tree:
+            # `prepared`, as in `tdd`: a tree with no environment collects nothing, and a
+            # reproducer that never ran reads here as a reproducer that did not reproduce.
+            async with prepared(ctx, session.repo_root, reproducer, for_verb=Test) as (tree, _note):
                 red = await ctx.do(_test_spec(tree, "fail", runner=staged_runner(ctx, Test)))
             if (stopped := not_a_verdict(red, cost=repro_inv.cost)) is not None:
                 return stopped
@@ -311,7 +313,7 @@ class DiagnoseThenFix(FixStrategy):
             notes=search_notes(session) + validation.findings(),
         )
 
-        async with materialize(session.repo_root, full) as tree:
+        async with prepared(ctx, session.repo_root, full, for_verb=Test) as (tree, _note):
             green = await ctx.do(_test_spec(tree, "pass", runner=staged_runner(ctx, Test)))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
