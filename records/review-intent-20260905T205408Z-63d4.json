@@ -1,0 +1,63 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.032195,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 14,
+        "message": "Indentation artifact in docstring from the rewrite",
+        "path": "src/in_lockstep/workflows/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 10,
+        "message": "Same indentation artifact as fix.py",
+        "path": "src/in_lockstep/workflows/implement.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 298,
+        "message": "Test scans only *.md files directly under docs/ and README.md, not subdirectories",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 292,
+        "message": "Test reads shipped ids from `register()`'s source text, not from the registry itself",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1e9bdd421f71ad79110ff08787f2bb0787c0f8ed",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 673,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T205408Z-63d4",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 676,
+  "ts": "2026-09-05T20:54:26+00:00",
+  "wall_seconds": 18.099
+}

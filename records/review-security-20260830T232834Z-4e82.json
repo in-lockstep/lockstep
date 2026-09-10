@@ -1,0 +1,33 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "provider.authentication",
+        "message": "Token exchange failed (HTTP 401): {'error': {'type': 'authentication_error', 'message': 'Authentication failed'}} Ensure your federation rule matches your identity token. View your authentication events in the Workload identity page of Claude Console for more details. [request_id=req_011CeZoQsWqdfBXiF3FiEXGx]",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "bfef4dfdcc72c66b66ab49bad71869196ffbf873",
+  "input_tokens": 0,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 0,
+  "reason": "provider.authentication",
+  "run_id": "review-security-20260830T232834Z-4e82",
+  "schema": 4,
+  "status": "errored",
+  "tokens": 0,
+  "ts": "2026-08-30T23:28:36+00:00",
+  "wall_seconds": 1.657
+}

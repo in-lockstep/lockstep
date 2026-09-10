@@ -1,0 +1,151 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "73d22c43712cfe471eda22b005bda4271031dc75"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 38603,
+  "ci_actor": "tpouyer",
+  "ci_run": "34375320690",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.163337,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 857,
+        "message": "`_int` helper used to coerce caller-supplied `offset`/`limit` is not visible in this diff.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 400,
+        "message": "test_gate_read_1_a_range_past_the_end_answers_with_the_length uses no `limit`, but the gate text says `offset` and `limit` together reach past the end.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 420,
+        "message": "`test_gate_read_1_the_cap_still_bounds_a_range` does not assert `offset` guidance in the truncation message.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "73d22c43712cfe471eda22b005bda4271031dc75",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.163337,
+  "output_tokens": 1236,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34375320690-20260909T161357Z-5a97",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.037865,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 123,
+      "verb": "review",
+      "wall_seconds": 11.292
+    },
+    {
+      "cost_usd": 0.038821,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 172,
+      "verb": "review",
+      "wall_seconds": 7.164
+    },
+    {
+      "cost_usd": 0.042114,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 857,
+            "message": "`_int` helper used to coerce caller-supplied `offset`/`limit` is not visible in this diff.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 385,
+      "verb": "review",
+      "wall_seconds": 11.4
+    },
+    {
+      "cost_usd": 0.044536,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 400,
+            "message": "test_gate_read_1_a_range_past_the_end_answers_with_the_length uses no `limit`, but the gate text says `offset` and `limit` together reach past the end.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 420,
+            "message": "`test_gate_read_1_the_cap_still_bounds_a_range` does not assert `offset` guidance in the truncation message.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 568,
+      "verb": "review",
+      "wall_seconds": 16.84
+    }
+  ],
+  "tokens": 1248,
+  "tool_calls": {},
+  "ts": "2026-09-09T16:14:16+00:00",
+  "turns": 4,
+  "wall_seconds": 16.84,
+  "workflow": "review/all-lenses"
+}

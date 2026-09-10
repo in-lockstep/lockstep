@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.114725,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 186,
+        "message": "workflow_slug allows forward slashes through unchanged",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2953,
+        "message": "Exception message from the host is echoed directly to the terminal",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e10d0b71c7b39a70eede08a58596accf461d3bc8",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 405,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260904T011954Z-aade",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 408,
+  "ts": "2026-09-04T01:20:06+00:00",
+  "wall_seconds": 12.864
+}

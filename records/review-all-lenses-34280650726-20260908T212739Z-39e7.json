@@ -1,0 +1,167 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "71013685132b51e75062f05c3817b64a621ae43f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 23823,
+  "ci_actor": "tpouyer",
+  "ci_run": "34280650726",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.104087,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 969,
+        "message": "Assertion only covers jobs that contain `in-lockstep run selfcheck`; a job renamed or restructured would silently drop the check.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 963,
+        "message": "Test checks provision precedes selfcheck but does not verify provision is also present in the selfcheck job specifically.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 971,
+        "message": "Test checks provision precedes selfcheck but does not assert provision step content.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 963,
+        "message": "Loop only checks jobs that contain a selfcheck dispatch, so a job that provisions but never dispatches is silently skipped \u2014 which is the correct behaviour here.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "71013685132b51e75062f05c3817b64a621ae43f",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.104087,
+  "output_tokens": 981,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34280650726-20260908T212739Z-39e7",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.029514,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 969,
+            "message": "Assertion only covers jobs that contain `in-lockstep run selfcheck`; a job renamed or restructured would silently drop the check.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 963,
+            "message": "Test checks provision precedes selfcheck but does not verify provision is also present in the selfcheck job specifically.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 490,
+      "verb": "review",
+      "wall_seconds": 14.895
+    },
+    {
+      "cost_usd": 0.023195,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 54,
+      "verb": "review",
+      "wall_seconds": 3.459
+    },
+    {
+      "cost_usd": 0.023608,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 75,
+      "verb": "review",
+      "wall_seconds": 3.835
+    },
+    {
+      "cost_usd": 0.02777,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 971,
+            "message": "Test checks provision precedes selfcheck but does not assert provision step content.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 963,
+            "message": "Loop only checks jobs that contain a selfcheck dispatch, so a job that provisions but never dispatches is silently skipped \u2014 which is the correct behaviour here.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 374,
+      "verb": "review",
+      "wall_seconds": 10.653
+    }
+  ],
+  "tokens": 993,
+  "tool_calls": {},
+  "ts": "2026-09-08T21:27:54+00:00",
+  "turns": 4,
+  "wall_seconds": 14.895,
+  "workflow": "review/all-lenses"
+}

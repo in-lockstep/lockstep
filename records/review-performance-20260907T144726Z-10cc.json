@@ -1,0 +1,37 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34134795314",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058014,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 220,
+        "message": "O(n\u00b2) string search when a file has many masked values",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "fa8452c49bb34a445de7bf47982d159f551fec9b",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 347,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260907T144726Z-10cc",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 350,
+  "ts": "2026-09-07T14:47:37+00:00",
+  "wall_seconds": 10.924
+}

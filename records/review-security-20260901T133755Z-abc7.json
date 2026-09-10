@@ -1,0 +1,90 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.098049,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The shipped file contains the full system prompt as it was recorded, including a `key` field whose value is a hash. The system prompt embedded in `request.json` is data, not a secret, but the file also contains the complete message content sent to the model \u2014 including the reviewed diff. Nothing in this change appears to introduce credentials into that file, and the test `test_the_fixture_carries_no_credential` scans it for known token prefixes. No finding on content; noting for completeness tha\u2026[truncated]",
+        "path": "src/in_lockstep/cassettes/request.json",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 220,
+        "message": "In `FixtureProvider.generate`, when the live request misses the cassette, the fallback replays `self.recorded` \u2014 the request the response was actually made against. The `on_drift` callback receives both `input` (the live, composed request) and `self.recorded` (the shipped one). Both are `LLMInput` objects constructed from trusted data; neither crosses an external trust boundary here. No injection or information-disclosure path is visible in this diff for that mechanism.",
+        "path": "src/in_lockstep/ai/replay.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 193,
+        "message": "`request_from` constructs an `LLMInput` from an arbitrary `dict` loaded from the shipped `request.json`. All fields are cast explicitly (`str(...)`, `int(...)`, `float(...)`), and the `input` field of each `ToolCall` is taken as `dict(c.get('input', {}))` \u2014 a shallow copy of whatever the JSON contained. For the shipped fixture this is controlled data. If this function were ever called on externally-supplied JSON (not the case in this diff), the `parameters` dict of a `ToolDefinition` and the `in\u2026[truncated]",
+        "path": "src/in_lockstep/ai/replay.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 281,
+        "message": "In `_say_drift`, `composed.system` and `recorded.system` are compared and their differences named, but neither is included in the output \u2014 only the part names ('the system prompt', 'the messages', etc.) are echoed. No prompt content reaches the terminal output through this path, so no accidental disclosure of the composed system prompt via drift reporting.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "11b7002b661a8b79ed145b385691d99a4eef2546",
+  "input_tokens": 29238,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 689,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T133755Z-abc7",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 29927,
+  "ts": "2026-09-01T13:38:21+00:00",
+  "wall_seconds": 25.961
+}

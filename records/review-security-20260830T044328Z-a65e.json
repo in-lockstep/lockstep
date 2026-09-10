@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058605,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1804,
+        "message": "Idea file read without path traversal constraint: `_Path(idea_file).read_text()` is called on any path the user supplies. On a multi-user system or in a context where the CLI is invoked by an agent, this lets the caller read arbitrary files. The `click.Path()` type is used without `exists=True`, `file_okay=True`, or any restriction to a subtree, so a value like `../../etc/passwd` or `/proc/self/environ` reaches `open()` directly.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1804,
+        "message": "File existence check before read creates a TOCTOU race: `file.exists()` is checked and then `file.read_text()` is called separately. Between those two calls the file can be replaced (e.g. a symlink swapped in). This is low-severity in a CLI context but worth noting because the same pattern was avoided elsewhere by using `click.Path(exists=True)`.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 191,
+        "message": "Injection scan findings are surfaced in CLI output but marked `blocking=False`: `injection_findings` from `invocation.findings` are appended to the outcome and echoed to the terminal, but they do not cause the verb to return a non-success status. An idea containing content that triggers the injection scanner proceeds to produce a draft and, with `--create`, files a ticket. If the scanner is the mechanism that is supposed to stop prompt-injection payloads in the idea from reaching the tracker, a \u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/rfe.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "66bfb83659520c1e60ca5b2be0f724a5742a20fe",
+  "input_tokens": 16235,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 660,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T044328Z-a65e",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 16895,
+  "ts": "2026-08-30T04:43:49+00:00",
+  "wall_seconds": 21.079
+}

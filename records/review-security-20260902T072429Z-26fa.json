@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.050506,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 32,
+        "message": "The `_RESUME` regex is applied to untrusted comment body text to extract a numeric depth, and the extracted string is passed directly to `int()` after a regex match on `\\d+`. This is safe as written \u2014 `\\d+` constrains the match to digits only, so no injection into `int()` is possible. However, the comment body is otherwise unsanitised and the `_RESUME` pattern uses `re.search` (not `re.fullmatch`), meaning a comment body of `/implement foo --resume 5 bar` will match and return depth 5. This is c\u2026[truncated]",
+        "path": "src/in_lockstep/platform/chatops.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1178,
+        "message": "In `_attempts_from`, the `artifact` string is a user-supplied filesystem path passed to `read_changeset` and `read_verdict` from `platform.artifacts`. If those functions open files at the supplied path without normalisation, an attacker (or a confused user) could supply a path such as `../../etc/passwd` or a path outside the expected artifact directory. The diff does not show the implementation of `read_changeset`/`read_verdict`, so I cannot confirm whether path traversal is prevented there. Thi\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 79,
+        "message": "Changeset `contents` values are stringified with `str(contents)` and embedded directly into the model prompt without any escaping or sanitisation. If `contents` is a crafted string containing prompt-injection text (e.g. from a compromised or adversarial repository file), it will be delivered verbatim to the model as `GENERATED` provenance \u2014 meaning the egress and trust rules that would apply to `UNTRUSTED_EXTERNAL` content do not apply. The module docstring explicitly notes the GENERATED tagging\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/attempts.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c9e3fcf1dead5eda67b27bfbde8efd048e22d5d6",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 625,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T072429Z-26fa",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 628,
+  "ts": "2026-09-02T07:24:49+00:00",
+  "wall_seconds": 19.589
+}

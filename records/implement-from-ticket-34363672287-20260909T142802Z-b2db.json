@@ -1,0 +1,237 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#400"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 3649657,
+  "cache_write_tokens": 195549,
+  "ci_actor": "tpouyer",
+  "ci_run": "34363672287",
+  "config": "local working tree",
+  "cost_usd": 11.285954,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_green",
+        "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/tickets/github.py",
+        "path": "src/in_lockstep/platform/tickets/github.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/tickets/gitlab.py",
+        "path": "src/in_lockstep/platform/tickets/gitlab.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/github.py",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/tickets/base.py",
+        "path": "src/in_lockstep/platform/tickets/base.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/ai/context.py",
+        "path": "src/in_lockstep/ai/context.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_review_context.py",
+        "path": "tests/in_lockstep/test_review_context.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_conversation_recency.py",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "search_code.index",
+        "message": "graft 0.16.0 \u00b7 index dc14c24b73f1",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 4 failed of 2818: tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_a_target_that_is_not_origin_opens_through_the_rest_form_with_head_repo; tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_a_credential_that_cannot_write_the_target_refuses_before_anything_is_pushed; tests/in_lockstep/test_fork_propose.py::test_an_origin_nothing_can_name_refuses_rather_than_sending_an_empty_head_repo; tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_gitlab_decline\u2026[truncated]",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "97a7582299fb21c255c08be0940b51abb626a108",
+  "input_tokens": 135,
+  "kind": "workflow",
+  "outcome_cost_usd": 11.285954,
+  "output_tokens": 28572,
+  "priced_fraction": 1.0,
+  "reason": "tdd.not_green",
+  "run_id": "implement-from-ticket-34363672287-20260909T142802Z-b2db",
+  "schema": 9,
+  "status": "failed",
+  "steps": [
+    {
+      "cost_usd": 11.285954,
+      "decided": true,
+      "findings": {
+        "count": 13,
+        "items": [
+          {
+            "blocking": true,
+            "id": "tdd.not_green",
+            "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/tickets/github.py",
+            "path": "src/in_lockstep/platform/tickets/github.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/tickets/gitlab.py",
+            "path": "src/in_lockstep/platform/tickets/gitlab.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/github.py",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/tickets/base.py",
+            "path": "src/in_lockstep/platform/tickets/base.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/ai/context.py",
+            "path": "src/in_lockstep/ai/context.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_review_context.py",
+            "path": "tests/in_lockstep/test_review_context.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_conversation_recency.py",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- in-lockstep:review:security -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- in-lockstep:review:security -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "search_code.index",
+            "message": "graft 0.16.0 \u00b7 index dc14c24b73f1",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 4 failed of 2818: tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_a_target_that_is_not_origin_opens_through_the_rest_form_with_head_repo; tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_a_credential_that_cannot_write_the_target_refuses_before_anything_is_pushed; tests/in_lockstep/test_fork_propose.py::test_an_origin_nothing_can_name_refuses_rather_than_sending_an_empty_head_repo; tests/in_lockstep/test_fork_propose.py::test_gate_fork_1_gitlab_decline\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "tdd.not_green",
+      "status": "failed",
+      "step": "implement",
+      "tokens": 28707,
+      "verb": "implement",
+      "wall_seconds": 1288.593
+    }
+  ],
+  "tokens": 28707,
+  "tool_calls": {
+    "delegate": 5,
+    "edit_file": 9,
+    "read_file": 22,
+    "run_script": 10,
+    "run_tests": 4,
+    "run_validate": 3,
+    "search_code": 18,
+    "search_text": 48,
+    "write_file": 1
+  },
+  "ts": "2026-09-09T14:49:33+00:00",
+  "turns": 119,
+  "wall_seconds": 1288.593,
+  "workflow": "implement/from-ticket"
+}

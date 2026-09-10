@@ -1,0 +1,92 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.133948,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 2653,
+        "message": "routed_model change silently alters the default model for `review --aspect <lens>` even when no lens-specific route exists.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 5055,
+        "message": "_is_shipped now returns False for any Lens with emphasis, even when the emphasis matches the shipped class's own `emphasis` attribute.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "test_the_adapter_asks_for_its_lens_by_name patches both review_module and strategy_module but the comment says the local import means only strategy_module matters \u2014 the first patch is dead.",
+        "path": "tests/in_lockstep/test_lens.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 6659,
+        "message": "_SCAFFOLD_REVIEW_TRAMPOLINE contains IN_LOCKSTEP_VERSION as a placeholder that the test asserts is already substituted \u2014 one of them is wrong.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2dee01a893a78dd58963b3ad500cf2a17c5f392b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1014,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T150509Z-e33e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1017,
+  "ts": "2026-09-06T15:05:37+00:00",
+  "wall_seconds": 27.45
+}

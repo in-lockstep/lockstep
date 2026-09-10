@@ -1,0 +1,226 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "bb38c27c04ac1822870dc65dd2c378ac7f07092f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 11680,
+  "cache_write_tokens": 47753,
+  "ci_actor": "tpouyer",
+  "ci_run": "34371601308",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.218608,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 204,
+        "message": "Curator test passes vacuously when no comment is dropped.",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 168,
+        "message": "_NEWEST_FIRST_KINDS uses kind as the discriminant but path shape is the real guard.",
+        "path": "src/in_lockstep/ai/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 113,
+        "message": "GitLab fake does not exercise the 10-page loop guard.",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`_turn` parses attacker-controlled path strings with `rpartition` and `isdigit`; ordinal becomes a sort key integer.",
+        "path": "src/in_lockstep/ai/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: src/in_lockstep/ai/context.py:226 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 205,
+        "message": "test_curator_keeps_newest_conversation_turns_under_tight_budget does not assert chronological output order after trimming.",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 163,
+        "message": "test_dropped_comment_names_the_position_it_left_out is conditional and may assert nothing.",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 113,
+        "message": "test_github_scm_remarks_cap_keeps_the_newest does not exercise the reviews slice, only comments.",
+        "path": "tests/in_lockstep/test_conversation_recency.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bb38c27c04ac1822870dc65dd2c378ac7f07092f",
+  "input_tokens": 15,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.218608,
+  "output_tokens": 2399,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34371601308-20260909T153937Z-fa9c",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.069695,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 204,
+            "message": "Curator test passes vacuously when no comment is dropped.",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 168,
+            "message": "_NEWEST_FIRST_KINDS uses kind as the discriminant but path shape is the real guard.",
+            "path": "src/in_lockstep/ai/context.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 113,
+            "message": "GitLab fake does not exercise the 10-page loop guard.",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1275,
+      "verb": "review",
+      "wall_seconds": 35.843
+    },
+    {
+      "cost_usd": 0.0461,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 141,
+      "verb": "review",
+      "wall_seconds": 9.777
+    },
+    {
+      "cost_usd": 0.049363,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "message": "`_turn` parses attacker-controlled path strings with `rpartition` and `isdigit`; ordinal becomes a sort key integer.",
+            "path": "src/in_lockstep/ai/context.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.line_not_in_hunk",
+            "message": "1 finding(s) kept without a line: src/in_lockstep/ai/context.py:226 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 352,
+      "verb": "review",
+      "wall_seconds": 11.649
+    },
+    {
+      "cost_usd": 0.05345,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 205,
+            "message": "test_curator_keeps_newest_conversation_turns_under_tight_budget does not assert chronological output order after trimming.",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 163,
+            "message": "test_dropped_comment_names_the_position_it_left_out is conditional and may assert nothing.",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 113,
+            "message": "test_github_scm_remarks_cap_keeps_the_newest does not exercise the reviews slice, only comments.",
+            "path": "tests/in_lockstep/test_conversation_recency.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 646,
+      "verb": "review",
+      "wall_seconds": 18.141
+    }
+  ],
+  "tokens": 2414,
+  "tool_calls": {},
+  "ts": "2026-09-09T15:40:13+00:00",
+  "turns": 5,
+  "wall_seconds": 35.843,
+  "workflow": "review/all-lenses"
+}

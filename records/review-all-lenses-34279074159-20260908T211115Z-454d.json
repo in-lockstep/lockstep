@@ -1,0 +1,248 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "194e20a4c5fbde4e5e24aad1710b3d2e7fbbaab3"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 73147,
+  "ci_actor": "tpouyer",
+  "ci_run": "34279074159",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.309737,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 204,
+        "message": "`_tail` joins all lines before truncating, which can hide the last line if earlier lines are long.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 976,
+        "message": "Test loads the live module at test time, which couples the assertion to the current interpreter's installed package rather than the repository source.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 204,
+        "message": "Runner output appended to finding messages without stripping ANSI or control characters.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 62,
+        "message": "`github.actor` interpolated directly into a shell `run` step.",
+        "path": ".github/workflows/ci.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 122,
+        "message": "No assertion that `_tail` joins non-empty lines with ` / ` and truncates from the left.",
+        "path": "tests/in_lockstep/test_monorepo_cwd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 116,
+        "message": "`_Recorder` and `_ctx` helpers used but not shown in the diff \u2014 cannot confirm they capture the final argv as expected.",
+        "path": "tests/in_lockstep/test_monorepo_cwd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 125,
+        "message": "No test for the worktree (`cwd` is set by the `package` branch) case in path relativisation.",
+        "path": "tests/in_lockstep/test_monorepo_cwd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 189,
+        "message": "The `test.no_summary` undecided path (exit 0) does not assert the joined multi-line form makes it through `as_record` whole.",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 963,
+        "message": "The `module.lockstep.container.resolve(Test)` call is not guarded; if the module has no container binding it raises rather than returning `None`.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "194e20a4c5fbde4e5e24aad1710b3d2e7fbbaab3",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.309737,
+  "output_tokens": 2360,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34279074159-20260908T211115Z-454d",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.07616,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 204,
+            "message": "`_tail` joins all lines before truncating, which can hide the last line if earlier lines are long.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 976,
+            "message": "Test loads the live module at test time, which couples the assertion to the current interpreter's installed package rather than the repository source.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 517,
+      "verb": "review",
+      "wall_seconds": 18.239
+    },
+    {
+      "cost_usd": 0.069647,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 68,
+      "verb": "review",
+      "wall_seconds": 4.477
+    },
+    {
+      "cost_usd": 0.078054,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 204,
+            "message": "Runner output appended to finding messages without stripping ANSI or control characters.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 62,
+            "message": "`github.actor` interpolated directly into a shell `run` step.",
+            "path": ".github/workflows/ci.yml",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 622,
+      "verb": "review",
+      "wall_seconds": 18.87
+    },
+    {
+      "cost_usd": 0.085876,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 122,
+            "message": "No assertion that `_tail` joins non-empty lines with ` / ` and truncates from the left.",
+            "path": "tests/in_lockstep/test_monorepo_cwd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 116,
+            "message": "`_Recorder` and `_ctx` helpers used but not shown in the diff \u2014 cannot confirm they capture the final argv as expected.",
+            "path": "tests/in_lockstep/test_monorepo_cwd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 125,
+            "message": "No test for the worktree (`cwd` is set by the `package` branch) case in path relativisation.",
+            "path": "tests/in_lockstep/test_monorepo_cwd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 189,
+            "message": "The `test.no_summary` undecided path (exit 0) does not assert the joined multi-line form makes it through `as_record` whole.",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 963,
+            "message": "The `module.lockstep.container.resolve(Test)` call is not guarded; if the module has no container binding it raises rather than returning `None`.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1165,
+      "verb": "review",
+      "wall_seconds": 28.811
+    }
+  ],
+  "tokens": 2372,
+  "tool_calls": {},
+  "ts": "2026-09-08T21:11:46+00:00",
+  "turns": 4,
+  "wall_seconds": 28.811,
+  "workflow": "review/all-lenses"
+}

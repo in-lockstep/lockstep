@@ -1,0 +1,53 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34152444820",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066703,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 492,
+        "message": "When `run_tool` is None (no tool runner), every turn is marked productive and the idle ceiling never fires.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 209,
+        "message": "No assertion on `idle_turns` for the `no_progress` outcome; the field could be wrong without failing.",
+        "path": "tests/in_lockstep/test_implement_oneshot.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 228,
+        "message": "The `run_tests`-as-progress path has no oneshot-level integration test.",
+        "path": "tests/in_lockstep/test_implement_oneshot.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e8490e4aa250c2c47eb74748758a9375821a80fd",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 768,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T183923Z-b12d",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 771,
+  "ts": "2026-09-07T18:39:46+00:00",
+  "wall_seconds": 23.313
+}

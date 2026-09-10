@@ -1,0 +1,118 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "b48695a52e9c8c9ac142cf6e47d76cfca514ac0f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 6455,
+  "cache_write_tokens": 17400,
+  "ci_actor": "tpouyer",
+  "ci_run": "34279485277",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.076433,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 970,
+        "message": "Substring match on 'in-lockstep provision' could silently pass if the step uses a different invocation form.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b48695a52e9c8c9ac142cf6e47d76cfca514ac0f",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.076433,
+  "output_tokens": 614,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34279485277-20260908T211529Z-7a66",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.018715,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 131,
+      "verb": "review",
+      "wall_seconds": 6.813
+    },
+    {
+      "cost_usd": 0.017608,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 56,
+      "verb": "review",
+      "wall_seconds": 3.301
+    },
+    {
+      "cost_usd": 0.018095,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 88,
+      "verb": "review",
+      "wall_seconds": 3.657
+    },
+    {
+      "cost_usd": 0.022015,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 970,
+            "message": "Substring match on 'in-lockstep provision' could silently pass if the step uses a different invocation form.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 351,
+      "verb": "review",
+      "wall_seconds": 10.319
+    }
+  ],
+  "tokens": 626,
+  "tool_calls": {},
+  "ts": "2026-09-08T21:15:41+00:00",
+  "turns": 4,
+  "wall_seconds": 10.319,
+  "workflow": "review/all-lenses"
+}

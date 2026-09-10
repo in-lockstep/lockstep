@@ -1,0 +1,54 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34164212271",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.026597,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 2941,
+        "message": "Raw subprocess error text (up to 200 chars) reflected into a user-visible ClickException message.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 122,
+        "message": "Anthropic organization, service-account, and federation-rule IDs are committed in plaintext in the workflow file.",
+        "path": ".github/workflows/review.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "997ec81561dd0fd81726298fe62b8e9780914b6b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 555,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T214439Z-6e92",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 558,
+  "ts": "2026-09-07T21:44:55+00:00",
+  "wall_seconds": 16.255
+}

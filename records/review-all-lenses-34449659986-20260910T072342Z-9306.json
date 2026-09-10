@@ -1,0 +1,220 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "8a4d58a22dae1e01e80c4dab6a1f581285e3449c"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 65188,
+  "ci_actor": "tpouyer",
+  "ci_run": "34449659986",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.275946,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 639,
+        "message": "Test asserts the old tuple-only paste format, not the new mapping format.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 737,
+        "message": "`_sandboxes` resolves only Test and Validate verbs; Build, Provision, Run are imported but the container guard is shared.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3983 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 891,
+        "message": "Container stdout flows into version strings that reach report messages and paste suggestions without sanitisation.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3983 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 197,
+        "message": "`str(version or \"\")` silently coerces falsy non-string values but no test covers that path.",
+        "path": "src/in_lockstep/core/verbs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 707,
+        "message": "`_sandboxes` unwrap logic for `WorktreeRunner.inner` and `runner.sandbox.inner` is untested in this diff.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (3983 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "8a4d58a22dae1e01e80c4dab6a1f581285e3449c",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.275946,
+  "output_tokens": 2097,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34449659986-20260910T072342Z-9306",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.074743,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 639,
+            "message": "Test asserts the old tuple-only paste format, not the new mapping format.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 737,
+            "message": "`_sandboxes` resolves only Test and Validate verbs; Build, Provision, Run are imported but the container guard is shared.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3983 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 822,
+      "verb": "review",
+      "wall_seconds": 34.67
+    },
+    {
+      "cost_usd": 0.058408,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 110,
+      "verb": "review",
+      "wall_seconds": 7.856
+    },
+    {
+      "cost_usd": 0.069317,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 891,
+            "message": "Container stdout flows into version strings that reach report messages and paste suggestions without sanitisation.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3983 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 439,
+      "verb": "review",
+      "wall_seconds": 27.652
+    },
+    {
+      "cost_usd": 0.073479,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 197,
+            "message": "`str(version or \"\")` silently coerces falsy non-string values but no test covers that path.",
+            "path": "src/in_lockstep/core/verbs.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 707,
+            "message": "`_sandboxes` unwrap logic for `WorktreeRunner.inner` and `runner.sandbox.inner` is untested in this diff.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (3983 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 738,
+      "verb": "review",
+      "wall_seconds": 34.841
+    }
+  ],
+  "tokens": 2109,
+  "tool_calls": {},
+  "ts": "2026-09-10T07:24:19+00:00",
+  "turns": 4,
+  "wall_seconds": 34.841,
+  "workflow": "review/all-lenses"
+}

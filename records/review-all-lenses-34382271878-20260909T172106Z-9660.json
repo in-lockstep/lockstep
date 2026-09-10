@@ -1,0 +1,230 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "d0c1c53b366bf49c2e11f801053e99a776fe3e7e"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 59991,
+  "ci_actor": "tpouyer",
+  "ci_run": "34382271878",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.258437,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 608,
+        "message": "`getattr(commands, 'executables', ())` is called twice on separate code paths with the same object; the two reads could diverge if `commands` is mutable, but more practically the pattern is repeated rather than extracted.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 734,
+        "message": "The `asyncio.run()` call inside `_probe_executables` will raise `RuntimeError` if an event loop is already running (e.g. when `doctor` is called from an async context).",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 547,
+        "message": "Top-level import of a private name (`_sandbox_executables`) inside `_doctor_over` is a module-level import placed mid-file after test functions, breaking the conventional import grouping the rest of the file follows.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "Program names from ALLOWED_COMMANDS are interpolated into a shell script without quoting.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 480,
+        "message": "Module-level import of a private symbol mid-file is fragile and bypasses the fixture-free import guard at the top of the file.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 464,
+        "message": "_Image.run models shell exit-code semantics, but the assertion it protects is only checked via the doctor path, not via _probe_executables directly.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 537,
+        "message": "test_gate_script_1_doctor_says_what_to_declare_when_nothing_is_declared asserts a specific tuple string that depends on ALLOWED_COMMANDS ordering.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 503,
+        "message": "No test asserts the doctor NOTE for the 'unlisted' branch (image carries a program that executables= omits).",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "d0c1c53b366bf49c2e11f801053e99a776fe3e7e",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.258437,
+  "output_tokens": 2229,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34382271878-20260909T172106Z-9660",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.067472,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 608,
+            "message": "`getattr(commands, 'executables', ())` is called twice on separate code paths with the same object; the two reads could diverge if `commands` is mutable, but more practically the pattern is repeated rather than extracted.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 734,
+            "message": "The `asyncio.run()` call inside `_probe_executables` will raise `RuntimeError` if an event loop is already running (e.g. when `doctor` is called from an async context).",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 547,
+            "message": "Top-level import of a private name (`_sandbox_executables`) inside `_doctor_over` is a module-level import placed mid-file after test functions, breaking the conventional import grouping the rest of the file follows.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 760,
+      "verb": "review",
+      "wall_seconds": 25.062
+    },
+    {
+      "cost_usd": 0.058468,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 145,
+      "verb": "review",
+      "wall_seconds": 9.386
+    },
+    {
+      "cost_usd": 0.062135,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "message": "Program names from ALLOWED_COMMANDS are interpolated into a shell script without quoting.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 383,
+      "verb": "review",
+      "wall_seconds": 16.442
+    },
+    {
+      "cost_usd": 0.070363,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 480,
+            "message": "Module-level import of a private symbol mid-file is fragile and bypasses the fixture-free import guard at the top of the file.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 464,
+            "message": "_Image.run models shell exit-code semantics, but the assertion it protects is only checked via the doctor path, not via _probe_executables directly.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 537,
+            "message": "test_gate_script_1_doctor_says_what_to_declare_when_nothing_is_declared asserts a specific tuple string that depends on ALLOWED_COMMANDS ordering.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 503,
+            "message": "No test asserts the doctor NOTE for the 'unlisted' branch (image carries a program that executables= omits).",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 953,
+      "verb": "review",
+      "wall_seconds": 25.06
+    }
+  ],
+  "tokens": 2241,
+  "tool_calls": {},
+  "ts": "2026-09-09T17:21:33+00:00",
+  "turns": 4,
+  "wall_seconds": 25.062,
+  "workflow": "review/all-lenses"
+}

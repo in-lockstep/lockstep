@@ -1,0 +1,37 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34129359428",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.024781,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 105,
+        "message": "Image size increase not mentioned in PR description or design doc trade-off section.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4026e3def1d65ecee23437c5e4747205e0af4ddf",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 244,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T134742Z-be2c",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 247,
+  "ts": "2026-09-07T13:47:54+00:00",
+  "wall_seconds": 11.128
+}

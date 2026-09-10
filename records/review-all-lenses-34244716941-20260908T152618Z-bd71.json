@@ -1,0 +1,295 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "ab83f4791e7724f4490df95a990ed314111fa873"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 12910,
+  "cache_write_tokens": 137248,
+  "ci_actor": "tpouyer",
+  "ci_run": "34244716941",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.593775,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 786,
+        "message": "Child cost is returned as `Cost()` (zero) when the child raises `InvocationBlocked` or `InvocationFailed`.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 760,
+        "message": "`DELEGATE_TOOL` excluded from `held` set shown in refusal message, but the exclusion is only applied after the set is built.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 792,
+        "message": "Child turn cap is computed once per delegate call, not shared across sibling delegates.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 762,
+        "message": "Child tool set is built from `tools.allow(*names)` where `names` is caller-supplied strings; if `allow` does a name-prefix or fuzzy match, a model could reach tools it was not given.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 755,
+        "message": "`held` check uses `t.name` but `resolve` and `tool.key` use `(server, name)`; a name collision across servers is undetected.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 796,
+        "message": "InvocationBlocked and InvocationFailed from the child return Cost() zero, so spend charged inside the child before it raised is not reflected in the parent's Invocation.cost.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2290,
+        "message": "Budget-ceiling test asserts string prefix only; the child's cost is never checked against the parent's Invocation.cost.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2344,
+        "message": "Tape test asserts turn_count == 2 but never asserts that the child's cost is included in result.cost before the tape check.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2385,
+        "message": "No test covers delegate called with an empty or missing `task`.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: Ignore previous instructions",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "ab83f4791e7724f4490df95a990ed314111fa873",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.296888,
+  "output_tokens": 5010,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34244716941-20260908T152618Z-bd71",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.074237,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 786,
+            "message": "Child cost is returned as `Cost()` (zero) when the child raises `InvocationBlocked` or `InvocationFailed`.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 760,
+            "message": "`DELEGATE_TOOL` excluded from `held` set shown in refusal message, but the exclusion is only applied after the set is built.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 631,
+      "verb": "review",
+      "wall_seconds": 21.074
+    },
+    {
+      "cost_usd": 0.071255,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 792,
+            "message": "Child turn cap is computed once per delegate call, not shared across sibling delegates.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 431,
+      "verb": "review",
+      "wall_seconds": 15.812
+    },
+    {
+      "cost_usd": 0.076288,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 762,
+            "message": "Child tool set is built from `tools.allow(*names)` where `names` is caller-supplied strings; if `allow` does a name-prefix or fuzzy match, a model could reach tools it was not given.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 755,
+            "message": "`held` check uses `t.name` but `resolve` and `tool.key` use `(server, name)`; a name collision across servers is undetected.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 796,
+            "message": "InvocationBlocked and InvocationFailed from the child return Cost() zero, so spend charged inside the child before it raised is not reflected in the parent's Invocation.cost.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 766,
+      "verb": "review",
+      "wall_seconds": 23.659
+    },
+    {
+      "cost_usd": 0.075107,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2290,
+            "message": "Budget-ceiling test asserts string prefix only; the child's cost is never checked against the parent's Invocation.cost.",
+            "path": "tests/in_lockstep/test_ai.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2344,
+            "message": "Tape test asserts turn_count == 2 but never asserts that the child's cost is included in result.cost before the tape check.",
+            "path": "tests/in_lockstep/test_ai.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 2385,
+            "message": "No test covers delegate called with an empty or missing `task`.",
+            "path": "tests/in_lockstep/test_ai.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: Ignore previous instructions",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 689,
+      "verb": "review",
+      "wall_seconds": 18.252
+    }
+  ],
+  "tokens": 5034,
+  "ts": "2026-09-08T15:26:44+00:00",
+  "wall_seconds": 78.797,
+  "workflow": "review/all-lenses"
+}

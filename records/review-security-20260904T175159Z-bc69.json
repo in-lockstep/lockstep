@@ -1,0 +1,87 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.065068,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 129,
+        "message": "The `review-${ISSUE}.json` cassette path in the harvest step is constructed from the `ISSUE` environment variable (set to `github.event.issue.number`), which is safe \u2014 but the step lacks the `if: ${{ !github.event.pull_request.head.repo.fork }}` guard present in the lockstep.yml harvest step. This is not an injection risk (the value is a number passed through an env var, not interpolated into the shell string), but it means the harvest step runs on fork-originated comments where the artifact upl\u2026[truncated]",
+        "path": ".github/workflows/review.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 207,
+        "message": "The `git check-ignore` subprocess call passes `str(directory)` as a path argument after `--`. On all supported platforms `directory` is derived from `root / CASSETTE_DIR` where `root` comes from the caller \u2014 no shell is involved and the `--` separator is present, so a path beginning with a dash cannot be misread as a flag. I see no exploitable path here; noting it because the diff comment itself calls this out as something a previous review raised, confirming the fix is in place.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "343941cdab0dfaf7753c3934df5675632ee324de",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 430,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260904T175159Z-bc69",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 433,
+  "ts": "2026-09-04T17:52:14+00:00",
+  "wall_seconds": 15.331
+}

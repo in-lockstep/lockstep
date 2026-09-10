@@ -1,0 +1,39 @@
+{
+  "args": {},
+  "billed_fraction": null,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "ci_actor": "tpouyer",
+  "ci_run": "34069517686",
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": false,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "improve.no_trend",
+        "message": "nothing recurs yet: no finding id clears both thresholds (min_runs 5 billed, min_weeks 2) over 72 record(s)",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "d784682b89fee3cad000987dadfe20a2f81a8da9",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": "improve.no_trend",
+  "run_id": "improve-measure-34069517686-20260907T002103Z-bed1",
+  "schema": 8,
+  "status": "blocked",
+  "steps": [],
+  "tokens": 0,
+  "ts": "2026-09-07T00:21:03+00:00",
+  "wall_seconds": 0.0,
+  "workflow": "improve/measure"
+}

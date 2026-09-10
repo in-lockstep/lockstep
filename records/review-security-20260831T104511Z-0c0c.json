@@ -1,0 +1,61 @@
+{
+  "aspect": "security",
+  "base": "pack-describe",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.082413,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 198,
+        "message": "AST walk covers only the module root, not subdirectories \u2014 a malicious pack could ship executable code in a nested package and still report `imports: none`.",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 222,
+        "message": "A bare `except Exception` in `_module_root` swallows all failures and returns `None`, causing `imports()` to fall through to `'unknown'` rather than `'modules'` \u2014 a pack that triggers an intentional exception during metadata traversal could avoid the AST check entirely.",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 408,
+        "message": "When a pack's module import fails, the exception message is placed verbatim into `problems` and eventually printed/returned in the receipt \u2014 if the exception text includes local paths, credentials injected via environment, or other host-specific information, that data leaves the process in structured output.",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 461,
+        "message": "`_offers()` calls `importlib.import_module(module_name)` where `module_name` is taken directly from entry-point metadata, which is an attacker-controlled string if a distribution is crafted or entry-point metadata is tampered with post-install.",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1d9d600082155497be00a2a482a7b96f422faea6",
+  "input_tokens": 21986,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1097,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T104511Z-0c0c",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 23083,
+  "ts": "2026-08-31T10:45:44+00:00",
+  "wall_seconds": 32.786
+}

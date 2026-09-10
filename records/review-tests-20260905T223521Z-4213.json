@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066043,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1516,
+        "message": "The hunk range assertion for `_DIFF_WITH_HUNKS` is not directly tested; the test at line 1516 checks lines 10, 12, and 80 but `@@ -10,3 +10,3 @@` produces a range of `(10, 12)` and `@@ -80,1 +80,1 @@` produces `(80, 80)`. Line 12 is the inclusive end, so the boundary is exercised. However line 11 (interior) is not checked \u2014 only the two endpoints and the second hunk's start. This is fine in practice, but the exact inclusive-end boundary for the second hunk (line 80 is both start and end of a cou\u2026[truncated]",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1633,
+        "message": "The `hunks` property for a renamed file is not tested. A rename appears as `--- a/old.py` / `+++ b/new.py`, meaning `paths` would include both names but `hunks` would key only on `new.py` (the `+++` side, after stripping `b/`). A finding citing `old.py` (the deleted side of a rename) would pass the `paths` check but get no hunk entry, and `_outside_every_hunk` would return `False` (the `not spans` short-circuit), keeping any line. That behaviour may be correct \u2014 it is the same path as a deleted \u2026[truncated]",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 296,
+        "message": "`hunks` strips a leading `b/` prefix from the `+++` name but `paths` strips neither `a/` nor `b/` from either side. So for a normal file `src/real.py`, `paths` contains `src/real.py` (from `+++ b/src/real.py` after `len('+++ b/')` = 6 chars stripped) \u2014 wait, `paths` strips the full marker `'+++ b/'` (6 chars), so it does store `src/real.py`. And `hunks` does `name[2:]` when `name.startswith('b/')`, giving the same key. They agree for the normal case. For a file literally in a directory named `b/\u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1564,
+        "message": "The `_PATHS_NAMED = 3` truncation path (\"and N more\") is not exercised. The test at line 1548 drops two paths and checks both appear in the message. A case with four or more distinct unreachable paths would trigger the truncation branch (`more > 0`). No test asserts that the \"and N more\" text appears, so a regression there would be silent. Missing assertion: `assert 'and 1 more' in refusals[0].message` for a four-path case.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6885e7bb7d159b274db6835eb094be1e47587b17",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1079,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T223521Z-4213",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1082,
+  "ts": "2026-09-05T22:35:49+00:00",
+  "wall_seconds": 28.539
+}

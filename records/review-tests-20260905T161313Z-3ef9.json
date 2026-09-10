@@ -1,0 +1,62 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.16103,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "New workflow functions `fix_from_ticket`, `fix_propose`, and `fix_report` are tested for registration and invocation, but `fix_report` coverage via `test_report_workflow.py` now depends on the `_run` stub supplying `container`, `repo`, and `max_attempts`. The updated stub does supply all three, and `store_for` is monkeypatched before use \u2014 so that path is covered.",
+        "path": "src/in_lockstep/workflows/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 5282,
+        "message": "The `--eject` flag path through `_ejected_source` is exercised by `test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs`, but that test's key assertion is conditional: `if marker in inspect.getsource(implement): assert marker in source`. If the marker string is absent from the installed source the assertion is skipped entirely, meaning a total text mismatch between the ejected output and the shipped source would pass the test. A stronger assertion \u2014 that the ejected source compiles\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 5227,
+        "message": "`_ejected_source` applies `register()` stripping and `@workflow` re-injection via regex. No test invokes `_ejected_source` directly and asserts that the resulting text compiles AND that calling `register()` on the ejected module would raise `DuplicateWorkflow` (proving the decorators actually landed). `test_ejecting_gives_the_source_back_and_it_is_the_source_that_runs` checks text presence but does not execute the ejected source.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 161,
+        "message": "The conditional marker assertion at line 161 (`if marker in inspect.getsource(implement): assert marker in source`) is the weakest assertion in the new tests. If the marker is removed from the framework source in a future commit, the test silently stops asserting that ejected text matches shipped text. The assertion should be unconditional, or the marker should be a constant shared between the test and the module it checks.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c9fc5de53f78a07b945e7e140f49b0bf864e3bbd",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 685,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T161313Z-3ef9",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 688,
+  "ts": "2026-09-05T16:13:33+00:00",
+  "wall_seconds": 19.923
+}

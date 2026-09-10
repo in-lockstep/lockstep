@@ -1,0 +1,118 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "e1fabd8f9179341bf49cb9c2e7c50499e597ec5a"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 10259,
+  "ci_actor": "tpouyer",
+  "ci_run": "34299831499",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044702,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 35,
+        "message": "'Cannot find a seam' escape hatch directs to a comment, not to a structured field.",
+        "path": "src/in_lockstep/prompts/fix/reproducer-writer.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e1fabd8f9179341bf49cb9c2e7c50499e597ec5a",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.044702,
+  "output_tokens": 413,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34299831499-20260909T013629Z-0bed",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.013528,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 35,
+            "message": "'Cannot find a seam' escape hatch directs to a comment, not to a structured field.",
+            "path": "src/in_lockstep/prompts/fix/reproducer-writer.md",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 272,
+      "verb": "review",
+      "wall_seconds": 11.257
+    },
+    {
+      "cost_usd": 0.010374,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 47,
+      "verb": "review",
+      "wall_seconds": 2.726
+    },
+    {
+      "cost_usd": 0.010592,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 55,
+      "verb": "review",
+      "wall_seconds": 3.093
+    },
+    {
+      "cost_usd": 0.010209,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 51,
+      "verb": "review",
+      "wall_seconds": 5.731
+    }
+  ],
+  "tokens": 425,
+  "tool_calls": {},
+  "ts": "2026-09-09T01:36:40+00:00",
+  "turns": 4,
+  "wall_seconds": 11.257,
+  "workflow": "review/all-lenses"
+}

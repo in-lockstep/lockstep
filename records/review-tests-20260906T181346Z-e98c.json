@@ -1,0 +1,56 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34050977751",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.068161,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 391,
+        "message": "absorb-and-push test does not assert that push carries the note to the remote.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 345,
+        "message": "Test for 'commit not on this branch' only checks working-tree main, not an arbitrary unrelated commit.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 237,
+        "message": "history --acknowledge with no --reason is not tested through the CLI path.",
+        "path": "tests/in_lockstep/test_ledger_evidence.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7532bd1ff929211b3240db30b38dcd25d1212e5e",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 667,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T181346Z-e98c",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 670,
+  "ts": "2026-09-06T18:14:04+00:00",
+  "wall_seconds": 18.378
+}

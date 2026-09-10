@@ -1,0 +1,77 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.087174,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 251,
+        "message": "Sidecar key is used as a dict index without hash verification at this layer; the comment acknowledges the check is deferred to the CLI and to `eval run`.",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1,
+        "message": "The promoted case embeds a full model request including system prompt and user message verbatim in a committed file; no credentials are visible, but the pattern establishes that future promotions will also commit full request payloads.",
+        "path": "evidence/cases/review/lockstep-48-security.json",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a85830134ce54fbe5132f4f65b10c56b9c50d41b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 642,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T020709Z-484c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 645,
+  "ts": "2026-09-06T02:07:30+00:00",
+  "wall_seconds": 20.812
+}

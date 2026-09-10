@@ -1,0 +1,57 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066402,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The catalog URL validation for `market add` is stated as \"https only\" in the design, but there is no implementation visible in this diff to verify that constraint is enforced in code. If `market add` accepts http URLs at runtime, an attacker controlling a network path between the user and the catalog host can serve a crafted `index.toml` that names a malicious receipt \u2014 and the receipt comparison that is supposed to catch substitution would be checking the attacker's document. This is noted in t\u2026[truncated]",
+        "path": "design/extension-packs.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The design states that an entry's `receipt` path \"may not leave the repository\" because it is \"untrusted input naming a file this process opens\" (\u00a75). No code implementing that path validation appears in this diff. A catalog entry with `receipt = \"../../etc/shadow\"` or a traversal sequence would name an arbitrary file for the process to open when `add` re-derives and compares the receipt. The design identifies the risk correctly; whether it is mitigated in the implementation is not visible here.",
+        "path": "design/extension-packs.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The design says `installed()` never calls `entry.load()` and reads `pack.toml` through distribution metadata rather than `importlib.resources` to avoid importing the package (\u00a73.1). This is a meaningful security boundary \u2014 it keeps an untrusted pack's code out of the process during listing. No implementation of `installed()` is in this diff to confirm the boundary holds. If a later refactor calls `entry.load()` to read metadata more conveniently, arbitrary code in the pack's `__init__.py` runs i\u2026[truncated]",
+        "path": "design/extension-packs.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The module docstring states the JSON digest is \"over exactly what is printed\" and that `compare` narrows to a `material` subset excluding `requires`. The diff does not show the `compare` implementation. If `material` is computed incorrectly \u2014 for example, if `capabilities` or `offers` is excluded \u2014 a pack that widened its capabilities would pass comparison silently. This is the core control behind `GATE-PACK-3`; its correctness cannot be confirmed from the diff shown.",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5aa399745caf9be63ff99157bce00a65cd73b537",
+  "input_tokens": 18474,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 732,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T125335Z-bb0a",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 19206,
+  "ts": "2026-08-31T12:53:58+00:00",
+  "wall_seconds": 22.663
+}

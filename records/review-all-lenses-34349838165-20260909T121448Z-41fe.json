@@ -1,0 +1,313 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "bcef9156abeb258877bbd9dc8763038407b51bd1"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 164999,
+  "ci_actor": "tpouyer",
+  "ci_run": "34349838165",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.676127,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 510,
+        "message": "validated() skips all checks when ctx has no container attribute, even when a Validate verb is bound",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 533,
+        "message": "fixed paths collected on attempt 0 only; a repair turn that adds new unfixed paths is not re-run through the fixer",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 525,
+        "message": "unrepaired note from a failing sandbox refusal is overwritten by later iterations",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 305,
+        "message": "fix command is run without checking its exit code; a failing formatter is silently ignored",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 72,
+        "message": "fix_command is not threaded through to CommandValidate when lint_command comes from a package.json script path",
+        "path": "src/in_lockstep/adapters/detected.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 499,
+        "message": "Two `materialize` worktree checkouts per repair round (build + check), plus a third if the fix pass runs.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 592,
+        "message": "Makefile target names are interpolated into shell commands without validation.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 299,
+        "message": "Fixer command runs without checking sandbox refusal for model-staged files.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 480,
+        "message": "`validated` returns early when `ctx.container` is None, silently skipping the check even when a Validate verb is bound elsewhere.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 513,
+        "message": "The `note` from `_built` is silently dropped when the build succeeds but the fix pass ran.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 551,
+        "message": "A `PhaseError` raised by `run_phase` during the repair turn discards its `invocations` list, which means turn counts and costs are under-reported.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 474,
+        "message": "The structural test (`test_gate_validate_2_every_strategy_that_reports_a_change_validates_it_first`) would pass even if `validated` were present but never awaited.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 419,
+        "message": "The ordering test in `test_gate_validate_2_the_checks_run_before_the_green_is_confirmed` (in `test_implement_tdd.py`) asserts `ctx.order[:4]` but does not assert that the green `Test` run that follows is the one that determines the final verdict.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bcef9156abeb258877bbd9dc8763038407b51bd1",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.676127,
+  "output_tokens": 3823,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34349838165-20260909T121448Z-41fe",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.176042,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 510,
+            "message": "validated() skips all checks when ctx has no container attribute, even when a Validate verb is bound",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 533,
+            "message": "fixed paths collected on attempt 0 only; a repair turn that adds new unfixed paths is not re-run through the fixer",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 525,
+            "message": "unrepaired note from a failing sandbox refusal is overwritten by later iterations",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 305,
+            "message": "fix command is run without checking its exit code; a failing formatter is silently ignored",
+            "path": "src/in_lockstep/adapters/command.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 72,
+            "message": "fix_command is not threaded through to CommandValidate when lint_command comes from a package.json script path",
+            "path": "src/in_lockstep/adapters/detected.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1435,
+      "verb": "review",
+      "wall_seconds": 40.439
+    },
+    {
+      "cost_usd": 0.159988,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 499,
+            "message": "Two `materialize` worktree checkouts per repair round (build + check), plus a third if the fix pass runs.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 350,
+      "verb": "review",
+      "wall_seconds": 13.68
+    },
+    {
+      "cost_usd": 0.16625,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 592,
+            "message": "Makefile target names are interpolated into shell commands without validation.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 299,
+            "message": "Fixer command runs without checking sandbox refusal for model-staged files.",
+            "path": "src/in_lockstep/adapters/command.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 761,
+      "verb": "review",
+      "wall_seconds": 21.687
+    },
+    {
+      "cost_usd": 0.173848,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 480,
+            "message": "`validated` returns early when `ctx.container` is None, silently skipping the check even when a Validate verb is bound elsewhere.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 513,
+            "message": "The `note` from `_built` is silently dropped when the build succeeds but the fix pass ran.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 551,
+            "message": "A `PhaseError` raised by `run_phase` during the repair turn discards its `invocations` list, which means turn counts and costs are under-reported.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 474,
+            "message": "The structural test (`test_gate_validate_2_every_strategy_that_reports_a_change_validates_it_first`) would pass even if `validated` were present but never awaited.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 419,
+            "message": "The ordering test in `test_gate_validate_2_the_checks_run_before_the_green_is_confirmed` (in `test_implement_tdd.py`) asserts `ctx.order[:4]` but does not assert that the green `Test` run that follows is the one that determines the final verdict.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1289,
+      "verb": "review",
+      "wall_seconds": 34.873
+    }
+  ],
+  "tokens": 3835,
+  "tool_calls": {},
+  "ts": "2026-09-09T12:15:28+00:00",
+  "turns": 4,
+  "wall_seconds": 40.439,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,232 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "52f3b80703fe4d96f7df93ef1e96c96ea7d0c948"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 55421,
+  "ci_actor": "tpouyer",
+  "ci_run": "34431070696",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.24166,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 374,
+        "message": "`for_verb` is now a required keyword argument; callers outside this diff would break at runtime.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 356,
+        "message": "`_install` silently returns a note when `Provision` is bound but `for_verb` is not \u2014 two different fallback messages for the same situation.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 388,
+        "message": "`_install_where_the_checks_run` uses `networked.run` but `networked` is a `replace`d copy with no shared `ran` list.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (678 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 381,
+        "message": "Installer command list is taken verbatim from an adapter-supplied tuple with no validation before being passed to `sandbox.run`.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (678 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 338,
+        "message": "Ordering assertion for the contained-image path only checks that `cwd` is truthy, not that the install ran before the staged change was written.",
+        "path": "tests/in_lockstep/test_prepared_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.path_not_in_diff",
+        "message": "2 finding(s) dropped: named tests/in_lockstep/test_validate_phase.py, tests/in_lockstep/test_validate_sandbox.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (678 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "52f3b80703fe4d96f7df93ef1e96c96ea7d0c948",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.24166,
+  "output_tokens": 2253,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34431070696-20260910T025221Z-35eb",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.064588,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 374,
+            "message": "`for_verb` is now a required keyword argument; callers outside this diff would break at runtime.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 356,
+            "message": "`_install` silently returns a note when `Provision` is bound but `for_verb` is not \u2014 two different fallback messages for the same situation.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 388,
+            "message": "`_install_where_the_checks_run` uses `networked.run` but `networked` is a `replace`d copy with no shared `ran` list.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (678 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 834,
+      "verb": "review",
+      "wall_seconds": 32.238
+    },
+    {
+      "cost_usd": 0.052802,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 111,
+      "verb": "review",
+      "wall_seconds": 6.202
+    },
+    {
+      "cost_usd": 0.059821,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 381,
+            "message": "Installer command list is taken verbatim from an adapter-supplied tuple with no validation before being passed to `sandbox.run`.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (678 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 495,
+      "verb": "review",
+      "wall_seconds": 26.657
+    },
+    {
+      "cost_usd": 0.064449,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 338,
+            "message": "Ordering assertion for the contained-image path only checks that `cwd` is truthy, not that the install ran before the staged change was written.",
+            "path": "tests/in_lockstep/test_prepared_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.path_not_in_diff",
+            "message": "2 finding(s) dropped: named tests/in_lockstep/test_validate_phase.py, tests/in_lockstep/test_validate_sandbox.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (678 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 825,
+      "verb": "review",
+      "wall_seconds": 30.901
+    }
+  ],
+  "tokens": 2265,
+  "tool_calls": {},
+  "ts": "2026-09-10T02:52:54+00:00",
+  "turns": 4,
+  "wall_seconds": 32.238,
+  "workflow": "review/all-lenses"
+}

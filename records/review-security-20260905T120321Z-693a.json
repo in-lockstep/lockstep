@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.078448,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 98,
+        "message": "Regex `LEDGER_ROW` is applied with `.match()`, which anchors only at the start of the line. A crafted line in `design/objectives.md` beginning with the expected pattern but embedding backtick-wrapped gate ids in unexpected positions could cause `CITED.findall` to extract attacker-controlled gate id strings into the `carried`/`blocked` tuples. Because those tuples are then compared against `_gate_status()` results from `gates.md`, a gate id that matches a real `held` gate would cause `_miscarried\u2026[truncated]",
+        "path": "tests/in_lockstep/test_objectives.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b7b1b9e17ddeb6b7d1ec944a73fc8848c9dbf326",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 351,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T120321Z-693a",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 354,
+  "ts": "2026-09-05T12:03:33+00:00",
+  "wall_seconds": 11.917
+}

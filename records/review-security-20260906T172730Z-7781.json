@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.063782,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 62,
+        "message": "Subprocess output from `git config` written to the ledger without length or content constraints.",
+        "path": "src/in_lockstep/platform/identity.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "20f08ab181b75c0d55e02f615b7d4f3374a57adb",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 442,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T172730Z-7781",
+  "schema": 7,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 445,
+  "ts": "2026-09-06T17:27:45+00:00",
+  "wall_seconds": 15.211
+}

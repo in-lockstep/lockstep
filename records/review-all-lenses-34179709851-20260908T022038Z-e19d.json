@@ -1,0 +1,343 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "4cb748c641a933e1ab42f5781b5ab0871ef208f6"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 215966,
+  "ci_actor": "tpouyer",
+  "ci_run": "34179709851",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.903545,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 18,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 165,
+        "message": "Fresh-verdict filter uses a string key `{case}/{arm}` that differs from what `Verdict` likely uses as its replay key.",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 536,
+        "message": "`_ensure_judge_bound` binds `AiJudge` silently when no route is declared, but `AiJudge` refuses an unrouted call \u2014 so the auto-bind saves no refusal, only buries the error later.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 258,
+        "message": "`_sidecar_for` falls back to `corpus / f\"{case}{SIDECAR_SUFFIX}\"` for an unknown case, but the gate says a verdict paid for must not be lost \u2014 a renamed case would silently miss the fallback sidecar on replay.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 248,
+        "message": "`_sidecar_for` scans the full corpus with `load_cases` to locate one case by name.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 223,
+        "message": "`_corpus_rubrics` and `_judged` each call `load_cases(corpus)`, and `_known_verdicts` does a separate `rglob` \u2014 three directory scans per `judge_corpus` invocation.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 241,
+        "message": "Case `name` from corpus JSON used to construct sidecar path without containment check.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 256,
+        "message": "Sidecar glob reads all `*.verdicts.jsonl` files recursively; a symlink or planted file outside normal case directories is silently ingested.",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 257,
+        "message": "Pass-rate assertion is wrong for the corpus test: 2/3 requires `broken` to count as a decided failure, but `broken`'s deterministic check fails against the *recorded* answer, meaning whether `_decided` now treats it as failed matters.",
+        "path": "tests/in_lockstep/test_judge_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 215,
+        "message": "`again.value.after.judged == 1` asserts replay produced a judged count, but does not assert the verdict *value* (level) that was replayed.",
+        "path": "tests/in_lockstep/test_judge_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 35,
+        "message": "`sink.append_text` is called with a concatenated string of all verdicts for a case; if a partial write fails mid-string, no verdict in that batch is recoverable.",
+        "path": "src/in_lockstep/platform/verdicts.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4cb748c641a933e1ab42f5781b5ab0871ef208f6",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.451772,
+  "output_tokens": 6240,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34179709851-20260908T022038Z-e19d",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 165,
+            "message": "Fresh-verdict filter uses a string key `{case}/{arm}` that differs from what `Verdict` likely uses as its replay key.",
+            "path": "src/in_lockstep/workflows/improve.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 536,
+            "message": "`_ensure_judge_bound` binds `AiJudge` silently when no route is declared, but `AiJudge` refuses an unrouted call \u2014 so the auto-bind saves no refusal, only buries the error later.",
+            "path": "src/in_lockstep/cli.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 258,
+            "message": "`_sidecar_for` falls back to `corpus / f\"{case}{SIDECAR_SUFFIX}\"` for an unknown case, but the gate says a verdict paid for must not be lost \u2014 a renamed case would silently miss the fallback sidecar on replay.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "verb": "review",
+      "wall_seconds": 26.094
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 248,
+            "message": "`_sidecar_for` scans the full corpus with `load_cases` to locate one case by name.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 223,
+            "message": "`_corpus_rubrics` and `_judged` each call `load_cases(corpus)`, and `_known_verdicts` does a separate `rglob` \u2014 three directory scans per `judge_corpus` invocation.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "verb": "review",
+      "wall_seconds": 19.047
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 241,
+            "message": "Case `name` from corpus JSON used to construct sidecar path without containment check.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 256,
+            "message": "Sidecar glob reads all `*.verdicts.jsonl` files recursively; a symlink or planted file outside normal case directories is silently ingested.",
+            "path": "src/in_lockstep/improver.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "verb": "review",
+      "wall_seconds": 17.785
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 257,
+            "message": "Pass-rate assertion is wrong for the corpus test: 2/3 requires `broken` to count as a decided failure, but `broken`'s deterministic check fails against the *recorded* answer, meaning whether `_decided` now treats it as failed matters.",
+            "path": "tests/in_lockstep/test_judge_loop.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 215,
+            "message": "`again.value.after.judged == 1` asserts replay produced a judged count, but does not assert the verdict *value* (level) that was replayed.",
+            "path": "tests/in_lockstep/test_judge_loop.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 35,
+            "message": "`sink.append_text` is called with a concatenated string of all verdicts for a case; if a partial write fails mid-string, no verdict in that batch is recoverable.",
+            "path": "src/in_lockstep/platform/verdicts.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "verb": "review",
+      "wall_seconds": 27.296
+    }
+  ],
+  "tokens": 6264,
+  "ts": "2026-09-08T02:21:07+00:00",
+  "wall_seconds": 90.223,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,71 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.067997,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 291,
+        "message": "The `paths` property now reads both `--- a/` and `+++ b/` sides to capture deleted and renamed files. That matches what `hunks` needs and what the gate description promises. However, `/dev/null` is explicitly excluded only conceptually \u2014 the code skips it because `/dev/null` does not start with `--- a/` or `+++ b/`. A diff for a new file uses `--- /dev/null` (no `a/` prefix), so it is already excluded. A diff for a deleted file uses `+++ /dev/null` (no `b/` prefix), so it is also already exclude\u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 306,
+        "message": "The `hunks` property strips `b/` from the `+++` name but handles the case where the name does not start with `b/` by setting `current = None`, silently producing no entry for that file. The only realistic non-`b/` value on the `+++` side is `/dev/null`, which is the right thing to skip. But if a diff were produced without the `b/` prefix (e.g. `git diff --no-prefix`), every file would silently get no hunk entry, `_outside_every_hunk` would return `False` for every finding (the `not spans` early \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 395,
+        "message": "The `paths` property on `Diff` (changed in this PR) now returns both `--- a/` and `+++ b/` paths. `_in_the_change` builds `touched` from `diff.paths`, so a finding on a deleted file's path will be in `touched`. But `hunks` keys on the `+++` name only, and a deleted file has `+++ /dev/null`, so it gets no entry in `hunks`. `_outside_every_hunk` then hits `not spans` (empty or missing) and returns `False`, meaning the line is accepted without checking. This matches the stated intent ('*no new side\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1534,
+        "message": "The hunk range `@@ -10,3 +10,3 @@` means three lines starting at 10 on the new side \u2014 lines 10, 11, 12. The test checks `line in (10, 12, 80)`. Line 12 is the last line of that hunk (10 + 3 - 1 = 12), so the boundary is exercised. Line 10 is the start. Line 80 is `@@ -80,1 +80,1 @@` \u2014 one line. That is also correct. The test does not exercise the boundary one past the end (line 13), which would confirm the upper bound is exclusive-of-13 rather than inclusive-of-12. This is a minor gap in boundar\u2026[truncated]",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 404,
+        "message": "The diff describes checking coordinates 'against the diff as sent to the model'. The implementation iterates `package.items` looking for items with `kind == \"diff\"`. If a context package contains multiple diff items (e.g. the base diff and a per-file excerpt), `touched` and `hunks` are built from all of them. Whether the model is ever shown multiple diff items is not visible in this diff, but if it were, a path from a supplementary diff item could cause a finding on that path to pass the gate ev\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6885e7bb7d159b274db6835eb094be1e47587b17",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1209,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T223434Z-5751",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1212,
+  "ts": "2026-09-05T22:35:04+00:00",
+  "wall_seconds": 29.894
+}

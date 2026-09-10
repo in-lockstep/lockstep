@@ -1,0 +1,249 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "170e1c2b3f388ddda823058c187b036065186840"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 49929,
+  "ci_actor": "tpouyer",
+  "ci_run": "34476474034",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.208615,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 185,
+        "message": "`CommandTest` runner-override path has no new test covering it.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4198 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 37,
+        "message": "`runner: Any = None` accepts an arbitrary object with no validation before it executes commands.",
+        "path": "src/in_lockstep/core/types.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4198 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "Assertion message describes the wrong outcome.",
+        "path": "tests/in_lockstep/test_staged_runner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "No parallel test added for `CommandTest`, which received the same `inp.runner` change as `PytestTest`.",
+        "path": "tests/in_lockstep/test_staged_runner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4198 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "170e1c2b3f388ddda823058c187b036065186840",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.208615,
+  "output_tokens": 1423,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34476474034-20260910T122451Z-83f7",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.053934,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 185,
+            "message": "`CommandTest` runner-override path has no new test covering it.",
+            "path": "src/in_lockstep/adapters/command.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4198 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 382,
+      "verb": "review",
+      "wall_seconds": 26.49
+    },
+    {
+      "cost_usd": 0.043333,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 78,
+      "verb": "review",
+      "wall_seconds": 5.936
+    },
+    {
+      "cost_usd": 0.054883,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 37,
+            "message": "`runner: Any = None` accepts an arbitrary object with no validation before it executes commands.",
+            "path": "src/in_lockstep/core/types.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4198 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 424,
+      "verb": "review",
+      "wall_seconds": 25.073
+    },
+    {
+      "cost_usd": 0.056465,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "message": "Assertion message describes the wrong outcome.",
+            "path": "tests/in_lockstep/test_staged_runner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "message": "No parallel test added for `CommandTest`, which received the same `inp.runner` change as `PytestTest`.",
+            "path": "tests/in_lockstep/test_staged_runner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4198 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 551,
+      "verb": "review",
+      "wall_seconds": 27.349
+    }
+  ],
+  "tokens": 1435,
+  "tool_calls": {},
+  "ts": "2026-09-10T12:25:20+00:00",
+  "turns": 4,
+  "wall_seconds": 27.349,
+  "workflow": "review/all-lenses"
+}

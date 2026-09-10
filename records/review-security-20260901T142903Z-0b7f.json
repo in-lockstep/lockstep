@@ -1,0 +1,85 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.078411,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 60,
+        "message": "Attacker-controlled content from pull request remarks reaches `Ticket.as_context` tagged UNTRUSTED_EXTERNAL, but the tagging boundary depends entirely on `with_review` being the sole caller and on downstream consumers respecting provenance \u2014 the diff does not show enforcement at the consumer side.",
+        "path": "src/in_lockstep/platform/conversation.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 175,
+        "message": "The `gh pr list --limit 60` result is taken at face value; `headRefName` comes from the GitHub API and is matched by `is_run_branch_for`, but the raw PR metadata fields (title, url, body) flow into `ChangeRequest` without sanitisation before being formatted into prompt blocks.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 218,
+        "message": "The `_clean` regex strips only one specific HTML-comment pattern; other HTML comments or embedded markup in reviewer bodies pass through to the prompt unmodified.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 207,
+        "message": "A `RuntimeError` from the pulls comments endpoint is silently swallowed and `notes` is set to `None`, causing line-note collection to be skipped without any indication in the returned `Remark` tuple or the caller's `note` string.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "834223e46b4173188721282ab981996dcb515f73",
+  "input_tokens": 21522,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 923,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T142903Z-0b7f",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 22445,
+  "ts": "2026-09-01T14:29:32+00:00",
+  "wall_seconds": 29.001
+}

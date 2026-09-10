@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.047619,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 155,
+        "message": "Main gate test has no positive control path \u2014 if `_page_module` strips all blocks to `pass`, the test passes vacuously.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 119,
+        "message": "`_page_module` skips `from __future__ import annotations` lines inside blocks but includes them in the prelude, which may hide errors in pages that rely on PEP 563 semantics only inside those stripped lines.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 148,
+        "message": "`subprocess.import` is deferred inside the test but the same symbol is moved to module level elsewhere in the file \u2014 inconsistent style, not a defect.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "83f22f014b0709af6115cc833330389fe87c1489",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 720,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T124500Z-5642",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 723,
+  "ts": "2026-09-06T12:45:19+00:00",
+  "wall_seconds": 19.008
+}

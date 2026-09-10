@@ -1,0 +1,168 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "8e2494a553a7abcfc62f9a15aba5219894831e41"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 21691,
+  "ci_actor": "tpouyer",
+  "ci_run": "34284290100",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.103052,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 155,
+        "message": "RuntimeError catch is keyed on a substring of the exception message, not a type",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 793,
+        "message": "Pinning test patches pwd.getpwuid but not os.environ removal \u2014 order dependency with monkeypatch",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 157,
+        "message": "RuntimeError suppression gated on a user-visible string from an external SDK.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 158,
+        "message": "String match 'home directory' is fragile but is pinned only against the RuntimeError message, not against the skip call path.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "8e2494a553a7abcfc62f9a15aba5219894831e41",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.103052,
+  "output_tokens": 1445,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34284290100-20260908T220839Z-3907",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.029225,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 155,
+            "message": "RuntimeError catch is keyed on a substring of the exception message, not a type",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 793,
+            "message": "Pinning test patches pwd.getpwuid but not os.environ removal \u2014 order dependency with monkeypatch",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 604,
+      "verb": "review",
+      "wall_seconds": 17.287
+    },
+    {
+      "cost_usd": 0.021406,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 68,
+      "verb": "review",
+      "wall_seconds": 4.217
+    },
+    {
+      "cost_usd": 0.026229,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 157,
+            "message": "RuntimeError suppression gated on a user-visible string from an external SDK.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 383,
+      "verb": "review",
+      "wall_seconds": 11.25
+    },
+    {
+      "cost_usd": 0.026191,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 158,
+            "message": "String match 'home directory' is fragile but is pinned only against the RuntimeError message, not against the skip call path.",
+            "path": "tests/in_lockstep/test_llm.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 402,
+      "verb": "review",
+      "wall_seconds": 11.152
+    }
+  ],
+  "tokens": 1457,
+  "tool_calls": {},
+  "ts": "2026-09-08T22:08:57+00:00",
+  "turns": 4,
+  "wall_seconds": 17.287,
+  "workflow": "review/all-lenses"
+}

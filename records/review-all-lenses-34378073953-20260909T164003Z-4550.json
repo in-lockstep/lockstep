@@ -1,0 +1,184 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "8b1711089aba8090c829d5be4a6a3403dfcd6eff"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 70971,
+  "ci_actor": "tpouyer",
+  "ci_run": "34378073953",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.292727,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 158,
+        "message": "failures_elsewhere uses path string matching that may miss staged paths not normalised to forward slashes before the set is built.",
+        "path": "src/in_lockstep/core/types.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 745,
+        "message": "elsewhere_only returns () when the report has no cases, but does not distinguish 'no cases' from 'overlap' \u2014 the caller cannot tell why it got ().",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 167,
+        "message": "Attacker-controlled test case IDs drive the 'whose failure is it' decision with only a string split.",
+        "path": "src/in_lockstep/core/types.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 327,
+        "message": "No test covers the `fix.suite_red_elsewhere` finding path in DiagnoseThenFix.",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 238,
+        "message": "test_gate_verdict_3_the_workflows_own_verdict_computes_the_split spawns real git and subprocess in a unit test suite.",
+        "path": "tests/in_lockstep/test_verdict_attribution.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "8b1711089aba8090c829d5be4a6a3403dfcd6eff",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.292727,
+  "output_tokens": 1770,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34378073953-20260909T164003Z-4550",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.0749,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 158,
+            "message": "failures_elsewhere uses path string matching that may miss staged paths not normalised to forward slashes before the set is built.",
+            "path": "src/in_lockstep/core/types.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 745,
+            "message": "elsewhere_only returns () when the report has no cases, but does not distinguish 'no cases' from 'overlap' \u2014 the caller cannot tell why it got ().",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 569,
+      "verb": "review",
+      "wall_seconds": 21.502
+    },
+    {
+      "cost_usd": 0.068341,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 117,
+      "verb": "review",
+      "wall_seconds": 8.56
+    },
+    {
+      "cost_usd": 0.073914,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 167,
+            "message": "Attacker-controlled test case IDs drive the 'whose failure is it' decision with only a string split.",
+            "path": "src/in_lockstep/core/types.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 482,
+      "verb": "review",
+      "wall_seconds": 17.59
+    },
+    {
+      "cost_usd": 0.075571,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 327,
+            "message": "No test covers the `fix.suite_red_elsewhere` finding path in DiagnoseThenFix.",
+            "path": "src/in_lockstep/adapters/ai/fix.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 238,
+            "message": "test_gate_verdict_3_the_workflows_own_verdict_computes_the_split spawns real git and subprocess in a unit test suite.",
+            "path": "tests/in_lockstep/test_verdict_attribution.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 614,
+      "verb": "review",
+      "wall_seconds": 17.117
+    }
+  ],
+  "tokens": 1782,
+  "tool_calls": {},
+  "ts": "2026-09-09T16:40:25+00:00",
+  "turns": 4,
+  "wall_seconds": 21.502,
+  "workflow": "review/all-lenses"
+}

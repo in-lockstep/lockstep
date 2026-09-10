@@ -1,0 +1,55 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.016953,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 72,
+        "message": "The new URL-userinfo pattern masks the password component of connection strings, but its lower bound of 6 characters means a 1\u20135 character password passes through unmasked. This is a documentation/accuracy concern: the gate text now says the pattern catches connection strings, but short passwords (e.g. `postgres://user:pass@host/db`) are silently passed through. An attacker or operator with a short database password would see it logged unredacted while believing the framework masks it.",
+        "path": "src/in_lockstep/privileged/redact.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 45,
+        "message": "The widened keyword pattern uses `(?<![A-Za-z0-9])` as a lookbehind but the keyword list (`api[_-]?key|token|secret|password`) still includes `token` and `secret` as bare words. A string like `id_token=<value>` or `reset_secret=<value>` will now match where `\\b` previously would not have, because underscore is treated as a boundary by the new lookbehind but the plain letter before the underscore is not alphanumeric from the lookbehind's perspective only at the `_` position. This is a minor false\u2026[truncated]",
+        "path": "src/in_lockstep/privileged/redact.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 988,
+        "message": "The `stored` variable is derived from `item.case`, which is untrusted data read back from a harvested cassette. If `stored` is a dict, its contents are passed to `request_from` and then `key_of`. I cannot see the implementations of `request_from` and `key_of` in this diff, so I cannot confirm whether they validate or constrain their input before use. If `request_from` does field-by-field extraction this is likely safe; if it passes the dict through to something that executes or queries with it, \u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1e0b0e4213802833b673aa635b3cbab9de9444cc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 880,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T003008Z-0f04",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 883,
+  "ts": "2026-09-05T00:30:32+00:00",
+  "wall_seconds": 24.221
+}

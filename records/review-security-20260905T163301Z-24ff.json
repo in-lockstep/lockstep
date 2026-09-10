@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.045579,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1973,
+        "message": "Regex extraction of workflow IDs and function names from source text is used to drive `getattr` and `inspect.getsource` calls. A workflow_id containing regex metacharacters (e.g. a `.` or `+`) could cause `re.search` in `_workflow_function` to match an unintended function name, and then `getattr(module, match.group(1))` would return an arbitrary attribute of the workflow module. The `name` argument comes from CLI user input, so an attacker who can invoke the CLI passes `name` directly into `re.e\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1960,
+        "message": "`_workflow_ids` calls `inspect.getsource(module.register)` and then `re.findall` over that text to discover workflow ids. `inspect.getsource` reads from the installed package on disk. If an attacker can write to the installed package's source files (e.g. via a compromised dependency or writable site-packages), they could inject arbitrary strings matching `workflow(id=\"...\")` into `register`'s source, causing `_workflow_ids` to return attacker-controlled ids. Those ids are printed to the terminal\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "01c4ba584af863d463b82aa7d3059b45a9b4c3c9",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 657,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T163301Z-24ff",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 660,
+  "ts": "2026-09-05T16:33:21+00:00",
+  "wall_seconds": 20.269
+}

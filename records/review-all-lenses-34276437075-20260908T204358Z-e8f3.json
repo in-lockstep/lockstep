@@ -1,0 +1,134 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "9147d2a524978204c51ab035582d140973996802"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 30263,
+  "ci_actor": "tpouyer",
+  "ci_run": "34276437075",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.124442,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 959,
+        "message": "First assertion does not check the step actually runs `uv run in-lockstep run selfcheck` \u2014 the substring match is loose enough to survive renaming the command.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 964,
+        "message": "The test loads the live `.lockstep/lockstep.py` binding; if that file is absent the test errors rather than fails with the gate's own message.",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9147d2a524978204c51ab035582d140973996802",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.124442,
+  "output_tokens": 728,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34276437075-20260908T204358Z-e8f3",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.029566,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 91,
+      "verb": "review",
+      "wall_seconds": 6.764
+    },
+    {
+      "cost_usd": 0.029248,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 55,
+      "verb": "review",
+      "wall_seconds": 4.756
+    },
+    {
+      "cost_usd": 0.03002,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 100,
+      "verb": "review",
+      "wall_seconds": 4.935
+    },
+    {
+      "cost_usd": 0.035608,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 959,
+            "message": "First assertion does not check the step actually runs `uv run in-lockstep run selfcheck` \u2014 the substring match is loose enough to survive renaming the command.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 964,
+            "message": "The test loads the live `.lockstep/lockstep.py` binding; if that file is absent the test errors rather than fails with the gate's own message.",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 494,
+      "verb": "review",
+      "wall_seconds": 15.44
+    }
+  ],
+  "tokens": 740,
+  "tool_calls": {},
+  "ts": "2026-09-08T20:44:15+00:00",
+  "turns": 4,
+  "wall_seconds": 15.44,
+  "workflow": "review/all-lenses"
+}

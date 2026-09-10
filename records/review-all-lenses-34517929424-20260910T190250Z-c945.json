@@ -1,0 +1,151 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "36676a2c9cfbcad8ad3e70eabc9034a6b19feb40"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 9823,
+  "cache_write_tokens": 40196,
+  "ci_actor": "tpouyer",
+  "ci_run": "34517929424",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.181012,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 82,
+        "message": "Assertion checks `\"prepared\" in jobs & models` but does not verify the two sets are equal.",
+        "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 81,
+        "message": "Assertion checks only `prepared in intersection`; a path using both `prepared` AND `materialize` would still pass.",
+        "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 57,
+        "message": "`getattr(func, 'attr', '')` on a nested attribute chain returns only the rightmost name, masking deeper-namespace calls.",
+        "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "36676a2c9cfbcad8ad3e70eabc9034a6b19feb40",
+  "input_tokens": 15,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.181012,
+  "output_tokens": 1819,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34517929424-20260910T190250Z-c945",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.041574,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 82,
+            "message": "Assertion checks `\"prepared\" in jobs & models` but does not verify the two sets are equal.",
+            "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 318,
+      "verb": "review",
+      "wall_seconds": 23.389
+    },
+    {
+      "cost_usd": 0.038585,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 104,
+      "verb": "review",
+      "wall_seconds": 7.838
+    },
+    {
+      "cost_usd": 0.038773,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 110,
+      "verb": "review",
+      "wall_seconds": 22.311
+    },
+    {
+      "cost_usd": 0.06208,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 81,
+            "message": "Assertion checks only `prepared in intersection`; a path using both `prepared` AND `materialize` would still pass.",
+            "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 57,
+            "message": "`getattr(func, 'attr', '')` on a nested attribute chain returns only the rightmost name, masking deeper-namespace calls.",
+            "path": "tests/in_lockstep/test_gate_ci_5_paths_agree.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1302,
+      "verb": "review",
+      "wall_seconds": 35.357
+    }
+  ],
+  "tokens": 1834,
+  "tool_calls": {},
+  "ts": "2026-09-10T19:03:26+00:00",
+  "turns": 5,
+  "wall_seconds": 35.357,
+  "workflow": "review/all-lenses"
+}

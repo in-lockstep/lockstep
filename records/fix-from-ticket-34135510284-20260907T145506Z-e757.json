@@ -1,0 +1,117 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 13620390,
+  "cache_write_tokens": 432244,
+  "ci_actor": "tpouyer",
+  "ci_run": "34135510284",
+  "config": "local working tree",
+  "cost_usd": 8.639196,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.not_fixed",
+        "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote src/in_lockstep/platform/ledger/history.py",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote tests/in_lockstep/test_history.py",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 8 failed of 2502: tests/in_lockstep/test_cli.py::test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves, tests/in_lockstep/test_controls.py::test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started, tests/in_lockstep/test_docs.py::test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy, tests/in_lockstep/test_docs.py::test_the_typecheck_gate_would_notice_a_bare_outcome, tests/in_lockstep/test_docs.py::test_the_\u2026[truncated]",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "75d1e834a5cd57609a4380309960e552910c2b21",
+  "input_tokens": 228,
+  "kind": "workflow",
+  "outcome_cost_usd": 4.319598,
+  "output_tokens": 195432,
+  "priced_fraction": 1.0,
+  "reason": "fix.not_fixed",
+  "run_id": "fix-from-ticket-34135510284-20260907T145506Z-e757",
+  "schema": 8,
+  "status": "failed",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.not_fixed",
+            "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote src/in_lockstep/platform/ledger/history.py",
+            "path": "src/in_lockstep/platform/ledger/history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote tests/in_lockstep/test_history.py",
+            "path": "tests/in_lockstep/test_history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 8 failed of 2502: tests/in_lockstep/test_cli.py::test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves, tests/in_lockstep/test_controls.py::test_a_sandboxed_command_that_hangs_is_killed_with_the_processes_it_started, tests/in_lockstep/test_docs.py::test_gate_docs_1_every_documented_snippet_type_checks_under_strict_mypy, tests/in_lockstep/test_docs.py::test_the_typecheck_gate_would_notice_a_bare_outcome, tests/in_lockstep/test_docs.py::test_the_\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "fix.not_fixed",
+      "status": "failed",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 2288.126
+    }
+  ],
+  "tokens": 195660,
+  "ts": "2026-09-07T15:33:16+00:00",
+  "wall_seconds": 2411.416,
+  "workflow": "fix/from-ticket"
+}
