@@ -581,11 +581,21 @@ def test_a_program_that_runs_and_fails_is_still_reported_as_a_failure(workspace:
 class _Image:
     """A runner standing in for a bound sandbox: an image, a declaration, and a shell."""
 
-    def __init__(self, *, has: tuple[str, ...], executables: tuple[str, ...] = (), shell: bool = True):
+    def __init__(
+        self,
+        *,
+        has: tuple[str, ...],
+        executables: Any = (),
+        shell: bool = True,
+        versions: dict[str, str] | None = None,
+    ):
         self.image = "example.test/image:tag"
         self.executables = executables
         self._has = has
         self._shell = shell
+        # What each program prints for `--version`. Absent is not empty: an image whose programs
+        # answer nothing is a real case, and the paste falls back to names there (#419).
+        self._versions = versions or {}
 
     async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
         if not self._shell:
@@ -605,9 +615,9 @@ class _Image:
 
             asked = [p for p in ALLOWED_COMMANDS if f"command -v {p} " in last]
             code = 0 if asked and asked[-1] in self._has else 127
-        return type(
-            "R", (), {"exit_code": code, "stdout": "\n".join(found) + "\n", "stderr": "", "how": "x"}
-        )()
+        # `<program>\t<what it said>`, the shape the probe asks for.
+        out = "".join(f"{p}\t{self._versions.get(p, '')}\n" for p in found)
+        return type("R", (), {"exit_code": code, "stdout": out, "stderr": "", "how": "x"})()
 
 
 def _doctor_over(runner: Any) -> Any:
@@ -627,6 +637,33 @@ def test_gate_script_1_doctor_says_what_to_declare_when_nothing_is_declared() ->
     (finding,) = [c for c in report.checks if c.code == "DOC183"]
     assert "carries 2 of the 12" in finding.message, "git is not one run_script offers"
     assert 'executables=("python3", "make")' in finding.hint
+
+
+def test_gate_script_1_doctor_pastes_the_versions_the_image_reported() -> None:
+    """GATE-SCRIPT-1. `DOC184` compares declared versions across bindings, and a declaration nobody
+    can obtain without running the image by hand is one nobody writes (#419). So the probe captures
+    what each program printed and hands back the mapping to paste."""
+    report = _doctor_over(
+        _Image(has=("python3", "make"), versions={"python3": "Python 3.12.7", "make": "GNU Make 4.3"})
+    )
+    (finding,) = [c for c in report.checks if c.code == "DOC183"]
+    assert 'executables={"python3": "Python 3.12.7", "make": "GNU Make 4.3"}' in finding.hint
+
+
+def test_gate_script_1_doctor_names_a_version_the_image_no_longer_reports() -> None:
+    """GATE-SCRIPT-1. A mutable tag moves and the declaration does not: `python3.11-bookworm` went
+    from 3.11.16 to 3.11.14 between two runs half an hour apart (#419). A WARNING and not an error,
+    because this half needs the probe and a laptop with no runtime must not fail `doctor`."""
+    report = _doctor_over(
+        _Image(
+            has=("python3",),
+            executables={"python3": "Python 3.11.16"},
+            versions={"python3": "Python 3.11.14"},
+        )
+    )
+    warnings = [c for c in report.checks if c.code == "DOC183" and c.severity.value == "warning"]
+    assert warnings and "1 version(s)" in warnings[0].message
+    assert "3.11.16" in warnings[0].hint and "3.11.14" in warnings[0].hint
 
 
 def test_gate_script_1_doctor_names_a_declaration_that_has_drifted_from_its_image() -> None:

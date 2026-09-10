@@ -71,6 +71,7 @@ def run(root: str | Path = ".", *, strict: bool = False) -> Report:
         _pack_guardrails(report, lockstep)
         _tooling(report, lockstep, path)
         _sandbox_executables(report, lockstep, path)
+        _executable_versions_agree(report, lockstep)
     if strict:
         _strict_policy(report, path)
         if lockstep is not None:
@@ -703,6 +704,73 @@ def _tooling(report: Report, lockstep: Any, root: Path) -> None:
             )
 
 
+def _sandboxes(lockstep: Any) -> list[tuple[str, Any]]:
+    """Every runner this module declares, named by what it serves.
+
+    The workshop's is `run_script`'s. The rest are the verbs whose adapters carry one. Enumerated
+    by verb rather than by walking the container's private bindings, so the list is a thing a
+    reader can check against the module in front of them.
+    """
+    from .core.types import Build, Provision, Run, Test, Validate
+
+    out: list[tuple[str, Any]] = []
+    workshop = getattr(getattr(lockstep, "workshop", None), "commands", None)
+    if workshop is not None:
+        # `Lockstep.use` wraps the bound runner in a `WorktreeRunner`, whose `inner` owns the image.
+        out.append(("workshop (run_script)", getattr(workshop, "inner", workshop)))
+    container = getattr(lockstep, "container", None)
+    for verb in (Test, Validate, Build, Provision, Run):
+        if container is None or not container.has(verb):
+            continue
+        runner = getattr(container.resolve(verb), "sandbox", None)
+        if runner is not None:
+            out.append((verb.__name__, getattr(runner, "inner", runner)))
+    return out
+
+
+def _executable_versions_agree(report: Report, lockstep: Any) -> None:
+    """Two bindings naming one program and disagreeing about its version (#419).
+
+    An ERROR, and the reason is measured rather than felt: this repository handed a model `python`
+    3.12 through `run_script` and `python` 3.11 or 3.13 through its suite -- which pair depending on
+    where the run happened -- so a model explored on one interpreter and its tests ran on another.
+    Nobody chose that; it is what two independent image choices drift into, and nothing could see it
+    because `executables=` named programs and not versions.
+
+    **No probe.** This compares what the module DECLARES, so it is arithmetic over the file (O7): no
+    container start, no runtime, the same answer on a laptop as on a runner. That matters twice
+    over. It is what makes an error affordable -- `report.ok` is `not self.errors` and the work jobs
+    run plain `doctor`, so a warning here would have printed beside `DOC130` and changed nothing --
+    and it is the check that would have caught the real bug, because those three Pythons were three
+    declarations nobody compared. Whether a declaration still matches its image is `DOC183`'s
+    question, needs the probe, and stays advisory.
+
+    **Pairwise, over shared programs only**, and by string equality. A `Test` image carrying `pytest`
+    that a linter's image does not is ordinary and is not a finding. And `GNU Make 4.3` shares no
+    grammar with `uv 0.5.11`, so a framework that parsed these would be guessing at every
+    ecosystem's versioning (O1); the same image reports the same string, and that is the whole test.
+    """
+    from .core.verbs import declared_executables
+
+    said: dict[str, dict[str, list[str]]] = {}
+    for who, runner in _sandboxes(lockstep):
+        for program, version in declared_executables(runner).items():
+            if version:
+                said.setdefault(program, {}).setdefault(version, []).append(who)
+    for program in sorted(p for p, versions in said.items() if len(versions) > 1):
+        rows = "; ".join(
+            f"{version} in {', '.join(sorted(who))}" for version, who in sorted(said[program].items())
+        )
+        report.add(
+            "DOC184",
+            Severity.ERROR,
+            f"bindings disagree about {program}: {rows}",
+            f"A model exploring with one {program} and running its tests on another is the defect "
+            f"this exists to stop. Point the bindings at one image, or -- where the difference is "
+            f"deliberate -- say so by giving them images whose {program} agrees.",
+        )
+
+
 def _sandbox_executables(report: Report, lockstep: Any, root: Path) -> None:
     """What the `run_script` image actually has, against what the binding says it has.
 
@@ -716,6 +784,7 @@ def _sandbox_executables(report: Report, lockstep: Any, root: Path) -> None:
     out by trying 36 times (#401). Here they are handed the tuple to paste.
     """
     from .ai.builtins import ALLOWED_COMMANDS
+    from .core.verbs import declared_executables
 
     runner = getattr(getattr(lockstep, "workshop", None), "commands", None)
     # `Lockstep.use` wraps the bound runner in a `WorktreeRunner`, whose `inner` is the sandbox
@@ -742,15 +811,23 @@ def _sandbox_executables(report: Report, lockstep: Any, root: Path) -> None:
 
     offered = tuple(program for program in ALLOWED_COMMANDS if program in found)
     if not declared:
-        # A tuple a person can paste: one item needs its trailing comma, more must not have one.
-        inner = ", ".join(f'"{program}"' for program in offered)
-        listed = f"{inner}," if len(offered) == 1 else inner
+        # Versions included where the image answered, because `DOC184` compares those across
+        # bindings and a declaration nobody can obtain without running the image by hand is one
+        # nobody writes (#419). Where nothing answered, the tuple: empty means unasked, and
+        # `{"python3": "", "make": ""}` is a worse thing to paste than the names alone.
+        if any(found[program] for program in offered):
+            inner = ", ".join(f'"{program}": "{found[program]}"' for program in offered)
+            listed = f"{{{inner}}}"
+        else:
+            # One item needs its trailing comma, more must not have one.
+            names = ", ".join(f'"{program}"' for program in offered)
+            listed = f"({names},)" if len(offered) == 1 else f"({names})"
         report.add(
             "DOC183",
             Severity.NOTE,
             f"{image} carries {len(offered)} of the {len(ALLOWED_COMMANDS)} programs run_script "
             f"offers, and the binding does not say so",
-            f"Declare it where the sandbox is bound: `executables=({listed})`. Without it a model "
+            f"Declare it where the sandbox is bound: `executables={listed}`. Without it a model "
             f"is told it may run all {len(ALLOWED_COMMANDS)} and finds out otherwise a turn at a "
             f"time.",
         )
@@ -774,10 +851,27 @@ def _sandbox_executables(report: Report, lockstep: Any, root: Path) -> None:
             "Not wrong -- an undeclared program is simply refused before it runs -- but a model "
             "could have used it.",
         )
+    # The version half, and a WARNING rather than an error on purpose: this is the half that needs
+    # the probe, so it cannot answer on a laptop with no runtime, and a check that fails only where
+    # it happens to be able to ask is not a control. `DOC184` is the error, and it needs no probe.
+    stale = tuple(
+        f"{program}: declared {said!r}, image says {found[program]!r}"
+        for program, said in declared_executables(runner).items()
+        if said and program in found and found[program] and said != found[program]
+    )
+    if stale:
+        report.add(
+            "DOC183",
+            Severity.WARNING,
+            f"`executables=` disagrees with {image} about {len(stale)} version(s)",
+            "The image moved and the declaration did not: " + "; ".join(stale) + ". A mutable tag "
+            "is the usual cause -- `python3.11-bookworm` went from 3.11.16 to 3.11.14 between two "
+            "runs half an hour apart (#419) -- so this is also the argument for pinning by digest.",
+        )
 
 
-def _probe_executables(runner: Any, root: Path) -> set[str] | None:
-    """Which of the programs `run_script` offers resolve inside the bound image, or None.
+def _probe_executables(runner: Any, root: Path) -> dict[str, str] | None:
+    """`{program: version}` for the programs `run_script` offers that resolve inside the image.
 
     ONE container start, not one per program: the shell loop asks about all of them and prints the
     ones it finds. `sh` is the assumption, and where it does not hold -- a distroless image -- the
@@ -790,8 +884,15 @@ def _probe_executables(runner: Any, root: Path) -> set[str] | None:
     # `exit 0` at the end, and it is the whole reliability of this: without it the script's exit
     # code is the last `command -v`, which is 127 whenever the last program happens to be missing.
     # A probe that read that as "the shell is not there" would report every image as unaskable.
+    # `<program>\t<what it said>` per line. `--version` in the same container start as the
+    # `command -v`, because the version half of the declaration (#419) is worth nothing if an
+    # adopter has to hand-write strings they can only get by running the image themselves. A
+    # program that answers nothing, or answers on stderr in a shape this cannot read, still counts
+    # as present with no version -- absent is not zero, and unasked is not "no version".
     tests = "; ".join(
-        f"command -v {program} >/dev/null 2>&1 && echo {program}" for program in ALLOWED_COMMANDS
+        f"command -v {program} >/dev/null 2>&1 && "
+        f"printf '%s\\t%s\\n' {program} \"$({program} --version 2>/dev/null | head -1)\""
+        for program in ALLOWED_COMMANDS
     )
     script = f"{tests}; exit 0"
     try:
@@ -803,7 +904,13 @@ def _probe_executables(runner: Any, root: Path) -> set[str] | None:
         # refusing (no container runtime), 127 is an image with no `sh`. Either way this learned
         # nothing, and an empty set would read as "the image carries nothing".
         return None
-    return {line.strip() for line in str(getattr(result, "stdout", "")).splitlines() if line.strip()}
+    found: dict[str, str] = {}
+    for line in str(getattr(result, "stdout", "")).splitlines():
+        if not line.strip():
+            continue
+        program, _tab, version = line.partition("\t")
+        found[program.strip()] = version.strip()
+    return found
 
 
 def _locations(
