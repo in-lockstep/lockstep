@@ -277,8 +277,14 @@ class _Ctx:
         self.adapter = PytestTest(args=["-q"], sandbox=_Declared(image="declared", require_container=True))
 
         class _Container:
-            def has(_self, _verb: object) -> bool:
-                return test_bound
+            def has(_self, verb: object) -> bool:
+                # Per verb, not "yes to everything". `verdict_over_staged` provisions before it
+                # tests, and a container answering True for `Provision` handed a `Provision`
+                # request to `PytestTest` -- which is not a bug in the code under test but a fake
+                # claiming a binding this fixture does not make. No Provision is bound here, so
+                # `prepared` installs nothing and the suite runs against what the runner carries,
+                # which for these tests is the host subprocess.
+                return test_bound and verb is Test
 
             def resolve(_self, _verb: object) -> PytestTest:
                 return self.adapter

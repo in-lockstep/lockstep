@@ -253,7 +253,12 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
         # The reason is not carried: `TestVerdict` is counts and a status so it serialises on the
         # redacted side of the artifact, and `implement_body` renders `blocked` as the sentence.
         return TestVerdict.of("blocked", False, TestReport())
-    async with materialize(repo_root, changeset) as tree:
+    # `prepared`, not `materialize`: this is the verdict that rides into the proposal and decides
+    # whether a change request is marked ready, so a tree with no environment here is a suite that
+    # collected nothing reported as an unverified change on every run. `prepared` installs the
+    # repository's own environment over HEAD first, then applies the staged change -- the order
+    # being the security property, since provisioning what a model staged would run its manifests.
+    async with prepared(ctx, repo_root, changeset, for_verb=Test) as (tree, _note):
         outcome = await ctx.do(Test(root=tree, runner=staged_runner(ctx, Test)))
     report = outcome.value if outcome.value is not None else TestReport()
     # The paths this change staged, so the verdict can tell a change that fails its own tests from
@@ -563,7 +568,16 @@ async def prepared(
 async def materialize(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD") -> AsyncIterator[str]:
     """`ref` (default HEAD) plus `changeset`, in a throwaway worktree. Yields its path; removes it.
 
-    Use as `async with materialize(root, changeset) as tree: await ctx.do(Test(root=tree))`.
+    The tree carries the repository's FILES and no environment: no `.venv`, no `node_modules`,
+    nothing an install would have put there. So this is the right primitive for reading a tree
+    (the Graft index) or for git work over one (`backport`), and the wrong one for running
+    anything that needs the repository's dependencies.
+
+    **A suite is dispatched from `prepared`, never from here**, and this docstring used to say the
+    opposite -- it offered `await ctx.do(Test(root=tree))` as the example, which is the shape that
+    made every `/implement` collect zero tests once the mounted host `.venv` went away. Even after
+    that was true it went on teaching the pattern; `test_model_test_environment.py` is the rule and
+    this is the sentence that stops the next reader reintroducing it.
     """
     # `ref` is an argv token to `git` (no shell), so this is option-confusion, not injection: a ref
     # like `--lock` would be read by `git worktree add` as a flag. A commit-ish never begins with a

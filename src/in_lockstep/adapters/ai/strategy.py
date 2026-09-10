@@ -584,7 +584,7 @@ async def _built(ctx: Any, session: Any, changeset: ChangeSet) -> tuple[str, str
     one, and inventing a build command would be the guess O1 refuses.
     """
     from ...core.types import Build
-    from ..worktree import materialize, staged_refusal
+    from ..worktree import prepared, staged_refusal
 
     container = ctx.container
     if not container.has(Build):
@@ -594,7 +594,9 @@ async def _built(ctx: Any, session: Any, changeset: ChangeSet) -> tuple[str, str
     # exposure GATE-SANDBOX-2 is about with a different file extension.
     if (why := staged_refusal(ctx, Build)) is not None:
         return "", f"the change was not built: {why}"
-    async with materialize(session.repo_root, changeset) as tree:
+    # `prepared` for the same reason `Test` uses it: a build needs the environment the repository
+    # installs, and a bare worktree has none.
+    async with prepared(ctx, session.repo_root, changeset, for_verb=Build) as (tree, _note):
         outcome = await ctx.do(Build(root=tree))
     if outcome.status is Status.SUCCEEDED:
         return "", ""
@@ -854,7 +856,7 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
     HEAD, and the reason this tool exists at all.
     """
     from ...core.types import Test
-    from ..worktree import materialize, staged_refusal, staged_runner
+    from ..worktree import prepared, staged_refusal, staged_runner
 
     async def run(paths: tuple[str, ...] = ()) -> str:
         container = getattr(ctx, "container", None)
@@ -871,9 +873,19 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
         # ends here is not a session that quietly ran its test on the host (GATE-SANDBOX-2).
         if (why := staged_refusal(ctx)) is not None:
             return f"refused (sandbox.host_fallback): {why}"
-        async with materialize(root, staged) as tree:
+        # `prepared`, not `materialize`: the environment is the repository's own `Provision` run
+        # over HEAD before the staged change lands, which is what makes the container carry the
+        # suite's dependencies at all. `materialize` yields a bare worktree, and after #419 removed
+        # the mounted host `.venv` that tree had no environment -- so `python -m pytest` collected
+        # ZERO tests and the model was told nothing was decided. `_validate_runner` below already
+        # ran this way; Test did not, and the asymmetry cost a $10.18 run to find (#421 is the same
+        # species one layer out: a control that inspected one path while another executed).
+        async with prepared(ctx, root, staged, for_verb=Test) as (tree, note):
             outcome = await ctx.do(Test(root=tree, paths=paths, runner=staged_runner(ctx, Test)))
-        return _rendered(outcome)
+        rendered = _rendered(outcome)
+        # Only where it explains something, the way the validator's does: a note appended to every
+        # result is prompt the session pays for on every later turn.
+        return f"{rendered}\n\n({note})" if note else rendered
 
     return run
 

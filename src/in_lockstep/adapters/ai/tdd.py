@@ -31,7 +31,7 @@ from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
-from ..worktree import head_state, materialize, staged_refusal, staged_runner
+from ..worktree import head_state, prepared, staged_refusal, staged_runner
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import (
     PhaseError,
@@ -187,7 +187,12 @@ class TDD(ImplementStrategy):
                     decided=not red_inv.exhausted,
                 )
 
-            async with materialize(session.repo_root, tests) as tree:
+            # `prepared`, not `materialize`: this dispatches the suite, so the tree needs the
+            # environment the repository's own `Provision` builds. A bare worktree has none since
+            # #419 dropped the mounted host `.venv`, and pytest in an image that never installed
+            # this project collects ZERO tests -- which arrives here as a run that decided nothing
+            # and is then reported as `tdd.not_red`, the sentence this phase exists to avoid.
+            async with prepared(ctx, session.repo_root, tests, for_verb=Test) as (tree, _note):
                 red = await ctx.do(Test(root=tree, expect="fail", runner=staged_runner(ctx, Test)))
                 # Red means the suite ran and failed, so a run that decided nothing -- collected
                 # nothing, or never reported -- is not red however it exited. Which of the three
@@ -296,7 +301,7 @@ class TDD(ImplementStrategy):
             notes=search_notes(session) + validation.findings(),
         )
 
-        async with materialize(session.repo_root, full) as tree:
+        async with prepared(ctx, session.repo_root, full, for_verb=Test) as (tree, _note):
             green = await ctx.do(Test(root=tree, expect="pass", runner=staged_runner(ctx, Test)))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
@@ -370,7 +375,7 @@ async def _revert_verify(
     before = await head_state(session.repo_root, [c.path for c in fix])
     undo = ChangeSet(changes=fix).inverse(before)
     reverted = _merge(full, undo)  # full with the implementation undone -> HEAD + the test
-    async with materialize(session.repo_root, reverted) as tree:
+    async with prepared(ctx, session.repo_root, reverted, for_verb=Test) as (tree, _note):
         recheck = await ctx.do(Test(root=tree, expect="fail", runner=staged_runner(ctx, Test)))
     if recheck.status is Status.SUCCEEDED:  # expect="fail" satisfied -> red again
         return [
