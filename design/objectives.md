@@ -87,7 +87,7 @@ to move without somebody standing in front of this table.
 
 | Objective | Title | Status | Carried by | Blocked on | The gap |
 |---|---|---|---|---|---|
-| `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-TOOLING-2`, `GATE-CI-3`, `GATE-TOOLING-4`, `GATE-VALIDATE-1`, `GATE-VALIDATE-2` | — | — |
+| `O1` | Drop in, and reuse what the repository already has | held | `GATE-TOOLING-1`, `GATE-PROVISION-1`, `GATE-PROVISION-3`, `GATE-TOOLING-2`, `GATE-CI-3`, `GATE-TOOLING-4`, `GATE-VALIDATE-1`, `GATE-VALIDATE-2` | — | — |
 | `O2` | Onboarding is light | held | `GATE-PROVISION-1`, `GATE-PROVISION-2`, `GATE-PLUGIN-2`, `GATE-TOOLING-2`, `GATE-TOOLING-3`, `GATE-FIXTURE-1`, `GATE-SEARCH-1` | — | — |
 | `O3` | The same process at a terminal and in CI | held | `GATE-CI-1`, `GATE-RECORD-1`, `GATE-CI-2`, `GATE-CI-4`, `GATE-OUT-7`, `GATE-OUT-5`, `GATE-FORK-1` | — | GitLab is scaffold-tested and never executed: the parity walk and the credential split are asserted over the file an adopter is given, and only a pipeline on an instance this repository does not have would move README's row from `partial`. The learning loop has no GitHub scaffold; its GitHub spelling is this repository's own `improve.yml`. |
 | `O4` | Every model call is recorded | held | `GATE-RECORD-1`, `GATE-RECORD-2`, `GATE-RECORD-3`, `GATE-RECORD-4`, `GATE-RECORD-5`, `GATE-LEDGER-10`, `GATE-LEDGER-11`, `GATE-JUDGE-3`, `GATE-DELEGATE-1`, `GATE-COST-7`, `GATE-RECORD-6` | — | — |

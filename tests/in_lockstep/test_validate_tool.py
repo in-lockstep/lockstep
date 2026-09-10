@@ -48,7 +48,10 @@ class _Ctx:
         class _Container:
             @staticmethod
             def has(verb: type) -> bool:
-                return ctx.bound
+                # By verb, not a blanket yes. `prepared` asks whether a `Provision` is bound
+                # before it materialises anything (#422), and a double that says yes to every
+                # verb would have this repository provisioning through a Validate adapter.
+                return ctx.bound and verb is Validate
 
             @staticmethod
             def resolve(verb: type) -> Any:
