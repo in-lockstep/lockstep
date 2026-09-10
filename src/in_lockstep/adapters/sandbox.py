@@ -23,6 +23,7 @@ import asyncio
 import os
 import shutil
 import signal
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -125,7 +126,23 @@ class Sandbox:
     #: the model is TOLD and never what is true: a program that runs anyway is not stopped, and one
     #: that was declared and is missing says the declaration is wrong rather than blaming the
     #: model.
-    executables: tuple[str, ...] = ()
+    #:
+    #: **Names, or names and versions.** A tuple declares what the image carries; a mapping declares
+    #: what each program REPORTED when asked -- `{"python": "Python 3.12.7"}`, exactly the first
+    #: line of `python --version`, never a parsed or normalised form. Naming a program without its
+    #: version is honest and stays supported: empty means unasked, as it always has.
+    #:
+    #: The version half exists because the names answered the wrong question (#419). A tuple says
+    #: *may I run this*; what broke was *which one am I running* -- this repository handed a model
+    #: `python` 3.12 through `run_script` and `python` 3.11 or 3.13 through its suite, depending on
+    #: where the run happened, and nothing could see it because nothing had been asked. Two bindings
+    #: that name one program and disagree about its version is an ERROR, decided by comparing these
+    #: strings and never by parsing them: `GNU Make 4.3` and `uv 0.5.11` share no grammar, and a
+    #: framework that tried to understand every tool's versioning would be guessing (O1).
+    #:
+    #: Every reader here takes the names, and `tuple(mapping)` is its keys -- so a mapping needs no
+    #: reader to change and `declared_executables` is for the half that wants versions.
+    executables: tuple[str, ...] | Mapping[str, str] = ()
 
     def clean_env(self) -> dict[str, str]:
         """What a subprocess sees: the pass-through set plus `extra_env`. Not what a container

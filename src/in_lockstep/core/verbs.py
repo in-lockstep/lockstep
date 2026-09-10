@@ -8,6 +8,7 @@ happens to run pytest.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import Enum
 from typing import ClassVar, Protocol, TypeVar, runtime_checkable
 
@@ -184,6 +185,18 @@ class Action(Protocol[InputT, ValueT]):
     capabilities: ClassVar[frozenset[Capability]]
 
     async def invoke(self, ctx: object, inp: InputT) -> Outcome[ValueT]: ...
+
+
+def declared_executables(runner: object) -> dict[str, str]:
+    """`{program: version}` for whatever `runner` declares, with `""` where it named no version.
+
+    One accessor, because `executables` accepts a tuple of names or a mapping of names to what each
+    reported, and every caller that has to tell those apart is a caller that can get it wrong.
+    """
+    declared = getattr(runner, "executables", ()) or ()
+    if isinstance(declared, Mapping):
+        return {str(name): str(version or "") for name, version in declared.items()}
+    return {str(name): "" for name in declared}
 
 
 def capabilities_of(action: object) -> frozenset[Capability]:
