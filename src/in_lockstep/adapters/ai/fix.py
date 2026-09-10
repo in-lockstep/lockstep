@@ -39,8 +39,10 @@ from .strategy import (
     AGENCY,
     AiStrategy,
     PhaseError,
+    collected_nothing,
     elsewhere_only,
     not_a_verdict,
+    nothing_collected_finding,
     read_reply,
     reported,
     run_phase,
@@ -201,13 +203,20 @@ class DiagnoseThenFix(FixStrategy):
             if (stopped := not_a_verdict(red, cost=repro_inv.cost)) is not None:
                 return stopped
             if red.status is not Status.SUCCEEDED:
+                # "The reproducer did not fail" is a claim about the reproducer, and a suite that
+                # collected nothing supports no claim about it -- the same split `tdd` makes in both
+                # of its phases. A model told its reproducer did not reproduce rewrites a test that
+                # was never executed.
+                nothing = collected_nothing(red)
                 return Outcome(
                     status=Status.FAILED,
-                    reason="fix.not_reproduced",
+                    reason="fix.suite_collected_nothing" if nothing else "fix.not_reproduced",
                     value=FixReport(reproducer=reproducer, strategy=self.id, turns=repro_inv.turn_count),
                     cost=repro_inv.cost,
                     findings=(
-                        Finding(
+                        nothing_collected_finding("fix.suite_collected_nothing", "reproducer")
+                        if nothing
+                        else Finding(
                             id="fix.not_reproduced",
                             message="the reproducer did not fail against the current code, so it has "
                             "not captured the bug. A fix run starts from a test that is red for the "

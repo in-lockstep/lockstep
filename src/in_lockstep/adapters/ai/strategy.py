@@ -1035,6 +1035,45 @@ def failure_outcome(error: Exception, *, cost: Any = None) -> Outcome[Any]:
     return errored(reason, str(error), cost)
 
 
+def collected_nothing(outcome: Any) -> bool:
+    """Whether the suite ran, reported, and collected no tests AT ALL.
+
+    A third thing, and the reason it needs a name: "your test was not collected" and "your test
+    passed" are both claims about the staged test, and this is a claim about the suite. `_uncollected`
+    distinguishes the first two by running the staged files on their own; when the whole run
+    collected nothing there is nothing for it to distinguish and no probe worth paying for.
+
+    `value is None` is deliberately NOT this. A run that produced no report at all did not
+    necessarily collect nothing -- it may not have run -- and `not_a_verdict` has already passed
+    SUCCEEDED and FAILED through by the time this is asked. Absent is not zero, in the module whose
+    verdicts this decides.
+    """
+    report = getattr(outcome, "value", None)
+    return report is not None and getattr(report, "total", 0) == 0
+
+
+def nothing_collected_finding(reason: str, phase: str) -> Finding:
+    """What a model is told when the suite collected nothing. Never that its test passed.
+
+    The three sentences send the next attempt to three different places, which is the entire reason
+    they are three: rewrite the assertions, fix the collection settings, or look at the environment.
+    Run 34498550853 was told the first about a suite that had done the third, and its tests were
+    genuinely red -- 6 failed, 4 passed, when a person ran them.
+    """
+    return Finding(
+        id=reason,
+        message=(
+            f"the suite collected NO tests at all on the {phase} run, so nothing was decided about "
+            "your change -- this is not a verdict on the test and not a verdict on the "
+            "implementation. Something stopped the suite from running: an environment the tree "
+            "does not have, a `testpaths` that matches nothing, or a collection error in a file it "
+            "imports. Do NOT rewrite the assertions; they were never executed."
+        ),
+        severity=Severity.ERROR,
+        blocking=True,
+    )
+
+
 def not_a_verdict(outcome: Any, *, value: Any = None, cost: Any = None) -> Outcome[Any] | None:
     """The Test did not reach a verdict — pass its own status through. None when it did.
 

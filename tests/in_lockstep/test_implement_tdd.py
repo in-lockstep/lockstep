@@ -377,7 +377,12 @@ def test_a_staged_test_that_really_passes_is_still_reported_as_not_red(
 
 def test_gate_verdict_1_a_staged_test_that_exits_clean_at_import_is_not_red(repo: Path) -> None:
     """`os._exit(0)` before pytest prints a line: a green suite of zero tests, which used to satisfy
-    nothing in the red phase and let the strategy proceed to implement against no test (#313)."""
+    nothing in the red phase and let the strategy proceed to implement against no test (#313).
+
+    The reason is asserted exactly rather than as "one of the two it might be". A module that kills
+    the interpreter at import IS the suite collecting nothing, and that is now its own verdict --
+    which points at the file that did it instead of at assertions that were never executed (#435).
+    """
     provider = Scripted(
         [
             _call("write_file", path="test_exit.py", contents="import os\n\nos._exit(0)\n"),
@@ -386,7 +391,7 @@ def test_gate_verdict_1_a_staged_test_that_exits_clean_at_import_is_not_red(repo
     )
     outcome = _run(provider, repo)
     assert outcome.status is Status.FAILED, outcome
-    assert outcome.reason in ("tdd.not_red", "tdd.test_not_collected")
+    assert outcome.reason == "tdd.suite_collected_nothing"
     assert not outcome.decided
 
 
