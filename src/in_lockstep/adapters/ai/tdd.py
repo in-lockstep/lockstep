@@ -35,8 +35,10 @@ from ..worktree import head_state, prepared, staged_refusal, staged_runner
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import (
     PhaseError,
+    collected_nothing,
     elsewhere_only,
     not_a_verdict,
+    nothing_collected_finding,
     read_reply,
     reported,
     run_phase,
@@ -47,7 +49,7 @@ from .strategy import (
 )
 
 
-async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]:
+async def _uncollected(ctx: Any, tree: str, tests: ChangeSet, runner: Any = None) -> tuple[str, ...]:
     """The staged Python files, if running the suite over just those collects no tests at all.
 
     One extra pytest invocation scoped to the new files, which costs about a second because it runs
@@ -58,19 +60,30 @@ async def _uncollected(ctx: Any, tree: str, tests: ChangeSet) -> tuple[str, ...]
     not be scoped at all. This decides the wording of a failure, so a wrong guess would be a
     confident, specific, wrong diagnosis; when it cannot tell, it says nothing and the general
     message stands.
+
+    **`runner` is the one the run being diagnosed used, and passing it is the whole point.** This
+    dispatched `Test` with no runner at all, so it fell back to the BOUND adapter's own sandbox --
+    `None` for this repository, meaning the host -- while the red run it was explaining had run in
+    a container. The probe then answered truthfully about an environment nobody had asked about:
+    the tests collect fine on a laptop that has a venv, so it reported "collection is not the
+    problem" about a container where the suite had collected nothing at all. A diagnostic that
+    inspects a different thing from the one that failed is the defect it exists to find, wearing
+    its own clothes (#421 is the same shape a layer out).
     """
     paths = tuple(sorted(c.path for c in tests.changes if c.path.endswith(".py")))
     if not paths:
         return ()
-    probe = await ctx.do(Test(root=tree, paths=paths, expect="fail"))
+    probe = await ctx.do(Test(root=tree, paths=paths, expect="fail", runner=runner))
     report = probe.value
     if report is None:
         return ()
     return paths if report.passed + report.failed == 0 else ()
 
 
-def _not_red_finding(uncollected: tuple[str, ...]) -> Finding:
-    """One of two messages, and the difference is what the next attempt does about it."""
+def _not_red_finding(uncollected: tuple[str, ...], *, nothing: bool = False) -> Finding:
+    """One of three messages, and the difference is what the next attempt does about it."""
+    if nothing:
+        return nothing_collected_finding("tdd.suite_collected_nothing", "red")
     if uncollected:
         return Finding(
             id="tdd.test_not_collected",
@@ -193,12 +206,20 @@ class TDD(ImplementStrategy):
             # this project collects ZERO tests -- which arrives here as a run that decided nothing
             # and is then reported as `tdd.not_red`, the sentence this phase exists to avoid.
             async with prepared(ctx, session.repo_root, tests, for_verb=Test) as (tree, _note):
-                red = await ctx.do(Test(root=tree, expect="fail", runner=staged_runner(ctx, Test)))
+                where = staged_runner(ctx, Test)
+                red = await ctx.do(Test(root=tree, expect="fail", runner=where))
                 # Red means the suite ran and failed, so a run that decided nothing -- collected
                 # nothing, or never reported -- is not red however it exited. Which of the three
                 # it was has to be decided while the worktree still exists.
                 went_red = red.status is Status.SUCCEEDED and red.decided
-                uncollected = await _uncollected(ctx, tree, tests) if not went_red else ()
+                # No probe where the whole suite collected nothing: there is no "did YOUR test run"
+                # question left to answer, and a second pytest invocation would cost a second to
+                # learn the same fact. The probe runs under the runner the red run used, or it
+                # answers about a different environment -- which is how this arrived.
+                nothing = not went_red and collected_nothing(red)
+                uncollected = (
+                    await _uncollected(ctx, tree, tests, where) if not went_red and not nothing else ()
+                )
             if (stopped := not_a_verdict(red, cost=red.cost)) is not None:
                 # A ceiling or a broken runner, not a test that passed when it should have failed.
                 return stopped
@@ -218,11 +239,17 @@ class TDD(ImplementStrategy):
                 # and reported that the staged test had passed.
                 return Outcome(
                     status=Status.FAILED,
-                    reason="tdd.test_not_collected" if uncollected else "tdd.not_red",
+                    reason=(
+                        "tdd.suite_collected_nothing"
+                        if nothing
+                        else "tdd.test_not_collected"
+                        if uncollected
+                        else "tdd.not_red"
+                    ),
                     value=ImplementReport(changeset=tests, strategy=self.id, turns=red_inv.turn_count),
                     cost=red_inv.cost,
                     findings=(
-                        _not_red_finding(uncollected),
+                        _not_red_finding(uncollected, nothing=nothing),
                         *test_findings(red),
                     ),
                     decided=red.decided,
@@ -324,13 +351,19 @@ class TDD(ImplementStrategy):
                 )
             )
         elif green.status is not Status.SUCCEEDED or not green.decided:
+            # The same three-way split the red phase makes, for the same reason: "the implementation
+            # did not make the staged test pass" is a claim about the implementation, and a suite
+            # that collected nothing supports no claim about it at all.
+            green_nothing = collected_nothing(green)
             return Outcome(
                 status=Status.FAILED,
-                reason="tdd.not_green",
+                reason="tdd.suite_collected_nothing" if green_nothing else "tdd.not_green",
                 value=report,
                 cost=cost,
                 findings=(
-                    Finding(
+                    nothing_collected_finding("tdd.suite_collected_nothing", "green")
+                    if green_nothing
+                    else Finding(
                         id="tdd.not_green",
                         message="the implementation did not make the staged test pass; the change is "
                         "returned unproposed so a red change does not open a pull request.",
