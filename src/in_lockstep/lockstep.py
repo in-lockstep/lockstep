@@ -233,6 +233,8 @@ class Lockstep:
             max_open_proposals=self.max_open_proposals,
             improvable=tuple(self.improve),
             guard=self.guard,
+            # What runs a model's staged work. `use` has already wrapped it in a `WorktreeRunner`.
+            workshop_runner=getattr(self.workshop, "commands", None),
         )
 
     def declared_ceiling(self) -> Budget:

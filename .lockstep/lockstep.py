@@ -446,15 +446,34 @@ lockstep.models.route("describe", "anthropic:claude-haiku-4-5")
 # estimate, which bounds output by this number rather than by an expected value — that is the
 # intended coupling, not a side effect: asking for more room means the projection reserves more.
 lockstep.workshop = Workshop(
+    # THE runner for everything a model's work touches (#419): `run_script`, and every verb the
+    # staged flow dispatches whose own binding names no image. `uv`'s image rather than
+    # `python:3.12-slim`, because this repository's checks are `make lint typecheck` and slim
+    # carries neither `make` nor `uv` -- a workshop that cannot run the repository's own checks is
+    # not where the repository's work happens.
     commands=Sandbox(
-        image="docker.io/library/python:3.12-slim",
+        image="ghcr.io/astral-sh/uv:python3.12-bookworm",
         require_container=True,
-        # What this image actually has, of the twelve `run_script` may run. Two, and saying so is
-        # the point: before this, a session was offered pytest, ruff, mypy, uv, make, npm, npx,
-        # node, go and cargo by an image carrying none of them, and one run spent 36 of its 95
-        # turns finding that out (#401). `doctor` probes the image and prints this tuple, so it is
-        # checked rather than remembered.
-        executables=("python", "python3"),
+        # What this image actually has, of the twelve `run_script` may run, and which VERSION where
+        # the answer is worth pinning. Before any of this a session was offered pytest, ruff, mypy,
+        # uv, make, npm, npx, node, go and cargo by an image carrying none of them, and one run
+        # spent 36 of its 95 turns finding that out (#401); `doctor` probes the image and prints
+        # this mapping, so it is checked rather than remembered.
+        #
+        # `bash` and `sh` carry no version here on purpose, and the reason is a trap worth leaving
+        # written down: `bash --version` embeds the build triple
+        # (`...(aarch64-unknown-linux-gnu)`), so a string probed on a laptop would read as drift on
+        # an amd64 runner, and `sh` is dash and prints nothing at all. Empty means unasked, which is
+        # exactly what those two are. `git`'s is stable but says nothing anybody here reasons about.
+        executables={
+            "bash": "",
+            "git": "",
+            "make": "GNU Make 4.3",
+            "python": "Python 3.12.12",
+            "python3": "Python 3.12.12",
+            "sh": "",
+            "uv": "uv 0.9.30",
+        },
     ),
     max_turns=100,
     max_tokens=20000,

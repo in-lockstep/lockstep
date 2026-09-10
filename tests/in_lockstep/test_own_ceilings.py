@@ -240,3 +240,45 @@ def test_this_repository_binds_the_learning_loop_it_dogfoods(lockstep: Lockstep)
     assert "improve" in lockstep.models.routes
     assert get("improve/measure") is not None and get("improve/propose") is not None
     assert lockstep.improve and lockstep.improve[0].body == "src/in_lockstep/prompts/review/security.md"
+
+
+def test_gate_sandbox_2_every_verb_a_model_stages_into_runs_contained(lockstep: Lockstep) -> None:
+    """GATE-SANDBOX-2, asked of this repository's own module and asked the way the control asks it.
+
+    Written in #418 against the BINDING, removed in #420 because the binding could not satisfy it:
+    `selfcheck` dispatches `Validate` over the working tree, where this repository's `make lint`
+    needs the host, and a `sandbox=` declared once cannot also be the container a staged change
+    needs. `staged_runner` is that distinction (#419), so this asks it rather than the binding --
+    which is also what makes it the same question the refusal and the dispatch both ask.
+    """
+    from in_lockstep.adapters.sandbox import host_fallback
+    from in_lockstep.adapters.worktree import staged_runner
+    from in_lockstep.core.types import Build, Test, Validate
+    from in_lockstep.core.verbs import Capability, capabilities_of
+
+    ctx = type(
+        "_Ctx",
+        (),
+        {
+            "container": lockstep.container,
+            "workshop_runner": getattr(lockstep.workshop, "commands", None),
+        },
+    )()
+
+    unconfined = []
+    for verb in (Test, Validate, Build):
+        if not lockstep.container.has(verb):
+            continue
+        if Capability.EXECUTES_CODE not in capabilities_of(lockstep.container.resolve(verb)):
+            continue
+        why = host_fallback(staged_runner(ctx, verb), named=verb.__name__)
+        # A laptop with no container runtime is not a misconfigured binding: `host_fallback` probes
+        # PATH for exactly that, and names it when it is the reason.
+        if why and "on PATH" not in why:
+            unconfined.append(f"{verb.__name__}: {why}")
+
+    assert not unconfined, (
+        "a verb a model stages into would run on this host: "
+        + "; ".join(unconfined)
+        + ". Give it an image, or leave its binding without one so the workshop's is used."
+    )

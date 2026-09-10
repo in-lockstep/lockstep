@@ -303,14 +303,19 @@ class CommandValidate:
             cwd, package = tooling.within(inp.root, self.cwd, top)
             paths = tooling.rebase(paths, package)
         paths = tooling.relative(paths, cwd)
+        # Where the caller said, else where the binding says (#419). `selfcheck` validates the
+        # working tree and supplies nothing, so it runs on the host where this repository's own
+        # `make lint` works; a model's staged change arrives with the workshop's contained runner,
+        # because one `sandbox=` cannot serve both. The same contract `inp.root` has one line up.
+        sandbox = inp.runner if inp.runner is not None else self.sandbox
         if inp.fix and self.fix:
             # Repair first, then report what stands -- the contract `Validate(fix=True)` has, and
             # the one `ruff check --fix` implements. The repair's own output is not the answer;
             # the check that follows it is.
-            fixer, _ = _argv0(self.fix, self.cwd, ctx, self.sandbox)
-            await self.sandbox.run([fixer, *self.fix[1:]], cwd=cwd)
-        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
-        result = await self.sandbox.run([argv0, *self.command[1:], *paths], cwd=cwd)
+            fixer, _ = _argv0(self.fix, self.cwd, ctx, sandbox)
+            await sandbox.run([fixer, *self.fix[1:]], cwd=cwd)
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, sandbox)
+        result = await sandbox.run([argv0, *self.command[1:], *paths], cwd=cwd)
         if (refused := _refused(result)) is not None:
             return refused
         if result.exit_code == 127:
