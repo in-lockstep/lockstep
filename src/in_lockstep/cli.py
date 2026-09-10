@@ -888,11 +888,33 @@ async def selfcheck(ctx: RunContext, paths: tuple[str, ...]) -> dict[str, Any]:
     repository whose stack it could not place has no Test or Validate, and a `ResolutionError`
     traceback there would read as a broken tool rather than an unconfigured one.
     """
+    from .adapters import tooling
+    from .adapters.worktree import WORKING_TREE, own_code_runner, prepared
+    from .core.types import ChangeSet, Provision
+
     bound = ctx.container.has
-    validate = await ctx.do(Validate(paths=paths)) if bound(Validate) else None
-    if validate is not None and validate.status is Status.BLOCKED:
-        return {"validate": validate, "tests": None}
-    tests = await ctx.do(Test(paths=paths)) if bound(Test) else None
+    # A container only where the repository can build its environment in one. Without a bound
+    # `Provision` there is nothing to install, so the image would carry no pytest and the run would
+    # report a suite it never ran -- which is what a scaffolded repository with no lockfile got.
+    # There, the checks run where they have always run (O1: nothing invented for a repository that
+    # declared nothing).
+    where = own_code_runner(ctx, Test) if bound(Provision) else None
+    # Named against the REPOSITORY, run against a copy of it. `--paths <the repo>` is a host
+    # absolute path, and the verbs translate paths against the tree they are given -- which is the
+    # copy, so the original names nothing there. Made repository-relative here, where both are
+    # known, and the adapters' own translation then resolves them against the tree (#419).
+    paths = tooling.relative(paths, ctx.repo.root)
+    # A COPY of the working tree, provisioned, then the verbs over it. The copy is the decision
+    # this repository made twice over: `selfcheck` validates the WORKING tree, uncommitted changes
+    # included, so a worktree of HEAD is not it -- and provisioning the repository itself would
+    # have a container's `uv sync` replace the host's `.venv` with one built by the image's
+    # interpreter, which is #419 invoked deliberately. What `.gitignore` calls location-specific
+    # is what `Provision` rebuilds, which is the same statement from both sides (#419).
+    async with prepared(ctx, ctx.repo.root, ChangeSet(), for_verb=Test, ref=WORKING_TREE) as (tree, _n):
+        validate = await ctx.do(Validate(paths=paths, root=tree, runner=where)) if bound(Validate) else None
+        if validate is not None and validate.status is Status.BLOCKED:
+            return {"validate": validate, "tests": None}
+        tests = await ctx.do(Test(paths=paths, root=tree, runner=where)) if bound(Test) else None
     return {"validate": validate, "tests": tests}
 
 
@@ -1265,7 +1287,12 @@ def run_cmd(
             # The id carries a per-invocation stamp and is no longer guessable, so a run that
             # checkpoints has to say what `--recover` should be given.
             click.echo(f"run       {run_id}  (resume an interrupted run with --recover {run_id})")
-    result = asyncio.run(selfcheck(ctx, paths or (lockstep.repo.root,)))
+    # No paths means no paths, and each verb's own default -- the whole tree for pytest, `ruff`'s
+    # `DEFAULT_PATHS` for ruff. It used to mean the repository root, which was harmless while the
+    # verbs ran over the repository and is not now they run over a copy of it: an absolute host
+    # path is not a path inside that copy, and pytest was handed one and reported that it did not
+    # exist (#419).
+    result = asyncio.run(selfcheck(ctx, paths))
 
     validate = result["validate"]
     tests = result["tests"]

@@ -135,7 +135,21 @@ _CONTAINED = Sandbox(
         "PATH": "/usr/local/bin:/usr/bin:/bin:/venv/bin",
     },
 )
-lockstep.bind(Test, PytestTest(args=["-q", "--no-header"], sandbox=_CONTAINED))
+# NO sandbox of its own, which is how it reaches the workshop's (#419). `staged_runner` takes a
+# binding's image where it names one and the workshop's otherwise, so leaving this silent puts a
+# model's suite in the same container as its `run_script` -- and stops the two drifting onto
+# different interpreters, which they had: 3.12 through one and 3.11 or 3.13 through the other,
+# depending on whether the run was on a laptop or a runner. Nobody chose that; it is what two
+# independent image choices drift into.
+#
+# The environment comes from `prepared`, which runs this repository's own `Provision` over the tree
+# before anything else touches it -- measured at 4.7s cold in that image, so the per-call cost is
+# noise. That replaces the mounted host `.venv`, which was the anomaly: a venv built on the host
+# carries the host's absolute paths in its console-script shebangs and its own platform's wheels,
+# so mounting it into an image was only ever viable while every package the suite imports is pure
+# Python. Provisioning in place of mounting is the repository's own `Provision` doing what a
+# provision is for.
+lockstep.bind(Test, PytestTest(args=["-q", "--no-header"]))
 # What this repository actually gates itself on, rather than the one tool of the several its
 # checks run (#396). `make lint` is ruff's check AND its formatter's; `typecheck` is mypy, which a
 # `ruff` binding cannot see at all -- so a model-authored change that type-checked wrong passed our

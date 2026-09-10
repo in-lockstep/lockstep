@@ -939,6 +939,7 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
     than a hand-rolled `docker run`, which is what keeps the container, its mounts and its
     environment the ones a model's `run_tests` will actually get.
     """
+    from in_lockstep.adapters.worktree import own_code_runner
     from in_lockstep.core.types import Test
     from in_lockstep.core.workflow import restore, snapshot
     from in_lockstep.loader import load
@@ -979,13 +980,27 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
             f"{dispatch}: `--approve` says a person is watching this run, and nobody watches a push"
         )
 
+    # And the runner that job's dispatch resolves to actually names an image. Asked of the RUNNER
+    # rather than of the binding since #419: a binding's `sandbox=` is an override for the staged
+    # path and the workshop's is the answer where it names none, so reading the binding here would
+    # report "no image" about a repository whose suite runs in one. The property is unchanged and
+    # it is the one that can rot silently -- a job dispatching `selfcheck` against a runner with no
+    # image runs the suite on the GitHub runner, passes, and looks exactly like this.
     state = snapshot()
     try:
         module, _ref = load(str(ROOT))
-        sandbox = getattr(module.lockstep.container.resolve(Test), "sandbox", None)
+        ctx = type(
+            "_Ctx",
+            (),
+            {
+                "container": module.lockstep.container,
+                "workshop_runner": getattr(module.lockstep.workshop, "commands", None),
+            },
+        )()
+        where = own_code_runner(ctx, Test)
     finally:
         restore(state)
-    assert getattr(sandbox, "image", ""), (
-        "the bound Test names no container image, so the job above runs the suite on the runner "
-        "and proves nothing about the environment a model's run_tests gets"
+    assert getattr(where, "image", ""), (
+        "the runner `selfcheck` resolves for Test names no container image, so the job above runs "
+        "the suite on the runner and proves nothing about the environment a model's run_tests gets"
     )

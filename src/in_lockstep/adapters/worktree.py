@@ -155,6 +155,27 @@ def staged_runner(ctx: Any, verb: type = Test) -> Any:
     return inner if inner is not None else own
 
 
+def own_code_runner(ctx: Any, verb: type) -> Any:
+    """The image a model's work runs in, willing to fall back to the host (#419).
+
+    `selfcheck` runs the repository's OWN code, so containment is not what it is for -- a person's
+    commit does not need a sandbox. What it is for is that CI exercises the image a model will meet
+    before a model meets it, which is the evidence `GATE-CI-5` exists to keep: run 34129809277 cost
+    $7.92 to learn what that job now says for free.
+
+    So the runner is `staged_runner`'s, with `require_container` dropped. On a runner with docker
+    this containerises and proves the path; on a laptop without one it is a credential-dropped
+    subprocess, which is what a person running `selfcheck` wants rather than a refusal about a
+    container they did not ask for.
+    """
+    from dataclasses import replace
+
+    from .sandbox import Sandbox
+
+    where = staged_runner(ctx, verb)
+    return replace(where, require_container=False) if isinstance(where, Sandbox) else where
+
+
 def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     """Why the runner bound to `verb` may not be handed a MODEL-staged tree, or None when it may.
 
@@ -375,6 +396,48 @@ DEPENDENCY_MANIFESTS = frozenset(
 )
 
 
+#: `ref` for the tree a PERSON is looking at, uncommitted changes included, rather than a commit.
+#: `selfcheck` validates the working tree by decision, and a git worktree of `HEAD` is not that.
+WORKING_TREE = "(working tree)"
+
+
+@asynccontextmanager
+async def working_copy(repo_root: str) -> AsyncIterator[str]:
+    """The working tree, copied, in a throwaway directory. Yields its path; removes it.
+
+    `git ls-files --cached --others --exclude-standard` is the list, and it is exactly the right
+    one: tracked files at their CURRENT contents, plus untracked files, minus everything
+    `.gitignore` names. A repository's ignore rules are its own statement about what is
+    location-specific and must be rebuilt rather than carried -- `.venv` above all -- which is the
+    same statement its `Provision` makes from the other side. So this copies what a second engineer
+    would get from a clone plus whatever is not committed yet, and `prepared` then provisions the
+    rest.
+
+    A COPY, and never the tree itself. `Provision` writes into the tree it is given, so pointing it
+    at the repository would have a container's `uv sync` replace the host's `.venv` with one built
+    by the image's interpreter -- which is #419's failure, invoked deliberately rather than
+    stumbled into. Measured on this repository: 400 paths, 6.2 MB, 0.39s.
+    """
+    root = os.path.abspath(repo_root)
+    listed = await _git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+    parent = Path(tempfile.mkdtemp(prefix="in-lockstep-working-"))
+    tree = parent / "tree"
+    try:
+        for name in (n for n in listed.split("\0") if n):
+            source = Path(root) / name
+            # `is_file` rather than `exists`: a submodule gitlink and a dangling symlink are both
+            # listed and neither is a file to copy.
+            if not source.is_file():
+                continue
+            target = tree / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        tree.mkdir(parents=True, exist_ok=True)
+        yield str(tree)
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+
 async def _install(ctx: Any, tree: str, for_verb: type) -> str:
     """Build the repository's own environment in `tree`. Returns a note, empty when all is well.
 
@@ -471,7 +534,17 @@ async def prepared(
     the host's absolute paths in its console-script shebangs, and nothing mounted makes those exist
     inside an image.
     """
-    async with materialize(repo_root, ChangeSet(), ref=ref) as tree:
+    if ref == WORKING_TREE and not (Path(repo_root) / ".git").exists():
+        # No copy and no install. `git ls-files` is what makes a copy possible, and provisioning
+        # the repository IN PLACE is the one thing this must not do -- a container's `uv sync`
+        # would replace the host's `.venv` with one built by the image's interpreter. So the checks
+        # run over the tree as it is, which is what they did before there was a copy at all, and
+        # the caller is told which it got. `in-lockstep run selfcheck` in a directory that is not a
+        # git repository worked before this and has to keep working (#419).
+        yield repo_root, "not a git repository, so the checks ran in place with no environment of their own"
+        return
+    maker = working_copy(repo_root) if ref == WORKING_TREE else materialize(repo_root, ChangeSet(), ref=ref)
+    async with maker as tree:
         note = await _install(ctx, tree, for_verb)
         # AFTER provisioning, never before. See the docstring.
         for change in changeset.changes:

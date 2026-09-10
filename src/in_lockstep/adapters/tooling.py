@@ -42,8 +42,26 @@ def interpreter(root: str | None, sandbox: object) -> Resolution:
 
     A containerized run resolves the name inside the image, where this host's filesystem says
     nothing about what exists, so the plain name travels and nothing is probed.
+
+    Unless the TREE carries one (#419). `prepared` runs the repository's own `Provision` over the
+    tree before anything reads it, so a venv can sit in the very directory the container mounts as
+    its working directory -- and then the host filesystem does say what exists inside, because it
+    is the same bytes. Answered RELATIVE rather than as `/work/.venv/...`: the command runs with
+    that tree as its cwd, so a relative path is right whatever the runner mounts it at, and this
+    module stays ignorant of a path `sandbox.py` chose. Without this the bare name won, the image's
+    python carried no pytest, and a run reported the suite unrunnable with a working environment
+    one directory below it.
     """
     if _containerized(sandbox):
+        top = _absolute(root)
+        # `lexists`, not `is_file`: the venv was built INSIDE the container, so its `python` is a
+        # symlink to an interpreter that exists there and not here. Following it from the host is
+        # the same dangling-symlink reading that started #419, arriving from the other side --
+        # `is_file` said "no environment" about one that works perfectly where it will be used.
+        if top is not None and os.path.lexists(top.joinpath(*VENV_BIN, "python")):
+            # POSIX by construction: the container is linux, whatever this host is.
+            here = "./" + "/".join((*VENV_BIN, "python"))
+            return Resolution(here, here, "the tree's own environment, inside the container")
         return Resolution("python", "python", "resolved inside the container image")
     tried: list[str] = []
     top = _absolute(root)

@@ -282,3 +282,40 @@ def test_gate_sandbox_2_every_verb_a_model_stages_into_runs_contained(lockstep: 
         + "; ".join(unconfined)
         + ". Give it an image, or leave its binding without one so the workshop's is used."
     )
+
+
+def test_a_model_explores_and_tests_on_the_same_interpreter(lockstep: Lockstep) -> None:
+    """One runner for everything a model touches, asserted over this repository's own module.
+
+    Measured before it was fixed, this repository handed a model `python` 3.12 through `run_script`
+    and 3.11 or 3.13 through its suite -- which pair depending on whether the run was on a laptop or
+    a runner -- because the workshop pinned an image and the Test binding derived one from
+    `sys.version_info`. Nobody chose that; it is what two independent image choices drift into, and
+    nothing could see it while `executables=` named programs and not versions (#419).
+    """
+    from in_lockstep.adapters.worktree import staged_runner
+    from in_lockstep.core.types import Test, Validate
+    from in_lockstep.core.verbs import declared_executables
+
+    ctx = type(
+        "_Ctx",
+        (),
+        {
+            "container": lockstep.container,
+            "workshop_runner": getattr(lockstep.workshop, "commands", None),
+        },
+    )()
+    script = getattr(lockstep.workshop.commands, "inner", lockstep.workshop.commands)
+    said = declared_executables(script).get("python", "")
+    assert said, "the workshop declares no python version, so this cannot be checked at all"
+
+    for verb in (Test, Validate):
+        if not lockstep.container.has(verb):
+            continue
+        where = staged_runner(ctx, verb)
+        if getattr(where, "image", "") == getattr(script, "image", ""):
+            continue  # the same image cannot disagree with itself
+        assert declared_executables(where).get("python", "") == said, (
+            f"a model's `run_script` and its staged {verb.__name__} are different images that "
+            f"disagree about python"
+        )
