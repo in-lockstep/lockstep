@@ -307,6 +307,94 @@ def _apply_change(worktree: Path, change: FileChange) -> None:
         os.chmod(target, change.mode & 0o777)
 
 
+#: Files whose change could move the environment the checks run in. NOT the question
+#: `detected_bindings` asks -- that one picks a provisioner from a lockfile that exists -- but the
+#: wider "might this staged change have altered what `Provision` installs". Deliberately a superset:
+#: a false positive costs one sentence in a report, and a false negative is a check that fails on a
+#: missing import while the model is told its code is wrong (#422).
+DEPENDENCY_MANIFESTS = frozenset(
+    {
+        "uv.lock",
+        "poetry.lock",
+        "pdm.lock",
+        "Pipfile.lock",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "pyproject.toml",
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "Gemfile",
+        "Gemfile.lock",
+        "go.mod",
+        "go.sum",
+        "Cargo.toml",
+        "Cargo.lock",
+    }
+)
+
+
+@asynccontextmanager
+async def prepared(
+    ctx: Any, repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD"
+) -> AsyncIterator[tuple[str, str]]:
+    """A worktree of `ref` with the repository's own environment installed, and THEN the staged
+    change applied. Yields the tree and a note about the environment, empty when there is nothing
+    to say.
+
+    **The order is the security property** (#422). `Provision` reaches a registry, so it runs with
+    the network open -- and it runs over a tree holding only `ref`, which is reviewed code. By the
+    time anything a model wrote is on disk the provisioning run has ended and the checks run under
+    the validator's own sandbox, which denies the network. Nothing here depends on an allowlist of
+    hosts, which is as well: `Sandbox.allow_network` is one boolean that removes `--network=none`,
+    and per-host rules are a proxy neither runtime offers as a flag.
+
+    Provisioning the STAGED tree instead would be arbitrary code execution with a supply chain
+    attached, and not hypothetically: `uv.lock`, `poetry.lock`, `requirements.txt`, `pyproject.toml`
+    and `Makefile` are tier-1 denied to a model, and `package.json` and `package-lock.json` are NOT.
+    A Node repository provisioning what a model staged would run `npm ci` over a manifest the model
+    wrote, with the network open, executing whatever postinstall scripts it named. The `ref`
+    argument is the whole control, which is why a test drives the staged case rather than reading
+    this paragraph.
+
+    One tree, not two, and no volume: the environment `Provision` builds lands INSIDE the worktree
+    (`.venv`, `node_modules`), so mounting the same tree again in the check run finds it with the
+    paths it was built with. That is also what #419 was missing -- a venv built on the host carries
+    the host's absolute paths in its console-script shebangs, and nothing mounted makes those exist
+    inside an image.
+    """
+    from ..core.outcome import Status
+    from ..core.types import Provision
+
+    async with materialize(repo_root, ChangeSet(), ref=ref) as tree:
+        note = ""
+        container = getattr(ctx, "container", None)
+        if container is None or not container.has(Provision):
+            # O1: nothing is invented where the repository declared nothing. The checks still run,
+            # against whatever the image carries, and the caller is told which it was.
+            note = "no Provision is bound, so the checks ran against whatever the image carries"
+        else:
+            outcome = await ctx.do(Provision(root=tree))
+            if getattr(outcome, "status", Status.SUCCEEDED) is not Status.SUCCEEDED:
+                note = (
+                    "the repository's own environment was not installed "
+                    f"({getattr(outcome, 'reason', '') or outcome.status.value}), so a failure "
+                    "below may be about the environment rather than about the change"
+                )
+        # AFTER provisioning, never before. See the docstring.
+        for change in changeset.changes:
+            _apply_change(Path(tree), change)
+        if moved := tuple(c.path for c in changeset.changes if Path(c.path).name in DEPENDENCY_MANIFESTS):
+            # Named rather than silently misleading: the environment came from `ref`, so a
+            # dependency this change ADDS is not in it, and the check fails on a missing import
+            # while looking like the change is wrong.
+            note = (
+                f"{note}. " if note else ""
+            ) + f"this change touches {', '.join(sorted(moved))}, and the environment came from {ref}"
+        yield str(tree), note
+
+
 @asynccontextmanager
 async def materialize(repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD") -> AsyncIterator[str]:
     """`ref` (default HEAD) plus `changeset`, in a throwaway worktree. Yields its path; removes it.
