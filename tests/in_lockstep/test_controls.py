@@ -1398,8 +1398,22 @@ def test_doc168_is_silent_when_nothing_was_recorded(tmp_path: Path) -> None:  # 
 # that cries wolf gets its verdict discarded, and then gates nothing at all.
 
 
+def _looks_like_a_repo(tmp_path: Path) -> Path:
+    """A root `_branch_protection` will not decline. It returns early without a `.git`, so these
+    tests were reading the AMBIENT directory and passing because the suite runs from inside this
+    repository -- the same shape as CLAUDE.md's rule about a `git` call that inherits its working
+    directory. Run over a copy of the working tree, which has no `.git`, all four went red."""
+    (tmp_path / ".git").mkdir(exist_ok=True)
+    return tmp_path
+
+
 def _protection_says(
-    monkeypatch: pytest.MonkeyPatch, *, branch_rc: int = 0, branch_out: str = "", name: str = "main"
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    branch_rc: int = 0,
+    branch_out: str = "",
+    name: str = "main",
 ) -> doctor.Report:
     """Drive `_branch_protection` with a stubbed `gh`, keyed on which subcommand is called."""
     import subprocess
@@ -1411,12 +1425,16 @@ def _protection_says(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     report = doctor.Report()
-    doctor._branch_protection(report, Path("."))
+    doctor._branch_protection(report, _looks_like_a_repo(tmp_path))
     return report
 
 
 def _bypasses_say(
-    monkeypatch: pytest.MonkeyPatch, *, protection: dict[str, Any], rulesets: list[dict[str, Any]]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    protection: dict[str, Any],
+    rulesets: list[dict[str, Any]],
 ) -> doctor.Report:
     """`_branch_protection` with a rule that reads, plus whatever rulesets the host lists."""
     import json
@@ -1436,18 +1454,19 @@ def _bypasses_say(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     report = doctor.Report()
-    doctor._branch_protection(report, Path("."))
+    doctor._branch_protection(report, _looks_like_a_repo(tmp_path))
     return report
 
 
 def test_an_admin_who_can_step_around_the_required_check_is_warned_about_by_name(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Issue 312. Both were true here: `enforce_admins` off on the classic rule, and the active
     ruleset carrying a bypass for the admin role -- so `required` was enforceable only by choice,
     and doctor said nothing. WARNINGs naming the setting, the way DOC121 names a missing rule."""
     report = _bypasses_say(
         monkeypatch,
+        tmp_path,
         protection={"enforce_admins": {"enabled": False}},
         rulesets=[
             {
@@ -1481,10 +1500,11 @@ def test_an_admin_who_can_step_around_the_required_check_is_warned_about_by_name
 
 
 def test_a_rule_enforced_for_everyone_and_a_ruleset_nobody_bypasses_warn_of_nothing(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     report = _bypasses_say(
         monkeypatch,
+        tmp_path,
         protection={"enforce_admins": {"enabled": True}},
         rulesets=[
             {
@@ -1499,14 +1519,21 @@ def test_a_rule_enforced_for_everyone_and_a_ruleset_nobody_bypasses_warn_of_noth
     assert [f.code for f in report.checks] == []
 
 
-def test_gate_ci_3_an_unprotected_default_branch_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gate_ci_3_an_unprotected_default_branch_is_an_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """The finding this check exists for, and the only answer that earns an ERROR."""
-    report = _protection_says(monkeypatch, branch_rc=1, branch_out="gh: Branch not protected (HTTP 404)")
+    report = _protection_says(
+        monkeypatch,
+        tmp_path,
+        branch_rc=1,
+        branch_out="gh: Branch not protected (HTTP 404)",
+    )
     assert any(c.code == "DOC121" for c in report.errors)
 
 
 def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Absent is not zero, in the check that made this repository discard doctor's verdict.
 
@@ -1515,7 +1542,7 @@ def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(
     declared missing on the strength of not having looked.
     """
     report = _protection_says(
-        monkeypatch, branch_rc=1, branch_out="gh: Resource not accessible by integration (HTTP 403)"
+        monkeypatch, tmp_path, branch_rc=1, branch_out="gh: Resource not accessible by integration (HTTP 403)"
     )
     assert not any(c.code == "DOC121" for c in report.checks), "an unreadable API is not a verdict"
     note = next(c for c in report.checks if c.code == "DOC120")
@@ -1523,13 +1550,17 @@ def test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error(
     assert "Resource not accessible" in note.hint, "what gh said is quoted, not paraphrased"
 
 
-def test_gate_ci_3_a_protected_default_branch_reports_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gate_ci_3_a_protected_default_branch_reports_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """The control: a check that fired on success too would be noise on every green run."""
-    report = _protection_says(monkeypatch, branch_rc=0)
+    report = _protection_says(monkeypatch, tmp_path, branch_rc=0)
     assert not [c for c in report.checks if c.code in ("DOC120", "DOC121")]
 
 
-def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """This asked about `branches/main/protection` literally, so a repository whose default is
     `master` got `Branch not found` — and, under the old reporting, an ERROR about a rule it may
     well have had."""
@@ -1545,7 +1576,7 @@ def test_gate_ci_3_the_default_branch_is_asked_for_not_assumed(monkeypatch: pyte
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    doctor._branch_protection(doctor.Report(), Path("."))
+    doctor._branch_protection(doctor.Report(), _looks_like_a_repo(tmp_path))
     assert any("branches/master/protection" in a for a in asked), asked
 
 

@@ -257,3 +257,60 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           # `gh` reads this; the adapter shells out to it rather than holding an API client.
           GH_TOKEN: ${{ github.token }}
+
+  # This repository's own provision and checks, in the sandbox a model's run will meet.
+  #
+  # HERE rather than in `ci.yml`, and the reason is that file's own first line: the gate that
+  # proves the framework works cannot be framework output. This job dispatches
+  # `in-lockstep run selfcheck`, so a broken CLI turns it red for reasons that have nothing to
+  # do with the code under test -- which is the coupling `ci.yml` is hand-written to avoid. It
+  # is the framework acting on this repository, which is what this workflow is.
+  #
+  # `check` above runs `make ci` on the GitHub runner. Every `/implement` and `/fix` runs the
+  # repository's verbs inside the workshop's container instead, and until this job existed nothing
+  # exercised that second path without spending: the only thing that had ever noticed a failure
+  # there was a paid run. #373 failed twice on one test that passes on the runner and in every
+  # local rebuild of that container, and the second attempt cost $7.92 to learn what this says for
+  # free on every push.
+  #
+  # It dispatches the shipped `selfcheck` workflow rather than a hand-rolled `docker run`, so the
+  # image and the environment are the ones the module declares. Since #419 that means: a copy of
+  # the working tree, the repository's own `Provision` run over it, and then `Validate` and `Test`
+  # in the workshop's image -- the same image a model's `run_script` and staged suite get, which is
+  # what stops the two drifting onto different interpreters. `selfcheck` is a person's path, so the
+  # container is not there to contain anything; it is there so this job meets what a model meets.
+  # No token and no credential: `gh` is not in the container, so the gates that ask the host skip
+  # by name there, which is itself part of what this proves.
+  sandbox:
+    runs-on: ubuntu-24.04
+    # Job-level, which REPLACES the workflow's rather than adding to it. `id-token: write` is
+    # granted above so the review job can mint an OIDC token for the provider exchange, and
+    # this job holding no credential is half of what it demonstrates -- inheriting that grant
+    # would quietly weaken the thing being shown.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      # `provision` first, the way the work jobs run it: it builds the venv every later
+      # `uv run in-lockstep ...` step uses, and `uv sync` alone leaves out the extras the
+      # module's Provision installs -- a suite missing an optional SDK SKIPS the tests that
+      # need it, so the job went green while the very failure it was built to catch was not
+      # being run (12 tests, including the one #373 died on twice). It no longer has anything
+      # to do with what the checks below run against: since #419 those get their own
+      # environment, provisioned into a copy of the working tree inside the sandbox, and
+      # nothing is mounted. Saying so beats leaving the older claim standing.
+      - run: uv run in-lockstep provision
+      # `ApprovalGate` is bound in this repository's module and gates on EXECUTES_CODE, which
+      # `PytestTest` declares and means -- so dispatching Test needs a grant, and the gate's own
+      # docstring says a command that passes none makes it unopenable rather than strict (#189).
+      # Nobody is watching a push, so the grant is `--approved-by` and the name recorded is
+      # whoever caused the run, the same spelling `implement.yml` uses after its gate job. Never
+      # `--approve`: that one claims a human is watching this run, and in CI that is a false
+      # record rather than a convenience.
+      - run: uv run in-lockstep run selfcheck --approved-by "${{ github.actor }}"

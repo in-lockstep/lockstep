@@ -25,7 +25,10 @@ import shutil
 import signal
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
+
+from ..core.types import VENV_BIN
 
 # Passed through to a sandboxed child. Everything else — every credential — is dropped.
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "PYTHONPATH", "CI")
@@ -203,6 +206,20 @@ class Sandbox:
         # `DOCKER_HOST` or `CONTAINER_HOST` there points the whole "sandboxed" run at another
         # daemon. The client gets the same pass-through set a subprocess would, and nothing else.
         env_flags = [item for key, value in self.extra_env.items() for item in ("-e", f"{key}={value}")]
+        # A provisioned tree's own tools, on PATH inside the container (#419). `prepared` runs the
+        # repository's `Provision` over the tree before anything reads it, so `.venv/bin` sits in
+        # the directory mounted at `/work` -- and a command that resolves a tool by NAME rather
+        # than by path must find that one and not the image's. The old arrangement got this by
+        # accident: the binding mounted the host's venv and named it in `PATH`, so a nested
+        # resolution found a python with pytest in it. Without this, 23 tests that spin up their
+        # own suite were told `pytest is not installed in /usr/local/bin/python`.
+        #
+        # `lexists`, because a venv built inside the container links to an interpreter that exists
+        # there and not here. An `extra_env` PATH wins: an adopter who wrote one meant it.
+        venv_bin = Path(mount).joinpath(*VENV_BIN)
+        if "PATH" not in self.extra_env and os.path.lexists(venv_bin):
+            inside = "/work/" + "/".join(VENV_BIN)
+            env_flags += ["-e", f"PATH={inside}:/usr/local/bin:/usr/bin:/bin"]
         # As the host user, not root. `--cap-drop=ALL` drops CAP_DAC_OVERRIDE, so root inside the
         # container may write only what "others" may -- and the tree is the host user's, mode 755,
         # so on a CI runner (uid 1001) the "throwaway tree the command may write" was not writable
@@ -216,7 +233,30 @@ class Sandbox:
         mount_flags = [
             item for host, inside in self.mounts for item in ("-v", f"{os.path.abspath(host)}:{inside}:ro")
         ]
-        argv = [
+        argv = self._argv(runtime, command, mount, flags, user_flags, env_flags, mount_flags)
+        code, out, err = await _exec(argv, cwd=mount, env=self._passthrough(), timeout=timeout)
+        # The runtime is named in `how` rather than hardcoded as "docker": a result that says
+        # which thing ran it is the difference between reading a transcript and guessing at one.
+        name = os.path.basename(runtime)
+        return SandboxResult(code, out, err, sandboxed=True, how=f"{name}:{self.image}")
+
+    def _argv(
+        self,
+        runtime: str,
+        command: list[str],
+        mount: str,
+        flags: list[str],
+        user_flags: list[str],
+        env_flags: list[str],
+        mount_flags: list[str],
+    ) -> list[str]:
+        """The whole command line, assembled where a test can read it.
+
+        Split out because what this repository most needs to assert about a container is the argv
+        -- which flags, which mounts, which `PATH` -- and a method that runs the thing can only be
+        asserted about by running it (#419).
+        """
+        return [
             runtime,
             "run",
             "--rm",
@@ -234,11 +274,6 @@ class Sandbox:
             self.image,
             *command,
         ]
-        code, out, err = await _exec(argv, cwd=mount, env=self._passthrough(), timeout=timeout)
-        # The runtime is named in `how` rather than hardcoded as "docker": a result that says
-        # which thing ran it is the difference between reading a transcript and guessing at one.
-        name = os.path.basename(runtime)
-        return SandboxResult(code, out, err, sandboxed=True, how=f"{name}:{self.image}")
 
     async def _subprocess(self, command: list[str], *, cwd: str | None, timeout: float) -> SandboxResult:
         code, out, err = await _exec(command, cwd=cwd, env=self.clean_env(), timeout=timeout)

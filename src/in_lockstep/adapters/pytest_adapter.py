@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from ..core.outcome import Cost, Finding, Outcome, Severity, Status
-from ..core.types import Resolution, Test, TestCase, TestReport
+from ..core.types import VENV_BIN, Resolution, Test, TestCase, TestReport
 from ..core.verbs import Capability, Verb
 from . import tooling
 from .command import _refused
@@ -53,10 +53,23 @@ class PytestTest:
         return (tooling.interpreter(self.cwd or root, self.sandbox),)
 
     async def invoke(self, ctx: object, inp: Test) -> Outcome[TestReport]:
-        # Resolved against the repository's root, not `inp.root`: a materialized worktree is a
-        # copy of HEAD, and the environment (`.venv` is ignored by git) lives in the real tree.
+        # Where the caller said, else where the binding says (#419). Resolved here as well as run
+        # with, and that is the whole of it: resolving against `self.sandbox` while RUNNING in a
+        # handed one picked the host venv's absolute path and executed it inside a container where
+        # no such path exists -- pytest collected nothing and the run reported that it had decided
+        # nothing, which is `GATE-VERDICT-1` catching a lie rather than a verdict.
+        sandbox = inp.runner if inp.runner is not None else self.sandbox
+        # The tree's own environment where it HAS one, and the repository's otherwise. That order
+        # is new and the reason is that the premise under the old one moved (#419): a materialised
+        # worktree is a copy of HEAD and `.venv` is ignored by git, so for years the environment
+        # could only be the repository's -- and now `prepared` runs the repository's own
+        # `Provision` over the tree before anything reads it, which puts a venv there built by the
+        # interpreter that will run it. Resolving past that picked the image's bare `python`, which
+        # carries no pytest, and reported the suite as unrunnable while a working environment sat
+        # two directories away.
         repo_root = self.cwd or getattr(getattr(ctx, "repo", None), "root", None)
-        resolved = tooling.interpreter(repo_root, self.sandbox)
+        provisioned = inp.root and (Path(inp.root).joinpath(*VENV_BIN)).is_dir()
+        resolved = tooling.interpreter(inp.root if provisioned else repo_root, sandbox)
         if resolved.path is None:
             return Outcome.errored(
                 f"no python interpreter for the repository; looked for {', '.join(resolved.tried)}"
@@ -92,9 +105,6 @@ class PytestTest:
             cmd += ["-k", inp.selector]
 
         try:
-            # Where the caller said, else where the binding says (#419). A staged run arrives with
-            # the workshop's contained runner; `selfcheck` supplies nothing and gets the binding's.
-            sandbox = inp.runner if inp.runner is not None else self.sandbox
             result = await sandbox.run(cmd, cwd=cwd)
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)

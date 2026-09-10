@@ -363,7 +363,14 @@ def test_every_layer_named_in_allowed_exists() -> None:
 #: (`_framework_provisions` gathers what bound adapters name in `provisions`) after the adopter's
 #: bound step, and no longer returns early when nothing is bound to `Provision`. What an install
 #: is and where it goes stays `adapters.graft`'s, where `test_graft.py` reaches it.
-CLI_HELPER_STATEMENTS = 1360
+#: 1360 -> 1366 for #419, COMPOSING: `selfcheck` wires a provisioned copy of the working tree and
+#: a runner into the two requests it already dispatched. What it means to run over a copy is
+#: `working_copy`'s, what to install is `prepared`'s, and where to run is `own_code_runner`'s --
+#: all in `adapters/worktree.py`, where a test reaches them without a `CliRunner`. Six statements
+#: here are the wiring that has to live at the composition root by definition, and two of them are
+#: translations: paths named against the repository made relative to it before they are handed to
+#: a verb running over a copy, and a container asked for only where a `Provision` exists to fill it.
+CLI_HELPER_STATEMENTS = 1366
 
 #: How far below the pin the count may drift before the pin itself is stale. Same shape as the
 #: coverage ratchet's two points: moving logic out is the point, and the reward for doing it is

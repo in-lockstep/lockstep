@@ -22,7 +22,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -352,3 +352,139 @@ def test_a_step_that_fails_in_the_check_image_names_the_step(repo: Path) -> None
     note = asyncio.run(go())
     assert "uv sync --locked" in note and "exited 1" in note
     assert "no lockfile here" in note, "the tail says what the installer actually said"
+
+
+def _container_argv(box: Any, tree: Path) -> list[str]:
+    """The argv a real run over `tree` would use, captured from `_container` itself.
+
+    Driven rather than reimplemented: a test that rebuilt the flag list would assert its own copy
+    of the thing under test, and the `PATH` rule here is exactly the kind that goes wrong between
+    the copy and the original.
+    """
+    import asyncio
+
+    from in_lockstep.adapters import sandbox as sandbox_module
+
+    seen: list[list[str]] = []
+
+    async def fake_exec(argv, **kw):
+        seen.append(list(argv))
+        return 0, "", ""
+
+    original = sandbox_module._exec
+    sandbox_module._exec = fake_exec
+    try:
+        asyncio.run(box._container("podman", ["true"], cwd=str(tree), timeout=5.0))
+    finally:
+        sandbox_module._exec = original
+    return seen[0]
+
+
+def test_a_provisioned_trees_tools_are_on_path_inside_the_container(tmp_path: Path) -> None:
+    """A command that resolves a tool by NAME must find the tree's, not the image's (#419).
+
+    `prepared` installs into the tree, and the tree is what the container mounts at its working
+    directory -- so `.venv/bin` is there and has to be ahead of `/usr/local/bin` on `PATH`. The old
+    arrangement got this by accident: the binding mounted the host's venv and named it in
+    `extra_env`, so a nested resolution found a python with pytest. Without it, 23 tests that spin
+    up their own suite were told `pytest is not installed in /usr/local/bin/python`.
+    """
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.core.types import VENV_BIN
+
+    (tmp_path.joinpath(*VENV_BIN)).mkdir(parents=True)
+    argv = _container_argv(Sandbox(image="example.test/image:tag"), tmp_path)
+    path = next(a for a in argv if a.startswith("PATH="))
+    assert path.startswith("PATH=/work/.venv/bin:"), path
+
+    bare = _container_argv(Sandbox(image="example.test/image:tag"), tmp_path / "nothing-here")
+    assert not any(a.startswith("PATH=") for a in bare), (
+        "a tree with no environment gets no PATH of ours; the image's own is the answer there"
+    )
+
+
+def test_an_adopters_own_path_wins(tmp_path: Path) -> None:
+    """Somebody who wrote a `PATH` in `extra_env` meant it, and this must not quietly replace it."""
+    from in_lockstep.adapters.sandbox import Sandbox
+    from in_lockstep.core.types import VENV_BIN
+
+    (tmp_path.joinpath(*VENV_BIN)).mkdir(parents=True)
+    box = Sandbox(image="example.test/image:tag", extra_env={"PATH": "/opt/theirs:/usr/bin"})
+    argv = _container_argv(box, tmp_path)
+    paths = [a for a in argv if a.startswith("PATH=")]
+    assert paths == ["PATH=/opt/theirs:/usr/bin"]
+
+
+def test_the_copy_is_the_working_tree_minus_what_gitignore_calls_portable(repo: Path) -> None:
+    """`git ls-files --cached --others --exclude-standard` is the list, and it is exactly right:
+    tracked files at their CURRENT contents, untracked files, and nothing `.gitignore` names. A
+    repository's ignore rules are its own statement about what is location-specific and must be
+    rebuilt rather than carried -- which is the same statement its `Provision` makes from the other
+    side, and the reason a copy is equivalent rather than a lesser thing (#419)."""
+    from in_lockstep.adapters.worktree import working_copy
+
+    (repo / ".gitignore").write_text(".venv/\n")
+    (repo / ".venv").mkdir()
+    (repo / ".venv" / "marker").write_text("built here, for here\n")
+    (repo / "app.py").write_text("x = 2\n")  # tracked, and modified since the commit
+    (repo / "new.py").write_text("untracked but not ignored\n")
+
+    async def go() -> dict[str, bool]:
+        async with working_copy(str(repo)) as tree:
+            t = Path(tree)
+            return {
+                "modified tracked file at its current contents": (t / "app.py").read_text() == "x = 2\n",
+                "untracked file": (t / "new.py").is_file(),
+                "ignored directory": (t / ".venv").exists(),
+            }
+
+    saw = asyncio.run(go())
+    assert saw["modified tracked file at its current contents"], "uncommitted work must be there"
+    assert saw["untracked file"], "an untracked, unignored file is part of the working tree"
+    assert not saw["ignored directory"], "an ignored path is what Provision rebuilds, not what a copy carries"
+
+
+def test_selfcheck_names_its_paths_against_the_tree_it_runs_over(repo: Path) -> None:
+    """`--paths <the repository>` is a host absolute path, and the verbs translate paths against
+    the tree they are GIVEN -- which is a copy, where the original names nothing. Made relative to
+    the repository first, so the adapters' own translation resolves them against the copy (#419).
+
+    Driven through `selfcheck` itself rather than asserted of `tooling.relative`, because what can
+    go wrong is the workflow forgetting to call it: removing that line left every test green."""
+    import asyncio as _asyncio
+
+    from in_lockstep.cli import selfcheck
+    from in_lockstep.core.outcome import Outcome, Status
+    from in_lockstep.core.types import Provision, Test, Validate
+
+    asked: list[Any] = []
+
+    class _Container:
+        @staticmethod
+        def has(verb: type) -> bool:
+            return verb in (Validate, Test, Provision)
+
+        @staticmethod
+        def resolve(verb: type) -> Any:
+            return SimpleNamespace(sandbox=None, steps=())
+
+    root = str(repo)  # a class body does not see the enclosing function's names on its own RHS
+
+    class _Ctx:
+        container = _Container()
+        workshop_runner = None
+        repo = SimpleNamespace(root=root)
+
+        async def do(self, request: Any) -> Outcome[Any]:
+            asked.append(request)
+            return Outcome(status=Status.SUCCEEDED)
+
+    # `cast`, not a `RunContext`: building a real one needs a container, a spend and a ledger,
+    # and what this asserts about is the two lines of translation `selfcheck` does to its paths.
+    _asyncio.run(selfcheck(cast(Any, _Ctx()), (str(repo), str(repo / "src"))))
+
+    named = [p for r in asked if isinstance(r, (Validate, Test)) for p in r.paths]
+    assert named, "selfcheck dispatched nothing to assert about"
+    assert not any(p.startswith(str(repo)) for p in named), (
+        f"a path named against the repository reached a verb running over a copy of it: {named}"
+    )
