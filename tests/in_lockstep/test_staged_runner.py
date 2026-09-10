@@ -121,3 +121,48 @@ def test_the_adapter_runs_where_its_binding_says_when_nobody_supplies_one() -> N
     adapter = CommandValidate(["make", "lint"], sandbox=_Runner())
     asyncio.run(adapter.invoke(SimpleNamespace(repo=SimpleNamespace(root=".")), Validate()))
     assert ran == ["binding"]
+
+
+def test_the_test_adapter_runs_where_the_request_says() -> None:
+    """`Test` gained `runner` for the reason `Validate` did (#419), and it closes something #427
+    left latent: the refusal already resolved through `staged_runner`, so a repository whose `Test`
+    binding named no image had its refusal cleared by the workshop while the dispatch still went to
+    the binding. It does not bite here only because this repository's `Test` binding names one."""
+    from in_lockstep.adapters.pytest_adapter import PytestTest
+    from in_lockstep.core.types import Test
+
+    ran: list[str] = []
+
+    class _Runner(Runner):
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.image = f"img/{name}"
+
+        async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+            ran.append(self.name)
+            return SandboxResult(exit_code=5, stdout="", stderr="", sandboxed=True, how="container")
+
+    adapter = PytestTest(sandbox=_Runner("binding"))
+    handed = _Runner("handed")
+    asyncio.run(adapter.invoke(SimpleNamespace(repo=SimpleNamespace(root=".")), Test(runner=handed)))
+
+    assert ran == ["handed"], "the suite ran where the binding said, not where the refusal looked"
+
+
+def test_the_test_adapter_runs_where_its_binding_says_when_nobody_supplies_one() -> None:
+    """`selfcheck`, and a laptop: a person's dispatch supplies nothing and gets the binding's."""
+    from in_lockstep.adapters.pytest_adapter import PytestTest
+    from in_lockstep.core.types import Test
+
+    ran: list[str] = []
+
+    class _Runner(Runner):
+        image = ""
+
+        async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
+            ran.append("binding")
+            return SandboxResult(exit_code=5, stdout="", stderr="", sandboxed=False, how="subprocess")
+
+    adapter = PytestTest(sandbox=_Runner())
+    asyncio.run(adapter.invoke(SimpleNamespace(repo=SimpleNamespace(root=".")), Test()))
+    assert ran == ["binding"]

@@ -92,7 +92,10 @@ class PytestTest:
             cmd += ["-k", inp.selector]
 
         try:
-            result = await self.sandbox.run(cmd, cwd=cwd)
+            # Where the caller said, else where the binding says (#419). A staged run arrives with
+            # the workshop's contained runner; `selfcheck` supplies nothing and gets the binding's.
+            sandbox = inp.runner if inp.runner is not None else self.sandbox
+            result = await sandbox.run(cmd, cwd=cwd)
         finally:
             shutil.rmtree(report_dir, ignore_errors=True)
 

@@ -31,7 +31,7 @@ from ...ai.structured import schema_instruction as _schema_instruction
 from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test
 from ...prompts.implement import IMPLEMENT_SCHEMA, ImplementParams
-from ..worktree import head_state, materialize, staged_refusal
+from ..worktree import head_state, materialize, staged_refusal, staged_runner
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
 from .strategy import (
     PhaseError,
@@ -188,7 +188,7 @@ class TDD(ImplementStrategy):
                 )
 
             async with materialize(session.repo_root, tests) as tree:
-                red = await ctx.do(Test(root=tree, expect="fail"))
+                red = await ctx.do(Test(root=tree, expect="fail", runner=staged_runner(ctx, Test)))
                 # Red means the suite ran and failed, so a run that decided nothing -- collected
                 # nothing, or never reported -- is not red however it exited. Which of the three
                 # it was has to be decided while the worktree still exists.
@@ -297,7 +297,7 @@ class TDD(ImplementStrategy):
         )
 
         async with materialize(session.repo_root, full) as tree:
-            green = await ctx.do(Test(root=tree, expect="pass"))
+            green = await ctx.do(Test(root=tree, expect="pass", runner=staged_runner(ctx, Test)))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
         foreign = elsewhere_only(green, full) if green.decided else ()
@@ -371,7 +371,7 @@ async def _revert_verify(
     undo = ChangeSet(changes=fix).inverse(before)
     reverted = _merge(full, undo)  # full with the implementation undone -> HEAD + the test
     async with materialize(session.repo_root, reverted) as tree:
-        recheck = await ctx.do(Test(root=tree, expect="fail"))
+        recheck = await ctx.do(Test(root=tree, expect="fail", runner=staged_runner(ctx, Test)))
     if recheck.status is Status.SUCCEEDED:  # expect="fail" satisfied -> red again
         return [
             Finding(
