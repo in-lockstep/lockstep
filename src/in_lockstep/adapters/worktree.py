@@ -66,21 +66,60 @@ class WorktreeRunner:
     the existing behaviour is, not whether its unstaged change works — `ctx.do(Test)` over a
     materialised change is for that. Each call gets a fresh copy, so nothing a command writes
     survives to the next; a step that needs its predecessor's output on disk is not what this is for.
+
+    **And the copy has the repository's own environment in it.** For as long as this class existed
+    it did not: `materialize` yields the repository's FILES, so `make lint` and
+    `python -c "import …"` could not work in here, while `executables=` truthfully declared that
+    `make` and `python` were present. The declaration was true of the binary and false of the thing
+    anybody would run it for, which is #401's defect one layer down — a session discovering by
+    spending turns what its tools can actually do.
+
+    So the install steps the repository declares run first, in this runner's own sandbox, with the
+    network open for that step alone and closed for the command. Same mechanism `prepared` uses for
+    the check verbs and the same ordering argument (#422): the tree holds only HEAD — reviewed
+    code — while the network is open, so this is not an allowlist and nothing a model wrote is on
+    disk at the point a manifest could be executed. `run_script` never applies the staged change at
+    all, which makes that ordering trivially true here.
+
+    **Per call, not per session, and that is the trade.** Provisioning once and reusing the tree
+    would be cheaper (~4.7s each, measured cold in this repository's workshop image) and would give
+    up the property this class exists for: that nothing a command writes reaches the next one.
+    Freshness is the control; the seconds are the price of it.
     """
 
-    def __init__(self, inner: Any, repo_root: str) -> None:
+    def __init__(self, inner: Any, repo_root: str, container: Any = None) -> None:
         self.inner = inner
         # The trusted repository root, decided at the binding site (`lockstep.repo.root`), not
         # anything a model can influence — this is what the throwaway worktree is a copy *of*, so a
         # value under an attacker's control would defeat the point. A non-git path fails loudly in
         # `materialize` rather than silently running somewhere else.
         self.repo_root = repo_root
+        # The container, read at RUN time rather than resolved here. `complete_for` wraps this
+        # runner when `lockstep.use(...)` is called, and a module is free to `bind(Provision, ...)`
+        # after that line; resolving eagerly would make the environment depend on the order two
+        # unrelated statements appear in. Optional, so a hand-written bind that names no container
+        # keeps working exactly as it did — with no environment, and the note below says so.
+        self.container = container
 
     async def run(self, command: list[str], *, cwd: str | None = None, timeout: float = 900.0) -> Any:
         # `cwd` (the workspace root) is ignored deliberately: the whole point is to run somewhere
         # other than the live tree. The worktree is materialised from `repo_root` and thrown away.
         async with materialize(self.repo_root, ChangeSet()) as tree:
-            return await self.inner.run(command, cwd=tree, timeout=timeout)
+            note = ""
+            if steps := provision_steps(self.container):
+                note = await _install_where_the_checks_run(self.inner, steps, tree)
+            result = await self.inner.run(command, cwd=tree, timeout=timeout)
+            # Only when the install FAILED. A note on every result is prompt the session pays for on
+            # every later turn, and a successful install is not news -- but a command that failed
+            # because its environment was never built reads as a broken repository, and the model
+            # then rewrites code that was fine. Carried on stderr because that is what `run_script`
+            # renders beside the exit code; nothing else in the result is touched.
+            if note:
+                from dataclasses import replace
+
+                said = str(getattr(result, "stderr", "") or "")
+                result = replace(result, stderr=f"{note}\n{said}" if said else note)
+            return result
 
 
 async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> dict[str, FileChange | None]:
@@ -443,6 +482,21 @@ async def working_copy(repo_root: str) -> AsyncIterator[str]:
         shutil.rmtree(parent, ignore_errors=True)
 
 
+def provision_steps(container: Any) -> tuple[Any, ...]:
+    """The repository's own install steps, or empty where it declared none.
+
+    One reader of the `Provision` binding, because there are now two callers that need the steps
+    without needing a run context -- `_install` below, and `WorktreeRunner`, which provisions the
+    tree a model's `run_script` runs in. Two spellings of "ask the container for Provision.steps"
+    is one of them going stale the day the binding grows a field.
+    """
+    from ..core.types import Provision
+
+    if container is None or not container.has(Provision):
+        return ()
+    return tuple(getattr(container.resolve(Provision), "steps", ()) or ())
+
+
 async def _install(ctx: Any, tree: str, for_verb: type) -> str:
     """Build the repository's own environment in `tree`. Returns a note, empty when all is well.
 
@@ -470,7 +524,7 @@ async def _install(ctx: Any, tree: str, for_verb: type) -> str:
         # against whatever the image carries, and the caller is told which it was.
         return "no Provision is bound, so the checks ran against whatever the image carries"
 
-    steps = tuple(getattr(container.resolve(Provision), "steps", ()) or ())
+    steps = provision_steps(container)
     # The same resolution the refusal and the dispatch use, so the environment is built where the
     # checks will read it (#419).
     where = staged_runner(ctx, for_verb)

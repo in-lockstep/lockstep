@@ -5196,6 +5196,7 @@ def implement_cmd(
                     WorktreeRunner(
                         Sandbox(image=sandbox_image, require_container=bool(sandbox_image)),
                         lockstep.repo.root,
+                        lockstep.container,
                     )
                     if execute
                     else None

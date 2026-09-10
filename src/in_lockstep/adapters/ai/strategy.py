@@ -218,7 +218,11 @@ class AiStrategy:
             if self.commands is None:
                 self.commands = workshop.commands
         if self.commands is not None and not isinstance(self.commands, WorktreeRunner):
-            self.commands = WorktreeRunner(self.commands, lockstep.repo.root)
+            # The container goes with it, so the throwaway worktree gets the repository's own
+            # environment installed before a command runs in it. Passed rather than resolved here:
+            # a module may bind Provision after this `use(...)` line, and the runner reads it at
+            # run time.
+            self.commands = WorktreeRunner(self.commands, lockstep.repo.root, lockstep.container)
         if not self.repo_root:
             self.repo_root = lockstep.repo.root
         return type(self).request

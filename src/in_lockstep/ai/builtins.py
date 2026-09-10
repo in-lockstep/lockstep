@@ -641,7 +641,11 @@ def _script_description(allowed_commands: tuple[str, ...], commands: CommandRunn
     to knowledge nobody supplied.
     """
     shell = "Run a command as an argv list — no shell, so no pipes, globs or redirection. "
-    tree = " Runs against the repository working tree, which does NOT contain this run's staged writes."
+    tree = (
+        " Runs against a fresh copy of the repository at HEAD, with its own environment installed,"
+        " so the repository's own commands work here -- but it does NOT contain this run's staged"
+        " writes, and nothing one command writes survives to the next."
+    )
     executables = tuple(getattr(commands, "executables", ()) or ())
     if not executables:
         return (
