@@ -1,0 +1,202 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "dbacc9511a06dfea91b091951649bd447a0aec3d"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 48398,
+  "ci_actor": "tpouyer",
+  "ci_run": "34516465802",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.203083,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 394,
+        "message": "Assertion tightened to a single reason, but the test comment no longer mentions the two earlier possibilities it used to accept.",
+        "path": "tests/in_lockstep/test_implement_tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 354,
+        "message": "Green phase checks `collected_nothing` but has no `_uncollected` probe \u2014 intentional, but asymmetric with red.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (375 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (375 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 354,
+        "message": "Green-phase `collected_nothing` branch has no test asserting its reason or finding.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "message": "Fix strategy's `collected_nothing` branch has no integration test asserting its reason or finding.",
+        "path": "src/in_lockstep/adapters/ai/fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (375 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "dbacc9511a06dfea91b091951649bd447a0aec3d",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.203083,
+  "output_tokens": 1437,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34516465802-20260910T184825Z-0512",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.05297,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 394,
+            "message": "Assertion tightened to a single reason, but the test comment no longer mentions the two earlier possibilities it used to accept.",
+            "path": "tests/in_lockstep/test_implement_tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 354,
+            "message": "Green phase checks `collected_nothing` but has no `_uncollected` probe \u2014 intentional, but asymmetric with red.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (375 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 506,
+      "verb": "review",
+      "wall_seconds": 29.015
+    },
+    {
+      "cost_usd": 0.046648,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 117,
+      "verb": "review",
+      "wall_seconds": 11.788
+    },
+    {
+      "cost_usd": 0.047349,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (375 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 110,
+      "verb": "review",
+      "wall_seconds": 18.927
+    },
+    {
+      "cost_usd": 0.056116,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 354,
+            "message": "Green-phase `collected_nothing` branch has no test asserting its reason or finding.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "message": "Fix strategy's `collected_nothing` branch has no integration test asserting its reason or finding.",
+            "path": "src/in_lockstep/adapters/ai/fix.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (375 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 716,
+      "verb": "review",
+      "wall_seconds": 26.246
+    }
+  ],
+  "tokens": 1449,
+  "tool_calls": {},
+  "ts": "2026-09-10T18:48:54+00:00",
+  "turns": 4,
+  "wall_seconds": 29.015,
+  "workflow": "review/all-lenses"
+}
