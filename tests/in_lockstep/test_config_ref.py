@@ -53,9 +53,17 @@ def test_gate_cfg_1_a_modified_config_in_the_head_tree_has_no_effect(tmp_path: P
 
 
 def test_loading_config_from_the_reviewed_ref_is_refused(tmp_path: Path) -> None:
+    """Constructed directly rather than through a `ConfigRef.under_review` classmethod.
+
+    That constructor existed and was taken by nobody but this test -- a defined vocabulary with no
+    caller, which is the shape the gate ledger exists to refuse. It comes back with the path that
+    will actually use it (#430, exercising a change's own configuration in a job holding nothing),
+    and until then the refusal is asserted over the state that reaches `read_config` in reality.
+    """
     root = _repo(tmp_path)
+    untrusted = ConfigRef(ref="attacker", reason="the ref under review", trusted=False)
     with pytest.raises(UntrustedConfig, match="rewrite its own constraints"):
-        read_config(root, "lockstep.py", ConfigRef.under_review("attacker"))
+        read_config(root, "lockstep.py", untrusted)
 
 
 def test_a_review_without_a_base_has_no_trusted_source(tmp_path: Path) -> None:

@@ -15,11 +15,11 @@ from __future__ import annotations
 import importlib.util
 import sys
 import tempfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from .config_ref import ConfigRef, read_config, resolve
+from .config_ref import ConfigRef, acknowledgement, changed_paths, read_config, resolve
 
 #: What the lifecycle module is called once imported. NOT `lockstep`.
 #:
@@ -41,6 +41,56 @@ MODULE_FILE = ".lockstep/lockstep.py"
 
 #: Where it used to live. Kept only so the error can say what to do about it.
 LEGACY_MODULE_FILE = "lockstep.py"
+
+
+#: The files that actually come from the trusted ref. Both spellings of the lifecycle module and
+#: nothing else, because `read_config` is called for these two paths and no others.
+#:
+#: `config_ref.CONFIG_PATHS` names the DIRECTORY the control is about, which is a wider thing and
+#: reads as a claim about every file in it. A change to a cassette, a transcript or a harvested
+#: case under `.lockstep/` is run output; CI not having loaded it is not a fact about anything.
+#: Reporting on the directory would say otherwise on every such change, and a report that is
+#: usually noise is a report people stop reading -- which is the failure this whole exercise is
+#: about, one layer over.
+#:
+#: The workflow that runs the check filters on the same two paths, and a test asserts the two
+#: lists are equal, because a `paths:` in YAML and a tuple in Python are one fact written twice.
+TRUSTED_REF_FILES: tuple[str, ...] = (MODULE_FILE, LEGACY_MODULE_FILE)
+
+
+@dataclass(frozen=True)
+class Unexercised:
+    """A change to configuration that the run loading configuration did not load."""
+
+    #: Which of `TRUSTED_REF_FILES` this change touches.
+    paths: tuple[str, ...]
+    #: What was loaded instead, so the report can name it rather than implying it.
+    ref: ConfigRef
+    #: The reason a commit gave for going in anyway, or empty for none.
+    acknowledged: str = ""
+
+    @property
+    def cleared(self) -> bool:
+        return bool(self.acknowledged)
+
+
+def unexercised(root: str | Path = ".", *, base: str) -> Unexercised | None:
+    """What this change alters in configuration that `base`'s copy was loaded instead of.
+
+    `None` for the ordinary case -- a change touching no configuration -- so a caller reads the
+    absence as "nothing to say" rather than as an empty report it then has to interpret.
+
+    Says nothing about whether the caller is reviewing. That is the CI environment's answer and
+    `platform.ci` gives it; asking for it here would put a second reader of `GITHUB_*` in a module
+    whose import allowance is empty, which is the shape that made `doctor`'s provenance check
+    silently skip GitLab for months.
+    """
+    if not base:
+        return None
+    touched = tuple(path for path in changed_paths(root, base) if path in TRUSTED_REF_FILES)
+    if not touched:
+        return None
+    return Unexercised(paths=touched, ref=ConfigRef.base(base), acknowledged=acknowledgement(root, base))
 
 
 class NoLifecycle(Exception):

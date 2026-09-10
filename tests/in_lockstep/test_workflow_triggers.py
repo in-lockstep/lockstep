@@ -316,11 +316,15 @@ ALLOWED_STATEMENTS = (
 #: that: a broken CLI turns it red for reasons unrelated to the code under test. Three statements
 #: is what the rule is meant to permit -- invocations of the framework, and nothing deciding
 #: anything.
+#: `lockstep-config.yml` arrives at 2: `uv sync` and `in-lockstep config`. It is the smallest
+#: lifecycle workflow here and should stay that way -- it reports a fact and executes nothing of
+#: the change's, so anything it grows is something it has started deciding.
 MAX_STATEMENTS = {
     "implement.yml": 14,
     "fix.yml": 14,
     "ai-generated.yml": 10,
     "lockstep.yml": 12,
+    "lockstep-config.yml": 2,
     "improve.yml": 11,
     "review.yml": 10,
     "reconcile.yml": 2,

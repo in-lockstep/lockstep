@@ -21,8 +21,16 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Everything loaded from the trusted ref rather than from the change under review. One directory
-#: now: the lifecycle module, the skills, and anything else the framework reads as configuration.
+#: The directory this control is ABOUT. Not the same thing as the set of files it actually reads
+#: from the trusted ref, which is `loader.TRUSTED_REF_FILES` -- two files, both of them the
+#: lifecycle module under one spelling or the other.
+#:
+#: The difference is written down rather than papered over. `.lockstep/market.toml` says which
+#: catalogs this repository pulls packs from and `.lockstep/packs/<name>.json` records what a pack
+#: was allowed to do, and both are read from the working tree, which under review is the change.
+#: Whether they should move behind this control or the comment should narrow is #431; what must
+#: not happen meanwhile is a reader taking the old wording -- "everything loaded from the trusted
+#: ref" -- at face value.
 CONFIG_PATHS = (".lockstep",)
 
 
@@ -62,10 +70,6 @@ class ConfigRef:
     @classmethod
     def base(cls, ref: str) -> ConfigRef:
         return cls(ref=ref, reason="base branch (not the ref under review)", trusted=True)
-
-    @classmethod
-    def under_review(cls, ref: str) -> ConfigRef:
-        return cls(ref=ref, reason="the ref under review", trusted=False)
 
 
 def read_config(repo_root: str | Path, path: str, ref: ConfigRef) -> str | None:
@@ -129,6 +133,63 @@ def _resolve_commit(repo_root: str | Path, ref: str) -> str | None:
         if out is not None and out.strip():
             return out.strip()
     return None
+
+
+#: The trailer that acknowledges a configuration change going in without CI having run it.
+#:
+#: A commit trailer rather than a line in the change request's body, and the reason is what happens
+#: after the merge. A body is edited by anyone with write access and disappears entirely into a
+#: squash-merge; a trailer travels with the commit into the default branch's history, which is
+#: where somebody asking "why did this go in unexercised" is looking. It also re-runs the check on
+#: the next push without the workflow having to subscribe to `edited` events.
+ACKNOWLEDGEMENT = "Unexercised-Config"
+
+
+def changed_paths(repo_root: str | Path, base: str) -> tuple[str, ...]:
+    """Every path this checkout changes against `base`, or nothing when the range is unreadable.
+
+    Three dots, not two. `base..HEAD` names every commit reachable from HEAD and not from base,
+    which after the base branch moves on includes nobody's work but its own -- so a file somebody
+    else changed on `main` would be reported as touched by this change. `base...HEAD` diffs from
+    the merge base, which is the change's own files and the question being asked.
+
+    Empty rather than an exception when the ref does not resolve: this answers "what did this
+    change touch", and a caller that needs the ref to be readable is `read_config`, which refuses
+    loudly about it already. Two refusals for one unfetched base would be one of them noise.
+    """
+    resolved = _resolve_commit(repo_root, base)
+    if resolved is None:
+        return ()
+    out = _run(repo_root, ["git", "diff", "--name-only", f"{resolved}...HEAD"])
+    return tuple(line.strip() for line in (out or "").splitlines() if line.strip())
+
+
+def acknowledgement(repo_root: str | Path, base: str, key: str = ACKNOWLEDGEMENT) -> str:
+    """The reason a commit in this range gives for going in unexercised, or empty for none.
+
+    Git does the parsing, deliberately. `%(trailers:key=...)` knows where a trailer block begins,
+    which lines continue the one above them, and that `Key:value` and `Key: value` are the same
+    trailer -- and `platform/scm/base.py` already reads trailers this way. A regex here would be a
+    second spelling of a format neither of us owns, which is the drift the ledger module documents
+    at length.
+
+    The first non-empty one wins rather than the last, because a range with two of them is a
+    person having said it once and then rebased; either sentence is the sentence.
+    """
+    resolved = _resolve_commit(repo_root, base)
+    if resolved is None:
+        return ""
+    out = _run(
+        repo_root,
+        ["git", "log", f"{resolved}..HEAD", f"--format=%(trailers:key={key},valueonly,unfold)%x1e"],
+    )
+    for record in (out or "").split("\x1e"):
+        # Whitespace-collapsed: an unfolded trailer arrives with its continuation lines still
+        # newline-separated, and this is rendered on one line and compared against emptiness.
+        reason = " ".join(record.split())
+        if reason:
+            return reason
+    return ""
 
 
 def _show(repo_root: str | Path, spec: str) -> str | None:

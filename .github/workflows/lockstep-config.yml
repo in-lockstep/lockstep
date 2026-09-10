@@ -1,0 +1,57 @@
+# The one change no other job runs. Hand-written and permanent; nothing generates or checks it.
+#
+# WHY A FILE OF ITS OWN. This check fires only when a change touches configuration, and GitHub
+# expresses that natively as `on: pull_request: paths:` -- which applies to a whole workflow. The
+# three jobs in `lockstep.yml` must run on every pull request: `review` is a required context,
+# `publish` is what makes each run's record durable, and `sandbox` is the free container check.
+# So a filtered job cannot live beside them, and nothing else can express "only when configuration
+# changed" without putting a decision in a shell statement, which GATE-CI-4 refuses.
+#
+# WHY IT IS NAMED THIS. Two workflow files cannot share `name:`, and every other workflow here is a
+# plain unprefixed word. This one carries the prefix so the check reads as the framework's rather
+# than as some repository convention: GitHub renders it `lockstep-config / exercised`.
+#
+# WHAT IT CANNOT BE. A required status check. A required check that never reports is not green --
+# GitHub holds it at "Expected - waiting for status to be reported" and blocks the merge forever --
+# and a path-filtered workflow is silent on every pull request that touches no configuration. So
+# its red is visible in the merge box and blocks nothing on its own. That is a real limit and it is
+# written here rather than discovered by whoever next tries to add it to branch protection.
+name: lockstep-config
+
+on:
+  pull_request:
+    # The two paths `read_config` actually reads from the trusted ref. NOT `.lockstep/**`: a
+    # cassette, a transcript or a harvested case under that directory is run output, and CI not
+    # having loaded it is a fact about nothing. `test_config_check.py` asserts this list equals
+    # `loader.TRUSTED_REF_FILES`, because a `paths:` in YAML and a tuple in Python are one fact
+    # written twice and nothing else would notice them parting.
+    paths:
+      - '.lockstep/lockstep.py'
+      - 'lockstep.py'
+
+permissions:
+  contents: read
+
+jobs:
+  exercised:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # The base branch has to be a commit here: the check diffs against it and reads the
+          # commits in the range for the acknowledging trailer. A depth-1 checkout of a pull
+          # request has neither, and `changed_paths` would answer "nothing changed" -- a green
+          # check about a question it could not ask, which is the failure mode this whole check
+          # exists to report on, wearing the check's own clothes.
+          fetch-depth: 0
+          # Nothing here pushes, and the token `actions/checkout` leaves in `.git/config` has no
+          # business in a job whose whole point is holding nothing.
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          python-version: '3.11'
+      - run: uv sync
+      # Not `continue-on-error`. Red is the entire product: this job exists to be the thing a
+      # reader sees on a pull request whose most important file was never executed.
+      - run: uv run in-lockstep config

@@ -2983,6 +2983,76 @@ def comment_cmd(number: int, body_file: str) -> None:
         click.echo(f"comment   posted to #{number} under {mark}")
 
 
+@main.command(name="config")
+@click.option(
+    "--base",
+    default="",
+    help="Ask the CI question here: what would a review against this ref have loaded?",
+)
+def config_cmd(base: str) -> None:
+    """Where configuration comes from, and whether a change to it was exercised.
+
+    The one file no CI job runs before it merges. Every job on a pull request loads the BASE
+    branch's `.lockstep/lockstep.py`, deliberately -- a change must not supply the module defining
+    the bindings, policy and path tiers that constrain reviewing it -- and the consequence nobody
+    was told about is that the change itself is never executed. #418 changed this repository's
+    `Validate` binding, its container job passed in 2m39s against main's binding, and main was red
+    within the hour. #420 reverted it and its container job failed, against the same stale
+    configuration. Both jobs did exactly what they were built to do.
+
+    So this says it. Not a model call and not a heuristic (O7): a diff against the base, filtered
+    to the two paths the loader actually reads from the trusted ref.
+
+    `--base` is what makes this the same command at a terminal that it is in CI (O3). Without it
+    and outside CI the answer is that configuration is the working tree, which is true and is why
+    there is nothing to report: a person running their own checkout IS the subject.
+    """
+    from .config_ref import ACKNOWLEDGEMENT
+    from .loader import unexercised
+    from .platform.ci import detect as detect_ci
+
+    env = detect_ci()
+    reviewing = bool(base) or bool(env and env.reviewing)
+    against = base or (env.base_ref if env else "")
+
+    if not reviewing:
+        click.echo("config    local working tree")
+        click.echo("verdict   your own configuration is what runs; nothing to exercise")
+        return
+    if not against:
+        raise click.ClickException(
+            "reviewing a change with no base ref, so there is nothing to compare configuration "
+            "against. Set the host's base-ref variable (GITHUB_BASE_REF on GitHub Actions; GitLab "
+            "sets CI_MERGE_REQUEST_TARGET_BRANCH_NAME on merge-request pipelines), or pass --base."
+        )
+
+    found = unexercised(".", base=against)
+    click.echo(f"config    base branch {against!r} (not the ref under review)")
+    if found is None:
+        click.echo("changed   no configuration")
+        click.echo("verdict   nothing here was left unexercised")
+        return
+
+    for path in found.paths:
+        click.echo(f"changed   {path}")
+    if found.cleared:
+        click.echo(f"verdict   unexercised, acknowledged: {found.acknowledged}")
+        return
+
+    click.echo("verdict   NOT exercised by this pull request's checks")
+    # The remedy travels with the refusal. A check whose fix lives in a document is a check people
+    # ask somebody about rather than read -- and this one is red on a change whose author has done
+    # nothing wrong, so the sentence it prints is the whole of its usefulness.
+    click.echo(
+        f"\nThe checks on this change loaded {against!r}'s configuration, so what you changed here\n"
+        f"has never run. The first thing to execute it will be the default branch, after the merge.\n"
+        f"\nExercise it, or say why it is going in unexercised, with a trailer on any commit here:\n"
+        f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n",
+        err=True,
+    )
+    raise SystemExit(EXIT_FAILED)
+
+
 @main.command(name="doctor")
 @click.option("--strict", is_flag=True, help="What an organisation puts in a required check.")
 @click.option(
