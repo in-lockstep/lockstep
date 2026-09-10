@@ -233,7 +233,7 @@ async def verdict_over_staged(ctx: Any, repo_root: str, changeset: ChangeSet) ->
         # redacted side of the artifact, and `implement_body` renders `blocked` as the sentence.
         return TestVerdict.of("blocked", False, TestReport())
     async with materialize(repo_root, changeset) as tree:
-        outcome = await ctx.do(Test(root=tree))
+        outcome = await ctx.do(Test(root=tree, runner=staged_runner(ctx, Test)))
     report = outcome.value if outcome.value is not None else TestReport()
     # The paths this change staged, so the verdict can tell a change that fails its own tests from
     # a suite that is red somewhere else. The two are one number apart and mean opposite things.

@@ -33,6 +33,11 @@ class Test:
     # and names it here, so `ctx.do(Test(root=that))` runs the suite against the change
     # without touching the real tree. Empty keeps the adapter's own default (`ctx.repo.root`).
     root: str = ""
+    #: Run it HERE rather than wherever the binding says (#419). The field `Validate` gained for
+    #: the same reason: `selfcheck` runs the suite over the working tree on the host, and a model's
+    #: staged change must be executed in a container, and one `sandbox=` cannot be both. Absent
+    #: means the binding's own, which is every path a person drives.
+    runner: Any = None
 
 
 @dataclass(frozen=True)

@@ -854,7 +854,7 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
     HEAD, and the reason this tool exists at all.
     """
     from ...core.types import Test
-    from ..worktree import materialize, staged_refusal
+    from ..worktree import materialize, staged_refusal, staged_runner
 
     async def run(paths: tuple[str, ...] = ()) -> str:
         container = getattr(ctx, "container", None)
@@ -872,7 +872,7 @@ def _test_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
         if (why := staged_refusal(ctx)) is not None:
             return f"refused (sandbox.host_fallback): {why}"
         async with materialize(root, staged) as tree:
-            outcome = await ctx.do(Test(root=tree, paths=paths))
+            outcome = await ctx.do(Test(root=tree, paths=paths, runner=staged_runner(ctx, Test)))
         return _rendered(outcome)
 
     return run

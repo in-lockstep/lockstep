@@ -182,9 +182,11 @@ class CommandTest:
         # same file on both sides of a container mount (GATE-TOOLING-4).
         paths = tooling.relative(paths, cwd)
         selector = [*self.selector_arg, inp.selector] if (inp.selector and self.selector_arg) else []
-        argv0, resolved = _argv0(self.command, self.cwd, ctx, self.sandbox)
+        # Where the caller said, else where the binding says (#419), as `CommandValidate` does.
+        sandbox = inp.runner if inp.runner is not None else self.sandbox
+        argv0, resolved = _argv0(self.command, self.cwd, ctx, sandbox)
         cmd = [argv0, *self.command[1:], *selector, *inp.args, *paths]
-        result = await self.sandbox.run(cmd, cwd=cwd)
+        result = await sandbox.run(cmd, cwd=cwd)
         if (refused := _refused(result)) is not None:
             return refused
         if result.exit_code == 127:

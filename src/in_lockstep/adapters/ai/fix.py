@@ -34,7 +34,7 @@ from ...core.outcome import Cost, Finding, Outcome, Severity, Status
 from ...core.types import ChangeSet, Test, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...prompts.fix import FIX_PROMPTS, FIX_SCHEMA, FixParams, FixPrompt, fix_layers
-from ..worktree import materialize, staged_refusal
+from ..worktree import materialize, staged_refusal, staged_runner
 from .strategy import (
     AGENCY,
     AiStrategy,
@@ -195,7 +195,7 @@ class DiagnoseThenFix(FixStrategy):
                 )
 
             async with materialize(session.repo_root, reproducer) as tree:
-                red = await ctx.do(_test_spec(tree, "fail"))
+                red = await ctx.do(_test_spec(tree, "fail", runner=staged_runner(ctx, Test)))
             if (stopped := not_a_verdict(red, cost=repro_inv.cost)) is not None:
                 return stopped
             if red.status is not Status.SUCCEEDED:
@@ -312,7 +312,7 @@ class DiagnoseThenFix(FixStrategy):
         )
 
         async with materialize(session.repo_root, full) as tree:
-            green = await ctx.do(_test_spec(tree, "pass"))
+            green = await ctx.do(_test_spec(tree, "pass", runner=staged_runner(ctx, Test)))
         if (stopped := not_a_verdict(green, value=report, cost=cost)) is not None:
             return stopped
         foreign = elsewhere_only(green, full) if green.decided else ()
@@ -397,8 +397,8 @@ class DiagnoseThenFix(FixStrategy):
         )
 
 
-def _test_spec(tree: str, expect: str) -> Test:
-    return Test(root=tree, expect=expect)
+def _test_spec(tree: str, expect: str, *, runner: object = None) -> Test:
+    return Test(root=tree, expect=expect, runner=runner)
 
 
 def _fix_specification(reproducer: ChangeSet, red: Any, *, early: tuple[str, ...] = ()) -> str:
