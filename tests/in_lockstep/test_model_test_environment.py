@@ -14,6 +14,16 @@ tests were genuinely red.
 
 Asserted over the source rather than by running a container, so it costs nothing and fails on the
 edit rather than on the next paid run.
+
+**Over the whole package, not over the strategies.** The first version of this walked
+`adapters/ai/` alone, which is where the six model-facing dispatches live -- and missed
+`worktree.py::verdict_over_staged`, the suite run whose result rides into the proposal and decides
+whether a change request is marked ready. A rule aimed at the place the bug was found rather than
+at the property is a rule that catches the instance and not the class.
+
+`materialize` itself is not the problem and is not going anywhere: it is the primitive `prepared`
+is built on, and `backport` and the Graft index use it correctly, because neither runs a suite and
+neither needs an environment. What this refuses is dispatching a SUITE from one.
 """
 
 from __future__ import annotations
@@ -21,7 +31,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-STRATEGIES = Path(__file__).resolve().parents[2] / "src" / "in_lockstep" / "adapters" / "ai"
+SRC = Path(__file__).resolve().parents[2] / "src" / "in_lockstep"
 
 #: What dispatching the suite looks like at a call site. `_test_spec` is `fix.py`'s spelling, which
 #: builds a `Test` with the reproducer's paths on it.
@@ -52,14 +62,14 @@ def _dispatches_a_suite(node: ast.AST) -> bool:
     return False
 
 
-def _suites_dispatched_from_a_bare_worktree(where: Path = STRATEGIES) -> list[str]:
+def _suites_dispatched_from_a_bare_worktree(where: Path = SRC) -> list[str]:
     """Each `async with materialize(...)` whose body runs the suite, as `file:line`.
 
     Takes its directory so the negative control can point it at a fixture. A walk that can only
     ever look at one place is a walk nobody can prove finds anything.
     """
     found = []
-    for path in sorted(where.glob("*.py")):
+    for path in sorted(where.rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text())):
             if not isinstance(node, ast.AsyncWith):
                 continue
@@ -92,10 +102,11 @@ def test_every_model_facing_suite_dispatch_provisions_first() -> None:
     """The positive half, and the one that would have caught the regression: the sites exist and
     they are `prepared`. An empty walk satisfies the assertion above for free."""
     provisioned = []
-    for path in sorted(STRATEGIES.glob("*.py")):
+    for path in sorted(SRC.rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.AsyncWith) and "prepared" in _context_manager_names(node):
                 if any(_dispatches_a_suite(stmt) for stmt in node.body):
                     provisioned.append(f"{path.name}:{node.lineno}")
-    # Six: `run_tests`, tdd's red, green and revert control, and fix's reproducer and green.
-    assert len(provisioned) >= 6, f"only {len(provisioned)} provisioned dispatch(es): {provisioned}"
+    # Seven: `run_tests`, tdd's red, green and revert control, fix's reproducer and green, and
+    # `verdict_over_staged` -- the one the first version of this test was scoped too narrowly to see.
+    assert len(provisioned) >= 7, f"only {len(provisioned)} provisioned dispatch(es): {provisioned}"
