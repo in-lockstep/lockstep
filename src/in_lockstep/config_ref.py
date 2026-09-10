@@ -10,9 +10,9 @@ the workflow that runs is the one on the default branch, so a fork cannot modify
 reviews it. Nothing about "runnable, never rendered" requires giving that up — it only requires
 being explicit about which ref configuration comes from.
 
-So: content under review comes from head, and `lockstep.py` plus `.in-lockstep/` come from a
-trusted ref. Protecting `lockstep.py` from *agent* writes does not address this at all; the change
-here is human-authored by construction.
+So: content under review comes from head, and the lifecycle module (`lockstep.py` under either
+spelling) comes from a trusted ref. Protecting `lockstep.py` from *agent* writes does not address
+this at all; the change here is human-authored by construction.
 """
 
 from __future__ import annotations
