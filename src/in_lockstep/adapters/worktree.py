@@ -118,6 +118,43 @@ async def head_state(repo_root: str, paths: list[str], *, ref: str = "HEAD") -> 
     return state
 
 
+def staged_runner(ctx: Any, verb: type = Test) -> Any:
+    """Where a model's staged work executes for `verb` (#419).
+
+    **The binding's own if it names an image, else the workshop's.** A binding's `sandbox=` is an
+    override for this path, not the only answer to it, because one binding serves callers with
+    different requirements: `selfcheck` validates the working tree on the host, where this
+    repository's own `make lint` works, and a model's staged change must be executed in a
+    container. A `sandbox=` declared once cannot be both, and the workshop is what already means
+    "where a model's work runs" -- `run_script` has been going through it all along.
+
+    ONE function, and that is the point rather than tidiness. `staged_refusal` asks about a runner
+    and the dispatch has to USE it; a call site free to resolve those separately is a control
+    measuring something it does not govern, which this repository produced twice in a week
+    (`GATE-READ-1` asserted one layer below delivery, #412; a pull request's container job verified
+    the base branch's configuration rather than the change, #421).
+    """
+    container = getattr(ctx, "container", None)
+    own = None
+    if container is not None and container.has(verb):
+        own = getattr(container.resolve(verb), "sandbox", None)
+        if str(getattr(own, "image", "") or ""):
+            return own
+    # UNWRAPPED, and that is load-bearing rather than tidy. `Lockstep.use` wraps the workshop's
+    # sandbox in a `WorktreeRunner`, whose documented job is to run each command in a throwaway
+    # worktree of HEAD -- right for `run_script`, and wrong here: `prepared` has already built the
+    # tree, environment and staged change included, and a second worktree of HEAD would check the
+    # code as it was before the change. The sandbox that owns the image is `inner`. Unwrapped by
+    # attribute rather than by type, so an adopter's own wrapper is treated the same way.
+    workshop = getattr(ctx, "workshop_runner", None)
+    inner = getattr(workshop, "inner", workshop)
+    # And the binding's own where there is no workshop either -- not because it would be allowed,
+    # but because it is what WOULD execute, and the refusal describes the runner it was handed. A
+    # `None` here reads as "exposes no sandbox" about a binding that has one and simply names no
+    # image, which sends somebody to fix the wrong line.
+    return inner if inner is not None else own
+
+
 def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     """Why the runner bound to `verb` may not be handed a MODEL-staged tree, or None when it may.
 
@@ -163,7 +200,10 @@ def staged_refusal(ctx: Any, verb: type = Test) -> str | None:
     # is the control that does not depend on enumerating files.
     if Capability.EXECUTES_CODE not in capabilities_of(adapter):
         return None
-    why = host_fallback(getattr(adapter, "sandbox", None), named=verb.__name__)
+    # The runner this asks about is the runner the dispatch uses, because both call `staged_runner`
+    # (#419). Asking the binding here while the workshop executed would be the defect this control
+    # exists to prevent, wearing the control's own clothes.
+    why = host_fallback(staged_runner(ctx, verb), named=verb.__name__)
     if why is None:
         return None
     named = verb.__name__
@@ -363,7 +403,9 @@ async def _install(ctx: Any, tree: str, for_verb: type) -> str:
         return "no Provision is bound, so the checks ran against whatever the image carries"
 
     steps = tuple(getattr(container.resolve(Provision), "steps", ()) or ())
-    where = getattr(container.resolve(for_verb), "sandbox", None) if container.has(for_verb) else None
+    # The same resolution the refusal and the dispatch use, so the environment is built where the
+    # checks will read it (#419).
+    where = staged_runner(ctx, for_verb)
     if steps and str(getattr(where, "image", "") or ""):
         return await _install_where_the_checks_run(where, steps, tree)
 

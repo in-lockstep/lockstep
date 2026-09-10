@@ -80,7 +80,12 @@ class RuffValidate:
         if inp.fix:
             cmd.append("--fix")
 
-        result = await self.sandbox.run(cmd, cwd=cwd)
+        # Where the caller said, else where the binding says (#419). Ruff declares `READS_REPO`
+        # and needs no container of its own, so this is almost always `self.sandbox` -- but a
+        # staged flow that hands one in is telling this adapter where the model's tree may be
+        # executed, and honouring that is what keeps the refusal and the execution the same runner.
+        sandbox = inp.runner if inp.runner is not None else self.sandbox
+        result = await sandbox.run(cmd, cwd=cwd)
         if result.exit_code == 127:
             return Outcome.errored(f"ruff at {resolved.path} could not be run ({resolved.how})")
 

@@ -614,12 +614,14 @@ def _fixes(ctx: Any) -> bool:
 
 
 async def _fix_pass(ctx: Any, session: Any, changeset: ChangeSet, paths: tuple[str, ...]) -> tuple[str, ...]:
-    from ..worktree import prepared
+    from ..worktree import prepared, staged_runner
 
     # The fixer needs the environment as much as the check does -- `make fmt` is `uv run ruff
     # format`, and a tree with no environment cannot run it (#422).
     async with prepared(ctx, session.repo_root, changeset, for_verb=Validate) as (tree, _note):
-        await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths), fix=True))
+        await ctx.do(
+            Validate(root=tree, paths=_scoped(ctx, paths), fix=True, runner=staged_runner(ctx, Validate))
+        )
         return _restaged(session.workspace, changeset, tree)
 
 
@@ -635,7 +637,7 @@ async def _checked(
     fix, and reading that as the whole answer would make this depend on one tool's choice of what
     to print. A second pass costs a subprocess and says exactly what stands.
     """
-    from ..worktree import prepared, staged_refusal
+    from ..worktree import prepared, staged_refusal, staged_runner
 
     if not ctx.container.has(Validate):
         # O1's rule: nothing is invented where the repository declared nothing.
@@ -649,7 +651,10 @@ async def _checked(
     # The repository's own environment first, over HEAD, and the staged change only after it is
     # installed. `prepared` holds the argument for that order (#422).
     async with prepared(ctx, session.repo_root, changeset, for_verb=Validate) as (tree, note):
-        outcome = await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths)))
+        # Where `staged_refusal` just asked about, by construction rather than by agreement.
+        outcome = await ctx.do(
+            Validate(root=tree, paths=_scoped(ctx, paths), runner=staged_runner(ctx, Validate))
+        )
     report = outcome.value if isinstance(outcome.value, ValidationReport) else None
     if report is None:
         # Absent is not clean, and it is not this run's failure either: the change stands,
@@ -890,7 +895,7 @@ def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
     checks the adapter's declared capabilities.
     """
     from ...core.types import Validate
-    from ..worktree import prepared, staged_refusal
+    from ..worktree import prepared, staged_refusal, staged_runner
 
     async def run(paths: tuple[str, ...] = ()) -> str:
         container = getattr(ctx, "container", None)
@@ -909,7 +914,7 @@ def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
         if (why := staged_refusal(ctx, Validate)) is not None:
             return f"refused (sandbox.host_fallback): {why}"
         async with prepared(ctx, root, staged, for_verb=Validate) as (tree, note):
-            outcome = await ctx.do(Validate(root=tree, paths=paths))
+            outcome = await ctx.do(Validate(root=tree, paths=paths, runner=staged_runner(ctx, Validate)))
         answer = _validation(outcome)
         # Only where it explains something. A clean check needs no sentence about the environment,
         # and one appended to every result is prompt the session pays for on every later turn.

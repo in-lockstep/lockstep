@@ -14,7 +14,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -191,6 +191,14 @@ class Validate:
     #: caller: a session's writes are staged rather than on disk, so the only way to check them is
     #: to materialise them into a worktree and point the verb at it (`run_validate`).
     root: str = ""
+    #: Run it HERE rather than wherever the binding says (#419). The same contract `root` has, on
+    #: the other axis: `root` is what to check and this is where to execute, both supplied by the
+    #: caller that knows and both honoured by an adapter that reads them. It exists because one
+    #: binding serves two callers with different requirements -- a person's `selfcheck` validates
+    #: the working tree on the host, and a model's staged change must be executed in a container --
+    #: and a `sandbox=` declared once cannot be both. Absent means the binding's own, which is
+    #: every path a person drives.
+    runner: Any = None
 
 
 @dataclass(frozen=True)

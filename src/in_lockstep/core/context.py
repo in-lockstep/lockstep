@@ -392,6 +392,11 @@ class RunContext:
     #: context, which is a run that records nowhere and can park nowhere.
     ledger: LedgerStore | None = None
     recovering: bool = False
+    #: Where a model's staged work executes: the workshop's runner, already wrapped by
+    #: `Lockstep.use`. Here rather than reached for at each call site, because `staged_refusal`
+    #: asks about it and the dispatch has to USE it, and a call site that could forget one of
+    #: those is a control measuring something it does not govern (#419).
+    workshop_runner: Any = None
     #: Who asked for this run. Empty means nobody did, which `ApprovalGate` treats as no grant.
     approval: Approval = field(default_factory=Approval)
     #: The per-verb model routes, snapshotted from `lockstep.models.routes` at `context()` time.
