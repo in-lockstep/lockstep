@@ -22,7 +22,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -479,7 +479,9 @@ def test_selfcheck_names_its_paths_against_the_tree_it_runs_over(repo: Path) -> 
             asked.append(request)
             return Outcome(status=Status.SUCCEEDED)
 
-    _asyncio.run(selfcheck(_Ctx(), (str(repo), str(repo / "src"))))
+    # `cast`, not a `RunContext`: building a real one needs a container, a spend and a ledger,
+    # and what this asserts about is the two lines of translation `selfcheck` does to its paths.
+    _asyncio.run(selfcheck(cast(Any, _Ctx()), (str(repo), str(repo / "src"))))
 
     named = [p for r in asked if isinstance(r, (Validate, Test)) for p in r.paths]
     assert named, "selfcheck dispatched nothing to assert about"

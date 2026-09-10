@@ -308,11 +308,19 @@ ALLOWED_STATEMENTS = (
 #: and `improve.yml` a `test "$status" -eq 3 && exit 0`, both lifecycle logic in files nothing
 #: tests, and neither was under the rule. Sized to what each file holds today, so growth in any
 #: of them is a number somebody raises with an argument.
+#:
+#: `lockstep.yml` 9 -> 12 for #419: the `sandbox` job moved here from `ci.yml`, bringing three
+#: statements and no logic -- `uv sync`, `provision`, `run selfcheck`, each already in the
+#: allowlist above. It moved because `ci.yml` opens by saying the gate that proves the framework
+#: works cannot be framework output, and a job dispatching `in-lockstep run selfcheck` is exactly
+#: that: a broken CLI turns it red for reasons unrelated to the code under test. Three statements
+#: is what the rule is meant to permit -- invocations of the framework, and nothing deciding
+#: anything.
 MAX_STATEMENTS = {
     "implement.yml": 14,
     "fix.yml": 14,
     "ai-generated.yml": 10,
-    "lockstep.yml": 9,
+    "lockstep.yml": 12,
     "improve.yml": 11,
     "review.yml": 10,
     "reconcile.yml": 2,
@@ -944,16 +952,32 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
     from in_lockstep.core.workflow import restore, snapshot
     from in_lockstep.loader import load
 
-    ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text())
+    # Every workflow, not `ci.yml` by name. What this gate is about is that SOME job on every push
+    # runs the suite through the bound Test verb; which file that job lives in is an organising
+    # decision, and one that changed (#419: it belongs with the framework acting on this
+    # repository, not with the hand-written gate that must not depend on the framework working).
+    # A test naming the file would have to be edited each time, which makes it a test about
+    # bookkeeping rather than about the property.
+    workflows = {
+        path.name: yaml.safe_load(path.read_text())
+        for path in sorted(WORKFLOWS.glob("*.yml"))
+        if "pull_request" in str(yaml.safe_load(path.read_text()).get(True) or "")
+        or "pull_request" in str(yaml.safe_load(path.read_text()).get("on") or "")
+    }
     dispatches = [
-        f"{name}: {step['run'].strip()}"
-        for name, job in (ci.get("jobs") or {}).items()
+        f"{where}/{name}: {step['run'].strip()}"
+        for where, doc in workflows.items()
+        for name, job in ((doc or {}).get("jobs") or {}).items()
         for step in job.get("steps") or []
         if isinstance(step, dict) and "in-lockstep run selfcheck" in str(step.get("run") or "")
     ]
+    assert "lockstep.yml" in workflows and "ci.yml" in workflows, (
+        f"the scan found {sorted(workflows)}; a loop over nothing satisfies every assertion below "
+        f"it, so what this gate covers is asserted before it is used"
+    )
     assert dispatches, (
-        "no job in ci.yml runs the suite through the bound Test verb, so the container path a "
-        "model's run takes is exercised only by a paid run (#373)"
+        "no job on a pull request runs the suite through the bound Test verb, so the container "
+        "path a model's run takes is exercised only by a paid run (#373)"
     )
     # The grant, and which one. `ApprovalGate` gates on EXECUTES_CODE, so the dispatch needs one
     # or the job blocks; `--approve` would open it by claiming a human is watching a push, which
@@ -963,7 +987,11 @@ def test_gate_ci_5_the_suite_runs_for_free_in_the_container_a_models_run_will_us
     # leaves out the extras `Provision` installs, and a suite missing an optional SDK skips the
     # tests that need it rather than failing -- so a job without this goes green while the case
     # it exists to cover is never run.
-    for name, job in (ci.get("jobs") or {}).items():
+    for name, job in (
+        (f"{where}/{job_name}", job)
+        for where, doc in workflows.items()
+        for job_name, job in ((doc or {}).get("jobs") or {}).items()
+    ):
         runs = [str(step.get("run") or "") for step in job.get("steps") or [] if isinstance(step, dict)]
         at = next((i for i, r in enumerate(runs) if "in-lockstep run selfcheck" in r), None)
         if at is None:
