@@ -618,7 +618,7 @@ async def _fix_pass(ctx: Any, session: Any, changeset: ChangeSet, paths: tuple[s
 
     # The fixer needs the environment as much as the check does -- `make fmt` is `uv run ruff
     # format`, and a tree with no environment cannot run it (#422).
-    async with prepared(ctx, session.repo_root, changeset) as (tree, _note):
+    async with prepared(ctx, session.repo_root, changeset, for_verb=Validate) as (tree, _note):
         await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths), fix=True))
         return _restaged(session.workspace, changeset, tree)
 
@@ -648,7 +648,7 @@ async def _checked(
         return None, "", f"the change was not checked: {why}"
     # The repository's own environment first, over HEAD, and the staged change only after it is
     # installed. `prepared` holds the argument for that order (#422).
-    async with prepared(ctx, session.repo_root, changeset) as (tree, note):
+    async with prepared(ctx, session.repo_root, changeset, for_verb=Validate) as (tree, note):
         outcome = await ctx.do(Validate(root=tree, paths=_scoped(ctx, paths)))
     report = outcome.value if isinstance(outcome.value, ValidationReport) else None
     if report is None:
@@ -908,7 +908,7 @@ def _validate_runner(ctx: Any, root: str, workspace: Workspace) -> Any:
         # (GATE-SANDBOX-2, #410).
         if (why := staged_refusal(ctx, Validate)) is not None:
             return f"refused (sandbox.host_fallback): {why}"
-        async with prepared(ctx, root, staged) as (tree, note):
+        async with prepared(ctx, root, staged, for_verb=Validate) as (tree, note):
             outcome = await ctx.do(Validate(root=tree, paths=paths))
         answer = _validation(outcome)
         # Only where it explains something. A clean check needs no sentence about the environment,
