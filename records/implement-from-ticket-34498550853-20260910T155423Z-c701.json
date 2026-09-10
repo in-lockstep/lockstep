@@ -1,0 +1,78 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#431"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 3629026,
+  "cache_write_tokens": 156939,
+  "ci_actor": "tpouyer",
+  "ci_run": "34498550853",
+  "config": "local working tree",
+  "cost_usd": 10.181585,
+  "decided": false,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_red",
+        "message": "the staged test did not fail against the current code, so it specifies nothing to implement. A test-first change starts from a test that is red for the right reason.",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "11e31b5b5a88fb75b03d150db0d3d512f0e6e460",
+  "input_tokens": 86,
+  "kind": "workflow",
+  "outcome_cost_usd": 10.181585,
+  "output_tokens": 23922,
+  "priced_fraction": 1.0,
+  "reason": "tdd.not_red",
+  "run_id": "implement-from-ticket-34498550853-20260910T155423Z-c701",
+  "schema": 9,
+  "status": "failed",
+  "steps": [
+    {
+      "cost_usd": 10.181585,
+      "decided": false,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": true,
+            "id": "tdd.not_red",
+            "message": "the staged test did not fail against the current code, so it specifies nothing to implement. A test-first change starts from a test that is red for the right reason.",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "tdd.not_red",
+      "status": "failed",
+      "step": "implement",
+      "tokens": 24008,
+      "verb": "implement",
+      "wall_seconds": 774.137
+    }
+  ],
+  "tokens": 24008,
+  "tool_calls": {
+    "delegate": 1,
+    "list_files": 6,
+    "read_file": 36,
+    "run_script": 3,
+    "run_tests": 3,
+    "search_code": 3,
+    "search_text": 34,
+    "write_file": 4
+  },
+  "ts": "2026-09-10T16:07:18+00:00",
+  "turns": 82,
+  "wall_seconds": 774.137,
+  "workflow": "implement/from-ticket"
+}
