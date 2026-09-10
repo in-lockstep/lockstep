@@ -48,21 +48,26 @@ def _read_config_call_args(loader_source: str) -> set[str]:
             name = func.attr
         if name != "read_config":
             continue
-        # The path is the second positional argument.
-        if len(node.args) >= 2:
-            arg = node.args[1]
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                paths.add(arg.value)
-            elif isinstance(arg, ast.Name):
-                # Resolve module-level constants in the same file.
-                for top in ast.walk(tree):
-                    if (
-                        isinstance(top, ast.Assign)
-                        and any(isinstance(t, ast.Name) and t.id == arg.id for t in top.targets)
-                        and isinstance(top.value, ast.Constant)
-                        and isinstance(top.value.value, str)
-                    ):
-                        paths.add(top.value.value)
+        # `read_config(repo_root, path, ref)`: the second positional argument, or the `path=`
+        # keyword. Both spellings, because a walk that reads only one is a walk that goes quiet the
+        # day somebody writes the other -- and going quiet is the exact failure this test exists to
+        # prevent, one level up. The `tests` and `intent` lenses on #442 both said so.
+        arg = next(
+            (kw.value for kw in node.keywords if kw.arg == "path"),
+            node.args[1] if len(node.args) >= 2 else None,
+        )
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            paths.add(arg.value)
+        elif isinstance(arg, ast.Name):
+            # Resolve module-level constants in the same file.
+            for top in ast.walk(tree):
+                if (
+                    isinstance(top, ast.Assign)
+                    and any(isinstance(t, ast.Name) and t.id == arg.id for t in top.targets)
+                    and isinstance(top.value, ast.Constant)
+                    and isinstance(top.value.value, str)
+                ):
+                    paths.add(top.value.value)
     return paths
 
 
@@ -117,23 +122,49 @@ def _framework_directory_constants() -> set[str]:
     return {p.rstrip("/") + "/" for p in raw}
 
 
+def _outside_dot_lockstep(directories: set[str]) -> list[str]:
+    """Every directory in `directories` the framework should not be writing into.
+
+    A function rather than a loop inside each test, so the negative control below can drive the
+    REAL check over a set it controls. A control that asserts `".in-lockstep/".startswith(...)` is
+    false is a claim about Python's string methods: it passes whatever this file says about the
+    framework, and it passed while `CASSETTE_DIR` was moved out of `.lockstep/` in a trial.
+    """
+    return sorted(d for d in directories if not d.startswith(".lockstep/"))
+
+
 def test_scaffold_gitignore_entries_all_resolve_under_dot_lockstep() -> None:
     """Every directory the scaffolded .gitignore names is under `.lockstep/`."""
-    for entry in _scaffold_gitignore_dirs():
-        assert entry.startswith(".lockstep/"), (
-            f"scaffolded .gitignore names {entry!r}, which is not under .lockstep/"
-        )
+    named = _scaffold_gitignore_dirs()
+
+    assert named, "the scaffold names no directories; a loop over nothing satisfies this for free"
+    assert _outside_dot_lockstep(named) == [], (
+        f"the scaffolded .gitignore names {_outside_dot_lockstep(named)}, which is not under .lockstep/"
+    )
 
 
 def test_every_framework_directory_constant_resolves_under_dot_lockstep() -> None:
     """Every directory the framework writes run output into is under `.lockstep/`."""
-    for entry in _framework_directory_constants():
-        assert entry.startswith(".lockstep/"), f"directory constant {entry!r} is not under .lockstep/"
+    constants = _framework_directory_constants()
+
+    assert len(constants) >= 4, f"only {sorted(constants)} found; the constants moved and this went blind"
+    assert _outside_dot_lockstep(constants) == [], (
+        f"directory constant(s) {_outside_dot_lockstep(constants)} not under .lockstep/"
+    )
 
 
-def test_a_framework_write_target_outside_dot_lockstep_fails() -> None:
-    """Negative control: `.in-lockstep/` as a write target would fail the directory check."""
-    assert not ".in-lockstep/runs/".startswith(".lockstep/")
+def test_the_directory_check_finds_a_write_target_outside_dot_lockstep() -> None:
+    """The negative control, driving the same function the two tests above depend on.
+
+    If `_outside_dot_lockstep` ever stops finding anything -- the way a checker does when somebody
+    "simplifies" it -- both assertions above pass over a broken check and this one fails instead.
+    That is the whole job of a control, and it is why this drives the code rather than restating a
+    property of `str.startswith`.
+    """
+    assert _outside_dot_lockstep({".lockstep/runs/", ".in-lockstep/runs/", "build/"}) == [
+        ".in-lockstep/runs/",
+        "build/",
+    ]
 
 
 # ---------------------------------------------------------------------------
