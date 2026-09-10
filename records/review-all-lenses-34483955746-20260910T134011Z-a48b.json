@@ -1,0 +1,269 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "c4d1a97506fcbf06a6a7b153ec6ed2164f29deed"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 26138,
+  "cache_write_tokens": 104116,
+  "ci_actor": "tpouyer",
+  "ci_run": "34483955746",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.439001,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 12,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 534,
+        "message": "prepared falls back to running in-place when not a git repo but does not install, silently skipping a bound Provision.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 64,
+        "message": "Interpreter resolution probes for a provisioned venv only by is_dir, which is correct for the host but latent for future callers who pass a container runner without going through prepared.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4168 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 416,
+        "message": "git ls-files output is split on NUL and used to construct copy paths without further validation.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4168 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 55,
+        "message": "New `lexists` branch in `interpreter` for a containerised, provisioned tree is not directly tested in `test_worktree.py` or `test_tooling.py`.",
+        "path": "src/in_lockstep/adapters/tooling.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 534,
+        "message": "The `not a git repository` early-exit branch in `prepared` is not covered by any test added in this diff.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (4168 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "c4d1a97506fcbf06a6a7b153ec6ed2164f29deed",
+  "input_tokens": 15,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.439001,
+  "output_tokens": 2712,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34483955746-20260910T134011Z-a48b",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.133278,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 534,
+            "message": "prepared falls back to running in-place when not a git repo but does not install, silently skipping a bound Provision.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 64,
+            "message": "Interpreter resolution probes for a provisioned venv only by is_dir, which is correct for the host but latent for future callers who pass a container runner without going through prepared.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4168 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1564,
+      "verb": "review",
+      "wall_seconds": 51.024
+    },
+    {
+      "cost_usd": 0.09356,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 104,
+      "verb": "review",
+      "wall_seconds": 8.919
+    },
+    {
+      "cost_usd": 0.103565,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 416,
+            "message": "git ls-files output is split on NUL and used to construct copy paths without further validation.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4168 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 351,
+      "verb": "review",
+      "wall_seconds": 28.029
+    },
+    {
+      "cost_usd": 0.108598,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 55,
+            "message": "New `lexists` branch in `interpreter` for a containerised, provisioned tree is not directly tested in `test_worktree.py` or `test_tooling.py`.",
+            "path": "src/in_lockstep/adapters/tooling.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 534,
+            "message": "The `not a git repository` early-exit branch in `prepared` is not covered by any test added in this diff.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (4168 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 708,
+      "verb": "review",
+      "wall_seconds": 31.196
+    }
+  ],
+  "tokens": 2727,
+  "tool_calls": {},
+  "ts": "2026-09-10T13:41:02+00:00",
+  "turns": 5,
+  "wall_seconds": 51.024,
+  "workflow": "review/all-lenses"
+}
