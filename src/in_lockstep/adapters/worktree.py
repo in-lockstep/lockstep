@@ -335,9 +335,74 @@ DEPENDENCY_MANIFESTS = frozenset(
 )
 
 
+async def _install(ctx: Any, tree: str, for_verb: type) -> str:
+    """Build the repository's own environment in `tree`. Returns a note, empty when all is well.
+
+    **Where it builds is the point (#424).** One `Provision` binding serves two callers that need
+    different environments: `in-lockstep provision` needs one on the host, at the repository root,
+    built by the runner's interpreter, because every later `uv run in-lockstep …` step uses it;
+    a check needs one inside its own image, in the worktree, because `uv run mypy` executes a
+    console script whose shebang carries an absolute path. A `sandbox=` is declared once and cannot
+    be both, and giving the binding an image containerises the CI step instead -- which is #419's
+    mechanism arriving from the other side.
+
+    So the steps are the binding's and the PLACE is the check's. Where the verb being prepared for
+    names an image, its own sandbox runs the install, with the network open for that step alone:
+    same image, same mounts, so what is installed is what the checks will find. `steps` is read the
+    way `fixes` and `sandbox` already are, by asking rather than by knowing the class -- and an
+    adapter that exposes none, or a check that names no image, falls back to the bound `Provision`
+    through `ctx.do`, which is the host path and says so.
+    """
+    from ..core.outcome import Status
+    from ..core.types import Provision
+
+    container = getattr(ctx, "container", None)
+    if container is None or not container.has(Provision):
+        # O1: nothing is invented where the repository declared nothing. The checks still run,
+        # against whatever the image carries, and the caller is told which it was.
+        return "no Provision is bound, so the checks ran against whatever the image carries"
+
+    steps = tuple(getattr(container.resolve(Provision), "steps", ()) or ())
+    where = getattr(container.resolve(for_verb), "sandbox", None) if container.has(for_verb) else None
+    if steps and str(getattr(where, "image", "") or ""):
+        return await _install_where_the_checks_run(where, steps, tree)
+
+    outcome = await ctx.do(Provision(root=tree))
+    if getattr(outcome, "status", Status.SUCCEEDED) is not Status.SUCCEEDED:
+        return (
+            "the repository's own environment was not installed "
+            f"({getattr(outcome, 'reason', '') or outcome.status.value}), so a failure below may "
+            "be about the environment rather than about the change"
+        )
+    return ""
+
+
+async def _install_where_the_checks_run(sandbox: Any, steps: tuple[Any, ...], tree: str) -> str:
+    """The repository's install steps, in the check's own sandbox, over `tree`.
+
+    `replace(..., allow_network=True)` rather than a sandbox of our own: the image, the mounts and
+    the environment are the ones the checks will run under, and only the network differs. It is
+    open here and closed for the checks, and the tree holds only `ref` while it is open -- which is
+    the ordering `prepared` exists for, and the reason this is not an allowlist.
+    """
+    from dataclasses import replace
+
+    networked = replace(sandbox, allow_network=True)
+    for step in steps:
+        result = await networked.run(list(step), cwd=tree)
+        if getattr(result, "exit_code", 0) != 0:
+            said = (getattr(result, "stderr", "") or getattr(result, "stdout", "")).strip()
+            return (
+                f"the repository's own environment was not installed: {' '.join(step)} exited "
+                f"{result.exit_code}{f' ({said[-300:]})' if said else ''}, so a failure below may "
+                "be about the environment rather than about the change"
+            )
+    return ""
+
+
 @asynccontextmanager
 async def prepared(
-    ctx: Any, repo_root: str, changeset: ChangeSet, *, ref: str = "HEAD"
+    ctx: Any, repo_root: str, changeset: ChangeSet, *, for_verb: type, ref: str = "HEAD"
 ) -> AsyncIterator[tuple[str, str]]:
     """A worktree of `ref` with the repository's own environment installed, and THEN the staged
     change applied. Yields the tree and a note about the environment, empty when there is nothing
@@ -364,24 +429,8 @@ async def prepared(
     the host's absolute paths in its console-script shebangs, and nothing mounted makes those exist
     inside an image.
     """
-    from ..core.outcome import Status
-    from ..core.types import Provision
-
     async with materialize(repo_root, ChangeSet(), ref=ref) as tree:
-        note = ""
-        container = getattr(ctx, "container", None)
-        if container is None or not container.has(Provision):
-            # O1: nothing is invented where the repository declared nothing. The checks still run,
-            # against whatever the image carries, and the caller is told which it was.
-            note = "no Provision is bound, so the checks ran against whatever the image carries"
-        else:
-            outcome = await ctx.do(Provision(root=tree))
-            if getattr(outcome, "status", Status.SUCCEEDED) is not Status.SUCCEEDED:
-                note = (
-                    "the repository's own environment was not installed "
-                    f"({getattr(outcome, 'reason', '') or outcome.status.value}), so a failure "
-                    "below may be about the environment rather than about the change"
-                )
+        note = await _install(ctx, tree, for_verb)
         # AFTER provisioning, never before. See the docstring.
         for change in changeset.changes:
             _apply_change(Path(tree), change)
