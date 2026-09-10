@@ -1,0 +1,237 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "4ec41059369a63e6945ec72ffa24027489289fcf"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 75139,
+  "ci_actor": "tpouyer",
+  "ci_run": "34487309825",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.313022,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 537,
+        "message": "Non-git fallback yields `repo_root` directly, but callers pass `root` and `tree` to verbs that expect the copy's path.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 951,
+        "message": "Workflow scan double-parses each YAML file (three `safe_load` calls per file).",
+        "path": "tests/in_lockstep/test_workflow_triggers.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1923 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 430,
+        "message": "Per-file `shutil.copy2` loop over every tracked path, run on every `selfcheck` invocation.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 316,
+        "message": "`github.actor` interpolated directly into a shell run step, allowing script injection.",
+        "path": ".github/workflows/lockstep.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1923 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 166,
+        "message": "`own_code_runner` replaces `require_container` on a `Sandbox` but no test asserts the returned object has it set to `False`.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 451,
+        "message": "`test_selfcheck_names_its_paths_against_the_tree_it_runs_over` does not assert that `root=tree` was threaded into the dispatched requests.",
+        "path": "tests/in_lockstep/test_prepared_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1923 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "4ec41059369a63e6945ec72ffa24027489289fcf",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.313022,
+  "output_tokens": 2081,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34487309825-20260910T141131Z-974f",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.080859,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 537,
+            "message": "Non-git fallback yields `repo_root` directly, but callers pass `root` and `tree` to verbs that expect the copy's path.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 951,
+            "message": "Workflow scan double-parses each YAML file (three `safe_load` calls per file).",
+            "path": "tests/in_lockstep/test_workflow_triggers.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1923 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 656,
+      "verb": "review",
+      "wall_seconds": 37.202
+    },
+    {
+      "cost_usd": 0.073085,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 430,
+            "message": "Per-file `shutil.copy2` loop over every tracked path, run on every `selfcheck` invocation.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 322,
+      "verb": "review",
+      "wall_seconds": 12.941
+    },
+    {
+      "cost_usd": 0.076678,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 316,
+            "message": "`github.actor` interpolated directly into a shell run step, allowing script injection.",
+            "path": ".github/workflows/lockstep.yml",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1923 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 356,
+      "verb": "review",
+      "wall_seconds": 25.924
+    },
+    {
+      "cost_usd": 0.0824,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 166,
+            "message": "`own_code_runner` replaces `require_container` on a `Sandbox` but no test asserts the returned object has it set to `False`.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 451,
+            "message": "`test_selfcheck_names_its_paths_against_the_tree_it_runs_over` does not assert that `root=tree` was threaded into the dispatched requests.",
+            "path": "tests/in_lockstep/test_prepared_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1923 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 759,
+      "verb": "review",
+      "wall_seconds": 34.888
+    }
+  ],
+  "tokens": 2093,
+  "tool_calls": {},
+  "ts": "2026-09-10T14:12:08+00:00",
+  "turns": 4,
+  "wall_seconds": 37.202,
+  "workflow": "review/all-lenses"
+}
