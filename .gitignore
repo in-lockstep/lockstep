@@ -39,9 +39,6 @@ build/
 .lockstep/transcripts/
 # The loader imports `.lockstep/lockstep.py`, and Python writes bytecode beside what it imports.
 .lockstep/__pycache__/
-# The previous layout, still ignored for a checkout that predates the move.
-.in-lockstep/
-
 # `.claude/` gets the same split as `.lockstep/`: `launch.json` is committed tooling config
 # (the browser preview server definition), so the machine-local session state is ignored by
 # name rather than by ignoring the directory and negating.

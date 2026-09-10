@@ -11,9 +11,10 @@ to do, so a grant cannot lift them. Tier 2 is deny-by-default with a named grant
 
 `lockstep.py` leads Tier 1, and that is new. When configuration was YAML the compiler validated,
 editing it was bounded by what the schema allowed. Now configuration is executable Python: an
-agent that can edit it can rebind any adapter, drop middleware, and grant itself tools. So can
-anything under `.in-lockstep/` — skills are instructions for every future run, the ledger is the
-audit record, and the checkpoint store decides what `--recover` replays.
+agent that can edit it can rebind any adapter, drop middleware, and grant itself tools. The same
+was true of the previous layout under `.in-lockstep/` — skills were instructions for every future
+run, the ledger was the audit record, and the checkpoint store decided what `--recover` replays.
+That directory is still denied (see `DENY_ALWAYS`) because a repository mid-migration has one.
 
 Matching is done on the post-change tree. A symlink written this turn is an out-of-root write next
 turn, and evaluating the rule against the pre-change tree would miss it.
