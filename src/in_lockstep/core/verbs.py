@@ -59,6 +59,7 @@ class Verb:
     DEBUG: ClassVar[Verb]
     IMPROVE: ClassVar[Verb]
     JUDGE: ClassVar[Verb]
+    ASSESS: ClassVar[Verb]
     DESCRIBE: ClassVar[Verb]
 
     def __new__(cls, value: str) -> Verb:
@@ -134,6 +135,14 @@ SHIPPED_VERBS = (
     # names. It is asked only what no script could settle -- the deterministic half is graded
     # first and a case that failed it is never sent (O7, `GATE-JUDGE-2`).
     "judge",
+    # Whether the change does what the ticket asked for, which is not what its tests prove. TDD
+    # settles red-to-green deterministically and then has no answer to "and does it answer the
+    # ticket" -- #450 satisfied its own tests, skipped an acceptance criterion outright, and wrote
+    # a test asserting the omission as a requirement, all of it green. Routed apart like `judge`
+    # and `describe`, and for a sharper reason than either: a model that has just argued itself
+    # into an implementation is the worst available judge of whether that implementation answers
+    # the ticket, so the model that assesses should not be the model that wrote it (O11).
+    "assess",
     # The reviewer-facing account of a change, written by a model that did NOT do the work: it is
     # handed the ticket, the diff and the verdict, and nothing of the session. That is the whole
     # point -- a session's own summary is addressed to the framework at the end of its turn, and

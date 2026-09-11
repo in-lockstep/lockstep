@@ -39,6 +39,10 @@ def test_every_shipped_family_has_prompts() -> None:
         "improve",
         "judge",
         "describe",
+        # The acceptance-criteria assessor TDD's third phase dispatches (#452). A family here
+        # because it is a verb with its own prompt and its own route -- and the diff is the
+        # deliberate one this test asks for rather than a directory that appeared.
+        "assess",
     }
     assert families <= set(SHIPPED_VERBS), (
         f"prompt families that name no shipped verb: {sorted(families - set(SHIPPED_VERBS))}"

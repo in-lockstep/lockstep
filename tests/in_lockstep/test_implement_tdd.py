@@ -27,7 +27,7 @@ from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
 from in_lockstep.core.outcome import Outcome, Status
 from in_lockstep.core.spend import Budget, Spend
-from in_lockstep.core.types import Test, Validate
+from in_lockstep.core.types import Assess, AssessReport, CriterionVerdict, Test, Validate
 from in_lockstep.llm.interface import LLMProvider
 from in_lockstep.llm.types import LLMInput, LLMOutput, TokenUsage, ToolCall
 from in_lockstep.platform.tickets import Ticket
@@ -104,12 +104,21 @@ class Ctx:
     """A ctx whose Test verb is a real PytestTest, so the red/green runs are real."""
 
     def __init__(
-        self, *, test_bound: bool = True, sandbox: Runner | None = None, validator: Any = None
+        self,
+        *,
+        test_bound: bool = True,
+        sandbox: Runner | None = None,
+        validator: Any = None,
+        assessor: Any = None,
     ) -> None:
         self.spend = Spend(budget=Budget(usd=5.0))
         self.run_id = "t"
         self.adapter = PytestTest(args=["-q"], sandbox=sandbox or Declared())
         self.validator = validator
+        #: The acceptance-criteria assessor, when a test binds one. None is the ordinary case and
+        #: the one every test above this feature exercises: no Assess bound, so TDD's third phase
+        #: is skipped entirely and the run is exactly the two-phase one it always was.
+        self.assessor = assessor
         #: Which verbs were dispatched, in order — what GATE-VALIDATE-2's ordering claim reads.
         self.order: list[str] = []
 
@@ -121,10 +130,14 @@ class Ctx:
                 # back a pytest runner.
                 if verb is Validate:
                     return validator is not None
+                if verb is Assess:
+                    return assessor is not None
                 return verb is Test and test_bound
 
             def resolve(_self, verb: object) -> Any:
-                return self.validator if verb is Validate else self.adapter
+                if verb is Validate:
+                    return self.validator
+                return self.assessor if verb is Assess else self.adapter
 
         self.container = _Container()
 
@@ -133,6 +146,9 @@ class Ctx:
         if isinstance(request, Validate):
             checked: Outcome[Any] = await self.validator.invoke(self, request)
             return checked
+        if isinstance(request, Assess):
+            assessed: Outcome[Any] = await self.assessor.invoke(self, request)
+            return assessed
         return await self.adapter.invoke(self, request)
 
 
@@ -176,10 +192,11 @@ def _run(
     test_bound: bool = True,
     sandbox: Runner | None = None,
     ctx: Ctx | None = None,
+    ticket: Ticket | None = None,
 ) -> Outcome[Any]:
     return asyncio.run(
         _adapter(provider, repo).invoke(
-            ctx or Ctx(test_bound=test_bound, sandbox=sandbox), Implement(ticket=_ticket())
+            ctx or Ctx(test_bound=test_bound, sandbox=sandbox), Implement(ticket=ticket or _ticket())
         )
     )
 
@@ -500,3 +517,169 @@ def test_gate_report_1_an_unparsed_cover_note_stays_on_the_report(repo: Path) ->
     assert outcome.value.summary == thinking, "the text is still kept for the record"
     assert outcome.value.changeset.summary == "", "and never in what a body renders"
     assert any(f.id == "implement.unstructured" for f in outcome.findings)
+
+
+# -- phase 3: does it answer the ticket? (#452) ----------------------------------------
+
+
+class _Assessor:
+    """An assessor scripted per round: `rounds[i]` is what it says the (i+1)th time it is asked."""
+
+    def __init__(self, *rounds: tuple[tuple[str, bool], ...]) -> None:
+        self.rounds = rounds
+        self.seen: list[int] = []
+
+    async def invoke(self, _ctx: Any, inp: Assess) -> Outcome[AssessReport]:
+        self.seen.append(inp.round_number)
+        verdicts = self.rounds[min(len(self.seen), len(self.rounds)) - 1]
+        return Outcome(
+            status=Status.SUCCEEDED,
+            value=AssessReport(
+                verdicts=tuple(
+                    CriterionVerdict(criterion=c, met=m, reason="" if m else "it does not do that")
+                    for c, m in verdicts
+                ),
+                assessor="stub:assessor",
+            ),
+            decided=True,
+        )
+
+
+def _criteria_ticket() -> Ticket:
+    return Ticket(
+        key="#7",
+        title="Add add()",
+        description="calc.add(a, b) returns a + b.",
+        acceptance_criteria=("add() returns the sum", "it is documented"),
+    )
+
+
+def _two_phase() -> Scripted:
+    return Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),
+            _done("staged the failing test"),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            _done("implemented add()"),
+        ]
+    )
+
+
+def _three_phase() -> Scripted:
+    """Red, green, then one correcting round."""
+    return Scripted(
+        [
+            _call("write_file", path="test_calc.py", contents=_FAILING_TEST),
+            _done("staged the failing test"),
+            _call("write_file", path="calc.py", contents="def add(a, b):\n    return a + b\n"),
+            _done("implemented add()"),
+            _call(
+                "write_file",
+                path="calc.py",
+                contents='def add(a, b):\n    """Return the sum."""\n    return a + b\n',
+            ),
+            _done("documented it"),
+        ]
+    )
+
+
+def test_gate_assess_1_a_change_that_meets_its_criteria_says_so(repo: Path) -> None:
+    """The happy path, and the one that has to stay cheap: met on the first ask, no correction."""
+    assessor = _Assessor((("add() returns the sum", True), ("it is documented", True)))
+    ctx = Ctx(assessor=assessor)
+
+    outcome = _run(_two_phase(), repo, ctx=ctx, ticket=_criteria_ticket())
+
+    assert outcome.status is Status.SUCCEEDED, outcome.findings
+    assert assessor.seen == [1], "one assessment, no correcting round"
+    report = outcome.value
+    assert report is not None and report.assessment is not None and report.assessment.met
+    assert any(f.id == "assess.met" for f in outcome.findings)
+
+
+def test_gate_assess_1_an_unmet_criterion_goes_back_to_the_model_and_is_corrected(repo: Path) -> None:
+    """The loop. A criterion a second reader can name is usually one the author can fix, so it goes
+    back to the phase that wrote the code with the assessor's reason attached."""
+    assessor = _Assessor(
+        (("add() returns the sum", True), ("it is documented", False)),
+        (("add() returns the sum", True), ("it is documented", True)),
+    )
+    ctx = Ctx(assessor=assessor)
+
+    outcome = _run(_three_phase(), repo, ctx=ctx, ticket=_criteria_ticket())
+
+    assert outcome.status is Status.SUCCEEDED, outcome.findings
+    assert assessor.seen == [1, 2], "assessed, corrected, assessed again"
+    report = outcome.value
+    assert report is not None and report.assessment is not None and report.assessment.met
+    assert any(f.id == "assess.met" and "after 2 rounds" in f.message for f in outcome.findings)
+
+
+def test_gate_assess_1_the_suite_runs_again_after_a_correcting_round(repo: Path) -> None:
+    """A correction edits code to satisfy a criterion and can break the tests the green phase
+    proved. Without a re-run the change ships whose green was established a round ago -- a verdict
+    about a suite that did not run, wearing a different hat (#435)."""
+    assessor = _Assessor(
+        (("add() returns the sum", True), ("it is documented", False)),
+        (("add() returns the sum", True), ("it is documented", True)),
+    )
+    ctx = Ctx(assessor=assessor)
+
+    _run(_three_phase(), repo, ctx=ctx, ticket=_criteria_ticket())
+
+    # BETWEEN the two assessments, not merely after the first. Counting from the first Assess to
+    # the end of the run passes whatever the loop does, because `_revert_verify` dispatches a Test
+    # after the loop has finished -- which is the vacuous shape this suite keeps finding elsewhere,
+    # and the first version of this test had it.
+    first, second = (i for i, verb in enumerate(ctx.order) if verb == "Assess")
+    between = ctx.order[first + 1 : second]
+
+    assert "Test" in between, (
+        f"the suite did not run between the correcting round and the reassessment: {ctx.order}"
+    )
+
+
+def test_gate_assess_1_rounds_are_bounded_and_exhaustion_says_which_criteria_are_unmet(
+    repo: Path,
+) -> None:
+    """The bound is a rule, not a bill. Two models can disagree about a criterion for as long as
+    somebody is paying, so `max_assess_rounds` is what terminates this -- and the change still
+    travels, with the gap named, because four criteria of five is work."""
+    assessor = _Assessor((("add() returns the sum", True), ("it is documented", False)))
+    ctx = Ctx(assessor=assessor)
+
+    outcome = _run(_three_phase(), repo, ctx=ctx, ticket=_criteria_ticket())
+
+    assert outcome.status is Status.SUCCEEDED, "an unmet criterion is not a failed run"
+    assert assessor.seen == [1, 2], "bounded at max_assess_rounds, which defaults to 2"
+    report = outcome.value
+    assert report is not None and report.assessment is not None and not report.assessment.met
+    unmet = next(f for f in outcome.findings if f.id == "assess.unmet")
+    assert "it is documented" in unmet.message and "it does not do that" in unmet.message
+
+
+def test_a_ticket_with_no_acceptance_criteria_is_not_assessed(repo: Path) -> None:
+    """Nothing to assess is not everything assessed. An assessor bound and a ticket stating no
+    criteria costs nothing and claims nothing."""
+    assessor = _Assessor((("x", True),))
+    ctx = Ctx(assessor=assessor)
+
+    outcome = _run(_two_phase(), repo, ctx=ctx)
+
+    assert assessor.seen == [], "not asked"
+    report = outcome.value
+    assert report is not None and report.assessment is None, "and not reported as met"
+
+
+def test_no_assessor_bound_is_the_run_that_always_was(repo: Path) -> None:
+    """The backward-compatibility claim, asserted rather than assumed: an adopter who has bound no
+    `Assess` gets exactly the two-phase TDD they had, with no finding and no cost."""
+    ctx = Ctx()
+
+    outcome = _run(_two_phase(), repo, ctx=ctx, ticket=_criteria_ticket())
+
+    assert outcome.status is Status.SUCCEEDED
+    report = outcome.value
+    assert report is not None and report.assessment is None
+    assert "Assess" not in ctx.order
+    assert not any(f.id.startswith("assess.") for f in outcome.findings)

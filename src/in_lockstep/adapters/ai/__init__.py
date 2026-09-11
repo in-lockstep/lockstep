@@ -1,5 +1,7 @@
 """AI-backed verb adapters. The strategies ARE the adapters: `lockstep.bind(Implement, TDD(...))`."""
 
+from ...core.types import Assess, AssessReport
+from .assess import AiAssess
 from .describe import AiDescribe, Describe, Description
 from .fix import DiagnoseThenFix, Fix, FixReport, FixSession, FixStrategy
 from .implement import Implement, ImplementReport, ImplementSession, ImplementStrategy
@@ -49,6 +51,9 @@ __all__ = [
     "TriageDecision",
     "UndeclaredAgency",
     "AiImprove",
+    "AiAssess",
+    "Assess",
+    "AssessReport",
     "AiJudge",
     "Judge",
     "JudgeReport",

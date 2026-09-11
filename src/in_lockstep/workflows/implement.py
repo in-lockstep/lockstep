@@ -40,6 +40,7 @@ from ..core.workflow import workflow
 from ..platform.artifacts import (
     ATTEMPT,
     CHANGESET,
+    read_assessment,
     read_changeset,
     read_description,
     read_validation,
@@ -133,6 +134,11 @@ async def implement_from_ticket(
             report.changeset,
             verdict=verdict,
             validation=report.validation,
+            # What the second reader said about the ticket's criteria. It travels for the reason
+            # the verdict and the validation do: the propose job holds a write token and no
+            # provider credential, so it cannot re-run an assessment, and the decision to ask a
+            # person for review is made from what came with the change or not at all.
+            assessment=report.assessment,
             description=description,
         )
         print(f"staged    {len(report.changeset.changes)} change(s) -> {written}")
@@ -168,6 +174,7 @@ async def implement_propose(
     changeset = read_changeset(artifact)
     verdict = read_verdict(artifact)
     validation = read_validation(artifact)
+    assessment = read_assessment(artifact)
 
     if not changeset.changes:
         # Still a comment. A trigger that answers only on success leaves somebody watching a
@@ -204,7 +211,18 @@ async def implement_propose(
     # for a person's time, and the repository already said what it wants to be judged by. An
     # unchecked change (`validation is None`: nothing bound, or a validator that could not report)
     # is not blocked by this -- absent is not failing, the same reading a missing verdict gets.
-    ready = verdict is not None and verdict.green and (validation is None or validation.clean)
+    # And assessed, where anything assessed it. A change whose own second reader said it does not
+    # do what the ticket asked is the clearest possible case for not putting it in somebody's
+    # review queue as finished -- and it travels as a draft rather than being destroyed, because
+    # four criteria of five is work (#452). Absent is not met, the third time this file makes that
+    # reading: nothing bound, no criteria on the ticket, or an assessor that could not report all
+    # arrive as None and none of them is a pass.
+    ready = (
+        verdict is not None
+        and verdict.green
+        and (validation is None or validation.clean)
+        and (assessment is None or assessment.met)
+    )
     # Fetched before the change is opened, because the title comes from it now.
     issue = await tickets.get(ticket)
     try:

@@ -19,7 +19,7 @@ them as two things: here is the bug, made executable; here is the line that matt
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar
 
@@ -110,6 +110,19 @@ class FixSession:
     curator: ContextCurator
     guard: ChangeGuard
     repo_root: str = "."
+    #: The invoker for one named PHASE of this run, or None where the strategy names no phases.
+    #:
+    #: A strategy's phases are separate model calls doing different jobs -- writing a test, writing
+    #: an implementation, assessing whether it answers the ticket -- and `routed_model` has always
+    #: resolved `verb/aspect` before `verb` (the `review/security` mechanism, #204). What was
+    #: missing is that nothing passed an aspect, so a repository could route `implement` and not
+    #: `implement/assess`. This is that seam: `None` means every phase takes the run's invoker,
+    #: which is exactly what happened before and what a repository routing only `implement` still
+    #: gets.
+    #:
+    #: Last in the field list because it carries a default and `repo_root` above it does too;
+    #: everything before them is required.
+    invoker_for: Callable[[str], AiInvoker] | None = None
 
     def context(self, spec: Fix) -> ContextPackage:
         items: list[ContextItem] = list(spec.ticket.as_context())

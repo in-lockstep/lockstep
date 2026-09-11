@@ -80,11 +80,29 @@ def _files(changeset: Any) -> str:
     shown what it wrote, not what changed. Truncated per file so one enormous file cannot silently
     cost the others their place in the message.
     """
+    blocks = file_blocks(changeset, MAX_ATTEMPT_CHARS)
+    if not blocks:
+        return "(the attempt staged nothing)"
+    return "You staged this on an earlier attempt:\n\n" + blocks
+
+
+def file_blocks(changeset: Any, budget: int) -> str:
+    """A change set as `path:` followed by contents, truncated per file against one budget.
+
+    Public and shared because there are two callers that need a change rendered for a model to
+    read -- a resumed session's earlier attempt, and the assessor deciding whether a change meets
+    its criteria -- and they differ only in the sentence above it and the number of characters they
+    can afford. Two spellings of "render a change set" is one of them drifting the day a file mode
+    or a rename starts mattering.
+
+    Empty for a change set that staged nothing, so each caller writes its own sentence about that:
+    "the attempt staged nothing" and "there is nothing to assess" are not the same statement.
+    """
     changes = getattr(changeset, "changes", ()) or ()
     if not changes:
-        return "(the attempt staged nothing)"
+        return ""
     blocks: list[str] = []
-    budget = MAX_ATTEMPT_CHARS
+    left = budget
     for change in changes:
         path = getattr(change, "path", "?")
         contents = getattr(change, "contents", None)
@@ -92,11 +110,11 @@ def _files(changeset: Any) -> str:
             blocks.append(f"{path}: deleted")
             continue
         text = str(contents)
-        if len(text) > budget:
-            text = text[: max(budget, 0)] + "\n…[truncated]"
-        budget = max(0, budget - len(text))
+        if len(text) > left:
+            text = text[: max(left, 0)] + "\n…[truncated]"
+        left = max(0, left - len(text))
         blocks.append(f"{path}:\n{text}")
-    return "You staged this on an earlier attempt:\n\n" + "\n\n".join(blocks)
+    return "\n\n".join(blocks)
 
 
 def _verdict(verdict: Any) -> str:

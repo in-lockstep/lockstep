@@ -104,6 +104,18 @@ class InvokePolicy:
     # ceiling — a bound on what one invocation may consume — and because a repository that wants a
     # model to iterate harder should raise it in the same place it raises the turn cap.
     max_test_runs: int = DEFAULT_TEST_RUNS
+    # How many times a strategy may go back to the model with acceptance criteria it did not meet.
+    #
+    # Beside the caps above because it is the same kind of thing, and here rather than nowhere
+    # because this is the one loop in the framework whose exit condition is a MODEL's judgement.
+    # A budget ceiling and a deadline do stop it, but "bounded by running out of money" is not the
+    # same as bounded: two models can disagree about whether a criterion is met for as long as
+    # somebody is paying. A count is what actually terminates it.
+    #
+    # 2 means one correction attempt -- enough to fix an omission a reader would call obvious, not
+    # enough to fund an argument. Raising it is a repository's call in `lockstep.py`, with the
+    # measurement that justifies it: each round is a generation, a suite run and an assessment.
+    max_assess_rounds: int = 2
     # The largest a single `read_file` result may be. The shipped default was measured against
     # this repository -- 97% of its Python files fit whole -- which is a fine way to pick a default
     # and no way to pick a number nobody else can change, so `Workshop(max_read_chars=...)` states
