@@ -1,0 +1,65 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.046764,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 103,
+        "message": "The regex `_REVIEW` and `aspect_from` take only the first `\\S+` token after `/review`, so a name like `../../etc/passwd` is refused because it is not in `known` \u2014 but the refusal message interpolates the raw user-supplied string with `{asked!r}`. An attacker who can comment on a pull request sends `/review <crafted string>` and controls a substring of the exception message, which is then raised as a `click.ClickException` and printed to stdout. The impact is limited to terminal/log output, not a\u2026[truncated]",
+        "path": "src/in_lockstep/platform/chatops.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 87,
+        "message": "The `options` string interpolated into refusal messages is built from `known`, which comes from `adapter.compositions()`. If that method returns labels whose string representations contain characters meaningful to whatever renders the error (e.g. HTML comment sequences like `-->`), those propagate into the refusal text. The diff closes the path from `asked` into `report.marker`, but does not show what sanitisation, if any, applies to the `known` set itself before it reaches the marker or before \u2026[truncated]",
+        "path": "src/in_lockstep/platform/chatops.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 383,
+        "message": "GitLab's `change_refs` calls `self._request(\"GET\", ...)` without a try/except. Unlike the GitHub implementation, which catches `RuntimeError` from `gh pr view` and returns `None`, a GitLab API error (e.g. network failure, 404 on an issue number) will propagate as an unhandled exception rather than returning `None`. The caller in `cli.py` checks for `None` and raises a `click.ClickException`; an unhandled exception from the GitLab path instead produces a traceback, which may expose internal path \u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:{aspect} -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5fa3fb4a9eb73e63c94a8d2a46180d93b7aa2ade",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 659,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260904T123955Z-8e6d",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 662,
+  "ts": "2026-09-04T12:40:16+00:00",
+  "wall_seconds": 20.893
+}

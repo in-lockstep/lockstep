@@ -1,0 +1,209 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#373"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 2329426,
+  "cache_write_tokens": 159984,
+  "ci_actor": "tpouyer",
+  "ci_run": "34272957947",
+  "config": "local working tree",
+  "cost_usd": 7.919529,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_green",
+        "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_fork_propose.py",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/base.py",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/github.py",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/conformance.py",
+        "path": "src/in_lockstep/platform/conformance.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unfinished",
+        "message": "The ticket mentions a `scm.no_rights_on_target` refusal when the credential cannot write to the target before the branch is pushed. This pre-flight permission check is not implemented: it would require an additional API call and the failure mode (permission denied from the host) is already surfaced as a RuntimeError from the REST call. A dedicated pre-check could be added in a follow-up.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unfinished",
+        "message": "The ticket mentions that `propose` workflows should take `--arg target=owner/repo` and that `tickets` should read from the target. Only the `open_change` plumbing is wired here; the CLI and workflow scaffolds that thread the `target` argument through are not changed \u2014 they pass `**kwargs` already, so a caller can add `target=` to the kwargs dict today.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "search_code.index",
+        "message": "graft 0.16.0 \u00b7 index 8b3b334166ab",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 1 failed of 2720: tests/in_lockstep/test_llm.py::test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty[anthropic]",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "d5eabfd9267b981bec161dd76c195f0937075249",
+  "input_tokens": 96,
+  "kind": "workflow",
+  "outcome_cost_usd": 7.919529,
+  "output_tokens": 18990,
+  "priced_fraction": 1.0,
+  "reason": "tdd.not_green",
+  "run_id": "implement-from-ticket-34272957947-20260908T200849Z-9ed4",
+  "schema": 9,
+  "status": "failed",
+  "steps": [
+    {
+      "cost_usd": 7.919529,
+      "decided": true,
+      "findings": {
+        "count": 11,
+        "items": [
+          {
+            "blocking": true,
+            "id": "tdd.not_green",
+            "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_fork_propose.py",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/base.py",
+            "path": "src/in_lockstep/platform/scm/base.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/github.py",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+            "path": "src/in_lockstep/platform/scm/gitlab.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/conformance.py",
+            "path": "src/in_lockstep/platform/conformance.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unfinished",
+            "message": "The ticket mentions a `scm.no_rights_on_target` refusal when the credential cannot write to the target before the branch is pushed. This pre-flight permission check is not implemented: it would require an additional API call and the failure mode (permission denied from the host) is already surfaced as a RuntimeError from the REST call. A dedicated pre-check could be added in a follow-up.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unfinished",
+            "message": "The ticket mentions that `propose` workflows should take `--arg target=owner/repo` and that `tickets` should read from the target. Only the `open_change` plumbing is wired here; the CLI and workflow scaffolds that thread the `target` argument through are not changed \u2014 they pass `**kwargs` already, so a caller can add `target=` to the kwargs dict today.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "search_code.index",
+            "message": "graft 0.16.0 \u00b7 index 8b3b334166ab",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 1 failed of 2720: tests/in_lockstep/test_llm.py::test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty[anthropic]",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "tdd.not_green",
+      "status": "failed",
+      "step": "implement",
+      "tokens": 19086,
+      "verb": "implement",
+      "wall_seconds": 749.7
+    }
+  ],
+  "tokens": 19086,
+  "tool_calls": {
+    "delegate": 6,
+    "edit_file": 5,
+    "list_files": 1,
+    "read_file": 19,
+    "run_script": 12,
+    "run_tests": 4,
+    "search_code": 13,
+    "search_text": 16,
+    "write_file": 1
+  },
+  "ts": "2026-09-08T20:21:20+00:00",
+  "turns": 80,
+  "wall_seconds": 749.7,
+  "workflow": "implement/from-ticket"
+}

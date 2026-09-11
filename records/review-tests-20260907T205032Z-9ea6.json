@@ -1,0 +1,37 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34160858308",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.033403,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 130,
+        "message": "Non-list `notes` value silently reads as `()` \u2014 the tolerant path is untested.",
+        "path": "src/in_lockstep/platform/artifacts.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0bb1326820f3c34b451a329653b6011389b3e9ba",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 315,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T205032Z-9ea6",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 318,
+  "ts": "2026-09-07T20:50:42+00:00",
+  "wall_seconds": 10.041
+}

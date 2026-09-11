@@ -1,0 +1,47 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.042823,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 1959,
+        "message": "`_workflow_ids` calls `inspect.getsource(module.register)` inside `show_workflow_cmd` in two places, and also inside `_workflow_function`. Each call to `show-workflow <id>` therefore reads and regex-scans the register source twice: once in the membership check inside `show_workflow_cmd` and once inside `_workflow_function`. This is negligible at present given the tiny number of workflows, but the pattern \u2014 computing the same source scan in a helper and again in the caller \u2014 is worth noting if th\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 1944,
+        "message": "`inspect.getsource` is called on entire workflow modules (potentially hundreds of lines) to produce the `--registered` listing and the whole-family print paths. On a cold import path this also forces the import of both workflow modules unconditionally inside `show_workflow_cmd`. Both costs are CLI-invocation scope only and do not scale with request volume, so this is not a production hot-path concern. Noting it for completeness.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0aec03f0456acfa67c9936492a6c6159a83cafcc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 395,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260905T164124Z-2561",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "b67d9b23e6b52ff09aa7acdc96f8844e",
+  "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 398,
+  "ts": "2026-09-05T16:41:55+00:00",
+  "wall_seconds": 31.686
+}

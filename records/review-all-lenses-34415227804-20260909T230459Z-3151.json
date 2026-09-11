@@ -1,0 +1,236 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "49f296e18a3a91197aec43cce814ea2cbf5caed7"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 81667,
+  "ci_actor": "tpouyer",
+  "ci_run": "34415227804",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.338747,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 80,
+        "message": "Test double gains `EXECUTES_CODE` but has no `sandbox` image \u2014 the refusal it is supposed to exercise has a different code path.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2814 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 898,
+        "message": "staged_refusal refusal in _validate_runner returns a string to the model rather than raising, and the model may proceed past it.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 158,
+        "message": "capabilities_of is imported inside staged_refusal on every call; not a security issue but worth confirming the import cannot be shadowed by model-authored code on sys.path.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2814 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 239,
+        "message": "The `_validate_runner` refusal test asserts on the result string but does not assert that `validator.seen` is empty when the validator reads.",
+        "path": "tests/in_lockstep/test_validate_sandbox.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 176,
+        "message": "The `_Ctx.do` dispatcher will `KeyError` for any verb not in `self.bound`, masking failures if `_checked` dispatches an unexpected type.",
+        "path": "tests/in_lockstep/test_validate_sandbox.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 252,
+        "message": "Detection test relies on `_detect_facts` and `detected_bindings` being importable from those paths; if those are private APIs, a refactor silently breaks the test.",
+        "path": "tests/in_lockstep/test_validate_sandbox.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2814 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "49f296e18a3a91197aec43cce814ea2cbf5caed7",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.338747,
+  "output_tokens": 2164,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34415227804-20260909T230459Z-3151",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.08513,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 80,
+            "message": "Test double gains `EXECUTES_CODE` but has no `sandbox` image \u2014 the refusal it is supposed to exercise has a different code path.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2814 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 511,
+      "verb": "review",
+      "wall_seconds": 27.403
+    },
+    {
+      "cost_usd": 0.074446,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 70,
+      "verb": "review",
+      "wall_seconds": 5.071
+    },
+    {
+      "cost_usd": 0.087984,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 898,
+            "message": "staged_refusal refusal in _validate_runner returns a string to the model rather than raising, and the model may proceed past it.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 158,
+            "message": "capabilities_of is imported inside staged_refusal on every call; not a security issue but worth confirming the import cannot be shadowed by model-authored code on sys.path.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2814 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 680,
+      "verb": "review",
+      "wall_seconds": 29.994
+    },
+    {
+      "cost_usd": 0.091187,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 239,
+            "message": "The `_validate_runner` refusal test asserts on the result string but does not assert that `validator.seen` is empty when the validator reads.",
+            "path": "tests/in_lockstep/test_validate_sandbox.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 176,
+            "message": "The `_Ctx.do` dispatcher will `KeyError` for any verb not in `self.bound`, masking failures if `_checked` dispatches an unexpected type.",
+            "path": "tests/in_lockstep/test_validate_sandbox.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 252,
+            "message": "Detection test relies on `_detect_facts` and `detected_bindings` being importable from those paths; if those are private APIs, a refactor silently breaks the test.",
+            "path": "tests/in_lockstep/test_validate_sandbox.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2814 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 915,
+      "verb": "review",
+      "wall_seconds": 31.403
+    }
+  ],
+  "tokens": 2176,
+  "tool_calls": {},
+  "ts": "2026-09-09T23:05:31+00:00",
+  "turns": 4,
+  "wall_seconds": 31.403,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,60 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34049842963",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.098649,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 306,
+        "message": "Zip slip: `archive.extractall(into)` extracts a GitHub artifact zip without checking member paths.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 351,
+        "message": "`run_id` is embedded in a git commit message without sanitisation beyond what `_safe` applies elsewhere.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f1ee0f23dc88e798e9c2f90d2f104cd774ad0c77",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 598,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T175033Z-edfd",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 601,
+  "ts": "2026-09-06T17:50:51+00:00",
+  "wall_seconds": 17.931
+}

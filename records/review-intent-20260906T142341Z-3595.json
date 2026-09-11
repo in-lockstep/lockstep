@@ -1,0 +1,39 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.015789,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 493,
+        "message": "KeyError if the closing section names an N-number that is not in the table.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "83b6dc3e477f73d5193b04f7653c41513bb20e05",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 227,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T142341Z-3595",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 230,
+  "ts": "2026-09-06T14:23:48+00:00",
+  "wall_seconds": 7.053
+}

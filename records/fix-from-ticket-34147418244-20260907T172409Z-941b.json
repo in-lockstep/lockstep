@@ -1,0 +1,117 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 24388928,
+  "cache_write_tokens": 540630,
+  "ci_actor": "tpouyer",
+  "ci_run": "34147418244",
+  "config": "local working tree",
+  "cost_usd": 13.417141,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.not_fixed",
+        "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote src/in_lockstep/platform/ledger/history.py",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote tests/in_lockstep/test_history.py",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 7 failed of 2503: tests/in_lockstep/test_backport.py::test_cli_resolve_without_a_budget_is_refused, tests/in_lockstep/test_cli.py::test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves, tests/in_lockstep/test_cli.py::test_implement_refuses_when_egress_is_unenforced, tests/in_lockstep/test_cli.py::test_implement_runs_the_wiring_and_writes_a_ledger_record, tests/in_lockstep/test_cli.py::test_a_missing_ticket_file_is_a_message_not_a_traceback, tes\u2026[truncated]",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "3c33a42aaf7e90e5da229e5a71dc90ac1544367b",
+  "input_tokens": 330,
+  "kind": "workflow",
+  "outcome_cost_usd": 6.70857,
+  "output_tokens": 271474,
+  "priced_fraction": 1.0,
+  "reason": "fix.not_fixed",
+  "run_id": "fix-from-ticket-34147418244-20260907T172409Z-941b",
+  "schema": 8,
+  "status": "failed",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.not_fixed",
+            "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote src/in_lockstep/platform/ledger/history.py",
+            "path": "src/in_lockstep/platform/ledger/history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote tests/in_lockstep/test_history.py",
+            "path": "tests/in_lockstep/test_history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 7 failed of 2503: tests/in_lockstep/test_backport.py::test_cli_resolve_without_a_budget_is_refused, tests/in_lockstep/test_cli.py::test_a_scaffolded_repository_reaches_a_green_selfcheck_when_a_person_approves, tests/in_lockstep/test_cli.py::test_implement_refuses_when_egress_is_unenforced, tests/in_lockstep/test_cli.py::test_implement_runs_the_wiring_and_writes_a_ledger_record, tests/in_lockstep/test_cli.py::test_a_missing_ticket_file_is_a_message_not_a_traceback, tes\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "fix.not_fixed",
+      "status": "failed",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 3127.331
+    }
+  ],
+  "tokens": 271804,
+  "ts": "2026-09-07T18:16:18+00:00",
+  "wall_seconds": 3264.701,
+  "workflow": "fix/from-ticket"
+}

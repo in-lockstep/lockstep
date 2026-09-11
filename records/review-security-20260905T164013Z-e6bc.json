@@ -1,0 +1,47 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04565,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1990,
+        "message": "Regex over `inspect.getsource` output used to discover workflow ids and resolve function names \u2014 workflow id value flows into a regex pattern via `re.escape`, but the family name split from user input does not.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1944,
+        "message": "`--registered` calls `_default_lockstep()` which loads the lifecycle module from the current working directory; the path is not validated before loading.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0aec03f0456acfa67c9936492a6c6159a83cafcc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 577,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T164013Z-e6bc",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 580,
+  "ts": "2026-09-05T16:40:59+00:00",
+  "wall_seconds": 46.625
+}

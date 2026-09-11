@@ -1,0 +1,168 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "3ade387250b78942a86e7064638d1dd22e351e78"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 34547,
+  "ci_actor": "tpouyer",
+  "ci_run": "34376250296",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.148982,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1087,
+        "message": "Program name extracted before the guard, but `argv` may be empty.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1108,
+        "message": "`_INSTEAD` covers twelve entries but the allowlist is generated from `allowed_commands`; the two can drift.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1117,
+        "message": "Caller-controlled program name reflected verbatim into the error message returned to the model.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 415,
+        "message": "No test covers the `_not_in_this_sandbox` fallback for a program absent from `_INSTEAD`.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "3ade387250b78942a86e7064638d1dd22e351e78",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.148982,
+  "output_tokens": 1293,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34376250296-20260909T162242Z-8782",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.039988,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1087,
+            "message": "Program name extracted before the guard, but `argv` may be empty.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1108,
+            "message": "`_INSTEAD` covers twelve entries but the allowlist is generated from `allowed_commands`; the two can drift.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 518,
+      "verb": "review",
+      "wall_seconds": 19.722
+    },
+    {
+      "cost_usd": 0.033849,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 94,
+      "verb": "review",
+      "wall_seconds": 5.271
+    },
+    {
+      "cost_usd": 0.037876,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 1117,
+            "message": "Caller-controlled program name reflected verbatim into the error message returned to the model.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 356,
+      "verb": "review",
+      "wall_seconds": 15.477
+    },
+    {
+      "cost_usd": 0.037269,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 415,
+            "message": "No test covers the `_not_in_this_sandbox` fallback for a program absent from `_INSTEAD`.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 337,
+      "verb": "review",
+      "wall_seconds": 13.991
+    }
+  ],
+  "tokens": 1305,
+  "tool_calls": {},
+  "ts": "2026-09-09T16:23:02+00:00",
+  "turns": 4,
+  "wall_seconds": 19.722,
+  "workflow": "review/all-lenses"
+}

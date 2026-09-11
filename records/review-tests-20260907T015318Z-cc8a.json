@@ -1,0 +1,48 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34074406265",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.050574,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 503,
+        "message": "Test asserts `drafter.asked == []` but never asserts anything about the blocking message contents that would fail if the wrong case were named.",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 470,
+        "message": "`outcome.status is Status.SUCCEEDED` does not assert the provider was actually reached through the registry's canned `_Provider`.",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a9e9c0287f877218b33fb4ae424f408bbfb2fe22",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 633,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T015318Z-cc8a",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 636,
+  "ts": "2026-09-07T01:53:35+00:00",
+  "wall_seconds": 17.499
+}

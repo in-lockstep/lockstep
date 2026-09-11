@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.071885,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1233,
+        "message": "The refused-sandbox test monkey-patches `sandbox.runtime` to return None but does not verify that the sandbox's run path actually checks `runtime()` before executing \u2014 if the sandbox reaches the container runtime check via a different attribute or method name, the test will still produce a refused result by some other code path (or raise), and the assertion would pass without exercising the `_refused` guard in each adapter. This is a minor concern: the test asserts `Status.BLOCKED` on all five a\u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 576,
+        "message": "No test covers the case where a resolver is blocked and the `cost` argument passed to `_resolver_stopped` differs from `answer.cost` \u2014 the function takes an accumulated `cost` from the caller loop, not the resolver's own cost, so a ceiling that fires after several partial resolutions should carry the accumulated spend. The existing tests pass `Cost(usd=0.0)` from the resolver and do not accumulate anything, so this path is untested. Low severity: the logic is simple and the omission is in a deta\u2026[truncated]",
+        "path": "tests/in_lockstep/test_backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1387,
+        "message": "The `test_a_pack_refused_by_a_control_is_not_a_pack_that_broke` test asserts only that `REFUSED != ERRORED` \u2014 two string constants are unequal. It does not assert that a `BLOCKED` outcome from `_review_case` actually produces state `REFUSED` rather than `ERRORED`. The behaviour promised in the description (that a blocked outcome goes to the `refused` bucket) has no test that exercises `_review_case` with a `BLOCKED` outcome and checks the returned `CaseResult.state`.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1355,
+        "message": "The `test_a_control_refusal_is_not_counted_among_what_the_reviewer_keeps_finding` test uses a single record per finding and does not cross the `min_runs` or `min_weeks` thresholds, so `qualifies` is False for both rows. The test checks only that the finding ids appear or do not appear in `{row.finding for row in recurring(records)}` \u2014 `recurring` returns all trends, not just qualifying ones \u2014 so this assertion would pass even if the filtering logic were absent. Consider asserting on `qualifies` \u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bc2e28193e57c2c9a4dbadf83468745d8f7b6817",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 683,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T012647Z-b58e",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 686,
+  "ts": "2026-09-06T01:27:07+00:00",
+  "wall_seconds": 20.326
+}

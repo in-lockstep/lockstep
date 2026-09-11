@@ -1,0 +1,105 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 5794224,
+  "cache_write_tokens": 245344,
+  "ci_actor": "tpouyer",
+  "ci_run": "34140101081",
+  "config": "local working tree",
+  "cost_usd": 3.529969,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.not_fixed",
+        "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote src/in_lockstep/platform/ledger/history.py",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote tests/in_lockstep/test_ledger_collision.py",
+        "path": "tests/in_lockstep/test_ledger_collision.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 1 failed of 2502: tests/in_lockstep/test_own_ceilings.py::test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_runs",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "887b49e4caeeed56e5c769ff2c48df5d7d3b8b97",
+  "input_tokens": 144,
+  "kind": "workflow",
+  "outcome_cost_usd": 1.764985,
+  "output_tokens": 58082,
+  "priced_fraction": 1.0,
+  "reason": "fix.not_fixed",
+  "run_id": "fix-from-ticket-34140101081-20260907T154807Z-4c82",
+  "schema": 8,
+  "status": "failed",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.not_fixed",
+            "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote src/in_lockstep/platform/ledger/history.py",
+            "path": "src/in_lockstep/platform/ledger/history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote tests/in_lockstep/test_ledger_collision.py",
+            "path": "tests/in_lockstep/test_ledger_collision.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 1 failed of 2502: tests/in_lockstep/test_own_ceilings.py::test_this_repositorys_own_lifecycle_module_passes_the_ruff_its_selfcheck_runs",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "fix.not_fixed",
+      "status": "failed",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 849.307
+    }
+  ],
+  "tokens": 58226,
+  "ts": "2026-09-07T16:02:18+00:00",
+  "wall_seconds": 983.307,
+  "workflow": "fix/from-ticket"
+}

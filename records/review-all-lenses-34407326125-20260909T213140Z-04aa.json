@@ -1,0 +1,253 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "d6156bcbbf58c51aa81bfd678292e08a4f78c316"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 47981,
+  "ci_actor": "tpouyer",
+  "ci_run": "34407326125",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.21568,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 571,
+        "message": "The `asked_something_new` branch guards on `not last_progress`, but `last_progress` is set to a non-empty string only after a productive write turn; the guard is correct as stated. However, `explored` is a snapshot taken *before* dispatch and compared to the value *after*, yet `explores` (the baseline captured before the loop) is never updated across turns \u2014 so after turn one, `explores` still reflects the value from before turn one, not before the current turn.",
+        "path": "src/in_lockstep/ai/invoker.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 163,
+        "message": "`test_gate_progress_1_a_session_repeating_one_question_still_stops` expects `idle_turns == 40` (the doubled pre-staging allowance), but given the bug above, `idle` would reset every turn once `explored` has risen above zero from the first call \u2014 the session would never stop, making this test a false negative that would catch the bug only if the error finding above is wrong.",
+        "path": "tests/in_lockstep/test_orientation.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 793,
+        "message": "The key for `_asked` serialises argument values with `repr(v)` and keys with `str(k)`. If an argument value is a string, `repr` adds quotes, so `{'path': 'foo'}` hashes as `('read_file', (('path', \"'foo'\"),))`. That is consistent within a run, but it means the key format is not the natural identity of the call and could produce false collisions if a non-string value's `repr` happens to match a string value's `repr` in a different argument position.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2325 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 793,
+        "message": "`_asked` set grows unboundedly for the lifetime of a session with no eviction.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 793,
+        "message": "Tool argument values are repr()d into the deduplication key, not normalised.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2325 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 178,
+        "message": "`test_orientation_does_not_halve_the_allowance_it_exists_for` does not assert the session completed all thirty reads.",
+        "path": "tests/in_lockstep/test_orientation.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 155,
+        "message": "`test_gate_progress_1_a_session_repeating_one_question_still_stops` asserts `idle_turns == 40` but the attribute name on the outcome is not visible in the diff.",
+        "path": "tests/in_lockstep/test_orientation.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2325 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "d6156bcbbf58c51aa81bfd678292e08a4f78c316",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.21568,
+  "output_tokens": 2381,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34407326125-20260909T213140Z-04aa",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.060763,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 571,
+            "message": "The `asked_something_new` branch guards on `not last_progress`, but `last_progress` is set to a non-empty string only after a productive write turn; the guard is correct as stated. However, `explored` is a snapshot taken *before* dispatch and compared to the value *after*, yet `explores` (the baseline captured before the loop) is never updated across turns \u2014 so after turn one, `explores` still reflects the value from before turn one, not before the current turn.",
+            "path": "src/in_lockstep/ai/invoker.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 163,
+            "message": "`test_gate_progress_1_a_session_repeating_one_question_still_stops` expects `idle_turns == 40` (the doubled pre-staging allowance), but given the bug above, `idle` would reset every turn once `explored` has risen above zero from the first call \u2014 the session would never stop, making this test a false negative that would catch the bug only if the error finding above is wrong.",
+            "path": "tests/in_lockstep/test_orientation.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 793,
+            "message": "The key for `_asked` serialises argument values with `repr(v)` and keys with `str(k)`. If an argument value is a string, `repr` adds quotes, so `{'path': 'foo'}` hashes as `('read_file', (('path', \"'foo'\"),))`. That is consistent within a run, but it means the key format is not the natural identity of the call and could produce false collisions if a non-string value's `repr` happens to match a string value's `repr` in a different argument position.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2325 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1004,
+      "verb": "review",
+      "wall_seconds": 39.792
+    },
+    {
+      "cost_usd": 0.048016,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 793,
+            "message": "`_asked` set grows unboundedly for the lifetime of a session with no eviction.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 377,
+      "verb": "review",
+      "wall_seconds": 17.311
+    },
+    {
+      "cost_usd": 0.051767,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 793,
+            "message": "Tool argument values are repr()d into the deduplication key, not normalised.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2325 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 383,
+      "verb": "review",
+      "wall_seconds": 25.646
+    },
+    {
+      "cost_usd": 0.055134,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 178,
+            "message": "`test_orientation_does_not_halve_the_allowance_it_exists_for` does not assert the session completed all thirty reads.",
+            "path": "tests/in_lockstep/test_orientation.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 155,
+            "message": "`test_gate_progress_1_a_session_repeating_one_question_still_stops` asserts `idle_turns == 40` but the attribute name on the outcome is not visible in the diff.",
+            "path": "tests/in_lockstep/test_orientation.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2325 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 629,
+      "verb": "review",
+      "wall_seconds": 28.132
+    }
+  ],
+  "tokens": 2393,
+  "tool_calls": {},
+  "ts": "2026-09-09T21:32:20+00:00",
+  "turns": 4,
+  "wall_seconds": 39.792,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,200 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "0a70c271379627ad2c0f4be57903d13319a199e1"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 40611,
+  "ci_actor": "tpouyer",
+  "ci_run": "34528868756",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.178967,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 57,
+        "message": "AST resolver for variable-name arguments only handles module-level assignments, not constants from imported modules.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 119,
+        "message": "_framework_directory_constants accesses __dataclass_fields__ with type: ignore, and silently returns wrong values if defaults change.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 233,
+        "message": "Comment says `.in-lockstep/` appears at line 43 of .gitignore; that line no longer exists after this change.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 97,
+        "message": "AST constant-resolution walks the entire file, not just module-level scope, and matches any assignment by name.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 64,
+        "message": "AST walker silently drops `read_config` calls whose path argument is not a bare string literal or simple module-level name.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 113,
+        "message": "`_framework_directory_constants` accesses `__dataclass_fields__` and `default_factory` with a type-ignore; if the defaults are not factories the expression raises at collection time, not at assertion time.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "0a70c271379627ad2c0f4be57903d13319a199e1",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.178967,
+  "output_tokens": 1776,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34528868756-20260910T205246Z-8c0c",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.048448,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 57,
+            "message": "AST resolver for variable-name arguments only handles module-level assignments, not constants from imported modules.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 119,
+            "message": "_framework_directory_constants accesses __dataclass_fields__ with type: ignore, and silently returns wrong values if defaults change.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 233,
+            "message": "Comment says `.in-lockstep/` appears at line 43 of .gitignore; that line no longer exists after this change.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 703,
+      "verb": "review",
+      "wall_seconds": 33.035
+    },
+    {
+      "cost_usd": 0.038934,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 54,
+      "verb": "review",
+      "wall_seconds": 4.879
+    },
+    {
+      "cost_usd": 0.044131,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 97,
+            "message": "AST constant-resolution walks the entire file, not just module-level scope, and matches any assignment by name.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 394,
+      "verb": "review",
+      "wall_seconds": 21.533
+    },
+    {
+      "cost_usd": 0.047454,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 64,
+            "message": "AST walker silently drops `read_config` calls whose path argument is not a bare string literal or simple module-level name.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 113,
+            "message": "`_framework_directory_constants` accesses `__dataclass_fields__` and `default_factory` with a type-ignore; if the defaults are not factories the expression raises at collection time, not at assertion time.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 637,
+      "verb": "review",
+      "wall_seconds": 30.085
+    }
+  ],
+  "tokens": 1788,
+  "tool_calls": {},
+  "ts": "2026-09-10T20:53:19+00:00",
+  "turns": 4,
+  "wall_seconds": 33.035,
+  "workflow": "review/all-lenses"
+}

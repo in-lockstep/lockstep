@@ -1,0 +1,39 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058955,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 176,
+        "message": "Model output reflected verbatim into the follow-up prompt without sanitisation.",
+        "path": "src/in_lockstep/ai/structured.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "33528d5939d7768adba45d978b202c813f84d24a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 387,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T121852Z-9058",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 390,
+  "ts": "2026-09-06T12:19:07+00:00",
+  "wall_seconds": 14.448
+}

@@ -1,0 +1,78 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#387"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 3446137,
+  "cache_write_tokens": 154968,
+  "ci_actor": "tpouyer",
+  "ci_run": "34361896059",
+  "config": "local working tree",
+  "cost_usd": 9.591131,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "implement.no_progress",
+        "message": "stopped after 20 turn(s) in a row that staged nothing and tested nothing new (the ceiling is 20, and twice that before anything is staged); the last productive one was turn 28: ran the suite over 4 staged change(s). 4 staged change(s) are returned unproposed.",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "97a7582299fb21c255c08be0940b51abb626a108",
+  "input_tokens": 105,
+  "kind": "workflow",
+  "outcome_cost_usd": 6.640041,
+  "output_tokens": 20196,
+  "priced_fraction": 1.0,
+  "reason": "implement.no_progress",
+  "run_id": "implement-from-ticket-34361896059-20260909T141301Z-e047",
+  "schema": 9,
+  "status": "blocked",
+  "steps": [
+    {
+      "cost_usd": 6.640041,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": true,
+            "id": "implement.no_progress",
+            "message": "stopped after 20 turn(s) in a row that staged nothing and tested nothing new (the ceiling is 20, and twice that before anything is staged); the last productive one was turn 28: ran the suite over 4 staged change(s). 4 staged change(s) are returned unproposed.",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "implement.no_progress",
+      "status": "blocked",
+      "step": "implement",
+      "tokens": 14006,
+      "verb": "implement",
+      "wall_seconds": 736.839
+    }
+  ],
+  "tokens": 20301,
+  "tool_calls": {
+    "delegate": 3,
+    "edit_file": 5,
+    "list_files": 2,
+    "read_file": 19,
+    "run_script": 36,
+    "run_tests": 4,
+    "search_code": 10,
+    "search_text": 24
+  },
+  "ts": "2026-09-09T14:25:19+00:00",
+  "turns": 95,
+  "wall_seconds": 736.839,
+  "workflow": "implement/from-ticket"
+}

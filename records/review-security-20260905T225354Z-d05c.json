@@ -1,0 +1,59 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.057388,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The `IN_LOCKSTEP_ORG_SPEND_LIMIT` value flows from `vars` (a repository variable, not a secret), which is appropriate for a non-sensitive spend-limit amount. No injection risk is introduced: the value is passed as an environment variable to a CLI tool, not interpolated into a shell expression. No finding here \u2014 noted for completeness.",
+        "path": ".github/workflows/ai-generated.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 280,
+        "message": "The branch name returned by `gh repo view` is passed directly into a shell command argument list (not a shell string), so there is no shell-injection risk from a maliciously named default branch. However, the branch name is also embedded into user-facing message strings at lines 292 and 305 (`f\"the default branch ({branch}) has no protection rule\"` and `f\"could not read branch protection for {branch}\"`). If `gh` returns a branch name containing terminal control sequences or unusually long string\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The `_gh_said` helper truncates `stderr`/`stdout` to 200 characters of the first line and embeds the result verbatim in report output. The content of `gh`'s stderr is controlled by the GitHub API response, not by the caller. In a scenario where an attacker controls the API response (e.g. a compromised or spoofed GitHub endpoint), they could inject arbitrary text into doctor output. This is a marginal trust-boundary issue \u2014 the value is not rendered in a web context and `gh` validates TLS \u2014 but t\u2026[truncated]",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: src/in_lockstep/doctor.py:317 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6314c8400336df836d49aa5896c44245bc6bdc0a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 593,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260905T225354Z-d05c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 596,
+  "ts": "2026-09-05T22:54:12+00:00",
+  "wall_seconds": 17.749
+}

@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.062645,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1155,
+        "message": "The `_protection_says` helper patches `subprocess.run` globally but `_branch_protection` now calls `_gh`, which calls `subprocess.run` directly. The patch will work only if the import in the test file and the import inside `doctor.py` resolve to the same `subprocess` module object \u2014 which they do in CPython, so this is fine. However, `_protection_says` also monkeypatches `subprocess.run` without guarding against the `.git` existence check: `doctor._branch_protection` returns early when `(root / \u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1166,
+        "message": "The `fake_run` in `_protection_says` keys on `argv[:2] == ['gh', 'repo']` to return the branch name. The stub returns `name` as `stdout` and `\"\"` as `stderr`. When `name` is the empty string (`\"\"`) the helper sets `returncode=1`, which routes to the `branch_rc != 0` path. But `_branch_protection` checks `named.returncode != 0 or not branch` \u2014 an empty `branch` string also triggers the NOTE path. The stub does not exercise the `not branch` branch independently (returncode is already non-zero), so\u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1193,
+        "message": "The assertion `assert note.severity is not __import__('in_lockstep').doctor.Severity.ERROR` uses `is not` on an enum member imported through a dynamic `__import__` call. Enum identity comparison works reliably in Python, so this is correct. However, using `__import__` inside an assertion expression is unusual and will confuse readers; it would be clearer as a top-level import. This is a style observation, not a correctness finding.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1197,
+        "message": "The test `test_gate_ci_3_a_protection_api_that_cannot_be_read_is_a_note_not_an_error` asserts `'Resource not accessible' in note.hint`. The `_gh_said` helper takes the first line of stderr/stdout and prepends `'gh said: '`. The stub returns `branch_out` as `stdout` and `\"\"` as `stderr`, so `_gh_said` will use `stdout`. The text `'Resource not accessible by integration'` will appear after `'gh said: '`, so the substring check is correct. However, `_gh` is called a second time for the protection A\u2026[truncated]",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6314c8400336df836d49aa5896c44245bc6bdc0a",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 965,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T225439Z-3960",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 968,
+  "ts": "2026-09-05T22:55:03+00:00",
+  "wall_seconds": 24.424
+}

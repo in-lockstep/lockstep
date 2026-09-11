@@ -1,0 +1,196 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "291913a8f08ffb1dbfd898bd3eb41c34c2ea26d8"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 24863,
+  "ci_actor": "tpouyer",
+  "ci_run": "34509080867",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.115412,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 98,
+        "message": "Positive assertion lower-bounds at 6 but the comment says `_test_runner` is one of the six; if the comment is wrong the count could pass vacuously.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.path_not_in_diff",
+        "message": "1 finding(s) dropped: named src/in_lockstep/adapters/ai/oneshot.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1307 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1307 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 98,
+        "message": "`len(provisioned) >= 6` is a floor that cannot catch a regression back to `materialize`.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.path_not_in_diff",
+        "message": "1 finding(s) dropped: named tests/in_lockstep/test_run_tests_tool.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1307 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "291913a8f08ffb1dbfd898bd3eb41c34c2ea26d8",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.115412,
+  "output_tokens": 1476,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34509080867-20260910T173609Z-f1f6",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.03224,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 98,
+            "message": "Positive assertion lower-bounds at 6 but the comment says `_test_runner` is one of the six; if the comment is wrong the count could pass vacuously.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.path_not_in_diff",
+            "message": "1 finding(s) dropped: named src/in_lockstep/adapters/ai/oneshot.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1307 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 572,
+      "verb": "review",
+      "wall_seconds": 25.639
+    },
+    {
+      "cost_usd": 0.024332,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 169,
+      "verb": "review",
+      "wall_seconds": 9.433
+    },
+    {
+      "cost_usd": 0.025194,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1307 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 81,
+      "verb": "review",
+      "wall_seconds": 15.667
+    },
+    {
+      "cost_usd": 0.033646,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 98,
+            "message": "`len(provisioned) >= 6` is a floor that cannot catch a regression back to `materialize`.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.path_not_in_diff",
+            "message": "1 finding(s) dropped: named tests/in_lockstep/test_run_tests_tool.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1307 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 666,
+      "verb": "review",
+      "wall_seconds": 27.128
+    }
+  ],
+  "tokens": 1488,
+  "tool_calls": {},
+  "ts": "2026-09-10T17:36:38+00:00",
+  "turns": 4,
+  "wall_seconds": 27.128,
+  "workflow": "review/all-lenses"
+}

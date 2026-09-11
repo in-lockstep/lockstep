@@ -1,0 +1,55 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.047533,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 149,
+        "message": "All pages are run in a single mypy invocation; a failure in one page swamps the error output for others.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 130,
+        "message": "_page_module skips `from __future__ import annotations` lines inside blocks but keeps them in the prelude; a block relying on PEP 563 postponed evaluation at module scope may behave differently if that import is stripped.",
+        "path": "tests/in_lockstep/test_docs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 87,
+        "message": "New snippet returns `Outcome(status=Status.SUCCEEDED, value={\"seconds\": 0.0})` but the declared return type is `Outcome[dict[str, float]]`; this is correct, but the comment above it says 'A real adapter parses the report; the shape is what matters here' while the previous ellipsis version was clearer that the body is illustrative \u2014 minor doc clarity issue, not a type error.",
+        "path": "docs/extending.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "83f22f014b0709af6115cc833330389fe87c1489",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 714,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T124425Z-a7fb",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 717,
+  "ts": "2026-09-06T12:44:46+00:00",
+  "wall_seconds": 21.33
+}

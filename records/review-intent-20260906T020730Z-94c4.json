@@ -1,0 +1,116 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.087995,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "GATE-EVIDENCE-1 moved from `partial` to `held`; GATE-FIXTURE-1 gained text about `harvest` reading the sidecar. The diff matches: #268 is cited as the promotion and #269 as the harvest fix, both of which land in this change.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "O5's `held` column gains `GATE-EVIDENCE-1` and loses it from the `blocked on` column. The narrative prose added under 'Still eight' accurately describes the state the diff puts the repository in.",
+        "path": "design/objectives.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "New promoted case. The `harvested.key` and `harvested.filed_under` fields are identical, which is what `test_evidence.py` requires. The `expect` block contains three `contains` strings (at or below `MAX_CONTAINS`) and a `count` with `min: 2` \u2014 consistent with the closed-set comparator rules described in `GATE-EVAL-2`. The recorded content matches the expectations named.",
+        "path": "evidence/cases/review/lockstep-48-security.json",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The sidecar logic does what the description says: it is a no-op when all entries already carry a request, it never overwrites a recorded request, and it is keyed. One thing to confirm: the docstring says 'The key is trusted as an index and not verified here' \u2014 that is honest, and the test suite exercises the integrity check at a higher layer. The description claims this is where the gap was; the code change is exactly that fill.",
+        "path": "src/in_lockstep/evaluation/harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "Documentation updated to reflect that one case now exists and to describe harvesting from the shipped recording. The new 'From the shipped recording' subsection matches the actual command structure in harvest.py.",
+        "path": "evidence/README.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "New tests cover: the shipped cassette harvesting to a settleable case; sidecar fill on a synthetic tape; sidecar not overwriting a recorded request; a sidecar naming a wrong key leaving the tape unharvestable; an unreadable sidecar being ignored when not needed and named when needed. Coverage matches the claims in the docstring of `_with_sidecar`.",
+        "path": "tests/in_lockstep/test_harvest.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The summary paragraph now says 'one more is `partial`' (dropping `GATE-EVIDENCE-1`). The table row for `GATE-EVIDENCE-1` is updated to `held`. These two statements are consistent with each other and with the rest of the diff.",
+        "path": "design/gates.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: design/gates.md:51 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a85830134ce54fbe5132f4f65b10c56b9c50d41b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 718,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T020730Z-94c4",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 721,
+  "ts": "2026-09-06T02:07:51+00:00",
+  "wall_seconds": 20.838
+}

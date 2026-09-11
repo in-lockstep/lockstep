@@ -1,0 +1,45 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34172751496",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.023387,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 900,
+        "message": "Happy-path assertion does not verify that `ledger.push()` actually published the expected records to the remote.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 858,
+        "message": "The test does not cover the `push()` path of `_held_by_the_branch`; only `absorb()` is exercised against the depth-one publisher.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "3fd75fa92e863700b67a6bc2c85532a7d6c624df",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 550,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260908T001648Z-2bba",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 553,
+  "ts": "2026-09-08T00:17:02+00:00",
+  "wall_seconds": 14.114
+}

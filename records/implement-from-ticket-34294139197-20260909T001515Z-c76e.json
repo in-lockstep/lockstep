@@ -1,0 +1,221 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#373"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 5655265,
+  "cache_write_tokens": 331400,
+  "ci_actor": "tpouyer",
+  "ci_run": "34294139197",
+  "config": "local working tree",
+  "cost_usd": 18.498292,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_fork_propose.py",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/base.py",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/conformance.py",
+        "path": "src/in_lockstep/platform/conformance.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/github.py",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "search_code.index",
+        "message": "graft 0.16.0 \u00b7 index 1950c5532483",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "tdd.fix_verified",
+        "message": "reverting the implementation returns the suite to red, so the change is load-bearing for its test.",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "66a026cc92e9e5d4341dc47fd27c5e8a5b7d6c62",
+  "input_tokens": 183,
+  "kind": "workflow",
+  "outcome_cost_usd": 18.498292,
+  "output_tokens": 50652,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "implement-from-ticket-34294139197-20260909T001515Z-c76e",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 18.498292,
+      "decided": true,
+      "findings": {
+        "count": 11,
+        "items": [
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_fork_propose.py",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/base.py",
+            "path": "src/in_lockstep/platform/scm/base.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+            "path": "src/in_lockstep/platform/scm/gitlab.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/conformance.py",
+            "path": "src/in_lockstep/platform/conformance.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/github.py",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "search_code.index",
+            "message": "graft 0.16.0 \u00b7 index 1950c5532483",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "tdd.fix_verified",
+            "message": "reverting the implementation returns the suite to red, so the change is load-bearing for its test.",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "implement",
+      "tokens": 50835,
+      "verb": "implement",
+      "wall_seconds": 1813.982
+    },
+    {
+      "cost_usd": 0.0,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "test.6",
+      "tokens": 0,
+      "verb": "test",
+      "wall_seconds": 71.58
+    }
+  ],
+  "tokens": 50835,
+  "tool_calls": {
+    "delegate": 10,
+    "edit_file": 8,
+    "list_files": 4,
+    "read_file": 44,
+    "run_script": 17,
+    "run_tests": 5,
+    "search_code": 10,
+    "search_text": 66,
+    "write_file": 1
+  },
+  "ts": "2026-09-09T00:46:44+00:00",
+  "turns": 159,
+  "wall_seconds": 1885.562,
+  "workflow": "implement/from-ticket"
+}

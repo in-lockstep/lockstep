@@ -1,0 +1,87 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.041352,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 278,
+        "message": "The `_located_without_importing` fallback uses `find_spec` then iterates `spec.submodule_search_locations`, returning the first entry. `submodule_search_locations` on a namespace package or a `.pth`-manipulated sys.path can contain attacker-influenced strings if the environment's `sys.path` has been poisoned before this runs. This is a lower-severity concern, but the resolved `Path` is later used to open `pack.toml` (inferred from `found.manifest()` in the test), so a path that resolves outside \u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 204,
+        "message": "The fix is correct and the finding it closes is real: the previous identity test `prefixes is DENY_ALWAYS` meant that any caller constructing a new tuple \u2014 even one strictly extending `DENY_ALWAYS` \u2014 silently dropped the basename and suffix guards for `conftest.py`, `*.pem`, `.env*`, and `sitecustomize.py`. The new `always` flag is passed only by `ChangeGuard.check_path` for the tier-1 call, which is the right shape. No remaining concern on this path from what I can see in the diff.",
+        "path": "src/in_lockstep/core/changes.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "43dc75fa4f9cbaf77cadb98eea7bcf4e503d6a2d",
+  "input_tokens": 11294,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 498,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T140448Z-b8ae",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 11792,
+  "ts": "2026-08-31T14:05:03+00:00",
+  "wall_seconds": 15.179
+}

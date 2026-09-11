@@ -1,0 +1,109 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.193213,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 370,
+        "message": "Regression-test ordering is case-name-dependent and may not exercise the intended scenario",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 384,
+        "message": "Both-arms-share-one-denominator test accepts a partial success that may hide a bug",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 394,
+        "message": "Ceiling-mid-measurement test does not assert that no artifact was written",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 127,
+        "message": "score() calls load_cases twice when baseline.cases is non-empty, with no guarantee of stability between calls",
+        "path": "src/in_lockstep/improver.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 436,
+        "message": "Propose test asserts outcome.status but not that the opened body is safe to merge",
+        "path": "tests/in_lockstep/test_improve_loop.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 163,
+        "message": "improve_measure reads the current body from disk after the grant check, with no check that the file exists",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a8e35b6679440d22eaac5c5f56a53093dc585f79",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1124,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T031421Z-6a90",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1127,
+  "ts": "2026-09-06T03:14:52+00:00",
+  "wall_seconds": 30.857
+}

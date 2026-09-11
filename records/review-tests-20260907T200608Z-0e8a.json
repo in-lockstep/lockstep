@@ -1,0 +1,45 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34158055704",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.026203,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 190,
+        "message": "`report.fix.paths()` assertion relies on the fix step writing exactly `calc.py` \u2014 there is no test for the case where the reproduce step stages non-test changes but the fix step stages nothing at all.",
+        "path": "tests/in_lockstep/test_fix.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 198,
+        "message": "The test asserts `report.fix.paths() == ('calc.py',)` but does not assert that `report.reproducer` does not contain `calc.py`, leaving open whether the split in `fix.py` actually excludes it.",
+        "path": "tests/in_lockstep/test_fix.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "77948bda4bbd4b89f80d85b45f17faa1e97d932c",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 595,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T200608Z-0e8a",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 598,
+  "ts": "2026-09-07T20:06:22+00:00",
+  "wall_seconds": 14.006
+}

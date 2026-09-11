@@ -1,0 +1,843 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "fea4a6f35dbf08484cfd32db4071e86b5c2d2bdf"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 147460,
+  "ci_actor": "tpouyer",
+  "ci_run": "34637683138",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.585456,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 71,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change makes `statement` required in the review schema, renames `verdict` to `statement` throughout, routes the statement through the finding system so it reaches the run record and the improvement loop, and updates every fixture and test that touched the old shape. The description matches the diff closely: the gate entry, the schema change, the `_statement_finding` helper, the `review_comment` rendering, the `DryRunProvider` default, the cassette re-recording, and the new test file all coh\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 479,
+        "message": "Truncation appends `\u2026[truncated]` after normalising whitespace, but the cap is checked against the normalised length, so the final message can exceed `MAX_STATEMENT_CHARS`.",
+        "path": "src/in_lockstep/adapters/ai/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1324 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces `GATE-REVIEW-7`: it renames the dead `verdict` field to `statement`, makes it required in the JSON schema, routes it through a dedicated `review.statement` finding so it reaches the run record, and bounds its length at `MAX_STATEMENT_CHARS = 2000`. The work itself is framework bookkeeping \u2014 no hot paths, no loops over growing collections, no unbounded reads. The one place worth checking through a performance lens is `_statement_finding`, which normalises whitespace with `'\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change renames the `verdict` field to `statement` in the review schema and wires the lens's prose account of the change through as a NOTE finding so it reaches the run record, the pull-request comment, and the improvement loop. I examined the new code paths for: model-controlled text reaching a rendered output without sanitisation; the truncation path in `_statement_finding`; the `DryRunProvider` default content change; the cassette update; and the `report.py` rendering change. The model's \u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 96,
+        "message": "Model-supplied statement text is written verbatim into Markdown above the findings table without pipe or backtick escaping.",
+        "path": "src/in_lockstep/platform/report.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-revision -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: review/reviewing -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "fea4a6f35dbf08484cfd32db4071e86b5c2d2bdf",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.585456,
+  "output_tokens": 2163,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34637683138-20260911T191452Z-6807",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.147811,
+      "decided": true,
+      "findings": {
+        "count": 18,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change makes `statement` required in the review schema, renames `verdict` to `statement` throughout, routes the statement through the finding system so it reaches the run record and the improvement loop, and updates every fixture and test that touched the old shape. The description matches the diff closely: the gate entry, the schema change, the `_statement_finding` helper, the `review_comment` rendering, the `DryRunProvider` default, the cassette re-recording, and the new test file all coh\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 479,
+            "message": "Truncation appends `\u2026[truncated]` after normalising whitespace, but the cap is checked against the normalised length, so the final message can exceed `MAX_STATEMENT_CHARS`.",
+            "path": "src/in_lockstep/adapters/ai/review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1324 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 614,
+      "verb": "review",
+      "wall_seconds": 32.981
+    },
+    {
+      "cost_usd": 0.140221,
+      "decided": true,
+      "findings": {
+        "count": 16,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces `GATE-REVIEW-7`: it renames the dead `verdict` field to `statement`, makes it required in the JSON schema, routes it through a dedicated `review.statement` finding so it reaches the run record, and bounds its length at `MAX_STATEMENT_CHARS = 2000`. The work itself is framework bookkeeping \u2014 no hot paths, no loops over growing collections, no unbounded reads. The one place worth checking through a performance lens is `_statement_finding`, which normalises whitespace with `'\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 234,
+      "verb": "review",
+      "wall_seconds": 11.844
+    },
+    {
+      "cost_usd": 0.14834,
+      "decided": true,
+      "findings": {
+        "count": 18,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change renames the `verdict` field to `statement` in the review schema and wires the lens's prose account of the change through as a NOTE finding so it reaches the run record, the pull-request comment, and the improvement loop. I examined the new code paths for: model-controlled text reaching a rendered output without sanitisation; the truncation path in `_statement_finding`; the `DryRunProvider` default content change; the cassette update; and the `report.py` rendering change. The model's \u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 96,
+            "message": "Model-supplied statement text is written verbatim into Markdown above the findings table without pipe or backtick escaping.",
+            "path": "src/in_lockstep/platform/report.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1324 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 628,
+      "verb": "review",
+      "wall_seconds": 31.813
+    },
+    {
+      "cost_usd": 0.149083,
+      "decided": true,
+      "findings": {
+        "count": 19,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces GATE-REVIEW-7: a required `statement` field in the review schema, replacing the optional and unused `verdict`. The core logic is well-covered by the new `test_review_statement.py` file, which tests the finding shape, truncation, placement in the rendered comment, schema enforcement, and the empty-input case. I checked the existing tests that were updated (stub replies, `_review_returning`, cassette integrity) and the unchanged tests called out in the impact section. One ga\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 95,
+            "message": "Partition of `review.statement` from `rest` is tested in the new file but the existing `test_report.py` tests that call `review_comment` are not visible in this diff.",
+            "path": "src/in_lockstep/platform/report.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 103,
+            "message": "No test asserts that the statement finding is present in the recorded outcome from `AiReview.invoke` end-to-end.",
+            "path": "tests/in_lockstep/test_review_statement.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- Guardrails are inlined first, verbatim: their position is a security property and is not delegated to import merge ",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: baseline -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- guardrail: review/reviewing -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-format -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!-- skill: review/review-revision -->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1324 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 699,
+      "verb": "review",
+      "wall_seconds": 32.875
+    }
+  ],
+  "tokens": 2175,
+  "tool_calls": {},
+  "ts": "2026-09-11T19:15:27+00:00",
+  "turns": 4,
+  "wall_seconds": 32.981,
+  "workflow": "review/all-lenses"
+}

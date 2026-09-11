@@ -1,0 +1,220 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "7049c5003bd3dd3ac4a6204ed72114a3bc4a1865"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 31202,
+  "ci_actor": "tpouyer",
+  "ci_run": "34511888905",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.142063,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 112,
+        "message": "Count assertion says 'seven' in the comment but the guard is `>= 7`, leaving the positive half passing if an eighth site is added without a ninth being required.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 57,
+        "message": "`_dispatches_a_suite` silently ignores `AttributeError` on `func.id` when `func` is not a `Name`.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2031 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2031 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 112,
+        "message": "Count guard `>= 7` does not verify which files the provisioned dispatches are in.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 63,
+        "message": "`_dispatches_a_suite` walks only direct children of the `AsyncWith` body, not nested `async with` blocks.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 96,
+        "message": "Negative control fixture writes a bare `async def` that is not inside a class or module \u2014 verify `ast.parse` accepts it.",
+        "path": "tests/in_lockstep/test_model_test_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2031 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "7049c5003bd3dd3ac4a6204ed72114a3bc4a1865",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.142063,
+  "output_tokens": 1668,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34511888905-20260910T180343Z-f996",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.0389,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 112,
+            "message": "Count assertion says 'seven' in the comment but the guard is `>= 7`, leaving the positive half passing if an eighth site is added without a ninth being required.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 57,
+            "message": "`_dispatches_a_suite` silently ignores `AttributeError` on `func.id` when `func` is not a `Name`.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2031 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 603,
+      "verb": "review",
+      "wall_seconds": 33.342
+    },
+    {
+      "cost_usd": 0.029143,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 144,
+      "verb": "review",
+      "wall_seconds": 11.135
+    },
+    {
+      "cost_usd": 0.032274,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2031 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 140,
+      "verb": "review",
+      "wall_seconds": 21.739
+    },
+    {
+      "cost_usd": 0.041746,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 112,
+            "message": "Count guard `>= 7` does not verify which files the provisioned dispatches are in.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 63,
+            "message": "`_dispatches_a_suite` walks only direct children of the `AsyncWith` body, not nested `async with` blocks.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 96,
+            "message": "Negative control fixture writes a bare `async def` that is not inside a class or module \u2014 verify `ast.parse` accepts it.",
+            "path": "tests/in_lockstep/test_model_test_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2031 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 793,
+      "verb": "review",
+      "wall_seconds": 34.633
+    }
+  ],
+  "tokens": 1680,
+  "tool_calls": {},
+  "ts": "2026-09-10T18:04:20+00:00",
+  "turns": 4,
+  "wall_seconds": 34.633,
+  "workflow": "review/all-lenses"
+}

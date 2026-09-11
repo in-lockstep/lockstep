@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "pack-describe",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.07791,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 172,
+        "message": "Path traversal is possible through the `relative` argument to `Pack.read()` and `Pack.file()`. These methods join `self.root` with an arbitrary caller-supplied string using `/` (i.e. `self.root / relative`). Nothing in this diff constrains `relative` to stay inside the pack's own tree. A caller passing `relative=\"../../etc/passwd\"` or a pack name that is itself a relative path could walk outside the intended distribution root. In the current callers this is only reached from `guardrails()` and `\u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 430,
+        "message": "Arbitrary module import triggered by pack name. `_offers()` calls `importlib.import_module(module_name)` where `module_name` comes from `Pack.module`, which is derived from the entry-point `value` field of any installed distribution. If a distribution is installed whose entry-point value is a dotted name resolving to an attacker-controlled module (e.g. via a dependency-confusion package on PyPI), `receipt_for_pack(..., load=True)` \u2014 which is the default \u2014 will import and execute that module's to\u2026[truncated]",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 209,
+        "message": "The bare `except Exception` in `_module_root` silently swallows all errors from iterating `dist.files`. This is noted as defensive, but `dist.files` is attacker-influenced (it comes from installed distribution metadata). A distribution that raises an exception during `dist.files` iteration would cause `_module_root` to return `None`, setting `root=None` on the resulting `Pack`. That causes `imports()` to return `\"unknown\"` rather than `\"modules\"`, which suppresses the import step in `receipt_for\u2026[truncated]",
+        "path": "src/in_lockstep/packs.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9727d664f09f5b4462bc3d658021efb64575c44a",
+  "input_tokens": 21985,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 797,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T110057Z-202b",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 22782,
+  "ts": "2026-08-31T11:01:27+00:00",
+  "wall_seconds": 29.23
+}

@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "6f731f766685e0427224c9c52b7f1de883ae8a4c"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 58491,
+  "ci_actor": "tpouyer",
+  "ci_run": "34316465881",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.247817,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 433,
+        "message": "Test does not exercise `upsert_comment` or `mark_parked`/`unpark`, which also gained `_at()` calls.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 56,
+        "message": "`repo` parameter added to `__init__` \u2014 undescribed change to a public constructor.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 44,
+        "message": "Caller-supplied `repo` string injected verbatim into subprocess argv as `--repo` value.",
+        "path": "src/in_lockstep/platform/tickets/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 72,
+        "message": "Caller-supplied `repo` slug substituted into `gh api` path strings without validation.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 420,
+        "message": "`open_changes_by_workflow` is listed as 'must not follow narrowing' but `delivery_rows`, `run_artifacts`, and `download_artifact` are tested incompletely.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 397,
+        "message": "The narrowing test for `remarks` does not cover the inline-review-comment path inside `remarks`.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 406,
+        "message": "Narrowing test does not cover `upsert_comment`, `mark_parked`, or `mark_unparked`.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6f731f766685e0427224c9c52b7f1de883ae8a4c",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.247817,
+  "output_tokens": 1896,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34316465881-20260909T055039Z-b1a7",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.062045,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 433,
+            "message": "Test does not exercise `upsert_comment` or `mark_parked`/`unpark`, which also gained `_at()` calls.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 56,
+            "message": "`repo` parameter added to `__init__` \u2014 undescribed change to a public constructor.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 492,
+      "verb": "review",
+      "wall_seconds": 21.472
+    },
+    {
+      "cost_usd": 0.056042,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 77,
+      "verb": "review",
+      "wall_seconds": 6.122
+    },
+    {
+      "cost_usd": 0.063864,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 44,
+            "message": "Caller-supplied `repo` string injected verbatim into subprocess argv as `--repo` value.",
+            "path": "src/in_lockstep/platform/tickets/github.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 72,
+            "message": "Caller-supplied `repo` slug substituted into `gh api` path strings without validation.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 592,
+      "verb": "review",
+      "wall_seconds": 23.148
+    },
+    {
+      "cost_usd": 0.065867,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 420,
+            "message": "`open_changes_by_workflow` is listed as 'must not follow narrowing' but `delivery_rows`, `run_artifacts`, and `download_artifact` are tested incompletely.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 397,
+            "message": "The narrowing test for `remarks` does not cover the inline-review-comment path inside `remarks`.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 406,
+            "message": "Narrowing test does not cover `upsert_comment`, `mark_parked`, or `mark_unparked`.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 747,
+      "verb": "review",
+      "wall_seconds": 23.049
+    }
+  ],
+  "tokens": 1908,
+  "tool_calls": {},
+  "ts": "2026-09-09T05:51:04+00:00",
+  "turns": 4,
+  "wall_seconds": 23.148,
+  "workflow": "review/all-lenses"
+}

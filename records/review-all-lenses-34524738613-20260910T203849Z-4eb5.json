@@ -1,0 +1,167 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "a01017011177aa14b99da9cda1542700d66c2cda"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 38547,
+  "ci_actor": "github-actions[bot]",
+  "ci_run": "34524738613",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.164537,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 159,
+        "message": "Negative control asserts a hand-typed literal, not a live code path.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 55,
+        "message": "AST walk does not handle keyword arguments or variables other than module-level string assignments.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 139,
+        "message": "Negative-control test asserts a literal string property, not a code invariant.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 111,
+        "message": "`_framework_directory_constants` accesses private `__dataclass_fields__` and `default_factory` \u2014 fragile coupling.",
+        "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a01017011177aa14b99da9cda1542700d66c2cda",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.164537,
+  "output_tokens": 1330,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34524738613-20260910T203849Z-4eb5",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.045058,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 159,
+            "message": "Negative control asserts a hand-typed literal, not a live code path.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 55,
+            "message": "AST walk does not handle keyword arguments or variables other than module-level string assignments.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 606,
+      "verb": "review",
+      "wall_seconds": 30.777
+    },
+    {
+      "cost_usd": 0.036954,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 51,
+      "verb": "review",
+      "wall_seconds": 5.378
+    },
+    {
+      "cost_usd": 0.037997,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 114,
+      "verb": "review",
+      "wall_seconds": 16.201
+    },
+    {
+      "cost_usd": 0.044529,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 139,
+            "message": "Negative-control test asserts a literal string property, not a code invariant.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 111,
+            "message": "`_framework_directory_constants` accesses private `__dataclass_fields__` and `default_factory` \u2014 fragile coupling.",
+            "path": "tests/in_lockstep/test_one_lockstep_dir.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 571,
+      "verb": "review",
+      "wall_seconds": 27.943
+    }
+  ],
+  "tokens": 1342,
+  "tool_calls": {},
+  "ts": "2026-09-10T20:39:20+00:00",
+  "turns": 4,
+  "wall_seconds": 30.777,
+  "workflow": "review/all-lenses"
+}

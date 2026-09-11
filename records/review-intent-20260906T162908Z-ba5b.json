@@ -1,0 +1,55 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.077735,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 171,
+        "message": "Test asserts `improve.py` is the only `invoker.run(` call missing `schema=`, but the diff does not add `schema=` to `improve.py`.",
+        "path": "tests/in_lockstep/test_model_caps.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 199,
+        "message": "The repair call in `settle` now passes `schema=` to `invoker.run`, which re-checks the capability on every re-prompt.",
+        "path": "src/in_lockstep/ai/structured.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 667,
+        "message": "`registry.registration_for(selected).caps.structured_output` is called without guarding against `ProviderRegistrationError`, unlike the analogous `caps_for` helper which catches it.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "90c7b004aaa48475df6f946b905ba0e4fe5a96d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 804,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T162908Z-ba5b",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 807,
+  "ts": "2026-09-06T16:29:29+00:00",
+  "wall_seconds": 20.104
+}

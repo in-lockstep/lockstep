@@ -1,0 +1,185 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#373"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 7190756,
+  "cache_write_tokens": 377392,
+  "ci_actor": "tpouyer",
+  "ci_run": "34255026959",
+  "config": "local working tree",
+  "cost_usd": 24.626304,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": true,
+        "id": "tdd.not_green",
+        "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote tests/in_lockstep/test_fork_propose.py",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/base.py",
+        "path": "src/in_lockstep/platform/scm/base.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/conformance.py",
+        "path": "src/in_lockstep/platform/conformance.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.staged",
+        "message": "wrote src/in_lockstep/platform/scm/github.py",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "implement.unstructured",
+        "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 3 failed of 2674: tests/in_lockstep/test_dogfood.py::test_gate_dogfood_1_the_host_has_merged_a_change_this_framework_opened, tests/in_lockstep/test_dogfood.py::test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_jobs, tests/in_lockstep/test_llm.py::test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty[anthropic]",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "83ede9af5f39d3a1d447977ab33cb1bc3d230c42",
+  "input_tokens": 198,
+  "kind": "workflow",
+  "outcome_cost_usd": 12.313152,
+  "output_tokens": 90148,
+  "priced_fraction": 1.0,
+  "reason": "tdd.not_green",
+  "run_id": "implement-from-ticket-34255026959-20260908T170612Z-2516",
+  "schema": 8,
+  "status": "failed",
+  "steps": [
+    {
+      "cost_usd": 12.313152,
+      "decided": true,
+      "findings": {
+        "count": 10,
+        "items": [
+          {
+            "blocking": true,
+            "id": "tdd.not_green",
+            "message": "the implementation did not make the staged test pass; the change is returned unproposed so a red change does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote tests/in_lockstep/test_fork_propose.py",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/base.py",
+            "path": "src/in_lockstep/platform/scm/base.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/gitlab.py",
+            "path": "src/in_lockstep/platform/scm/gitlab.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/conformance.py",
+            "path": "src/in_lockstep/platform/conformance.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.staged",
+            "message": "wrote src/in_lockstep/platform/scm/github.py",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "implement.unstructured",
+            "message": "the final message was not the JSON the schema asked for; its text was kept as the summary. The staged change came through the tool boundary and is unaffected.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.html_comment",
+            "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 3 failed of 2674: tests/in_lockstep/test_dogfood.py::test_gate_dogfood_1_the_host_has_merged_a_change_this_framework_opened, tests/in_lockstep/test_dogfood.py::test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_jobs, tests/in_lockstep/test_llm.py::test_gate_auth_1_every_registered_provider_constructs_with_the_environment_empty[anthropic]",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "tdd.not_green",
+      "status": "failed",
+      "step": "implement",
+      "tokens": 45173,
+      "verb": "implement",
+      "wall_seconds": 1303.877
+    }
+  ],
+  "tokens": 90346,
+  "ts": "2026-09-08T17:27:57+00:00",
+  "wall_seconds": 1497.017,
+  "workflow": "implement/from-ticket"
+}

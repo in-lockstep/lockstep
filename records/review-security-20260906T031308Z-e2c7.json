@@ -1,0 +1,93 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.191645,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 185,
+        "message": "Broad exception catch in ceiling check could mask unexpected errors",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 155,
+        "message": "Artifact content from a prior job is treated as trusted after only structural checks",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 148,
+        "message": "Probe requests are constructed from case-stored data without re-validating the system prompt substitution boundary",
+        "path": "src/in_lockstep/adapters/ai/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 79,
+        "message": "Non-sensitive UUIDs and IDs are hardcoded in the workflow environment",
+        "path": ".github/workflows/improve.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- guardrail: baseline -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- skill: review/review-format -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a8e35b6679440d22eaac5c5f56a53093dc585f79",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 998,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260906T031308Z-e2c7",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1001,
+  "ts": "2026-09-06T03:13:38+00:00",
+  "wall_seconds": 30.109
+}

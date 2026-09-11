@@ -1,0 +1,45 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "github-actions[bot]",
+  "ci_run": "34159586724",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.038476,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 106,
+        "message": "Collision test asserts the remote blob is unchanged by text comparison, but `_git` returns stdout of `git show` (file content), not the blob hash \u2014 if `git show` fails silently it returns an empty string and the assertion compares two empty strings.",
+        "path": "tests/in_lockstep/test_ledger_collision.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 135,
+        "message": "Absorb collision test records the local blob with `git show DEFAULT_BRANCH:records/\u2026` against a working-tree repo; if `GitLedger.append` writes to a ref with a different name the show returns empty and the before/after comparison is vacuous for the same reason as above.",
+        "path": "tests/in_lockstep/test_ledger_collision.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5d632907f012007fb68ed32a3b780e2372f9a227",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 654,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T203221Z-9186",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 657,
+  "ts": "2026-09-07T20:32:39+00:00",
+  "wall_seconds": 17.232
+}

@@ -1,0 +1,11 @@
+{
+  "by": "Tim Pouyer <tim.pouyer@gmail.com>",
+  "commit": "d29bde8053be8199d83df56f27b110405024ecfb",
+  "reason": "triage-412 and the two wayfinder-*-local ids are test fixtures a laptop pushed, not runs",
+  "rewrote": [
+    "records/triage-412.json was deleted after being appended (commit d29bde8053be)",
+    "records/wayfinder-chart-local.json was deleted after being appended (commit d29bde8053be)",
+    "records/wayfinder-work-local.json was deleted after being appended (commit d29bde8053be)"
+  ],
+  "ts": "2026-09-08T14:31:33+00:00"
+}

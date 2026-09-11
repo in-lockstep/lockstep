@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.023745,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 795,
+        "message": "Shell injection in test fixture via unsanitised label names",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 230,
+        "message": "Workflow file content controls whether the gh API is called; a crafted workflow could influence scoping",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "ca3be1e3bc43ec3fe89b6c4cc72cbe9352817494",
+  "input_tokens": 5195,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 544,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T204253Z-206f",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5739,
+  "ts": "2026-08-30T20:43:11+00:00",
+  "wall_seconds": 17.262
+}

@@ -1,0 +1,284 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "7d3f66f93d9adcc1e494cb04b4f1f512327e26eb"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 53265,
+  "ci_actor": "tpouyer",
+  "ci_run": "34428205513",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.237205,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 12,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 368,
+        "message": "`prepared` silently skips provisioning when `container` attribute is absent on ctx, but the note it emits assumes no `Provision` is bound rather than no container exists.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 381,
+        "message": "Failed `Provision` still applies the staged change and yields; the note warns but there is no early exit.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 51,
+        "message": "Fix to `_Ctx._Container.has` is correct but the test file's existing tests no longer exercise the Provision-absent branch of `prepared`.",
+        "path": "tests/in_lockstep/test_validate_tool.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1,
+        "message": "Test modules in the blast radius that reach `_fix_pass` and `_checked` are not in this diff.",
+        "path": "tests/in_lockstep/test_prepared_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1457 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 390,
+        "message": "FileChange.path is used as a filesystem path inside the worktree without traversal validation before _apply_change writes it.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 375,
+        "message": "DEPENDENCY_MANIFESTS match is by filename only (Path.name), so a file at any depth whose name matches triggers the environment-provenance note \u2014 but more importantly, a file at any depth is also accepted as a valid staged path.",
+        "path": "src/in_lockstep/adapters/worktree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1457 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 51,
+        "message": "`has` now filters by `verb is Validate`, but `test_validate_sandbox.py` is not in the diff \u2014 its `_Ctx` double may still answer `True` to every verb.",
+        "path": "tests/in_lockstep/test_validate_tool.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 162,
+        "message": "No test covers the branch where `note` is non-empty AND `answer` does not start with `clean:` in `_validate_runner`.",
+        "path": "tests/in_lockstep/test_prepared_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 120,
+        "message": "Ordering assertion checks only one snapshot, but does not assert the staged file is absent from that snapshot.",
+        "path": "tests/in_lockstep/test_prepared_environment.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (1457 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "7d3f66f93d9adcc1e494cb04b4f1f512327e26eb",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.237205,
+  "output_tokens": 2495,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34428205513-20260910T020826Z-f637",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.064591,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 368,
+            "message": "`prepared` silently skips provisioning when `container` attribute is absent on ctx, but the note it emits assumes no `Provision` is bound rather than no container exists.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 381,
+            "message": "Failed `Provision` still applies the staged change and yields; the note warns but there is no early exit.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 51,
+            "message": "Fix to `_Ctx._Container.has` is correct but the test file's existing tests no longer exercise the Provision-absent branch of `prepared`.",
+            "path": "tests/in_lockstep/test_validate_tool.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1,
+            "message": "Test modules in the blast radius that reach `_fix_pass` and `_checked` are not in this diff.",
+            "path": "tests/in_lockstep/test_prepared_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1457 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 951,
+      "verb": "review",
+      "wall_seconds": 35.69
+    },
+    {
+      "cost_usd": 0.04973,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 95,
+      "verb": "review",
+      "wall_seconds": 6.234
+    },
+    {
+      "cost_usd": 0.060095,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 390,
+            "message": "FileChange.path is used as a filesystem path inside the worktree without traversal validation before _apply_change writes it.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 375,
+            "message": "DEPENDENCY_MANIFESTS match is by filename only (Path.name), so a file at any depth whose name matches triggers the environment-provenance note \u2014 but more importantly, a file at any depth is also accepted as a valid staged path.",
+            "path": "src/in_lockstep/adapters/worktree.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1457 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 630,
+      "verb": "review",
+      "wall_seconds": 27.673
+    },
+    {
+      "cost_usd": 0.062788,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 51,
+            "message": "`has` now filters by `verb is Validate`, but `test_validate_sandbox.py` is not in the diff \u2014 its `_Ctx` double may still answer `True` to every verb.",
+            "path": "tests/in_lockstep/test_validate_tool.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 162,
+            "message": "No test covers the branch where `note` is non-empty AND `answer` does not start with `clean:` in `_validate_runner`.",
+            "path": "tests/in_lockstep/test_prepared_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 120,
+            "message": "Ordering assertion checks only one snapshot, but does not assert the staged file is absent from that snapshot.",
+            "path": "tests/in_lockstep/test_prepared_environment.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (1457 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 831,
+      "verb": "review",
+      "wall_seconds": 33.412
+    }
+  ],
+  "tokens": 2507,
+  "tool_calls": {},
+  "ts": "2026-09-10T02:09:02+00:00",
+  "turns": 4,
+  "wall_seconds": 35.69,
+  "workflow": "review/all-lenses"
+}

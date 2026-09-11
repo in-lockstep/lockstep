@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34147157078",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.031149,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 222,
+        "message": "Podman detection is by basename only, which fails for paths like 'podman-remote' or 'podman.exe'.",
+        "path": "src/in_lockstep/adapters/sandbox.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 292,
+        "message": "The --userns=keep-id assertion is unconditional, but the code only emits it for podman.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "37cc9eec6c5351de74e47f5b406a169f84adb6f8",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 453,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T172025Z-525e",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 456,
+  "ts": "2026-09-07T17:20:38+00:00",
+  "wall_seconds": 12.313
+}

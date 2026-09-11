@@ -1,0 +1,151 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "9db38916288476f6e9469bd59f5a581ae802e4c2"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 21251,
+  "ci_actor": "tpouyer",
+  "ci_run": "34281649518",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.094487,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 220,
+        "message": "Slice applied after join loses the wrong end \u2014 earliest error lines are dropped, not the latest.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 220,
+        "message": "`_errors` truncates from the front via `[-RUNNER_OUTPUT_CHARS:]`, but no test asserts truncation behaviour.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 186,
+        "message": "The `said` fallback fires when *no* failing case has a message, but a mix of cases with and without messages suppresses it entirely.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9db38916288476f6e9469bd59f5a581ae802e4c2",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.094487,
+  "output_tokens": 984,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34281649518-20260908T213830Z-0242",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.024613,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 220,
+            "message": "Slice applied after join loses the wrong end \u2014 earliest error lines are dropped, not the latest.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 324,
+      "verb": "review",
+      "wall_seconds": 17.832
+    },
+    {
+      "cost_usd": 0.020754,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 52,
+      "verb": "review",
+      "wall_seconds": 6.715
+    },
+    {
+      "cost_usd": 0.021691,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 108,
+      "verb": "review",
+      "wall_seconds": 8.49
+    },
+    {
+      "cost_usd": 0.027429,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 220,
+            "message": "`_errors` truncates from the front via `[-RUNNER_OUTPUT_CHARS:]`, but no test asserts truncation behaviour.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 186,
+            "message": "The `said` fallback fires when *no* failing case has a message, but a mix of cases with and without messages suppresses it entirely.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 512,
+      "verb": "review",
+      "wall_seconds": 16.716
+    }
+  ],
+  "tokens": 996,
+  "tool_calls": {},
+  "ts": "2026-09-08T21:38:48+00:00",
+  "turns": 4,
+  "wall_seconds": 17.832,
+  "workflow": "review/all-lenses"
+}

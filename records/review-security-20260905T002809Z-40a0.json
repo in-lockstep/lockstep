@@ -1,0 +1,37 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.060598,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "review.unparseable",
+        "message": "the reply is not JSON and could not be repaired: Expecting ',' delimiter at position 3082",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "1e0b0e4213802833b673aa635b3cbab9de9444cc",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 919,
+  "priced_fraction": 1.0,
+  "reason": "review.unparseable",
+  "run_id": "review-security-20260905T002809Z-40a0",
+  "schema": 6,
+  "status": "errored",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 922,
+  "ts": "2026-09-05T00:28:34+00:00",
+  "wall_seconds": 24.994
+}

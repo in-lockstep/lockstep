@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.023265,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 296,
+        "message": "Workflow file names concatenated unsanitised into an error message via f-string",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 869,
+        "message": "Test fixture writes a shell script embedding a caller-supplied string without escaping",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e4008cf6d36adf0b0496f221d88b9cb9d0f91290",
+  "input_tokens": 4860,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 579,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T211136Z-a906",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5439,
+  "ts": "2026-08-30T21:11:54+00:00",
+  "wall_seconds": 17.968
+}

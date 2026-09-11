@@ -1,0 +1,54 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.04976,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 107,
+        "message": "Existing test `test_a_failed_run_says_so_on_the_ticket` updates the ledger record to carry `workflow: f\"{verb}/from-ticket\"` but the new `_last_unsuccessful` filter matches any record whose `workflow` starts with the family prefix. The test verifies the common path works, which it does \u2014 no gap here. The change does what it says for this case.",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The change is internally consistent with its stated intent: `_last_unsuccessful` now accepts and filters on `family`, the three-verb distinction (`failed`/`blocked`/`errored`) is applied in both `implement_report` and `fix_report`, the reason no longer falls back to the status string, and the no-record message no longer says 'failed'. All four stated goals are implemented in both the template file and the generated `cli.py`, and the test suite covers each claim.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 354,
+        "message": "One gap worth noting: `test_the_other_verbs_run_is_not_borrowed` is parametrised over `status` in `['failed', 'blocked']` but not `'errored'`. The implementation routes `errored` through a different branch of `told`, so a filter bug that leaked only `errored` records across families would be invisible to this test. This is a minor coverage gap in the new tests, not a defect in the implementation itself \u2014 the filter (`startswith(family)`) is status-agnostic \u2014 but it is the kind of gap the PR's ow\u2026[truncated]",
+        "path": "tests/in_lockstep/test_report_workflow.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b695fc0a7472fec33a7fc0356442e7d2d4ec4929",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 431,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T142245Z-b8c1",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 434,
+  "ts": "2026-09-05T14:23:01+00:00",
+  "wall_seconds": 15.598
+}

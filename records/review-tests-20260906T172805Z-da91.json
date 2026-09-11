@@ -1,0 +1,55 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066759,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 110,
+        "message": "Hardcoded identity value `'t <t@example.test>'` will break for any other committer.",
+        "path": "tests/in_lockstep/test_ledger_evidence.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 64,
+        "message": "Parametrized absence test does not cover the empty-string case for `user.email`.",
+        "path": "tests/in_lockstep/test_identity.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 62,
+        "message": "No test covers `_config` when `subprocess.run` raises `OSError` directly (missing git binary).",
+        "path": "src/in_lockstep/platform/identity.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "20f08ab181b75c0d55e02f615b7d4f3374a57adb",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 662,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T172805Z-da91",
+  "schema": 7,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 665,
+  "ts": "2026-09-06T17:28:33+00:00",
+  "wall_seconds": 27.332
+}

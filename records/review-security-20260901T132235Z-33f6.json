@@ -1,0 +1,78 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066504,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "The `enforce: scan-input: warn` directive is removed from the baseline guardrail without any replacement control being introduced in this diff.",
+        "path": "src/in_lockstep/prompts/guardrail-baseline.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`deny-tools` for `github:merge_pull_request` and `github:delete_ref` removed from the fixing guardrail.",
+        "path": "src/in_lockstep/prompts/fix/guardrail-fixing.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "Same `deny-tools` removal as the fixing guardrail \u2014 `github:merge_pull_request` and `github:delete_ref` dropped from the implementing guardrail.",
+        "path": "src/in_lockstep/prompts/implement/guardrail-implementing.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`deny-tools` for `github:create_pull_request`, `github:merge_pull_request`, and `github:update_issue` removed from the retro guardrail.",
+        "path": "src/in_lockstep/prompts/retro/guardrail-retro.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`deny-tools` for `github:create_pull_request`, `github:merge_pull_request`, and `github:update_issue` removed from the reviewing guardrail.",
+        "path": "src/in_lockstep/prompts/review/guardrail-reviewing.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`deny-tools` for `github:create_issue`, `github:update_issue`, and `github:create_pull_request` removed from the RFE guardrail.",
+        "path": "src/in_lockstep/prompts/rfe/guardrail-rfe.md",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "`deny-tools` for `github:create_issue`, `github:update_issue`, and `github:create_pull_request` removed from the triage guardrail.",
+        "path": "src/in_lockstep/prompts/triage/guardrail-triage.md",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b92a90854c39c97f9990c3965efa4c8a5e75d23d",
+  "input_tokens": 15858,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1262,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T132235Z-33f6",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 17120,
+  "ts": "2026-09-01T13:23:07+00:00",
+  "wall_seconds": 31.401
+}

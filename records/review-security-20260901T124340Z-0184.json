@@ -1,0 +1,44 @@
+{
+  "aspect": "security",
+  "billed_fraction": 0.0,
+  "branch": "docs-and-site",
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 29,
+        "message": "Unquoted variable in `find` command allows word-splitting on paths with spaces or glob characters",
+        "path": "actions/save/action.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 23,
+        "message": "GitHub Actions expression `${{ inputs.paths }}` is interpolated directly into a shell script before variable assignment",
+        "path": "actions/save/action.yml",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "4c71671590bf81151f57c099a144f422b4db14f8",
+  "input_tokens": 5361,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 443,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T124340Z-0184",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 5804,
+  "ts": "2026-09-01T12:43:41+00:00",
+  "wall_seconds": 0.012
+}
