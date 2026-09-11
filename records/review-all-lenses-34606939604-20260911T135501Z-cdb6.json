@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "b09f009bb2a8ca7aa1fa8f2ae7186d318546ce05"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 30635,
+  "ci_actor": "tpouyer",
+  "ci_run": "34606939604",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.144842,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 222,
+        "message": "Record separator `\\x1e` could appear inside a commit message body, silently splitting one record into two.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 237,
+        "message": "`line.strip().startswith(prefix)` strips leading whitespace, so an indented line could be mistaken for the opening of a trailer.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 151,
+        "message": "CLI test captures output from both stdout and stderr, but the refusal messages are written to `err=True`.",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 236,
+        "message": "Unsanitised commit-message text returned and echoed to the terminal.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 146,
+        "message": "CLI test asserts exit code and absence of one phrase, but does not assert what the refusal actually says.",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 196,
+        "message": "No test covers the near-miss path when `_resolve_commit` returns None (repo with no matching base).",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 218,
+        "message": "test_a_folded_value_placed_correctly_still_clears_the_check depends on `unexercised` returning an object with `.cleared` and `.acknowledged`; if that contract changes the test error will be confusing.",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b09f009bb2a8ca7aa1fa8f2ae7186d318546ce05",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.144842,
+  "output_tokens": 1995,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34606939604-20260911T135501Z-cdb6",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.03947,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 222,
+            "message": "Record separator `\\x1e` could appear inside a commit message body, silently splitting one record into two.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 237,
+            "message": "`line.strip().startswith(prefix)` strips leading whitespace, so an indented line could be mistaken for the opening of a trailer.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 151,
+            "message": "CLI test captures output from both stdout and stderr, but the refusal messages are written to `err=True`.",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 728,
+      "verb": "review",
+      "wall_seconds": 32.472
+    },
+    {
+      "cost_usd": 0.029867,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 73,
+      "verb": "review",
+      "wall_seconds": 6.864
+    },
+    {
+      "cost_usd": 0.035319,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 236,
+            "message": "Unsanitised commit-message text returned and echoed to the terminal.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 430,
+      "verb": "review",
+      "wall_seconds": 22.175
+    },
+    {
+      "cost_usd": 0.040186,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 146,
+            "message": "CLI test asserts exit code and absence of one phrase, but does not assert what the refusal actually says.",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 196,
+            "message": "No test covers the near-miss path when `_resolve_commit` returns None (repo with no matching base).",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 218,
+            "message": "test_a_folded_value_placed_correctly_still_clears_the_check depends on `unexercised` returning an object with `.cleared` and `.acknowledged`; if that contract changes the test error will be confusing.",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 776,
+      "verb": "review",
+      "wall_seconds": 30.573
+    }
+  ],
+  "tokens": 2007,
+  "tool_calls": {},
+  "ts": "2026-09-11T13:55:33+00:00",
+  "turns": 4,
+  "wall_seconds": 32.472,
+  "workflow": "review/all-lenses"
+}
