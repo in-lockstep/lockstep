@@ -25,6 +25,7 @@ refuses up front rather than degrade to an untested oneshot in disguise.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, ClassVar
 
 from ...ai.structured import schema_instruction as _schema_instruction
@@ -376,6 +377,37 @@ class TDD(ImplementStrategy):
                 decided=green.decided,
             )
 
+        # -- Phase 3: does it answer the ticket? --------------------------------------------
+        #
+        # Green is not done. The suite proves a staged test went from failing to passing, which is
+        # arithmetic; whether the change does what the ticket ASKED FOR is judgement, and until
+        # this phase nothing asked it. #450 satisfied its own tests, skipped an acceptance
+        # criterion outright, and wrote a test asserting the omission as a requirement -- green
+        # throughout, caught by a person reading the issue beside the diff.
+        #
+        # A loop rather than a check, because a criterion a second reader can name is usually one
+        # the author can fix: the unmet criteria go back to the SAME phase that wrote the code,
+        # with the assessor's reasons attached, and the suite runs again over whatever comes back.
+        # Bounded by `max_assess_rounds` and not by the budget -- this is the one loop here whose
+        # exit condition is a model's judgement, and two models can disagree for as long as
+        # somebody is paying (#452).
+        assessment, findings, full, report, cost = await self._assess_rounds(
+            ctx,
+            session,
+            inp,
+            system=system,
+            base=base,
+            package=package,
+            tests=tests,
+            full=full,
+            report=report,
+            findings=findings,
+            cost=cost,
+            ticket=ticket,
+            notes=notes,
+            staged_summary=staged_summary,
+        )
+
         # Revert-and-verify: red→green already proved the implementation load-bearing against the
         # phase-1 test, but nothing yet proves it against the *final* test — a phase-2 edit could
         # have weakened the test into passing on its own. Undo the implementation (keeping the test)
@@ -390,6 +422,208 @@ class TDD(ImplementStrategy):
             decided=not green_inv.exhausted,
             reason="exhausted" if green_inv.exhausted else None,
         )
+
+    async def _assess_rounds(
+        self,
+        ctx: Any,
+        session: ImplementSession,
+        inp: Any,
+        *,
+        system: str,
+        base: list[Any],
+        package: Any,
+        tests: ChangeSet,
+        full: ChangeSet,
+        report: ImplementReport,
+        findings: list[Finding],
+        cost: Cost,
+        ticket: Any,
+        notes: tuple[str, ...],
+        staged_summary: str,
+    ) -> tuple[Any, list[Finding], ChangeSet, ImplementReport, Cost]:
+        """Assess, and correct while rounds remain. Returns what the caller must carry forward.
+
+        Skipped entirely -- no finding, no cost -- where no `Assess` verb is bound or the ticket
+        states no acceptance criteria. Both are ordinary: an adopter who has not bound an assessor
+        gets exactly the TDD they had, and a ticket with nothing to check against cannot be checked
+        against nothing. Neither is reported as an assessment that passed, which is the distinction
+        `AssessReport.met` refuses to blur by being False over no verdicts.
+
+        **Every round re-runs the suite.** A correction edits code to satisfy a criterion and can
+        break the tests the green phase proved; without the re-run a change ships whose green was
+        established two rounds ago, which is a verdict about a suite that did not run wearing a
+        different hat (#435).
+        """
+        from ...core.types import Assess
+
+        container = getattr(ctx, "container", None)
+        criteria = tuple(getattr(ticket, "acceptance_criteria", ()) or ())
+        if container is None or not container.has(Assess) or not criteria:
+            return None, findings, full, report, cost
+
+        assessment = None
+        rounds = max(1, session.policy.max_assess_rounds)
+        for round_number in range(1, rounds + 1):
+            outcome = await _assess(ctx, inp, full, round_number)
+            assessment = outcome.value
+            if outcome.status is not Status.SUCCEEDED or assessment is None:
+                # A refused or errored assessor is not a failed change. The control said nothing,
+                # and saying nothing is recorded as such rather than folded into the change's
+                # verdict -- `blocked` is the control working, and an unrouted assessor is a line
+                # somebody has not written yet rather than a defect in the work.
+                findings.append(
+                    Finding(
+                        id="assess.not_assessed",
+                        message=f"the change was not assessed against its acceptance criteria: "
+                        f"{outcome.reason or 'the assessor reported nothing'}",
+                        severity=Severity.WARNING,
+                    )
+                )
+                return None, findings, full, replace(report, assessment=None), cost + (outcome.cost or Cost())
+            cost = cost + (outcome.cost or Cost())
+            if assessment.met:
+                findings.append(
+                    Finding(
+                        id="assess.met",
+                        message=f"all {len(assessment.verdicts)} acceptance criteria met, assessed by "
+                        f"{assessment.assessor or 'the routed assessor'}"
+                        + (f" after {round_number} rounds" if round_number > 1 else ""),
+                        severity=Severity.NOTE,
+                    )
+                )
+                break
+            if round_number >= rounds:
+                # Exhausted. The change travels as a DRAFT with the gap named -- the same answer
+                # `implement/propose` already gives a change whose suite is red elsewhere. Failing
+                # here would destroy an implementation that may meet four criteria of five, and
+                # marking it ready would be a green-looking pull request whose own assessor said
+                # it missed the point.
+                findings.append(
+                    Finding(
+                        id="assess.unmet",
+                        message=f"{len(assessment.unmet)} of {len(assessment.verdicts)} acceptance "
+                        f"criteria still unmet after {rounds} round(s): "
+                        + "; ".join(f"{v.criterion} — {v.reason}" for v in assessment.unmet[:3])
+                        + ("; …" if len(assessment.unmet) > 3 else ""),
+                        severity=Severity.WARNING,
+                    )
+                )
+                break
+
+            # -- correct -------------------------------------------------------------------
+            try:
+                correction = await run_phase(
+                    session,
+                    system,
+                    with_directive(base, _correction_directive(assessment.unmet)),
+                    package,
+                    prefix="implement",
+                    # The phase that WROTE the code corrects it: same job, same route, so a
+                    # repository routing `implement/green` reaches both.
+                    aspect="green",
+                    schema=IMPLEMENT_SCHEMA,
+                    stalled_report=lambda staged: ImplementReport(changeset=staged, strategy=self.id),
+                )
+            except PhaseError as e:
+                # A ceiling reached mid-correction keeps what the earlier rounds produced: the
+                # change is real and its tests pass, and the reason it stopped improving is the
+                # control working rather than a broken change.
+                findings.append(
+                    Finding(
+                        id="assess.correction_stopped",
+                        message=f"a correcting round stopped: {e.outcome.reason or 'no reason given'}",
+                        severity=Severity.WARNING,
+                    )
+                )
+                break
+            cost = cost + correction.cost
+            full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
+
+            # The repository's own checks and then the suite, over what the correction staged.
+            # Both, and in that order, for the reason the first pass states: a validator that fixes
+            # rewrites the bytes, so confirming green first would prove it of code that no longer
+            # travels.
+            validation = await validated(
+                ctx, session, full, system=system, messages=base, package=package, prefix="implement"
+            )
+            full = session.workspace.changeset(summary=staged_summary, ticket=ticket.key, notes=notes)
+            cost = cost + sum((i.cost for i in validation.invocations), Cost())
+            async with prepared(ctx, session.repo_root, full, for_verb=Test) as (tree, _note):
+                again = await ctx.do(Test(root=tree, expect="pass", runner=staged_runner(ctx, Test)))
+            if again.status is not Status.SUCCEEDED or not again.decided:
+                # The correction broke what the green phase proved. Stop and say so: the earlier
+                # change was green and this one is not, and continuing would assess code whose
+                # tests fail.
+                findings.append(
+                    Finding(
+                        id="assess.correction_broke_the_suite",
+                        message="a correcting round left the suite red, so the assessment stopped "
+                        "there; the change is returned with its tests failing rather than "
+                        "corrected further.",
+                        severity=Severity.ERROR,
+                    )
+                )
+                report = replace(report, changeset=full, validation=validation.report)
+                return assessment, findings, full, report, cost
+            report = replace(report, changeset=full, validation=validation.report)
+
+        return assessment, findings, full, replace(report, assessment=assessment), cost
+
+
+def _correction_directive(unmet: tuple[Any, ...]) -> str:
+    """What the correcting round is told: which criteria are unmet, and WHY the assessor said so.
+
+    The reason travels with the criterion, and that is the whole design. `attempts.py` makes the
+    same argument for the cross-run case: *handed only its own diff, with no reason attached, a
+    model defends it.* A criterion restated on its own invites exactly that -- the session already
+    concluded it was met, and asking again without the objection gets the same conclusion back with
+    more confidence. Handed the objection, it has something to fix.
+    """
+    lines = [
+        "Step 3 of 3 — the acceptance criteria.",
+        "",
+        "Your tests pass. A second reader, which did not write this change, assessed it against "
+        "the ticket's acceptance criteria and found these unmet:",
+        "",
+    ]
+    for verdict in unmet:
+        lines.append(f"- {verdict.criterion}")
+        if verdict.reason:
+            lines.append(f"  Why not: {verdict.reason}")
+        for quote in verdict.evidence[:3]:
+            lines.append(f"  Looked at: {quote}")
+    lines += [
+        "",
+        "Change the code so those criteria are met. Do not argue that they already are -- if the "
+        "assessor is wrong about what the change does, the change is not saying what it does "
+        "clearly enough, and that is also something to fix. Keep the existing tests passing, and "
+        "add a test for any behaviour you add.",
+    ]
+    return "\n".join(lines)
+
+
+async def _assess(ctx: Any, inp: Any, full: ChangeSet, round_number: int) -> Any:
+    """Ask the bound assessor whether this change meets the ticket's criteria.
+
+    Rendered from the change set rather than a git diff: the change is staged and not on disk, so
+    there is nothing to diff against yet -- the same reason `attempts.py` renders files rather than
+    a patch.
+    """
+    from ...core.types import Assess
+    from ...core.verbs import Verb  # noqa: F401  (documents the routed verb this dispatches)
+    from .assess import MAX_CHANGE_CHARS
+    from .attempts import file_blocks
+
+    ticket = inp.ticket
+    return await ctx.do(
+        Assess(
+            criteria=tuple(ticket.acceptance_criteria),
+            change=file_blocks(full, MAX_CHANGE_CHARS),
+            ticket=ticket.key,
+            title=ticket.title,
+            round_number=round_number,
+        )
+    )
 
 
 async def _revert_verify(

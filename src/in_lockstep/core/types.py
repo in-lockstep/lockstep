@@ -409,3 +409,61 @@ class Locatable(Protocol):
     """An adapter that can say where the tools it runs come from. `ls` and `doctor` ask."""
 
     def locations(self, root: str) -> tuple[Resolution, ...]: ...
+
+
+@dataclass(frozen=True)
+class Assess:
+    """The Assess request: what was asked for, and what was done about it.
+
+    Frozen like every request type -- it is hashed for step identity, so two rounds over the same
+    change and criteria are the same step and two over different ones are not.
+    """
+
+    #: The acceptance criteria, as the ticket wrote them.
+    criteria: tuple[str, ...] = ()
+    #: The change under assessment, rendered as a diff.
+    change: str = ""
+    ticket: str = ""
+    title: str = ""
+    #: 1-based. Carried into the prompt so the assessor knows it is reading a correction, and so
+    #: two rounds of one run do not compose an identical prompt and become indistinguishable in
+    #: the record.
+    round_number: int = 1
+
+
+@dataclass(frozen=True)
+class CriterionVerdict:
+    """One criterion, and whether the change in front of the assessor does it."""
+
+    criterion: str
+    met: bool
+    reason: str = ""
+    evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class AssessReport:
+    """What an assessment came to.
+
+    `met` is a property rather than a field so it cannot disagree with the verdicts it summarises,
+    and it is False over an EMPTY verdict list on purpose: an assessment that settled nothing has
+    not established that anything was met. Absent is not clean -- the same rule the propose half
+    already applies to a missing validation report.
+    """
+
+    verdicts: tuple[CriterionVerdict, ...] = ()
+    summary: str = ""
+    #: The model that assessed, so a record says who, and a reader can see whether it was the one
+    #: that wrote the change.
+    assessor: str = ""
+    #: Said out loud when the diff did not fit. A verdict decided from part of a change is a
+    #: verdict about a change nobody made.
+    truncated: bool = False
+
+    @property
+    def met(self) -> bool:
+        return bool(self.verdicts) and all(v.met for v in self.verdicts)
+
+    @property
+    def unmet(self) -> tuple[CriterionVerdict, ...]:
+        return tuple(v for v in self.verdicts if not v.met)

@@ -14,7 +14,7 @@ configured per strategy — it is all keyed off the declaration.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
@@ -24,7 +24,7 @@ from ...ai.invoker import AiInvoker, InvokePolicy
 from ...ai.prompt import PromptLayers
 from ...ai.tools import ToolSet
 from ...core.changes import ChangeGuard
-from ...core.types import ChangeSet, ValidationReport
+from ...core.types import AssessReport, ChangeSet, ValidationReport
 from ...core.verbs import Capability, Verb
 from ...prompts.implement import PROMPTS, ImplementPrompt, implement_layers
 from .attempts import attempt_items
@@ -74,6 +74,12 @@ class ImplementReport:
     #: half reads None as unverified rather than as passing, the way it already reads a missing
     #: test verdict.
     validation: ValidationReport | None = None
+    #: What a second model said about whether this change meets the ticket's acceptance criteria,
+    #: or None when nothing assessed it -- no `Assess` bound, no criteria on the ticket, or an
+    #: assessor that could not report. Absent is not met: the propose half reads None as
+    #: unassessed rather than as passing, exactly as it already reads a missing validation report
+    #: and a missing test verdict.
+    assessment: AssessReport | None = None
 
     @property
     def empty(self) -> bool:
@@ -99,6 +105,19 @@ class ImplementSession:
     curator: ContextCurator
     guard: ChangeGuard
     repo_root: str = "."
+    #: The invoker for one named PHASE of this run, or None where the strategy names no phases.
+    #:
+    #: A strategy's phases are separate model calls doing different jobs -- writing a test, writing
+    #: an implementation, assessing whether it answers the ticket -- and `routed_model` has always
+    #: resolved `verb/aspect` before `verb` (the `review/security` mechanism, #204). What was
+    #: missing is that nothing passed an aspect, so a repository could route `implement` and not
+    #: `implement/assess`. This is that seam: `None` means every phase takes the run's invoker,
+    #: which is exactly what happened before and what a repository routing only `implement` still
+    #: gets.
+    #:
+    #: Last in the field list because it carries a default and `repo_root` above it does too;
+    #: everything before them is required.
+    invoker_for: Callable[[str], AiInvoker] | None = None
 
     def context(self, request: Implement) -> ContextPackage:
         """Earlier attempts, then the ticket, curated. Provenance comes from `Ticket.as_context`

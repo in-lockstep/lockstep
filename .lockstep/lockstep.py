@@ -19,10 +19,12 @@ from in_lockstep import Lockstep, Workshop
 from in_lockstep.adapters import CommandProvision, CommandValidate, Provision, PytestTest
 from in_lockstep.adapters.ai import (
     TDD,
+    AiAssess,
     AiDescribe,
     AiImprove,
     AiJudge,
     AiReview,
+    Assess,
     Describe,
     DiagnoseThenFix,
     Draft,
@@ -416,6 +418,19 @@ lockstep.models.route("judge", "anthropic:claude-haiku-4-5")
 # implementation costs would be a reason to stop writing them.
 lockstep.models.route("describe", "anthropic:claude-haiku-4-5")
 
+# The second reader, and it is routed at a DIFFERENT model from the one that writes the code on
+# purpose. `implement` is Opus above; this is Sonnet. A model that has just argued itself into an
+# implementation is the worst available judge of whether that implementation answers the ticket --
+# the same context that produced an omission is the context that would have to notice it, and #450
+# is the worked example: it satisfied its own tests, skipped an acceptance criterion outright, and
+# wrote a test asserting the omission as a requirement. All green. A person reading the issue
+# beside the diff caught it.
+#
+# Nothing in the framework refuses two phases routed at one model, and nothing should -- a
+# repository with one provider is not wrong to. What it does is make the separation available and
+# cheap, which is what O11 is about. This line is that choice being made here.
+lockstep.models.route("assess", "anthropic:claude-sonnet-4-6")
+
 # -- the workshop -------------------------------------------------------------------
 #
 # What every AI strategy below is completed from, declared once. It used to be typed once per verb,
@@ -597,6 +612,10 @@ lockstep.bind(Improver, CorpusImprover("evidence/cases"))
 # rubric it has not answered stays `outstanding` (GATE-JUDGE-1); one it has is kept beside the
 # case and never paid for twice (GATE-JUDGE-3).
 lockstep.bind(Judge, AiJudge())
+# The acceptance-criteria assessor TDD's third phase dispatches. Bound rather than left unbound
+# because this repository dogfoods its own verbs (O10): an assessor nothing here runs is one we
+# would be asking adopters to trust on our word.
+lockstep.bind(Assess, AiAssess())
 # What a reviewer reads first on a pull request this framework opened. Bound here rather than
 # left to detection because it is a model call, and a repository that has not routed one gets
 # the run's own cover note instead -- which is the honest fallback and what every run before

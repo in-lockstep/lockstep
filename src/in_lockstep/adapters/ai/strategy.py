@@ -289,8 +289,21 @@ class AiStrategy:
             # Appended, so the repository's conventions land after the framework's guardrails
             # and the strategy body. `plus` is the only spelling that guarantees that ordering.
             layers = layers.plus(contexts=house_rules(root))
+        verb = type(self).verb
+        # One invoker per aspect, built on first use and kept. Lazily, because resolving builds a
+        # provider client and a strategy that names three phases would otherwise pay for three on
+        # every run including the ones that never reach the third; cached, because two calls in
+        # one phase must be the same invoker or they record as two.
+        built: dict[str, Any] = {}
+
+        def invoker_for(aspect: str) -> Any:
+            if aspect not in built:
+                built[aspect] = resolve_invoker(self.invoker_factory, verb, ctx, aspect=aspect)
+            return built[aspect]
+
         return type(self)._session_cls(
-            invoker=resolve_invoker(self.invoker_factory, type(self).verb, ctx),
+            invoker=resolve_invoker(self.invoker_factory, verb, ctx),
+            invoker_for=invoker_for,
             workspace=workspace,
             tools=tools,
             run_tool=runner,
@@ -319,6 +332,7 @@ async def run_phase(
     package: Any,
     *,
     prefix: str,
+    aspect: str = "",
     schema: dict[str, Any] | None = None,
     stalled_report: Callable[[ChangeSet], Any] | None = None,
 ) -> Any:
@@ -342,8 +356,14 @@ async def run_phase(
     prepare = getattr(getattr(getattr(session, "run_tool", None), "code_search", None), "prepare", None)
     if callable(prepare):
         await prepare()
+    # The phase's own invoker where the strategy names a phase and the session can resolve one,
+    # and the run's otherwise. `routed_model` reads `implement/green` before `implement`, so a
+    # repository that routes only the verb reaches exactly the invoker it always did -- per-phase
+    # routing costs nothing until somebody writes a line (#204, #452).
+    resolver = getattr(session, "invoker_for", None)
+    invoker = resolver(aspect) if aspect and resolver is not None else session.invoker
     try:
-        invocation = await session.invoker.run(
+        invocation = await invoker.run(
             system=system,
             messages=messages,
             context=package,

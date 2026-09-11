@@ -65,6 +65,7 @@ def write_changeset(
     redact: Redact | None = None,
     verdict: TestVerdict | None = None,
     validation: ValidationReport | None = None,
+    assessment: Any = None,
     description: Any = None,
     scorecard: Mapping[str, Any] | None = None,
 ) -> Path:
@@ -77,6 +78,11 @@ def write_changeset(
     a write token and no provider credential, so it cannot re-run anything -- what the checks said
     has to travel with the change or the decision to ask a human for review is made without it.
     Omitted when nothing checked, which `read_validation` reads back as None rather than clean.
+
+    `assessment` is the third of the same arrangement: what a second model said about whether the
+    change meets the ticket's acceptance criteria. It travels for the reason the other two do --
+    the propose job cannot re-run it -- and it is omitted when nothing assessed, which
+    `read_assessment` reads back as None rather than as met.
     """
     mask = redact or Redact()
     path = payload_path(artifact)
@@ -115,6 +121,23 @@ def write_changeset(
             {"rule": f.rule, "message": mask.text(f.message), "path": f.path, "line": f.line}
             for f in validation.findings
         ]
+    if assessment is not None:
+        # Masked like the summary: a verdict's reason is a model's prose about a model's diff, and
+        # one that quotes the line it objected to quotes whatever was on it.
+        document["assessment"] = {
+            "met": bool(getattr(assessment, "met", False)),
+            "assessor": mask.text(str(getattr(assessment, "assessor", "") or "")),
+            "summary": mask.text(str(getattr(assessment, "summary", "") or "")),
+            "truncated": bool(getattr(assessment, "truncated", False)),
+            "verdicts": [
+                {
+                    "criterion": mask.text(str(v.criterion)),
+                    "met": bool(v.met),
+                    "reason": mask.text(str(v.reason)),
+                }
+                for v in getattr(assessment, "verdicts", ()) or ()
+            ],
+        }
     if scorecard is not None:
         # The measurement a prompt proposal was opened on, in the same document as the change it
         # measured, so the two cannot travel apart: a proposal read back with no scorecard is one
@@ -185,6 +208,45 @@ def read_description(artifact: str | Path) -> dict[str, Any] | None:
     if not summary and not changes:
         return None
     return {"summary": summary, "changes": changes, "risks": risks}
+
+
+def read_assessment(artifact: str | Path) -> Any:
+    """What a second model said about the acceptance criteria, or None when nothing assessed.
+
+    A sibling of `read_verdict` and `read_validation`, with the same rule and for the third time:
+    absent is not met. A propose job reading None must say the change was not assessed rather than
+    that it passed -- and the shape returned here is `met=False` over no verdicts precisely so a
+    malformed or empty record cannot read as a change that satisfied its ticket.
+    """
+    from ..core.types import AssessReport, CriterionVerdict
+
+    path = payload_path(artifact)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except ValueError:
+        return None
+    raw = data.get("assessment") if isinstance(data, dict) else None
+    if not isinstance(raw, dict):
+        return None
+    verdicts = []
+    for entry in raw.get("verdicts") or ():
+        if not isinstance(entry, dict):
+            continue
+        verdicts.append(
+            CriterionVerdict(
+                criterion=str(entry.get("criterion", "")),
+                met=bool(entry.get("met")),
+                reason=str(entry.get("reason", "")),
+            )
+        )
+    return AssessReport(
+        verdicts=tuple(verdicts),
+        summary=str(raw.get("summary", "")),
+        assessor=str(raw.get("assessor", "")),
+        truncated=bool(raw.get("truncated")),
+    )
 
 
 def read_validation(artifact: str | Path) -> ValidationReport | None:
