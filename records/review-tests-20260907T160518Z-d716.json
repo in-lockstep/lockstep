@@ -1,0 +1,28 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34141503862",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.009736,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "cc6757aaf57ef74fb3d8d3662fbaefa444d7a166",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 98,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T160518Z-d716",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 101,
+  "ts": "2026-09-07T16:05:22+00:00",
+  "wall_seconds": 4.597
+}

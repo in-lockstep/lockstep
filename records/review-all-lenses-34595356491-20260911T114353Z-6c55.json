@@ -1,0 +1,151 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "31aad5f58035dcaa45823b102e1c52f7ca87a873"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 12115,
+  "ci_actor": "tpouyer",
+  "ci_run": "34595356491",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.060602,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 160,
+        "message": "Skip/fail predicate may misclassify a mix of 'no successful run' and unreadable results.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 163,
+        "message": "The `all('no successful run' not in u for u in unreadable)` condition is the wrong polarity for its intent and is not tested.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 155,
+        "message": "Early `return` on first successful hit is untested in isolation.",
+        "path": "tests/in_lockstep/test_dogfood.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "31aad5f58035dcaa45823b102e1c52f7ca87a873",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.060602,
+  "output_tokens": 1009,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34595356491-20260911T114353Z-6c55",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.015838,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 160,
+            "message": "Skip/fail predicate may misclassify a mix of 'no successful run' and unreadable results.",
+            "path": "tests/in_lockstep/test_dogfood.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 310,
+      "verb": "review",
+      "wall_seconds": 21.924
+    },
+    {
+      "cost_usd": 0.012444,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 69,
+      "verb": "review",
+      "wall_seconds": 6.71
+    },
+    {
+      "cost_usd": 0.012932,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 95,
+      "verb": "review",
+      "wall_seconds": 14.409
+    },
+    {
+      "cost_usd": 0.019389,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 163,
+            "message": "The `all('no successful run' not in u for u in unreadable)` condition is the wrong polarity for its intent and is not tested.",
+            "path": "tests/in_lockstep/test_dogfood.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 155,
+            "message": "Early `return` on first successful hit is untested in isolation.",
+            "path": "tests/in_lockstep/test_dogfood.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 547,
+      "verb": "review",
+      "wall_seconds": 28.91
+    }
+  ],
+  "tokens": 1021,
+  "tool_calls": {},
+  "ts": "2026-09-11T11:44:23+00:00",
+  "turns": 4,
+  "wall_seconds": 28.91,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,64 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34068474238",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.089645,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 316,
+        "message": "`pull()` fetch-failure path not distinguished from 'remote has no branch' path.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 300,
+        "message": "No test for `_advance` compare-and-swap collision on a clone-first-write race.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 393,
+        "message": "`divergence()` counts not asserted when both refs exist and records are equal.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 265,
+        "message": "`verify()` uses `head` as the log start; the old code used `self.ref` \u2014 no test covers a clone where those differ.",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "b55c478e291c5232b04097862f766429ca2623c3",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1109,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T000206Z-ef59",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1112,
+  "ts": "2026-09-07T00:02:35+00:00",
+  "wall_seconds": 28.489
+}

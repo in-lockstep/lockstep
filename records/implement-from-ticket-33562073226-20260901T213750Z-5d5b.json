@@ -1,0 +1,37 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#139"
+  },
+  "branch": "main",
+  "ci_actor": "tpouyer",
+  "config": "local working tree",
+  "cost_usd": 24.226545,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "cost.budget_exceeded",
+        "message": "turn 15 would cross the budget (usd:25.5100>25.0000); refused before the call",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "fba13c3356ac621482c03544ec38ef4deb2418b9",
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "reason": "cost.budget_exceeded",
+  "run_id": "implement-from-ticket-33562073226-20260901T213750Z-5d5b",
+  "schema": 4,
+  "status": "blocked",
+  "tokens": 1575891,
+  "ts": "2026-09-01T21:42:32+00:00",
+  "wall_seconds": 299.149,
+  "workflow": "implement/from-ticket"
+}

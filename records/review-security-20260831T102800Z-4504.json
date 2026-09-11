@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "show-prompt-resolves-bindings",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.042339,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 86,
+        "message": "Absolute filesystem path written into the receipt and potentially exposed in `--json` output",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 212,
+        "message": "Exception swallowed in `_egress` and `_models` could silently omit security-relevant fields",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6045333687d30fe9f84234d9cb28f884e9f42772",
+  "input_tokens": 11068,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 609,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T102800Z-4504",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 11677,
+  "ts": "2026-08-31T10:28:19+00:00",
+  "wall_seconds": 18.551
+}

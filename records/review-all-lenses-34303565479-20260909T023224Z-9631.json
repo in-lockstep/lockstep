@@ -1,0 +1,233 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "fcf9024ab8a7ec710d4d79eaac0806d73d08a115"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 79103,
+  "ci_actor": "tpouyer",
+  "ci_run": "34303565479",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.335822,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 107,
+        "message": "`_target_default_branch` reports `scm.no_rights_on_target` when `gh api repos/<target>` returns non-zero, but a 404 (repo does not exist or token cannot see it at all) and a 403 (token can see it but cannot write it) are lumped into the same reason code.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 271,
+        "message": "`test_gate_fork_1_gitlab_declines_a_cross_project_target_by_name` uses `pytest.MonkeyPatch()` constructed directly, which bypasses pytest's cleanup lifecycle.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 120,
+        "message": "Synchronous blocking `gh api` call added to the `open_change` async path.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 118,
+        "message": "Caller-supplied `target` is interpolated directly into a GitHub API path without any validation.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 107,
+        "message": "`permissions.push` is read from the API response and trusted as the sole gate before writing.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 218,
+        "message": "Test asserts `calls == []` but the `monkeypatch.delenv` may not take effect before `_gh` is replaced, masking whether the early refusal actually skips the network call.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 171,
+        "message": "The 'working tree left on main' assertion does not verify the run branch was never created locally, only that HEAD is main.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 232,
+        "message": "GitLab test creates a `MonkeyPatch` instance manually rather than using the pytest fixture, so env cleanup is not guaranteed.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "fcf9024ab8a7ec710d4d79eaac0806d73d08a115",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.335822,
+  "output_tokens": 2610,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34303565479-20260909T023224Z-9631",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.083034,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 107,
+            "message": "`_target_default_branch` reports `scm.no_rights_on_target` when `gh api repos/<target>` returns non-zero, but a 404 (repo does not exist or token cannot see it at all) and a 403 (token can see it but cannot write it) are lumped into the same reason code.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 271,
+            "message": "`test_gate_fork_1_gitlab_declines_a_cross_project_target_by_name` uses `pytest.MonkeyPatch()` constructed directly, which bypasses pytest's cleanup lifecycle.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 603,
+      "verb": "review",
+      "wall_seconds": 19.754
+    },
+    {
+      "cost_usd": 0.079895,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 120,
+            "message": "Synchronous blocking `gh api` call added to the `open_change` async path.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 379,
+      "verb": "review",
+      "wall_seconds": 14.62
+    },
+    {
+      "cost_usd": 0.084133,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 118,
+            "message": "Caller-supplied `target` is interpolated directly into a GitHub API path without any validation.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 107,
+            "message": "`permissions.push` is read from the API response and trusted as the sole gate before writing.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 655,
+      "verb": "review",
+      "wall_seconds": 20.271
+    },
+    {
+      "cost_usd": 0.08876,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 218,
+            "message": "Test asserts `calls == []` but the `monkeypatch.delenv` may not take effect before `_gh` is replaced, masking whether the early refusal actually skips the network call.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 171,
+            "message": "The 'working tree left on main' assertion does not verify the run branch was never created locally, only that HEAD is main.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 232,
+            "message": "GitLab test creates a `MonkeyPatch` instance manually rather than using the pytest fixture, so env cleanup is not guaranteed.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 985,
+      "verb": "review",
+      "wall_seconds": 25.567
+    }
+  ],
+  "tokens": 2622,
+  "tool_calls": {},
+  "ts": "2026-09-09T02:32:52+00:00",
+  "turns": 4,
+  "wall_seconds": 25.567,
+  "workflow": "review/all-lenses"
+}

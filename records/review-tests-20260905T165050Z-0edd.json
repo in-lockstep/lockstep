@@ -1,0 +1,63 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.043622,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1960,
+        "message": "_workflow_ids uses a regex over inspect.getsource(module.register) to discover ids. If ruff or black reformats the workflow() call across multiple lines (e.g., `workflow(\n    id=\"implement/propose\"\n)`), the regex `workflow(id=\"([^\"]+)\")` will not match and the set silently comes back empty. test_the_id_discovery_is_not_vacuous guards the current formatting, but nothing asserts that _workflow_ids stays non-empty after any future formatting change at the call site in register(). The test name ackn\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 231,
+        "message": "test_registered_reports_the_repository_it_is_standing_in calls subprocess.run([\"git\", ...]) unconditionally, with no skip guard for environments where git is absent or git user config is unavailable. This is likely fine in CI but the test will fail with an unhelpful error if git is not on PATH, rather than a pytest.skip.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 255,
+        "message": "test_nothing_init_writes_is_a_workflow_body asserts absence of `await ctx.do(` as a proxy for 'no workflow body'. This is a weak signal: a workflow body that does not call ctx.do would pass the check. The more direct assertion \u2014 absence of async def implement_from_ticket and async def fix_from_ticket \u2014 is already in the same test, so the ctx.do check adds little and could give false confidence if a future workflow body is structured differently.",
+        "path": "tests/in_lockstep/test_py_typed.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1978,
+        "message": "_workflow_function uses re.search for `workflow(id=\"<id>\")(<funcname>)` on a single source line. If register() is ever formatted so the decorator call and the function name are not on the same line (e.g., ruff splits `@workflow(id=\"...\")` from `(funcname)` across lines), match will be None and the pragma-covered branch raises ClickException \u2014 but the caller already verified membership via _workflow_ids, so this path is marked `pragma: no cover`. The two regexes are not guaranteed to agree on for\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "975a7e272daceacdb67e6632f0cbc7eedaeef605",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 745,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260905T165050Z-0edd",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "8a379915060e53b0c8ecaf192d313bd0",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 748,
+  "ts": "2026-09-05T16:51:10+00:00",
+  "wall_seconds": 20.053
+}

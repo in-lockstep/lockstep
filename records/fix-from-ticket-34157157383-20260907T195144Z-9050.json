@@ -1,0 +1,77 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 1940252,
+  "cache_write_tokens": 100456,
+  "ci_actor": "tpouyer",
+  "ci_run": "34157157383",
+  "config": "local working tree",
+  "cost_usd": 1.242418,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.not_reproduced",
+        "message": "the reproducer did not fail against the current code, so it has not captured the bug. A fix run starts from a test that is red for the reason the report describes.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to fail, 0 failed of 2519",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "74b3ce7be718d6b1854f21d8948ad17a6e451f30",
+  "input_tokens": 54,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.621209,
+  "output_tokens": 18898,
+  "priced_fraction": 1.0,
+  "reason": "fix.not_reproduced",
+  "run_id": "fix-from-ticket-34157157383-20260907T195144Z-9050",
+  "schema": 8,
+  "status": "failed",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.not_reproduced",
+            "message": "the reproducer did not fail against the current code, so it has not captured the bug. A fix run starts from a test that is red for the reason the report describes.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to fail, 0 failed of 2519",
+            "severity": "note"
+          }
+        ]
+      },
+      "reason": "fix.not_reproduced",
+      "status": "failed",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 297.494
+    }
+  ],
+  "tokens": 18952,
+  "ts": "2026-09-07T19:56:43+00:00",
+  "wall_seconds": 387.154,
+  "workflow": "fix/from-ticket"
+}

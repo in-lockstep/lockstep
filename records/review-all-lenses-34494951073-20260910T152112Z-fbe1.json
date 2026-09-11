@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "d12ea9faf5cbf12537cda87f6294daa30064308e"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 56747,
+  "ci_actor": "tpouyer",
+  "ci_run": "34494951073",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.239747,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 3019,
+        "message": "Error message is printed to stderr but `result.output` (stdout) is asserted against it in the test.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 167,
+        "message": "Trailer parsing collapses multi-line continuation into a space-joined string, but the returned value is compared to a sentence the author wrote verbatim.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 191,
+        "message": "Test for the workflow paths filter depends on `pyyaml` being available in the test environment.",
+        "path": "tests/in_lockstep/test_config_check.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 185,
+        "message": "git trailer key interpolated unsanitized into a git log format string.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 196,
+        "message": "CLI test does not assert the cleared/acknowledged path exits zero.",
+        "path": "tests/in_lockstep/test_config_check.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 160,
+        "message": "`test_the_diff_is_against_the_merge_base_not_the_moving_base_branch` asserts only `changed_paths`, not the full `unexercised` result shape.",
+        "path": "tests/in_lockstep/test_config_check.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 220,
+        "message": "CLI test for the no-base-ref error path asserts `exit_code != 0` but not the specific exit code.",
+        "path": "tests/in_lockstep/test_config_check.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "d12ea9faf5cbf12537cda87f6294daa30064308e",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.239747,
+  "output_tokens": 1794,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34494951073-20260910T152112Z-fbe1",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.064535,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 3019,
+            "message": "Error message is printed to stderr but `result.output` (stdout) is asserted against it in the test.",
+            "path": "src/in_lockstep/cli.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 167,
+            "message": "Trailer parsing collapses multi-line continuation into a space-joined string, but the returned value is compared to a sentence the author wrote verbatim.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 191,
+            "message": "Test for the workflow paths filter depends on `pyyaml` being available in the test environment.",
+            "path": "tests/in_lockstep/test_config_check.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 767,
+      "verb": "review",
+      "wall_seconds": 34.349
+    },
+    {
+      "cost_usd": 0.054737,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 99,
+      "verb": "review",
+      "wall_seconds": 6.943
+    },
+    {
+      "cost_usd": 0.058854,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 185,
+            "message": "git trailer key interpolated unsanitized into a git log format string.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 367,
+      "verb": "review",
+      "wall_seconds": 24.138
+    },
+    {
+      "cost_usd": 0.061621,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 196,
+            "message": "CLI test does not assert the cleared/acknowledged path exits zero.",
+            "path": "tests/in_lockstep/test_config_check.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 160,
+            "message": "`test_the_diff_is_against_the_merge_base_not_the_moving_base_branch` asserts only `changed_paths`, not the full `unexercised` result shape.",
+            "path": "tests/in_lockstep/test_config_check.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 220,
+            "message": "CLI test for the no-base-ref error path asserts `exit_code != 0` but not the specific exit code.",
+            "path": "tests/in_lockstep/test_config_check.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 573,
+      "verb": "review",
+      "wall_seconds": 29.719
+    }
+  ],
+  "tokens": 1806,
+  "tool_calls": {},
+  "ts": "2026-09-10T15:21:46+00:00",
+  "turns": 4,
+  "wall_seconds": 34.349,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,55 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.07562,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 561,
+        "message": "The `_actor_row` function uses `index` in a `runs_by_id` fallback (`f\"#{index}\"`) but `index` is the variable from the outer `enumerate`, not a run ID. This means two records without a `run_id` in the same actor group will be deduplicated into separate synthetic keys only if their loop position differs \u2014 which it will, since `enumerate` is over `working` \u2014 but the fallback key leaks the position within the filtered list rather than within the original records. This is a minor correctness quirk: \u2026[truncated]",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 529,
+        "message": "In `_pseudonyms`, records that carry no timestamp are sorted with key `\"~\"` plus their index, placing them after all dated records. The comment says this is \"stable rather than arbitrary\", and it is stable within one call, but two calls over the same records will produce the same order only if `enumerate` is deterministic \u2014 which it is for a list. The claim holds. No issue, noted for completeness only; this finding should be disregarded if the reviewer agrees.",
+        "path": "src/in_lockstep/metrics.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1797,
+        "message": "When `group_by == \"actor\"`, `keyed_by_actor` is called to rewrite records before passing them to `summarize`. The `names` flag comes from the CLI parameter. However, the `--names` flag's help text says it affects the full report, and it does affect `metrics.build(records, names=names)` on the full-report path. On the `--format json` / `--by-kind` path the same `names` value flows into `keyed_by_actor`, which is correct. The description says pseudonyms are used by default and `--names` names them\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "09b307ab849ea33422667defe4bf6460082ece08",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 715,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T033531Z-a783",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 718,
+  "ts": "2026-09-06T03:35:52+00:00",
+  "wall_seconds": 21.04
+}

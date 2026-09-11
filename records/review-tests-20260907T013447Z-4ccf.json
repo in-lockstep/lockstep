@@ -1,0 +1,72 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34073412927",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.069017,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 356,
+        "message": "Vertex and Gemini `provider_for` is not exercised; only Bedrock's `base_url()` is compared against its endpoint.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 391,
+        "message": "Gemini `provider_for` path and its `base_url()` are untested; google-genai's lack of a URL attribute is the special case the code comments on.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 373,
+        "message": "Test asserts `registration.endpoint` equality but the sentinel value on both sides comes from the same function call.",
+        "path": "tests/in_lockstep/test_llm.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 741,
+        "message": "Test does not assert that `destination_unknown` with `restricted_repo=False` does NOT raise \u2014 the non-restricted path for an unknown destination is untested.",
+        "path": "tests/in_lockstep/test_ai.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 2670,
+        "message": "`result.output` compared with `splitlines()` for a list membership check; stdout vs combined output may differ under the test runner.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9003555f6b13290787957aa5865f3baae5065129",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1216,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T013447Z-4ccf",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1219,
+  "ts": "2026-09-07T01:35:16+00:00",
+  "wall_seconds": 29.007
+}

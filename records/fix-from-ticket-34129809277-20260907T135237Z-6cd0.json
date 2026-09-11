@@ -1,0 +1,117 @@
+{
+  "approval": {
+    "attended": false,
+    "by": "tpouyer"
+  },
+  "args": {
+    "ticket": "#319"
+  },
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 11641434,
+  "cache_write_tokens": 409398,
+  "ci_actor": "tpouyer",
+  "ci_run": "34129809277",
+  "config": "local working tree",
+  "cost_usd": 7.896153,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": true,
+        "id": "fix.not_fixed",
+        "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote src/in_lockstep/platform/ledger/history.py",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "fix.staged",
+        "message": "wrote tests/in_lockstep/test_history.py",
+        "path": "tests/in_lockstep/test_history.py",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "test.expectation_unmet",
+        "message": "expected the suite to pass, 9 failed of 2495",
+        "severity": "note"
+      },
+      {
+        "blocking": true,
+        "id": "cost.budget_overrun",
+        "message": "actual spend exceeded the ceiling after ActionCall(fix, step=None): wall:2196.9>1800.0. The pre-flight estimate was too low.",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "454c970180c688816f5d7bc2e45231811bf9a41c",
+  "input_tokens": 200,
+  "kind": "workflow",
+  "outcome_cost_usd": 3.948076,
+  "output_tokens": 191192,
+  "priced_fraction": 1.0,
+  "reason": "budget:wall:2196.9>1800.0",
+  "run_id": "fix-from-ticket-34129809277-20260907T135237Z-6cd0",
+  "schema": 8,
+  "status": "blocked",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": true,
+            "id": "fix.not_fixed",
+            "message": "the change did not make the reproducer pass; it is returned unproposed so a fix that does not fix the bug does not open a pull request.",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote src/in_lockstep/platform/ledger/history.py",
+            "path": "src/in_lockstep/platform/ledger/history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "fix.staged",
+            "message": "wrote tests/in_lockstep/test_history.py",
+            "path": "tests/in_lockstep/test_history.py",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "test.expectation_unmet",
+            "message": "expected the suite to pass, 9 failed of 2495",
+            "severity": "note"
+          },
+          {
+            "blocking": true,
+            "id": "cost.budget_overrun",
+            "message": "actual spend exceeded the ceiling after ActionCall(fix, step=None): wall:2196.9>1800.0. The pre-flight estimate was too low.",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "budget:wall:2196.9>1800.0",
+      "status": "blocked",
+      "step": "fix",
+      "verb": "fix",
+      "wall_seconds": 2072.081
+    }
+  ],
+  "tokens": 191392,
+  "ts": "2026-09-07T14:27:10+00:00",
+  "wall_seconds": 2196.941,
+  "workflow": "fix/from-ticket"
+}

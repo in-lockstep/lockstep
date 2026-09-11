@@ -1,0 +1,44 @@
+{
+  "args": {},
+  "billed_fraction": 1.0,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.00501,
+  "decided": true,
+  "dirty": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "2403121c10ff94cea7a5fce7983d69f3a76c6fd4",
+  "identity": "Tim Pouyer <tim.pouyer@gmail.com>",
+  "input_tokens": 3702,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.002505,
+  "output_tokens": 512,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "judge-corpus-20260908T024510Z-ccd7",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "judge",
+      "verb": "judge",
+      "wall_seconds": 3.822
+    }
+  ],
+  "tokens": 4214,
+  "ts": "2026-09-08T02:45:13+00:00",
+  "wall_seconds": 3.822,
+  "workflow": "judge/corpus"
+}

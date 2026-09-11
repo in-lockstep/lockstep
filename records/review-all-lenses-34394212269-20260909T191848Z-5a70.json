@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "084093c5e86d2151ec0e7c20ebe93cd41d4ec7ad"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 65067,
+  "ci_actor": "tpouyer",
+  "ci_run": "34394212269",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.276287,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 370,
+        "message": "`blast_render` silently drops `testModules` entries that cross the `max_files` cap on impacted files.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 157,
+        "message": "`_blast` is declared `async` and `await`ed, but `Graft.blast` itself is the only awaited call; `fingerprint` is also awaited \u2014 both are correct \u2014 but if `graft` is `None` or `inp.base` is falsy the method returns synchronously, which is fine. No defect, but the description says blast is given to `security`, `intent`, and `tests`; the binding in `lockstep.py` confirms this, yet the CI workflow comment (line 109 in `review.yml`) says \"security and intent lenses ask for it\" without mentioning `test\u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 106,
+        "message": "Workflow comment omits `tests` lens from the list of lenses that use the blast radius.",
+        "path": ".github/workflows/review.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 355,
+        "message": "`tree` and `base` are passed as positional argv tokens with no constraint on their content.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 101,
+        "message": "test_gate_blast_1_a_budget_that_cannot_hold_both_keeps_the_diff uses a token_budget of 1100 but the assertion may be fragile against tokeniser changes",
+        "path": "tests/in_lockstep/test_review_blast.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 133,
+        "message": "_blast method is not directly tested for the path where inp.base is falsy",
+        "path": "tests/in_lockstep/test_review_blast.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 91,
+        "message": "test_gate_blast_1_the_radius_rides_as_untrusted_beside_the_diff asserts provenance by name string, not by enum identity",
+        "path": "tests/in_lockstep/test_review_blast.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "084093c5e86d2151ec0e7c20ebe93cd41d4ec7ad",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.276287,
+  "output_tokens": 2150,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34394212269-20260909T191848Z-5a70",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.07289,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 370,
+            "message": "`blast_render` silently drops `testModules` entries that cross the `max_files` cap on impacted files.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 157,
+            "message": "`_blast` is declared `async` and `await`ed, but `Graft.blast` itself is the only awaited call; `fingerprint` is also awaited \u2014 both are correct \u2014 but if `graft` is `None` or `inp.base` is falsy the method returns synchronously, which is fine. No defect, but the description says blast is given to `security`, `intent`, and `tests`; the binding in `lockstep.py` confirms this, yet the CI workflow comment (line 109 in `review.yml`) says \"security and intent lenses ask for it\" without mentioning `test\u2026[truncated]",
+            "path": "src/in_lockstep/adapters/ai/review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 106,
+            "message": "Workflow comment omits `tests` lens from the list of lenses that use the blast radius.",
+            "path": ".github/workflows/review.yml",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 804,
+      "verb": "review",
+      "wall_seconds": 24.444
+    },
+    {
+      "cost_usd": 0.062282,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 82,
+      "verb": "review",
+      "wall_seconds": 5.824
+    },
+    {
+      "cost_usd": 0.067734,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 355,
+            "message": "`tree` and `base` are passed as positional argv tokens with no constraint on their content.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 439,
+      "verb": "review",
+      "wall_seconds": 14.427
+    },
+    {
+      "cost_usd": 0.073382,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 101,
+            "message": "test_gate_blast_1_a_budget_that_cannot_hold_both_keeps_the_diff uses a token_budget of 1100 but the assertion may be fragile against tokeniser changes",
+            "path": "tests/in_lockstep/test_review_blast.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 133,
+            "message": "_blast method is not directly tested for the path where inp.base is falsy",
+            "path": "tests/in_lockstep/test_review_blast.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 91,
+            "message": "test_gate_blast_1_the_radius_rides_as_untrusted_beside_the_diff asserts provenance by name string, not by enum identity",
+            "path": "tests/in_lockstep/test_review_blast.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 837,
+      "verb": "review",
+      "wall_seconds": 22.827
+    }
+  ],
+  "tokens": 2162,
+  "tool_calls": {},
+  "ts": "2026-09-09T19:19:13+00:00",
+  "turns": 4,
+  "wall_seconds": 24.444,
+  "workflow": "review/all-lenses"
+}

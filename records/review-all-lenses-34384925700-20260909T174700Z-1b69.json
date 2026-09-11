@@ -1,0 +1,217 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "45473d0553e0200d12601ab6dd49ab22f9e2f9b3"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 15543,
+  "cache_write_tokens": 63113,
+  "ci_actor": "tpouyer",
+  "ci_run": "34384925700",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.280757,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1122,
+        "message": "Pre-run refusal passes declared=False even when the sandbox positively omits the program.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 616,
+        "message": "Missing blank line before _script_description may fail ruff E302.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 782,
+        "message": "asyncio.run inside _probe_executables raises if called from a running event loop.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 782,
+        "message": "Probe runs all ALLOWED_COMMANDS checks in a single container start, which is correct, but asyncio.run() will fail if called from an already-running event loop.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 793,
+        "message": "Program names from ALLOWED_COMMANDS are interpolated unsanitized into a shell script run inside the container.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 568,
+        "message": "The `_Image` shell-exit model only checks the *last* program in the script; a test that happens to put a missing program last would silently return 127 and mark the image as unaskable.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 506,
+        "message": "No test asserts that the early refusal (pre-container) fires for every non-declared program, not just `pytest`.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "45473d0553e0200d12601ab6dd49ab22f9e2f9b3",
+  "input_tokens": 15,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.280757,
+  "output_tokens": 2625,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34384925700-20260909T174700Z-1b69",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.08519,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1122,
+            "message": "Pre-run refusal passes declared=False even when the sandbox positively omits the program.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 616,
+            "message": "Missing blank line before _script_description may fail ruff E302.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 782,
+            "message": "asyncio.run inside _probe_executables raises if called from a running event loop.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1288,
+      "verb": "review",
+      "wall_seconds": 32.162
+    },
+    {
+      "cost_usd": 0.061936,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 782,
+            "message": "Probe runs all ALLOWED_COMMANDS checks in a single container start, which is correct, but asyncio.run() will fail if called from an already-running event loop.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 231,
+      "verb": "review",
+      "wall_seconds": 8.53
+    },
+    {
+      "cost_usd": 0.064464,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 793,
+            "message": "Program names from ALLOWED_COMMANDS are interpolated unsanitized into a shell script run inside the container.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 393,
+      "verb": "review",
+      "wall_seconds": 12.31
+    },
+    {
+      "cost_usd": 0.069167,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 568,
+            "message": "The `_Image` shell-exit model only checks the *last* program in the script; a test that happens to put a missing program last would silently return 127 and mark the image as unaskable.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 506,
+            "message": "No test asserts that the early refusal (pre-container) fires for every non-declared program, not just `pytest`.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 728,
+      "verb": "review",
+      "wall_seconds": 20.058
+    }
+  ],
+  "tokens": 2640,
+  "tool_calls": {},
+  "ts": "2026-09-09T17:47:32+00:00",
+  "turns": 5,
+  "wall_seconds": 32.162,
+  "workflow": "review/all-lenses"
+}

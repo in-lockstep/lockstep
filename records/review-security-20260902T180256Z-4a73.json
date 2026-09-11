@@ -1,0 +1,61 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.066073,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 261,
+        "message": "Caller-supplied `inp.env` is merged into the sandbox's environment without any constraint on key or value content.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 240,
+        "message": "The `cmd` list assembled for `CommandRun` includes `inp.command` verbatim; if the underlying sandbox does not enforce a no-shell execution path, caller-controlled tokens become argv elements that may alter command behaviour.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 232,
+        "message": "`inp.cwd` from the caller overrides the bound working directory and is passed to the sandbox without validation.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 394,
+        "message": "Makefile target names read from the repository are used as command arguments without sanitisation.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7c53e656855cf4332ca73462eb53eb7f2c5e41aa",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 906,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T180256Z-4a73",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 909,
+  "ts": "2026-09-02T18:03:22+00:00",
+  "wall_seconds": 25.898
+}

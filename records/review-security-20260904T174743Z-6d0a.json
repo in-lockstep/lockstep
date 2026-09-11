@@ -1,0 +1,87 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.071619,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 9,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 130,
+        "message": "The `ISSUE` environment variable used to build the cassette filename in the `Harvest` step is sourced from `github.event.issue.number`, which is an integer supplied by GitHub and not attacker-controlled in a way that would affect the filesystem path. However, the cassette path constructed as `${RUNNER_TEMP}/review-${ISSUE}.json` in the earlier `run:` step is passed through an environment variable (`ISSUE`), so no shell injection is introduced there. This is correctly handled and is not a finding\u2026[truncated]",
+        "path": ".github/workflows/review.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 205,
+        "message": "The `git check-ignore` subprocess call passes `str(directory)` as an argument. `directory` is constructed as `root / CASSETTE_DIR` where `root` comes from the `run()` caller. If a caller passes an attacker-influenced root path, `str(directory)` could be an unexpected path. Within this codebase's usage pattern `root` is the repository root resolved by the CLI, not user input from a request, so this is low-confidence. Noting the mechanism rather than asserting exploitation.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6805f1a287ca705a315bd2418e7a676e4a7eb91b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 519,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260904T174743Z-6d0a",
+  "schema": 5,
+  "status": "succeeded",
+  "tokens": 522,
+  "ts": "2026-09-04T17:48:00+00:00",
+  "wall_seconds": 16.284
+}

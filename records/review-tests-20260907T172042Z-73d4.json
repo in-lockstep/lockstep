@@ -1,0 +1,45 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34147157078",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.03164,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 293,
+        "message": "Test asserts `--userns=keep-id` unconditionally, but the code only adds it for podman.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 295,
+        "message": "Order assertion (`--user` before `-v`) would pass even if `user_flags` were inserted after the volume flags.",
+        "path": "tests/in_lockstep/test_controls.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "37cc9eec6c5351de74e47f5b406a169f84adb6f8",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 486,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260907T172042Z-73d4",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 489,
+  "ts": "2026-09-07T17:20:55+00:00",
+  "wall_seconds": 13.323
+}

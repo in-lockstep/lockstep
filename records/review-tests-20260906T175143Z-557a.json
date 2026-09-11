@@ -1,0 +1,84 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34049842963",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.110161,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 113,
+        "message": "`test_an_absorb_into_a_branch_that_already_exists_names_the_run_in_its_commit` does not assert the commit message directly.",
+        "path": "tests/in_lockstep/test_reconcile.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 142,
+        "message": "No test for `note_absorbed` being called when `absorb` creates the branch from scratch (first-fetch path).",
+        "path": "tests/in_lockstep/test_reconcile.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 194,
+        "message": "The `--from-artifacts` command test does not exercise the `--push` flag.",
+        "path": "tests/in_lockstep/test_reconcile.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 114,
+        "message": "An artifact with no run id (`run_id == ''`) that is also non-expired is always treated as pending and downloaded every sweep.",
+        "path": "src/in_lockstep/platform/ledger/reconcile.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 291,
+        "message": "`download_artifact` has no test that exercises its error path with a non-UTF-8 stderr.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f1ee0f23dc88e798e9c2f90d2f104cd774ad0c77",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1387,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T175143Z-557a",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1390,
+  "ts": "2026-09-06T17:52:17+00:00",
+  "wall_seconds": 33.905
+}

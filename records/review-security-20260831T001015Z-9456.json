@@ -1,0 +1,37 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.025353,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 106,
+        "message": "The `__init_subclass__` check fires at class-definition time for every subclass, including abstract or partially-declared intermediate base classes. If any internal base class (e.g., a per-verb base like `ImplementStrategy` mentioned in the docstring) is defined without `capabilities` set to `AGENCY`, it will raise `UndeclaredAgency` at import, potentially making the module unimportable. This is not an attacker-exploitable finding but a correctness concern in the refusal mechanism itself \u2014 I am \u2026[truncated]",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "bbdd8175bb4b07579c33ee191f19f8766671507e",
+  "input_tokens": 6206,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 449,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T001015Z-9456",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 6655,
+  "ts": "2026-08-31T00:10:30+00:00",
+  "wall_seconds": 14.925
+}

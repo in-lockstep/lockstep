@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.038765,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 393,
+        "message": "Exception message from the test runner is returned verbatim to the model in the `error:` prefix string.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 377,
+        "message": "Model-supplied `paths` strings are passed to the TestRunner without any containment check against the workspace root.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 84,
+        "message": "Duplicate `@runtime_checkable` decorator on `TestRunner`.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "d8225820f2cae9a1f00c8393322756013f98a9a0",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 637,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T072338Z-85c5",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 640,
+  "ts": "2026-09-02T07:23:58+00:00",
+  "wall_seconds": 19.733
+}

@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.071116,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 270,
+        "message": "User-controlled env values reach a finding message without escaping.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 235,
+        "message": "inp.command from the Run request is appended to the bound argv without any constraint.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 398,
+        "message": "Makefile target names from the filesystem are used as command arguments without validation.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5cfaa2ebb8763fe06688c2338b33feb8b79bb800",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 989,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T180840Z-cbb6",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 992,
+  "ts": "2026-09-02T18:09:07+00:00",
+  "wall_seconds": 26.906
+}

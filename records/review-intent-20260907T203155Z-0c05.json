@@ -1,0 +1,45 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "github-actions[bot]",
+  "ci_run": "34159586724",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.037745,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 450,
+        "message": "Collision check in `_reconcile` reads the remote tree but the index being built is local; a non-fast-forward retry might re-enter `_reconcile` after a partial index write, leaving no rollback.",
+        "path": "src/in_lockstep/platform/ledger/history.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 73,
+        "message": "`push()` on the second clone may fast-forward rather than reconcile if the remote ref is ahead; the test depends on a race that the test infrastructure does not enforce.",
+        "path": "tests/in_lockstep/test_ledger_collision.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5d632907f012007fb68ed32a3b780e2372f9a227",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 605,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260907T203155Z-0c05",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 608,
+  "ts": "2026-09-07T20:32:11+00:00",
+  "wall_seconds": 16.646
+}

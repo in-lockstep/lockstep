@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34073412927",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.058539,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 190,
+        "message": "Proxy URL set by operator via ANTHROPIC_BASE_URL surfaces verbatim in a ProviderRegistrationError message.",
+        "path": "src/in_lockstep/ai/bootstrap.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "endpoint_reason stored on Registration is user-supplied and reaches error messages without sanitisation.",
+        "path": "src/in_lockstep/llm/registry.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: src/in_lockstep/llm/registry.py:187 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "9003555f6b13290787957aa5865f3baae5065129",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 496,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260907T013401Z-1c18",
+  "schema": 8,
+  "status": "succeeded",
+  "subject": "46868466208533c68ba9e30d29ee5aeb",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 499,
+  "ts": "2026-09-07T01:34:21+00:00",
+  "wall_seconds": 19.531
+}

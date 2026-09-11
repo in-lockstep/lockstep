@@ -1,0 +1,47 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.028528,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 36,
+        "message": "Empty `ruff check` exemption dict is left with a comment but no entries \u2014 confirm the test still enforces the `examples` paths are present in the Makefile.",
+        "path": "tests/in_lockstep/test_checked_tree.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 156,
+        "message": "Unrelated `list()` \u2192 `tuple()` change not mentioned in the PR description.",
+        "path": "examples/wayfinder-implement/wayfinder.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "1982966147b04b8ee1c29d668347da6e3a4b6c3c",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 446,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260906T131543Z-f886",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 449,
+  "ts": "2026-09-06T13:15:57+00:00",
+  "wall_seconds": 13.686
+}

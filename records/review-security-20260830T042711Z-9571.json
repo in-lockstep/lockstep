@@ -1,0 +1,67 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.089496,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 244,
+        "message": "Path traversal via model-supplied file paths in `_write_resolutions`",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 196,
+        "message": "Commit patch from `git show` is sent to the model without a length cap on the diff itself",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 168,
+        "message": "Conflicted file contents (with conflict markers) are sent to the model verbatim and labelled TRUSTED_REPO",
+        "path": "src/in_lockstep/adapters/backport.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 1906,
+        "message": "--base is passed through to apply without validation; a value like `$(cmd)` or a flag-shaped string reaches the SCM layer",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a8123dee5d050e5fb828cf6855599a708fd59ca6",
+  "input_tokens": 25137,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 939,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T042711Z-9571",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 26076,
+  "ts": "2026-08-30T04:27:39+00:00",
+  "wall_seconds": 28.016
+}

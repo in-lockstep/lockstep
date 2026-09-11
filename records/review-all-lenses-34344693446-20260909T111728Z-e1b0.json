@@ -1,0 +1,265 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "62cabc97261613657add358733afc9b1acdeca60"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 114927,
+  "ci_actor": "tpouyer",
+  "ci_run": "34344693446",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.478862,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 530,
+        "message": "Final loop iteration returns `Validation(report=None, ...)` despite a valid report being in scope.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 482,
+        "message": "`validated` is called with `rounds=0` nowhere, but `with_directive` is called even when `rounds==0` would skip the repair; the guard is subtle.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 207,
+        "message": "`_Session.invoker` is set to `_Refusing()` but `validated` calls `run_phase`, which uses `session.invoker` indirectly through `AiInvoker`; the double may not wire correctly.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 544,
+        "message": "Two `materialize` calls per validation cycle regardless of whether the fixer ran.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 100,
+        "message": "Validator finding messages are masked by `Redact`, but the effectiveness depends on `Redact.text` covering linter output that may quote arbitrary file contents.",
+        "path": "src/in_lockstep/platform/artifacts.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 516,
+        "message": "Finding lines rendered into the repair directive include raw `path`, `line`, and `message` from the validator \u2014 these reach the model turn without a sanitisation boundary.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 160,
+        "message": "_Validator.invoke uses `self.seen[0].fix` to detect 'a fix pass happened', but `self.seen[0]` is the very call being processed on the first invocation.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 356,
+        "message": "test_gate_validate_2_an_unclean_change_is_opened_as_a_draft asserts `unclean.ready == []` with the message 'a change with findings asked for review', which is the opposite of what the test intends.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 392,
+        "message": "test_gate_validate_2_every_strategy_that_reports_a_change_validates_it_first scans for bare-name `validated` calls only, missing qualified or aliased imports.",
+        "path": "tests/in_lockstep/test_validate_phase.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 581,
+        "message": "validated() falls through to `return Validation(report=None, ...)` after the loop exits normally, which can only happen if `rounds` is 0 and the initial report is not clean.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "62cabc97261613657add358733afc9b1acdeca60",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.478862,
+  "output_tokens": 3190,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34344693446-20260909T111728Z-e1b0",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.121614,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 530,
+            "message": "Final loop iteration returns `Validation(report=None, ...)` despite a valid report being in scope.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 482,
+            "message": "`validated` is called with `rounds=0` nowhere, but `with_directive` is called even when `rounds==0` would skip the repair; the guard is subtle.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 207,
+            "message": "`_Session.invoker` is set to `_Refusing()` but `validated` calls `run_phase`, which uses `session.invoker` indirectly through `AiInvoker`; the double may not wire correctly.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 936,
+      "verb": "review",
+      "wall_seconds": 27.395
+    },
+    {
+      "cost_usd": 0.114365,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 544,
+            "message": "Two `materialize` calls per validation cycle regardless of whether the fixer ran.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 438,
+      "verb": "review",
+      "wall_seconds": 14.176
+    },
+    {
+      "cost_usd": 0.118183,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 100,
+            "message": "Validator finding messages are masked by `Redact`, but the effectiveness depends on `Redact.text` covering linter output that may quote arbitrary file contents.",
+            "path": "src/in_lockstep/platform/artifacts.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 516,
+            "message": "Finding lines rendered into the repair directive include raw `path`, `line`, and `message` from the validator \u2014 these reach the model turn without a sanitisation boundary.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 686,
+      "verb": "review",
+      "wall_seconds": 22.338
+    },
+    {
+      "cost_usd": 0.1247,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 160,
+            "message": "_Validator.invoke uses `self.seen[0].fix` to detect 'a fix pass happened', but `self.seen[0]` is the very call being processed on the first invocation.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 356,
+            "message": "test_gate_validate_2_an_unclean_change_is_opened_as_a_draft asserts `unclean.ready == []` with the message 'a change with findings asked for review', which is the opposite of what the test intends.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 392,
+            "message": "test_gate_validate_2_every_strategy_that_reports_a_change_validates_it_first scans for bare-name `validated` calls only, missing qualified or aliased imports.",
+            "path": "tests/in_lockstep/test_validate_phase.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 581,
+            "message": "validated() falls through to `return Validation(report=None, ...)` after the loop exits normally, which can only happen if `rounds` is 0 and the initial report is not clean.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1142,
+      "verb": "review",
+      "wall_seconds": 28.232
+    }
+  ],
+  "tokens": 3202,
+  "tool_calls": {},
+  "ts": "2026-09-09T11:17:59+00:00",
+  "turns": 4,
+  "wall_seconds": 28.232,
+  "workflow": "review/all-lenses"
+}

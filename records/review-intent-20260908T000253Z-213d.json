@@ -1,0 +1,65 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34171996495",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.084542,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 57,
+        "message": "`fan_out` is called but the method added to `RunContext` in this diff is `fan_out`; verify the name matches what `context.py` exposes.",
+        "path": "src/in_lockstep/workflows/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 281,
+        "message": "The `store.scope` check uses a string comparison (`!= 'shared'`) that would silently pass for any future subclass that forgets to set `scope`.",
+        "path": "src/in_lockstep/workflows/improve.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 43,
+        "message": "`history --push` runs with `continue-on-error: true` and `if: always()`, but if the push fails silently the ledger entry for the resumed run is lost without any diagnostic.",
+        "path": ".github/workflows/resume.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:licensing -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "99b3c991fffbc8e70777cecfb324532ac4af6d85",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 696,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260908T000253Z-213d",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 699,
+  "ts": "2026-09-08T00:03:12+00:00",
+  "wall_seconds": 19.28
+}

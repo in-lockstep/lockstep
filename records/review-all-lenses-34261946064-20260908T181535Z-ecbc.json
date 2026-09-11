@@ -1,0 +1,166 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "eaac702e76cf5416f80569922b97341c6fbcda0f"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 54174,
+  "ci_actor": "tpouyer",
+  "ci_run": "34261946064",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.240544,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 4,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 237,
+        "message": "_case() splits on ` - ` before checking the outcome prefix, so an ERROR line with no ` - ` part silently assigns outcome from the raw word but id from the full un-split token.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 163,
+        "message": "test_gate_verdict_2_the_model_is_told_what_its_tests_said does not assert the test_three-no-message line's rendered form.",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 215,
+        "message": "Pytest failure message embedded in findings and tool results without sanitisation.",
+        "path": "src/in_lockstep/adapters/pytest_adapter.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 153,
+        "message": "test_gate_verdict_2_the_model_is_told_what_its_tests_said does not assert the ERROR case's message appears in the rendered output.",
+        "path": "tests/in_lockstep/test_verdict.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "eaac702e76cf5416f80569922b97341c6fbcda0f",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.120272,
+  "output_tokens": 2488,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34261946064-20260908T181535Z-ecbc",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.033354,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 237,
+            "message": "_case() splits on ` - ` before checking the outcome prefix, so an ERROR line with no ` - ` part silently assigns outcome from the raw word but id from the full un-split token.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 163,
+            "message": "test_gate_verdict_2_the_model_is_told_what_its_tests_said does not assert the test_three-no-message line's rendered form.",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 542,
+      "verb": "review",
+      "wall_seconds": 20.674
+    },
+    {
+      "cost_usd": 0.026375,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 62,
+      "verb": "review",
+      "wall_seconds": 5.53
+    },
+    {
+      "cost_usd": 0.030928,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 215,
+            "message": "Pytest failure message embedded in findings and tool results without sanitisation.",
+            "path": "src/in_lockstep/adapters/pytest_adapter.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 359,
+      "verb": "review",
+      "wall_seconds": 11.686
+    },
+    {
+      "cost_usd": 0.029615,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 153,
+            "message": "test_gate_verdict_2_the_model_is_told_what_its_tests_said does not assert the ERROR case's message appears in the rendered output.",
+            "path": "tests/in_lockstep/test_verdict.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 293,
+      "verb": "review",
+      "wall_seconds": 9.594
+    }
+  ],
+  "tokens": 2512,
+  "ts": "2026-09-08T18:15:56+00:00",
+  "wall_seconds": 47.484,
+  "workflow": "review/all-lenses"
+}

@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "f8099c68b27b76687af0a7f47602280c28eafde9"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 25019,
+  "ci_actor": "github-actions[bot]",
+  "ci_run": "34296470264",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.122207,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 118,
+        "message": "push is now best-effort (check=True removed); real push failures are silently swallowed before the PR API call.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 197,
+        "message": "GitLabScm.open_change gains the `target=` parameter but no implementation \u2014 the description does not mention this limitation.",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 81,
+        "message": "test_no_target_uses_gh_pr_create: the fake `_gh` returns a plain URL string, but the `git config --get remote.origin.url` call goes to the real subprocess \u2014 origin URL will be a local path, not a GitHub slug.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 136,
+        "message": "`target` is interpolated into a `gh api` URL path without any validation.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 161,
+        "message": "`_owner_repo_from_remote` scp-like URL and empty-input paths are untested.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 75,
+        "message": "`test_no_target_uses_gh_pr_create` assertion on the `api` exclusion is fragile and may silently pass incorrectly.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 117,
+        "message": "No test asserts the `base=` and `draft=True` arguments are forwarded in the REST path.",
+        "path": "tests/in_lockstep/test_fork_propose.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "f8099c68b27b76687af0a7f47602280c28eafde9",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.122207,
+  "output_tokens": 1890,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34296470264-20260909T005442Z-401f",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.034295,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 118,
+            "message": "push is now best-effort (check=True removed); real push failures are silently swallowed before the PR API call.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 197,
+            "message": "GitLabScm.open_change gains the `target=` parameter but no implementation \u2014 the description does not mention this limitation.",
+            "path": "src/in_lockstep/platform/scm/gitlab.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 81,
+            "message": "test_no_target_uses_gh_pr_create: the fake `_gh` returns a plain URL string, but the `git config --get remote.origin.url` call goes to the real subprocess \u2014 origin URL will be a local path, not a GitHub slug.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 734,
+      "verb": "review",
+      "wall_seconds": 21.205
+    },
+    {
+      "cost_usd": 0.024796,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 86,
+      "verb": "review",
+      "wall_seconds": 6.124
+    },
+    {
+      "cost_usd": 0.029139,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 136,
+            "message": "`target` is interpolated into a `gh api` URL path without any validation.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 369,
+      "verb": "review",
+      "wall_seconds": 12.033
+    },
+    {
+      "cost_usd": 0.033976,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 161,
+            "message": "`_owner_repo_from_remote` scp-like URL and empty-input paths are untested.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 75,
+            "message": "`test_no_target_uses_gh_pr_create` assertion on the `api` exclusion is fragile and may silently pass incorrectly.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 117,
+            "message": "No test asserts the `base=` and `draft=True` arguments are forwarded in the REST path.",
+            "path": "tests/in_lockstep/test_fork_propose.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 713,
+      "verb": "review",
+      "wall_seconds": 17.283
+    }
+  ],
+  "tokens": 1902,
+  "tool_calls": {},
+  "ts": "2026-09-09T00:55:03+00:00",
+  "turns": 4,
+  "wall_seconds": 21.205,
+  "workflow": "review/all-lenses"
+}

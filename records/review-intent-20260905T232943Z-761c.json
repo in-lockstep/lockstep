@@ -1,0 +1,75 @@
+{
+  "aspect": "intent",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.09251,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The five direct verbs now call `_report_what_was_kept` only when `record` is truthy, but the PR description says recording is the default. If `record` defaults to `True`, the guard `if record:` is always satisfied and the reporting path is effectively unconditional \u2014 which is fine. But if `record` can be `None` (the tri-state the codebase elsewhere uses for `--offline`/`--dry-run`), a run that recorded by default might silently skip reporting. The diff does not show the `record` parameter's defa\u2026[truncated]",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 72,
+        "message": "The binding now passes `--extra anthropic` to `uv sync --locked`. This means the provision step installs the anthropic SDK into the repository's own environment unconditionally, not just when the job needs it. Adopters whose bindings mirror this file will pull in the anthropic SDK on every provision. The comment explains why (provision runs from the base branch and could otherwise uninstall what the job installed), which is the correct reasoning \u2014 but the side effect is worth naming: this is now\u2026[truncated]",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 520,
+        "message": "The `recorded` call wraps `invoker.provider` in place by assignment after the factory returns. This relies on `invoker` having a mutable `provider` attribute. If an adapter's factory returns an invoker whose `provider` is a property with no setter, the assignment silently fails in Python (or raises, depending on implementation). The diff does not show `AiInvoker`'s definition, so I cannot confirm whether this is safe \u2014 but the pattern is fragile if `provider` is ever made read-only.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 3549,
+        "message": "The bespoke-adapter test (`test_a_hand_written_adapter_that_bypasses_every_seam_is_named_not_hidden`) asserts `'recorder never saw' in result.output` but the `_BESPOKE` fixture is constructed by string-replacing `_OWN_ADAPTER`. The replacement inserts a `_unused = (AiReview(` expression whose closing `)` is inherited from the original `AiReview(` call site. Whether the parentheses balance correctly in the resulting module depends on the exact text of `_OWN_ADAPTER` at the replacement boundary. T\u2026[truncated]",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The change in all four workflow files moves `uv sync --extra anthropic` to after `uv run in-lockstep provision`. The explanation is sound and the diff matches the description exactly. No gap between stated intent and implementation.",
+        "path": ".github/workflows/ai-generated.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "2 finding(s) kept without a line: .github/workflows/ai-generated.yml:79, src/in_lockstep/cli.py:2626 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "7d5576370c51948ad65f1eece323affc4d5b1eb4",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 934,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-intent-20260905T232943Z-761c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "855242593c86728f41ab5fc0d27d84a8",
+  "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 937,
+  "ts": "2026-09-05T23:30:07+00:00",
+  "wall_seconds": 24.127
+}

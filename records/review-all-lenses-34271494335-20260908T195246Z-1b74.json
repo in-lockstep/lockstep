@@ -1,0 +1,377 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "06dfc848d44cbd955af4d12cb76511255b9114ff"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 115919,
+  "ci_actor": "tpouyer",
+  "ci_run": "34271494335",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.479897,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 19,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 604,
+        "message": "ToolRunnerImpl.code_search is a plain class-level attribute set by mutation after construction, not a constructor parameter.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 444,
+        "message": "DiagnoseThenFix changed from a class reference to an instantiation \u2014 an undeclared behavioral change.",
+        "path": ".lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 491,
+        "message": "GraftSearch.__call__ calls ensure_installed on every query rather than relying on prepare's result.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_cloud_creds",
+        "message": "critical: ~/.aws",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 430,
+        "message": "`fingerprint` is called on every `__call__`, including repeated queries over the same staged set.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_cloud_creds",
+        "message": "critical: ~/.aws",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 316,
+        "message": "Model-controlled `scope` value reaches Graft argv without path validation.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 660,
+        "message": "Exception message from the code-search backend is returned verbatim to the model.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_cloud_creds",
+        "message": "critical: ~/.aws",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 194,
+        "message": "The assertion `calls[0] == 'generate:1'` proves ordering but not that `prepare` ran *before* the first generate on a cold path.",
+        "path": "tests/in_lockstep/test_search_code.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 208,
+        "message": "`assert strategy.provisions == ()` for a caller-supplied backend is tested, but the `code_search=True` path only checks the class name, not that `provisions` returns the same `Graft` instance the strategy would use.",
+        "path": "tests/in_lockstep/test_search_code.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 296,
+        "message": "The `_Host.factory` ignores the `network` argument; a test for sealed-environment behaviour relies on it never being checked.",
+        "path": "tests/in_lockstep/test_search_code.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 251,
+        "message": "The deletion case (`a.py`, `None`) rebuilds the index (asserted via `graft.builds == 3`) but the test does not assert that `a.py` content is absent from the query answer.",
+        "path": "tests/in_lockstep/test_search_code.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 421,
+        "message": "No test covers the branch where `result.exit_code != 0` but `result.stdout` is valid JSON.",
+        "path": "src/in_lockstep/adapters/graft/__init__.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.ignore_previous",
+        "message": "critical: ignore all previous instructions",
+        "severity": "error"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_cloud_creds",
+        "message": "critical: ~/.aws",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "06dfc848d44cbd955af4d12cb76511255b9114ff",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.479897,
+  "output_tokens": 3011,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34271494335-20260908T195246Z-1b74",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.119334,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 604,
+            "message": "ToolRunnerImpl.code_search is a plain class-level attribute set by mutation after construction, not a constructor parameter.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 444,
+            "message": "DiagnoseThenFix changed from a class reference to an instantiation \u2014 an undeclared behavioral change.",
+            "path": ".lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 491,
+            "message": "GraftSearch.__call__ calls ensure_installed on every query rather than relying on prepare's result.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: ignore all previous instructions",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_cloud_creds",
+            "message": "critical: ~/.aws",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 722,
+      "verb": "review",
+      "wall_seconds": 26.199
+    },
+    {
+      "cost_usd": 0.114035,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 430,
+            "message": "`fingerprint` is called on every `__call__`, including repeated queries over the same staged set.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: ignore all previous instructions",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_cloud_creds",
+            "message": "critical: ~/.aws",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 354,
+      "verb": "review",
+      "wall_seconds": 14.217
+    },
+    {
+      "cost_usd": 0.117748,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 316,
+            "message": "Model-controlled `scope` value reaches Graft argv without path validation.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 660,
+            "message": "Exception message from the code-search backend is returned verbatim to the model.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: ignore all previous instructions",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_cloud_creds",
+            "message": "critical: ~/.aws",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 595,
+      "verb": "review",
+      "wall_seconds": 20.655
+    },
+    {
+      "cost_usd": 0.12878,
+      "decided": true,
+      "findings": {
+        "count": 7,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 194,
+            "message": "The assertion `calls[0] == 'generate:1'` proves ordering but not that `prepare` ran *before* the first generate on a cold path.",
+            "path": "tests/in_lockstep/test_search_code.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 208,
+            "message": "`assert strategy.provisions == ()` for a caller-supplied backend is tested, but the `code_search=True` path only checks the class name, not that `provisions` returns the same `Graft` instance the strategy would use.",
+            "path": "tests/in_lockstep/test_search_code.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 296,
+            "message": "The `_Host.factory` ignores the `network` argument; a test for sealed-environment behaviour relies on it never being checked.",
+            "path": "tests/in_lockstep/test_search_code.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 251,
+            "message": "The deletion case (`a.py`, `None`) rebuilds the index (asserted via `graft.builds == 3`) but the test does not assert that `a.py` content is absent from the query answer.",
+            "path": "tests/in_lockstep/test_search_code.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 421,
+            "message": "No test covers the branch where `result.exit_code != 0` but `result.stdout` is valid JSON.",
+            "path": "src/in_lockstep/adapters/graft/__init__.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.ignore_previous",
+            "message": "critical: ignore all previous instructions",
+            "severity": "error"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_cloud_creds",
+            "message": "critical: ~/.aws",
+            "severity": "error"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1352,
+      "verb": "review",
+      "wall_seconds": 33.401
+    }
+  ],
+  "tokens": 3023,
+  "tool_calls": {},
+  "ts": "2026-09-08T19:53:22+00:00",
+  "turns": 4,
+  "wall_seconds": 33.401,
+  "workflow": "review/all-lenses"
+}

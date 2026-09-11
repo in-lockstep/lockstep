@@ -1,0 +1,45 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.078781,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 257,
+        "message": "Caller-supplied `env` keys and values are interpolated directly into `-e key=value` flag strings without any validation or escaping.",
+        "path": "src/in_lockstep/adapters/command.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 456,
+        "message": "Makefile and package.json content from the repository is read and used to construct shell command tuples that are later executed; the parsing is heuristic and the resulting argv is trusted as safe by callers.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e797236916d7e4d02b59098dc846884c56a528e4",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 722,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260902T181351Z-0857",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 725,
+  "ts": "2026-09-02T18:14:13+00:00",
+  "wall_seconds": 22.65
+}

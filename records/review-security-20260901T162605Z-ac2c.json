@@ -1,0 +1,77 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.10407,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 110,
+        "message": "Review comments gathered from pull requests are rendered into prompt context as-is, with only a character cap applied. A reviewer (or any collaborator with PR comment access) can craft a comment containing prompt-injection text \u2014 e.g., instructions to exfiltrate the next diff, approve the change, or alter the generated code \u2014 and that text will reach the model tagged UNTRUSTED_EXTERNAL but not otherwise neutralised. The design acknowledges the provenance but the model receiving the text must its\u2026[truncated]",
+        "path": "src/in_lockstep/platform/conversation.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 193,
+        "message": "The `changes_for` call asks `gh pr list` for up to 60 open PRs and then filters client-side by branch name. On a repository with many open PRs the 60-item window may not include all framework-opened PRs, silently omitting review context rather than failing visibly. This is a correctness gap rather than an exploitable injection path, but it also means an adversary who opens 60 unrelated PRs before a `/implement` run can suppress review context from reaching the model, potentially causing the agen\u2026[truncated]",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 222,
+        "message": "In `ticket_of`, the body of any pull request is passed to `trailers_from`, which parses a JSON block from within an HTML `<details>` element. A pull request whose description was edited to contain a malformed or adversarial block in that exact format could cause `trailers_from` to return a crafted `Ticket` value, redirecting the run to a different ticket. The `json.loads` failure path returns `{}` (safe), but a valid JSON object with a `Ticket` key set to an arbitrary string would be accepted.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!--\\s*in-lockstep:[^>]*-->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.html_comment",
+        "message": "medium: <!-- in-lockstep:review:security -->",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e6a874585f539eecce90026f67f424a04f0748ee",
+  "input_tokens": 29650,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1008,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260901T162605Z-ac2c",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 30658,
+  "ts": "2026-09-01T16:26:34+00:00",
+  "wall_seconds": 29.622
+}

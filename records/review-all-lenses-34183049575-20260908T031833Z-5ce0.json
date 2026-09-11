@@ -1,0 +1,283 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "436d3e61fa1ab99e7927de308a7960ce039fe741"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 137574,
+  "ci_actor": "tpouyer",
+  "ci_run": "34183049575",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.601625,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 432,
+        "message": "`php` detection treats a malformed or empty `composer.json` as no PHP stack, silently.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "message": "The `rake_test` guard requires a `Gemfile`, so a Rakefile-only repository never binds `bundle exec rake test` even when the Rakefile defines the task.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 600,
+        "message": "`cmake --build build` is bound for any `CMakeLists.txt`, but `build/` is only the conventional directory; the configure step is not run, so the build will fail on a fresh tree.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 668,
+        "message": "`dotnet restore` is unconditionally appended to `provision_commands` whenever `dotnet` is true, running before other provision steps with no guard.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 897,
+        "message": "The Rakefile-only negative case asserts `test_command == ()` but does not assert what the decline says, leaving the `STACK_HINTS` path untested for the no-Gemfile case.",
+        "path": "tests/in_lockstep/test_detect.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: src/in_lockstep/lockstep.py:522 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 702,
+        "message": "One-level-down scan calls `manifest_present` (which may `glob`) for every entry in `BUILD_MANIFESTS` for every subdirectory iterated.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "message": "Regex applied to Rakefile content with re.MULTILINE but no size or content limit before the match.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 412,
+        "message": "composer.json is parsed with json.loads on the full file content with no size limit.",
+        "path": "src/in_lockstep/lockstep.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.line_not_in_hunk",
+        "message": "1 finding(s) kept without a line: src/in_lockstep/lockstep.py:524 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 871,
+        "message": "Declined-message assertion for CMake without `enable_testing()` is too weak to catch a regression.",
+        "path": "tests/in_lockstep/test_detect.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 897,
+        "message": "One-level-down test does not assert that glob entries (`*.csproj`) are found, only that the formatted string `api/*.csproj` appears in the decline.",
+        "path": "tests/in_lockstep/test_detect.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 880,
+        "message": "No test covers a Rakefile-only repository (no Gemfile) reaching a non-empty test command.",
+        "path": "tests/in_lockstep/test_detect.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "436d3e61fa1ab99e7927de308a7960ce039fe741",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.300812,
+  "output_tokens": 5710,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34183049575-20260908T031833Z-5ce0",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 6,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 432,
+            "message": "`php` detection treats a malformed or empty `composer.json` as no PHP stack, silently.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "message": "The `rake_test` guard requires a `Gemfile`, so a Rakefile-only repository never binds `bundle exec rake test` even when the Rakefile defines the task.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 600,
+            "message": "`cmake --build build` is bound for any `CMakeLists.txt`, but `build/` is only the conventional directory; the configure step is not run, so the build will fail on a fresh tree.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 668,
+            "message": "`dotnet restore` is unconditionally appended to `provision_commands` whenever `dotnet` is true, running before other provision steps with no guard.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 897,
+            "message": "The Rakefile-only negative case asserts `test_command == ()` but does not assert what the decline says, leaving the `STACK_HINTS` path untested for the no-Gemfile case.",
+            "path": "tests/in_lockstep/test_detect.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.line_not_in_hunk",
+            "message": "1 finding(s) kept without a line: src/in_lockstep/lockstep.py:522 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "verb": "review",
+      "wall_seconds": 34.05
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 702,
+            "message": "One-level-down scan calls `manifest_present` (which may `glob`) for every entry in `BUILD_MANIFESTS` for every subdirectory iterated.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "verb": "review",
+      "wall_seconds": 10.736
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "message": "Regex applied to Rakefile content with re.MULTILINE but no size or content limit before the match.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 412,
+            "message": "composer.json is parsed with json.loads on the full file content with no size limit.",
+            "path": "src/in_lockstep/lockstep.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.line_not_in_hunk",
+            "message": "1 finding(s) kept without a line: src/in_lockstep/lockstep.py:524 points outside every hunk this change produced in that file. The claim may still be right, so it is reported; the coordinate is not, so it is not.",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "verb": "review",
+      "wall_seconds": 13.572
+    },
+    {
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 871,
+            "message": "Declined-message assertion for CMake without `enable_testing()` is too weak to catch a regression.",
+            "path": "tests/in_lockstep/test_detect.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 897,
+            "message": "One-level-down test does not assert that glob entries (`*.csproj`) are found, only that the formatted string `api/*.csproj` appears in the decline.",
+            "path": "tests/in_lockstep/test_detect.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 880,
+            "message": "No test covers a Rakefile-only repository (no Gemfile) reaching a non-empty test command.",
+            "path": "tests/in_lockstep/test_detect.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "verb": "review",
+      "wall_seconds": 22.18
+    }
+  ],
+  "tokens": 5734,
+  "ts": "2026-09-08T03:19:07+00:00",
+  "wall_seconds": 80.538,
+  "workflow": "review/all-lenses"
+}

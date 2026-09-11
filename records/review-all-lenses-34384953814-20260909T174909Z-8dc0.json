@@ -1,0 +1,216 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "c2696a471bf45a29b29514ece2bccc0c403f3d38"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 6455,
+  "cache_write_tokens": 55860,
+  "ci_actor": "tpouyer",
+  "ci_run": "34384953814",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.241267,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 626,
+        "message": "Intersection is computed against `allowed_commands`, but the order comes from there too \u2014 the declared order in `executables=` is silently dropped.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 1119,
+        "message": "Early refusal fires before the allowlist check, but the code path order is reversed: the allowlist check comes first in the original code.",
+        "path": "src/in_lockstep/ai/builtins.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 560,
+        "message": "The `_Image` double's shell-exit-code simulation is subtle and could silently stop exercising the `exit 0` invariant it claims to guard.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 793,
+        "message": "Program names from `ALLOWED_COMMANDS` are interpolated directly into a shell script without quoting.",
+        "path": "src/in_lockstep/doctor.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 492,
+        "message": "test_gate_script_1_a_sandbox_that_declares_its_programs_refuses_the_rest_before_running asserts runner.seen == [] after a refused call, but a second call follows \u2014 the assertion should be made before the second run() call or the intent is obscured.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 553,
+        "message": "_Image.run models shell exit-status correctly for the probe's `exit 0`, but ONLY when the last semicolon-separated token is exactly 'exit 0' \u2014 a whitespace variation would misclassify it.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 536,
+        "message": "No test asserts that the description names only the intersection when both declared AND allowed programs exist \u2014 the 'carries none' and 'policy, not an inventory' branches are tested, but the intersection branch's exclusion property is only partially checked.",
+        "path": "tests/in_lockstep/test_toolrunner.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "c2696a471bf45a29b29514ece2bccc0c403f3d38",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.241267,
+  "output_tokens": 1988,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34384953814-20260909T174909Z-8dc0",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.064131,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 626,
+            "message": "Intersection is computed against `allowed_commands`, but the order comes from there too \u2014 the declared order in `executables=` is silently dropped.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 1119,
+            "message": "Early refusal fires before the allowlist check, but the code path order is reversed: the allowlist check comes first in the original code.",
+            "path": "src/in_lockstep/ai/builtins.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 560,
+            "message": "The `_Image` double's shell-exit-code simulation is subtle and could silently stop exercising the `exit 0` invariant it claims to guard.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 755,
+      "verb": "review",
+      "wall_seconds": 23.318
+    },
+    {
+      "cost_usd": 0.054369,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 103,
+      "verb": "review",
+      "wall_seconds": 5.722
+    },
+    {
+      "cost_usd": 0.058412,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 793,
+            "message": "Program names from `ALLOWED_COMMANDS` are interpolated directly into a shell script without quoting.",
+            "path": "src/in_lockstep/doctor.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 372,
+      "verb": "review",
+      "wall_seconds": 15.602
+    },
+    {
+      "cost_usd": 0.064356,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 492,
+            "message": "test_gate_script_1_a_sandbox_that_declares_its_programs_refuses_the_rest_before_running asserts runner.seen == [] after a refused call, but a second call follows \u2014 the assertion should be made before the second run() call or the intent is obscured.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 553,
+            "message": "_Image.run models shell exit-status correctly for the probe's `exit 0`, but ONLY when the last semicolon-separated token is exactly 'exit 0' \u2014 a whitespace variation would misclassify it.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 536,
+            "message": "No test asserts that the description names only the intersection when both declared AND allowed programs exist \u2014 the 'carries none' and 'policy, not an inventory' branches are tested, but the intersection branch's exclusion property is only partially checked.",
+            "path": "tests/in_lockstep/test_toolrunner.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 770,
+      "verb": "review",
+      "wall_seconds": 25.295
+    }
+  ],
+  "tokens": 2000,
+  "tool_calls": {},
+  "ts": "2026-09-09T17:49:36+00:00",
+  "turns": 4,
+  "wall_seconds": 25.295,
+  "workflow": "review/all-lenses"
+}

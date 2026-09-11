@@ -1,0 +1,26 @@
+{
+  "aspect": "security",
+  "branch": "fix/blocked-is-not-a-failure",
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "d2ded3dc8ec38bb142a0fbdac6391254e4ab254a",
+  "input_tokens": 0,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 0,
+  "reason": "killswitch",
+  "run_id": "review-security-20260905T140431Z-73b0",
+  "schema": 6,
+  "status": "blocked",
+  "subject": "79e9da20c5150530d94f788dbaaad413",
+  "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 0,
+  "ts": "2026-09-05T14:04:31+00:00",
+  "wall_seconds": 0.0
+}

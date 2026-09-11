@@ -1,0 +1,58 @@
+{
+  "args": {},
+  "billed_fraction": null,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "provider.transient",
+        "message": "All connection attempts failed",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "2403121c10ff94cea7a5fce7983d69f3a76c6fd4",
+  "identity": "Tim Pouyer <tim.pouyer@gmail.com>",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": "provider.transient",
+  "run_id": "judge-corpus-20260908T023019Z-c427",
+  "schema": 8,
+  "status": "errored",
+  "steps": [
+    {
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": true,
+            "id": "provider.transient",
+            "message": "All connection attempts failed",
+            "severity": "error"
+          }
+        ]
+      },
+      "reason": "provider.transient",
+      "status": "errored",
+      "step": "judge",
+      "verb": "judge",
+      "wall_seconds": 1.709
+    }
+  ],
+  "tokens": 0,
+  "ts": "2026-09-08T02:30:21+00:00",
+  "wall_seconds": 1.709,
+  "workflow": "judge/corpus"
+}

@@ -1,0 +1,28 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.007149,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 0,
+    "items": []
+  },
+  "head": "353224e3012e175f6aa63e4799b7ac091fb4a3bf",
+  "input_tokens": 2148,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 47,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260830T053617Z-fdf8",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 2195,
+  "ts": "2026-08-30T05:36:22+00:00",
+  "wall_seconds": 4.894
+}

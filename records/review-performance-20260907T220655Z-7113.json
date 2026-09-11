@@ -1,0 +1,45 @@
+{
+  "aspect": "performance",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "ci_run": "34165474040",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.075812,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 2,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 557,
+        "message": "Watcher polls every 50 ms but never exits early after cancelling \u2014 it cancels tasks and returns, but the poll interval means kill-switch latency is 0\u201350 ms per check cycle, not the 50 ms worst case the comment implies.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 299,
+        "message": "JoinResult.cost sums in a Python loop, rebuilding a Cost object per branch \u2014 harmless at small fan-out counts but called repeatedly since it is a property with no caching.",
+        "path": "src/in_lockstep/core/outcome.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "6b19dc04afe2d89f46ca62b207a708c56bab22d1",
+  "input_tokens": 3,
+  "kind": "review",
+  "output_tokens": 573,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-performance-20260907T220655Z-7113",
+  "schema": 8,
+  "status": "succeeded",
+  "tokens": 576,
+  "ts": "2026-09-07T22:07:14+00:00",
+  "wall_seconds": 18.443
+}

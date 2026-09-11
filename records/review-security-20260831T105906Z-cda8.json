@@ -1,0 +1,53 @@
+{
+  "aspect": "security",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.044034,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 3,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 87,
+        "message": "Absolute filesystem path written into receipt output and potentially logged or stored",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 211,
+        "message": "Exception swallowed silently in `_egress` may hide a partial or empty egress manifest",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 219,
+        "message": "Corpus path traversal: `case.path.parent.parent.name` is taken from loaded case objects without validation",
+        "path": "src/in_lockstep/receipt.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "08f3a4cfbd43212507e59741eeb04ccd09dac56c",
+  "input_tokens": 11053,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 725,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-security-20260831T105906Z-cda8",
+  "schema": 4,
+  "status": "succeeded",
+  "tokens": 11778,
+  "ts": "2026-08-31T10:59:32+00:00",
+  "wall_seconds": 25.624
+}

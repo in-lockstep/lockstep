@@ -1,0 +1,101 @@
+{
+  "aspect": "tests",
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "ci_actor": "tpouyer",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.143469,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 10,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 202,
+        "message": "Test asserts `routed_model` returns empty string for a missing lens route, but does not assert the fall-through to the verb route when only a verb route exists.",
+        "path": "tests/in_lockstep/test_lens.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 148,
+        "message": "`test_gate_lens_1_turns_may_only_tighten_and_tokens_replace` does not assert that `deny_tools` and `scan_input` are preserved when turns or tokens change.",
+        "path": "tests/in_lockstep/test_lens.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 231,
+        "message": "The `_Seen` stub's `run` method ignores the `settle` call path; the truncation message test uses a separate `_Cut` stub that also returns unfinished JSON, but `settle` is not stubbed.",
+        "path": "tests/in_lockstep/test_lens.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 3676,
+        "message": "The `--comment-out` flag and `--ask` flag verified as strings present in the scaffold text, but not verified to appear in the correct job.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 3815,
+        "message": "`test_review_runs_a_lens_on_the_model_its_own_route_names` uses `ROUTES_MODULE`, which has no `AiReview(lenses=...)` bind \u2014 verifying the CLI's route resolution but not the adapter's.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: GITHUB_TOKEN",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "2dee01a893a78dd58963b3ad500cf2a17c5f392b",
+  "input_tokens": 3,
+  "kind": "review",
+  "model": "anthropic:claude-sonnet-4-6",
+  "output_tokens": 1649,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-tests-20260906T150550Z-d81c",
+  "schema": 6,
+  "status": "succeeded",
+  "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+  "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+  "tokens": 1652,
+  "ts": "2026-09-06T15:06:32+00:00",
+  "wall_seconds": 42.047
+}

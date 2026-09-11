@@ -1,0 +1,181 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "e75182740a9054a7825aae891aadf030b3354f67"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 80990,
+  "ci_actor": "tpouyer",
+  "ci_run": "34217176294",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.349295,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 5,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 340,
+        "message": "`cost_usd` and `tokens` are now emitted on every step record, not only review-lens steps.",
+        "path": "src/in_lockstep/core/context.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 285,
+        "message": "Synthetic step entries inherit `kind` from `step.get('verb')`, defaulting to `'review'`; a non-review step with a `subject` field would produce a misleading entry.",
+        "path": "src/in_lockstep/platform/ledger/store.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1198,
+        "message": "No test exercises a step that carries a `subject` but is missing `cost_usd` or `tokens`.",
+        "path": "tests/in_lockstep/test_platform.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 1197,
+        "message": "The `'workflow'` subject test asserts an empty pair but does not assert the parent itself is absent from each window.",
+        "path": "tests/in_lockstep/test_platform.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 4694,
+        "message": "The `StepOutcome` for `'tests'` has no explicit `tokens` field; the assertion on `tests['cost_usd']` does not verify the absence of `tokens` in that record.",
+        "path": "tests/in_lockstep/test_cli.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "e75182740a9054a7825aae891aadf030b3354f67",
+  "input_tokens": 24,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.174647,
+  "output_tokens": 3034,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34217176294-20260908T104617Z-6910",
+  "schema": 8,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.047664,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 340,
+            "message": "`cost_usd` and `tokens` are now emitted on every step record, not only review-lens steps.",
+            "path": "src/in_lockstep/core/context.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 285,
+            "message": "Synthetic step entries inherit `kind` from `step.get('verb')`, defaulting to `'review'`; a non-review step with a `subject` field would produce a misleading entry.",
+            "path": "src/in_lockstep/platform/ledger/store.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 658,
+      "verb": "review",
+      "wall_seconds": 21.037
+    },
+    {
+      "cost_usd": 0.039575,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 104,
+      "verb": "review",
+      "wall_seconds": 5.926
+    },
+    {
+      "cost_usd": 0.039208,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 73,
+      "verb": "review",
+      "wall_seconds": 4.59
+    },
+    {
+      "cost_usd": 0.0482,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 1198,
+            "message": "No test exercises a step that carries a `subject` but is missing `cost_usd` or `tokens`.",
+            "path": "tests/in_lockstep/test_platform.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 1197,
+            "message": "The `'workflow'` subject test asserts an empty pair but does not assert the parent itself is absent from each window.",
+            "path": "tests/in_lockstep/test_platform.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 4694,
+            "message": "The `StepOutcome` for `'tests'` has no explicit `tokens` field; the assertion on `tests['cost_usd']` does not verify the absence of `tokens` in that record.",
+            "path": "tests/in_lockstep/test_cli.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 694,
+      "verb": "review",
+      "wall_seconds": 24.567
+    }
+  ],
+  "tokens": 3058,
+  "ts": "2026-09-08T10:46:44+00:00",
+  "wall_seconds": 56.12,
+  "workflow": "review/all-lenses"
+}
