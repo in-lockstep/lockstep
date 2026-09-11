@@ -354,9 +354,9 @@ the draft on the model that case was recorded on. The scorecard has both arms ov
 on the host first, and then parks on that pull request's review
 (`ctx.park(HumanBoundary.pr_review(...))`) when the bound `LedgerStore` is shared;
 `improve/after-review` is the continuation a person's verdict starts, through
-`in-lockstep resume --run <id> --as approved --by <login>` or the `resume.yml` dispatch. On a local
+`in-lockstep resume --run <id> --as approved --by <login>` or the `lockstep-resume.yml` dispatch. On a local
 store the proposal is opened and nothing parks, and the run says so. Bind the adapter and the corpus, register the process, and it runs the same
-way at a terminal and from `.github/workflows/improve.yml`:
+way at a terminal and from `.github/workflows/lockstep-improve.yml`:
 
 ```python
 from in_lockstep.adapters.ai import AiImprove, Draft, Measure
@@ -1254,14 +1254,14 @@ the reason the trampoline has two jobs.
 
 Everything else is process, and process in YAML is process with no tests.
 
-`.github/workflows/implement.yml` is the worked example. A test enforces a budget on how many
+`.github/workflows/lockstep-implement.yml` is the worked example. A test enforces a budget on how many
 lines of shell it may contain, and fails if it starts running `git commit`, `gh pr create` or
 `gh issue comment` itself. Each of those has a port behind it (`Scm.open_change`,
 `TicketSource.comment`), and reaching for the command instead is how lifecycle logic gets back in.
 
 ### Firing it from a comment
 
-`.github/workflows/implement.yml` runs a session when an authorized person comments `/implement`
+`.github/workflows/lockstep-implement.yml` runs a session when an authorized person comments `/implement`
 on an issue, using that issue as the ticket. Three jobs, and the shape is the point:
 
 ```

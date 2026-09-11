@@ -1,7 +1,7 @@
 """The chat-ops trigger, as a file that has to hold together.
 
 A workflow is the one artifact in this repository that nothing type-checks, nothing imports and
-nothing runs until it matters — and `implement.yml` is the file where a mistake means either an
+nothing runs until it matters — and `lockstep-implement.yml` is the file where a mistake means either an
 unauthenticated entry point or an API key sharing a process with a write token. YAML review is not
 a control; this is.
 
@@ -99,7 +99,7 @@ def test_every_expression_function_exists(path: Path) -> None:
 
 def test_the_trigger_is_a_prefix_match_not_a_mention() -> None:
     """`contains` would fire on every comment explaining why not to run it."""
-    condition = _load("implement.yml")["jobs"]["gate"]["if"]
+    condition = _load("lockstep-implement.yml")["jobs"]["gate"]["if"]
     assert "startsWith(github.event.comment.body" in condition
     assert "contains(" not in condition
 
@@ -111,7 +111,7 @@ def test_a_pull_request_comment_fires_the_trigger_too() -> None:
     attempt is needed is standing on the pull request when they decide it. Sending them somewhere
     else to say so is how a tool teaches people it is awkward.
     """
-    for name in ("implement.yml", "fix.yml"):
+    for name in ("lockstep-implement.yml", "lockstep-fix.yml"):
         condition = _load(name)["jobs"]["gate"]["if"]
         assert "issue.pull_request" not in condition, f"{name} still refuses a reviewer's comment"
 
@@ -126,7 +126,7 @@ def test_which_ticket_a_comment_is_about_is_not_decided_in_yaml() -> None:
 
     So the workflow passes the number through untouched and the workflow function resolves it.
     """
-    for name in ("implement.yml", "fix.yml"):
+    for name in ("lockstep-implement.yml", "lockstep-fix.yml"):
         text = (WORKFLOWS / name).read_text()
         body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
         assert "issue.pull_request" not in body, f"{name} branches on the comment's location"
@@ -135,7 +135,7 @@ def test_which_ticket_a_comment_is_about_is_not_decided_in_yaml() -> None:
 
 def test_the_actor_gate_runs_before_anything_holding_a_credential() -> None:
     """An unauthorized comment must cost one job that installs nothing and calls nothing."""
-    jobs = _load("implement.yml")["jobs"]
+    jobs = _load("lockstep-implement.yml")["jobs"]
     gate = jobs["gate"]
     assert "in-lockstep gate" in yaml.dump(gate["steps"])
     assert gate["permissions"] == {"contents": "read"}
@@ -251,13 +251,13 @@ def test_gate_sandbox_2_a_job_that_runs_a_model_checks_out_without_persisting_th
 
 def test_the_writing_job_does_not_install_a_provider_sdk() -> None:
     """`apply` must be constructible with no provider registry — a fact, not a convention."""
-    propose = yaml.dump(_load("implement.yml")["jobs"]["propose"])
+    propose = yaml.dump(_load("lockstep-implement.yml")["jobs"]["propose"])
     assert "--extra anthropic" not in propose
     assert "ANTHROPIC" not in propose
 
 
 def test_permissions_are_denied_at_the_top_and_granted_per_job() -> None:
-    workflow = _load("implement.yml")
+    workflow = _load("lockstep-implement.yml")
     assert workflow["permissions"] == {}, "a workflow-level grant reaches jobs that should not have it"
     for name, job in workflow["jobs"].items():
         assert "permissions" in job, f"{name} inherits rather than declaring what it needs"
@@ -265,7 +265,7 @@ def test_permissions_are_denied_at_the_top_and_granted_per_job() -> None:
 
 def test_a_paid_run_is_not_cancelled_by_a_second_comment() -> None:
     """A cancelled model call may still be billed, and throws away what was paid for."""
-    concurrency = _load("implement.yml")["concurrency"]
+    concurrency = _load("lockstep-implement.yml")["concurrency"]
     assert concurrency["cancel-in-progress"] is False
     assert "issue.number" in concurrency["group"], "the group has to be per issue, not per repo"
 
@@ -304,8 +304,8 @@ ALLOWED_STATEMENTS = (
 #: invocation of the framework.
 #:
 #: One cap per lifecycle workflow since #314 (GATE-CI-4), when the allowlist stopped being applied
-#: to `implement.yml` alone: `lockstep.yml` carried a four-statement shell loop over the lenses
-#: and `improve.yml` a `test "$status" -eq 3 && exit 0`, both lifecycle logic in files nothing
+#: to `lockstep-implement.yml` alone: `lockstep.yml` carried a four-statement shell loop over the lenses
+#: and `lockstep-improve.yml` a `test "$status" -eq 3 && exit 0`, both lifecycle logic in files nothing
 #: tests, and neither was under the rule. Sized to what each file holds today, so growth in any
 #: of them is a number somebody raises with an argument.
 #:
@@ -320,15 +320,15 @@ ALLOWED_STATEMENTS = (
 #: lifecycle workflow here and should stay that way -- it reports a fact and executes nothing of
 #: the change's, so anything it grows is something it has started deciding.
 MAX_STATEMENTS = {
-    "implement.yml": 14,
-    "fix.yml": 14,
-    "ai-generated.yml": 10,
+    "lockstep-implement.yml": 14,
+    "lockstep-fix.yml": 14,
+    "lockstep-ai-generated.yml": 10,
     "lockstep.yml": 12,
     "lockstep-config.yml": 2,
-    "improve.yml": 11,
-    "review.yml": 10,
-    "reconcile.yml": 2,
-    "resume.yml": 3,
+    "lockstep-improve.yml": 11,
+    "lockstep-review.yml": 10,
+    "lockstep-reconcile.yml": 2,
+    "lockstep-resume.yml": 3,
 }
 
 #: Every workflow the framework's lifecycle runs through; `ci.yml` and `release-python.yml` are
@@ -347,6 +347,50 @@ def _statements(workflow: str) -> list[str]:
                 if stripped and not stripped.startswith("#"):
                     out.append(stripped)
     return out
+
+
+#: The one framework workflow whose file keeps a bare name. It IS the framework's name, so a
+#: repository that already has a `lockstep.yml` has almost certainly got this one.
+UNPREFIXED = "lockstep.yml"
+
+
+def test_every_framework_workflow_file_is_prefixed_so_it_cannot_take_an_adopters_name() -> None:
+    """A file this framework writes into somebody else's repository must not take a name they may
+    already be using.
+
+    `init` wrote `review.yml`, `fix.yml`, `implement.yml` and `ai-generated.yml`. `_write_trampoline`
+    leaves an existing file alone -- correctly, a trampoline is never regenerated -- so an adopter
+    with their own `review.yml` was told it "exists, left alone, deliberately" and quietly never got
+    the framework's. The failure reads as a considered decision rather than a name clash, which is
+    worse than a clobber: nothing says the two files are unrelated, and "why is /review doing
+    nothing" is not discoverable from that sentence (O2).
+
+    Walked from the directory rather than from a list, so a trampoline added later is under the rule.
+    """
+    for workflow in sorted(p.name for p in ALL_WORKFLOWS):
+        if workflow in ("ci.yml", "release-python.yml", UNPREFIXED):
+            continue  # this repository's own build and release, and the framework's own name
+        assert workflow.startswith("lockstep-"), (
+            f"{workflow} would take that name in an adopter's repository; prefix it `lockstep-`"
+        )
+
+
+def test_the_scaffolded_paths_carry_the_prefix_too() -> None:
+    """The files an adopter actually receives, which is where the collision happens. Asserted over
+    the paths `init` writes rather than over this repository's directory, because those are two
+    lists and only one of them lands in somebody else's `.github/`."""
+    import re
+
+    from in_lockstep import cli
+
+    source = Path(cli.__file__).read_text()
+    written = sorted(set(re.findall(r'Path\("\.github/workflows/([\w.-]+\.yml)"\)', source)))
+
+    assert len(written) >= 5, f"found only {written}; init writes five, so this is looking wrongly"
+    for workflow in written:
+        assert workflow == UNPREFIXED or workflow.startswith("lockstep-"), (
+            f"init writes .github/workflows/{workflow}, which may already be an adopter's"
+        )
 
 
 def test_every_lifecycle_workflow_this_repository_ships_is_under_the_rule() -> None:
@@ -376,7 +420,7 @@ def test_gate_ci_4_the_trigger_carries_no_lifecycle_logic(workflow: str) -> None
 
 def test_the_trigger_does_not_reimplement_what_the_framework_does() -> None:
     """The specific things the first draft did in bash, each of which has a port behind it."""
-    text = (WORKFLOWS / "implement.yml").read_text()
+    text = (WORKFLOWS / "lockstep-implement.yml").read_text()
     body = "\n".join(
         line
         for line in text.splitlines()
@@ -391,7 +435,7 @@ def test_the_trigger_does_not_reimplement_what_the_framework_does() -> None:
         ("gh issue comment", "TicketSource.comment"),
     ):
         assert reimplemented not in body, (
-            f"implement.yml runs `{reimplemented}` itself; {port} exists and is what a @workflow "
+            f"lockstep-implement.yml runs `{reimplemented}` itself; {port} exists and is what a @workflow "
             f"in lockstep.py should call"
         )
 
@@ -399,7 +443,7 @@ def test_the_trigger_does_not_reimplement_what_the_framework_does() -> None:
 def test_every_job_invokes_the_framework() -> None:
     """A job that never calls `in-lockstep` is a job doing something the framework does not know
     about, which is where process starts leaking back into YAML."""
-    for name, job in _load("implement.yml")["jobs"].items():
+    for name, job in _load("lockstep-implement.yml")["jobs"].items():
         joined = " ".join(step.get("run", "") for step in job["steps"])
         assert "in-lockstep" in joined, f"{name} invokes the framework nowhere"
 
@@ -438,8 +482,8 @@ def test_a_run_that_did_the_work_and_could_not_publish_it_still_answers() -> Non
     reappearing on the outcome where the loss is largest, because a change actually existed.
     """
     for path, work in (
-        (ROOT / ".github/workflows/implement.yml", "implement"),
-        (ROOT / ".github/workflows/fix.yml", "fix"),
+        (ROOT / ".github/workflows/lockstep-implement.yml", "implement"),
+        (ROOT / ".github/workflows/lockstep-fix.yml", "fix"),
     ):
         data = yaml.safe_load(path.read_text())
         report = data["jobs"]["report"]
@@ -471,7 +515,7 @@ def test_no_workflow_repeats_a_key(path: Path) -> None:
     """YAML keeps the LAST of two identical keys and says nothing, and neither does `safe_load` —
     so a step with two `env:` blocks silently loses the first one's variables.
 
-    Written after exactly that: a `review.yml` step carried `env: {ISSUE: ...}` and then
+    Written after exactly that: a `lockstep-review.yml` step carried `env: {ISSUE: ...}` and then
     `env: {GH_TOKEN: ...}`, and every other assertion in this file passed over a workflow whose
     job would have run without the number it was about. A file nothing type-checks needs the
     checks it can get.
@@ -522,24 +566,24 @@ def _scaffolds() -> dict[str, str]:
     return {
         "scaffold: .github/workflows/lockstep.yml": _SCAFFOLD_TRAMPOLINE,
         "scaffold: .gitlab-ci.yml": _SCAFFOLD_GITLAB_TRAMPOLINE,
-        "scaffold: implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
-        "scaffold: fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
-        "scaffold: ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        "scaffold: lockstep-implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "scaffold: lockstep-fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "scaffold: lockstep-ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
         # The sixth, added with the flag that writes it (#204). It uploads `findings.md`, a
         # history bundle and harvested cases, which is run evidence three ways over.
-        "scaffold: review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
+        "scaffold: lockstep-review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
     }
 
 
 def test_the_review_on_request_job_hands_gh_the_read_token_it_asks_the_host_with() -> None:
     """Issue 346. `change_refs` asks the host what the pull request points at, through `gh`, and
-    `gh` reads `GH_TOKEN`. The scaffold set it and this repository's own `review.yml` did not, so
+    `gh` reads `GH_TOKEN`. The scaffold set it and this repository's own `lockstep-review.yml` did not, so
     the first `/review security` that matched the gate failed one step in. Checked in both."""
     from in_lockstep.cli import _SCAFFOLD_REVIEW_TRAMPOLINE
 
     files = {
-        "review.yml": _load("review.yml"),
-        "scaffold: review.yml": yaml.load(
+        "lockstep-review.yml": _load("lockstep-review.yml"),
+        "scaffold: lockstep-review.yml": yaml.load(
             _SCAFFOLD_REVIEW_TRAMPOLINE.replace("IN_LOCKSTEP_VERSION", "0.0.0"), Loader=_Loader
         ),
     }
@@ -599,13 +643,17 @@ def test_gate_ledger_10_the_review_record_is_published_by_a_job_holding_write_an
         if "jobs" not in spec:
             _gitlab_review_record_is_published(spec, name)
             continue
-        review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
+        # `reviews` on GitHub: a check run is named for the JOB, so the required context is this
+        # id, and it was renamed off the ambiguous `review` two workflows both emitted.
+        # GitLab's job keeps that name and is handled in the branch above -- it runs one lens on a
+        # merge request rather than this fan-out, so it is a different job, not the same one twice.
+        review, publish = spec["jobs"]["reviews"], spec["jobs"]["publish"]
         bundled = " ".join(s.get("run", "") for s in review["steps"])
         assert "history --bundle history.bundle" in bundled, f"{name}: the review job bundles nothing"
         upload = next(s for s in review["steps"] if "upload-artifact" in str(s.get("uses", "")))
         assert "history.bundle" in str(upload["with"]["path"]), f"{name}: the artifact carries no bundle"
 
-        assert publish["needs"] == "review", name
+        assert publish["needs"] == "reviews", name
         assert "always()" in str(publish.get("if", "")), (
             f"{name}: a refused review is the run most worth a record"
         )
@@ -645,7 +693,7 @@ def test_gate_review_6_each_lens_is_posted_as_its_own_comment_by_the_job_holding
                 'in-lockstep comment --pr "$CI_MERGE_REQUEST_IID" --body-file review-comments' in publish
             ), name
             continue
-        review, publish = spec["jobs"]["review"], spec["jobs"]["publish"]
+        review, publish = spec["jobs"]["reviews"], spec["jobs"]["publish"]
         reviewed = re.sub(r"\\\s*\n\s*", " ", " ".join(s.get("run", "") for s in review["steps"]))
         assert re.search(
             r"in-lockstep review .*--comment-out review-comments\b"
@@ -674,12 +722,12 @@ def test_gate_review_6_each_lens_is_posted_as_its_own_comment_by_the_job_holding
 def test_gate_ledger_10_every_workflow_that_bundles_a_record_uploads_it_under_the_name_the_sweep_lists() -> (
     None
 ):
-    """The sweep lists artifacts by ONE name (`reconcile.yml` names it), so a workflow that bundles
-    its record under any other name has made a record nothing absorbs. `review.yml` did, as
+    """The sweep lists artifacts by ONE name (`lockstep-reconcile.yml` names it), so a workflow that bundles
+    its record under any other name has made a record nothing absorbs. `lockstep-review.yml` did, as
     `review-<n>`: the first `/review security` that ran here left its record on a 30-day clock
     (#312). Every lifecycle workflow here and every scaffold that bundles is checked."""
-    swept = re.search(r"--from-artifacts\s+(\S+)", " ".join(_statements("reconcile.yml")))
-    assert swept, "reconcile.yml no longer sweeps by artifact name"
+    swept = re.search(r"--from-artifacts\s+(\S+)", " ".join(_statements("lockstep-reconcile.yml")))
+    assert swept, "lockstep-reconcile.yml no longer sweeps by artifact name"
     name = swept.group(1)
     specs = {w: _load(w) for w in LIFECYCLE_WORKFLOWS}
     for label, text in _scaffolds().items():
@@ -703,12 +751,12 @@ def test_the_resume_trampoline_holds_the_write_token_and_no_provider_credential(
     """Design §13.3 in its dispatch form. What runs is decided by the tick and the continuation
     the barrier names; nothing here calls a model, so the job may hold the write token the
     continuation's record and the pull request's label need, and nothing else."""
-    spec = _load("resume.yml")
+    spec = _load("lockstep-resume.yml")
     assert spec["on"] == {"workflow_dispatch": spec["on"]["workflow_dispatch"]}
     (job,) = spec["jobs"].values()
     assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
     assert not _spends(job), "the resume job can reach a model"
-    statements = _statements("resume.yml")
+    statements = _statements("lockstep-resume.yml")
     assert any(
         s.startswith('uv run in-lockstep resume --run "$RUN" --as "$VERDICT" --by "$GITHUB_ACTOR"')
         for s in statements
@@ -722,7 +770,7 @@ def test_gate_ledger_10_a_scheduled_sweep_absorbs_what_publish_missed() -> None:
     """`cancel-in-progress` cancels a run when the next push lands, and a push can be refused, so
     the publish job can miss a bundle. The sweep takes in each outstanding artifact once, from a
     job holding the write token and no provider, and it is one bare invocation of the framework."""
-    spec = _load("reconcile.yml")
+    spec = _load("lockstep-reconcile.yml")
     assert "schedule" in spec["on"] and "workflow_dispatch" in spec["on"]
     assert spec["permissions"] == {}, "a workflow-level grant reaches jobs that should not have it"
     assert spec["concurrency"]["cancel-in-progress"] is False
@@ -742,7 +790,7 @@ def test_gate_ledger_12_every_job_that_reads_the_ledger_fetches_the_branch_first
     of it, and the ledger's fallback reads `origin/lockstep-history` -- so a job that reads the
     ledger checks out at full depth, or it reads nothing and calls that a census (#307). No shell
     `git fetch`: the allowlist admits invocations of the framework only."""
-    for name, job in (("reconcile.yml", "reconcile"), ("improve.yml", "measure")):
+    for name, job in (("lockstep-reconcile.yml", "reconcile"), ("lockstep-improve.yml", "measure")):
         steps = _load(name)["jobs"][job]["steps"]
         checkout = next(s for s in steps if "actions/checkout" in str(s.get("uses", "")))
         assert (checkout.get("with") or {}).get("fetch-depth") == 0, f"{name}: {job} reads at depth 1"

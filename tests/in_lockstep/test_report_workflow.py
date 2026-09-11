@@ -316,7 +316,7 @@ def test_the_evidence_path_is_uploaded_by_both_workflows(workflows: Lockstep) ->
     from in_lockstep.platform.artifacts import ATTEMPT
 
     module, _ref = load(str(ROOT))
-    for name in ("implement.yml", "fix.yml"):
+    for name in ("lockstep-implement.yml", "lockstep-fix.yml"):
         text = (ROOT / ".github" / "workflows" / name).read_text()
         assert f"{ATTEMPT}/" in text, f"{name} does not upload the evidence path"
 

@@ -48,7 +48,7 @@ trampoline: it invokes the CLI and contains no lifecycle logic, because a CI hos
 YAML and that YAML belongs to the host. The `.gitignore` covers what a run writes — appended to
 yours if you have one, and only the lines it is missing.
 
-`init --review` adds a fourth, `.github/workflows/review.yml`: a reviewer comments `/review tests`
+`init --review` adds a fourth, `.github/workflows/lockstep-review.yml`: a reviewer comments `/review tests`
 on a pull request and that one lens runs and posts its findings, from a job that holds no provider
 key. The lens is resolved against the ones your module binds, so `in-lockstep ls` is the list a
 comment may name. `--implement` and `--fix` scaffold the write verbs the same way. The trampoline

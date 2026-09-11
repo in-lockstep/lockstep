@@ -53,7 +53,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  review:
+  # Plural, and that is the whole of the rename: this is the four lenses, and `review` was the job
+  # id in two different workflows here -- so both emitted a check run of that name and branch
+  # protection's required `review` context was satisfiable by either. They did not collide only
+  # because an `issue_comment` workflow's check attaches to the default branch's SHA rather than
+  # the pull request's. An accident is a poor thing for a required check to rest on.
+  #
+  # RENAMING THIS RETIRES A REQUIRED CONTEXT. A check run is named for the JOB, not the workflow, so
+  # branch protection has to be updated in the same window or every pull request blocks on a check
+  # that never arrives.
+  reviews:
     runs-on: ubuntu-24.04
     # 65 like every model job here, since the check became a `run` of a workflow under the
     # module's own hour-long deadline: the host must not end the job before the framework can
@@ -144,7 +153,7 @@ jobs:
           # Optional once federation is configured: a static key set here still wins, and its
           # absence routes the framework to federation.
           #ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Workload identity federation. Identifiers, not secrets — see implement.yml. The
+          # Workload identity federation. Identifiers, not secrets — see lockstep-implement.yml. The
           # framework mints the GitHub JWT itself; no fetch step belongs in this file.
           ANTHROPIC_FEDERATION_RULE_ID: fdrl_01YHsixNuafpyXLLRpHFMEsu
           ANTHROPIC_ORGANIZATION_ID: 8e678137-2908-4c6f-ab64-4e7839de1f0f
@@ -205,7 +214,7 @@ jobs:
   # two days of pull requests that is where every one of them stayed, on a 30-day clock, while
   # the branch `report` reads held eight paid runs (#294). This job holds `contents: write` and
   # no provider credential, which is exactly the half a record should be published from: the
-  # split implement.yml's `propose` job already uses, one more time.
+  # split lockstep-implement.yml's `propose` job already uses, one more time.
   #
   # `always()`, because a review that blocked or errored is the run most worth a record of. Not
   # for a fork, whose token cannot push. `continue-on-error` on the publish, because a record that
@@ -213,13 +222,13 @@ jobs:
   # `cancel-in-progress` cancelled, a refused push) the scheduled `reconcile` workflow sweeps up,
   # while `report --scm` counts what is still outstanding.
   publish:
-    needs: review
+    needs: reviews
     if: ${{ always() && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
-      # The comments below. Held here and not in `review`, for the reason review.yml splits its
+      # The comments below. Held here and not in `review`, for the reason lockstep-review.yml splits its
       # `post` job from its reviewer: the process that calls a model must not also hold a token
       # that writes to the repository, and a comment is a write.
       pull-requests: write
@@ -310,7 +319,7 @@ jobs:
       # `PytestTest` declares and means -- so dispatching Test needs a grant, and the gate's own
       # docstring says a command that passes none makes it unopenable rather than strict (#189).
       # Nobody is watching a push, so the grant is `--approved-by` and the name recorded is
-      # whoever caused the run, the same spelling `implement.yml` uses after its gate job. Never
+      # whoever caused the run, the same spelling `lockstep-implement.yml` uses after its gate job. Never
       # `--approve`: that one claims a human is watching this run, and in CI that is a false
       # record rather than a convenience.
       - run: uv run in-lockstep run selfcheck --approved-by "${{ github.actor }}"

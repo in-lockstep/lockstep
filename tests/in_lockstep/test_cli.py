@@ -235,7 +235,7 @@ def test_gate_review_6_comment_posts_every_body_in_a_directory_under_its_own_mar
 
 
 def test_gate_ci_4_run_blocked_ok_exits_zero_on_a_blocked_run_and_says_so(repo: Path) -> None:
-    """GATE-CI-4. `improve.yml` translated exit 3 to 0 in shell -- `test "$status" -eq 3 && exit 0`
+    """GATE-CI-4. `lockstep-improve.yml` translated exit 3 to 0 in shell -- `test "$status" -eq 3 && exit 0`
     -- a decision about what a scheduled run MEANS living in YAML (#314). A flag on `run`, and the
     log says a refusal happened rather than showing a green step that did nothing."""
     _lifecycle(repo).write_text(
@@ -827,7 +827,7 @@ def test_the_scaffold_skips_rather_than_fails_without_a_credential(repo: Path) -
 
     CliRunner().invoke(main, ["init"])
     workflow = yaml.safe_load((repo / ".github/workflows/lockstep.yml").read_text())
-    review = next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
+    review = next(s for s in workflow["jobs"]["reviews"]["steps"] if s.get("name") == "Review")
     # `secrets` context, not `env`: it reads in a step `if` and keeps the key scoped to this one
     # step rather than exposing it to every step in the job.
     assert "secrets.ANTHROPIC_API_KEY" in review.get("if", ""), "the review step must guard on the credential"
@@ -845,7 +845,7 @@ def test_init_implement_scaffolds_the_credential_split(repo: Path) -> None:
 
     result = CliRunner().invoke(main, ["init", "--implement"])
     assert result.exit_code == 0, result.output
-    workflow = yaml.safe_load((repo / ".github/workflows/implement.yml").read_text())
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep-implement.yml").read_text())
     jobs = workflow["jobs"]
     assert set(jobs) == {"gate", "implement", "propose"}
     for name, job in jobs.items():
@@ -926,7 +926,7 @@ def test_init_fix_writes_the_ai_generated_event_hook(repo: Path) -> None:
 
     result = CliRunner().invoke(main, ["init", "--fix"])
     assert result.exit_code == 0, result.output
-    workflow = yaml.safe_load((repo / ".github/workflows/ai-generated.yml").read_text())
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep-ai-generated.yml").read_text())
 
     # `yaml.safe_load` turns the bare `on:` key into Python True, so read it by that key.
     triggers = workflow[True]["issues"]["types"]
@@ -1005,7 +1005,7 @@ def test_init_implement_invokes_only_commands_that_exist(repo: Path) -> None:
     import yaml
 
     CliRunner().invoke(main, ["init", "--implement"])
-    workflow = yaml.safe_load((repo / ".github/workflows/implement.yml").read_text())
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep-implement.yml").read_text())
     known = set(main.commands)
     invoked = set()
     for job in workflow["jobs"].values():
@@ -1028,7 +1028,7 @@ def test_gate_provision_1_the_work_jobs_provision_before_doctor_without_a_creden
     result = CliRunner().invoke(main, ["init", "--implement", "--fix"])
     assert result.exit_code == 0, result.output
     work_jobs = 0
-    for name in ("implement.yml", "fix.yml", "ai-generated.yml"):
+    for name in ("lockstep-implement.yml", "lockstep-fix.yml", "lockstep-ai-generated.yml"):
         workflow = yaml.safe_load((repo / ".github/workflows" / name).read_text())
         for job_name, job in workflow["jobs"].items():
             steps = job["steps"]
@@ -1054,7 +1054,7 @@ def test_the_review_gate_and_propose_jobs_never_provision(repo: Path) -> None:
     import yaml
 
     CliRunner().invoke(main, ["init", "--implement", "--fix"])
-    for name in ("lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml"):
+    for name in ("lockstep.yml", "lockstep-implement.yml", "lockstep-fix.yml", "lockstep-ai-generated.yml"):
         workflow = yaml.safe_load((repo / ".github/workflows" / name).read_text())
         for job_name, job in workflow["jobs"].items():
             if name == "lockstep.yml" or job_name in ("gate", "propose"):
@@ -1096,7 +1096,7 @@ def test_the_trampoline_is_independent_of_the_repository(
     A compiler cannot pass this. It binds the workflow files only — `init`'s lockstep.py scaffold
     may detect the stack freely.
     """
-    files = ("lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml")
+    files = ("lockstep.yml", "lockstep-implement.yml", "lockstep-fix.yml", "lockstep-ai-generated.yml")
     outputs = []
     for name, populate in (("empty", False), ("full", True)):
         target = tmp_path / name
@@ -1113,7 +1113,7 @@ def test_the_trampoline_is_independent_of_the_repository(
         assert CliRunner().invoke(main, ["init", "--implement", "--fix"]).exit_code == 0
         outputs.append({f: (target / ".github/workflows" / f).read_text() for f in files})
     assert outputs[0] == outputs[1]
-    assert "in-lockstep provision" in outputs[0]["implement.yml"]
+    assert "in-lockstep provision" in outputs[0]["lockstep-implement.yml"]
 
 
 def _git_repo(root: Path) -> None:
@@ -3483,10 +3483,10 @@ def _rendered_scaffolds() -> dict[str, str]:
     templates = {
         "lockstep.yml": _SCAFFOLD_TRAMPOLINE,
         ".gitlab-ci.yml": _SCAFFOLD_GITLAB_TRAMPOLINE,
-        "implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
-        "fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
-        "ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
-        "review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
+        "lockstep-implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "lockstep-fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "lockstep-ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        "lockstep-review.yml": _SCAFFOLD_REVIEW_TRAMPOLINE,
     }
     return {name: _render_trampoline(text, "anthropic") for name, text in templates.items()}
 
@@ -3545,7 +3545,7 @@ def test_gate_tooling_2_a_module_routing_review_at_bedrock_gets_a_trampoline_for
     assert "in-lockstep[bedrock]==" in text and "in-lockstep[anthropic]" not in text
     assert "ANTHROPIC_API_KEY" not in text
     workflow = yaml.safe_load(text)
-    review = next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
+    review = next(s for s in workflow["jobs"]["reviews"]["steps"] if s.get("name") == "Review")
     assert "secrets.AWS_SECRET_ACCESS_KEY" in review["if"]
     assert set(review["env"]) >= {"AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "AWS_REGION"}
     assert "no AWS_SECRET_ACCESS_KEY (fork pull request?)" in text
@@ -4177,7 +4177,7 @@ def test_init_review_scaffolds_the_credential_split(repo: Path) -> None:
 
     result = CliRunner().invoke(main, ["init", "--review"])
     assert result.exit_code == 0, result.output
-    workflow = yaml.safe_load((repo / ".github/workflows/review.yml").read_text())
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep-review.yml").read_text())
     jobs = workflow["jobs"]
     assert set(jobs) == {"gate", "review", "post"}
     assert jobs["review"]["needs"] == "gate" and jobs["post"]["needs"] == "review"
@@ -4198,7 +4198,7 @@ def test_the_review_scaffold_passes_only_options_the_commands_declare(repo: Path
     import re
 
     CliRunner().invoke(main, ["init", "--review"])
-    text = (repo / ".github/workflows/review.yml").read_text()
+    text = (repo / ".github/workflows/lockstep-review.yml").read_text()
     for command in ("review", "comment", "gate", "history"):
         declared = {o for p in main.commands[command].params for o in p.opts}
         for chunk in text.split(f"in-lockstep {command} ")[1:]:
@@ -4217,7 +4217,7 @@ def test_the_review_scaffold_never_interpolates_the_comment_into_a_shell(repo: P
     import yaml
 
     CliRunner().invoke(main, ["init", "--review"])
-    workflow = yaml.safe_load((repo / ".github/workflows/review.yml").read_text())
+    workflow = yaml.safe_load((repo / ".github/workflows/lockstep-review.yml").read_text())
     for job in workflow["jobs"].values():
         for step in job["steps"]:
             assert "comment.body" not in (step.get("run") or ""), step
@@ -4232,7 +4232,7 @@ def test_the_review_scaffold_is_pinned_like_the_others(repo: Path) -> None:
     from in_lockstep import __version__
 
     CliRunner().invoke(main, ["init", "--review"])
-    text = (repo / ".github/workflows/review.yml").read_text()
+    text = (repo / ".github/workflows/lockstep-review.yml").read_text()
     assert f"in-lockstep[anthropic]=={__version__}" in text
     assert "IN_LOCKSTEP_VERSION" not in text
     for used in re.findall(r"uses: (\S+)", text):
@@ -4246,7 +4246,7 @@ def test_init_review_writes_nothing_on_gitlab_and_says_why(repo: Path) -> None:
     (repo / ".gitlab-ci.yml").write_text("stages: [review]\n")
     result = CliRunner().invoke(main, ["init", "--review"])
     assert result.exit_code == 0, result.output
-    assert not (repo / ".github" / "workflows" / "review.yml").exists()
+    assert not (repo / ".github" / "workflows" / "lockstep-review.yml").exists()
     assert "no issue-comment trigger" in result.output
 
 
@@ -4254,7 +4254,13 @@ def test_init_review_composes_with_the_write_verbs(repo: Path) -> None:
     result = CliRunner().invoke(main, ["init", "--implement", "--fix", "--review"])
     assert result.exit_code == 0, result.output
     names = {p.name for p in (repo / ".github" / "workflows").iterdir()}
-    assert {"lockstep.yml", "implement.yml", "fix.yml", "ai-generated.yml", "review.yml"} <= names
+    assert {
+        "lockstep.yml",
+        "lockstep-implement.yml",
+        "lockstep-fix.yml",
+        "lockstep-ai-generated.yml",
+        "lockstep-review.yml",
+    } <= names
 
 
 LENS_MODULE = """

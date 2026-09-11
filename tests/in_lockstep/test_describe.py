@@ -192,7 +192,7 @@ def test_gate_report_1_the_description_crosses_the_artifact_because_propose_has_
     tmp_path: Path,
 ) -> None:
     """GATE-REPORT-1. The job that opens the change holds a write token and no provider key --
-    `implement.yml` says so where it grants federation -- so a body it composed would be composed
+    `lockstep-implement.yml` says so where it grants federation -- so a body it composed would be composed
     from the run's own cover note. What is written where the credential is has to travel."""
     artifact = str(tmp_path / "changeset")
     write_changeset(

@@ -57,7 +57,7 @@ def lenses() -> Any:
 
 def _step() -> dict[str, Any]:
     workflow = yaml.safe_load(WORKFLOW.read_text())
-    return next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Review")
+    return next(s for s in workflow["jobs"]["reviews"]["steps"] if s.get("name") == "Review")
 
 
 class _Lensed:

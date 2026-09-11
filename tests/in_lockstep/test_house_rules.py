@@ -93,8 +93,8 @@ def test_the_writing_verbs_read_house_rules_and_the_default_is_off() -> None:
 def test_review_does_not_read_them_because_its_checkout_is_the_contributors() -> None:
     """The load-bearing half of the opt-in.
 
-    `implement.yml` and `fix.yml` trigger on `issue_comment`/`issues`, which GitHub runs on the
-    DEFAULT branch — the reviewed file. `lockstep.yml` triggers on `pull_request`, where
+    `lockstep-implement.yml` and `lockstep-fix.yml` trigger on `issue_comment`/`issues`, which
+    GitHub runs on the DEFAULT branch — the reviewed file. `lockstep.yml` triggers on `pull_request`, where
     `actions/checkout` gives the merge ref, so a `CLAUDE.md` there is whatever the contributor
     wrote. Reading it would let anyone who can open a pull request put text into the system prompt
     of the model reviewing their own change, which is the injection this framework is mostly about

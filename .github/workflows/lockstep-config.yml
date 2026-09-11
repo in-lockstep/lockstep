@@ -7,16 +7,18 @@
 # So a filtered job cannot live beside them, and nothing else can express "only when configuration
 # changed" without putting a decision in a shell statement, which GATE-CI-4 refuses.
 #
-# WHY IT IS NAMED THIS. Two workflow files cannot share `name:`, and every other workflow here is a
-# plain unprefixed word. This one carries the prefix so the check reads as the framework's rather
-# than as some repository convention: GitHub renders it `lockstep-config / exercised`.
+# WHY IT IS NAMED THIS. The FILE carries the `lockstep-` prefix, like every framework workflow
+# here, so that it cannot take a name an adopter already uses. The `name:` does not, like every
+# framework workflow here, because a check run is named for the JOB and not for the workflow -- so
+# `name:` is display only, and a prefix there would buy a longer string in the merge box and
+# nothing else. GitHub renders this `config / exercised`.
 #
 # WHAT IT CANNOT BE. A required status check. A required check that never reports is not green --
 # GitHub holds it at "Expected - waiting for status to be reported" and blocks the merge forever --
 # and a path-filtered workflow is silent on every pull request that touches no configuration. So
 # its red is visible in the merge box and blocks nothing on its own. That is a real limit and it is
 # written here rather than discovered by whoever next tries to add it to branch protection.
-name: lockstep-config
+name: config
 
 on:
   pull_request:

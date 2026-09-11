@@ -551,7 +551,7 @@ lockstep.middleware += [
 
 # -- what a `/implement` comment actually does --------------------------------------------------
 #
-# THIS is the process, and it is here rather than in `.github/workflows/implement.yml` because
+# THIS is the process, and it is here rather than in `.github/workflows/lockstep-implement.yml` because
 # that is the whole claim of this framework: the lifecycle is Python you can read, test and run,
 # and a CI file is a trigger that invokes it. The first draft of that workflow had forty-five
 # lines of shell in it — branching on whether anything was staged, composing a commit message,
@@ -575,7 +575,7 @@ lockstep.middleware += [
 #
 # What is different is where the work comes from. `/fix` is a person asking. The `ai-generated`
 # label is this loop asking itself: `implement/propose` above files such a ticket when a staged
-# change fails its tests, and `.github/workflows/ai-generated.yml` routes it straight back here.
+# change fails its tests, and `.github/workflows/lockstep-ai-generated.yml` routes it straight back here.
 # The label is write-gated, so it is the authorization — which is why that trampoline has no gate
 # job and the `/fix` comment one does.
 
