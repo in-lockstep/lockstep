@@ -342,6 +342,64 @@ class GitHubScm:
         if code != 0:
             raise RuntimeError(f"could not mark PR #{change.number} ready: {err.strip()}")
 
+    async def update_change(
+        self,
+        change: ChangeRequest,
+        cs: ChangeSet,
+        *,
+        title: str = "",
+        body: str = "",
+        ticket: str = "",
+        workflow: str = "",
+        run_id: str = "",
+    ) -> ChangeRequest:
+        """Force-push a new changeset to the branch of an existing change request.
+
+        The changeset is built over HEAD — the ordering property in `prepared` is not weakened
+        (#422) — and force-pushed to the branch the pull request already lives on. The pull
+        request's URL, number and review threads survive.
+        """
+        branch = change.branch
+        # The branch was opened by a prior run. It is still run-scoped (the prefix matches), but
+        # scoped to a DIFFERENT run. That is deliberate: this is the update path, and refusing
+        # here would make the feature impossible.
+        self.local.assert_run_scoped(branch)
+
+        subject = conventional_subject(title, workflow=workflow) if title else change.title
+
+        # Build the changeset over HEAD, not the branch tip. checkout -B resets the branch to the
+        # current HEAD, then the changeset is applied on top of it.
+        self.local.git("checkout", "-B", branch)
+        self.local.apply(cs, workflow_id=workflow)
+
+        trailers = {"In-Lockstep-Run": run_id}
+        if ticket:
+            trailers["Ticket"] = ticket
+        self.local.commit(subject, trailers=trailers)
+        # Force-push: the branch already exists on the remote with the prior run's commits.
+        self.local.git("push", "--force-with-lease", "-u", "origin", branch, check=True)
+
+        # Update the pull request's title and body if provided.
+        if title or body:
+            rendered = change_body(body, trailers) if body else ""
+            update_args: list[str] = ["pr", "edit", str(change.number)]
+            if title:
+                update_args += ["--title", title_line(subject)]
+            if rendered:
+                update_args += ["--body", rendered]
+            self._gh(*update_args)
+
+        return ChangeRequest(
+            id=change.id,
+            url=change.url,
+            branch=branch,
+            title=title_line(subject),
+            number=change.number,
+            trailers=trailers,
+            draft=change.draft,
+            repo=change.repo,
+        )
+
     async def comment(self, target: int, body: str) -> None:
         self._gh("pr", "comment", str(target), *self._at(), "--body", body)
 
