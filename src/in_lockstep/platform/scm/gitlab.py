@@ -296,6 +296,62 @@ class GitLabScm:
             json={"title": change.title},
         )
 
+    async def update_change(
+        self,
+        change: ChangeRequest,
+        cs: ChangeSet,
+        *,
+        title: str = "",
+        body: str = "",
+        ticket: str = "",
+        workflow: str = "",
+        run_id: str = "",
+    ) -> ChangeRequest:
+        """Force-push a new changeset to the branch of an existing merge request.
+
+        The changeset is built over HEAD — the ordering property in `prepared` is not weakened
+        (#422) — and force-pushed to the branch the merge request already lives on. The merge
+        request's URL, iid and discussion threads survive.
+        """
+        branch = change.branch
+        self.local.assert_run_scoped(branch)
+
+        subject = conventional_subject(title, workflow=workflow) if title else change.title
+
+        # Build the changeset over HEAD, not the branch tip.
+        self.local.git("checkout", "-B", branch)
+        self.local.apply(cs, workflow_id=workflow)
+
+        trailers = {"In-Lockstep-Run": run_id}
+        if ticket:
+            trailers["Ticket"] = ticket
+        self.local.commit(title_line(subject), trailers=trailers)
+        self.local.git("push", "--force-with-lease", "-u", "origin", branch, check=True)
+
+        # Update the merge request's title and description if provided.
+        if change.number is not None and (title or body):
+            update: dict[str, str] = {}
+            if title:
+                update["title"] = title_line(subject)
+            if body:
+                update["description"] = change_body(body, trailers)
+            self._request(
+                "PUT",
+                f"/projects/{self._project_path()}/merge_requests/{change.number}",
+                json=update,
+            )
+
+        return ChangeRequest(
+            id=change.id,
+            url=change.url,
+            branch=branch,
+            title=title_line(subject),
+            number=change.number,
+            trailers=trailers,
+            draft=change.draft,
+            repo=change.repo,
+        )
+
     # -- comments (the same duck-typed extras GitHubScm carries) ----------------------
 
     async def comment(self, target: int, body: str) -> None:

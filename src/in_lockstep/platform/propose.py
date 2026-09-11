@@ -31,6 +31,20 @@ async def open_reviewable(scm: Any, changeset: Any, *, ready: bool, **kwargs: An
     return change
 
 
+async def update_reviewable(scm: Any, existing: Any, changeset: Any, *, ready: bool, **kwargs: Any) -> Any:
+    """Push a new changeset to an existing change request, and mark it ready only when `ready`.
+
+    The update path for a second `/implement` on a ticket that already has an open pull request.
+    The changeset is built over HEAD — the ordering property in `prepared` is not weakened — and
+    force-pushed to the existing branch, so the pull request's URL, number and review threads
+    survive. `kwargs` are `update_change`'s (`title`, `body`, `ticket`, `workflow`, `run_id`).
+    """
+    change = await scm.update_change(existing, changeset, **kwargs)
+    if ready:
+        await scm.mark_ready(change)
+    return change
+
+
 def attempt_of(labels: Any) -> int:
     """How many automated attempts a ticket's labels record. A human-filed ticket has none (0); an
     `ai-generated` ticket this loop opened carries `ai-attempt-N`. The highest N wins, so a stray

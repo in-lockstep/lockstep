@@ -214,6 +214,13 @@ def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     humans scanning a branch list (`git branch --list 'in-lockstep/*/59/*'`) and never replaces
     it. The ticket is a hierarchy segment of its own so that glob works; a leading `#` is
     stripped because shells treat it as a comment even though git would accept it.
+
+    **Since #443** a second `/implement` on a ticket with an open change request force-pushes to
+    the existing branch rather than creating a new one. That narrows where the concurrency
+    guarantee lives: two attempts on one ticket are serialised by the workflow's `concurrency`
+    group (e.g. `implement-<issue>` with `cancel-in-progress: false`) rather than by branch-name
+    uniqueness alone. The branch name's run-id segment still prevents collisions across tickets,
+    and branch-name uniqueness is still the guarantee for the first attempt.
     """
     safe = workflow_slug(workflow)
     key = branch_key(ticket)

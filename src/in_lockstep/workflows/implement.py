@@ -48,7 +48,7 @@ from ..platform.artifacts import (
     write_changeset,
 )
 from ..platform.conversation import with_review
-from ..platform.propose import escalate, open_reviewable
+from ..platform.propose import escalate, open_reviewable, update_reviewable
 from ..platform.report import implement_body
 from ..platform.scm import Scm, TargetRefused
 from ..platform.tickets import TicketSource
@@ -225,6 +225,60 @@ async def implement_propose(
     )
     # Fetched before the change is opened, because the title comes from it now.
     issue = await tickets.get(ticket)
+
+    # --- Check for an existing change request opened by a prior run on the same ticket. ---
+    # When one exists, a second `/implement` updates it rather than opening a second pull
+    # request — same URL, same review threads, same number. The changeset is still built over
+    # HEAD (the ordering property in `prepared` is not weakened; see #422), and force-pushed
+    # to the existing branch.
+    existing_cr = await _existing_change_for(ticket, scm)
+
+    if existing_cr is not None:
+        # A branch carrying a person's commit is refused before anything is written. Every
+        # framework commit carries an `In-Lockstep-Run` trailer; a commit without one is a
+        # person's, and overwriting it silently is the failure that would end trust fastest.
+        person_commits = _person_commits_on(existing_cr, scm)
+        if person_commits:
+            shas = ", ".join(f"`{c.sha[:7]}`" for c in person_commits)
+            subjects = "; ".join(f"`{c.sha[:7]}` {c.subject}" for c in person_commits)
+            await tickets.comment(
+                issue,
+                f"`/implement` found commits on {existing_cr.url or existing_cr.branch} that "
+                f"were not written by the framework: {subjects}. Overwriting them is refused.\n\n"
+                f"To retry: close the pull request (or drop the commits {shas}), then ask again.",
+            )
+            print(f"refused   person commits on {existing_cr.branch}: {shas}")
+            return Outcome(status=Status.FAILED, reason="implement.person_commits_on_branch")
+        try:
+            change = await update_reviewable(
+                scm,
+                existing_cr,
+                changeset,
+                ready=ready,
+                title=issue.title or changeset.summary or f"Implement {ticket}",
+                body=implement_body(changeset, verdict, validation, read_description(artifact)),
+                ticket=ticket,
+                workflow="implement",
+                run_id=ctx.run_id,
+            )
+        except TargetRefused as e:
+            await tickets.comment(
+                issue,
+                f"`/implement` staged a change but could not update {existing_cr.url or existing_cr.branch}"
+                f": {e}\n\nThe change is in this run's artifact.",
+            )
+            print(f"refused   {e}")
+            return Outcome(status=Status.FAILED, reason=e.reason)
+        await tickets.comment(
+            issue,
+            f"`/implement` updated {change.url or change.branch} as "
+            f"{'ready for review' if ready else 'a draft — its tests have not passed'}. "
+            "Nobody has read it yet.",
+        )
+        print(f"updated   {change.url or change.branch}")
+        return Outcome(status=Status.SUCCEEDED, value=change)
+
+    # --- No existing CR: open a new one, the original path. ---
     try:
         change = await open_reviewable(
             scm,
@@ -352,6 +406,53 @@ async def implement_report(
     # second red mark on a run whose failure is already recorded, and hide whether the answer
     # actually reached the ticket.
     return Outcome(status=Status.SUCCEEDED, reason=None)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for the update-existing-CR path (#443).
+# ---------------------------------------------------------------------------
+
+
+async def _existing_change_for(ticket: str, scm: Any) -> Any:
+    """The newest open change request the framework opened for `ticket`, or None.
+
+    Accessed via `hasattr` because `changes_for` is a host capability — plain `GitLocal` cannot
+    list pull requests. When the host does not support it, the answer is None and the flow falls
+    through to `open_change`, which is what happened before this path existed.
+    """
+    if not hasattr(scm, "changes_for"):
+        return None
+    try:
+        changes = await scm.changes_for(ticket)
+    except (RuntimeError, OSError):
+        # A host that errored listing changes is not a reason to open a second PR — but neither
+        # is it a reason to refuse. Fall through to the new-PR path, the same thing that would
+        # happen if the host had no `changes_for` at all.
+        return None
+    if not changes:
+        return None
+    # Newest first, which is what `changes_for` returns.
+    return changes[0]
+
+
+def _person_commits_on(change: Any, scm: Any) -> list[Any]:
+    """Commits on `change`'s branch that lack an `In-Lockstep-Run` trailer — a person's work.
+
+    Detection uses machinery that exists: every framework commit carries the trailer, and
+    `commits_between` already parses trailers off a range. A commit without the trailer is a
+    person's. No heuristic, no author-name matching.
+
+    Returns an empty list when the host cannot enumerate commits — the safe side is to proceed,
+    because the alternative is refusing every update on a host that does not expose commit
+    metadata.
+    """
+    if not hasattr(scm, "commits_between"):
+        return []
+    try:
+        commits = scm.commits_between("HEAD", change.branch)
+    except (RuntimeError, OSError):
+        return []
+    return [c for c in commits if "In-Lockstep-Run" not in (c.trailers or {})]
 
 
 def register() -> None:
