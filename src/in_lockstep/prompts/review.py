@@ -27,7 +27,12 @@ from ..ai.prompt import Body, Prompt, PromptLayers, parse_frontmatter
 
 REVIEW_SCHEMA = {
     "type": "object",
-    "required": ["findings"],
+    # `statement` is REQUIRED, so structured output enforces it rather than the prompt asking
+    # nicely -- a lens returning none is a `review.schema_mismatch`, which the adapter already
+    # handles. Required because an empty findings table is the case it exists for: "No findings."
+    # from a lens that read the diff carefully and one that skimmed it are the same four
+    # characters, and the statement is what makes the difference legible.
+    "required": ["findings", "statement"],
     "properties": {
         "findings": {
             "type": "array",
@@ -43,7 +48,15 @@ REVIEW_SCHEMA = {
                 },
             },
         },
-        "verdict": {"type": "string"},
+        # What the lens made of the change as a whole, from its own angle. NOT a summary of the
+        # findings below it -- the thing the table cannot say, which is the judgement the findings
+        # were drawn from and the reason an empty table is meaningful.
+        #
+        # Named `statement` and not `verdict`: `verdict` means a pass/fail judgement everywhere
+        # else here (`TestVerdict`, `read_verdict`, `CriterionVerdict`), and a review has none to
+        # give -- `AiReview` emits findings as non-blocking warnings on purpose, so that four
+        # lenses are defensible on a required check. It was `verdict` and was read by nothing.
+        "statement": {"type": "string"},
     },
 }
 

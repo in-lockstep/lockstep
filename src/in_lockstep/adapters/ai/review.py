@@ -45,7 +45,11 @@ class ReviewFinding:
 @dataclass(frozen=True)
 class ReviewReport:
     findings: tuple[ReviewFinding, ...] = ()
-    verdict: str = ""
+    #: What the lens made of the change as a whole. Was `verdict`, populated from the model's
+    #: reply since the schema had the key and read by nothing at all -- a third dead vocabulary
+    #: after `ConfigRef.under_review` and `_CONTAINED`. Renamed because `verdict` means a pass/fail
+    #: judgement everywhere else here and a review has none to give.
+    statement: str = ""
     aspect: str = ""
 
     @property
@@ -399,10 +403,21 @@ class AiReview:
             for name in package.dropped
         )
 
+        # The statement travels as a FINDING, and that is what gets it onto the run record: a
+        # step's record carries its findings and not its outcome's value, so a statement kept
+        # only on the report would reach the pull-request comment and nothing else -- invisible
+        # to `report`, to `history --explain`, and to the improvement loop that reads recorded
+        # inferences to propose better prompts (O4, O5).
+        #
+        # NOTE severity, and never blocking. `AiReview` emits findings as non-blocking warnings
+        # so that four lenses are defensible on a required check, and a paragraph of prose that
+        # could turn a check red would undo that. It is context for a reader, not a verdict.
+        statement = _statement_finding(report.statement, inp.aspect)
+
         return Outcome(
             status=Status.SUCCEEDED,
             value=report,
-            findings=findings + injection_findings + omitted + _blast_note(radius, blast_note),
+            findings=statement + findings + injection_findings + omitted + _blast_note(radius, blast_note),
             cost=invocation.cost,
             decided=not invocation.exhausted,
             reason="exhausted" if invocation.exhausted else None,
@@ -450,6 +465,36 @@ class AiReview:
         return self.curator.curate(
             items, ContextNeed(base=inp.base, head=inp.head, token_budget=inp.token_budget)
         )
+
+
+#: How much of a lens's statement travels. `Finding.MAX_RECORDED_MESSAGE` already truncates at 500
+#: for the record; this is the bound on what reaches the pull-request comment, and it is larger
+#: because a comment is the place the statement is FOR. Bounded at all for the reason a finding's
+#: message is (`GATE-VERDICT-2`): a comment is read on a ticket, and a lens that writes a page
+#: makes the three beside it unreadable.
+#:
+#: 1200 was a guess, and the first real statement measured 1229 -- so it clipped a genuine
+#: answer by two percent, mid-sentence, which is the worst of both: the reader loses the end of
+#: the thought and the run paid for it anyway. 2000 is sized from that measurement with room
+#: above it rather than from another guess, and four lenses at that length is still a comment
+#: somebody reads rather than scrolls past.
+MAX_STATEMENT_CHARS = 2_000
+
+
+def _statement_finding(statement: str, aspect: str) -> tuple[Finding, ...]:
+    """The lens's account of the change, as a non-blocking note, or nothing where it gave none.
+
+    Empty rather than a placeholder: a lens that returned no statement is a schema mismatch the
+    adapter has already refused, so reaching here with nothing means a lens whose reply was
+    accepted and said nothing -- and inventing "no statement given" would put prose in the record
+    that no model wrote.
+    """
+    text = " ".join(statement.split())
+    if not text:
+        return ()
+    if len(text) > MAX_STATEMENT_CHARS:
+        text = text[:MAX_STATEMENT_CHARS] + "…[truncated]"
+    return (Finding(id="review.statement", message=text, severity=Severity.NOTE),)
 
 
 def _blast_note(radius: str, why: str) -> tuple[Finding, ...]:
@@ -598,4 +643,4 @@ def _to_report(value: object, aspect: str) -> ReviewReport:
                 aspect=aspect,
             )
         )
-    return ReviewReport(findings=tuple(findings), verdict=str(data.get("verdict", "")), aspect=aspect)
+    return ReviewReport(findings=tuple(findings), statement=str(data.get("statement", "")), aspect=aspect)

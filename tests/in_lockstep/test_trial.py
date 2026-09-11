@@ -35,10 +35,10 @@ EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "acme-review-prompt
 FOUND = json.dumps(
     {
         "findings": [{"path": "app.py", "line": 3, "summary": "module-global SESSION outlives the request"}],
-        "verdict": "changes requested",
+        "statement": "changes requested",
     }
 )
-CLEAN = json.dumps({"findings": [], "verdict": "looks fine"})
+CLEAN = json.dumps({"findings": [], "statement": "looks fine"})
 
 
 class Scripted(LLMProvider):

@@ -87,7 +87,19 @@ def review_comment(aspect: str, outcome: Any) -> str:
         "",
     ]
 
-    rest = [f for f in outcome.findings if not f.id.startswith(("injection.", "review.not_reviewed"))]
+    # The lens's account of the change, between the cost line and the table. Partitioned out of
+    # `rest` like the injection signals and the omissions above it, and for the same reason: it
+    # is not a finding about the code, and rendering it as a row would make a paragraph of prose
+    # sit in a column headed "finding".
+    statement = next((f.message for f in outcome.findings if f.id == "review.statement"), "")
+    if statement:
+        lines += [statement, ""]
+
+    rest = [
+        f
+        for f in outcome.findings
+        if not f.id.startswith(("injection.", "review.not_reviewed", "review.statement"))
+    ]
     injections = [f for f in outcome.findings if f.id.startswith("injection.")]
     omitted = [f for f in outcome.findings if f.id == "review.not_reviewed"]
     refused = status == "blocked"
