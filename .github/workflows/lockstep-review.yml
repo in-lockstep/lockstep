@@ -153,7 +153,7 @@ jobs:
         if: always()
         with:
           # `lockstep-run`, the name every workflow that bundles a record uploads under, because
-          # that is the name the scheduled sweep lists (`reconcile.yml`). Named `review-<n>` until
+          # that is the name the scheduled sweep lists (`lockstep-reconcile.yml`). Named `review-<n>` until
           # the first `/review security` that ran here (34167168362) left its record in an
           # artifact nothing would ever absorb. Per-run on the host, so the number added nothing.
           name: lockstep-run

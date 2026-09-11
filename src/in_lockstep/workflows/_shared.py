@@ -51,7 +51,7 @@ async def described(ctx: Any, ticket: Any, changeset: Any, verdict: Any) -> Any:
     """The reviewer-facing account of a staged change, or None when nothing wrote one.
 
     Called where the provider credential is -- the work job -- because the job that opens the
-    change holds a write token and no provider key, and `implement.yml` says so at the line that
+    change holds a write token and no provider key, and `lockstep-implement.yml` says so at the line that
     grants federation: "gate and propose call no model". So this runs beside `verdict_over_staged`
     and travels in the same artifact, for the same reason the verdict does.
 

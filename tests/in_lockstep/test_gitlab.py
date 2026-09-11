@@ -776,7 +776,7 @@ def _run_steps(text: str) -> set[str]:
 
 def _github_side() -> dict[str, str]:
     """The GitHub half of O3's claim: every trampoline `init` writes there, plus this repository's
-    own `improve.yml`, which is the learning loop's only GitHub spelling (no scaffold writes one)."""
+    own `lockstep-improve.yml`, which is the learning loop's only GitHub spelling (no scaffold writes one)."""
     from in_lockstep.cli import (
         _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
         _SCAFFOLD_FIX_TRAMPOLINE,
@@ -787,10 +787,10 @@ def _github_side() -> dict[str, str]:
     root = Path(__file__).resolve().parents[2]
     return {
         "scaffold: lockstep.yml": _SCAFFOLD_TRAMPOLINE,
-        "scaffold: implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
-        "scaffold: fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
-        "scaffold: ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
-        "improve.yml": (root / ".github" / "workflows" / "improve.yml").read_text(),
+        "scaffold: lockstep-implement.yml": _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+        "scaffold: lockstep-fix.yml": _SCAFFOLD_FIX_TRAMPOLINE,
+        "scaffold: lockstep-ai-generated.yml": _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+        "lockstep-improve.yml": (root / ".github" / "workflows" / "lockstep-improve.yml").read_text(),
     }
 
 

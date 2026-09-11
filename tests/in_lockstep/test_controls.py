@@ -1091,7 +1091,7 @@ def _repo_with_the_loop_wired(tmp_path: Path, *, labels: tuple[str, ...]) -> Pat
     (tmp_path / ".git").mkdir()
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
-    (workflows / "ai-generated.yml").write_text(
+    (workflows / "lockstep-ai-generated.yml").write_text(
         "on:\n  issues:\n    types: [opened, labeled]\njobs:\n  fix:\n"
         "    if: github.event.label.name == 'ai-generated'\n"
     )
@@ -1119,7 +1119,7 @@ def test_doctor_reports_a_missing_ai_generated_label(tmp_path: Path, monkeypatch
 
     report = doctor.run(str(tmp_path))
     finding = next(c for c in report.errors if c.code == "DOC123")
-    assert "ai-generated.yml" in finding.message
+    assert "lockstep-ai-generated.yml" in finding.message
     assert "gh label create ai-generated" in finding.hint
 
 
@@ -1161,7 +1161,7 @@ def test_doctor_says_nothing_to_a_repository_that_never_wired_the_loop(
     from in_lockstep import doctor
 
     bin_dir = _repo_with_the_loop_wired(tmp_path, labels=("bug",))
-    (tmp_path / ".github" / "workflows" / "ai-generated.yml").unlink()
+    (tmp_path / ".github" / "workflows" / "lockstep-ai-generated.yml").unlink()
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
 
     report = doctor.run(str(tmp_path))
@@ -1229,7 +1229,7 @@ def _repo_that_opens_changes(tmp_path: Path, *, payload: str) -> Path:
     (tmp_path / ".git").mkdir()
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
-    (workflows / "implement.yml").write_text(
+    (workflows / "lockstep-implement.yml").write_text(
         "jobs:\n  propose:\n    permissions:\n      contents: write\n"
         "      pull-requests: write\n      issues: write\n"
     )
@@ -1263,7 +1263,7 @@ def test_doctor_reports_that_actions_may_not_open_a_change(
 
     report = doctor.run(str(tmp_path))
     finding = next(c for c in report.errors if c.code == "DOC126")
-    assert "implement.yml" in finding.message
+    assert "lockstep-implement.yml" in finding.message
     assert "Allow GitHub Actions to create and approve pull requests" in finding.hint
 
 
@@ -1301,7 +1301,7 @@ def test_doctor_says_nothing_to_a_repository_that_opens_no_changes(
     from in_lockstep import doctor
 
     bin_dir = _repo_that_opens_changes(tmp_path, payload='{"can_approve_pull_request_reviews": false}')
-    (tmp_path / ".github" / "workflows" / "implement.yml").write_text(
+    (tmp_path / ".github" / "workflows" / "lockstep-implement.yml").write_text(
         "jobs:\n  review:\n    permissions:\n      contents: read\n"
     )
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")

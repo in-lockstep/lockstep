@@ -108,7 +108,7 @@ def resumes_automatically(labels: Any) -> bool:
     A person resuming is opt-in: `--resume` exists because a model handed its own wrong diff will
     defend it, and sometimes the right answer is a clean start that only a human can judge is
     needed. That reasoning inverts for a ticket this loop filed itself. Nobody is watching an
-    `ai-generated` run — the label is the authorization and `ai-generated.yml` fires on it — so
+    `ai-generated` run — the label is the authorization and `lockstep-ai-generated.yml` fires on it — so
     there is no one to type the flag, and the alternative to resuming is provably repeating the
     same failure at full price. Attempt 2 rebuilding from the ticket text can reproduce attempt 1's
     mistake exactly, and attempt 3 again.

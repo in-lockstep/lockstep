@@ -47,7 +47,7 @@ jobs:
       # it opened last time, so a reviewer's objection is context the next attempt can act on.
       # This job still holds no write token — proposing is the next job, which holds no key.
       pull-requests: read
-      # Workload identity federation, granted to THIS job only — see implement.yml.
+      # Workload identity federation, granted to THIS job only — see lockstep-implement.yml.
       id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -88,7 +88,7 @@ jobs:
       # `--approved-by` records who labelled it — a maintainer, or `github-actions[bot]` when this
       # framework opened the follow-up itself. The grant is the write-gated label, not a comment,
       # and recording which it was is the point of the flag.
-      # NO `--budget`, for the reason spelled out in `implement.yml`: the flag replaces the
+      # NO `--budget`, for the reason spelled out in `lockstep-implement.yml`: the flag replaces the
       # module's ceiling rather than merging, so a literal here becomes an invisible second place
       # to raise. This loop is the one that most needs its ceiling to be the one somebody reads —
       # it can fire without a person in the room.

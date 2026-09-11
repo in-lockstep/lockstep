@@ -66,7 +66,7 @@ def test_gate_dogfood_1_a_fix_this_framework_ran_here_is_on_the_published_ledger
 
 
 def test_gate_dogfood_1_the_learning_loop_has_measured_here() -> None:
-    """`improve.yml` ran (34069517686 dispatched, 34121918174 scheduled) and each left its record,
+    """`lockstep-improve.yml` ran (34069517686 dispatched, 34121918174 scheduled) and each left its record,
     blocked by name -- `improve.no_trend`, then `improve.nothing_to_improve` -- which is the loop
     refusing to propose on no evidence rather than the loop not running."""
     records = _published_records()
@@ -112,10 +112,18 @@ def test_gate_dogfood_1_no_fixture_record_is_published_after_the_cleanup() -> No
 
 def test_gate_dogfood_1_a_review_asked_for_on_a_thread_ran_through_its_three_jobs() -> None:
     """The chat-ops clause. `/review security` on #348 (run 34167168362, 2026-09-07) was the first
-    comment that matched `review.yml`'s gate and ran through gate, review and post to a sticky
+    comment that matched `lockstep-review.yml`'s gate and ran through gate, review and post to a sticky
     comment; the first that matched at all, 34163733667, failed for want of a token (#347)."""
     listed = _gh(
-        "run", "list", "--workflow=review.yml", "--status", "success", "--limit", "5", "--json", "databaseId"
+        "run",
+        "list",
+        "--workflow=lockstep-review.yml",
+        "--status",
+        "success",
+        "--limit",
+        "5",
+        "--json",
+        "databaseId",
     )
     if listed.returncode != 0:
         said = (listed.stderr or listed.stdout).strip().splitlines()

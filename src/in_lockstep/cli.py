@@ -843,7 +843,7 @@ def _exit_for(result: Any, ctx: Any, *, blocked_ok: bool = False, parked_ok: boo
         if blocked_ok:
             # A scheduled job whose run was refused before it spent -- nothing recurs yet, the
             # ceiling is reached, no proposal in the artifact -- is the control working, and the
-            # record already says which. `improve.yml` used to make this translation in shell
+            # record already says which. `lockstep-improve.yml` used to make this translation in shell
             # (`test "$status" -eq 3 && exit 0`), a decision about what a run MEANS living in
             # YAML (#314); the flag keeps it here, where a test can reach it. Said, so a log
             # reader sees a refusal and not a green step that did nothing.
@@ -935,7 +935,7 @@ def main() -> None:
 def _harvest_in_process(tape: Any, workflow_id: str, lockstep: Any) -> None:
     """Turn the tape into cases here, at the end of the run, rather than as a second CI statement.
 
-    Two reasons, and the second is the one that decided it. `implement.yml` is at 13 of
+    Two reasons, and the second is the one that decided it. `lockstep-implement.yml` is at 13 of
     `MAX_STATEMENTS = 13`, and its own comment says a cap somebody raises whenever it bites is not
     a cap — so a harvest step would have cost a raise nobody had argued for. And a step that can be
     forgotten is a step that will be: the flag and what makes it worth passing belong together, or
@@ -6803,7 +6803,7 @@ from in_lockstep.platform.tickets import TicketSource
 # Two workflows rather than one, because they must not be one process. `implement/from-ticket`
 # runs unprivileged with the provider key and stages a change into an artifact;
 # `implement/propose` runs privileged with a write token and no provider key. The trampoline in
-# .github/workflows/implement.yml holds the trigger, the job split and the credentials — and
+# .github/workflows/lockstep-implement.yml holds the trigger, the job split and the credentials — and
 # nothing else. Run the first half locally with:
 #
 #     in-lockstep run implement/from-ticket --arg ticket='#42' --approve --budget 2.00
@@ -6884,7 +6884,7 @@ from in_lockstep.platform.tickets import TicketSource
 
 # --- appended by `in-lockstep init --fix` --------------------------------------------------------
 # The `/fix` chat-ops flow, and the target the ai-generated-issue hook routes to. Everything the
-# comment does is Python here; .github/workflows/fix.yml holds only what CI owns. Bug Fix
+# comment does is Python here; .github/workflows/lockstep-fix.yml holds only what CI owns. Bug Fix
 # reproduces the bug as a failing test, fixes it, and proves both — see `fix/diagnose-then-fix`.
 
 
@@ -6953,7 +6953,9 @@ def _scaffold_implement(module: Path, facts: Any, *, provider: str, host: str = 
         click.echo("        credentials first; the file says which.")
     else:
         _write_trampoline(
-            Path(".github/workflows/implement.yml"), _SCAFFOLD_IMPLEMENT_TRAMPOLINE, provider=provider
+            Path(".github/workflows/lockstep-implement.yml"),
+            _SCAFFOLD_IMPLEMENT_TRAMPOLINE,
+            provider=provider,
         )
 
     text = module.read_text() if module.exists() else ""
@@ -7011,7 +7013,7 @@ def _scaffold_implement(module: Path, facts: Any, *, provider: str, host: str = 
 def _scaffold_fix(module: Path, facts: Any, *, provider: str, host: str = "") -> None:
     """The `/fix` chat-ops flow: a three-job trampoline and the two workflows it fires.
 
-    `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `ai-generated.yml`
+    `fix/from-ticket` is also the target the ai-generated-issue hook routes to: `lockstep-ai-generated.yml`
     fires on an issue labeled `ai-generated` and runs the same workflow, closing the loop where a
     failed fix opens the next issue. The appended block guards each shared binding, so it composes
     with `--implement` without binding TicketSource, Scm, Test or the approval gate twice.
@@ -7025,9 +7027,13 @@ def _scaffold_fix(module: Path, facts: Any, *, provider: str, host: str = "") ->
         click.echo("        ai-generated loop is a pipeline run the same way. Scope the credentials")
         click.echo("        first; the file says which.")
     else:
-        _write_trampoline(Path(".github/workflows/fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE, provider=provider)
         _write_trampoline(
-            Path(".github/workflows/ai-generated.yml"), _SCAFFOLD_AI_GENERATED_TRAMPOLINE, provider=provider
+            Path(".github/workflows/lockstep-fix.yml"), _SCAFFOLD_FIX_TRAMPOLINE, provider=provider
+        )
+        _write_trampoline(
+            Path(".github/workflows/lockstep-ai-generated.yml"),
+            _SCAFFOLD_AI_GENERATED_TRAMPOLINE,
+            provider=provider,
         )
 
     text = module.read_text() if module.exists() else ""
@@ -7074,7 +7080,7 @@ def _scaffold_review(*, provider: str, host: str = "") -> None:
         click.echo("        pipeline run with variables, the way the work job takes LOCKSTEP_ISSUE.")
         return
     if _write_trampoline(
-        Path(".github/workflows/review.yml"), _SCAFFOLD_REVIEW_TRAMPOLINE, provider=provider
+        Path(".github/workflows/lockstep-review.yml"), _SCAFFOLD_REVIEW_TRAMPOLINE, provider=provider
     ):
         click.echo("")
         click.echo("Three jobs, because posting is a write: `gate` holds no credential, `review`")
@@ -7244,7 +7250,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  review:
+  # Named for what it IS -- the reviews that gate a pull request -- not for the verb it runs.
+  # A check run is named for the JOB and not for the workflow, so this is the name that goes in
+  # your branch protection, and renaming it later retires the required check until you update it.
+  reviews:
     runs-on: ubuntu-24.04
     # Without this the CI default is 360 minutes, not 20.
     timeout-minutes: 20
@@ -7350,7 +7359,7 @@ jobs:
   # lockstep-run --push` absorbs from a job holding the write token, once each; `report --scm`
   # counts what is outstanding.
   publish:
-    needs: review
+    needs: reviews
     if: ${{ always() && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -7392,8 +7401,9 @@ jobs:
 _SCAFFOLD_GITLAB_TRAMPOLINE = """\
 # Invokes the CLI. Contains no lifecycle logic, and is never regenerated.
 #
-# The same trampolines lockstep.yml, implement.yml, fix.yml and improve.yml are on GitHub, in
-# GitLab's own terms; docs/trampoline.md is the host-neutral contract both are written against.
+# The same trampolines lockstep.yml, lockstep-implement.yml, lockstep-fix.yml and
+# lockstep-improve.yml are on GitHub, in GitLab's own terms; docs/trampoline.md is the
+# host-neutral contract both are written against.
 # Two ACTIVE jobs on every merge request: review, which is read-only and needs a provider
 # credential and the read the runner already has, and publish, which keeps review's record and
 # holds the push token and no provider. The gate/work/propose split for write-capable verbs is
@@ -7505,9 +7515,9 @@ publish:
 
 # -- write-capable verbs: the gate/work/propose credential split --------------------------------
 #
-# The same three-part split implement.yml and fix.yml carry on GitHub — gate authorizes the asker
-# holding no write-capable credential; work talks to the model holding the provider key and a
-# READ token; propose opens the merge request holding the write token and no provider key —
+# The same three-part split lockstep-implement.yml and lockstep-fix.yml carry on GitHub — gate
+# authorizes the asker holding no write-capable credential; work talks to the model holding the
+# provider key and a READ token; propose opens the merge request holding the write token and no provider key —
 # expressed in GitLab's terms. ONE pair of jobs for both verbs rather than two, and the verb is
 # a pipeline variable: on GitHub the two files exist because the two triggers differ
 # (`/implement` and `/fix` are different comments), and on GitLab the trigger is the same
@@ -7624,7 +7634,7 @@ propose:
 
 # -- the learning loop: improve/measure and improve/propose, on the same split ------------------
 #
-# What improve.yml is on GitHub. Measure reads the ledger and the eval corpus, drafts a prompt
+# What lockstep-improve.yml is on GitHub. Measure reads the ledger and the eval corpus, drafts a prompt
 # change and measures it, holding the provider credential and a read token; propose opens the
 # merge request holding the write token and no provider. Fired by a pipeline SCHEDULE on the
 # default branch that sets LOCKSTEP_IMPROVE=1 -- GitLab's `schedule` source carries variables,
@@ -7887,7 +7897,7 @@ jobs:
 _SCAFFOLD_FIX_TRAMPOLINE = """\
 # The /fix chat-ops flow: gate the asker, reproduce-and-fix under the provider key with no write
 # token, then open the pull request from the job that holds the token and no key. Same three-job
-# credential split as implement.yml, because fix writes too. A later slice adds an `issues:
+# credential split as lockstep-implement.yml, because fix writes too. A later slice adds an `issues:
 # labeled` trigger so an `ai-generated` bug routes here on its own.
 #
 # Pinned by version and by SHA: an unpinned install runs whatever the registry serves next, beside
@@ -8049,7 +8059,7 @@ _SCAFFOLD_AI_GENERATED_TRAMPOLINE = """\
 # anyone can label). The loop is bounded by `lockstep.max_attempts` — a failed fix opens the next
 # `ai-generated` issue only until the cap — so this trigger cannot run away.
 #
-# Same credential split as fix.yml, and pinned by version and SHA for the same reason.
+# Same credential split as lockstep-fix.yml, and pinned by version and SHA for the same reason.
 name: ai-generated
 
 on:

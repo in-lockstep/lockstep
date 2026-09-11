@@ -678,7 +678,7 @@ def test_a_case_that_dropped_nothing_says_nothing(tmp_path: Path) -> None:
 def test_a_recorded_run_harvests_itself(tmp_path: Path) -> None:
     """In-process at the end of the run, not as a second CI statement.
 
-    `implement.yml` sits at 13 of `MAX_STATEMENTS = 13` and its own comment says a cap somebody
+    `lockstep-implement.yml` sits at 13 of `MAX_STATEMENTS = 13` and its own comment says a cap somebody
     raises whenever it bites is not a cap — so a harvest step would have cost a raise nobody had
     argued for. And a step that can be forgotten is a step that will be: the flag and the thing
     that makes it worth passing belong together, or a repository records into a tape nothing reads.

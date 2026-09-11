@@ -1,6 +1,6 @@
 """Reading what a chat-ops comment asked for.
 
-A comment is a command selector, never a command: `implement.yml` fires on
+A comment is a command selector, never a command: `lockstep-implement.yml` fires on
 `startsWith(github.event.comment.body, '/implement')` and passes the body through, and what the
 words in it mean is decided HERE.
 
