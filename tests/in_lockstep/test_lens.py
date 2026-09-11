@@ -45,7 +45,10 @@ class _Seen:
     async def run(self, **kwargs: Any) -> Invocation:
         self.systems.append(str(kwargs["system"]))
         self.policies.append(kwargs["policy"])
-        return Invocation(content='{"findings": []}', cost=Cost(usd=0.001, input_tokens=10, output_tokens=5))
+        return Invocation(
+            content='{"statement": "small and does what it says", "findings": []}',
+            cost=Cost(usd=0.001, input_tokens=10, output_tokens=5),
+        )
 
 
 def _run(adapter: AiReview, aspect: str) -> Any:
@@ -252,7 +255,10 @@ def test_gate_lens_1_the_key_is_what_the_finding_id_the_marker_and_the_label_are
     class _Found:
         async def run(self, **kwargs: Any) -> Invocation:
             return Invocation(
-                content='{"findings": [{"path": "a.py", "line": 1, "summary": "s"}]}',
+                content=(
+                    '{"statement": "small and does what it says", '
+                    '"findings": [{"path": "a.py", "line": 1, "summary": "s"}]}'
+                ),
                 cost=Cost(usd=0.001, input_tokens=10, output_tokens=5),
             )
 
@@ -260,7 +266,12 @@ def test_gate_lens_1_the_key_is_what_the_finding_id_the_marker_and_the_label_are
         lambda ctx: _Found(), lenses={"security": Lens(SecurityReviewPrompt, emphasis="Enhanced.")}
     )
     outcome = _run(adapter, "security")
-    assert [f.id for f in outcome.findings] == ["review.security"], "enhanced, not re-keyed"
+    # The statement is excluded rather than accommodated: this claim is about how a LENS is
+    # keyed, and `review.statement` is one finding per review regardless of which lens ran
+    # (#451). Folding it into the expected list would make this drift every time the review
+    # verb grows another note.
+    keyed = [f.id for f in outcome.findings if f.id != "review.statement"]
+    assert keyed == ["review.security"], "enhanced, not re-keyed"
     assert marker("review:security") in review_comment("security", outcome)
     assert list(adapter.compositions()) == ["review/security"]
 

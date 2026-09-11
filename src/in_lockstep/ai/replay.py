@@ -381,7 +381,13 @@ class DryRunProvider(LLMProvider):
     transmits = False
 
     def __init__(self, content: str = "", *, usage: TokenUsage | None = None) -> None:
-        self.content = content or '{"findings": []}'
+        # A clean review, in the shape `REVIEW_SCHEMA` requires. `statement` is part of that
+        # shape since #451 and the default answer has to satisfy it, or every `--dry-run`
+        # review errors as `review.schema_mismatch` -- a wiring check failing on the wiring
+        # of the check. Written out rather than imported: this layer may not reach `prompts`,
+        # and a default answer that had to import a schema to be valid would be a stronger
+        # coupling than the one it is standing in for.
+        self.content = content or '{"statement": "a dry run, nothing read", "findings": []}'
         self.usage = usage or TokenUsage(input_tokens=10, output_tokens=5)
         self.calls: list[LLMInput] = []
 

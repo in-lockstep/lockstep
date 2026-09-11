@@ -557,7 +557,9 @@ def test_repair_respects_strings_and_escapes() -> None:
 
 
 def test_json_in_a_fence_is_extracted() -> None:
-    assert parse('```json\n{"findings": []}\n```').value == {"findings": []}
+    assert parse(
+        '```json\n{"statement": "the change is small and does what it says", "findings": []}\n```'
+    ).value == {"statement": "the change is small and does what it says", "findings": []}
 
 
 def test_unparseable_output_says_so_rather_than_guessing() -> None:
@@ -1330,7 +1332,14 @@ def test_a_complete_answer_at_the_cap_is_not_truncation() -> None:
     from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
 
-    provider = Stub(replies=[LLMOutput(content='{"findings": []}', stop_reason="end_turn")])
+    provider = Stub(
+        replies=[
+            LLMOutput(
+                content='{"statement": "the change is small and does what it says", "findings": []}',
+                stop_reason="end_turn",
+            )
+        ]
+    )
     adapter = AiReview(lambda ctx: invoker(provider), policy=InvokePolicy(max_turns=1, max_tokens=16))
     outcome = asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff="x")))
     assert outcome.status is Status.SUCCEEDED
@@ -1387,7 +1396,11 @@ def test_a_review_with_nothing_to_look_at_refuses(tmp_path: Path) -> None:
     from in_lockstep.adapters.ai.review import AiReview, Review
     from in_lockstep.core.outcome import Status
 
-    provider = Stub(replies=[LLMOutput(content='{"findings": []}')])
+    provider = Stub(
+        replies=[
+            LLMOutput(content='{"statement": "the change is small and does what it says", "findings": []}')
+        ]
+    )
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path))
     outcome = asyncio.run(adapter.invoke(None, Review(base="HEAD", head="HEAD")))
 
@@ -1403,7 +1416,7 @@ def test_a_partial_review_says_which_part_it_did_not_read(tmp_path: Path) -> Non
     from in_lockstep.core.outcome import Status
 
     files = "".join(f"diff --git a/f{i}.py b/f{i}.py\n@@ -1 +1 @@\n-{'x' * 800}\n" for i in range(10))
-    provider = Stub(replies=[LLMOutput(content='{"findings": [], "verdict": "ok"}')])
+    provider = Stub(replies=[LLMOutput(content='{"findings": [], "statement": "ok"}')])
     adapter = AiReview(lambda ctx: invoker(provider), repo_root=str(tmp_path), curator=ContextCurator())
     outcome = asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff=files, token_budget=600)))
     assert outcome.status is Status.SUCCEEDED
@@ -1741,7 +1754,7 @@ def _review_returning(findings: list[dict[str, Any]], diff: str = _DIFF_TWO_FILE
 
     from in_lockstep.adapters.ai.review import AiReview, Review
 
-    provider = Stub(replies=[LLMOutput(content=json.dumps({"findings": findings, "verdict": "ok"}))])
+    provider = Stub(replies=[LLMOutput(content=json.dumps({"findings": findings, "statement": "ok"}))])
     adapter = AiReview(lambda ctx: invoker(provider))
     return asyncio.run(adapter.invoke(None, Review(base="a", head="b", diff=diff)))
 
@@ -2010,8 +2023,14 @@ def test_resolve_invoker_wraps_a_factory_that_did_not(tmp_path: Path) -> None:
 # The structured module's docstring had promised "once more with the parse error quoted back" and
 # nothing implemented it.
 
-_MALFORMED = '{"findings": [{"path": "a.py", "line": 3, "summary": "Unquoted variable" "detail": "x"}]}'
-_GOOD = '{"findings": [{"path": "a.py", "line": 3, "summary": "Unquoted variable", "detail": "x"}]}'
+_MALFORMED = (
+    '{"statement": "ok", "findings": '
+    '[{"path": "a.py", "line": 3, "summary": "Unquoted variable" "detail": "x"}]}'
+)
+_GOOD = (
+    '{"statement": "ok", "findings": '
+    '[{"path": "a.py", "line": 3, "summary": "Unquoted variable", "detail": "x"}]}'
+)
 
 
 def _review(provider: Stub, policy: InvokePolicy | None = None) -> Outcome[Any]:

@@ -3914,7 +3914,7 @@ class Canned(LLMProvider):
         # bypass detection keys on spend: "kept nothing" only means "the recorder was bypassed"
         # when there was something to keep.
         return LLMOutput(
-            content='{"findings": [], "verdict": "fine"}',
+            content='{"findings": [], "statement": "fine"}',
             stop_reason="end_turn",
             usage=TokenUsage(input_tokens=100, output_tokens=20),
         )
