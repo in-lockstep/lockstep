@@ -1,0 +1,265 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "c717fc9dd6ff6c25d88b9e5c7bdc746b2a961481"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 141240,
+  "ci_actor": "tpouyer",
+  "ci_run": "34630072678",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.567441,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 614,
+        "message": "Suite-re-run order test passes vacuously if the loop runs only one correction.",
+        "path": "tests/in_lockstep/test_implement_tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 489,
+        "message": "Correction loop passes `aspect='green'` to `run_phase`, but `ImplementSession.invoker_for` is not exercised by the integration tests that go through `_assess_rounds`.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 221,
+        "message": "`assessment.met` in the `ready` expression means a truncated-diff assessment can mark a change not-ready even though the assessment was acknowledged as partial.",
+        "path": "src/in_lockstep/workflows/implement.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 497,
+        "message": "Changeset re-fetched from workspace after each correcting round, inside the assess loop.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.performance",
+        "line": 300,
+        "message": "Invoker cache `built` is local to one `session` call; verified it does not accumulate across runs.",
+        "path": "src/in_lockstep/adapters/ai/strategy.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 240,
+        "message": "Assessment verdicts read from disk are not bounded in length before being placed into AssessReport fields.",
+        "path": "src/in_lockstep/platform/artifacts.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 602,
+        "message": "`test_gate_assess_1_the_suite_runs_again_after_a_correcting_round` looks for 'Test' anywhere between the two Assess dispatches, but `ctx.order` is not shown to record Assess entries.",
+        "path": "tests/in_lockstep/test_implement_tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.path_not_in_diff",
+        "message": "1 finding(s) dropped: named tests/in_lockstep/test_artifacts.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "c717fc9dd6ff6c25d88b9e5c7bdc746b2a961481",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.567441,
+  "output_tokens": 2517,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34630072678-20260911T175257Z-7fb7",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.149536,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 614,
+            "message": "Suite-re-run order test passes vacuously if the loop runs only one correction.",
+            "path": "tests/in_lockstep/test_implement_tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 489,
+            "message": "Correction loop passes `aspect='green'` to `run_phase`, but `ImplementSession.invoker_for` is not exercised by the integration tests that go through `_assess_rounds`.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 221,
+            "message": "`assessment.met` in the `ready` expression means a truncated-diff assessment can mark a change not-ready even though the assessment was acknowledged as partial.",
+            "path": "src/in_lockstep/workflows/implement.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 947,
+      "verb": "review",
+      "wall_seconds": 40.318
+    },
+    {
+      "cost_usd": 0.130546,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 497,
+            "message": "Changeset re-fetched from workspace after each correcting round, inside the assess loop.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.performance",
+            "line": 300,
+            "message": "Invoker cache `built` is local to one `session` call; verified it does not accumulate across runs.",
+            "path": "src/in_lockstep/adapters/ai/strategy.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 490,
+      "verb": "review",
+      "wall_seconds": 15.874
+    },
+    {
+      "cost_usd": 0.141365,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 240,
+            "message": "Assessment verdicts read from disk are not bounded in length before being placed into AssessReport fields.",
+            "path": "src/in_lockstep/platform/artifacts.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 381,
+      "verb": "review",
+      "wall_seconds": 25.066
+    },
+    {
+      "cost_usd": 0.145993,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 602,
+            "message": "`test_gate_assess_1_the_suite_runs_again_after_a_correcting_round` looks for 'Test' anywhere between the two Assess dispatches, but `ctx.order` is not shown to record Assess entries.",
+            "path": "tests/in_lockstep/test_implement_tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.path_not_in_diff",
+            "message": "1 finding(s) dropped: named tests/in_lockstep/test_artifacts.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 711,
+      "verb": "review",
+      "wall_seconds": 31.54
+    }
+  ],
+  "tokens": 2529,
+  "tool_calls": {},
+  "ts": "2026-09-11T17:53:38+00:00",
+  "turns": 4,
+  "wall_seconds": 40.318,
+  "workflow": "review/all-lenses"
+}
