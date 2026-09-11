@@ -3040,16 +3040,36 @@ def config_cmd(base: str) -> None:
         return
 
     click.echo("verdict   NOT exercised by this pull request's checks")
-    # The remedy travels with the refusal. A check whose fix lives in a document is a check people
-    # ask somebody about rather than read -- and this one is red on a change whose author has done
-    # nothing wrong, so the sentence it prints is the whole of its usefulness.
-    click.echo(
-        f"\nThe checks on this change loaded {against!r}'s configuration, so what you changed here\n"
-        f"has never run. The first thing to execute it will be the default branch, after the merge.\n"
-        f"\nExercise it, or say why it is going in unexercised, with a trailer on any commit here:\n"
-        f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n",
-        err=True,
-    )
+
+    # Distinguish "no acknowledgement at all" from "acknowledgement written but not in git's
+    # trailer block". The second happens when a blank line separates the trailer from the final
+    # paragraph — natural when Co-Authored-By: is already at the end — and the remedy is
+    # different: move it, do not add it.
+    from .config_ref import near_miss_acknowledgement
+
+    near_miss = near_miss_acknowledgement(".", against)
+    if near_miss:
+        # The acknowledgement exists in the commit message but git does not see it as a trailer.
+        click.echo(
+            f"\nAn {ACKNOWLEDGEMENT}: trailer was found in the commit message, but it is not in\n"
+            f"git's trailer block (the last paragraph of the message). Git only reads trailers from\n"
+            f"the final paragraph, with no blank line between them. Move the trailer so it is\n"
+            f"adjacent to Co-Authored-By: with no blank line in between:\n"
+            f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n"
+            f"    Co-Authored-By: ...\n",
+            err=True,
+        )
+    else:
+        # The remedy travels with the refusal. A check whose fix lives in a document is a check
+        # people ask somebody about rather than read -- and this one is red on a change whose
+        # author has done nothing wrong, so the sentence it prints is the whole of its usefulness.
+        click.echo(
+            f"\nThe checks on this change loaded {against!r}'s configuration, so what you changed here\n"
+            f"has never run. The first thing to execute it will be the default branch, after the merge.\n"
+            f"\nExercise it, or say why it is going in unexercised, with a trailer on any commit here:\n"
+            f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n",
+            err=True,
+        )
     raise SystemExit(EXIT_FAILED)
 
 

@@ -192,6 +192,41 @@ def acknowledgement(repo_root: str | Path, base: str, key: str = ACKNOWLEDGEMENT
     return ""
 
 
+def near_miss_acknowledgement(repo_root: str | Path, base: str, key: str = ACKNOWLEDGEMENT) -> str:
+    """A line that looks like an acknowledgement but is not in git's trailer block.
+
+    When `acknowledgement()` returns empty, this scans the raw commit messages for a line
+    beginning with `key:`. If one is found, it was written but placed outside the final
+    paragraph — typically separated from `Co-Authored-By:` by a blank line — so git reads it
+    as prose rather than a trailer. The return is the value part (everything after `key:`),
+    stripped, or empty if nothing was found.
+
+    This is a diagnostic aid, not a second trailer parser. Git's `%(trailers:key=...)` remains
+    the only thing that decides whether a trailer IS a trailer; this just tells a person "you
+    wrote it, but git cannot see it" instead of "you did not write it".
+    """
+    resolved = _resolve_commit(repo_root, base)
+    if resolved is None:
+        return ""
+    # If git already sees a proper trailer, there is no near-miss.
+    if acknowledgement(repo_root, base, key):
+        return ""
+    # Read every raw commit body in the range.
+    out = _run(
+        repo_root,
+        ["git", "log", f"{resolved}..HEAD", "--format=%B%x1e"],
+    )
+    prefix = f"{key}:"
+    for record in (out or "").split("\x1e"):
+        for line in record.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(prefix):
+                value = stripped[len(prefix) :].strip()
+                if value:
+                    return value
+    return ""
+
+
 def _show(repo_root: str | Path, spec: str) -> str | None:
     return _run(repo_root, ["git", "show", spec])
 
