@@ -13,7 +13,6 @@ first entry in the protected-path deny list, and why it is loaded from a trusted
 from whichever branch is under review.
 """
 
-import sys
 from pathlib import Path
 
 from in_lockstep import Lockstep, Workshop
@@ -98,43 +97,27 @@ lockstep.guard = ChangeGuard(
 # `.git/config` one `git config` away. A staged test now runs under `--network=none` with a single
 # writable mount, the throwaway worktree, or the run is refused by name (`sandbox.host_fallback`).
 #
-# The image is uv's, on the interpreter this process runs on: Python, `git` and `uv`. The slim
-# Python image has no git, and 42 of 42 in `test_history.py` failed inside it -- the honest
-# failure, and also a `/fix` here that could never go green. The full Python image has git and
-# no uv, which this repository's own Provision and the tests that scaffold and provision a
-# repository invoke; run 34129809277 (#312) failed 9 tests of 2495 in that image on the runner
-# and named none of them, so whether uv was among the reasons is what the next run's named
-# finding will say. The ENVIRONMENT is the `.venv` the host already built, mounted read-only and
-# put on `PYTHONPATH`: a base image carries no pytest,
-# and the worktree a staged change is materialised into is a copy of HEAD, so `.venv` (ignored by
-# git) is not in it. Right where this repository's write verbs run -- a linux runner whose venv the
-# `Provision` line below built for this interpreter -- and right on a laptop for as long as every
-# package the suite imports is pure Python, which this repository's are; a compiled dependency built
-# for macOS would fail at import inside the container, naming the module rather than passing
-# anything. `require_container` stays off so that `run selfcheck`,
-# which runs THIS repository's own committed suite for a person, keeps the credential-dropped
-# subprocess where no runtime is; the model-staged callers refuse before materialising instead.
-_PY = f"{sys.version_info.major}.{sys.version_info.minor}"
-_VENV = f"{lockstep.repo.root}/.venv"
-# Named rather than inline because #419 will bind it twice. Today only `Test` uses it, and the
-# reason is worth reading before assuming `Validate` can have the same one: `PytestTest` runs
-# `python -m pytest`, and a venv's site-packages are path-independent, so mounting the host's
-# `.venv` and putting it on `PYTHONPATH` works. `uv run mypy` is not that -- it executes a console
-# script whose shebang was baked with the HOST's absolute venv path, which does not exist in here.
-_CONTAINED = Sandbox(
-    image=f"ghcr.io/astral-sh/uv:python{_PY}-bookworm",
-    mounts=((_VENV, "/venv"),),
-    # `src` on the path as well as the venv's packages, because this repository is
-    # installed editable and an editable install is a `.pth` file, which Python reads in a
-    # site directory and not on PYTHONPATH -- so `python -m mypy` and the CLI run as a
-    # subprocess could not import the package inside the container. The venv's `bin`
-    # LAST on PATH, so `python` is the image's (the venv's is a symlink to a host path)
-    # and `ruff`, which the suite resolves by name, is the one the host built.
-    extra_env={
-        "PYTHONPATH": f"/venv/lib/python{_PY}/site-packages:/work/src",
-        "PATH": "/usr/local/bin:/usr/bin:/bin:/venv/bin",
-    },
-)
+# The image is the WORKSHOP's, declared once at the bottom of this file, and why it is uv's rather
+# than a Python base image is worth keeping where a reader of this binding meets it: the slim image
+# has no git, and 42 of 42 in `test_history.py` failed inside it -- the honest failure, and also a
+# `/fix` here that could never have gone green; the full Python image has git and no uv, which this
+# repository's own Provision and the tests that scaffold and provision a repository invoke, and run
+# 34129809277 (#312) failed 9 tests of 2495 in it on the runner.
+#
+# The ENVIRONMENT was, for a long time, the `.venv` this host had already built, mounted read-only
+# and put on `PYTHONPATH`. That is gone, and so is `_CONTAINED`, the constant that carried it: an
+# image plus that mount plus the `PYTHONPATH` it needed, with no caller left once `Test` stopped
+# naming a sandbox of its own (#429). A venv built on the host carries the host's absolute paths in
+# its console-script shebangs and its own platform's wheels, so mounting one into an image was only
+# ever viable while every package the suite imports is pure Python. `prepared` runs this
+# repository's own `Provision` over the tree instead, which is a provision doing what a provision is
+# for -- and #434 is what it cost to learn that only the callers which actually CALL `prepared` get
+# it: every `Validate` site did and every `Test` site did not, so for three weeks a model's suite
+# ran in an image where this project had never been installed and collected nothing.
+#
+# A person's `run selfcheck` still runs on the host where no container runtime exists. That is
+# `own_code_runner`'s `require_container=False` now rather than anything declared here; the
+# model-staged callers refuse before materialising instead.
 # NO sandbox of its own, which is how it reaches the workshop's (#419). `staged_runner` takes a
 # binding's image where it names one and the workshop's otherwise, so leaving this silent puts a
 # model's suite in the same container as its `run_script` -- and stops the two drifting onto
@@ -168,13 +151,14 @@ lockstep.bind(Test, PytestTest(args=["-q", "--no-header"]))
 # repository's own `/implement` and `/fix` do not check what they wrote. It fails closed, which is
 # the right direction and the reason it is easy not to notice.
 #
-# It was contained, on `_CONTAINED` above, and that broke `run selfcheck` on CI within the hour
-# (run 34415733664). `make lint` shells out to `uv run`; `uv run` found `/work/.venv` -- the
-# WORKING TREE's venv, which is writable because the working tree has to be, where `mounts` are
-# `:ro` -- saw its interpreter symlink dangling the moment the image's Python patch differed from
-# the runner's (3.11.14 against 3.11.16, on a mutable image tag), and DELETED it to rebuild, which
-# needs a network the sandbox correctly does not have. The same delete took the suite down with
-# it in the same job: `test errored (pytest is not installed)`. Measured, not guessed:
+# It was contained once, on an image with this host's `.venv` mounted read-only, and that broke
+# `run selfcheck` on CI within the hour (run 34415733664). `make lint` shells out to `uv run`;
+# `uv run` found `/work/.venv` -- the WORKING TREE's venv, which is writable because the working
+# tree has to be, where `mounts` are `:ro` -- saw its interpreter symlink dangling the moment the
+# image's Python patch differed from the runner's (3.11.14 against 3.11.16, on a mutable image
+# tag), and DELETED it to rebuild, which needs a network the sandbox correctly does not have. The
+# same delete took the suite down with it in the same job: `test errored (pytest is not
+# installed)`. Measured, not guessed:
 # `UV_NO_SYNC` does not prevent the delete, and pointing `UV_PROJECT_ENVIRONMENT` at a path inside
 # the image does -- but then `uv run` falls through to PATH, which serves `ruff` (a real binary)
 # and not `mypy` (a console script whose shebang carries the host's absolute venv path). Test
