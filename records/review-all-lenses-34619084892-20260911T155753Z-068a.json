@@ -1,0 +1,264 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "412de164ab6abd16b1a42cd8433aeadec96b55bd"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 141196,
+  "ci_actor": "tpouyer",
+  "ci_run": "34619084892",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.573606,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 11,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 495,
+        "message": "Correction loop uses `aspect='green'` but the assessment call in `_assess` passes no aspect.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 540,
+        "message": "Correction loop does not re-read the workspace changeset before dispatching `_assess` after validation rewrites bytes.",
+        "path": "src/in_lockstep/adapters/ai/tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 577,
+        "message": "The ordering assertion reads the first and last `Assess` entries, not the first and second.",
+        "path": "tests/in_lockstep/test_implement_tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 155,
+        "message": "Criterion text from the ticket is concatenated into the system prompt without structural separation.",
+        "path": "src/in_lockstep/adapters/ai/assess.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 131,
+        "message": "Criterion text written to the artifact JSON is masked via `mask.text` but the masking is for secrets, not for injection; criterion content is attacker-controlled.",
+        "path": "src/in_lockstep/platform/artifacts.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 253,
+        "message": "test_run_phase_asks_the_session_for_the_aspects_invoker does not assert that naming no aspect leaves the run's invoker unchanged when aspect='' is passed rather than omitted",
+        "path": "tests/in_lockstep/test_assess.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 586,
+        "message": "test_gate_assess_1_the_suite_runs_again_after_a_correcting_round asserts 'Test in between' but ctx.order is never shown to record Assess entries",
+        "path": "tests/in_lockstep/test_implement_tdd.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.path_not_in_diff",
+        "message": "1 finding(s) dropped: named tests/in_lockstep/test_artifacts.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (8469 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "412de164ab6abd16b1a42cd8433aeadec96b55bd",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.573606,
+  "output_tokens": 2939,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34619084892-20260911T155753Z-068a",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.156002,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 495,
+            "message": "Correction loop uses `aspect='green'` but the assessment call in `_assess` passes no aspect.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 540,
+            "message": "Correction loop does not re-read the workspace changeset before dispatching `_assess` after validation rewrites bytes.",
+            "path": "src/in_lockstep/adapters/ai/tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 577,
+            "message": "The ordering assertion reads the first and last `Assess` entries, not the first and second.",
+            "path": "tests/in_lockstep/test_implement_tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 1381,
+      "verb": "review",
+      "wall_seconds": 48.021
+    },
+    {
+      "cost_usd": 0.125522,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 157,
+      "verb": "review",
+      "wall_seconds": 9.159
+    },
+    {
+      "cost_usd": 0.145265,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 155,
+            "message": "Criterion text from the ticket is concatenated into the system prompt without structural separation.",
+            "path": "src/in_lockstep/adapters/ai/assess.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 131,
+            "message": "Criterion text written to the artifact JSON is masked via `mask.text` but the masking is for secrets, not for injection; criterion content is attacker-controlled.",
+            "path": "src/in_lockstep/platform/artifacts.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 644,
+      "verb": "review",
+      "wall_seconds": 30.841
+    },
+    {
+      "cost_usd": 0.146818,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 253,
+            "message": "test_run_phase_asks_the_session_for_the_aspects_invoker does not assert that naming no aspect leaves the run's invoker unchanged when aspect='' is passed rather than omitted",
+            "path": "tests/in_lockstep/test_assess.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 586,
+            "message": "test_gate_assess_1_the_suite_runs_again_after_a_correcting_round asserts 'Test in between' but ctx.order is never shown to record Assess entries",
+            "path": "tests/in_lockstep/test_implement_tdd.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.path_not_in_diff",
+            "message": "1 finding(s) dropped: named tests/in_lockstep/test_artifacts.py, which this change does not touch. A finding's path is the location a reviewer is sent to, and one the diff does not contain sends them nowhere.",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (8469 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 769,
+      "verb": "review",
+      "wall_seconds": 33.124
+    }
+  ],
+  "tokens": 2951,
+  "tool_calls": {},
+  "ts": "2026-09-11T15:58:41+00:00",
+  "turns": 4,
+  "wall_seconds": 48.021,
+  "workflow": "review/all-lenses"
+}
