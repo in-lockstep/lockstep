@@ -1,0 +1,199 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "32186bc002b270adab9555f8ce0d4cb6c18a5907"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 23039,
+  "ci_actor": "github-actions[bot]",
+  "ci_run": "34601591879",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.111347,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 210,
+        "message": "near_miss_acknowledgement returns on the first matching line regardless of which commit it appears in.",
+        "path": "src/in_lockstep/config_ref.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 3054,
+        "message": "Deferred import of `near_miss_acknowledgement` is inconsistent with the rest of the module.",
+        "path": "src/in_lockstep/cli.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 100,
+        "message": "CLI tests check `result.output` but the error messages are written to stderr (`err=True`).",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 155,
+        "message": "CLI test reads from `result.output` but the near-miss message is written to stderr (`err=True`).",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 129,
+        "message": "'no acknowledgement' refusal asserts only that `ACKNOWLEDGEMENT:` appears in output \u2014 that assertion would pass with the change reverted.",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 40,
+        "message": "Fixture creates `.lockstep` dir on `tmp_path`, then calls `git init` on `root` \u2014 the directory is created before git initialises it, which is fine, but worth confirming the `.lockstep` content survives the `git init`.",
+        "path": "tests/in_lockstep/test_config_near_miss.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "32186bc002b270adab9555f8ce0d4cb6c18a5907",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.111347,
+  "output_tokens": 1661,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34601591879-20260911T125850Z-0085",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.031899,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 210,
+            "message": "near_miss_acknowledgement returns on the first matching line regardless of which commit it appears in.",
+            "path": "src/in_lockstep/config_ref.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 3054,
+            "message": "Deferred import of `near_miss_acknowledgement` is inconsistent with the rest of the module.",
+            "path": "src/in_lockstep/cli.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 100,
+            "message": "CLI tests check `result.output` but the error messages are written to stderr (`err=True`).",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 698,
+      "verb": "review",
+      "wall_seconds": 37.282
+    },
+    {
+      "cost_usd": 0.023225,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 105,
+      "verb": "review",
+      "wall_seconds": 13.583
+    },
+    {
+      "cost_usd": 0.023308,
+      "decided": true,
+      "findings": {
+        "count": 0,
+        "items": []
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 104,
+      "verb": "review",
+      "wall_seconds": 19.566
+    },
+    {
+      "cost_usd": 0.032915,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 155,
+            "message": "CLI test reads from `result.output` but the near-miss message is written to stderr (`err=True`).",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 129,
+            "message": "'no acknowledgement' refusal asserts only that `ACKNOWLEDGEMENT:` appears in output \u2014 that assertion would pass with the change reverted.",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 40,
+            "message": "Fixture creates `.lockstep` dir on `tmp_path`, then calls `git init` on `root` \u2014 the directory is created before git initialises it, which is fine, but worth confirming the `.lockstep` content survives the `git init`.",
+            "path": "tests/in_lockstep/test_config_near_miss.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 766,
+      "verb": "review",
+      "wall_seconds": 33.722
+    }
+  ],
+  "tokens": 1673,
+  "tool_calls": {},
+  "ts": "2026-09-11T12:59:27+00:00",
+  "turns": 4,
+  "wall_seconds": 37.282,
+  "workflow": "review/all-lenses"
+}
