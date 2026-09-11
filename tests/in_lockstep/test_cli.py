@@ -1961,13 +1961,20 @@ def test_offline_needs_no_module_and_no_budget(repo: Path) -> None:
 
     Nothing bound, nothing declared, no key. Five clean installs of 0.2.0 were refused here by
     GATE-BUDGET-1, for spend a cassette cannot incur (#174). A replay states a ceiling of zero
-    instead, and the two findings come back at $0.0000. No `_write` on purpose: the module it
+    instead, and the findings come back at $0.0000. No `_write` on purpose: the module it
     scaffolds declares the very ceiling this is about.
+
+    The finding COUNT is deliberately not pinned. It was `== 2`, which is a fact about one
+    recording rather than about this claim: re-recording the fixture for #451 produced one
+    finding instead of two, and a test that goes red because a model reviewed the same diff
+    slightly differently is a test about the recording. What this is about is that a replay
+    needs no module, declares no budget, renders what the lens found, and bills nothing.
     """
     result = CliRunner().invoke(main, ["review", "--offline"])
     assert result.exit_code == 0, result.output
     assert "no budget is declared" not in result.output
-    assert result.output.count("review.security:") == 2, result.output
+    assert result.output.count("review.security:") >= 1, result.output
+    assert "review.statement:" in result.output, "and the lens says what it made of the change"
     assert "$0.0000" in result.output
 
 
@@ -1996,7 +2003,16 @@ def test_the_fixture_is_a_real_recording(repo: Path) -> None:
     cassette = json.loads(Path(fixture["cassette"]).read_text())
     entry = next(iter(cassette["provider_calls"].values()))
     usage = entry["usage"]
-    assert usage["input_tokens"] > 1000, "a canned answer would not have real token counts"
+    # The whole prompt, wherever the provider counted it. `input_tokens` alone was the proxy
+    # and it stopped meaning this the day prompt caching arrived: re-recording the fixture for
+    # #451 reported `input_tokens: 3` beside `cache_write_tokens: 5357`, because the prompt was
+    # written to the cache rather than billed as ordinary input. A real call against an 11KB
+    # diff, and this assertion would have called it an authored stand-in -- a fixture-integrity
+    # check rejecting the thing it exists to require.
+    prompt_tokens = (
+        usage["input_tokens"] + usage.get("cache_write_tokens", 0) + usage.get("cache_read_tokens", 0)
+    )
+    assert prompt_tokens > 1000, "a canned answer would not have real token counts"
     assert usage["output_tokens"] > 0
     assert entry["stop_reason"] == "end_turn", "not truncated"
 

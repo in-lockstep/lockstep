@@ -472,7 +472,13 @@ class AiReview:
 #: because a comment is the place the statement is FOR. Bounded at all for the reason a finding's
 #: message is (`GATE-VERDICT-2`): a comment is read on a ticket, and a lens that writes a page
 #: makes the three beside it unreadable.
-MAX_STATEMENT_CHARS = 1_200
+#:
+#: 1200 was a guess, and the first real statement measured 1229 -- so it clipped a genuine
+#: answer by two percent, mid-sentence, which is the worst of both: the reader loses the end of
+#: the thought and the run paid for it anyway. 2000 is sized from that measurement with room
+#: above it rather than from another guess, and four lenses at that length is still a comment
+#: somebody reads rather than scrolls past.
+MAX_STATEMENT_CHARS = 2_000
 
 
 def _statement_finding(statement: str, aspect: str) -> tuple[Finding, ...]:
