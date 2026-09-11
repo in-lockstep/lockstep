@@ -198,8 +198,8 @@ def near_miss_acknowledgement(repo_root: str | Path, base: str, key: str = ACKNO
     When `acknowledgement()` returns empty, this scans the raw commit messages for a line
     beginning with `key:`. If one is found, it was written but placed outside the final
     paragraph — typically separated from `Co-Authored-By:` by a blank line — so git reads it
-    as prose rather than a trailer. The return is the value part (everything after `key:`),
-    stripped, or empty if nothing was found.
+    as prose rather than a trailer. The return is the value part -- everything after `key:`, plus
+    any indented continuation lines, which is how git's `unfold` reads one -- or empty for none.
 
     This is a diagnostic aid, not a second trailer parser. Git's `%(trailers:key=...)` remains
     the only thing that decides whether a trailer IS a trailer; this just tells a person "you
@@ -218,12 +218,27 @@ def near_miss_acknowledgement(repo_root: str | Path, base: str, key: str = ACKNO
     )
     prefix = f"{key}:"
     for record in (out or "").split("\x1e"):
-        for line in record.splitlines():
-            stripped = line.strip()
-            if stripped.startswith(prefix):
-                value = stripped[len(prefix) :].strip()
-                if value:
-                    return value
+        lines = record.splitlines()
+        for index, line in enumerate(lines):
+            if not line.strip().startswith(prefix):
+                continue
+            # The value CONTINUES onto following indented lines, the way git's `unfold` reads one.
+            # Reading the first line alone disagreed with git about what an acknowledgement is: a
+            # trailer whose whole reason sits on a continuation line clears the check when it is
+            # placed correctly, and was invisible to this scan when it was not -- so a person who
+            # wrote one in that shape was told they had written nothing, which is the sentence this
+            # whole function exists to stop printing.
+            #
+            # Still not a trailer parser, and the distinction is the point: git decides WHETHER a
+            # trailer is one, and this only has to agree with it about WHERE the value ends, or the
+            # two readers disagree about whether the person wrote anything at all.
+            folded = [line.strip()[len(prefix) :].strip()]
+            for following in lines[index + 1 :]:
+                if not following[:1].isspace() or not following.strip():
+                    break
+                folded.append(following.strip())
+            if value := " ".join(part for part in folded if part):
+                return value
     return ""
 
 

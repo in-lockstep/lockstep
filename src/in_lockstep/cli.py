@@ -3063,11 +3063,20 @@ def config_cmd(base: str) -> None:
         # The remedy travels with the refusal. A check whose fix lives in a document is a check
         # people ask somebody about rather than read -- and this one is red on a change whose
         # author has done nothing wrong, so the sentence it prints is the whole of its usefulness.
+        # The syntax clause is HERE as well as in the near-miss above, and that is not redundancy.
+        # This is the refusal a person meets first, before they have written anything -- and the
+        # natural place to write the trailer, after the prose and before the `Co-Authored-By:` this
+        # repository requires on every commit, is the one place git does not read it. Saying so only
+        # after they have got it wrong costs a second round trip to teach what one sentence teaches
+        # here.
         click.echo(
             f"\nThe checks on this change loaded {against!r}'s configuration, so what you changed here\n"
             f"has never run. The first thing to execute it will be the default branch, after the merge.\n"
             f"\nExercise it, or say why it is going in unexercised, with a trailer on any commit here:\n"
-            f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n",
+            f"\n    {ACKNOWLEDGEMENT}: <why this is going in without having been run>\n"
+            f"\nIt must be in git's trailer block -- the LAST paragraph of the message, with no blank\n"
+            f"line between it and any other trailer. Put it directly above Co-Authored-By:, not in a\n"
+            f"paragraph of its own, or git reads it as prose and this check will not see it.\n",
             err=True,
         )
     raise SystemExit(EXIT_FAILED)
