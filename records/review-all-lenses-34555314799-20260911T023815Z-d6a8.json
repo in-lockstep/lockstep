@@ -1,0 +1,349 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "db4656c5f273e23011066cd8abe614b82d8fd382"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 207762,
+  "ci_actor": "tpouyer",
+  "ci_run": "34555314799",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.788264,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 20,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 61,
+        "message": "Required branch-protection context `review` is retired by this rename with no in-band migration.",
+        "path": ".github/workflows/lockstep.yml",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2416 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2416 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "injection.exfil_token_names",
+        "message": "high: ANTHROPIC_API_KEY",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2416 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "db4656c5f273e23011066cd8abe614b82d8fd382",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.788264,
+  "output_tokens": 608,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34555314799-20260911T023815Z-d6a8",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.199824,
+      "decided": true,
+      "findings": {
+        "count": 6,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 61,
+            "message": "Required branch-protection context `review` is retired by this rename with no in-band migration.",
+            "path": ".github/workflows/lockstep.yml",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2416 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "aaa44c0c61f735f585785ec9d2f7ab59",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 287,
+      "verb": "review",
+      "wall_seconds": 26.317
+    },
+    {
+      "cost_usd": 0.193427,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "b58dfabe1eb0c285b8f358da8186259e",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 89,
+      "verb": "review",
+      "wall_seconds": 6.767
+    },
+    {
+      "cost_usd": 0.197773,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2416 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "46868466208533c68ba9e30d29ee5aeb",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 129,
+      "verb": "review",
+      "wall_seconds": 19.642
+    },
+    {
+      "cost_usd": 0.19724,
+      "decided": true,
+      "findings": {
+        "count": 5,
+        "items": [
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "injection.exfil_token_names",
+            "message": "high: ANTHROPIC_API_KEY",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2416 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "2e660dc671e3c91127cee24bcf5e7b0a",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 115,
+      "verb": "review",
+      "wall_seconds": 18.471
+    }
+  ],
+  "tokens": 620,
+  "tool_calls": {},
+  "ts": "2026-09-11T02:38:42+00:00",
+  "turns": 4,
+  "wall_seconds": 26.317,
+  "workflow": "review/all-lenses"
+}
