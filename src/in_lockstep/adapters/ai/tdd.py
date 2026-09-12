@@ -458,7 +458,33 @@ class TDD(ImplementStrategy):
 
         container = getattr(ctx, "container", None)
         criteria = tuple(getattr(ticket, "acceptance_criteria", ()) or ())
-        if container is None or not container.has(Assess) or not criteria:
+        if container is None or not container.has(Assess):
+            # No assessor bound is a configuration choice, not a surprise, and a note on every
+            # run of every repository that has not bound one would be noise.
+            return None, findings, full, report, cost
+        if not criteria:
+            # Said out loud, because somebody bound an assessor and therefore wants assessment
+            # -- and because the likeliest cause is a PARSE rather than an absence.
+            #
+            # `criteria_from` reads an `Acceptance` or `Acceptance criteria` heading and nothing
+            # else. #443's `/implement` ran with zero criteria against a ticket whose acceptance
+            # section a reader can see, and skipping in silence meant $17.55 produced no
+            # evidence about the one phase it was meant to exercise. A reader of that record saw
+            # nothing and would reasonably conclude the change had been assessed and passed.
+            #
+            # Absent is not met, and this is the third reading of it in this feature: the report
+            # is False over no verdicts, an unanswered criterion is unmet, and now a run that
+            # found nothing to assess against says so instead of looking like one that did.
+            findings.append(
+                Finding(
+                    id="assess.no_criteria",
+                    message="an assessor is bound and this ticket states no acceptance criteria "
+                    "that could be read, so the change was NOT assessed against it. Criteria are "
+                    "read from an `Acceptance` or `Acceptance criteria` heading, or from a task "
+                    "list; a section under any other heading is not found.",
+                    severity=Severity.WARNING,
+                )
+            )
             return None, findings, full, report, cost
 
         assessment = None
@@ -485,6 +511,9 @@ class TDD(ImplementStrategy):
                 findings.append(
                     Finding(
                         id="assess.met",
+                        # The COUNT, because it is the cheapest check on the parse. An issue with
+                        # two acceptance sections yields the first one, and a reader who sees
+                        # "all 4" beside a ticket showing seven knows to look (#443 has both).
                         message=f"all {len(assessment.verdicts)} acceptance criteria met, assessed by "
                         f"{assessment.assessor or 'the routed assessor'}"
                         + (f" after {round_number} rounds" if round_number > 1 else ""),
