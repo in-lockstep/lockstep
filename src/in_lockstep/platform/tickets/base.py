@@ -173,7 +173,18 @@ class TicketSource(Protocol):
         raise Unsupported("this TicketSource does not transition tickets")
 
 
-_HEADING = re.compile(r"(?im)^#{1,6}\s*acceptance criteria\s*$")
+# "Acceptance" as well as "Acceptance criteria", because the shorter one is what people write.
+# Every issue in this repository uses `## Acceptance`, and every one of them parsed to ZERO
+# criteria -- so #443's `/implement` ran the acceptance-assessment phase against nothing and
+# said nothing about it, at $17.55. A heading nobody uses is a heading that finds nothing.
+#
+# Deliberately NOT loosened further. "Acceptance" or "Acceptance criteria" and nothing else: a
+# prefix match would take "Acceptance testing strategy", and guessing which qualified headings
+# mean criteria -- "Acceptance (revised)" does, "Acceptance risks" does not -- is inference of
+# the kind that goes wrong quietly. Under-matching is now LOUD instead: the assessment phase
+# reports finding no criteria rather than skipping in silence, so a heading this misses shows
+# up on the run rather than looking like a change that passed.
+_HEADING = re.compile(r"(?im)^#{1,6}\s*acceptance(?:\s+criteria)?\s*:?\s*$")
 _TASK = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*(.+)$")
 # The checkbox is optional here, and its absence was a bug. An issue with BOTH an "Acceptance
 # criteria" heading and a task list under it — which is how people actually write one — took the
