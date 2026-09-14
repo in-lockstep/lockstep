@@ -458,6 +458,11 @@ async def _existing_change_for(ticket: str, scm: Any) -> Any:
         # A host that errored listing changes is not a reason to open a second PR — but neither
         # is it a reason to refuse. Fall through to the new-PR path, the same thing that would
         # happen if the host had no `changes_for` at all.
+        #
+        # Which is the OPPOSITE of what `_branch_state` does with its own failure, deliberately,
+        # and the asymmetry is the consequence rather than the call: failing to LIST costs a
+        # person one duplicate pull request to close, and failing to READ A BRANCH would cost
+        # them work that cannot be got back. Both return None; only one of them is safe.
         return None
     # Newest first, which is what `changes_for` returns.
     mine = [c for c in changes if is_run_branch_of(str(getattr(c, "branch", "") or ""), "implement")]

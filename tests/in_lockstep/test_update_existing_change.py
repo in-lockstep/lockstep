@@ -27,6 +27,7 @@ from typing import Any
 
 from in_lockstep.core.outcome import Status
 from in_lockstep.core.types import ChangeSet, FileChange
+from in_lockstep.platform.artifacts import read_verdict
 from in_lockstep.platform.scm.base import ChangeRequest, Commit
 
 # ---------------------------------------------------------------------------
@@ -329,7 +330,11 @@ def test_a_red_second_attempt_puts_the_change_request_back_into_draft(tmp_path: 
     framework_commit = Commit(sha="aaa", subject="feat: first attempt", trailers={"In-Lockstep-Run": "r1"})
     scm = _Scm(existing_changes=(_EXISTING_CR,), branch_commits=(framework_commit,))
     tickets = _Tickets()
-    # No verdict in the artifact: nothing proved these tests pass, which is exactly `ready=False`.
+    # The precondition, asserted rather than depended on: the artifact carries a changeset and no
+    # verdict, so nothing proved these tests pass and `ready` is False. A later change to what
+    # `write_changeset` leaves behind would otherwise turn this into a test of the green path
+    # asserting the red path's outcome.
+    assert read_verdict(_staged(tmp_path)) is None
     asyncio.run(
         implement_propose(
             _Ctx(tmp_path),  # type: ignore[arg-type]
@@ -536,3 +541,74 @@ def test_a_persons_commit_is_found_through_the_adapter_the_workflow_is_handed(tm
     assert [c.sha for c in people] == [by_hand], (
         "the commit with no `In-Lockstep-Run` trailer is the one a person wrote"
     )
+
+
+def test_a_host_that_cannot_list_its_changes_opens_a_new_one(tmp_path: Path) -> None:
+    """GATE-REVIEW-8. `changes_for` failing is not a reason to refuse: the answer is the behaviour
+    that shipped before this path existed, and the cost of being wrong is one duplicate pull
+    request a person closes. That is the opposite of what an unreadable BRANCH does, and the
+    asymmetry is the whole argument — one failure costs a click, the other costs work nobody can
+    get back."""
+    from in_lockstep.workflows.implement import implement_propose
+
+    class _Cannot(_Scm):
+        async def changes_for(self, ticket: str) -> tuple[ChangeRequest, ...]:
+            raise RuntimeError("gh pr list failed: HTTP 502")
+
+    scm = _Cannot(existing_changes=(_EXISTING_CR,))
+    outcome = asyncio.run(
+        implement_propose(
+            _Ctx(tmp_path),  # type: ignore[arg-type]
+            "#443",
+            _Tickets(),  # type: ignore[arg-type]
+            scm,  # type: ignore[arg-type]
+            artifact=_staged(tmp_path),
+        )
+    )
+    assert outcome.status is Status.SUCCEEDED
+    assert scm.opened and not scm.updated
+
+
+def test_the_refusal_a_person_reads_does_not_carry_git_stderr(tmp_path: Path) -> None:
+    """GATE-REVIEW-8. `TargetRefused`'s prose is posted publicly on the ticket, and git's stderr
+    echoes the remote URL — which IS a credential on any remote spelled
+    `https://<token>@host/...`, the ordinary shape for a checkout that does not use an auth
+    header. Every other failed push here raises a plain `RuntimeError` no workflow catches, so
+    nothing git said has ever reached a comment; this path was the one that would have started.
+    git's text goes to the job log instead, and `raise ... from e` keeps it for a traceback.
+
+    Offline and deterministic: the remote is a path that does not exist, so git fails at once and
+    names it in stderr without a network call.
+    """
+    import pytest
+
+    from in_lockstep.platform.scm.base import TargetRefused
+    from in_lockstep.platform.scm.github import GitHubScm
+    from in_lockstep.workflows.implement import _branch_state
+
+    _remote, checkout, change = _an_attempt_already_on_the_remote(tmp_path)
+    scm = GitHubScm(checkout)
+    state = _branch_state(change, scm)
+    assert state is not None
+    expect, _people = state
+
+    # A remote spelled the way a token-in-URL checkout spells one, pointed at nothing.
+    secret = "s3cr3t-token-value"
+    _git(checkout, "remote", "set-url", "origin", f"file:///nowhere/{secret}/repo.git")
+
+    with pytest.raises(TargetRefused) as refusal:
+        asyncio.run(
+            scm.update_change(
+                change,
+                ChangeSet(changes=(FileChange(path="second.py", contents="y = 2\n"),), summary="s"),
+                expect=expect,
+                workflow="implement",
+                run_id="r2",
+            )
+        )
+    assert refusal.value.reason == "scm.branch_moved"
+    assert secret not in str(refusal.value), "git's stderr must not reach a public ticket comment"
+    assert "nowhere" not in str(refusal.value), "nor the remote URL it is embedded in"
+    # The control that keeps the one above honest: git DID say it, so the assertion is about what
+    # this code carries and not about git having been quiet.
+    assert secret in str(refusal.value.__cause__)

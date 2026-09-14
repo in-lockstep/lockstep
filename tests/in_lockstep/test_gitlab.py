@@ -188,6 +188,34 @@ def test_mark_ready_strips_the_draft_prefix_by_rewriting_the_title(tmp_path: Pat
     assert seen["body"] == {"title": "fix: it"}, "the title written back has no Draft: prefix"
 
 
+def test_mark_draft_puts_the_prefix_back_and_does_not_double_it(tmp_path: Path) -> None:
+    """GATE-REVIEW-8. The inverse of `mark_ready`, for the state only the update path can meet: a
+    merge request a green attempt marked ready, updated by one whose tests went red.
+
+    Idempotent, because the two constructors of a `ChangeRequest` disagree about the title.
+    `update_change` returns one whose title is the Conventional-Commit subject, which is what
+    `mark_ready`'s docstring means by "the title without the prefix by construction" — but
+    `changes_for` reads titles back off the API, where a draft's title carries `Draft:` already.
+    Trusting the caller to have used the right one is a rule; not double-prefixing is a property.
+    """
+    from in_lockstep.platform.scm.base import ChangeRequest
+
+    seen: list[Any] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(req.content))
+        return httpx.Response(200, json={})
+
+    scm = _scm(_repo(tmp_path), handler)
+    plain = ChangeRequest(id="x", url="", branch="b", title="fix: it", number=7)
+    asyncio.run(scm.mark_draft(plain))
+    assert seen[-1] == {"title": "Draft: fix: it"}
+
+    already = ChangeRequest(id="x", url="", branch="b", title="Draft: fix: it", number=7, draft=True)
+    asyncio.run(scm.mark_draft(already))
+    assert seen[-1] == {"title": "Draft: fix: it"}, "a title that is already a draft's is not prefixed twice"
+
+
 def test_mark_ready_without_a_number_is_left_alone(tmp_path: Path) -> None:
     """A request with no iid is never guessed at — same rule as GitHub."""
     from in_lockstep.platform.scm.base import ChangeRequest

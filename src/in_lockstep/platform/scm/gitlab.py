@@ -337,10 +337,18 @@ class GitLabScm:
                 "push", f"--force-with-lease={branch}:{expect}", "-u", "origin", branch, check=True
             )
         except RuntimeError as e:
+            # git's own text goes to the job log and NOT into the refusal's prose. This message is
+            # posted publicly on the ticket, and git's stderr carries the remote URL -- which is a
+            # credential on any remote spelled `https://<token>@host/...`. Every other failed push
+            # here raises a plain `RuntimeError` that no workflow catches, so nothing git said has
+            # ever reached a comment; this path is the one that would have started.
+            print(f"push      {e}")
             raise TargetRefused(
                 "scm.branch_moved",
-                f"could not force-push {branch}: the push was leased on `{expect[:7]}`, the commit "
-                f"this run read off the branch and checked. {e}",
+                f"could not force-push `{branch}`. The push was leased on `{expect[:7]}`, the "
+                f"commit this run read off the branch and checked, so either another run has "
+                f"written the branch since or the credential cannot write it. The job log says "
+                f"which.",
             ) from e
 
         # Update the merge request's title and description if provided.
@@ -378,10 +386,16 @@ class GitLabScm:
         """
         if change.number is None:
             return None
+        # Prefixed only where it is not already, rather than trusting the caller to hand over a
+        # request whose title `update_change` built. `mark_ready` documents that a request's title
+        # IS its subject by construction -- true of one this adapter returned, and not of one
+        # `changes_for` read back off the API, where a draft's title carries the prefix. Idempotent
+        # is the cheaper property than a rule about which constructor a caller used.
+        title = change.title if change.title.startswith("Draft: ") else f"Draft: {change.title}"
         self._request(
             "PUT",
             f"/projects/{self._project_path()}/merge_requests/{change.number}",
-            json={"title": f"Draft: {change.title}"},
+            json={"title": title},
         )
 
     # -- comments (the same duck-typed extras GitHubScm carries) ----------------------
