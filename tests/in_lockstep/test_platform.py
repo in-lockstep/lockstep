@@ -618,6 +618,34 @@ def test_acceptance_criteria_come_from_a_heading_when_there_is_one() -> None:
     assert criteria_from(body) == ("first", "second")
 
 
+def test_acceptance_alone_is_a_heading_too() -> None:
+    """The shorter heading is the one people write, and it found nothing.
+
+    Every issue in this repository uses `## Acceptance`; the pattern required
+    `## Acceptance criteria`. So #443's `/implement` ran its acceptance-assessment phase against
+    ZERO criteria on a ticket whose acceptance section a reader can see, at $17.55, and recorded
+    nothing about the one phase it was meant to exercise.
+    """
+    body = "Intro\n\n## Acceptance\n\n- first\n- second\n\n## Objectives\n\n- ignored\n"
+    assert criteria_from(body) == ("first", "second")
+
+
+def test_a_heading_that_merely_starts_with_acceptance_is_not_one() -> None:
+    """The negative control, and the reason the pattern was not loosened further: a prefix match
+    takes `Acceptance testing strategy`, whose bullets are not criteria. Guessing which qualified
+    headings mean criteria is inference of the kind that goes wrong quietly -- and under-matching
+    is loud now, because the assessment phase reports finding no criteria rather than skipping in
+    silence."""
+    body = "## Acceptance testing strategy\n\n- run the suite twice\n"
+    assert criteria_from(body) == ()
+
+
+def test_a_trailing_colon_on_the_heading_is_tolerated() -> None:
+    """`## Acceptance:` is the same heading with punctuation, and refusing it would be pedantry
+    that costs a silent zero."""
+    assert criteria_from("## Acceptance:\n\n- first\n") == ("first",)
+
+
 def test_criteria_fall_back_to_a_task_list() -> None:
     """Most trackers have no criteria field, and a checklist is what people actually write."""
     assert criteria_from("- [ ] do a thing\n- [x] done already\n") == (

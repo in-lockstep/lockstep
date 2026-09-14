@@ -25,7 +25,7 @@ from in_lockstep.adapters.pytest_adapter import PytestTest
 from in_lockstep.adapters.sandbox import Runner, Sandbox
 from in_lockstep.ai.invoker import AiInvoker, InvokePolicy
 from in_lockstep.ai.pricing import CostTable, Rate
-from in_lockstep.core.outcome import Outcome, Status
+from in_lockstep.core.outcome import Outcome, Severity, Status
 from in_lockstep.core.spend import Budget, Spend
 from in_lockstep.core.types import Assess, AssessReport, CriterionVerdict, Test, Validate
 from in_lockstep.llm.interface import LLMProvider
@@ -682,4 +682,36 @@ def test_no_assessor_bound_is_the_run_that_always_was(repo: Path) -> None:
     report = outcome.value
     assert report is not None and report.assessment is None
     assert "Assess" not in ctx.order
+    assert not any(f.id.startswith("assess.") for f in outcome.findings)
+
+
+def test_an_assessor_bound_and_no_criteria_found_says_so(repo: Path) -> None:
+    """GATE-ASSESS-1. Skipping in silence is what made #443's `/implement` produce no evidence
+    about the phase it was meant to exercise.
+
+    `criteria_from` reads an `Acceptance` heading and nothing else, and every issue in this
+    repository used `## Acceptance` while the pattern required `## Acceptance criteria` -- so the
+    ticket parsed to zero criteria, the phase returned early, and $17.55 of run recorded nothing
+    about it. A reader of that record saw no assessment finding at all and would reasonably
+    conclude the change had been assessed and passed.
+
+    Absent is not met, for the third time in this feature.
+    """
+    assessor = _Assessor((("x", True),))
+    ctx = Ctx(assessor=assessor)
+
+    outcome = _run(_two_phase(), repo, ctx=ctx)  # `_ticket()` states no criteria
+
+    assert assessor.seen == [], "not asked, because there was nothing to ask about"
+    said = next(f for f in outcome.findings if f.id == "assess.no_criteria")
+    assert said.severity is Severity.WARNING
+    assert "NOT assessed" in said.message
+    assert "Acceptance" in said.message, "and it names where criteria are read from"
+
+
+def test_no_assessor_bound_says_nothing_at_all(repo: Path) -> None:
+    """The negative control for the note above, and the reason it is conditional: a repository that
+    has bound no assessor has made a choice, and a warning on every run of it would be noise."""
+    outcome = _run(_two_phase(), repo, ctx=Ctx(), ticket=_criteria_ticket())
+
     assert not any(f.id.startswith("assess.") for f in outcome.findings)
