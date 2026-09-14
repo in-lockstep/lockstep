@@ -1,0 +1,41 @@
+{
+  "args": {},
+  "billed_fraction": null,
+  "branch": "main",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 0,
+  "ci_actor": "tpouyer",
+  "ci_run": "34845700792",
+  "config": "local working tree",
+  "cost_usd": 0.0,
+  "decided": false,
+  "epoch": "in-process",
+  "findings": {
+    "count": 1,
+    "items": [
+      {
+        "blocking": true,
+        "id": "improve.nothing_to_improve",
+        "message": "every attributable case passes against review/security as it stands, so no draft can improve the measurement and nothing was spent. A case's expectations say what a correct answer would have contained: tighten one to what the recorded answer missed, or add a rubric and bind a judge",
+        "severity": "error"
+      }
+    ]
+  },
+  "head": "6fb3e9806e239e3a6cb2f27ddd415ad810ba42dc",
+  "input_tokens": 0,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.0,
+  "output_tokens": 0,
+  "priced_fraction": null,
+  "reason": "improve.nothing_to_improve",
+  "run_id": "improve-measure-34845700792-20260914T125228Z-1bc2",
+  "schema": 9,
+  "status": "blocked",
+  "steps": [],
+  "tokens": 0,
+  "tool_calls": {},
+  "ts": "2026-09-14T12:52:30+00:00",
+  "turns": 0,
+  "wall_seconds": 0.0,
+  "workflow": "improve/measure"
+}
