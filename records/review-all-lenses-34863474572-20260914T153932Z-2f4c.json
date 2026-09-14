@@ -1,0 +1,285 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "eb1f87e58f652ccd65ba2389402436699ffd0e50"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 102636,
+  "ci_actor": "tpouyer",
+  "ci_run": "34863474572",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.419121,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 13,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change implements GATE-REVIEW-8: a second `/implement` on a ticket with an open change request force-pushes to the existing branch rather than opening a duplicate pull request. The diff delivers what it says \u2014 `update_reviewable`, `update_change` on both GitHub and GitLab adapters, `fetch_branch` on `GitLocal`, the person-commit and unreadable-branch refusals, the `mark_draft` inverse, and a substantial test file covering all thirteen named discharge tests. The design documentation and obje\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 358,
+        "message": "GitLab `update_change` commits with `title_line(subject)` but GitHub commits with `subject` directly.",
+        "path": "src/in_lockstep/platform/scm/gitlab.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 472,
+        "message": "`_existing_change_for` falls through to open-new on `changes_for` error, but the description says the gate holds both directions separately \u2014 the test for this path exists, but the asymmetry with `_branch_state` is documented only in a comment.",
+        "path": "src/in_lockstep/workflows/implement.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2288 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds an update path for a second `/implement` on a ticket with an open change request: instead of opening a new pull request it fetches the existing branch, checks for person-authored commits, and force-pushes with a lease. The performance lens looks for queries inside loops, unbounded reads, and work that scales with usage. The new `_existing_change_for` helper calls `scm.changes_for(ticket)` once and then filters in Python \u2014 no loop amplification. `_branch_state` calls `fetch_branc\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds a second-`/implement`-updates-existing-PR path, with force-push leased on a freshly-fetched sha, person-commit detection via trailer inspection, and a `mark_draft` inverse. The security-relevant controls are the lease preventing a blind overwrite, the credential-stripping of git stderr before public posting, and the `assert_run_scoped` check that gates both `update_change` implementations. I reviewed both adapter implementations and the orchestrating `implement_propose` path. Th\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 389,
+        "message": "`assert_run_scoped` is called on a branch that was opened by a different run, and its check may be weaker than documented here.",
+        "path": "src/in_lockstep/platform/scm/github.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.security",
+        "line": 251,
+        "message": "An error from `changes_for` silently falls back to opening a new PR, and the asymmetry with the unreadable-branch refusal is undocumented at the call site.",
+        "path": "src/in_lockstep/workflows/implement.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2288 chars)",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds `GATE-REVIEW-8`: a second `/implement` on a ticket with an open change request force-pushes to the existing branch rather than opening a new pull request. The test file `test_update_existing_change.py` is substantial and well-structured, covering the main paths declared in the gate entry. I checked each named test against the behaviour it is supposed to assert, examined the two levels (stub-level `implement_propose` tests and real-git adapter tests), and looked at the GitLab ada\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 378,
+        "message": "`test_two_open_crs_uses_the_one_resolved_through` does not assert that the comment names which CR was updated.",
+        "path": "tests/in_lockstep/test_update_existing_change.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 399,
+        "message": "No real-git test covers the GitLab `update_change` path.",
+        "path": "tests/in_lockstep/test_update_existing_change.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.blast",
+        "message": "the lens was given this change's blast radius (2288 chars)",
+        "severity": "note"
+      }
+    ]
+  },
+  "head": "eb1f87e58f652ccd65ba2389402436699ffd0e50",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.419121,
+  "output_tokens": 2280,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34863474572-20260914T153932Z-2f4c",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.105545,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change implements GATE-REVIEW-8: a second `/implement` on a ticket with an open change request force-pushes to the existing branch rather than opening a duplicate pull request. The diff delivers what it says \u2014 `update_reviewable`, `update_change` on both GitHub and GitLab adapters, `fetch_branch` on `GitLocal`, the person-commit and unreadable-branch refusals, the `mark_draft` inverse, and a substantial test file covering all thirteen named discharge tests. The design documentation and obje\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 358,
+            "message": "GitLab `update_change` commits with `title_line(subject)` but GitHub commits with `subject` directly.",
+            "path": "src/in_lockstep/platform/scm/gitlab.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 472,
+            "message": "`_existing_change_for` falls through to open-new on `changes_for` error, but the description says the gate holds both directions separately \u2014 the test for this path exists, but the asymmetry with `_branch_state` is documented only in a comment.",
+            "path": "src/in_lockstep/workflows/implement.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2288 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 576,
+      "verb": "review",
+      "wall_seconds": 28.382
+    },
+    {
+      "cost_usd": 0.09725,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds an update path for a second `/implement` on a ticket with an open change request: instead of opening a new pull request it fetches the existing branch, checks for person-authored commits, and force-pushes with a lease. The performance lens looks for queries inside loops, unbounded reads, and work that scales with usage. The new `_existing_change_for` helper calls `scm.changes_for(ticket)` once and then filters in Python \u2014 no loop amplification. `_branch_state` calls `fetch_branc\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 236,
+      "verb": "review",
+      "wall_seconds": 11.247
+    },
+    {
+      "cost_usd": 0.107304,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds a second-`/implement`-updates-existing-PR path, with force-push leased on a freshly-fetched sha, person-commit detection via trailer inspection, and a `mark_draft` inverse. The security-relevant controls are the lease preventing a blind overwrite, the credential-stripping of git stderr before public posting, and the `assert_run_scoped` check that gates both `update_change` implementations. I reviewed both adapter implementations and the orchestrating `implement_propose` path. Th\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 389,
+            "message": "`assert_run_scoped` is called on a branch that was opened by a different run, and its check may be weaker than documented here.",
+            "path": "src/in_lockstep/platform/scm/github.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.security",
+            "line": 251,
+            "message": "An error from `changes_for` silently falls back to opening a new PR, and the asymmetry with the unreadable-branch refusal is undocumented at the call site.",
+            "path": "src/in_lockstep/workflows/implement.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2288 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 672,
+      "verb": "review",
+      "wall_seconds": 32.03
+    },
+    {
+      "cost_usd": 0.109021,
+      "decided": true,
+      "findings": {
+        "count": 4,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds `GATE-REVIEW-8`: a second `/implement` on a ticket with an open change request force-pushes to the existing branch rather than opening a new pull request. The test file `test_update_existing_change.py` is substantial and well-structured, covering the main paths declared in the gate entry. I checked each named test against the behaviour it is supposed to assert, examined the two levels (stub-level `implement_propose` tests and real-git adapter tests), and looked at the GitLab ada\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 378,
+            "message": "`test_two_open_crs_uses_the_one_resolved_through` does not assert that the comment names which CR was updated.",
+            "path": "tests/in_lockstep/test_update_existing_change.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 399,
+            "message": "No real-git test covers the GitLab `update_change` path.",
+            "path": "tests/in_lockstep/test_update_existing_change.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.blast",
+            "message": "the lens was given this change's blast radius (2288 chars)",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 808,
+      "verb": "review",
+      "wall_seconds": 37.294
+    }
+  ],
+  "tokens": 2292,
+  "tool_calls": {},
+  "ts": "2026-09-14T15:40:11+00:00",
+  "turns": 4,
+  "wall_seconds": 37.294,
+  "workflow": "review/all-lenses"
+}
