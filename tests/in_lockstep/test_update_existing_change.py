@@ -64,6 +64,14 @@ class _Local:
         return self.sha
 
     def commits_between(self, base: str, head: str = "HEAD") -> tuple[Commit, ...]:
+        # The range is asserted, not ignored. A stub that answers the same tuple whatever it is
+        # asked cannot tell a correct call from one that reads the wrong two points — which is
+        # the defect this whole file exists downstream of, one level up. `HEAD..<the sha just
+        # fetched>` is the only range that means "what is on the branch and not yet reviewed";
+        # naming the BRANCH as the head would read a ref this checkout may not have, and the
+        # answer to that must not be an empty log.
+        assert base == "HEAD", f"the range starts at HEAD, not {base!r}"
+        assert head == self.sha, f"the range ends at the fetched sha, not {head!r}"
         return self.commits
 
 

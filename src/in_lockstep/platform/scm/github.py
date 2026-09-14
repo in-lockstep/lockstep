@@ -400,6 +400,13 @@ class GitHubScm:
             # credential on any remote spelled `https://<token>@host/...`. Every other failed push
             # here raises a plain `RuntimeError` that no workflow catches, so nothing git said has
             # ever reached a comment; this path is the one that would have started.
+            #
+            # The two destinations are NOT equally protected, which is the whole reason to split
+            # them. `cli.main` wraps stdout in a `RedactingStream` before any command runs, and
+            # `_STRUCTURAL` masks URL userinfo -- `https://svc:token@host/repo.git` comes out
+            # `https://svc:***@host/repo.git`, asserted in `test_sinks.py`. A ticket comment goes
+            # out through `gh` as an argument and passes through none of that. So the log is a
+            # redacted sink and the comment is a raw one, and git's text belongs in the first.
             print(f"push      {e}")
             raise TargetRefused(
                 "scm.branch_moved",

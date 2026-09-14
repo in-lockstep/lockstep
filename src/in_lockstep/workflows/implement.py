@@ -454,7 +454,11 @@ async def _existing_change_for(ticket: str, scm: Any) -> Any:
         return None
     try:
         changes = await scm.changes_for(ticket)
-    except (RuntimeError, OSError):
+    except (RuntimeError, OSError) as e:
+        # Said out loud, because the consequence is silent: a person who asked for a second
+        # attempt and got a second pull request has nothing telling them the first one was
+        # looked for and the host would not answer.
+        print(f"changes   could not list open changes for {ticket}: {e}")
         # A host that errored listing changes is not a reason to open a second PR — but neither
         # is it a reason to refuse. Fall through to the new-PR path, the same thing that would
         # happen if the host had no `changes_for` at all.
