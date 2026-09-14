@@ -32,16 +32,30 @@ async def open_reviewable(scm: Any, changeset: Any, *, ready: bool, **kwargs: An
 
 
 async def update_reviewable(scm: Any, existing: Any, changeset: Any, *, ready: bool, **kwargs: Any) -> Any:
-    """Push a new changeset to an existing change request, and mark it ready only when `ready`.
+    """Push a new changeset to an existing change request, and put it in the state `ready` names.
 
     The update path for a second `/implement` on a ticket that already has an open pull request.
     The changeset is built over HEAD — the ordering property in `prepared` is not weakened — and
     force-pushed to the existing branch, so the pull request's URL, number and review threads
-    survive. `kwargs` are `update_change`'s (`title`, `body`, `ticket`, `workflow`, `run_id`).
+    survive. `kwargs` are `update_change`'s (`expect`, `title`, `body`, `ticket`, `workflow`,
+    `run_id`).
+
+    **Both directions, unlike `open_reviewable`, which only ever needs one.** A change request
+    that is being updated already has a draft state, and the second attempt's is not necessarily
+    the first's: a green attempt marks it ready, and a red attempt after it must put it back.
+    Leaving a red change sitting in a review queue while the ticket comment calls it a draft is a
+    false statement in the place a person reads it, which is the failure `implement_report`'s
+    three verbs exist to avoid one layer up.
     """
     change = await scm.update_change(existing, changeset, **kwargs)
     if ready:
         await scm.mark_ready(change)
+    else:
+        # `getattr`, because a host with no draft concept has neither call and must not fail here:
+        # `mark_ready` is on the `Scm` port as a documented no-op and this is the duck-typed half.
+        back = getattr(scm, "mark_draft", None)
+        if back is not None:
+            await back(change)
     return change
 
 

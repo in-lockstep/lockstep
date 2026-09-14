@@ -301,6 +301,7 @@ class GitLabScm:
         change: ChangeRequest,
         cs: ChangeSet,
         *,
+        expect: str,
         title: str = "",
         body: str = "",
         ticket: str = "",
@@ -312,6 +313,11 @@ class GitLabScm:
         The changeset is built over HEAD — the ordering property in `prepared` is not weakened
         (#422) — and force-pushed to the branch the merge request already lives on. The merge
         request's URL, iid and discussion threads survive.
+
+        `expect` is the sha the caller read off the branch and made its decision about; the
+        GitHub adapter's docstring argues for it and the argument is the host's only in that a
+        bare `--force-with-lease` fails there for a reason git spells out. Here it is the same
+        control for the same reason: the check and the write must name one state.
         """
         branch = change.branch
         self.local.assert_run_scoped(branch)
@@ -326,7 +332,16 @@ class GitLabScm:
         if ticket:
             trailers["Ticket"] = ticket
         self.local.commit(title_line(subject), trailers=trailers)
-        self.local.git("push", "--force-with-lease", "-u", "origin", branch, check=True)
+        try:
+            self.local.git(
+                "push", f"--force-with-lease={branch}:{expect}", "-u", "origin", branch, check=True
+            )
+        except RuntimeError as e:
+            raise TargetRefused(
+                "scm.branch_moved",
+                f"could not force-push {branch}: the push was leased on `{expect[:7]}`, the commit "
+                f"this run read off the branch and checked. {e}",
+            ) from e
 
         # Update the merge request's title and description if provided.
         if change.number is not None and (title or body):
@@ -350,6 +365,23 @@ class GitLabScm:
             trailers=trailers,
             draft=change.draft,
             repo=change.repo,
+        )
+
+    async def mark_draft(self, change: ChangeRequest) -> None:
+        """Put the `Draft:` prefix back -- the merge request is no longer asking for review.
+
+        The other direction of `mark_ready`, for the state the update path made reachable: a
+        merge request a green attempt marked ready, updated by an attempt whose tests went red.
+        The title is the request's own Conventional-Commit subject, which is the title without
+        the prefix by construction, so prefixing it is the exact inverse of what `mark_ready`
+        writes back.
+        """
+        if change.number is None:
+            return None
+        self._request(
+            "PUT",
+            f"/projects/{self._project_path()}/merge_requests/{change.number}",
+            json={"title": f"Draft: {change.title}"},
         )
 
     # -- comments (the same duck-typed extras GitHubScm carries) ----------------------

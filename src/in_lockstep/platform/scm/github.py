@@ -347,6 +347,7 @@ class GitHubScm:
         change: ChangeRequest,
         cs: ChangeSet,
         *,
+        expect: str,
         title: str = "",
         body: str = "",
         ticket: str = "",
@@ -358,6 +359,14 @@ class GitHubScm:
         The changeset is built over HEAD — the ordering property in `prepared` is not weakened
         (#422) — and force-pushed to the branch the pull request already lives on. The pull
         request's URL, number and review threads survive.
+
+        `expect` is the sha the caller read off the branch and made its decision about, and it is
+        required rather than defaulted: a force-push with no lease is a write that cannot be
+        refused, and the caller's person-commit check is only worth running if what it inspected
+        is what gets overwritten. `git push --force-with-lease` **on its own** does not supply
+        one here — bare, it leases against the remote-tracking ref, which the job that runs this
+        has never fetched, and git rejects the push as `stale info` rather than proceeding
+        unleased. Naming the sha is both the fix and the control.
         """
         branch = change.branch
         # The branch was opened by a prior run. It is still run-scoped (the prefix matches), but
@@ -376,13 +385,28 @@ class GitHubScm:
         if ticket:
             trailers["Ticket"] = ticket
         self.local.commit(subject, trailers=trailers)
-        # Force-push: the branch already exists on the remote with the prior run's commits.
-        self.local.git("push", "--force-with-lease", "-u", "origin", branch, check=True)
+        # Force-push, leased on the sha the caller inspected. A failure here is a refusal a person
+        # must be told about -- the branch moved under a second run, or the credential cannot
+        # write it -- and `TargetRefused` is what the workflows catch and answer on the ticket
+        # with. A bare RuntimeError from `git` would leave the thread silent, which is the one
+        # thing a chat-ops trigger cannot do.
+        try:
+            self.local.git(
+                "push", f"--force-with-lease={branch}:{expect}", "-u", "origin", branch, check=True
+            )
+        except RuntimeError as e:
+            raise TargetRefused(
+                "scm.branch_moved",
+                f"could not force-push {branch}: the push was leased on `{expect[:7]}`, the commit "
+                f"this run read off the branch and checked. {e}",
+            ) from e
 
-        # Update the pull request's title and body if provided.
+        # Update the pull request's title and body if provided. `_at()` because this addresses a
+        # NUMBER: `for_repo`'s rule is that a numbered call follows the narrowing, and without it
+        # an adapter pointed at another repository would edit whatever #42 is in this checkout's.
         if title or body:
             rendered = change_body(body, trailers) if body else ""
-            update_args: list[str] = ["pr", "edit", str(change.number)]
+            update_args: list[str] = ["pr", "edit", str(change.number), *self._at()]
             if title:
                 update_args += ["--title", title_line(subject)]
             if rendered:
@@ -399,6 +423,23 @@ class GitHubScm:
             draft=change.draft,
             repo=change.repo,
         )
+
+    async def mark_draft(self, change: ChangeRequest) -> None:
+        """Put the pull request back into draft -- it is no longer asking for human review.
+
+        The other direction of `mark_ready`, and it exists because the update path made a state
+        reachable that opening one never could: a change request marked ready by a green attempt,
+        updated by a second attempt whose tests went red. Without this the pull request stays in
+        somebody's review queue while the ticket comment says it is a draft, which is a false
+        statement in the place a person reads it.
+
+        Already-a-draft is not an error worth raising -- `gh` exits non-zero saying it is already
+        a draft -- so this is idempotent by not checking the code, the same shape `comment` uses.
+        """
+        if change.number is None:
+            return None
+        where = ["--repo", change.repo] if change.repo else []
+        self._gh("pr", "ready", str(change.number), "--undo", *where)
 
     async def comment(self, target: int, body: str) -> None:
         self._gh("pr", "comment", str(target), *self._at(), "--body", body)

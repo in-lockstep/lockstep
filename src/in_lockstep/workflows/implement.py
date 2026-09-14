@@ -50,7 +50,7 @@ from ..platform.artifacts import (
 from ..platform.conversation import with_review
 from ..platform.propose import escalate, open_reviewable, update_reviewable
 from ..platform.report import implement_body
-from ..platform.scm import Scm, TargetRefused
+from ..platform.scm import Scm, TargetRefused, is_run_branch_of
 from ..platform.tickets import TicketSource
 from ._shared import described, last_unsuccessful, pointed_at
 
@@ -237,7 +237,22 @@ async def implement_propose(
         # A branch carrying a person's commit is refused before anything is written. Every
         # framework commit carries an `In-Lockstep-Run` trailer; a commit without one is a
         # person's, and overwriting it silently is the failure that would end trust fastest.
-        person_commits = _person_commits_on(existing_cr, scm)
+        state = _branch_state(existing_cr, scm)
+        if state is None:
+            # Could not read the branch, which is NOT the same fact as "nothing of a person's is
+            # on it" -- and the two were spelled the same until this refusal existed. Refused
+            # rather than opening a second pull request instead, because falling back would make
+            # an unreadable branch the quiet way to get the old behaviour back, and a control
+            # with a fallback is a control with an off switch.
+            await tickets.comment(
+                issue,
+                f"`/implement` could not read {existing_cr.url or existing_cr.branch}, so it "
+                f"cannot tell whether anyone has pushed to it. Updating it is refused rather "
+                f"than guessed at.\n\nThe change is in this run's artifact.",
+            )
+            print(f"refused   could not read {existing_cr.branch}")
+            return Outcome(status=Status.FAILED, reason="implement.branch_unreadable")
+        expect, person_commits = state
         if person_commits:
             shas = ", ".join(f"`{c.sha[:7]}`" for c in person_commits)
             subjects = "; ".join(f"`{c.sha[:7]}` {c.subject}" for c in person_commits)
@@ -255,6 +270,11 @@ async def implement_propose(
                 existing_cr,
                 changeset,
                 ready=ready,
+                # The sha the check above inspected, which the push leases on. If a second run
+                # writes this branch between the two, that push is refused rather than this one
+                # overwriting a tree nothing checked -- which is what the branch name's run id
+                # used to guarantee and no longer can.
+                expect=expect,
                 title=issue.title or changeset.summary or f"Implement {ticket}",
                 body=implement_body(changeset, verdict, validation, read_description(artifact)),
                 ticket=ticket,
@@ -414,13 +434,23 @@ async def implement_report(
 
 
 async def _existing_change_for(ticket: str, scm: Any) -> Any:
-    """The newest open change request the framework opened for `ticket`, or None.
+    """The newest open change request THIS VERB opened for `ticket`, or None.
 
     Accessed via `hasattr` because `changes_for` is a host capability — plain `GitLocal` cannot
-    list pull requests. When the host does not support it, the answer is None and the flow falls
-    through to `open_change`, which is what happened before this path existed.
+    list pull requests. `update_change` is asked for in the same breath and for a stronger
+    reason: an adopter's own adapter may implement the port and not this pair (it is duck-typed
+    extras, not `Scm`), and the answer to that is the behaviour that shipped before this path
+    existed, not an `AttributeError` three calls later.
+
+    **Filtered to `implement`'s own branches, which `changes_for` does not do.** It matches
+    `is_run_branch_for`, which reads the TICKET segment and ignores the workflow one — so a
+    `/fix` run's open pull request on the same ticket is in that list. That is right where
+    `with_review` uses it, because gathering what a reviewer said about any of our changes is
+    the point; it is wrong here, where the answer decides which branch gets force-pushed over.
+    A verb that overwrote another verb's change request would be the same class of surprise as
+    overwriting a person's commit, one layer out.
     """
-    if not hasattr(scm, "changes_for"):
+    if not (hasattr(scm, "changes_for") and hasattr(scm, "update_change")):
         return None
     try:
         changes = await scm.changes_for(ticket)
@@ -429,30 +459,42 @@ async def _existing_change_for(ticket: str, scm: Any) -> Any:
         # is it a reason to refuse. Fall through to the new-PR path, the same thing that would
         # happen if the host had no `changes_for` at all.
         return None
-    if not changes:
-        return None
     # Newest first, which is what `changes_for` returns.
-    return changes[0]
+    mine = [c for c in changes if is_run_branch_of(str(getattr(c, "branch", "") or ""), "implement")]
+    return mine[0] if mine else None
 
 
-def _person_commits_on(change: Any, scm: Any) -> list[Any]:
-    """Commits on `change`'s branch that lack an `In-Lockstep-Run` trailer — a person's work.
+def _branch_state(change: Any, scm: Any) -> tuple[str, list[Any]] | None:
+    """What is on `change`'s branch: its sha, and the commits on it a person wrote. None means
+    *could not tell*, which the caller refuses on.
 
-    Detection uses machinery that exists: every framework commit carries the trailer, and
-    `commits_between` already parses trailers off a range. A commit without the trailer is a
-    person's. No heuristic, no author-name matching.
+    Every framework commit carries an `In-Lockstep-Run` trailer, and `commits_between` parses
+    trailers off a range, so a commit in the range without one is a person's: no heuristic and no
+    author-name matching. The sha comes back with them because the push is leased on it — the
+    control and the write name one state, or the control is about a tree the write no longer
+    touches.
 
-    Returns an empty list when the host cannot enumerate commits — the safe side is to proceed,
-    because the alternative is refusing every update on a host that does not expose commit
-    metadata.
+    **Three ways to answer "nobody wrote anything here" without looking, all of them met.** The
+    first spelling of this asked `hasattr(scm, "commits_between")`; `commits_between` is
+    `GitLocal`'s and `GitHubScm` proxies exactly one method (`diff`), so the answer was False on
+    both shipped hosts and the refusal never ran. It then read `HEAD..<branch>` in a checkout that
+    had never fetched the branch, where git cannot resolve the revision. And `GitLocal.git`
+    without `check=True` returns "" on failure, so that error arrives as an empty log — an error
+    spelled exactly like a clean branch. Hence `fetch_branch`, which raises, and hence None here
+    being a distinct answer from `[]`: absent is not zero, and a branch nobody could read is not
+    a branch nobody has written to.
     """
-    if not hasattr(scm, "commits_between"):
-        return []
+    local = getattr(scm, "local", None)
+    if local is None or not hasattr(local, "commits_between") or not hasattr(local, "fetch_branch"):
+        return None
     try:
-        commits = scm.commits_between("HEAD", change.branch)
+        sha = local.fetch_branch(change.branch)
+        commits = local.commits_between("HEAD", sha)
     except (RuntimeError, OSError):
-        return []
-    return [c for c in commits if "In-Lockstep-Run" not in (c.trailers or {})]
+        return None
+    if not sha:
+        return None
+    return sha, [c for c in commits if "In-Lockstep-Run" not in (c.trailers or {})]
 
 
 def register() -> None:
