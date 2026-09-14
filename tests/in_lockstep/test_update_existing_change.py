@@ -371,11 +371,12 @@ def test_two_open_crs_uses_the_one_resolved_through(tmp_path: Path) -> None:
     )
     framework_commit = Commit(sha="aaa", subject="feat: attempt", trailers={"In-Lockstep-Run": "r1"})
     scm = _Scm(existing_changes=(newer, older), branch_commits=(framework_commit,))
+    tickets = _Tickets()
     outcome = asyncio.run(
         implement_propose(
             _Ctx(tmp_path),  # type: ignore[arg-type]
             "#443",
-            _Tickets(),  # type: ignore[arg-type]
+            tickets,  # type: ignore[arg-type]
             scm,  # type: ignore[arg-type]
             artifact=_staged(tmp_path),
         )
@@ -383,6 +384,10 @@ def test_two_open_crs_uses_the_one_resolved_through(tmp_path: Path) -> None:
     assert outcome.status is Status.SUCCEEDED
     assert scm.updated
     assert scm.updated[0]["change"].number == 42, "the newest CR is the one updated"
+    # "and says which" is half the criterion: with two open change requests on one ticket, a
+    # comment that does not name the one it wrote leaves a reader to guess between them.
+    assert any(newer.url in msg for msg in tickets.said), "the comment names the CR it updated"
+    assert not any(older.url in msg for msg in tickets.said)
 
 
 # ---------------------------------------------------------------------------
@@ -612,3 +617,82 @@ def test_the_refusal_a_person_reads_does_not_carry_git_stderr(tmp_path: Path) ->
     # The control that keeps the one above honest: git DID say it, so the assertion is about what
     # this code carries and not about git having been quiet.
     assert secret in str(refusal.value.__cause__)
+
+
+def test_the_gitlab_adapter_updates_over_head_and_on_a_lease_too(tmp_path: Path) -> None:
+    """GATE-REVIEW-8, on the other host. O3 asks for the same process wherever a repository
+    lives, and `update_change` is two implementations of one property — so asserting it on
+    GitHub alone leaves the half an adopter on GitLab actually runs untested. Neither the
+    changeset's base nor the lease goes through the API, so this needs no transport: the merge
+    request is only touched when a title or a body is passed, and neither is here.
+    """
+    import pytest
+
+    from in_lockstep.platform.scm.base import TargetRefused
+    from in_lockstep.platform.scm.gitlab import GitLabScm
+
+    remote, checkout, change = _an_attempt_already_on_the_remote(tmp_path)
+    scm = GitLabScm(checkout, base_url="https://gitlab.example.invalid", project="group/proj")
+    expect = scm.local.fetch_branch(change.branch)
+
+    asyncio.run(
+        scm.update_change(
+            change,
+            ChangeSet(changes=(FileChange(path="second.py", contents="y = 2\n"),), summary="s"),
+            expect=expect,
+            workflow="implement",
+            run_id="r2",
+        )
+    )
+    assert "second.py" in _git(remote, "ls-tree", "--name-only", _BRANCH)
+    assert "stale.py" not in _git(remote, "ls-tree", "--name-only", _BRANCH), (
+        "the changeset was built over the branch tip, which is what #422 refuses"
+    )
+
+    # The lease, on the sha that is now stale because the push above moved the branch.
+    with pytest.raises(TargetRefused) as refusal:
+        asyncio.run(
+            scm.update_change(
+                change,
+                ChangeSet(changes=(FileChange(path="third.py", contents="z = 3\n"),), summary="s"),
+                expect=expect,
+                workflow="implement",
+                run_id="r3",
+            )
+        )
+    assert refusal.value.reason == "scm.branch_moved"
+    assert "third.py" not in _git(remote, "ls-tree", "--name-only", _BRANCH)
+
+
+def test_an_update_keeps_the_commit_body_a_title_cannot_carry(tmp_path: Path) -> None:
+    """GATE-REVIEW-8. A commit message may have a body and a change request title may not, which
+    is why `title_line` exists and why `open_change` on both hosts commits the whole subject and
+    clamps only what it sends as a title. GitLab's update path clamped the COMMIT too, so a
+    second attempt silently dropped a body the first attempt kept — and nothing here noticed,
+    because no test read a commit message back off the remote.
+    """
+    import httpx
+
+    from in_lockstep.platform.scm.gitlab import GitLabScm
+
+    remote, checkout, change = _an_attempt_already_on_the_remote(tmp_path)
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={})),
+        base_url="https://gitlab.example.invalid/api/v4",
+    )
+    scm = GitLabScm(checkout, project="group/proj", client=client)
+    expect = scm.local.fetch_branch(change.branch)
+
+    asyncio.run(
+        scm.update_change(
+            change,
+            ChangeSet(changes=(FileChange(path="second.py", contents="y = 2\n"),), summary="s"),
+            expect=expect,
+            title="feat: the second attempt\n\nWhy the first one was not right.",
+            workflow="implement",
+            run_id="r2",
+        )
+    )
+    message = _git(remote, "log", "-1", "--format=%B", _BRANCH)
+    assert message.splitlines()[0] == "feat: the second attempt"
+    assert "Why the first one was not right." in message, "the commit body was clamped away"

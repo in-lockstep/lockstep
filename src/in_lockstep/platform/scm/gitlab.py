@@ -331,7 +331,11 @@ class GitLabScm:
         trailers = {"In-Lockstep-Run": run_id}
         if ticket:
             trailers["Ticket"] = ticket
-        self.local.commit(title_line(subject), trailers=trailers)
+        # `subject`, not `title_line(subject)`: a commit message may carry a body and a merge
+        # request title may not, which is why the two are different calls. `open_change` on
+        # both hosts commits the whole thing and clamps only what it sends as a title; this
+        # clamped the commit as well, so an update dropped a body the first attempt kept.
+        self.local.commit(subject, trailers=trailers)
         try:
             self.local.git(
                 "push", f"--force-with-lease={branch}:{expect}", "-u", "origin", branch, check=True
