@@ -687,4 +687,11 @@ improve_workflows.register()
 judge_workflows.register()
 # `review/all-lenses`: the required check, as one fan-out over every lens the bound adapter
 # declares (GATE-REVIEW-5, GATE-COST-6). `lockstep.yml` invokes it and nothing else.
+#
+# No `gating=`, and that is a decision rather than an omission. Since #449 a repository can
+# name which of its bound lenses gate a pull request, leaving the rest bound and reachable
+# from `/review <lens>` on the thread but off the required check. THIS repository may not:
+# O10 exists so the four shipped lenses are not things we ask adopters to trust on our word,
+# and `intent`, `performance` and `tests` already spent a release shipped-but-never-run once
+# (#241). `GATE-REVIEW-9` fails the build if an argument appears here.
 review_workflows.register()
