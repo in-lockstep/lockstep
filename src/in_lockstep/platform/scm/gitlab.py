@@ -296,6 +296,119 @@ class GitLabScm:
             json={"title": change.title},
         )
 
+    async def update_change(
+        self,
+        change: ChangeRequest,
+        cs: ChangeSet,
+        *,
+        expect: str,
+        title: str = "",
+        body: str = "",
+        ticket: str = "",
+        workflow: str = "",
+        run_id: str = "",
+    ) -> ChangeRequest:
+        """Force-push a new changeset to the branch of an existing merge request.
+
+        The changeset is built over HEAD — the ordering property in `prepared` is not weakened
+        (#422) — and force-pushed to the branch the merge request already lives on. The merge
+        request's URL, iid and discussion threads survive.
+
+        `expect` is the sha the caller read off the branch and made its decision about; the
+        GitHub adapter's docstring argues for it and the argument is the host's only in that a
+        bare `--force-with-lease` fails there for a reason git spells out. Here it is the same
+        control for the same reason: the check and the write must name one state.
+        """
+        branch = change.branch
+        self.local.assert_run_scoped(branch)
+
+        subject = conventional_subject(title, workflow=workflow) if title else change.title
+
+        # Build the changeset over HEAD, not the branch tip.
+        self.local.git("checkout", "-B", branch)
+        self.local.apply(cs, workflow_id=workflow)
+
+        trailers = {"In-Lockstep-Run": run_id}
+        if ticket:
+            trailers["Ticket"] = ticket
+        # `subject`, not `title_line(subject)`: a commit message may carry a body and a merge
+        # request title may not, which is why the two are different calls. `open_change` on
+        # both hosts commits the whole thing and clamps only what it sends as a title; this
+        # clamped the commit as well, so an update dropped a body the first attempt kept.
+        self.local.commit(subject, trailers=trailers)
+        try:
+            self.local.git(
+                "push", f"--force-with-lease={branch}:{expect}", "-u", "origin", branch, check=True
+            )
+        except RuntimeError as e:
+            # git's own text goes to the job log and NOT into the refusal's prose. This message is
+            # posted publicly on the ticket, and git's stderr carries the remote URL -- which is a
+            # credential on any remote spelled `https://<token>@host/...`. Every other failed push
+            # here raises a plain `RuntimeError` that no workflow catches, so nothing git said has
+            # ever reached a comment; this path is the one that would have started.
+            #
+            # The two destinations are NOT equally protected, which is the whole reason to split
+            # them. `cli.main` wraps stdout in a `RedactingStream` before any command runs, and
+            # `_STRUCTURAL` masks URL userinfo -- `https://svc:token@host/repo.git` comes out
+            # `https://svc:***@host/repo.git`, asserted in `test_sinks.py`. A ticket comment goes
+            # out through `gh` as an argument and passes through none of that. So the log is a
+            # redacted sink and the comment is a raw one, and git's text belongs in the first.
+            print(f"push      {e}")
+            raise TargetRefused(
+                "scm.branch_moved",
+                f"could not force-push `{branch}`. The push was leased on `{expect[:7]}`, the "
+                f"commit this run read off the branch and checked, so either another run has "
+                f"written the branch since or the credential cannot write it. The job log says "
+                f"which.",
+            ) from e
+
+        # Update the merge request's title and description if provided.
+        if change.number is not None and (title or body):
+            update: dict[str, str] = {}
+            if title:
+                update["title"] = title_line(subject)
+            if body:
+                update["description"] = change_body(body, trailers)
+            self._request(
+                "PUT",
+                f"/projects/{self._project_path()}/merge_requests/{change.number}",
+                json=update,
+            )
+
+        return ChangeRequest(
+            id=change.id,
+            url=change.url,
+            branch=branch,
+            title=title_line(subject),
+            number=change.number,
+            trailers=trailers,
+            draft=change.draft,
+            repo=change.repo,
+        )
+
+    async def mark_draft(self, change: ChangeRequest) -> None:
+        """Put the `Draft:` prefix back -- the merge request is no longer asking for review.
+
+        The other direction of `mark_ready`, for the state the update path made reachable: a
+        merge request a green attempt marked ready, updated by an attempt whose tests went red.
+        The title is the request's own Conventional-Commit subject, which is the title without
+        the prefix by construction, so prefixing it is the exact inverse of what `mark_ready`
+        writes back.
+        """
+        if change.number is None:
+            return None
+        # Prefixed only where it is not already, rather than trusting the caller to hand over a
+        # request whose title `update_change` built. `mark_ready` documents that a request's title
+        # IS its subject by construction -- true of one this adapter returned, and not of one
+        # `changes_for` read back off the API, where a draft's title carries the prefix. Idempotent
+        # is the cheaper property than a rule about which constructor a caller used.
+        title = change.title if change.title.startswith("Draft: ") else f"Draft: {change.title}"
+        self._request(
+            "PUT",
+            f"/projects/{self._project_path()}/merge_requests/{change.number}",
+            json={"title": title},
+        )
+
     # -- comments (the same duck-typed extras GitHubScm carries) ----------------------
 
     async def comment(self, target: int, body: str) -> None:

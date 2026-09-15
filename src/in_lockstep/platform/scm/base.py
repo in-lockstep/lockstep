@@ -214,6 +214,19 @@ def branch_for(workflow: str, run_id: str, *, ticket: str = "") -> str:
     humans scanning a branch list (`git branch --list 'in-lockstep/*/59/*'`) and never replaces
     it. The ticket is a hierarchy segment of its own so that glob works; a leading `#` is
     stripped because shells treat it as a comment even though git would accept it.
+
+    **Since #443** a second `/implement` on a ticket with an open change request force-pushes to
+    the existing branch rather than creating a new one, so two runs CAN name one branch and the
+    run-id segment is no longer what keeps them apart.
+
+    What keeps them apart instead is the lease on that force-push, not the workflow's concurrency
+    group. The group is keyed on the number the comment was left on, and `lockstep-implement.yml`
+    says why that does not serialise these two: a round asked for on the issue and a round asked
+    for on the pull request carry different numbers, land in different groups, and overlap — which
+    was safe only while every run got its own branch. So `update_change` reads the branch's sha
+    and pushes `--force-with-lease=<branch>:<that sha>`: whichever run pushes second finds the
+    lease stale and is refused by name, on the ticket, with nothing written. That is a guarantee
+    this repository can test, which the concurrency group was not.
     """
     safe = workflow_slug(workflow)
     key = branch_key(ticket)
@@ -595,6 +608,33 @@ class GitLocal:
                     trailers[key.strip()] = value.strip()
             commits.append(Commit(sha=sha.strip(), subject=subject, trailers=trailers))
         return tuple(commits)
+
+    def fetch_branch(self, branch: str, *, remote: str = "origin") -> str:
+        """`remote`'s `branch`, fetched into its remote-tracking ref, returning the sha it is at.
+
+        One read, for two readers who must agree. A run that updates an existing change request
+        has to know what is on the branch before it decides whether it may write (a commit a
+        person pushed is a refusal), and then has to write against *that same state* — so the
+        force-push leases on the sha this returned. If the branch moves between the two, the lease
+        refuses rather than the check having been right about a tree the push then destroyed. A
+        control that inspects one state while the write acts on another is this repository's most
+        expensive recurring defect; here the two are one value.
+
+        **The fetch is not optional.** The job that pushes checks out one ref at depth 1, so the
+        branch has neither a remote-tracking ref nor its objects: `git log HEAD..<branch>` names a
+        revision the checkout has never heard of, and `--force-with-lease` with no expectation
+        reads a ref that is not there and is rejected as `stale info`. A plain fetch of the one
+        branch brings enough history for `HEAD..<sha>` to resolve even from a shallow clone;
+        verified against one, because the shallow boundary is exactly what makes it a question.
+
+        Raises rather than returning an empty string, and that is the whole point of it having a
+        return value: `git` here is the no-`check` spelling that answers "" on failure, and a
+        branch that could not be read is not a branch with nothing on it.
+        """
+        self.git(
+            "fetch", "--force", remote, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}", check=True
+        )
+        return self.git("rev-parse", f"refs/remotes/{remote}/{branch}", check=True).strip()
 
     def assert_run_scoped(self, branch: str) -> None:
         """Refused here rather than relying on a token's scope.
