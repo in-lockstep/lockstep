@@ -1,0 +1,217 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "5b129260ba01020cca5e7b41b84df2c06cc317af"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 70767,
+  "ci_actor": "tpouyer",
+  "ci_run": "34976134077",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.291512,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change implements GATE-REVIEW-9: separating which lenses a repository *has* from which lenses *gate* a pull request. The core mechanism is a `gating` parameter on `review_workflows.register()`, resolved at run time against the bound adapter rather than at registration, and deliberately excluded from the registered callable's signature to prevent it appearing as a `--arg`. The documentation, gates table, objectives table, and tests all land consistently. The intent matches the implementation\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 113,
+        "message": "Ordering of gating lenses follows adapter declaration order, but the comment says so without a test in the implementation path itself.",
+        "path": "src/in_lockstep/workflows/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 156,
+        "message": "`__qualname__` left as closure's own is asserted in prose but not in the test suite.",
+        "path": "src/in_lockstep/workflows/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request. The implementation is documentation, design docs, a module-level function, and tests \u2014 no data structures that grow with usage, no loops over external state, no network calls introduced on any hot path. The fan-out in `review_all_lenses` was already bounded by the number of declared lenses; filtering that set to a named subset makes it strict\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which bound lenses gate a pull request independently of which lenses exist. The security-relevant surface is narrow: the new code validates the `gating` collection against the adapter's declared lenses at run time, refuses an empty selection explicitly, and deliberately excludes the `gating` parameter from the registered callable's introspectable signature to prevent it from becoming a \u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds `GATE-REVIEW-9`: a `gating=` parameter on `review_workflows.register()` that decouples which lenses exist from which lenses gate a pull request. The implementation is in `review.py`, documented in `docs/extending.md` and `design/gates.md`, and the tests in `test_enforced_review.py` cover the new behaviour with notable care. I examined whether each behaviour the description promises is named by a test, whether the assertions would survive reverting the change, and whether the clo\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 215,
+        "message": "No test asserts the `gating_unknown` refusal message when multiple unknown lenses are named simultaneously.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 196,
+        "message": "The `gating_empty` refusal is not asserted to exit with `Status.BLOCKED` in a way that would distinguish it from `Status.FAILED`.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5b129260ba01020cca5e7b41b84df2c06cc317af",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.291512,
+  "output_tokens": 1740,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34976134077-20260915T133754Z-b8fd",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.075879,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change implements GATE-REVIEW-9: separating which lenses a repository *has* from which lenses *gate* a pull request. The core mechanism is a `gating` parameter on `review_workflows.register()`, resolved at run time against the bound adapter rather than at registration, and deliberately excluded from the registered callable's signature to prevent it appearing as a `--arg`. The documentation, gates table, objectives table, and tests all land consistently. The intent matches the implementation\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 113,
+            "message": "Ordering of gating lenses follows adapter declaration order, but the comment says so without a test in the implementation path itself.",
+            "path": "src/in_lockstep/workflows/review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 156,
+            "message": "`__qualname__` left as closure's own is asserted in prose but not in the test suite.",
+            "path": "src/in_lockstep/workflows/review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 647,
+      "verb": "review",
+      "wall_seconds": 31.065
+    },
+    {
+      "cost_usd": 0.06911,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request. The implementation is documentation, design docs, a module-level function, and tests \u2014 no data structures that grow with usage, no loops over external state, no network calls introduced on any hot path. The fan-out in `review_all_lenses` was already bounded by the number of declared lenses; filtering that set to a named subset makes it strict\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 181,
+      "verb": "review",
+      "wall_seconds": 8.562
+    },
+    {
+      "cost_usd": 0.070618,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which bound lenses gate a pull request independently of which lenses exist. The security-relevant surface is narrow: the new code validates the `gating` collection against the adapter's declared lenses at run time, refuses an empty selection explicitly, and deliberately excludes the `gating` parameter from the registered callable's introspectable signature to prevent it from becoming a \u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 275,
+      "verb": "review",
+      "wall_seconds": 19.509
+    },
+    {
+      "cost_usd": 0.075905,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds `GATE-REVIEW-9`: a `gating=` parameter on `review_workflows.register()` that decouples which lenses exist from which lenses gate a pull request. The implementation is in `review.py`, documented in `docs/extending.md` and `design/gates.md`, and the tests in `test_enforced_review.py` cover the new behaviour with notable care. I examined whether each behaviour the description promises is named by a test, whether the assertions would survive reverting the change, and whether the clo\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 215,
+            "message": "No test asserts the `gating_unknown` refusal message when multiple unknown lenses are named simultaneously.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 196,
+            "message": "The `gating_empty` refusal is not asserted to exit with `Status.BLOCKED` in a way that would distinguish it from `Status.FAILED`.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 649,
+      "verb": "review",
+      "wall_seconds": 30.209
+    }
+  ],
+  "tokens": 1752,
+  "tool_calls": {},
+  "ts": "2026-09-15T13:38:26+00:00",
+  "turns": 4,
+  "wall_seconds": 31.065,
+  "workflow": "review/all-lenses"
+}
