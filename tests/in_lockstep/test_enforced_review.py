@@ -240,6 +240,39 @@ def test_gate_review_9_a_gating_lens_the_adapter_does_not_declare_refuses_before
     assert "intent, performance, security, tests" in message, "the refusal lists what does exist"
     assert adapter.asked == [], "a misconfigured gating set must not reach a model"
 
+    # More than one at a time, because the singular case cannot tell a join from a bare name and
+    # somebody renaming lenses gets several wrong at once.
+    register(gating=("security", "test", "licencing"))
+    outcome = asyncio.run(_registered()(_ctx(adapter), "main", "HEAD"))
+    assert outcome.status is Status.BLOCKED and outcome.reason == "review.gating_unknown"
+    assert outcome.findings[0].message.startswith("`register(gating=...)` names licencing, test, which"), (
+        outcome.findings[0].message
+    )
+    assert adapter.asked == []
+
+
+def test_gate_review_9_registering_twice_replaces_the_selection_rather_than_conflicting(
+    registry: None,
+) -> None:
+    """`GATE-REVIEW-9`. Any host that loads a `lockstep.py` more than once in one process
+    registers twice -- a long-lived worker, a test harness, two CLI invocations sharing an
+    interpreter -- and `_same_declaration` reads that as one declaration evaluated twice rather
+    than as two workflows claiming an id. It reads it that way by comparing module and
+    `__qualname__`, so the property survives here only because `register` leaves the closure's own
+    qualname alone, which was prose in a comment until this. Both directions, because a selection
+    that could not be taken back off would be the worse failure."""
+    adapter = _Lensed("security", "intent", "tests")
+
+    register(gating=("security",))
+    register()
+    asyncio.run(_registered()(_ctx(adapter), "main", "HEAD"))
+    assert sorted(adapter.asked) == ["intent", "security", "tests"], "the narrowing was not undone"
+
+    again = _Lensed("security", "intent", "tests")
+    register(gating=("security",))
+    asyncio.run(_registered()(_ctx(again), "main", "HEAD"))
+    assert again.asked == ["security"], "the later selection did not win"
+
 
 def test_gate_review_9_gating_on_nothing_is_refused_rather_than_read_as_gating_on_everything(
     registry: None,
