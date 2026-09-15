@@ -174,6 +174,9 @@ def test_gate_review_9_only_the_gating_lenses_run_and_the_rest_are_never_asked(
     narrowed away from the adapter -- they are simply not this check's business."""
     adapter = _Lensed("security", "intent", "performance", "tests", "licensing")
     ctx = _ctx(adapter)
+    # Named in the reverse of the order they run in, deliberately: the branches are ordered by
+    # what the ADAPTER declares, not by how the selection was typed, so the steps below assert an
+    # ordering that a `for name in asked` implementation would get wrong.
     register(gating=("tests", "security"))
     outcome = asyncio.run(_registered()(ctx, "main", "HEAD", comments=str(tmp_path / "bodies")))
     assert sorted(adapter.asked) == ["security", "tests"], "a lens that does not gate was paid for"
@@ -275,11 +278,29 @@ def test_gate_review_9_this_repository_gates_on_every_lens_it_binds(registry: No
     already spent a release shipped-but-never-run once (#241). Asserted by running the workflow
     THIS module registered over a stub declaring five lenses: a selection of any kind would show
     up as fewer than five branches."""
+    # Provenance first: what runs below has to be the closure THIS module installed, not one a
+    # neighbouring test left in the registry. `register` builds a fresh `Registered` per call, so
+    # an unchanged entry means `.lockstep/lockstep.py` never registered the check at all -- at
+    # which point every assertion after this would be about somebody else's registration.
+    before = get(ALL_LENSES)
     module, _ref = load(str(ROOT))
+    entry = get(ALL_LENSES)
+    assert entry is not None and entry is not before, (
+        "this repository's module did not register review/all-lenses; the rest of this test would "
+        "be asserting over a leftover registration"
+    )
+
     adapter = _Lensed("security", "intent", "performance", "tests", "licensing")
     ctx = _ctx(adapter)
-    asyncio.run(_registered()(ctx, "main", "HEAD"))
+    # `Workflow` is annotated `Callable[..., Awaitable[Any]]`, which `asyncio.run` will not
+    # take; the registry stores what it stores and the widening belongs here, not there.
+    registered_fn: Any = entry.fn
+    asyncio.run(registered_fn(ctx, "main", "HEAD"))
     assert sorted(adapter.asked) == ["intent", "licensing", "performance", "security", "tests"], (
         "this repository's registration narrowed the required check"
     )
-    assert module is not None
+    # Five over a stub says the registration narrows nothing; this says what it is not narrowing
+    # HERE, so the row's claim is about this repository's real lens set rather than about a stub.
+    _ensure_review_bound(module.lockstep)
+    known = _review_lenses(module.lockstep)
+    assert known is not None and {"intent", "performance", "security", "tests"} <= set(known)
