@@ -1,0 +1,201 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "419f2dc54ac8f4e2ac57330512b795db26a38214"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 73415,
+  "ci_actor": "tpouyer",
+  "ci_run": "34977511368",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.305282,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 7,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces `GATE-REVIEW-9`: a second lever (`register(gating=...)`) that separates which lenses a repository has from which lenses gate a pull request. Previously the only way to keep a lens off the required check was to drop it from `AiReview(lenses=...)`, which also removed it from `/review <lens>` on the thread \u2014 the wrong lever. The implementation adds the `gating` parameter to `register`, re-declares the inner closure signature deliberately to avoid `functools.wraps` and its `__\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 300,
+        "message": "Test assertion order may not expose a 'later selection did not win' failure reliably.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 109,
+        "message": "Ordering of `lenses` after filtering preserves adapter order, but the comment claims adapter order by design \u2014 worth a direct assertion.",
+        "path": "src/in_lockstep/workflows/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds a `gating` parameter to `review_workflows.register()`, separating which lenses a repository has from which lenses gate a pull request. The performance-relevant paths are: the validation in `review_all_lenses` (a few tuple/set operations over a handful of lens names \u2014 not a concern), and the fan-out itself, which is unchanged in structure. The new `lenses = tuple(name for name in declared if name in set(asked))` on line 122 builds a set from `asked` before filtering `declared`, s\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which subset of its bound review lenses gate a pull request, while keeping all lenses reachable via chat-ops comments. The security-relevant surface is the resolution logic in `review_all_lenses`: unknown lens names are refused before the fan-out, an empty gating set is refused, and the `gating` parameter is deliberately excluded from the registered callable's signature so it cannot be \u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces `register(gating=...)` as a second lever for controlling which lenses gate a pull request, separate from which lenses exist. The test coverage is thorough and well-structured: each distinct behavioural claim in GATE-REVIEW-9 has a named test, the refusal paths for unknown lenses, empty selection, and the structural no-`gating`-arg-in-signature constraint are all exercised with assertions tight enough to fail on the wrong implementation. I checked the most common failure mo\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 209,
+        "message": "Ordering of `adapter.asked` in double-registration second direction is asserted with bare equality.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "419f2dc54ac8f4e2ac57330512b795db26a38214",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.305282,
+  "output_tokens": 1996,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34977511368-20260915T135038Z-3ab8",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.081917,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces `GATE-REVIEW-9`: a second lever (`register(gating=...)`) that separates which lenses a repository has from which lenses gate a pull request. Previously the only way to keep a lens off the required check was to drop it from `AiReview(lenses=...)`, which also removed it from `/review <lens>` on the thread \u2014 the wrong lever. The implementation adds the `gating` parameter to `register`, re-declares the inner closure signature deliberately to avoid `functools.wraps` and its `__\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 300,
+            "message": "Test assertion order may not expose a 'later selection did not win' failure reliably.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 109,
+            "message": "Ordering of `lenses` after filtering preserves adapter order, but the comment claims adapter order by design \u2014 worth a direct assertion.",
+            "path": "src/in_lockstep/workflows/review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 884,
+      "verb": "review",
+      "wall_seconds": 34.465
+    },
+    {
+      "cost_usd": 0.072418,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds a `gating` parameter to `review_workflows.register()`, separating which lenses a repository has from which lenses gate a pull request. The performance-relevant paths are: the validation in `review_all_lenses` (a few tuple/set operations over a handful of lens names \u2014 not a concern), and the fan-out itself, which is unchanged in structure. The new `lenses = tuple(name for name in declared if name in set(asked))` on line 122 builds a set from `asked` before filtering `declared`, s\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 236,
+      "verb": "review",
+      "wall_seconds": 12.024
+    },
+    {
+      "cost_usd": 0.07313,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which subset of its bound review lenses gate a pull request, while keeping all lenses reachable via chat-ops comments. The security-relevant surface is the resolution logic in `review_all_lenses`: unknown lens names are refused before the fan-out, an empty gating set is refused, and the `gating` parameter is deliberately excluded from the registered callable's signature so it cannot be \u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 277,
+      "verb": "review",
+      "wall_seconds": 15.902
+    },
+    {
+      "cost_usd": 0.077818,
+      "decided": true,
+      "findings": {
+        "count": 2,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces `register(gating=...)` as a second lever for controlling which lenses gate a pull request, separate from which lenses exist. The test coverage is thorough and well-structured: each distinct behavioural claim in GATE-REVIEW-9 has a named test, the refusal paths for unknown lenses, empty selection, and the structural no-`gating`-arg-in-signature constraint are all exercised with assertions tight enough to fail on the wrong implementation. I checked the most common failure mo\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 209,
+            "message": "Ordering of `adapter.asked` in double-registration second direction is asserted with bare equality.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 611,
+      "verb": "review",
+      "wall_seconds": 27.102
+    }
+  ],
+  "tokens": 2008,
+  "tool_calls": {},
+  "ts": "2026-09-15T13:51:12+00:00",
+  "turns": 4,
+  "wall_seconds": 34.465,
+  "workflow": "review/all-lenses"
+}
