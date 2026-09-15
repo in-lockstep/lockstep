@@ -1,0 +1,217 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "5bf3ab81c49e9b3bfc22f495c057379b09509976"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 7119,
+  "cache_write_tokens": 62012,
+  "ci_actor": "tpouyer",
+  "ci_run": "34973974171",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.266007,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 8,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request \u2014 a distinction previously inexpressible without also removing lenses from chatops resolution. The implementation is coherent with what the description claims: the parameter is keyword-only on `register`, absent from the trampoline-visible signature via deliberate re-declaration rather than `functools.wraps`, validated at run time agains\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 170,
+        "message": "Closure captures `selection` by reference to the enclosing scope, not by value \u2014 though it is safe here.",
+        "path": "src/in_lockstep/workflows/review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.intent",
+        "line": 243,
+        "message": "`module` is loaded but only asserted non-None; the test's actual enforcement is over the stub adapter, not the real module's registration.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request. The core logic is a closure-based registration that hides `gating` from the CLI surface by re-declaring the inner function's signature rather than using `functools.wraps`. From a performance lens, the only path with scaling relevance is the `gating` validation in `review_all_lenses`: it iterates over `asked` to find unknowns against `de\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to separate which lenses exist (resolvable via `/review <lens>` chat-ops) from which lenses run on the required check. The security-relevant surface is narrow: the new parameter is keyword-only, deliberately absent from the registered callable's introspectable signature (preventing it from appearing as a `--arg` in the trampoline), and the validation logic explicitly refuses both unknown lens name\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds `register(gating=...)` to let repositories separate which lenses exist from which lenses gate a pull request, and introduces `GATE-REVIEW-9` to enforce that this repository keeps all four lenses gating. The test suite is the main focus of my review. I checked the five new test functions, the shared fixture, the helper `_registered`, and the assertions in each. The tests are specific and well-targeted: they cover the two refusal paths (`gating_empty`, `gating_unknown`), the signa\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 221,
+        "message": "The module loaded by `load(str(ROOT))` is never used after the assertion `module is not None`, so the test proves only that `load` returns something.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 188,
+        "message": "No test covers the ordering guarantee: `lenses` is derived as the subset of `declared` in `declared`'s order, not in `asked`'s order, but no assertion names that property.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "5bf3ab81c49e9b3bfc22f495c057379b09509976",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.266007,
+  "output_tokens": 2086,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34973974171-20260915T131805Z-cd15",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.069423,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request \u2014 a distinction previously inexpressible without also removing lenses from chatops resolution. The implementation is coherent with what the description claims: the parameter is keyword-only on `register`, absent from the trampoline-visible signature via deliberate re-declaration rather than `functools.wraps`, validated at run time agains\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 170,
+            "message": "Closure captures `selection` by reference to the enclosing scope, not by value \u2014 though it is safe here.",
+            "path": "src/in_lockstep/workflows/review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.intent",
+            "line": 243,
+            "message": "`module` is loaded but only asserted non-None; the test's actual enforcement is over the stub adapter, not the real module's registration.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 720,
+      "verb": "review",
+      "wall_seconds": 33.406
+    },
+    {
+      "cost_usd": 0.062226,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, separating which lenses a repository *has* from which lenses *gate* a pull request. The core logic is a closure-based registration that hides `gating` from the CLI surface by re-declaring the inner function's signature rather than using `functools.wraps`. From a performance lens, the only path with scaling relevance is the `gating` validation in `review_all_lenses`: it iterates over `asked` to find unknowns against `de\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 239,
+      "verb": "review",
+      "wall_seconds": 10.358
+    },
+    {
+      "cost_usd": 0.063674,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to separate which lenses exist (resolvable via `/review <lens>` chat-ops) from which lenses run on the required check. The security-relevant surface is narrow: the new parameter is keyword-only, deliberately absent from the registered callable's introspectable signature (preventing it from appearing as a `--arg` in the trampoline), and the validation logic explicitly refuses both unknown lens name\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 335,
+      "verb": "review",
+      "wall_seconds": 22.499
+    },
+    {
+      "cost_usd": 0.070683,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds `register(gating=...)` to let repositories separate which lenses exist from which lenses gate a pull request, and introduces `GATE-REVIEW-9` to enforce that this repository keeps all four lenses gating. The test suite is the main focus of my review. I checked the five new test functions, the shared fixture, the helper `_registered`, and the assertions in each. The tests are specific and well-targeted: they cover the two refusal paths (`gating_empty`, `gating_unknown`), the signa\u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 221,
+            "message": "The module loaded by `load(str(ROOT))` is never used after the assertion `module is not None`, so the test proves only that `load` returns something.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 188,
+            "message": "No test covers the ordering guarantee: `lenses` is derived as the subset of `declared` in `declared`'s order, not in `asked`'s order, but no assertion names that property.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 804,
+      "verb": "review",
+      "wall_seconds": 35.381
+    }
+  ],
+  "tokens": 2098,
+  "tool_calls": {},
+  "ts": "2026-09-15T13:18:42+00:00",
+  "turns": 4,
+  "wall_seconds": 35.381,
+  "workflow": "review/all-lenses"
+}
