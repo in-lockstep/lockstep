@@ -1,0 +1,185 @@
+{
+  "args": {
+    "base": "origin/main",
+    "comments": "review-comments",
+    "head": "a86cf2e92dda5cdf6052ab4de53ffc68e26bd658"
+  },
+  "base": "main",
+  "billed_fraction": 1.0,
+  "branch": "HEAD",
+  "cache_read_tokens": 0,
+  "cache_write_tokens": 69135,
+  "ci_actor": "tpouyer",
+  "ci_run": "34973482628",
+  "config": "base branch (not the ref under review)",
+  "cost_usd": 0.282002,
+  "decided": true,
+  "epoch": "in-process",
+  "findings": {
+    "count": 6,
+    "items": [
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()` that separates which lenses a repository *has* from which lenses *gate* a pull request \u2014 previously one map answered both questions, so the only way to keep a lens off the required check was to remove it from the adapter, which also made it unreachable from `/review <lens>` comments. The diff adds the feature (in `review.py`), documents it (`docs/extending.md`), records it as `GATE-REVIEW-9` in the design tables, adds a\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds a `gating` parameter to `review_workflows.register()`, letting a repository declare which of its bound lenses gate a pull request independently of which lenses exist. The implementation fans out only over the gating subset, so fewer model calls are made when `gating` is narrower than the full declared set. From a performance standpoint, the change moves in the right direction: it gives repositories a way to spend less per pull request. The validation path (unknown lens, empty ga\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which of its bound lenses run on the required check without removing them from the `/review <lens>` chat-ops surface. The core security-relevant properties are: the `gating` set is resolved against the live adapter at run time (after binding, before fan-out), unknown names and empty sets are refused with exit 3 rather than silently degraded, and the parameter is deliberately excluded fr\u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.statement",
+        "message": "This change adds `GATE-REVIEW-9`: a `gating=` parameter on `register()` that lets a repository declare which of its bound lenses gate a pull request, distinct from which lenses exist. The implementation is accompanied by five new tests covering the main behavioural properties: selective gating runs only named lenses, non-gating lenses remain reachable from chat-ops, unknown gating names are refused before spend, empty gating is refused rather than silently ignored, and the registered callable's \u2026[truncated]",
+        "severity": "note"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 266,
+        "message": "Test asserts `module is not None` after it is used \u2014 the assert is vacuous if load() never returns None for a valid path.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      },
+      {
+        "blocking": false,
+        "id": "review.tests",
+        "line": 220,
+        "message": "Chat-ops reachability test constructs a fresh container after the run \u2014 not the container the run used.",
+        "path": "tests/in_lockstep/test_enforced_review.py",
+        "severity": "warning"
+      }
+    ]
+  },
+  "head": "a86cf2e92dda5cdf6052ab4de53ffc68e26bd658",
+  "input_tokens": 12,
+  "kind": "workflow",
+  "outcome_cost_usd": 0.282002,
+  "output_tokens": 1514,
+  "priced_fraction": 1.0,
+  "reason": null,
+  "run_id": "review-all-lenses-34973482628-20260915T131308Z-16d2",
+  "schema": 9,
+  "status": "succeeded",
+  "steps": [
+    {
+      "cost_usd": 0.069504,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()` that separates which lenses a repository *has* from which lenses *gate* a pull request \u2014 previously one map answered both questions, so the only way to keep a lens off the required check was to remove it from the adapter, which also made it unreachable from `/review <lens>` comments. The diff adds the feature (in `review.py`), documents it (`docs/extending.md`), records it as `GATE-REVIEW-9` in the design tables, adds a\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "intent",
+      "subject": "7a1c1880cbaa622f5c83c0a9a96d6e8a",
+      "subject_label": "review/intent IntentReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 324,
+      "verb": "review",
+      "wall_seconds": 31.927
+    },
+    {
+      "cost_usd": 0.06755,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds a `gating` parameter to `review_workflows.register()`, letting a repository declare which of its bound lenses gate a pull request independently of which lenses exist. The implementation fans out only over the gating subset, so fewer model calls are made when `gating` is narrower than the full declared set. From a performance standpoint, the change moves in the right direction: it gives repositories a way to spend less per pull request. The validation path (unknown lens, empty ga\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "performance",
+      "subject": "370a733fb698812fa47cfff4521bb6f8",
+      "subject_label": "review/performance PerformanceReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 179,
+      "verb": "review",
+      "wall_seconds": 7.925
+    },
+    {
+      "cost_usd": 0.070093,
+      "decided": true,
+      "findings": {
+        "count": 1,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change introduces a `gating` parameter to `review_workflows.register()`, allowing a repository to declare which of its bound lenses run on the required check without removing them from the `/review <lens>` chat-ops surface. The core security-relevant properties are: the `gating` set is resolved against the live adapter at run time (after binding, before fan-out), unknown names and empty sets are refused with exit 3 rather than silently degraded, and the parameter is deliberately excluded fr\u2026[truncated]",
+            "severity": "note"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "security",
+      "subject": "c4e01488f567428f218d18ea4847ee99",
+      "subject_label": "review/security SecurityReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 342,
+      "verb": "review",
+      "wall_seconds": 24.369
+    },
+    {
+      "cost_usd": 0.074855,
+      "decided": true,
+      "findings": {
+        "count": 3,
+        "items": [
+          {
+            "blocking": false,
+            "id": "review.statement",
+            "message": "This change adds `GATE-REVIEW-9`: a `gating=` parameter on `register()` that lets a repository declare which of its bound lenses gate a pull request, distinct from which lenses exist. The implementation is accompanied by five new tests covering the main behavioural properties: selective gating runs only named lenses, non-gating lenses remain reachable from chat-ops, unknown gating names are refused before spend, empty gating is refused rather than silently ignored, and the registered callable's \u2026[truncated]",
+            "severity": "note"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 266,
+            "message": "Test asserts `module is not None` after it is used \u2014 the assert is vacuous if load() never returns None for a valid path.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          },
+          {
+            "blocking": false,
+            "id": "review.tests",
+            "line": 220,
+            "message": "Chat-ops reachability test constructs a fresh container after the run \u2014 not the container the run used.",
+            "path": "tests/in_lockstep/test_enforced_review.py",
+            "severity": "warning"
+          }
+        ]
+      },
+      "status": "succeeded",
+      "step": "tests",
+      "subject": "42bb8b072d011277e6cd02e82760d1ed",
+      "subject_label": "review/tests TestsReviewPrompt@1 on anthropic:claude-sonnet-4-6",
+      "tokens": 681,
+      "verb": "review",
+      "wall_seconds": 27.818
+    }
+  ],
+  "tokens": 1526,
+  "tool_calls": {},
+  "ts": "2026-09-15T13:13:40+00:00",
+  "turns": 4,
+  "wall_seconds": 31.927,
+  "workflow": "review/all-lenses"
+}
