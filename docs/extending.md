@@ -159,6 +159,34 @@ aspect then reports the lenses *this adapter* has, not the ones that happen to s
 The map is copied at construction, in both directions: a later mutation of `LENSES` cannot reach
 an adapter you already bound, and an adapter cannot leak a lens back into the shipped map.
 
+### Which of them gate a pull request
+
+That map says which lenses this repository **has**, and `/review <lens>` on a thread resolves
+against exactly it — so narrowing it to keep a lens off the required check would also put that lens
+out of reach of the comment asking for it. Which lenses **gate** is a different decision, and it
+sits on the registration of the check rather than on the adapter, because that is what it is a
+property of:
+
+```python
+from in_lockstep.workflows import review as review_workflows
+
+review_workflows.register(gating=("security", "tests"))
+```
+
+Five lenses bound, two named: the required check runs those two and pays for those two, and the
+other three are still one `/review performance` away on any thread. Omit the argument — as this
+repository does, deliberately — and every bound lens gates.
+
+A name the bound adapter does not declare refuses the run, listing it beside the set that exists,
+before the fan-out and therefore before anything spends. `gating=()` is refused separately, because
+"nothing gates" and "everything gates" are opposite intentions and the second is already what an
+omitted argument means. Both refusals exit 3, so a selection with a typo in it is a red check
+rather than a green one over nothing.
+
+There is deliberately no flag for this. The selection is executable configuration in the one file
+you are meant to edit, never an argument in a workflow file: a lens list in YAML is precisely the
+thing that goes stale, which is why the check stopped taking one.
+
 ### Enhancing a shipped lens, without a subclass
 
 An entry in that map is either a prompt class or a `Lens`: the declared form, carrying the prompt
